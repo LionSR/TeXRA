@@ -66,18 +66,18 @@ function seedChildHierarchy(): void {
   }
   applySubagentRoster(ROOT, [
     {
-      kind: 'subagent',
       executionId: 'escape-child-execution',
       agentName: 'child',
+      identity: { kind: 'agent' as const, agent: 'child' },
       childStreamId: CHILD,
       status: STREAM_PHASE.RUNNING,
     },
   ]);
   applySubagentRoster(CHILD, [
     {
-      kind: 'subagent',
       executionId: 'escape-grandchild-execution',
       agentName: 'grandchild',
+      identity: { kind: 'agent' as const, agent: 'grandchild' },
       childStreamId: GRANDCHILD,
       status: STREAM_PHASE.RUNNING,
     },
@@ -157,6 +157,10 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'solo-workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'solo-workflow',
+      },
       category: AgentCategory.Workflow,
       entries: [
         {
@@ -202,6 +206,10 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'workflow',
+      },
       category: AgentCategory.Workflow,
     }));
     const runTrace = createRunTrace(ROOT, defaultSession().transcripts);
@@ -231,16 +239,16 @@ describe('App foreground Escape ownership', () => {
     syncStreamLog(ROOT);
     applySubagentRoster(ROOT, [
       {
-        kind: 'subagent',
         executionId: 'workflow-child-execution',
         agentName: 'duplicate',
+        identity: { kind: 'agent' as const, agent: 'duplicate' },
         childStreamId: CHILD,
         status: STREAM_PHASE.RUNNING,
       },
       {
-        kind: 'subagent',
         executionId: 'workflow-review-execution',
         agentName: 'duplicate',
+        identity: { kind: 'agent' as const, agent: 'duplicate' },
         childStreamId: GRANDCHILD,
         status: STREAM_PHASE.RUNNING,
       },
@@ -316,9 +324,9 @@ describe('App foreground Escape ownership', () => {
     });
     applySubagentRoster(ROOT, [
       {
-        kind: 'subagent',
         executionId: 'shared-child-execution',
         agentName: 'shared-child',
+        identity: { kind: 'agent' as const, agent: 'shared-child' },
         childStreamId: CHILD,
         status: STREAM_PHASE.RUNNING,
       },
@@ -327,6 +335,10 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'ambiguous-workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'ambiguous-workflow',
+      },
       category: AgentCategory.Workflow,
       entries: ['first', 'second'].map((id) => ({
         id: `task-${id}`,

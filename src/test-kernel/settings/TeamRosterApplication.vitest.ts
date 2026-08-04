@@ -8,20 +8,26 @@ const preset: AgentModePreset = {
   name: 'Research',
   description: 'Research team',
   icon: 'bookmark',
-  workflowAgents: [],
-  toolUseAgents: ['orchestrator'],
+  agents: {
+    workflow: [],
+    toolUse: ['orchestrator'],
+  },
   texraHostedAgents: ['orchestrator'],
 };
 
 const unresolved = {
-  workflowKeys: [],
-  toolUseKeys: ['orchestrator'],
+  keys: {
+    workflow: [],
+    toolUse: ['orchestrator'],
+  },
   unresolvedNames: ['orchestrator'],
 };
 
 const resolved = {
-  workflowKeys: [],
-  toolUseKeys: ['remote:orchestrator'],
+  keys: {
+    workflow: [],
+    toolUse: ['remote:orchestrator'],
+  },
   unresolvedNames: [],
 };
 
@@ -105,8 +111,10 @@ describe('team roster application', () => {
       name: 'Legacy',
       description: 'Saved before hosted provenance',
       icon: 'bookmark',
-      workflowAgents: [],
-      toolUseAgents: ['review', 'remoteSpecialist'],
+      agents: {
+        workflow: [],
+        toolUse: ['review', 'remoteSpecialist'],
+      },
     };
     const choose = vi.fn(
       async (_names: readonly string[]) => 'cancel' as const,
@@ -119,8 +127,10 @@ describe('team roster application', () => {
           ok: true,
           preset: legacyPreset,
           resolution: {
-            workflowKeys: [],
-            toolUseKeys: ['builtInToolUse:review', 'remoteSpecialist'],
+            keys: {
+              workflow: [],
+              toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+            },
             unresolvedNames: ['remoteSpecialist'],
           },
         }),
@@ -144,8 +154,10 @@ describe('team roster application', () => {
       name: 'Mixed legacy',
       description: 'Contains local and remote members without provenance',
       icon: 'bookmark',
-      workflowAgents: ['generic'],
-      toolUseAgents: ['review', 'remoteSpecialist'],
+      agents: {
+        workflow: ['generic'],
+        toolUse: ['review', 'remoteSpecialist'],
+      },
     };
     const choose = vi.fn(
       async (_names: readonly string[]) => 'cancel' as const,
@@ -157,8 +169,10 @@ describe('team roster application', () => {
           ok: true,
           preset: legacyPreset,
           resolution: {
-            workflowKeys: ['generic'],
-            toolUseKeys: ['builtInToolUse:review', 'remoteSpecialist'],
+            keys: {
+              workflow: ['generic'],
+              toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+            },
             unresolvedNames: ['generic', 'remoteSpecialist'],
           },
         }),

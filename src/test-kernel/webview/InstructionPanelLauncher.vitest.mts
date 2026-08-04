@@ -140,10 +140,13 @@ describe('instruction-panel launcher', () => {
     it('intercepts the browse-all-agents sentinel: restores the current agent and opens the catalog instead of an agent-change', async () => {
       const element = await mountPanel(
         makeSession({
-          toolUseAgent: 'assistant',
+          agent: { workflow: 'copy-editor', toolUse: 'assistant' },
           // The reset target must exist among the rendered options — wa-select
           // coerces values with no matching wa-option to null.
-          toolUseAgentOptions: [{ value: 'assistant', label: 'Assistant' }],
+          agentOptions: {
+            workflow: [],
+            toolUse: [{ value: 'assistant', label: 'Assistant' }],
+          },
         }),
       );
       const events = recordEvents(element, [

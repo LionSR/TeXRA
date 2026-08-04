@@ -11,11 +11,12 @@ import {
 /**
  * Host-neutral stream metadata builder used by the extension and desktop
  * progress backends before sending UPDATE_STREAMS payloads. Derived from
- * `StreamMetadataSchema` (every field optional except `kind`) rather than
- * hand-duplicated, so it can't drift from the wire schema.
+ * `StreamMetadataSchema` rather than hand-duplicated, so it can't drift from
+ * the wire schema. `category` is absent while a stream's run identity is
+ * still pending — the frontend renders pending instead of a fabricated kind.
  */
 const StreamMetadataInputsSchema = StreamMetadataSchema.partial().extend({
-  kind: AgentCategorySchema,
+  category: AgentCategorySchema.optional(),
 });
 
 export type StreamMetadataInputs = z.infer<typeof StreamMetadataInputsSchema>;
@@ -24,7 +25,7 @@ export function buildStreamMetadata(
   inputs: StreamMetadataInputs,
 ): StreamMetadata {
   return {
-    kind: inputs.kind,
+    category: inputs.category,
     status: inputs.status ?? DEFAULT_STREAM_METADATA_STATUS,
     substate: inputs.substate,
     lastTimestamp: inputs.lastTimestamp,

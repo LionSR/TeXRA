@@ -135,8 +135,8 @@ function parentContext(): LaunchRunContext {
       agentName: 'orchestrator',
       workingDirectory: '/workspace',
       delegationAgentScope: {
-        workflowAgentKeys: ['builtInWorkflow:correct'],
-        toolUseAgentKeys: ['builtInToolUse:assistant'],
+        workflow: ['builtInWorkflow:correct'],
+        toolUse: ['builtInToolUse:assistant'],
       },
       session: { id: 'session' } as never,
       signal: new AbortController().signal,
@@ -360,8 +360,8 @@ describe('createWorkflowScriptAgentRunner', () => {
           mediaFiles: ['figure.pdf'],
           workingDirectory: '/workspace',
           delegationAgentScope: {
-            workflowAgentKeys: ['builtInWorkflow:correct'],
-            toolUseAgentKeys: ['builtInToolUse:assistant'],
+            workflow: ['builtInWorkflow:correct'],
+            toolUse: ['builtInToolUse:assistant'],
           },
         }),
       }),
@@ -486,8 +486,8 @@ describe('createWorkflowScriptAgentRunner', () => {
       'workflow',
       'merge',
       {
-        workflowAgentKeys: ['builtInWorkflow:correct'],
-        toolUseAgentKeys: ['builtInToolUse:assistant'],
+        workflow: ['builtInWorkflow:correct'],
+        toolUse: ['builtInToolUse:assistant'],
       },
     );
     expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(

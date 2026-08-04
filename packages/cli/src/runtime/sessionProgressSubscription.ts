@@ -5,13 +5,36 @@ import type {
 } from '@agent/runtime/SessionEventHub';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
+  CliNdjsonActiveChildRow,
   CliNdjsonProgressEvent,
   CliNdjsonProgressEventPayloads,
 } from './cliNdjsonProgressEvents';
+
+/**
+ * Project one roster row onto the frozen public shape (proposal gate G): the
+ * `identity` struct is internal — public NDJSON keeps the pre-consolidation
+ * `kind`/`toolName`/`childStreamId` encoding. `delegate_multi_agents` is the
+ * historical toolName of a workflow-script child.
+ */
+function projectCliActiveChildRow(
+  item: ActiveChildInfo,
+): CliNdjsonActiveChildRow {
+  const { identity, childStreamId, ...rest } = item;
+  const toolName =
+    identity.kind === 'multiAgentWorkflow'
+      ? 'delegate_multi_agents'
+      : identity.tool;
+  return {
+    kind: identity.kind === 'process' ? 'process' : 'subagent',
+    ...rest,
+    ...(toolName !== undefined ? { toolName } : {}),
+    ...(identity.kind === 'process' ? {} : { childStreamId }),
+  };
+}
 
 type CliProjectedNdjsonProgressEvent = {
   [K in CliNdjsonProgressEvent]: {
@@ -71,8 +94,8 @@ function projectCliSessionFact(
 
 /**
  * Project run facts onto the frozen NDJSON progress-event vocabulary.
- * `run.start` is intentionally unprojected: the wire shape carries no
- * run-descriptor event.
+ * `run.start` is intentionally unprojected: the public wire shape carries no
+ * run-start record.
  */
 function projectCliRunFact(
   streamId: StreamTabId,
@@ -155,7 +178,7 @@ function projectCliRunFact(
         event: 'updateActiveSubagents',
         payload: {
           parentStreamId: event.parentStreamId,
-          children: [...event.items],
+          children: event.items.map(projectCliActiveChildRow),
         },
       };
   }

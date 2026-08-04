@@ -68,8 +68,8 @@ describe('MainViewExecutionController', () => {
       {
         agent: 'builtInToolUse:lead',
         delegationAgentScope: {
-          workflowAgentKeys: ['builtInWorkflow:writer'],
-          toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
+          workflow: ['builtInWorkflow:writer'],
+          toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
         cliMultiAgentPresetId: 'custom-team',
       },
@@ -82,8 +82,8 @@ describe('MainViewExecutionController', () => {
       model: 'gpt-5.4',
       agentCategory: AgentCategory.ToolUse,
       delegationAgentScope: {
-        workflowAgentKeys: ['builtInWorkflow:writer'],
-        toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
+        workflow: ['builtInWorkflow:writer'],
+        toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
       },
       cliMultiAgentPresetId: 'custom-team',
     });
@@ -93,8 +93,8 @@ describe('MainViewExecutionController', () => {
     const fields = {
       agent: 'builtInToolUse:lead',
       delegationAgentScope: {
-        workflowAgentKeys: ['builtInWorkflow:writer'],
-        toolUseAgentKeys: ['builtInToolUse:lead'],
+        workflow: ['builtInWorkflow:writer'],
+        toolUse: ['builtInToolUse:lead'],
       },
       cliMultiAgentPresetId: 'custom-team',
     };

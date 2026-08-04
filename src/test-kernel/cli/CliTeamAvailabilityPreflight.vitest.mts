@@ -10,15 +10,21 @@ function plan(missing: readonly string[]): CliMultiAgentPresetRunPlan {
       name: 'Custom team',
       description: 'Test team',
       icon: 'screwdriver-wrench',
-      workflowAgents: [],
-      toolUseAgents: ['orchestrator'],
+      agents: {
+        workflow: [],
+        toolUse: ['orchestrator'],
+      },
       texraHostedAgents: ['orchestrator'],
       source: 'custom',
     },
-    workflowAgentKeys: [],
-    toolUseAgentKeys: [],
-    missingWorkflowAgents: [],
-    missingToolUseAgents: [...missing],
+    agentKeys: {
+      workflow: [],
+      toolUse: [],
+    },
+    missingAgents: {
+      workflow: [],
+      toolUse: [...missing],
+    },
   };
 }
 
@@ -95,8 +101,11 @@ describe('CLI team availability host adapter', () => {
         plan: {
           ...legacyPlan,
           preset: legacyPreset,
-          toolUseAgentKeys: ['remoteSpecialist'],
-          missingToolUseAgents: ['remoteSpecialist'],
+          agentKeys: { ...legacyPlan.agentKeys, toolUse: ['remoteSpecialist'] },
+          missingAgents: {
+            ...legacyPlan.missingAgents,
+            toolUse: ['remoteSpecialist'],
+          },
         },
         remoteCatalogRefreshAttempted: false,
         canAccessRemoteCatalog: async () => false,
@@ -112,14 +121,20 @@ describe('CLI team availability host adapter', () => {
     const initial = plan(['orchestrator']);
     const preset = {
       ...initial.preset,
-      toolUseAgents: ['orchestrator', 'presenter'],
+      agents: {
+        ...initial.preset.agents,
+        toolUse: ['orchestrator', 'presenter'],
+      },
       texraHostedAgents: ['orchestrator', 'presenter'],
     };
     const refreshed = {
       ...initial,
       preset,
-      toolUseAgentKeys: ['remote:orchestrator', 'presenter'],
-      missingToolUseAgents: ['presenter'],
+      agentKeys: {
+        ...initial.agentKeys,
+        toolUse: ['remote:orchestrator', 'presenter'],
+      },
+      missingAgents: { ...initial.missingAgents, toolUse: ['presenter'] },
     };
 
     await expect(

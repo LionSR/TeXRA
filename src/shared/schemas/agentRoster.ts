@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { AgentCategory, AgentCategorySchema } from './agent';
+
 const AgentKeyListSchema = z.array(z.string().trim().min(1));
 const AgentRosterCategorySelectionSchema = z.union([
   z.literal('all'),
@@ -23,8 +25,10 @@ export const AgentRosterSelectionSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({
     kind: z.literal('custom'),
-    workflowAgentKeys: AgentRosterCategorySelectionSchema,
-    toolUseAgentKeys: AgentRosterCategorySelectionSchema,
+    agentKeys: z.record(
+      AgentCategorySchema,
+      AgentRosterCategorySelectionSchema,
+    ),
   }),
 ]);
 
@@ -34,10 +38,40 @@ export const INHERITED_AGENT_ROSTER: AgentRosterSelection = Object.freeze({
   kind: 'inherit',
 });
 
-/** Exact delegation catalog attached to a run, independent of durable UI state. */
-export const AgentDelegationScopeSchema = z.strictObject({
-  workflowAgentKeys: AgentKeyListSchema,
-  toolUseAgentKeys: AgentKeyListSchema,
-});
+/** Canonical delegation catalog shape: agent keys keyed by category. */
+const AgentDelegationScopeCanonicalSchema = z.record(
+  AgentCategorySchema,
+  AgentKeyListSchema,
+);
 
-export type AgentDelegationScope = z.infer<typeof AgentDelegationScopeSchema>;
+/**
+ * Legacy persisted shape: team-run `config.json` rows written before the
+ * category-keyed record (#8403 era) carried the scope as a
+ * `workflowAgentKeys`/`toolUseAgentKeys` field pair. Normalized once, here at
+ * the parse boundary — dropping this member would fail AgentConfigSchema on
+ * those rows and list finished team runs as incomplete.
+ *
+ * Introduced 2026-08-04 (#9705). Permanent parse-side reader, not a dated
+ * migration: the pair lives in immutable per-run history rows that are never
+ * rewritten, so there is no rewrite event to retire on. Retires only with a
+ * policy decision to stop reading pre-record run history.
+ */
+const AgentDelegationScopeLegacySchema = z
+  .strictObject({
+    workflowAgentKeys: AgentKeyListSchema,
+    toolUseAgentKeys: AgentKeyListSchema,
+  })
+  .transform(({ workflowAgentKeys, toolUseAgentKeys }) => ({
+    [AgentCategory.Workflow]: workflowAgentKeys,
+    [AgentCategory.ToolUse]: toolUseAgentKeys,
+  }));
+
+/** Exact delegation catalog attached to a run, independent of durable UI state. */
+export const AgentDelegationScopeSchema = z.union([
+  AgentDelegationScopeCanonicalSchema,
+  AgentDelegationScopeLegacySchema,
+]);
+
+export type AgentDelegationScope = z.infer<
+  typeof AgentDelegationScopeCanonicalSchema
+>;

@@ -11,6 +11,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
@@ -86,7 +87,7 @@ async function runHistoryShow(
 
   emitCliResult(context, {
     json: details,
-    ndjson: { kind: 'history-detail', detail: details },
+    ndjson: cliHistoryDetailNdjsonRecord(details),
     text: formatCliHistoryDetailsText(details),
   });
   return CliExitCode.Success;
@@ -148,14 +149,6 @@ export async function runHistoryExport(
           `Execution ${id} exists but has no replayable execution-root transcript ` +
             '(it may predate transcript persistence, the run may have produced ' +
             'no output, or only proven child transcripts may remain).',
-        );
-        break;
-      case 'streamId_ambiguous':
-        writeTextStderr(
-          `Execution ${id} has multiple associated transcript sidecars ` +
-            `(${traceResult.candidateStreamIds.join(', ')}), but no canonical ` +
-            'trace timeline can be established, so HTML trace export was ' +
-            'not written.',
         );
         break;
       default:

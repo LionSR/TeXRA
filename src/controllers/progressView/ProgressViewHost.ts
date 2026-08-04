@@ -3,7 +3,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { platform } from '@platform/platform';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunIdentity, StreamTabId } from '@shared/schemas';
 
 // Local file imports
 import {
@@ -45,12 +45,37 @@ interface ProgressViewHostCommandOptions {
 
 interface ProgressViewRunState {
   getRunConfig(stream: StreamTabId): AgentConfig | undefined;
+  getRunIdentity(stream: StreamTabId): RunIdentity | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
+}
+
+/**
+ * Resume, rerun, and restore are native-agent affordances. A workflow-script
+ * stream's persisted config is a borrowed default agent, a process stream's is
+ * synthetic, and an external-CLI session resumes through its own tool — for
+ * all three, relaunching the stored config would run the wrong thing
+ * (live defect 3 of the run-classification consolidation).
+ */
+function isNativeAgentRun(identity: RunIdentity | undefined): boolean {
+  return identity?.kind === 'agent' && identity.tool === undefined;
 }
 
 interface ProgressViewRunDependencies {
   readonly state: ProgressViewRunState;
   executeAgent(request: ExecutionRequest): Promise<void>;
+}
+
+/** User-facing refusal for the resume/re-run gate. Front-end button hiding
+ *  makes this rare (stale renderer state, direct IPC), but a refused action
+ *  must still say why instead of silently doing nothing. */
+async function reportNonNativeRunRefusal(
+  showInfo: (message: string) => void | PromiseLike<unknown>,
+  action: string,
+): Promise<void> {
+  await showInfo(
+    `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
+      'not one.',
+  );
 }
 
 /**
@@ -62,7 +87,12 @@ interface ProgressViewRunDependencies {
 async function resumeStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
+  showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
+  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) {
+    await reportNonNativeRunRefusal(showInfo, 'resumed');
+    return;
+  }
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
@@ -81,7 +111,12 @@ async function resumeStream(
 async function runNewStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
+  showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
+  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) {
+    await reportNonNativeRunRefusal(showInfo, 're-run');
+    return;
+  }
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
@@ -111,8 +146,10 @@ export class ProgressViewHost {
     this.commandHandlers = createProgressViewCommandHandlers({
       lifecycle: options.commands.lifecycle,
       run: {
-        resumeStream: (stream) => resumeStream(options.run, stream),
-        runNewStream: (stream) => runNewStream(options.run, stream),
+        resumeStream: (stream) =>
+          resumeStream(options.run, stream, options.commands.bypass.showInfo),
+        runNewStream: (stream) =>
+          runNewStream(options.run, stream, options.commands.bypass.showInfo),
       },
       followUp: options.commands.followUp,
       bypass: options.commands.bypass,

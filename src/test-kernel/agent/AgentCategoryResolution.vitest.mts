@@ -155,12 +155,8 @@ describe('cross-category agent resolution', () => {
   it('resolves scoped names within category and drops unknown ones', () => {
     const scoped = resolveDelegationScopeAgents(
       {
-        workflowAgentKeys: [],
-        toolUseAgentKeys: [
-          'assistant',
-          'builtInToolUse:assistant',
-          'missing-agent',
-        ],
+        workflow: [],
+        toolUse: ['assistant', 'builtInToolUse:assistant', 'missing-agent'],
       },
       AgentCategory.ToolUse,
     );
@@ -178,8 +174,8 @@ describe('cross-category agent resolution', () => {
 
     const scoped = resolveDelegationScopeAgents(
       {
-        workflowAgentKeys: [],
-        toolUseAgentKeys: ['builtInToolUse:review', 'custom:review'],
+        workflow: [],
+        toolUse: ['builtInToolUse:review', 'custom:review'],
       },
       AgentCategory.ToolUse,
     );

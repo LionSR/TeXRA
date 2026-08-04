@@ -18,7 +18,10 @@ import {
   DELIVERY_TAGS,
   type DeliveryTagName,
 } from '@shared/deliveryTags';
-import { WorkflowScriptDeliverySummarySchema } from '@shared/schemas';
+import {
+  WorkflowScriptDeliverySummarySchema,
+  type WorkflowScriptDeliverySummary,
+} from '@shared/schemas';
 import { isObject } from '@utils/core';
 import {
   formatCompactDuration,
@@ -204,8 +207,13 @@ function decodedResultResponsePreview(response: string): string {
 /**
  * Read the presentation-only facts attached to a workflow delivery. The raw
  * response remains intact for the invoking model and diagnostic inspection.
+ * This string parse lives at the delivery boundary — the transcript row
+ * producer and the CLI summarizer — never at render time: renderers receive
+ * the parsed summary carried beside the row text.
  */
-export function workflowScriptDeliverySummary(xml: string): string | undefined {
+export function parseWorkflowScriptDeliverySummary(
+  xml: string,
+): WorkflowScriptDeliverySummary | undefined {
   const rawSummary = innerTag(xml, 'workflow-summary');
   if (!rawSummary) return undefined;
   const parsedJson = safeParseJson(decodeXmlEntities(rawSummary));
@@ -213,9 +221,13 @@ export function workflowScriptDeliverySummary(xml: string): string | undefined {
   const parsed = WorkflowScriptDeliverySummarySchema.safeParse(
     parsedJson.value,
   );
-  if (!parsed.success) return undefined;
+  return parsed.success ? parsed.data : undefined;
+}
 
-  const summary = parsed.data;
+/** Collapse a parsed workflow delivery summary to its transcript lines. */
+export function formatWorkflowScriptDeliverySummary(
+  summary: WorkflowScriptDeliverySummary,
+): string {
   const marker = summary.outcome === 'completed' ? '✓' : '✗';
   const status = summary.outcome === 'completed' ? 'completed' : 'failed';
   const facts = [
@@ -265,8 +277,8 @@ export function summarizeSubagentFollowup(text: unknown): string {
     tag === DELIVERY_TAG.workflowScriptResult ||
     tag === DELIVERY_TAG.workflowScriptError
   ) {
-    const summary = workflowScriptDeliverySummary(trimmed);
-    if (summary) return summary;
+    const summary = parseWorkflowScriptDeliverySummary(trimmed);
+    if (summary) return formatWorkflowScriptDeliverySummary(summary);
   }
 
   // Result/error envelopes share one shape across families

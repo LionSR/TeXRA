@@ -377,9 +377,15 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
     label: `Switch to ${stream.label || stream.name}`,
     description:
       stream.description ||
-      stream.agent ||
-      (stream.kind === 'workflowScript' ? stream.workflowName : undefined) ||
-      (stream.kind === 'agent' ? stream.modelLabel : undefined) ||
+      (stream.identity?.kind === 'multiAgentWorkflow'
+        ? stream.identity.workflowName
+        : undefined) ||
+      (stream.identity?.kind === 'agent'
+        ? stream.identity.agent || stream.modelLabel
+        : undefined) ||
+      (stream.identity?.kind === 'process'
+        ? stream.command || stream.identity.tool
+        : undefined) ||
       'Stream',
     icon: 'terminal',
     category: 'Streams',

@@ -13,6 +13,8 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   startChildRunLoop,
   type ChildRunPorts,
@@ -69,9 +71,10 @@ export function publishAgentCliStreamUsage(
 }
 
 interface ResumableAgentCliSession {
-  parentStreamId: StreamTabId;
   childStreamId: StreamTabId;
   executionId: ExecutionId;
+  /** Registry holding the live handle — lineage is read there, never copied. */
+  executions: ExecutionRegistry;
 }
 
 interface ClaimableAgentCliStore {
@@ -96,7 +99,15 @@ async function queueAgentCliFollowUp(
   },
 ): Promise<ToolResult> {
   const { id, prompt, callerStreamId, labels } = params;
-  if (callerStreamId && stored.parentStreamId !== callerStreamId) {
+  // Ownership is a live-handle fact: a detached or re-parented child must not
+  // accept follow-ups from its former orchestrator. A missing handle falls
+  // through to submitFollowUp's no-session outcome below.
+  const handle = stored.executions.getHandle(stored.executionId);
+  if (
+    callerStreamId &&
+    handle instanceof AgentExecutionHandle &&
+    !handle.isOwnedBy(callerStreamId)
+  ) {
     throw new ToolError(
       `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
     );
@@ -192,10 +203,19 @@ export async function launchAgentCliSession(
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
   const childStreamId = getChildStreamId(executionId, params.streamPrefix);
+  // An external CLI drives this agent: the CLI is both the agent name and the
+  // driving tool, and `identity.tool` is what gates native-only affordances
+  // (resume/rerun) off for this cohort.
+  const identity = {
+    kind: 'agent',
+    agent: params.agentName,
+    tool: params.agentName,
+  } as const;
 
   try {
     await registerExecution(executionId, params.config, params.agentName, {
       streamId: childStreamId,
+      identity,
       parentExecutionId: params.parentExecutionId,
       description: childStreamDescription(params.description),
     });
@@ -209,12 +229,9 @@ export async function launchAgentCliSession(
     try {
       childStream = createChildStream(executionId, params.parentStreamId, {
         streamPrefix: params.streamPrefix,
-        streamCategory: AgentCategory.ToolUse,
-        runKind: 'agent',
-        agentName: params.agentName,
+        run: identity,
         description: params.description,
         config: params.config,
-        toolName: params.agentName,
       });
       await params.startLoop({ childStream, executionId });
     } catch (error) {

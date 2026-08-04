@@ -51,17 +51,22 @@ const planTeamRunForAgentEntry = planTeamRun<AgentEntry>;
 type TeamPreset = Parameters<typeof planTeamRunForAgentEntry>[0];
 type TeamRunOptions = Parameters<typeof planTeamRunForAgentEntry>[1];
 
-function planRun(preset: TeamPreset, options: Partial<TeamRunOptions> = {}) {
+function planRun(
+  preset: TeamPreset,
+  options: Partial<TeamRunOptions['agents']> & {
+    agentOverride?: string;
+  } = {},
+) {
+  const { agentOverride, ...agents } = options;
   return planTeamRunForAgentEntry(preset, {
-    workflowAgents: [],
-    toolUseAgents: [],
-    ...options,
+    agents: { workflow: [], toolUse: [], ...agents },
+    agentOverride,
   });
 }
 
 // The full tool-use roster of a preset, with only `root` able to delegate.
 function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
-  return preset.toolUseAgents.map((name) =>
+  return preset.agents.toolUse.map((name) =>
     agent(name, AgentCategory.ToolUse, name === root ? ['delegate_agent'] : []),
   );
 }
@@ -69,7 +74,7 @@ function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
 // The lean-project team with two of its seven members and no delegating root.
 function partialLeanProjectPlan(): CliMultiAgentPresetRunPlan {
   return planRun(findPreset('lean-project'), {
-    toolUseAgents: [
+    toolUse: [
       agent('lean', AgentCategory.ToolUse),
       agent('latexFixer', AgentCategory.ToolUse),
     ],
@@ -88,11 +93,12 @@ describe('CLI multi-agent presets', () => {
   it('includes critical review in the mathematician team', () => {
     const preset = findPreset('mathematician');
 
-    expect(preset.workflowAgents).toContain('criticize');
+    expect(preset.agents.workflow).toContain('criticize');
     expect(preset.texraHostedAgents).toContain('criticize');
   });
 
   it('preserves missing hosted provenance on a legacy custom preset', () => {
+    // Legacy pair-shaped preset (pre-record recut): must normalize, not drop.
     const presets = teamPresets([
       {
         id: 'legacy',
@@ -104,30 +110,35 @@ describe('CLI multi-agent presets', () => {
       },
     ]);
 
-    expect(
-      findTeamPreset(presets, 'legacy')?.texraHostedAgents,
-    ).toBeUndefined();
+    const legacy = findTeamPreset(presets, 'legacy');
+    expect(legacy?.agents).toEqual({
+      workflow: ['generic', 'polish'],
+      toolUse: ['orchestrator', 'review'],
+    });
+    expect(legacy?.texraHostedAgents).toBeUndefined();
   });
 
   it('lists planned built-in team presets with stable counts', () => {
     const presets = teamPresets(undefined);
     const plans = planTeamRuns(presets, {
-      workflowAgents: presets.flatMap((preset) =>
-        preset.workflowAgents.map((name) =>
-          agent(name, AgentCategory.Workflow),
-        ),
-      ),
-      toolUseAgents: presets.flatMap((preset) =>
-        preset.toolUseAgents.map((name) =>
-          agent(
-            name,
-            AgentCategory.ToolUse,
-            ['orchestrator', 'leanOrchestrator', 'engineer'].includes(name)
-              ? ['delegate_agent']
-              : [],
+      agents: {
+        workflow: presets.flatMap((preset) =>
+          preset.agents.workflow.map((name) =>
+            agent(name, AgentCategory.Workflow),
           ),
         ),
-      ),
+        toolUse: presets.flatMap((preset) =>
+          preset.agents.toolUse.map((name) =>
+            agent(
+              name,
+              AgentCategory.ToolUse,
+              ['orchestrator', 'leanOrchestrator', 'engineer'].includes(name)
+                ? ['delegate_agent']
+                : [],
+            ),
+          ),
+        ),
+      },
     });
 
     expect(presets.map((preset) => preset.id)).toContain('physicist');
@@ -176,7 +187,7 @@ describe('CLI multi-agent presets', () => {
 
   it('keeps degraded presets launchable when they still have delegation', () => {
     const plan = planRun(findPreset('physicist'), {
-      toolUseAgents: degradedPhysicistToolUse(),
+      toolUse: degradedPhysicistToolUse(),
     });
 
     expect(teamAvailability(plan).status).toBe('degraded');
@@ -185,8 +196,8 @@ describe('CLI multi-agent presets', () => {
 
   it('formats compact launcher summaries from planned availability', () => {
     const plan = planRun(findPreset('physicist'), {
-      workflowAgents: [agent('correct', AgentCategory.Workflow)],
-      toolUseAgents: degradedPhysicistToolUse(),
+      workflow: [agent('correct', AgentCategory.Workflow)],
+      toolUse: degradedPhysicistToolUse(),
     });
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
@@ -200,7 +211,7 @@ describe('CLI multi-agent presets', () => {
 
   it('formats run warnings from planned missing team members', () => {
     const plan = planRun(findPreset('physicist'), {
-      toolUseAgents: degradedPhysicistToolUse(),
+      toolUse: degradedPhysicistToolUse(),
     });
 
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
@@ -212,7 +223,7 @@ describe('CLI multi-agent presets', () => {
   it('omits degraded run warnings when only the root is available', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      toolUseAgents: [
+      toolUse: [
         agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
       ],
     });
@@ -225,30 +236,32 @@ describe('CLI multi-agent presets', () => {
   it('marks complete built-in teams available', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      workflowAgents: preset.workflowAgents.map((name) =>
+      workflow: preset.agents.workflow.map((name) =>
         agent(name, AgentCategory.Workflow),
       ),
-      toolUseAgents: toolUseTeam(preset, 'orchestrator'),
+      toolUse: toolUseTeam(preset, 'orchestrator'),
     });
 
     expect(teamAvailability(plan)).toMatchObject({
       status: 'available',
-      toolUse: { available: 9, total: 9 },
-      workflow: { available: 6, total: 6 },
+      agents: {
+        toolUse: { available: 9, total: 9 },
+        workflow: { available: 6, total: 6 },
+      },
     });
   });
 
   it('launches the software-engineer team on its bundled engineer root', () => {
     const preset = findPreset('software-engineer');
     const plan = planRun(preset, {
-      toolUseAgents: toolUseTeam(preset, 'engineer'),
+      toolUse: toolUseTeam(preset, 'engineer'),
     });
 
     expect(plan.rootAgent?.name).toBe('engineer');
-    expect(plan.missingToolUseAgents).toEqual([]);
+    expect(plan.missingAgents.toolUse).toEqual([]);
     expect(teamPlanHasGaps(plan)).toBe(false);
     expect(canLaunchTeam(plan)).toBe(true);
-    expect(teamAvailability(plan).toolUse).toMatchObject({
+    expect(teamAvailability(plan).agents.toolUse).toMatchObject({
       available: 5,
       total: 5,
     });
@@ -257,13 +270,15 @@ describe('CLI multi-agent presets', () => {
   it('keeps unavailable preset facts separate from launcher guidance', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      toolUseAgents: [],
+      toolUse: [],
     });
 
     expect(teamAvailability(plan)).toMatchObject({
       status: 'unavailable',
-      toolUse: { available: 0, total: 9 },
-      workflow: { available: 0, total: 6 },
+      agents: {
+        toolUse: { available: 0, total: 9 },
+        workflow: { available: 0, total: 6 },
+      },
     });
     expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
   });
@@ -271,7 +286,7 @@ describe('CLI multi-agent presets', () => {
   it('formats team launch block messages from the planned preset state', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+      toolUse: [agent('lean', AgentCategory.ToolUse)],
     });
 
     expect(
@@ -288,7 +303,7 @@ describe('CLI multi-agent presets', () => {
   it('names an explicit non-delegating team root instead of saying it cannot delegate', () => {
     const preset = findPreset('mathematician');
     const plan = planRun(preset, {
-      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+      toolUse: [agent('lean', AgentCategory.ToolUse)],
       agentOverride: 'lean',
     });
 
@@ -307,7 +322,7 @@ describe('CLI multi-agent presets', () => {
   it('rejects launch block message formatting for launchable plans', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: toolUseTeam(preset, 'leanOrchestrator'),
+      toolUse: toolUseTeam(preset, 'leanOrchestrator'),
     });
 
     expect(() => formatCliMultiAgentTeamLaunchBlockMessage(plan)).toThrow(
@@ -317,18 +332,20 @@ describe('CLI multi-agent presets', () => {
 
   it('keeps built-in teams unavailable until their orchestrator root is present', () => {
     const plans = planTeamRuns(teamPresets(undefined), {
-      workflowAgents: [
-        agent('correct', AgentCategory.Workflow),
-        agent('polish', AgentCategory.Workflow),
-      ],
-      toolUseAgents: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('research', AgentCategory.ToolUse),
-        agent('numerics', AgentCategory.ToolUse),
-        agent('review', AgentCategory.ToolUse),
-        agent('search', AgentCategory.ToolUse),
-        agent('latexFixer', AgentCategory.ToolUse),
-      ],
+      agents: {
+        workflow: [
+          agent('correct', AgentCategory.Workflow),
+          agent('polish', AgentCategory.Workflow),
+        ],
+        toolUse: [
+          agent('lean', AgentCategory.ToolUse),
+          agent('research', AgentCategory.ToolUse),
+          agent('numerics', AgentCategory.ToolUse),
+          agent('review', AgentCategory.ToolUse),
+          agent('search', AgentCategory.ToolUse),
+          agent('latexFixer', AgentCategory.ToolUse),
+        ],
+      },
     });
 
     const launchBlockReasons = new Map(
@@ -351,26 +368,28 @@ describe('CLI multi-agent presets', () => {
     const record = cliMultiAgentPresetListRecord(partialLeanProjectPlan());
 
     expect(record.id).toBe('lean-project');
-    expect(record.toolUseAgents).toEqual(preset.toolUseAgents);
+    expect(record.agents.toolUse).toEqual(preset.agents.toolUse);
     expect(record.availability).toMatchObject({
       status: 'unavailable',
-      workflow: {
-        available: 0,
-        total: 0,
-        missing: [],
-        label: '0',
-      },
-      toolUse: {
-        available: 2,
-        total: 7,
-        missing: [
-          'leanSearch',
-          'leanSimplifier',
-          'leanBlueprint',
-          'progressCheck',
-          'leanOrchestrator',
-        ],
-        label: '2/7',
+      agents: {
+        workflow: {
+          available: 0,
+          total: 0,
+          missing: [],
+          label: '0',
+        },
+        toolUse: {
+          available: 2,
+          total: 7,
+          missing: [
+            'leanSearch',
+            'leanSimplifier',
+            'leanBlueprint',
+            'progressCheck',
+            'leanOrchestrator',
+          ],
+          label: '2/7',
+        },
       },
     });
     expect(record.availability.rootAgent).toBeUndefined();
@@ -379,7 +398,7 @@ describe('CLI multi-agent presets', () => {
   it('includes planned availability in ndjson preset records', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+      toolUse: [agent('lean', AgentCategory.ToolUse)],
     });
 
     expect(cliMultiAgentPresetNdjsonRecords([plan])).toEqual([
@@ -390,10 +409,12 @@ describe('CLI multi-agent presets', () => {
           id: 'lean-project',
           availability: expect.objectContaining({
             status: 'unavailable',
-            toolUse: expect.objectContaining({
-              available: 1,
-              total: 7,
-              label: '1/7',
+            agents: expect.objectContaining({
+              toolUse: expect.objectContaining({
+                available: 1,
+                total: 7,
+                label: '1/7',
+              }),
             }),
           }),
         }),
@@ -408,8 +429,10 @@ describe('CLI multi-agent presets', () => {
         name: 'Paper Team',
         description: 'For this paper',
         icon: 'codicon-bookmark',
-        workflowAgents: ['polish'],
-        toolUseAgents: ['review'],
+        agents: {
+          workflow: ['polish'],
+          toolUse: ['review'],
+        },
       },
     ];
     const customPresets = (raw: unknown) =>
@@ -444,8 +467,10 @@ describe('CLI multi-agent presets', () => {
           name: 'Broken Icon',
           description: 'Structurally valid but uses an unknown icon.',
           icon: 'not-a-valid-icon',
-          workflowAgents: [],
-          toolUseAgents: [],
+          agents: {
+            workflow: [],
+            toolUse: [],
+          },
         },
       ]),
     ).toEqual([
@@ -459,8 +484,10 @@ describe('CLI multi-agent presets', () => {
         name: 'Broken Icon',
         description: 'Structurally valid but uses an unknown icon.',
         icon: 'bookmark',
-        workflowAgents: [],
-        toolUseAgents: [],
+        agents: {
+          workflow: [],
+          toolUse: [],
+        },
         source: 'custom',
       },
     ]);
@@ -484,11 +511,11 @@ describe('CLI multi-agent presets', () => {
   it('formats an inspection plan with root and missing members', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      workflowAgents: [
+      workflow: [
         agent('correct', AgentCategory.Workflow),
         agent('polish', AgentCategory.Workflow),
       ],
-      toolUseAgents: [
+      toolUse: [
         agent('review', AgentCategory.ToolUse),
         agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
       ],
@@ -524,7 +551,7 @@ describe('CLI multi-agent presets', () => {
   it('omits inspection login recovery hint after a remote agent load was attempted', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      toolUseAgents: [agent('review', AgentCategory.ToolUse)],
+      toolUse: [agent('review', AgentCategory.ToolUse)],
     });
 
     const details = formatCliMultiAgentPresetInspection(plan, {
@@ -538,26 +565,26 @@ describe('CLI multi-agent presets', () => {
   it('plans a preset run with canonical visibility keys and an orchestrator root', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      workflowAgents: [
+      workflow: [
         agent('correct', AgentCategory.Workflow),
         agent('polish', AgentCategory.Workflow),
       ],
-      toolUseAgents: [
+      toolUse: [
         agent('review', AgentCategory.ToolUse),
         agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
       ],
     });
 
     expect(plan.rootAgent?.name).toBe('orchestrator');
-    expect(plan.workflowAgentKeys).toEqual([
+    expect(plan.agentKeys.workflow).toEqual([
       'builtInWorkflow:correct',
       'builtInWorkflow:polish',
     ]);
-    expect(plan.toolUseAgentKeys).toEqual([
+    expect(plan.agentKeys.toolUse).toEqual([
       'builtInToolUse:orchestrator',
       'builtInToolUse:review',
     ]);
-    expect(plan.missingToolUseAgents).toContain('research');
+    expect(plan.missingAgents.toolUse).toContain('research');
   });
 
   it('flags a gap when a built-in preset has members but no root', () => {
@@ -566,7 +593,7 @@ describe('CLI multi-agent presets', () => {
     // orchestrators are available. The members should still count as available,
     // but they should not be promoted to the built-in team root.
     const plan = planRun(preset, {
-      toolUseAgents: [agent('review', AgentCategory.ToolUse)],
+      toolUse: [agent('review', AgentCategory.ToolUse)],
     });
 
     expect(plan.rootAgent).toBeUndefined();
@@ -576,15 +603,13 @@ describe('CLI multi-agent presets', () => {
   it('does not select built-in team specialists as implicit roots', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      toolUseAgents: [
+      toolUse: [
         agent('review', AgentCategory.ToolUse),
         agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
       ],
     });
     const onlySimplifierPlan = planRun(preset, {
-      toolUseAgents: [
-        agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
+      toolUse: [agent('simplifier', AgentCategory.ToolUse, ['delegate_agent'])],
     });
 
     expect(plan.rootAgent).toBeUndefined();
@@ -595,7 +620,7 @@ describe('CLI multi-agent presets', () => {
   it('keeps delegating built-in specialists as members instead of roots', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: [
+      toolUse: [
         agent('lean', AgentCategory.ToolUse, ['delegate_agent']),
         agent('latexFixer', AgentCategory.ToolUse),
       ],
@@ -646,11 +671,13 @@ describe('CLI multi-agent presets', () => {
         description: 'User-authored team.',
         icon: 'cube',
         source: 'custom',
-        workflowAgents: [],
-        toolUseAgents: members,
+        agents: {
+          workflow: [],
+          toolUse: members,
+        },
       },
       {
-        toolUseAgents: members.map((member) =>
+        toolUse: members.map((member) =>
           agent(
             member,
             AgentCategory.ToolUse,
@@ -671,18 +698,18 @@ describe('CLI multi-agent presets', () => {
   it('reports no gaps when every preset member resolves', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: toolUseTeam(preset, 'leanOrchestrator'),
+      toolUse: toolUseTeam(preset, 'leanOrchestrator'),
     });
 
     expect(plan.rootAgent?.name).toBe('leanOrchestrator');
-    expect(plan.missingToolUseAgents).toEqual([]);
+    expect(plan.missingAgents.toolUse).toEqual([]);
     expect(teamPlanHasGaps(plan)).toBe(false);
   });
 
   it('flags a gap when no root agent can be selected', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      toolUseAgents: [],
+      toolUse: [],
     });
 
     expect(plan.rootAgent).toBeUndefined();
@@ -692,14 +719,14 @@ describe('CLI multi-agent presets', () => {
   it('adds an explicit root override to the visible tool-use team', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: [
+      toolUse: [
         agent('lean', AgentCategory.ToolUse),
         agent('review', AgentCategory.ToolUse, ['delegate_agent']),
       ],
       agentOverride: 'review',
     });
     const sourceQualifiedPlan = planRun(preset, {
-      toolUseAgents: [
+      toolUse: [
         agent('lean', AgentCategory.ToolUse),
         agent('review', AgentCategory.ToolUse, ['delegate_agent']),
       ],
@@ -707,7 +734,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(plan.rootAgent?.name).toBe('review');
-    expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
+    expect(plan.agentKeys.toolUse).toContain('builtInToolUse:review');
     expect(sourceQualifiedPlan.missingAgentOverride).toBeUndefined();
     expect(sourceQualifiedPlan.rootAgent?.name).toBe('review');
   });
@@ -715,7 +742,7 @@ describe('CLI multi-agent presets', () => {
   it('allows a preset member when explicitly requested as the root', () => {
     const preset = findPreset('physicist');
     const plan = planRun(preset, {
-      toolUseAgents: [
+      toolUse: [
         agent('review', AgentCategory.ToolUse, ['delegate_agent']),
         agent('research', AgentCategory.ToolUse),
       ],
@@ -723,19 +750,19 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(plan.rootAgent?.name).toBe('review');
-    expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
+    expect(plan.agentKeys.toolUse).toContain('builtInToolUse:review');
   });
 
   it('tracks a missing root override as a plan gap', () => {
     const preset = findPreset('lean-project');
     const plan = planRun(preset, {
-      toolUseAgents: toolUseTeam(preset, 'leanOrchestrator'),
+      toolUse: toolUseTeam(preset, 'leanOrchestrator'),
       agentOverride: 'definitely-not-real',
     });
 
     expect(plan.missingAgentOverride).toBe('definitely-not-real');
     expect(plan.rootAgent?.name).toBe('leanOrchestrator');
-    expect(plan.missingToolUseAgents).toEqual([]);
+    expect(plan.missingAgents.toolUse).toEqual([]);
     expect(teamPlanHasGaps(plan)).toBe(true);
   });
 });

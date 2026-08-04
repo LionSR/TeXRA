@@ -196,8 +196,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:correct'],
-      toolUseAgentKeys: 'all',
+      agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
     });
     expect(posted.map(commandOf)).toEqual(
       expect.arrayContaining([
@@ -456,8 +455,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)).toEqual([
       expect.objectContaining({
         name: 'Paper Team',
-        workflowAgents: ['correct'],
-        toolUseAgents: ['review'],
+        agents: { workflow: ['correct'], toolUse: ['review'] },
       }),
     ]);
     expect(infoMessages).toEqual(['Saved team "Paper Team"']);

@@ -152,18 +152,31 @@ describe('ContextManagementDataSchema — legacy missing tokensAfter/utilization
   });
 });
 
-describe('ActiveChildInfoSchema — canonical discriminant', () => {
+describe('ActiveChildInfoSchema — flat roster row', () => {
   const base = {
     executionId: 'exec-1',
+    childStreamId: 'stream-1',
     agentName: 'review',
+    identity: { kind: 'agent', agent: 'review' },
   };
 
-  it('accepts a process entry', () => {
+  it('accepts a row carrying its parsed identity verbatim', () => {
     const result = ActiveChildInfoSchema.parse({
       ...base,
-      kind: 'process',
+      identity: { kind: 'process', tool: 'bash' },
     });
-    expect(result).toMatchObject({ kind: 'process' });
+    expect(result).toMatchObject({
+      identity: { kind: 'process', tool: 'bash' },
+    });
+  });
+
+  it('requires childStreamId — every child owns a stream tab', () => {
+    expect(() =>
+      ActiveChildInfoSchema.parse({
+        executionId: 'exec-1',
+        agentName: 'review',
+      }),
+    ).toThrow();
   });
 
   // `status` has no legacy migration on purpose. The child roster is liveness
@@ -174,8 +187,6 @@ describe('ActiveChildInfoSchema — canonical discriminant', () => {
   it('accepts a StreamPhase status', () => {
     const result = ActiveChildInfoSchema.parse({
       ...base,
-      kind: 'subagent',
-      childStreamId: 'stream-1',
       status: STREAM_PHASE.RUNNING,
     });
 
@@ -186,7 +197,6 @@ describe('ActiveChildInfoSchema — canonical discriminant', () => {
     expect(() =>
       ActiveChildInfoSchema.parse({
         ...base,
-        kind: 'process',
         status: STREAM_STATUS.INITIALIZING,
       }),
     ).toThrow();

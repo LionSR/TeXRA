@@ -107,16 +107,16 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   const candidates = toNewestFirstByTimestamp(
     entries.filter(isUserVisibleExecution).filter(
       (entry) =>
-        entry.agentConfig.agentCategory === AgentCategory.ToolUse &&
+        entry.record.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a
         // sensible default for a plain single-agent chat session.
-        !entry.agentConfig.cliMultiAgentPresetId,
+        !entry.record.cliMultiAgentPresetId,
     ),
     (item) => item.timestamp,
   );
   const mostRecent = candidates[0];
   if (!mostRecent) return {};
-  return { model: resolveKnownCliModelId(mostRecent.agentConfig.model) };
+  return { model: resolveKnownCliModelId(mostRecent.record.model) };
 }
 
 function deriveSource(sources: {

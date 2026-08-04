@@ -128,8 +128,8 @@ async function configureAgentRoster(
   }
   if (input.workflow !== undefined && input.toolUse !== undefined) {
     await roster.setCustom({
-      workflowAgentKeys: parseAgentKeys(input.workflow),
-      toolUseAgentKeys: parseAgentKeys(input.toolUse),
+      workflow: parseAgentKeys(input.workflow),
+      toolUse: parseAgentKeys(input.toolUse),
     });
   } else if (input.workflow !== undefined) {
     await roster.setEnabledAgentKeys(

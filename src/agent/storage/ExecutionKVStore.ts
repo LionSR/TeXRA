@@ -13,6 +13,11 @@ import {
   type AgentConfig,
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  RunRecordSchema,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
@@ -150,6 +155,9 @@ export interface ExecutionKVStore {
    * corruption stops recovery instead of being treated as missing state.
    */
   readMetaStrict(): Promise<ExecutionMeta | null>;
+  /** The persisted run record: honest union across agent and non-agent runs. */
+  readRunRecord(): Promise<RunRecord | null>;
+  /** Agent-arm view of the run record; null for non-agent records. */
   readConfig(): Promise<AgentConfig | null>;
   readReport(): Promise<string | null>;
   readWorkspaceFiles(): Promise<string[]>;
@@ -159,7 +167,7 @@ export interface ExecutionKVStore {
 
   // -- Typed writers --------------------------------------------------------
   writeMeta(meta: ExecutionMetaInput): Promise<void>;
-  writeConfig(config: AgentConfig): Promise<void>;
+  writeRunRecord(record: RunRecord): Promise<void>;
   writeReport(report: string): Promise<void>;
   writeWorkspaceFiles(paths: readonly string[]): Promise<void>;
   writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void>;
@@ -236,12 +244,22 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return this.readValidated(KEYS.META, ExecutionMetaSchema);
   }
 
+  async readRunRecord(): Promise<RunRecord | null> {
+    return this.readValidated(KEYS.CONFIG, RunRecordSchema);
+  }
+
   async readMetaStrict(): Promise<ExecutionMeta | null> {
     return this.readValidated(KEYS.META, ExecutionMetaSchema, 'throw');
   }
 
+  /**
+   * Agent-arm view of the run record: null when the record is a non-agent
+   * run's honest minimal shape. Pre-consolidation non-agent rows persisted a
+   * fabricated `AgentConfig` and still read through this arm.
+   */
   async readConfig(): Promise<AgentConfig | null> {
-    return this.readValidated<AgentConfig>(KEYS.CONFIG, AgentConfigSchema);
+    const record = await this.readRunRecord();
+    return record && isAgentRunRecord(record) ? record : null;
   }
 
   async readReport(): Promise<string | null> {
@@ -291,8 +309,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     await this.write(KEYS.META, ExecutionMetaSchema.parse(meta));
   }
 
-  async writeConfig(config: AgentConfig): Promise<void> {
-    await this.write(KEYS.CONFIG, config);
+  async writeRunRecord(record: RunRecord): Promise<void> {
+    await this.write(KEYS.CONFIG, RunRecordSchema.parse(record));
   }
 
   async writeReport(report: string): Promise<void> {

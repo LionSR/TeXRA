@@ -2,17 +2,16 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
 
 /**
- * Build a stream tab ID from an agent, model, and executionId.
+ * Mint the opaque stream tab id for a new run: `${name}#${executionId}`.
  *
- * `executionId` is required: each run gets a unique tab ID, so callers that
- * don't know the executionId cannot refer to any existing tab and should pass
- * an explicit `streamIdOverride` instead of deriving one here.
+ * The id is an opaque handle — nothing parses it back. Uniqueness comes from
+ * the executionId suffix; the name prefix is human-orienting only. Existing
+ * runs are addressed by the `streamId` stamped on their execution metadata
+ * at registration, never by re-deriving this format.
  */
 export function getStreamTabId(
   agent: string,
-  model: string,
   options: { executionId: ExecutionId },
 ): StreamTabId {
-  const cleanAgent = getCleanAgentName(agent);
-  return `${cleanAgent}@${model}#${options.executionId}`;
+  return `${getCleanAgentName(agent)}#${options.executionId}`;
 }

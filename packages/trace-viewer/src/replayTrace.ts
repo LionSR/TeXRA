@@ -6,13 +6,13 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   StreamLifecycleStatusSchema,
   streamStatusToLifecycleStatus,
+  type RunIdentity,
   type StreamLifecycleStatus,
   type SyncStreamContentPayload,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { isObject } from '@utils/core';
 import type { TraceDocument } from '@transcript';
 
@@ -133,6 +133,35 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
 }
 
 /**
+ * Identity fallback for pre-migration exports (`trace.meta.identity` absent):
+ * the stream-id prefix is the one surviving discriminator, read here and in
+ * the storage entrance stamper only — production classification reads the
+ * stamped identity.
+ */
+/** The record's display name across both arms of the config union. */
+function recordName(config: TraceDocument['config']): string {
+  return 'agentCategory' in config ? config.agent : config.name;
+}
+
+function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
+  const streamId = trace.streamId;
+  const name = recordName(trace.config);
+  if (streamId.startsWith('workflow-script#')) {
+    return { kind: 'multiAgentWorkflow', workflowName: name };
+  }
+  if (streamId.startsWith('codex@')) {
+    return { kind: 'agent', agent: name, tool: 'codex' };
+  }
+  if (streamId.startsWith('claude@')) {
+    return { kind: 'agent', agent: name, tool: 'claude_code' };
+  }
+  if (streamId.startsWith('bash@')) {
+    return { kind: 'process', tool: 'bash' };
+  }
+  return { kind: 'agent', agent: name };
+}
+
+/**
  * Replays one finished execution through the REAL `dispatchMessage` pipeline
  * as a short synthetic message sequence — the same reducer logic a live host
  * uses, just fed once instead of over time. Order matters: `LOG_DELTA` is a
@@ -141,11 +170,12 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
  */
 export function replayTrace(trace: TraceDocument): void {
   const { snapshot } = trace;
+  const agentConfig =
+    'agentCategory' in trace.config ? trace.config : undefined;
   const streamTabBase = {
     name: trace.streamId,
-    label: trace.config.agent,
-    agent: trace.config.agent,
-    agentCategory: trace.config.agentCategory,
+    label: recordName(trace.config),
+    agentCategory: agentConfig?.agentCategory,
     // Empty-entries traces have nothing to derive a creation time from;
     // fall back to "now" rather than the Unix epoch, which would render
     // as a misleadingly specific (and wrong) 1970 date.
@@ -153,12 +183,18 @@ export function replayTrace(trace: TraceDocument): void {
     executionId: trace.executionId,
     description: trace.meta?.description,
   };
-  // A replayed process-agent trace (e.g. bash) must keep kind: 'process' so
-  // the progress UI picks the terminal-style renderer instead of tool-use
-  // chrome — matches the live classification in buildStreamTabInfo.
-  const streamTabInfo: StreamTabInfo = isProcessAgent(trace.config.agent)
-    ? { ...streamTabBase, kind: 'process', command: trace.config.instruction }
-    : { ...streamTabBase, kind: 'agent', model: trace.config.model };
+  // The embedded ExecutionMeta carries the run's identity. Pre-migration
+  // exports have no identity and are NOT all agent runs (bash process and
+  // workflow-script traces exist), so classify from the trace's stream-id
+  // prefix — the same quarantined evidence rule as the storage entrance
+  // stamper (`deriveLegacyIdentity`); an immutable exported file is the one
+  // permanent home for this fallback.
+  const identity: RunIdentity =
+    trace.meta?.identity ?? legacyTraceIdentity(trace);
+  const streamTabInfo: StreamTabInfo =
+    identity.kind === 'process'
+      ? { ...streamTabBase, identity, command: trace.config.instruction }
+      : { ...streamTabBase, identity, model: trace.config.model };
   const updateStreams: UpdateStreamsMessage = {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [streamTabInfo],
@@ -166,7 +202,7 @@ export function replayTrace(trace: TraceDocument): void {
     streamStates: {
       [trace.streamId]: {
         status: toStreamLifecycleStatus(trace),
-        kind: trace.config.agentCategory,
+        category: agentConfig?.agentCategory,
         conversationProgress: snapshot.conversationProgress,
         // Liveness is never restored as live (matches the existing
         // ghost-stream hydrate convention documented on StreamSnapshot) —
@@ -192,11 +228,15 @@ export function replayTrace(trace: TraceDocument): void {
     stream: trace.streamId,
     runUsage: snapshot.runUsage,
   };
+  // Workflow-shaped sync for workflow agents AND multi-agent-workflow
+  // containers (both have round outputs); everything else renders the
+  // tool-use shape.
   const syncPayload: SyncStreamContentPayload =
-    trace.config.agentCategory === AgentCategory.Workflow
+    agentConfig?.agentCategory === AgentCategory.Workflow ||
+    identity.kind === 'multiAgentWorkflow'
       ? {
           ...syncSnapshot,
-          kind: AgentCategory.Workflow,
+          category: AgentCategory.Workflow,
           outputs: {
             files: snapshot.outputFilesByRound,
             missing: snapshot.missingOutputsByRound,
@@ -205,7 +245,7 @@ export function replayTrace(trace: TraceDocument): void {
         }
       : {
           ...syncSnapshot,
-          kind: AgentCategory.ToolUse,
+          category: AgentCategory.ToolUse,
           workPlan: {
             todos: snapshot.todos,
             plan: snapshot.plan,

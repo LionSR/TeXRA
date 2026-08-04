@@ -42,15 +42,11 @@ const roster = vi.hoisted(() => ({
 // re-implementing the real resolver's priority/dedup logic.
 vi.mock('@agent/index/agentRegistry', () => ({
   resolveDelegationScopeAgents: (
-    scope:
-      { workflowAgentKeys: string[]; toolUseAgentKeys: string[] } | undefined,
-    category: string,
+    scope: { workflow: string[]; toolUse: string[] } | undefined,
+    category: 'workflow' | 'toolUse',
   ) => {
     if (!scope) return roster.entries.filter((e) => e.category === category);
-    const keys =
-      category === 'workflow'
-        ? scope.workflowAgentKeys
-        : scope.toolUseAgentKeys;
+    const keys = scope[category];
     return keys.flatMap((key) => {
       const entry = roster.entries.find(
         (e) => e.category === category && `${e.source}:${e.name}` === key,
@@ -86,8 +82,8 @@ describe('buildUserVars delegation scope', () => {
       noopTrace,
       {
         delegationAgentScope: {
-          workflowAgentKeys: ['builtInWorkflow:scoped-writer'],
-          toolUseAgentKeys: ['remote:scoped-reviewer'],
+          workflow: ['builtInWorkflow:scoped-writer'],
+          toolUse: ['remote:scoped-reviewer'],
         },
       },
     );

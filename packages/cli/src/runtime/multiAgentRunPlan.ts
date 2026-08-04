@@ -8,6 +8,7 @@ import {
   refreshRemoteCatalogForGaps,
   teamPlanHasGaps,
 } from '@common/teams/TeamPlan';
+import { byCategory } from '@shared/schemas';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -42,8 +43,7 @@ function planCurrentMultiAgentRun(
     throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
   }
   return planTeamRun(preset, {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+    agents: byCategory((category) => getAgentsByCategory(category)),
     agentOverride: init.agent,
   });
 }
@@ -52,8 +52,7 @@ function planLoadedCliMultiAgentPresets(
   presets: readonly CliMultiAgentPreset[],
 ): CliMultiAgentPresetRunPlan[] {
   return planTeamRuns(presets, {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+    agents: byCategory((category) => getAgentsByCategory(category)),
   });
 }
 

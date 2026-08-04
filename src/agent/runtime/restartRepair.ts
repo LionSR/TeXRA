@@ -66,7 +66,7 @@ export interface RestartRepairResult {
   failedStreams: StreamTabId[];
   closedWaitingGroups: StreamTabId[];
   closedFailedGroups: StreamTabId[];
-  terminalStatusUpdated: ExecutionId[];
+  outcomeUpdated: ExecutionId[];
   /** Earliest time a fresh lease skipped at startup can be checked again. */
   nextLeaseCheckAt?: number;
 }
@@ -77,7 +77,7 @@ function createRestartRepairResult(): RestartRepairResult {
     failedStreams: [],
     closedWaitingGroups: [],
     closedFailedGroups: [],
-    terminalStatusUpdated: [],
+    outcomeUpdated: [],
   };
 }
 
@@ -128,26 +128,20 @@ function repairCandidates(
 
 type ExecutionSettlement =
   | { readonly kind: 'unsettled' }
-  | { readonly kind: 'unmappable-terminal' }
   | { readonly kind: 'settled'; readonly outcome: RunOutcome };
 
 /**
  * Revalidate terminal metadata while holding the execution lease.
  *
  * A cancelled execution remains unsettled when it still has a resumable flow;
- * completed and failed executions are always terminal. Unknown legacy terminal
- * statuses are protected from repair even though they cannot be projected onto
- * the current stream-phase vocabulary.
+ * completed and failed executions are always terminal.
  */
 async function readExecutionSettlement(
   executionId: ExecutionId,
 ): Promise<ExecutionSettlement> {
   const meta = await getExecutionStore(executionId).readMetaStrict();
-  if (!meta || (meta.terminalStatus == null && meta.outcome == null)) {
+  if (!meta || meta.outcome == null) {
     return { kind: 'unsettled' };
-  }
-  if (meta.outcome == null) {
-    return { kind: 'unmappable-terminal' };
   }
   if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
     return {
@@ -202,11 +196,11 @@ function repairToWaiting(
 }
 
 /**
- * Persist the FAILED terminal status for a repaired stream's execution,
- * reporting whether that status reached disk. Finalization problems are logged
- * rather than thrown: the in-memory repair has already committed.
+ * Persist the FAILED terminal outcome for a repaired stream's execution,
+ * reporting whether that outcome reached disk. Finalization problems are
+ * logged rather than thrown: the in-memory repair has already committed.
  */
-async function writeFailedTerminalStatus(
+async function writeFailedOutcome(
   streamId: StreamTabId,
   executionId: ExecutionId,
   finalizeExecution: (
@@ -217,7 +211,7 @@ async function writeFailedTerminalStatus(
   try {
     const finalization = await finalizeExecution({
       executionId,
-      terminalStatus: projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
     if (finalization.status === 'failed') {
@@ -226,12 +220,12 @@ async function writeFailedTerminalStatus(
           streamId,
           executionId,
           stage: finalization.stage,
-          terminalStatusPersisted: finalization.terminalStatusPersisted,
+          outcomePersisted: finalization.outcomePersisted,
           error: finalization.error,
         },
       });
     }
-    return finalization.terminalStatusPersisted;
+    return finalization.outcomePersisted;
   } catch (error) {
     logger?.warn('Restart-repair finalization rejected unexpectedly', {
       data: { streamId, executionId, error },
@@ -270,9 +264,6 @@ export async function repairRestartedStreams(
           const settlement = await readExecutionSettlement(executionId);
           if (options.signal?.aborted) {
             return { kind: 'cancelled' as const };
-          }
-          if (settlement.kind === 'unmappable-terminal') {
-            return { kind: 'protected-terminal' as const };
           }
           if (settlement.kind === 'settled') {
             synchronizeSettledPhase(
@@ -321,12 +312,6 @@ export async function repairRestartedStreams(
         continue;
       }
       if (repaired.value.kind === 'cancelled') break;
-      if (repaired.value.kind === 'protected-terminal') {
-        options.logger?.debug(
-          `Skipped restart repair for execution ${executionId} with an unknown legacy terminal status`,
-        );
-        continue;
-      }
       if (repaired.value.kind === 'settled') {
         options.logger?.debug(
           `Skipped restart repair for terminal execution ${executionId}`,
@@ -338,7 +323,7 @@ export async function repairRestartedStreams(
       result.failedStreams.push(...streamResult.failedStreams);
       result.closedWaitingGroups.push(...streamResult.closedWaitingGroups);
       result.closedFailedGroups.push(...streamResult.closedFailedGroups);
-      result.terminalStatusUpdated.push(...streamResult.terminalStatusUpdated);
+      result.outcomeUpdated.push(...streamResult.outcomeUpdated);
     } catch (error) {
       if (repairStarted) throw error;
       options.logger?.warn(
@@ -432,21 +417,21 @@ async function repairRestartedStream(
         now,
       )
     : [];
-  const terminalStatusUpdated: ExecutionId[] = [];
+  const outcomeUpdated: ExecutionId[] = [];
   if (failedStreams.length > 0 && executionId) {
-    const persisted = await writeFailedTerminalStatus(
+    const persisted = await writeFailedOutcome(
       streamId,
       executionId,
       options.finalizeExecution ?? defaultFinalizeExecution,
       options.logger,
     );
-    if (persisted) terminalStatusUpdated.push(executionId);
+    if (persisted) outcomeUpdated.push(executionId);
   }
   return {
     waitingStreams,
     failedStreams,
     closedWaitingGroups: [...closedWaitingGroups],
     closedFailedGroups: [...closedFailedGroups],
-    terminalStatusUpdated,
+    outcomeUpdated,
   };
 }

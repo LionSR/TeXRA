@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { RunRecordSchema } from '@agent/core/definition/RunRecord';
 import {
   ExecutionIdSchema,
   StreamTabIdSchema,
@@ -16,7 +16,8 @@ import { StreamSnapshotSchema } from '@shared/schemas/streamSnapshot';
 export const TraceDocumentSchema = z.object({
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
-  config: AgentConfigSchema,
+  /** The run's honest record: AgentConfig for agent runs, minimal otherwise. */
+  config: RunRecordSchema,
   meta: ExecutionMetaSchema.nullable(),
   entries: z.array(StreamLogEntrySchema),
   snapshot: StreamSnapshotSchema,

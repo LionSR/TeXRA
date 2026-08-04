@@ -636,6 +636,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const statusBarSession = defaultSession();
   const statusBarUsageTracker = new StatusBarUsageTracker(
     statusBarSession.status,
+    statusBarSession.snapshots,
   );
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
@@ -682,12 +683,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const disposeStatusListener = subscribeStatusBarSessionEvents({
     session: statusBarSession,
-    tracker: statusBarUsageTracker,
     onStatusChanged: () => {
       updateStatusBarTooltip();
       updateStatusBarText();
     },
-    // UsageMonitor emits per-round deltas; the tracker accumulates them.
+    // The snapshot store accumulates the per-round deltas; the tracker
+    // projects the running streams' totals from it on each refresh.
     onUsageChanged: updateStatusBarTooltip,
   });
 

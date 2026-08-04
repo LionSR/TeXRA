@@ -27,11 +27,6 @@
       "specifier": "@agent/storage"
     },
     {
-      "file": "src/test-kernel/cli/ChatDefaultsFastPath.vitest.mts",
-      "form": "mock",
-      "specifier": "@agent/storage"
-    },
-    {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
       "form": "mock",
       "specifier": "@agent/runtime/executeAgent"
@@ -102,6 +97,16 @@
       "specifier": "@agent/storage"
     },
     {
+      "file": "src/test-kernel/cli/ResumeCommand.vitest.mts",
+      "form": "mock",
+      "specifier": "@agent/runtime/SessionResumeRetrieval"
+    },
+    {
+      "file": "src/test-kernel/cli/ResumeCommand.vitest.mts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
       "file": "src/test-kernel/cli/RunChatConfig.vitest.mts",
       "form": "mock",
       "specifier": "@agent/index"
@@ -122,19 +127,14 @@
       "specifier": "@agent/index"
     },
     {
-      "file": "src/test-kernel/cli/SessionResumeResolution.vitest.mts",
-      "form": "mock",
-      "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
-      "file": "src/test-kernel/cli/SessionResumeResolution.vitest.mts",
-      "form": "mock",
-      "specifier": "@agent/runtime/streamTab"
-    },
-    {
       "file": "src/test-kernel/cli/TranscriptSessionPolicy.vitest.mts",
       "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/TuiHostInteractionsCancelForStream.vitest.mts",
+      "form": "mock",
+      "specifier": "@agent/runtime/SessionHandle"
     },
     {
       "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.mts",

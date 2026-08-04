@@ -724,14 +724,13 @@ export class ExecutionRegistry {
       if (!isChildExecution(handle, parentStreamId)) continue;
       const { status, elapsed } = this.getStatus(handle);
       result.push({
-        kind: 'subagent',
         executionId: handle.executionId,
+        identity: handle.identity,
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
         elapsed: elapsed ?? null,
         childStreamId: handle.childStreamId,
-        ...(handle.toolName ? { toolName: handle.toolName } : {}),
         ...(handle.workflowPhase
           ? { workflowPhase: handle.workflowPhase }
           : {}),

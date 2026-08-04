@@ -215,8 +215,8 @@ const SHOW_BOTH_SUBSCRIPTION_PREFERENCES =
   process.env.HARNESS_BOTH_SUBSCRIPTION_PREFERENCES === '1';
 const SHOW_KIMI_CODE_SUBSCRIPTION =
   process.env.HARNESS_KIMI_CODE_SUBSCRIPTION === '1';
-const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
-  process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
+const SHOW_ORCHESTRATION_HISTORY =
+  process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
 const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
@@ -463,14 +463,16 @@ if (
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     {
       kind: 'custom',
-      workflowAgentKeys:
-        process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-          ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-          : 'all',
-      toolUseAgentKeys:
-        process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-          ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-          : 'all',
+      agentKeys: {
+        workflow:
+          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+            : 'all',
+        toolUse:
+          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+            : 'all',
+      },
     },
   );
 }
@@ -482,29 +484,11 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
 }
 await loadAgents({ includeRemote: false });
 
+// Models the production boundary: `listCliHistoryEntries` already applies
+// `isUserVisibleExecution`, so menu builders only ever see user-started rows.
 function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
-  if (!SHOW_DELEGATED_ORCHESTRATION_HISTORY) return [];
+  if (!SHOW_ORCHESTRATION_HISTORY) return [];
   return [
-    {
-      id: 'aaaaaaaaaaaa' as ExecutionId,
-      timestamp: '2026-06-06T00:00:00Z',
-      agent: 'search',
-      model: 'harness-model',
-      status: CLI_HISTORY_RESUMABLE_STATUS,
-      inputBasename: '-',
-      category: AgentCategory.ToolUse,
-      parentExecutionId: 'root-session' as ExecutionId,
-    },
-    {
-      id: 'bbbbbbbbbbbb' as ExecutionId,
-      timestamp: '2026-06-06T00:01:00Z',
-      agent: 'review',
-      model: 'harness-model',
-      status: CLI_HISTORY_RESUMABLE_STATUS,
-      inputBasename: '-',
-      category: AgentCategory.ToolUse,
-      parentExecutionId: 'root-session' as ExecutionId,
-    },
     {
       id: 'cccccccccccc' as ExecutionId,
       timestamp: '2026-06-06T00:02:00Z',
@@ -523,8 +507,10 @@ const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
 );
 const HARNESS_ALL_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
 const HARNESS_PRESET_PLANS = planTeamRuns(teamPresets(undefined), {
-  workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-  toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
+  agents: {
+    workflow: getAgentsByCategory(AgentCategory.Workflow),
+    toolUse: HARNESS_ALL_TOOL_USE_AGENTS,
+  },
 });
 const HARNESS_MODEL_ACCESS =
   SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
@@ -1263,17 +1249,17 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 }
 
 function seedWorkflowTimeline(): void {
-  const executionId = 'harness-workflow-timeline' as ExecutionId;
-  const childStreamId =
-    'workflow-script#harness-workflow-timeline' as StreamTabId;
+  // Hex-valid: the StreamSnapshotStore (the one artifact accumulator) parses
+  // payload execution ids and drops non-conforming rows.
+  const executionId = 'aaaa0001f10e' as ExecutionId;
+  const childStreamId = 'workflow-script#aaaa0001f10e' as StreamTabId;
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
-      kind: 'subagent',
       executionId,
       agentName: 'repositoryAudit',
       childStreamId,
-      toolName: 'delegate_multi_agents',
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'repositoryAudit' },
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
@@ -1371,9 +1357,8 @@ function seedWorkflowTimeline(): void {
 }
 
 function seedRunningWorkflow(): void {
-  const executionId = 'harness-workflow-running' as ExecutionId;
-  const childStreamId =
-    'workflow-script#harness-workflow-running' as StreamTabId;
+  const executionId = 'aaaa0002f10e' as ExecutionId;
+  const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
   const firstAgentStreamId =
     'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
   const secondAgentStreamId =
@@ -1382,11 +1367,13 @@ function seedRunningWorkflow(): void {
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
-      kind: 'subagent',
       executionId,
       agentName: 'live-workflow-validation',
       childStreamId,
-      toolName: 'delegate_multi_agents',
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'live-workflow-validation',
+      },
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
@@ -1436,16 +1423,16 @@ function seedRunningWorkflow(): void {
 
   const workflowChildren = [
     {
-      kind: 'subagent',
       executionId: 'harness-workflow-agent-a',
+      identity: { kind: 'agent', agent: 'correct' },
       agentName: 'correct',
       childStreamId: firstAgentStreamId,
       elapsed: '18s',
       workflowPhase: 'Proofread',
     },
     {
-      kind: 'subagent',
       executionId: 'harness-workflow-agent-b',
+      identity: { kind: 'agent', agent: 'correct' },
       agentName: 'correct',
       childStreamId: secondAgentStreamId,
       elapsed: '17s',
@@ -1497,8 +1484,8 @@ const HARNESS_DISPOSERS: Array<() => void> = [];
 
 function childEventOrderRosterRow(): ActiveChildInfo {
   return {
-    kind: 'subagent',
     executionId: CHILD_EVENT_ORDER_EXECUTION_ID,
+    identity: { kind: 'agent', agent: CHILD_EVENT_ORDER_AGENT_NAME },
     agentName: CHILD_EVENT_ORDER_AGENT_NAME,
     childStreamId: CHILD_EVENT_ORDER_STREAM_ID,
     elapsed: '1m 4s',
@@ -1728,6 +1715,7 @@ if (SHOW_CHILDREN) {
   const nestedStrategyChild = {
     kind: 'subagent' as const,
     executionId: 'harness-nested-local-checker',
+    identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
     childStreamId: 'harness-nested-local-checker-stream',
     status: STREAM_PHASE.RUNNING,
@@ -1735,24 +1723,24 @@ if (SHOW_CHILDREN) {
   };
   const childStreams = [
     {
-      kind: 'subagent' as const,
       executionId: 'harness-child-strategy',
+      identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
       childStreamId: 'harness-child-strategy-stream',
       status: STREAM_PHASE.RUNNING,
       startedAt,
     },
     {
-      kind: 'subagent' as const,
       executionId: 'harness-child-lean',
+      identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
       status: STREAM_PHASE.WAITING,
       elapsed: '2m 3s',
     },
     {
-      kind: 'subagent' as const,
       executionId: 'harness-child-review',
+      identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
       childStreamId: 'harness-child-review-stream',
       status: STREAM_PHASE.RUNNING,
@@ -2432,7 +2420,12 @@ if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
   // `subscribeStreamStatus()` and the run-fact subscription once per TUI
   // session.
-  HARNESS_DISPOSERS.push(attachTuiRunFactSubscription(defaultSession().events));
+  HARNESS_DISPOSERS.push(
+    attachTuiRunFactSubscription(
+      defaultSession().events,
+      defaultSession().snapshots,
+    ),
+  );
 }
 
 if (SHOW_WORKFLOW_TIMELINE) {

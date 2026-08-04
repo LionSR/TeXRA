@@ -89,6 +89,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // each controller only needs a subset of these.
   private readonly getRunConfig = (stream: StreamTabId) =>
     this.provider.state.snapshots.getRunConfig(stream);
+  private readonly getRunIdentity = (stream: StreamTabId) =>
+    this.provider.state.snapshots.getRunIdentity(stream);
   private readonly getExecutionId = (stream: StreamTabId) =>
     this.provider.state.snapshots.getExecutionId(stream);
   private readonly getOutputFiles = (stream: StreamTabId) =>
@@ -184,6 +186,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
 
     const secondTierActions: ProgressViewSecondTierActions = {
+      getRunIdentity: this.getRunIdentity,
       workflowActions: this.workflowActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -377,6 +380,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       run: {
         state: {
           getRunConfig: this.getRunConfig,
+          getRunIdentity: this.getRunIdentity,
           getExecutionId: this.getExecutionId,
         },
         // Workflow actions intentionally wait for the run to finish.

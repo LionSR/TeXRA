@@ -1,4 +1,5 @@
 // Type imports
+import { AGENT_CATEGORIES, byCategory, type ByCategory } from '@shared/schemas';
 import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
 
 export const CLI_COMPLETION_SHELLS = ['bash', 'zsh', 'fish'] as const;
@@ -203,22 +204,33 @@ export const COMPLETION_SOURCES = {
     command: 'agents list --quiet',
     column: 2,
   },
-  workflowAgents: {
-    shellFunction: '_texra_workflow_agents',
-    command: 'agents list --quiet --all --category workflow',
-    column: 2,
-  },
-  toolUseAgents: {
-    shellFunction: '_texra_tool_use_agents',
-    command: 'agents list --quiet --all --category toolUse',
-    column: 2,
-  },
   models: {
     shellFunction: '_texra_models',
     command: 'models list --quiet',
     column: 1,
   },
 } as const satisfies Record<string, CompletionSource>;
+
+const AGENT_COMPLETION_SHELL_FUNCTIONS: ByCategory<string> = {
+  workflow: '_texra_workflow_agents',
+  toolUse: '_texra_tool_use_agents',
+};
+
+/** Per-category agent listing sources (roster-filtered `agents list`). */
+export const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> =
+  byCategory((category) => ({
+    shellFunction: AGENT_COMPLETION_SHELL_FUNCTIONS[category],
+    command: `agents list --quiet --all --category ${category}`,
+    column: 2,
+  }));
+
+/** Every dynamic listing source, for the generators that emit each function. */
+export function allCompletionSources(): CompletionSource[] {
+  return [
+    ...Object.values(COMPLETION_SOURCES),
+    ...AGENT_CATEGORIES.map((category) => AGENT_COMPLETION_SOURCES[category]),
+  ];
+}
 
 /** The listing pipeline a shell function body runs, shared by bash and zsh. */
 export function completionSourceListing(source: CompletionSource): string {

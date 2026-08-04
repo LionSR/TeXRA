@@ -55,6 +55,7 @@ vi.mock('@agent/storage', () => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
+  EXECUTION_LEASE_STALE_MS: 120_000,
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
@@ -204,7 +205,10 @@ describe('codex tool - atomic resume fallback', () => {
       id: 'stale-thread',
       runStreamed: vi.fn(),
     };
-    const executions = { getAgentHandleByStream: () => undefined } as any;
+    const executions = {
+      getAgentHandleByStream: () => undefined,
+      getHandle: () => undefined,
+    } as any;
     let strategy: ChildRunStrategy<unknown> | undefined;
 
     mocks.importCodexClass.mockImplementation(() => {

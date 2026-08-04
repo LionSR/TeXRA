@@ -35,17 +35,18 @@ export function deriveRunOutcome(facts: {
 }
 
 export interface RunOutcomeProjection {
-  /** Persisted-history projection (`ExecutionMeta.terminalStatus`). */
+  /** Export-boundary projection (trace document `terminalStatus`). */
   readonly executionStatus: ExecutionStatus;
 }
 
 /**
  * Projection table: one row per outcome for persisted execution status.
  *
- * `executionStatus` keeps all three outcomes distinct when writing the
- * `ExecutionMeta.terminalStatus` compatibility field. Retired transcript and
- * stream vocabularies are not projected here: permanent parse-side readers
- * accept those legacy values and normalize them to canonical current values.
+ * `executionStatus` keeps all three outcomes distinct at the frozen public
+ * boundaries (trace document `terminalStatus`, CLI NDJSON history status).
+ * Retired transcript and stream vocabularies are not projected here:
+ * permanent parse-side readers accept those legacy values and normalize them
+ * to canonical current values.
  *
  * The `Record` key type keeps the table compile-time exhaustive; read it
  * through {@link projectRunOutcome} so an out-of-vocabulary value (stale

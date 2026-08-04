@@ -290,19 +290,20 @@ texra history show <id>
 texra history delete <id>
 ```
 
-Reopen a stored tool-use session in the interactive chat, on the saved agent
-and model:
+Continue a stored session, on the saved agent and model:
 
 ```bash
 texra resume <id>
 texra --resume <id>
 ```
 
-Resume is interactive-only — a resumed session waits for your next message, so
-without a terminal it exits with a usage error that points scripting at
-`texra run`. The interactive chat also accepts `/resume`: with no id it prints
-recent executions, with an id it continues the stored session. A missing or
-malformed id exits with code 2.
+A tool-use session reopens in the interactive chat and waits for your next
+message, so without a terminal it exits with a usage error that points
+scripting at `texra run`. A workflow run resumes headless under its original
+execution id and honors the headless globals (`--print`, `--output-format`,
+`--no-input`). The interactive chat also accepts `/resume`: with no id it
+prints recent executions, with an id it continues the stored session. A
+missing or malformed id exits with code 2.
 
 ## Tools and Integrations
 

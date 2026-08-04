@@ -152,8 +152,9 @@ function createWorkflowStreamProjection(
 
 /**
  * Project every detached workflow-script stream onto deterministic,
- * spinner-free text. The descriptor emitted during child activation is the
- * source of truth: ordinary workflow agents retain their usual renderer.
+ * spinner-free text. The `run.start` identity is the source of truth (only
+ * `kind: 'multiAgentWorkflow'` streams project here): ordinary workflow
+ * agents retain their usual renderer.
  */
 export function attachWorkflowPlainOutput(
   events: SessionEventHub,
@@ -165,10 +166,13 @@ export function attachWorkflowPlainOutput(
       if (sessionEvent.scope !== 'run') return;
       const { streamId, event } = sessionEvent;
       if (event.type === 'run.start') {
-        if (event.descriptor.kind === 'workflowScript') {
+        if (event.identity.kind === 'multiAgentWorkflow') {
           projections.set(
             streamId,
-            createWorkflowStreamProjection(event.descriptor.agent, options),
+            createWorkflowStreamProjection(
+              event.identity.workflowName,
+              options,
+            ),
           );
         }
         return;

@@ -1,4 +1,5 @@
 import {
+  AGENT_COMPLETION_SOURCES,
   CLI_COMPLETION_SHELLS,
   COMPLETION_SOURCES,
   completionFlagVariants,
@@ -14,10 +15,10 @@ function dynamicListSource(source: CompletionSource): string {
 
 const AGENTS_LIST_SOURCE = dynamicListSource(COMPLETION_SOURCES.agents);
 const WORKFLOW_AGENTS_LIST_SOURCE = dynamicListSource(
-  COMPLETION_SOURCES.workflowAgents,
+  AGENT_COMPLETION_SOURCES.workflow,
 );
 const TOOL_USE_AGENTS_LIST_SOURCE = dynamicListSource(
-  COMPLETION_SOURCES.toolUseAgents,
+  AGENT_COMPLETION_SOURCES.toolUse,
 );
 const MODELS_LIST_SOURCE = dynamicListSource(COMPLETION_SOURCES.models);
 const TOP_LEVEL_RUN_CONDITION =

@@ -16,8 +16,7 @@ import {
   resetMainViewState,
   sessionType$,
   singleFiles$,
-  toolUseAgent$,
-  workflowAgent$,
+  agent$,
 } from '@webview/frontend/mainViewState';
 
 const mocks = vi.hoisted(() => ({
@@ -46,7 +45,7 @@ describe('main-view direct actions', () => {
   it('posts a single-file pack followed by its information message', () => {
     sessionType$.set('workflow');
     model$.set('gpt-5.4');
-    workflowAgent$.set('correct');
+    agent$.set({ ...agent$.get(), workflow: 'correct' });
     selectFiles(['main.tex']);
 
     runPanelAction('pack');
@@ -68,7 +67,7 @@ describe('main-view direct actions', () => {
   it('filters empty entries and posts a multi-file clean with the active tool-use agent', () => {
     sessionType$.set('toolUse');
     model$.set('gpt-5.4');
-    toolUseAgent$.set('orchestrator');
+    agent$.set({ ...agent$.get(), toolUse: 'orchestrator' });
     selectFiles(['main.tex', '', 'chapter.tex']);
 
     runPanelAction('clean');

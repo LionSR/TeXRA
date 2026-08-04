@@ -1,7 +1,7 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 // Local imports - shared schemas and utilities
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
@@ -263,10 +263,11 @@ export function groupPendingApprovalsByRow(
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively
-// skip/retry-able row: it is a Workflow-category subagent whose parent
-// stream is itself the Workflow run (the run stream's parent is the
-// orchestrator, a non-Workflow category), which excludes the run stream
-// itself so its row never shows a control that would silently no-op.
+// skip/retry-able row: a NATIVE agent run (no external CLI tool — those
+// children are driven by their own tool and would no-op here) whose parent
+// stream IS the workflow-script run — one identity hop, which excludes the
+// run stream itself so its row never shows a control that would silently
+// no-op.
 export function selectedChildRowWorkflowControllable({
   parentStream,
   selectedChildKillable,
@@ -282,9 +283,11 @@ export function selectedChildRowWorkflowControllable({
     return false;
   }
   const parentOfSelectedChild = parentStream.get(selectedChildStreamId);
+  const childIdentity = streams.get(selectedChildStreamId)?.identity;
   return (
-    streams.get(selectedChildStreamId)?.category === AgentCategory.Workflow &&
+    childIdentity?.kind === 'agent' &&
+    childIdentity.tool === undefined &&
     parentOfSelectedChild !== undefined &&
-    streams.get(parentOfSelectedChild)?.category === AgentCategory.Workflow
+    streams.get(parentOfSelectedChild)?.identity?.kind === 'multiAgentWorkflow'
   );
 }

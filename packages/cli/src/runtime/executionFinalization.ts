@@ -1,6 +1,6 @@
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
-import type { ExecutionStatus } from '@shared/schemas';
+import type { RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type CliFinalizationFailureReporter = (error: Error) => void;
@@ -12,17 +12,16 @@ type FailedFinalizationResult = Extract<
 function finalizationFailureMessage(
   result: FailedFinalizationResult,
   executionId: FinalizeExecutionInput['executionId'],
-  terminalStatus: ExecutionStatus,
+  outcome: RunOutcome,
 ): string {
-  const status = terminalStatus.toLowerCase();
   const detail = toErrorMessage(result.error);
   switch (result.stage) {
     case 'flow-record-delete':
-      return `Persisted ${status} status for execution ${executionId}, but failed to delete its flow record: ${detail}`;
+      return `Persisted ${outcome} status for execution ${executionId}, but failed to delete its flow record: ${detail}`;
     case 'terminal-status-and-flow-record-delete':
-      return `Failed to persist ${status} status and delete the flow record for execution ${executionId}: ${detail}`;
+      return `Failed to persist ${outcome} status and delete the flow record for execution ${executionId}: ${detail}`;
     case 'terminal-status':
-      return `Failed to persist ${status} status for execution ${executionId}: ${detail}`;
+      return `Failed to persist ${outcome} status for execution ${executionId}: ${detail}`;
   }
 }
 
@@ -32,7 +31,7 @@ function finalizationFailureMessage(
  */
 export async function finalizeCliExecution(
   executionId: FinalizeExecutionInput['executionId'],
-  terminalStatus: ExecutionStatus,
+  outcome: RunOutcome,
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
 ): Promise<void> {
@@ -40,7 +39,7 @@ export async function finalizeCliExecution(
   try {
     result = await finalizeExecution({
       executionId,
-      terminalStatus,
+      outcome,
       flowRecord,
     });
   } catch (error) {
@@ -56,10 +55,6 @@ export async function finalizeCliExecution(
   if (result.status === 'durable') return;
   markOwnedExecutionLeaseUndurable(executionId);
 
-  const message = finalizationFailureMessage(
-    result,
-    executionId,
-    terminalStatus,
-  );
+  const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
 }

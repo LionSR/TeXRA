@@ -19,8 +19,10 @@ describe('extension team auth catalog refresh scope', () => {
       name: 'Remote team',
       description: 'Hosted team',
       icon: 'screwdriver-wrench' as const,
-      workflowAgents: [],
-      toolUseAgents: ['orchestrator'],
+      agents: {
+        workflow: [],
+        toolUse: ['orchestrator'],
+      },
       texraHostedAgents: ['orchestrator'],
     };
 
@@ -32,13 +34,17 @@ describe('extension team auth catalog refresh scope', () => {
             preset,
             resolution: refreshed
               ? {
-                  workflowKeys: [],
-                  toolUseKeys: ['remote:orchestrator'],
+                  keys: {
+                    workflow: [],
+                    toolUse: ['remote:orchestrator'],
+                  },
                   unresolvedNames: [],
                 }
               : {
-                  workflowKeys: [],
-                  toolUseKeys: ['orchestrator'],
+                  keys: {
+                    workflow: [],
+                    toolUse: ['orchestrator'],
+                  },
                   unresolvedNames: ['orchestrator'],
                 },
           }),

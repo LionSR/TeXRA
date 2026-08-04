@@ -3,7 +3,6 @@ import type { ExecutionId, StorageKey, StreamTabId } from './identifiers';
 import type { CompileFailure, FileLocation, OutputFileInfo } from './output';
 import type { RoundIndexed } from './roundIndexed';
 import type {
-  ActiveChildInfo,
   ConversationProgress,
   PhaseStage,
   RoundStage,
@@ -115,12 +114,6 @@ export interface UpdateRoundStagePayload {
 export interface UpdatePhaseStagePayload {
   streamId: StreamTabId;
   phaseStage: PhaseStage;
-}
-
-/** Active subagent roster, projected from `child.activity`. */
-export interface UpdateActiveSubagentsPayload {
-  parentStreamId: StreamTabId;
-  children: ActiveChildInfo[];
 }
 
 /**

@@ -891,7 +891,7 @@ export function startChildRunLoop<TTurn>(
                       message: toErrorMessage(lastTurnErr),
                     }
                   : undefined,
-              isSubagent: true,
+              isSubagent: handle.isChildExecution,
               flushArtifacts: () =>
                 runSession.flushArtifacts(handle.executionId),
               persistence: {

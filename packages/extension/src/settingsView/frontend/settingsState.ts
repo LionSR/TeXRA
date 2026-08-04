@@ -27,6 +27,11 @@ import type {
   ProviderKeyStatus,
   ModelSelectionItem,
 } from '@shared/schemas';
+import {
+  byCategory,
+  type AgentCategory,
+  type ByCategory,
+} from '@shared/schemas';
 import type {
   SpendingStatus,
   SpendingStatusError,
@@ -53,7 +58,6 @@ import {
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
 } from '@shared/schemas/stateSettings';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import type { AgentCategory } from '@shared/schemas/agent';
 import { AGENT_SKILLS_ENABLED_DEFAULT } from '@shared/schemas/agentSkills';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import {
@@ -137,8 +141,9 @@ export const copilotRouteInfos = trackedSignal<CopilotRouteInfo[]>(() => []);
 // ---------------------------------------------------------------------------
 // Agent selection state
 // ---------------------------------------------------------------------------
-export const workflowAgents = trackedSignal<AgentSelectionItem[]>(() => []);
-export const toolUseAgents = trackedSignal<AgentSelectionItem[]>(() => []);
+export const agentSelectionItems = trackedSignal<
+  ByCategory<AgentSelectionItem[]>
+>(() => byCategory(() => []));
 export const customAgentDir = trackedSignal(() => '');
 export const customAgentDirIsDefault = trackedSignal(() => true);
 export const agentSubTab = trackedSignal<AgentCategory | undefined>(

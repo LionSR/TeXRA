@@ -412,12 +412,20 @@ export class BashTool extends defineTool({
       agentCategory: AgentCategory.ToolUse,
     });
 
-    await registerExecution(executionId, syntheticConfig, 'bash', {
-      streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
-      parentExecutionId,
-      category: 'process',
-      description: childStreamDescription(command),
-    });
+    // The durable record states only what a shell command has: no execution
+    // mode, no model. The synthetic AgentConfig above feeds the ephemeral
+    // live wire only.
+    await registerExecution(
+      executionId,
+      { name: 'bash', instruction: command },
+      'bash',
+      {
+        streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
+        identity: { kind: 'process', tool: 'bash' },
+        parentExecutionId,
+        description: childStreamDescription(command),
+      },
+    );
     const runWithOwnership = captureOwnedExecutionLease(executionId);
 
     let childStream!: ChildStream;
@@ -425,12 +433,9 @@ export class BashTool extends defineTool({
       runWithOwnership(() => {
         childStream = createChildStream(executionId, parentStreamId, {
           streamPrefix: BASH_CHILD_STREAM_PREFIX,
-          streamCategory: AgentCategory.ToolUse,
-          runKind: 'process',
-          agentName: 'bash',
+          run: { kind: 'process', tool: 'bash' },
           description: command,
           config: syntheticConfig,
-          toolName: 'bash',
         });
       });
     } catch (error) {

@@ -55,6 +55,7 @@ function createXmlManager(
         info: vi.fn(),
         warn: vi.fn(),
         domain: vi.fn(),
+        emit: vi.fn(),
       },
       { strict: true },
     );
@@ -65,6 +66,7 @@ function createXmlManager(
     } as unknown as AgentConfig,
     logger,
     new TaskRunFileService('xml-output-manager-test'),
+    'xml-test@stream#1',
   );
 }
 

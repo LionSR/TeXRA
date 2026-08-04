@@ -15,7 +15,7 @@ import {
 // Local imports - shared runtime
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
@@ -308,8 +308,7 @@ export function App(props: AppProps): React.JSX.Element {
     return executionIds;
   }, [childStreamEntries, sessionViews, streams]);
   const workflowDashboardRoot =
-    childListTarget.slice?.category === AgentCategory.Workflow &&
-    childListTarget.slice.entries.some((entry) => entry.role === 'workflowTask')
+    childListTarget.slice?.identity?.kind === 'multiAgentWorkflow'
       ? childListTarget.slice
       : undefined;
   const workflowDashboardTasks = useMemo(

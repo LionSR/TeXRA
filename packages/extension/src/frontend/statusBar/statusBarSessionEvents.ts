@@ -1,39 +1,35 @@
 // Local imports - runtime events
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
-// Local imports - status bar state
-import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
-
 export interface StatusBarSessionEventOptions {
-  session: Pick<SessionHandle, 'events'>;
-  tracker: StatusBarUsageTracker;
+  session: Pick<SessionHandle, 'events' | 'status'>;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
 }
 
 /**
- * Mirrors the canonical session status and usage facts into the extension
- * status-bar usage tracker.
+ * Refreshes the extension status bar when the canonical session status and
+ * usage facts change. The facts themselves are not mirrored here: the status
+ * bar's tracker projects live from the session status plane and the session
+ * snapshot store, which the runtime updates before these subscribers run.
  */
 export function subscribeStatusBarSessionEvents({
   session,
-  tracker,
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
-  const disposeStatus = session.events.subscribeStatus(
-    ({ streamId, phase }) => {
-      tracker.updateStreamStatus(streamId, phase);
-      onStatusChanged();
-    },
-  );
+  const disposeStatus = session.events.subscribeStatus(() => {
+    onStatusChanged();
+  });
 
   const disposeUsage = session.events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       if (sessionEvent.event.type !== 'usage') return;
-      const { payload } = sessionEvent.event;
-      if (tracker.recordUsage(payload.streamId, payload.usage)) {
+      // The runtime publishes the in-flight status before usage for a round;
+      // usage for a stream not in flight cannot change the projected total,
+      // so stale async events skip the refresh.
+      if (session.status.isInFlight(sessionEvent.event.payload.streamId)) {
         onUsageChanged();
       }
     },

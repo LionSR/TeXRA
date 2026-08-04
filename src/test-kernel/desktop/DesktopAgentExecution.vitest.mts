@@ -25,12 +25,10 @@ import type { AgentResumePort } from '@platform/interfaces';
 import {
   AgentCategory,
   LOG_LEVELS,
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  buildRunDescriptor,
   type ExecutionId,
   type OutputFileInfo,
   type StorageKey,
@@ -1021,10 +1019,10 @@ describe('DesktopProgressBridge', () => {
       parentStreamId: 'parent',
       items: [
         {
-          kind: 'subagent',
           childStreamId: 'agent-1',
           executionId: 'agent-1',
           agentName: 'reviewer',
+          identity: { kind: 'agent' as const, agent: 'reviewer' },
         },
       ],
     });
@@ -1062,10 +1060,10 @@ describe('DesktopProgressBridge', () => {
       parentStreamId: 'parent',
       items: [
         {
-          kind: 'subagent',
           childStreamId: 'agent-1',
           executionId: 'agent-1',
           agentName: 'reviewer',
+          identity: { kind: 'agent' as const, agent: 'reviewer' },
         },
       ],
     });
@@ -1084,7 +1082,6 @@ describe('DesktopProgressBridge', () => {
     expect(badgeUpdate).toMatchObject({
       subagents: [
         {
-          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'reviewer',
           finishedAt: 1_000,
@@ -1185,7 +1182,7 @@ describe('DesktopProgressBridge', () => {
       executionId,
     );
     const { getExecutionStore } = await import('@agent/storage');
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
     await firstSnapshots.flush();
     await firstSession.flushArtifacts();
     first.dispose();
@@ -1462,17 +1459,10 @@ describe('DesktopProgressBridge', () => {
         session.executions.track(
           new AgentExecutionHandle(
             {
-              schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
               streamId: 'bash#attachment-order-child' as StreamTabId,
               executionId: 'abcdef' as ExecutionId,
-              agent: 'bash',
+              identity: { kind: 'process', tool: 'bash' },
               category: AgentCategory.ToolUse,
-              kind: 'process',
-              configRef: {
-                kind: 'executionConfig',
-                executionId: 'abcdef',
-                path: 'executions/abcdef/config.json',
-              },
             },
             streamId,
           ),
@@ -1743,7 +1733,7 @@ describe('DesktopProgressBridge', () => {
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
       action: 'render',
       stream: 'first',
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       runUsage: {},
       outputs: { files: {}, missing: {}, compileFailures: {} },
       activeState: {
@@ -1752,7 +1742,6 @@ describe('DesktopProgressBridge', () => {
         badges: {
           subagents: [],
         },
-        parentStreamId: null,
       },
     });
     expect(messages[3]).toMatchObject({
@@ -2007,6 +1996,13 @@ describe('DesktopProgressBridge', () => {
         );
       },
     });
+    // The retained stream must have resolved a category (via run.config) or
+    // the pending tab renders no synced content at all.
+    emitRunConfigFact(bridge, {
+      streamId: retainedStream,
+      executionId: 'ret001' as ExecutionId,
+      config: workflowConfig(),
+    });
     bridge.setActiveStream(deletedStream);
     messages.length = 0;
 
@@ -2056,31 +2052,23 @@ describe('DesktopProgressBridge', () => {
       executionId,
     }));
     const runAgent = vi.fn(async () => {});
-    const kvRead = vi.fn(async (key: string) =>
-      key === 'meta'
-        ? {
-            runDescriptor: buildRunDescriptor({
-              streamId: 'stream-1',
-              executionId,
-              agent: runConfig.agent,
-              category: runConfig.agentCategory,
-              kind: 'agent',
-            }),
-            // Legacy sidecar shape: the retired TaskState wrapper, still read
-            // by the snapshot store's disk-read shim.
-            taskState: {
-              agentConfig: runConfig,
-              activeFiles: {
-                input: false,
-                context: false,
-                media: false,
-                output: false,
-              },
-            },
-            description: 'Persisted workflow',
-          }
-        : undefined,
-    );
+    // One mocked KV serves both stores: the stream sidecar reads only the
+    // executionId FK from `meta`, while the execution store reads
+    // timestamp/identity/description from the same blob and the run config
+    // from `config` — identity and config live in `executions/{id}/`, never
+    // as a sidecar copy.
+    const kvRead = vi.fn(async (key: string) => {
+      if (key === 'meta') {
+        return {
+          executionId,
+          timestamp: '2026-07-10T00:00:00.000Z',
+          identity: { kind: 'agent', agent: runConfig.agent },
+          description: 'Persisted workflow',
+        };
+      }
+      if (key === 'config') return runConfig;
+      return undefined;
+    });
     const bridge = await createBridge([], {
       kvRead,
       retrieveSessionResumeData,
@@ -2108,6 +2096,13 @@ describe('DesktopProgressBridge', () => {
     const runAgent = vi.fn(async () => {});
     const bridge = await createBridge([], { runAgent });
 
+    // Rerun is gated on a resolved native agent identity.
+    emitRunEvent(bridge, 'stream-new' as StreamTabId, {
+      type: 'run.start',
+      streamId: 'stream-new' as StreamTabId,
+      executionId: 'exec-new' as ExecutionId,
+      identity: { kind: 'agent', agent: runConfig.agent },
+    });
     emitRunConfigFact(bridge, {
       streamId: 'stream-new',
       executionId: 'exec-new',
@@ -2394,8 +2389,7 @@ describe('DesktopProgressBridge', () => {
         state: expect.objectContaining({
           sessionType: 'workflow',
           model: 'gemini31p',
-          workflowInstruction: 'Check this draft.',
-          toolUseInstruction: '',
+          instruction: { workflow: 'Check this draft.', toolUse: '' },
           inputFiles: ['main.tex', 'appendix.tex'],
           outputFiles: ['main.review.tex'],
         }),
@@ -2413,6 +2407,12 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
+    emitRunEvent(bridge, 'stream-1' as StreamTabId, {
+      type: 'run.start',
+      streamId: 'stream-1' as StreamTabId,
+      executionId: 'ec1002' as ExecutionId,
+      identity: { kind: 'agent', agent: 'search' },
+    });
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1002' as ExecutionId,
@@ -2467,6 +2467,12 @@ describe('DesktopProgressBridge', () => {
     // so restoreRunConfig() returns false and the handler must surface it
     // instead of silently doing nothing (unlike the extension's
     // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
+    emitRunEvent(bridge, 'stream-1' as StreamTabId, {
+      type: 'run.start',
+      streamId: 'stream-1' as StreamTabId,
+      executionId: 'ec1003' as ExecutionId,
+      identity: { kind: 'agent', agent: 'search' },
+    });
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1003' as ExecutionId,
@@ -2627,17 +2633,10 @@ describe('DesktopProgressBridge', () => {
         const nextExecutionId = options.executionId ?? executionId;
         const nextHandle = new AgentExecutionHandle(
           {
-            schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
             streamId: options.childStreamId ?? streamId,
             executionId: nextExecutionId,
-            agent: options.agentName ?? agentName,
+            identity: { kind: 'agent', agent: options.agentName ?? agentName },
             category: options.category ?? category,
-            kind: 'agent',
-            configRef: {
-              kind: 'executionConfig',
-              executionId: nextExecutionId,
-              path: `executions/${nextExecutionId}/config.json`,
-            },
           },
           options.parentStreamId ?? streamId,
           nextTrace as unknown as ConstructorParameters<
@@ -2747,6 +2746,12 @@ describe('DesktopProgressBridge', () => {
       });
       owner.processSession.transcripts.ensureStream(childStreamId);
       owner.processSession.publishRunEvent(childStreamId, {
+        type: 'run.start',
+        streamId: childStreamId,
+        executionId: childExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+      });
+      owner.processSession.publishRunEvent(childStreamId, {
         type: 'run.config',
         streamId: childStreamId,
         executionId: childExecutionId,
@@ -2811,7 +2816,8 @@ describe('DesktopProgressBridge', () => {
           streams: expect.arrayContaining([
             expect.objectContaining({
               name: childStreamId,
-              agent: 'search',
+              label: 'search',
+              identity: { kind: 'agent', agent: 'search' },
               agentCategory: AgentCategory.ToolUse,
               parentStreamId: streamId,
               description: 'Metadata emitted during attachment.',
@@ -3896,12 +3902,18 @@ describe('DesktopProgressBridge', () => {
         owner.processSession.transcripts.ensureStream(childStreamId);
         await owner
           .getExecutionStore(childExecutionId)
-          .writeConfig(childConfig);
+          .writeRunRecord(childConfig);
         const { handle: childHandle } = owner.createHandle({
           executionId: childExecutionId,
           childStreamId,
           agentName: 'searcher',
           category: AgentCategory.ToolUse,
+        });
+        owner.processSession.publishRunEvent(childStreamId, {
+          type: 'run.start',
+          streamId: childStreamId,
+          executionId: childExecutionId,
+          identity: { kind: 'agent', agent: 'searcher' },
         });
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'run.config',
@@ -4017,7 +4029,8 @@ describe('DesktopProgressBridge', () => {
           streams: expect.arrayContaining([
             expect.objectContaining({
               name: childStreamId,
-              agent: 'searcher',
+              label: 'searcher',
+              identity: { kind: 'agent', agent: 'searcher' },
               agentCategory: AgentCategory.ToolUse,
               parentStreamId: streamId,
               description: 'Search the docs',
@@ -4029,7 +4042,7 @@ describe('DesktopProgressBridge', () => {
         ).toEqual([
           expect.objectContaining({
             action: 'render',
-            kind: AgentCategory.ToolUse,
+            category: AgentCategory.ToolUse,
             runUsage: {
               [childExecutionId]: expect.objectContaining({
                 inputTokens: 11,
@@ -4037,9 +4050,6 @@ describe('DesktopProgressBridge', () => {
                 cost: 0.125,
               }),
             },
-            activeState: expect.objectContaining({
-              parentStreamId: streamId,
-            }),
           }),
         ]);
         expect(

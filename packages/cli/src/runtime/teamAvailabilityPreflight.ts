@@ -27,8 +27,8 @@ export function preflightCliTeamAvailability(
     initial: deps.plan,
     unresolvedNames: teamTexraHostedMissingNames,
     texraHostedNames: teamHostedNamesForPreflight(deps.plan.preset, [
-      ...deps.plan.missingWorkflowAgents,
-      ...deps.plan.missingToolUseAgents,
+      ...deps.plan.missingAgents.workflow,
+      ...deps.plan.missingAgents.toolUse,
     ]),
     canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
     choose: deps.choose,

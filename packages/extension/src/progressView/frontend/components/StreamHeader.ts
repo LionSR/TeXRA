@@ -39,10 +39,16 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 // Local imports - progress view constants
 import {
   ELEMENT_IDS,
+  NEUTRAL_TOOLBAR,
   TOOLBAR_BUTTONS,
   type ProgressToolbarButton,
 } from '../constants';
-import { archivedContext } from '../streamContexts';
+import {
+  archivedContext,
+  streamByIdContext,
+  EMPTY_STREAM_BY_ID,
+  type StreamByIdMap,
+} from '../streamContexts';
 import { ProgressEvents } from '../events';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
@@ -107,6 +113,21 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
 const EXECUTION_DEPENDENT_BUTTONS = new Set([
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.RESUME_BTN,
+]);
+
+/**
+ * Native-agent-only controls. Resume, re-run, and restore relaunch the run's
+ * stored config — which is borrowed for a workflow-script stream, synthetic
+ * for a process stream, and owned by the external tool for a CLI-driven
+ * session — so they are hidden (same mechanism as unsupported commands)
+ * unless `identity` is a native agent run. An absent identity is still
+ * pending and hides them too. Mirrors the backend gate in
+ * `ProgressViewHost` / the `RESTORE_STATE` handler.
+ */
+const NATIVE_AGENT_ONLY_BUTTONS = new Set([
+  ELEMENT_IDS.RESUME_BTN,
+  ELEMENT_IDS.RUN_NEW_BTN,
+  ELEMENT_IDS.RESTORE_STATE_BTN,
 ]);
 
 @customElement('stream-header')
@@ -322,6 +343,10 @@ export class StreamHeader extends LitElement {
   @consume({ context: archivedContext, subscribe: true })
   private archived = false;
 
+  /** Parent tab labels come from the parent's own tab info, not id parsing. */
+  @consume({ context: streamByIdContext, subscribe: true })
+  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
+
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
       return nothing;
@@ -334,9 +359,20 @@ export class StreamHeader extends LitElement {
     });
     const statusClass = streamStatusIndicatorClass(status, this.substate);
     const hasExecutionId = Boolean(this.stream.executionId);
+    const identity = this.stream.identity;
+    const isNativeAgentRun =
+      identity?.kind === 'agent' && identity.tool === undefined;
     const agentCategory = this.stream.agentCategory;
+    // Identity decides the chrome: a non-agent run (process, multi-agent-
+    // workflow container) gets the neutral toolbar even when a borrowed
+    // agentCategory rides the live wire, and a pending stream (no identity,
+    // no category) never gets a fabricated category's chrome.
+    const isAgentOrPending =
+      identity === undefined || identity.kind === 'agent';
     const toolbarButtons =
-      TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
+      isAgentOrPending && agentCategory
+        ? TOOLBAR_BUTTONS[agentCategory]
+        : NEUTRAL_TOOLBAR;
     const displayKey = streamStatusDisplayKey(status, this.substate);
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
@@ -354,6 +390,7 @@ export class StreamHeader extends LitElement {
         btn,
         enabledButtons,
         hasExecutionId,
+        isNativeAgentRun,
       );
       // Read-only trace-viewer export: no toolbar action reaches a live
       // backend — the onClick below re-checks `disabled` before
@@ -448,12 +485,15 @@ export class StreamHeader extends LitElement {
     button: ProgressToolbarButton,
     enabledButtons: ReadonlySet<string> | undefined,
     hasExecutionId: boolean,
+    isNativeAgentRun: boolean,
   ): { disabled: boolean; hidden: boolean } {
     // Same treatment as an execution-dependent button with no executionId:
     // hidden, not just disabled, so the toolbar never displays a control the
-    // active host's registry has declared unsupported.
+    // active host's registry has declared unsupported (or that this stream's
+    // run identity does not support).
     const hidden =
       (EXECUTION_DEPENDENT_BUTTONS.has(button.id) && !hasExecutionId) ||
+      (NATIVE_AGENT_ONLY_BUTTONS.has(button.id) && !isNativeAgentRun) ||
       isKnownUnsupported(this.unsupportedCommands, button.command);
     const disabled = hidden || !enabledButtons?.has(button.id);
     return { disabled, hidden };
@@ -516,11 +556,9 @@ export class StreamHeader extends LitElement {
     const parentStreamId = this.stream?.parentStreamId;
     if (!parentStreamId) return nothing;
 
-    // Extract agent name from stream ID (format: "agentName@timestamp")
-    const rawName = parentStreamId.split('@')[0];
-    // Strip source prefix (e.g., "builtin:assistant" → "assistant")
-    const colonIdx = rawName.indexOf(':');
-    const displayName = colonIdx !== -1 ? rawName.slice(colonIdx + 1) : rawName;
+    // The parent's own tab info owns its display label; never parse the id.
+    const displayName =
+      this.streamById.get(parentStreamId)?.label ?? parentStreamId;
 
     return html`
       <span

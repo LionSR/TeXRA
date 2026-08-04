@@ -178,3 +178,13 @@ export const TOOLBAR_BUTTONS = {
   workflow: WORKFLOW_TOOLBAR,
   toolUse: TOOL_USE_TOOLBAR,
 };
+
+/**
+ * Toolbar for a stream with no known agent category — identity still pending,
+ * or a non-agent run (process, multi-agent workflow container). Only the
+ * category-neutral actions; never a fabricated category's chrome.
+ */
+export const NEUTRAL_TOOLBAR: readonly ProgressToolbarButton[] = [
+  STOP_STREAM_BUTTON,
+  OPEN_TASK_STORAGE_BUTTON,
+];

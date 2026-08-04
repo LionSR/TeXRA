@@ -48,9 +48,9 @@ const stream = 'stream:shared-snapshot' as StreamTabId;
 const parentStream = 'stream:parent' as StreamTabId;
 const runId = 'run-1' as StorageKey;
 const activeSubagent: ActiveChildInfo = {
-  kind: 'subagent',
   executionId: 'child-1',
   agentName: 'search',
+  identity: { kind: 'agent' as const, agent: 'search' },
   childStreamId: 'stream:child',
 };
 
@@ -143,7 +143,7 @@ describe('progress view stream-content projection', () => {
     expect(messages.at(-1)).toMatchObject({
       stream,
       action: 'render',
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       runUsage: {
         [runId]: usage,
       },
@@ -166,7 +166,6 @@ describe('progress view stream-content projection', () => {
         badges: {
           subagents: [activeSubagent],
         },
-        parentStreamId: parentStream,
       },
     });
     expect(state.snapshots.getWorkPlan(stream)).toEqual({
@@ -193,7 +192,7 @@ describe('progress view stream-content projection', () => {
     expect(messages.at(-1)).toMatchObject({
       stream,
       action: 'render',
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       activeState: {
         roundStage: null,
         phaseStage: { label: 'Reduce', index: 1, total: 3 },
@@ -222,7 +221,7 @@ describe('progress view stream-content projection', () => {
     expect(messages[0]).toMatchObject({
       action: 'render',
       stream,
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       runUsage: { [runId]: usage },
       outputs: {
         files: { 1: [outputFile] },
@@ -258,7 +257,7 @@ describe('progress view stream-content projection', () => {
     expect(messages[0]).toMatchObject({
       action: 'render',
       stream,
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       activeState: {
         conversationProgress: { toolCallCount: 3 },
         badges: { subagents: [activeSubagent] },
@@ -297,7 +296,7 @@ describe('progress view stream-content projection', () => {
     expect(messages.at(-1)).toMatchObject({
       stream: controlledStream,
       action: 'render',
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       controls: {
         toolEditBypass: true,
         superYoloBypass: true,

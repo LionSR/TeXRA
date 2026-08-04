@@ -252,6 +252,7 @@ async function launchWaitingChild(options: {
   });
   await registerExecution(PARENT_EXECUTION_ID, parentConfig, PARENT_AGENT, {
     streamId: PARENT_STREAM_ID,
+    identity: { kind: 'agent', agent: PARENT_AGENT },
     parentExecutionId: OUTER_EXECUTION_ID,
   });
   await expect(

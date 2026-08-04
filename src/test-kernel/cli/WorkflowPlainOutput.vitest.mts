@@ -4,7 +4,6 @@ import type { AgentEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { attachWorkflowPlainOutput } from '@cli/runtime/workflowPlainOutput';
 import {
-  buildRunDescriptor,
   MESSAGE_TYPES,
   STREAM_PHASE,
   type ExecutionId,
@@ -31,13 +30,9 @@ function startWorkflow(
     events,
     {
       type: 'run.start',
-      descriptor: buildRunDescriptor({
-        streamId: target,
-        executionId,
-        agent: 'proof-workflow',
-        category: 'workflow',
-        kind: 'workflowScript',
-      }),
+      streamId: target,
+      executionId,
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'proof-workflow' },
     },
     target,
   );
@@ -169,13 +164,9 @@ describe('attachWorkflowPlainOutput', () => {
 
     emit(events, {
       type: 'run.start',
-      descriptor: buildRunDescriptor({
-        streamId,
-        executionId,
-        agent: 'ordinary-workflow',
-        category: 'workflow',
-        kind: 'agent',
-      }),
+      streamId,
+      executionId,
+      identity: { kind: 'agent', agent: 'ordinary-workflow' },
     });
     emit(events, {
       type: 'workflow.call',

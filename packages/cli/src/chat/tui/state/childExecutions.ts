@@ -12,8 +12,8 @@
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type {
   ActiveChildInfo,
+  RunIdentity,
   StreamTabId,
-  SubagentChildInfo,
 } from '@shared/schemas';
 
 import type { StreamSlice } from './cliState';
@@ -40,8 +40,9 @@ type ParentProvenance =
 
 interface LiveChildStreamEntry {
   readonly kind: 'live';
-  /** Latest roster metadata, excluding identity and status. */
-  readonly summary?: Omit<SubagentChildInfo, 'childStreamId' | 'status'>;
+  /** Latest roster metadata (identity included), excluding the stream id
+   *  (the map key) and the lagging display `status`. */
+  readonly summary?: Omit<ActiveChildInfo, 'childStreamId' | 'status'>;
   /** Whether the current parent roster still includes this child. */
   readonly active: boolean;
   /** Current topology and its authority, plus optional retained history. */
@@ -231,9 +232,24 @@ function summaryUnchanged(
     a.executionId === b.executionId &&
     a.startedAt === b.startedAt &&
     a.elapsed === b.elapsed &&
-    a.toolName === b.toolName &&
+    sameIdentity(a.identity, b.identity) &&
     a.workflowPhase === b.workflowPhase
   );
+}
+
+/** Structural identity equality — roster polls resend fresh objects, so a
+ *  reference compare would defeat the no-op detection on every tick. */
+function sameIdentity(a: RunIdentity, b: RunIdentity): boolean {
+  switch (a.kind) {
+    case 'agent':
+      return b.kind === 'agent' && a.agent === b.agent && a.tool === b.tool;
+    case 'process':
+      return b.kind === 'process' && a.tool === b.tool;
+    case 'multiAgentWorkflow':
+      return (
+        b.kind === 'multiAgentWorkflow' && a.workflowName === b.workflowName
+      );
+  }
 }
 
 /** Whether applying `nextEntry` over `entry` would be a no-op. */
@@ -263,12 +279,8 @@ export function applySubagentRoster(
   const current = CHILD_STREAMS.get();
   if (current.get(parentStreamId)?.kind === 'removed') return;
 
-  const subagents = children.filter(
-    (child): child is SubagentChildInfo => child.kind === 'subagent',
-  );
-
-  const accepted = new Map<StreamTabId, SubagentChildInfo>();
-  for (const child of subagents) {
+  const accepted = new Map<StreamTabId, ActiveChildInfo>();
+  for (const child of children) {
     const entry = current.get(child.childStreamId);
     if (entry?.kind === 'removed') continue;
     const parent = currentParent(entry);
@@ -434,11 +446,10 @@ function reconstruct(
   childStreamId: StreamTabId,
   entry: LiveChildStreamEntry,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
-): SubagentChildInfo | undefined {
+): ActiveChildInfo | undefined {
   if (!entry.summary) return undefined;
   return {
     ...entry.summary,
-    kind: 'subagent',
     childStreamId,
     status: streams.get(childStreamId)?.status,
   };
@@ -455,9 +466,9 @@ export function activeSubagentsFor(
   parentStreamId: StreamTabId,
   entries: ChildStreamEntries,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
-): readonly SubagentChildInfo[] {
+): readonly ActiveChildInfo[] {
   if (entries.get(parentStreamId)?.kind === 'removed') return [];
-  const out: SubagentChildInfo[] = [];
+  const out: ActiveChildInfo[] = [];
   for (const [childStreamId, entry] of entries) {
     if (entry.kind === 'removed' || !entry.active) {
       continue;
@@ -480,9 +491,9 @@ export function retainedChildStreamsFor(
   parentStreamId: StreamTabId,
   entries: ChildStreamEntries,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
-): readonly SubagentChildInfo[] {
+): readonly ActiveChildInfo[] {
   if (entries.get(parentStreamId)?.kind === 'removed') return [];
-  const rows: Array<{ order: number; info: SubagentChildInfo }> = [];
+  const rows: Array<{ order: number; info: ActiveChildInfo }> = [];
   for (const [childStreamId, entry] of entries) {
     if (entry.kind === 'removed') {
       continue;
@@ -505,7 +516,7 @@ export function visibleSubagentRows(
   parentStreamId: StreamTabId,
   entries: ChildStreamEntries,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
-): readonly SubagentChildInfo[] {
+): readonly ActiveChildInfo[] {
   const retained = retainedChildStreamsFor(parentStreamId, entries, streams);
   const active = activeSubagentsFor(parentStreamId, entries, streams);
   const activeByKey = new Map(
@@ -560,15 +571,13 @@ export function focusOrderDescendants(
 // ---------------------------------------------------------------------------
 
 export function childExecutionKey(child: ActiveChildInfo): string {
-  return child.kind === 'subagent' ? child.childStreamId : child.executionId;
+  return child.childStreamId;
 }
 
 export function childExecutionLabel(
-  child: Pick<ActiveChildInfo, 'agentName' | 'executionId' | 'toolName'>,
+  child: Pick<ActiveChildInfo, 'agentName' | 'executionId'>,
 ): string {
-  // The agent name is always set by the runtime (for both kinds), so it's the
-  // label; toolName/executionId are just defensive fallbacks for a malformed
-  // entry. `kind` isn't needed here — it's `childExecutionKey` that actually
-  // discriminates (only subagents have a stream tab to key by).
-  return child.agentName || child.toolName || child.executionId;
+  // The agent name is always set by the runtime, so it's the label;
+  // executionId is just a defensive fallback for a malformed entry.
+  return child.agentName || child.executionId;
 }
