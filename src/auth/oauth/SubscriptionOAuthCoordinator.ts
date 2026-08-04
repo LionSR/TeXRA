@@ -171,18 +171,34 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   /**
-   * After a refresh is superseded (concurrent login/sign-out), wait for queued
-   * storage mutations and return the current session when one remains. Only
-   * surface `expired`/re-auth when storage is empty — a newer valid sign-in
-   * must not look like a forced re-auth.
+   * After a refresh is superseded (concurrent login/sign-out), take a stable
+   * storage snapshot and:
+   * - return a *replacement* session (different credentials) — concurrent
+   *   sign-in succeeded; do not force re-auth;
+   * - return a still-fresh same session (rare: supersede without replace);
+   * - throw `expired` when storage is empty (sign-out won);
+   * - throw `transient` when the pre-refresh session is still the only
+   *   stored value and still needs refresh (failed concurrent store, or a
+   *   server-rotated refresh that never landed) — never hand back a known-
+   *   stale token as if the refresh completed.
    */
-  private async sessionAfterSupersede(): Promise<S> {
-    await this.sessionMutations.onIdle();
-    const current = await this.loadSession();
-    if (current) return current;
+  private async sessionAfterSupersede(previous: S): Promise<S> {
+    const { session } = await this.loadStableSession();
+    if (!session) {
+      throw new SubscriptionOAuthError(
+        this.policy.sessionChangedMessage,
+        'expired',
+      );
+    }
+    const replaced =
+      session.accessToken !== previous.accessToken ||
+      session.refreshToken !== previous.refreshToken;
+    if (replaced || !this.isExpiringSoon(session)) {
+      return session;
+    }
     throw new SubscriptionOAuthError(
       this.policy.sessionChangedMessage,
-      'expired',
+      'transient',
     );
   }
 
@@ -279,6 +295,6 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       await this.storeSession(session);
     });
     if (generation === this.sessionGeneration) return session;
-    return this.sessionAfterSupersede();
+    return this.sessionAfterSupersede(previous);
   }
 }
