@@ -162,9 +162,8 @@ export const toolUseStyles = css`
     gap: var(--wa-space-3xs);
   }
 
+  /* Radius only — the ring comes from focusRingStyles. */
   .proposal-restore-link:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 

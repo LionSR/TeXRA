@@ -106,6 +106,15 @@ export const streamTabStyles = css`
     text-overflow: ellipsis;
   }
 
+  /* Shape half of the status cue — border-left carries the hue. Renders in
+     the row's own foreground so it stays legible on the selection background
+     and adds no new color pair to verify. No opacity fade: this is the only
+     non-color signal the status has, so it is information, not decoration. */
+  .tab-status-icon {
+    flex-shrink: 0;
+    font-size: var(--font-size-xs);
+  }
+
   .tab-meta {
     display: none;
     align-items: center;
@@ -131,14 +140,21 @@ export const streamTabStyles = css`
     margin-left: var(--wa-space-2xs);
   }
 
+  /* 24px literal, not --control-size-s: that step is bridged to 20px in the
+     extension (common.css) for editor-chrome density, which is under WCAG
+     2.5.8's floor. The row's own select target sits flush against this one, so
+     the spacing exception does not apply and it has to meet 24x24 outright —
+     and growing the hit area with a pseudo-element instead would overlap the
+     select target, making near-misses delete a session. 24px is also exactly
+     --wa-row-height, so the row does not get taller. */
   .tab-delete {
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    min-width: 20px;
-    height: 20px;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
     margin: 0 0 0 var(--wa-space-2xs);
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: 0;
@@ -215,11 +231,9 @@ export const streamTabStyles = css`
     padding: var(--wa-space-3xs) var(--wa-space-3xs);
   }
 
-  .tab-container.is-compact .tab-delete {
-    width: 20px;
-    min-width: 20px;
-    height: 20px;
-  }
+  /* No compact override for .tab-delete: the narrow rail is 48px wide, which
+     still fits the 24px target, and shrinking it there would put the same
+     sub-minimum hit area back on the layout that most needs a reliable one. */
 
   .tab-container.is-compact .tab-header {
     gap: var(--wa-space-3xs);
@@ -256,8 +270,8 @@ export const streamTabStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    min-width: 20px;
+    width: 24px;
+    min-width: 24px;
     height: 100%;
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: var(--opacity-muted);
