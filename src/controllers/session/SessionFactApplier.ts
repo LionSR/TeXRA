@@ -318,24 +318,37 @@ export class SessionFactApplier {
 
     if (!this.renderer.isAvailable()) return;
 
-    // Always register the stream for signal hosts before the optional
-    // rehydrate, including suppressViewSwitch attachments with no category.
-    this.renderer.onStreamMetadataChanged(streamId, {
-      streamStates: this.state.streamStatus.getAllStreamStates(),
-      activeStream: shouldSwitch ? this.state.activeStream : undefined,
-    });
+    // Mint/register a brand-new stream for signal hosts before rehydrate.
+    // Do not pass `activeStream` — flipping the visible tab before
+    // `ensureLoaded` races a newer activation that wins during the await.
+    if (!wasKnownStream) {
+      this.renderer.onStreamMetadataChanged(streamId, {
+        streamStates: this.state.streamStatus.getAllStreamStates(),
+      });
+    }
 
     // Rehydrate a potentially-evicted stream before syncing content, so the
     // webview doesn't get an empty log. All synchronous state mutations are
-    // already done above; the await here only gates webview delivery.
+    // already done above; the await here only gates host delivery.
     await this.state.streamLogs.ensureLoaded(streamId);
 
     // A newer handleSetActiveStream may have resolved during our await and
-    // already taken over the active tab; skip webview sync so we don't
-    // overwrite its content with stale data.
+    // already taken over the active tab; skip delivery so we don't overwrite
+    // its content with stale data.
     if (shouldSwitch && this.state.activeStream !== streamId) return;
 
-    if (shouldSwitch && wasKnownStream) {
+    // Match pre-extraction Lit delivery: a brand-new stream gets a full
+    // metadata push (with optional activeStream for Lit); a known stream
+    // that should become active gets the cheap active-stream notify only.
+    // Always notify `onActiveStreamChanged` on switch so signal hosts (TUI)
+    // that ignore metadata's `activeStream` option still focus.
+    if (!wasKnownStream) {
+      this.renderer.onStreamMetadataChanged(streamId, {
+        streamStates: this.state.streamStatus.getAllStreamStates(),
+        activeStream: shouldSwitch ? this.state.activeStream : undefined,
+      });
+    }
+    if (shouldSwitch) {
       this.renderer.onActiveStreamChanged(streamId);
     }
     // Always sync content for the new stream so badges reach the webview —

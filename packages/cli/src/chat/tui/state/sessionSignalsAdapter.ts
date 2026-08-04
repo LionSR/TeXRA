@@ -258,6 +258,10 @@ export function attachSessionSignalsAdapter({
       if (generation !== getCliStateGeneration() || event.scope !== 'session') {
         return;
       }
+      // Status stays on `subscribeStreamStatus`: the shared applier's
+      // eviction keys off `SessionState.activeStream`, which is not the CLI
+      // focus id, and the old TUI ignored status facts here.
+      if (event.event.type === 'status') return;
       applier.handleSessionFact(event.event);
     },
     { scope: 'session' },
