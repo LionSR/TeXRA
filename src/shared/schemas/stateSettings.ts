@@ -279,7 +279,7 @@ const TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "run a shell command"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> SessionHandle.setApprovalPolicy -> src/tools/approval/bashApproval.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
 } satisfies CliRuntimeReachability;
 
 const PROXY_CONFIG_CONSUMER =
