@@ -3,13 +3,9 @@
   "compilerOptions": {
     "module": "esnext",
     "moduleResolution": "bundler",
-    "target": "ES2022",
     "lib": ["ES2023"],
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-    "strict": true,
-    "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts"],
+  "exclude": ["node_modules"]
 }

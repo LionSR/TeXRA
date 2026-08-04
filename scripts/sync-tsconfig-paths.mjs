@@ -6,18 +6,19 @@ import process from 'node:process';
 import prettier from 'prettier';
 import {
   loadRootPaths,
-  deriveExtensionPaths,
   deriveDesktopPaths,
   deriveBuildPaths,
   parseJsonc,
   pathTargetExists,
 } from './aliasUtils.mjs';
 
-// Code-generate the `compilerOptions.paths` block of the extension and
-// desktop/build tsconfig copies from the root tsconfig.json — the single
-// hand-edited source of truth for path aliases. Mirrors
-// sync-package-contributes.mjs: in `--check` mode this is the CI diff gate,
-// failing when a copy has drifted out of sync with the root map.
+// Code-generate the `compilerOptions.paths` block of the desktop and
+// build tsconfig copies from the root tsconfig.json — the single
+// hand-edited source of truth for path aliases. The extension tsconfig
+// now extends root directly and inherits its paths.
+// Mirrors sync-package-contributes.mjs: in `--check` mode this is the
+// CI diff gate, failing when a copy has drifted out of sync with the
+// root map.
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -29,10 +30,6 @@ const targets = [
     tsconfigPath: path.join(rootDir, 'tsconfig.build.json'),
     derive: deriveBuildPaths,
     validateTargets: true,
-  },
-  {
-    tsconfigPath: path.join(rootDir, 'packages', 'extension', 'tsconfig.json'),
-    derive: deriveExtensionPaths,
   },
   {
     tsconfigPath: path.join(
@@ -110,6 +107,6 @@ if (check) {
     );
   }
   console.log(
-    'tsconfig.build.json and the extension/desktop path maps are in sync with the root.',
+    'tsconfig.build.json and the desktop path map are in sync with the root.',
   );
 }

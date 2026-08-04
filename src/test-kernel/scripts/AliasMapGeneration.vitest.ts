@@ -98,7 +98,7 @@ describe('generated tsconfig paths match the committed copies', () => {
     );
   });
 
-  it('packages/extension/tsconfig.json paths derive from the root map', () => {
+  it('packages/extension/tsconfig.json extends root and inherits its paths', () => {
     const committed = JSON.parse(
       readFileSync(
         resolve(rootDir, 'packages/extension/tsconfig.json'),
@@ -106,9 +106,11 @@ describe('generated tsconfig paths match the committed copies', () => {
       ),
     );
 
-    expect(committed.compilerOptions.paths).toEqual(
-      deriveExtensionPaths(rootPaths),
-    );
+    expect(committed.extends).toBe('../../tsconfig.json');
+    expect(
+      committed.compilerOptions.paths,
+      'extension no longer carries its own paths — it inherits from root',
+    ).toBeUndefined();
   });
 
   it('packages/desktop/tsconfig.paths.json paths derive from the root map', () => {
