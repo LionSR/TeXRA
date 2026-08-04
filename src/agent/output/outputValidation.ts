@@ -5,11 +5,11 @@
  * reporting missing files for user notification.
  */
 
+import { debugInternal, type StageHandle } from '@agent/trace';
 import {
-  debugInternal,
-  logMissingOutputs,
-  type StageHandle,
-} from '@agent/trace';
+  emitRunFact,
+  reportMissingOutputs,
+} from '@agent/runtime/runFactEvents';
 import type { FileLocation, StorageKey } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 
@@ -56,6 +56,10 @@ export async function checkExpectedOutputs(
           deps.logger,
           `No expected outputs for round ${currRound} storageKey=${storageKey}`,
         );
+        emitRunFact(deps.logger, 'updateMissingOutputs', {
+          streamId: deps.streamId,
+          filesByRound: { [currRound]: [] },
+        });
         return { storageKey, currRound, missing: [], xmlExists: false };
       }
 
@@ -71,7 +75,9 @@ export async function checkExpectedOutputs(
       const xmlExists = await AbsoluteFS.exists(outputLocation.absolutePath);
 
       if (missing.length > 0) {
-        logMissingOutputs(deps.logger, {
+        reportMissingOutputs(deps.logger, {
+          streamId: deps.streamId,
+          round: currRound,
           missing,
           xmlFile: xmlExists ? outputLocation.absolutePath : null,
         });
@@ -79,6 +85,10 @@ export async function checkExpectedOutputs(
           data: missing,
         });
       } else {
+        emitRunFact(deps.logger, 'updateMissingOutputs', {
+          streamId: deps.streamId,
+          filesByRound: { [currRound]: [] },
+        });
         deps.logger.debug(
           `All expected outputs exist after round ${currRound}`,
         );

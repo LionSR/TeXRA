@@ -2,12 +2,8 @@ import * as path from 'node:path';
 
 import { XMLParser } from 'fast-xml-parser';
 
-import {
-  debugInternal,
-  logInternal,
-  logMissingOutputs,
-  type AgentTrace,
-} from '@agent/trace';
+import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
+import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
@@ -80,6 +76,7 @@ export class XmlOutputManager {
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentTrace,
     private readonly fileService: TaskRunFileService,
+    private readonly streamId: string,
   ) {}
 
   async processXmlContent(content: string): Promise<string> {
@@ -123,6 +120,7 @@ export class XmlOutputManager {
 
   private warnPartialExtraction(
     outputLocation: FileLocation,
+    round: number,
     expectedCount: number,
     extractedCount: number,
   ): void {
@@ -135,7 +133,9 @@ export class XmlOutputManager {
       (_, i) => `<unextracted document ${i + 1}>`,
     );
 
-    logMissingOutputs(this.logger, {
+    reportMissingOutputs(this.logger, {
+      streamId: this.streamId,
+      round,
       missing,
       xmlFile: outputLocation.absolutePath,
     });
@@ -143,6 +143,7 @@ export class XmlOutputManager {
 
   private warnMissingExpectedFiles(
     outputLocation: FileLocation,
+    round: number,
     expectedFiles: readonly string[],
     documents: ReadonlyArray<{ name: string }>,
   ): void {
@@ -154,7 +155,9 @@ export class XmlOutputManager {
     );
     if (missing.length === 0) return;
 
-    logMissingOutputs(this.logger, {
+    reportMissingOutputs(this.logger, {
+      streamId: this.streamId,
+      round,
       missing,
       xmlFile: outputLocation.absolutePath,
     });
@@ -185,6 +188,7 @@ export class XmlOutputManager {
   private async extractDocumentsByContentSimilarity(
     outputContent: string,
     outputLocation: FileLocation,
+    round: number,
     thinkingTag: string,
     baseFiles: readonly FileLocation[],
   ): Promise<Array<{ content: string; name: string }> | null> {
@@ -221,7 +225,9 @@ export class XmlOutputManager {
       .map((file) => file.name)
       .filter((name) => !matchedNames.has(name));
     if (unmatchedFiles.length > 0) {
-      logMissingOutputs(this.logger, {
+      reportMissingOutputs(this.logger, {
+        streamId: this.streamId,
+        round,
         missing: unmatchedFiles,
         xmlFile: outputLocation.absolutePath,
       });
@@ -310,6 +316,7 @@ export class XmlOutputManager {
         if (expectedFiles.length > 1) {
           this.warnMissingExpectedFiles(
             outputLocation,
+            round,
             expectedFiles,
             documents,
           );
@@ -377,18 +384,25 @@ export class XmlOutputManager {
       documents = await this.extractDocumentsByContentSimilarity(
         rawOutputContent,
         outputLocation,
+        round,
         thinkingTag,
         baseFiles,
       );
     }
 
     if (!documents) {
-      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
+      this.warnPartialExtraction(
+        outputLocation,
+        round,
+        expectedDocumentCount,
+        0,
+      );
       return [];
     }
 
     this.warnPartialExtraction(
       outputLocation,
+      round,
       expectedDocumentCount,
       documents.length,
     );

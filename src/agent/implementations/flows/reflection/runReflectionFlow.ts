@@ -121,7 +121,12 @@ export async function runReflectionFlow<C = unknown>(
   ).map((file) => fileService.locateSource(file));
 
   const outputState = createOutputState();
-  const xmlManager = new XmlOutputManager(config, logger, fileService);
+  const xmlManager = new XmlOutputManager(
+    config,
+    logger,
+    fileService,
+    streamId,
+  );
   const diffManager = new LatexDiffManager(
     setting,
     () => getOutputFilesByRound(outputState),

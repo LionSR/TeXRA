@@ -9,8 +9,8 @@ import {
   deriveResumability,
   getExecutionStore,
   isUserVisibleExecution,
-  listExecutionEditedFiles,
   listExecutions,
+  listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type ExecutionListingEntry,
   type ExecutionMeta,
@@ -187,10 +187,9 @@ export async function readCliHistoryDetails(
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
     : undefined;
-  const workspaceFiles = await listExecutionEditedFiles(
+  const workspaceFiles = await listExecutionWorkspaceFiles(
     config,
     persistedWorkspaceFilePaths,
-    conversation,
   );
   const files = mergeHistoryFiles(
     generatedFiles,
