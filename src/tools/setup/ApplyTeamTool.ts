@@ -155,7 +155,7 @@ ${describeTeams()}`,
     }
 
     const { preset } = result;
-    const { workflowKeys, toolUseKeys, unresolvedNames } = result.resolution;
+    const { keys, unresolvedNames } = result.resolution;
     const texraHostedNames = teamHostedNamesForPreflight(
       preset,
       unresolvedNames,
@@ -166,8 +166,8 @@ ${describeTeams()}`,
     // Relay-served leads are absent until sign-in — say so instead of letting
     // it read as a silent failure; check registry resolution, never auth.
     const unresolved = new Set(unresolvedNames);
-    const activeWorkflow = workflowKeys.filter((key) => !unresolved.has(key));
-    const activeToolUse = toolUseKeys.filter((key) => !unresolved.has(key));
+    const activeWorkflow = keys.workflow.filter((key) => !unresolved.has(key));
+    const activeToolUse = keys.toolUse.filter((key) => !unresolved.has(key));
     const pendingRemoteLeads = unresolvedNames.filter((name) =>
       texraHostedNames.has(name),
     );

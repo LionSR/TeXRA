@@ -33,8 +33,10 @@ const CUSTOM_PRESET: AgentModePreset = {
   name: 'Custom Team',
   description: 'A user-authored team.',
   icon: 'rocket',
-  workflowAgents: ['polish'],
-  toolUseAgents: ['assistant'],
+  agents: {
+    workflow: ['polish'],
+    toolUse: ['assistant'],
+  },
 };
 
 /**

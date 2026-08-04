@@ -54,7 +54,6 @@ async function persistCompletedChild(
     schemaVersion: 1,
     timestamp: '2026-07-15T00:00:00.000Z',
     parentExecutionId: parentId,
-    terminalStatus: 'completed',
     outcome: 'completed',
   });
   await store.writeResultMeta(completedWorkflowResult(absolutePath));

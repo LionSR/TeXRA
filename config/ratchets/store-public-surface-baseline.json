@@ -41,7 +41,7 @@
       "getOutputFiles",
       "getParentStreamId",
       "getRunConfig",
-      "getRunDescriptor",
+      "getRunIdentity",
       "getRunUsage",
       "getWorkPlan",
       "hasPersistedWorkPlan",
@@ -52,7 +52,6 @@
       "read",
       "readOutputFiles",
       "readPersistedExecutionId",
-      "readPersistedStreamAssociation",
       "reconcileStagedDeletions",
       "stageDeleteStream"
     ]

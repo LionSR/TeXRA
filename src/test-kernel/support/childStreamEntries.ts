@@ -10,9 +10,9 @@ import type {
   ChildStreamEntries,
   ChildStreamEntry,
 } from '@cli/chat/tui/state/childExecutions';
-import type { StreamTabId, SubagentChildInfo } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
-export interface ChildStreamEntryRow extends SubagentChildInfo {
+export interface ChildStreamEntryRow extends ActiveChildInfo {
   /** Explicit current edge, when the row needs one beyond the retained/active
    *  parent implied by its placement. `null` marks an explicit promotion. */
   readonly edgeParentStreamId?: StreamTabId | null;

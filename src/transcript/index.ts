@@ -27,5 +27,4 @@ export {
   readCompletedRunTodos,
   seedResumedConversationSidecar,
 } from './completedRunArchive';
-export { resolvePersistedStreamIdForExecution } from './legacyExecutionIdentity';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

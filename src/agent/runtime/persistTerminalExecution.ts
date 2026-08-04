@@ -26,7 +26,7 @@ export interface PersistTerminalExecutionParams {
 }
 
 export interface PersistTerminalExecutionResult {
-  readonly terminalStatusPersisted: boolean;
+  readonly outcomePersisted: boolean;
 }
 
 /**
@@ -57,7 +57,7 @@ export async function persistTerminalExecution(
   try {
     const finalization = await finalizeExecution({
       executionId,
-      terminalStatus: projectRunOutcome(outcome).executionStatus,
+      outcome,
       flowRecord,
     });
     if (finalization.status === 'failed') {
@@ -67,12 +67,12 @@ export async function persistTerminalExecution(
           ...agentData,
           executionId,
           stage: finalization.stage,
-          terminalStatusPersisted: finalization.terminalStatusPersisted,
+          outcomePersisted: finalization.outcomePersisted,
           error: finalization.error,
         },
       });
     }
-    return { terminalStatusPersisted: finalization.terminalStatusPersisted };
+    return { outcomePersisted: finalization.outcomePersisted };
   } catch (error) {
     markOwnedExecutionLeaseUndurable(executionId);
     callerLogger.warn(rejectedMessage, {
@@ -82,6 +82,6 @@ export async function persistTerminalExecution(
         error,
       },
     });
-    return { terminalStatusPersisted: false };
+    return { outcomePersisted: false };
   }
 }

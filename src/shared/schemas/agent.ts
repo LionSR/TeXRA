@@ -15,6 +15,29 @@ export type AgentCategory = (typeof AgentCategory)[keyof typeof AgentCategory];
 
 export const AgentCategorySchema = z.enum(AgentCategory);
 
+/** Every agent category, in canonical display order. */
+export const AGENT_CATEGORIES = [
+  AgentCategory.Workflow,
+  AgentCategory.ToolUse,
+] as const;
+
+/**
+ * One value per agent category. The single generic shape for every
+ * category-partitioned fact (rosters, selections, catalogs, form state) —
+ * replaces the historical `workflow*`/`toolUse*` field pairs.
+ */
+export type ByCategory<T> = Record<AgentCategory, T>;
+
+/** Build a {@link ByCategory} record by evaluating `build` per category. */
+export function byCategory<T>(
+  build: (category: AgentCategory) => T,
+): ByCategory<T> {
+  return {
+    [AgentCategory.Workflow]: build(AgentCategory.Workflow),
+    [AgentCategory.ToolUse]: build(AgentCategory.ToolUse),
+  };
+}
+
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
   BUILT_IN_WORKFLOW: 'builtInWorkflow',

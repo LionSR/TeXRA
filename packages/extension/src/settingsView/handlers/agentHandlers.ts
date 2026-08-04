@@ -348,7 +348,7 @@ export class AgentHandlers {
 
         await this.refreshAfterAgentMutation(
           this.catalogController.getPresetToolUseRoot(
-            result.preset.toolUseAgents,
+            result.preset.agents.toolUse,
             result.preset.id,
           ),
           true,

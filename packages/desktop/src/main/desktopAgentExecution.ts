@@ -734,6 +734,8 @@ export class DesktopProgressBridge {
       run: {
         state: {
           getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
+          getRunIdentity: (stream) =>
+            this.state.snapshots.getRunIdentity(stream),
           getExecutionId: (stream) => this.getStreamExecutionId(stream),
         },
         executeAgent: (request) => {
@@ -889,6 +891,7 @@ export class DesktopProgressBridge {
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
+      getRunIdentity: (stream) => this.state.snapshots.getRunIdentity(stream),
       workflowActions: this.workflowActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,

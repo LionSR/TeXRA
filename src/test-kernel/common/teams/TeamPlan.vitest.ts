@@ -43,8 +43,10 @@ function preset(overrides: Partial<TeamPreset> = {}): TeamPreset {
     name: 'Custom Team',
     description: 'A custom team.',
     icon: 'bookmark',
-    workflowAgents: ['writer'],
-    toolUseAgents: ['lead', 'member'],
+    agents: {
+      workflow: ['writer'],
+      toolUse: ['lead', 'member'],
+    },
     source: 'custom',
     ...overrides,
   };
@@ -54,10 +56,14 @@ function manualPlan(overrides: Partial<TeamRunPlan> = {}): TeamRunPlan {
   return {
     preset: preset(),
     rootAgent: agent('lead', { tools: delegateTools }),
-    workflowAgentKeys: ['builtInWorkflow:writer'],
-    toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
-    missingWorkflowAgents: [],
-    missingToolUseAgents: [],
+    agentKeys: {
+      workflow: ['builtInWorkflow:writer'],
+      toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
+    },
+    missingAgents: {
+      workflow: [],
+      toolUse: [],
+    },
     ...overrides,
   };
 }
@@ -111,11 +117,13 @@ describe('planTeamRun', () => {
   it('selects the orchestrator for the built-in physicist team', () => {
     const physicist = teamPresets([]).find((item) => item.id === 'physicist')!;
     const plan = planTeamRun(physicist, {
-      workflowAgents: [],
-      toolUseAgents: [
-        agent('research', { tools: delegateTools }),
-        agent('orchestrator', { source: 'remote', tools: delegateTools }),
-      ],
+      agents: {
+        workflow: [],
+        toolUse: [
+          agent('research', { tools: delegateTools }),
+          agent('orchestrator', { source: 'remote', tools: delegateTools }),
+        ],
+      },
     });
 
     expect(plan.rootAgent?.name).toBe('orchestrator');
@@ -126,11 +134,13 @@ describe('planTeamRun', () => {
       (item) => item.id === 'software-engineer',
     )!;
     const plan = planTeamRun(software, {
-      workflowAgents: [],
-      toolUseAgents: [
-        agent('coder', { tools: delegateTools }),
-        agent('engineer', { tools: delegateTools }),
-      ],
+      agents: {
+        workflow: [],
+        toolUse: [
+          agent('coder', { tools: delegateTools }),
+          agent('engineer', { tools: delegateTools }),
+        ],
+      },
     });
 
     expect(plan.rootAgent?.name).toBe('engineer');
@@ -139,8 +149,10 @@ describe('planTeamRun', () => {
   it('does not fall back to an arbitrary delegating agent for a built-in', () => {
     const physicist = teamPresets([]).find((item) => item.id === 'physicist')!;
     const plan = planTeamRun(physicist, {
-      workflowAgents: [],
-      toolUseAgents: [agent('research', { tools: delegateTools })],
+      agents: {
+        workflow: [],
+        toolUse: [agent('research', { tools: delegateTools })],
+      },
     });
 
     expect(plan.rootAgent).toBeUndefined();
@@ -148,14 +160,18 @@ describe('planTeamRun', () => {
 
   it('selects the first delegation-capable custom member in preset order', () => {
     const plan = planTeamRun(
-      preset({ toolUseAgents: ['second', 'first', 'plain'] }),
+      preset({
+        agents: { workflow: [], toolUse: ['second', 'first', 'plain'] },
+      }),
       {
-        workflowAgents: [],
-        toolUseAgents: [
-          agent('first', { tools: delegateTools }),
-          agent('second', { tools: delegateTools }),
-          agent('plain'),
-        ],
+        agents: {
+          workflow: [],
+          toolUse: [
+            agent('first', { tools: delegateTools }),
+            agent('second', { tools: delegateTools }),
+            agent('plain'),
+          ],
+        },
       },
     );
 
@@ -168,8 +184,10 @@ describe('planTeamRun', () => {
       tools: delegateTools,
     });
     const options = {
-      workflowAgents: [],
-      toolUseAgents: [customLead, agent('member')],
+      agents: {
+        workflow: [],
+        toolUse: [customLead, agent('member')],
+      },
     };
 
     const selected = planTeamRun(preset(), {
@@ -194,21 +212,25 @@ describe('planTeamRun', () => {
       tools: delegateTools,
     });
     const included = planTeamRun(preset(), {
-      workflowAgents: [],
-      toolUseAgents: [lead, agent('member')],
+      agents: {
+        workflow: [],
+        toolUse: [lead, agent('member')],
+      },
       agentOverride: 'lead',
     });
     const appended = planTeamRun(preset(), {
-      workflowAgents: [],
-      toolUseAgents: [lead, agent('member'), external],
+      agents: {
+        workflow: [],
+        toolUse: [lead, agent('member'), external],
+      },
       agentOverride: 'custom:external',
     });
 
-    expect(included.toolUseAgentKeys).toEqual([
+    expect(included.agentKeys.toolUse).toEqual([
       'builtInToolUse:lead',
       'builtInToolUse:member',
     ]);
-    expect(appended.toolUseAgentKeys).toEqual([
+    expect(appended.agentKeys.toolUse).toEqual([
       'builtInToolUse:lead',
       'builtInToolUse:member',
       'custom:external',
@@ -222,8 +244,10 @@ describe('plan status and launchability', () => {
       preset: preset({
         texraHostedAgents: ['hosted-workflow', 'hosted-tool'],
       }),
-      missingWorkflowAgents: ['hosted-workflow', 'local-workflow'],
-      missingToolUseAgents: ['hosted-tool', 'local-tool'],
+      missingAgents: {
+        workflow: ['hosted-workflow', 'local-workflow'],
+        toolUse: ['hosted-tool', 'local-tool'],
+      },
     });
 
     expect(teamPlanHasGaps(plan)).toBe(true);
@@ -237,9 +261,11 @@ describe('plan status and launchability', () => {
     const noRoot = manualPlan({ rootAgent: undefined });
     const nonDelegating = manualPlan({ rootAgent: agent('plain') });
     const noMembers = manualPlan({
-      preset: preset({ workflowAgents: [], toolUseAgents: ['lead'] }),
-      workflowAgentKeys: [],
-      toolUseAgentKeys: ['builtInToolUse:lead'],
+      preset: preset({ agents: { workflow: [], toolUse: ['lead'] } }),
+      agentKeys: {
+        workflow: [],
+        toolUse: ['builtInToolUse:lead'],
+      },
     });
 
     expect(teamLaunchBlockReason(noRoot)).toBe('no runnable team root');
@@ -251,7 +277,9 @@ describe('plan status and launchability', () => {
 
   it('narrows launchable plans and classifies availability status', () => {
     const available = manualPlan();
-    const degraded = manualPlan({ missingWorkflowAgents: ['missing'] });
+    const degraded = manualPlan({
+      missingAgents: { workflow: ['missing'], toolUse: [] },
+    });
     const unavailable = manualPlan({ rootAgent: undefined });
 
     expect(canLaunchTeam(available)).toBe(true);
@@ -264,23 +292,27 @@ describe('plan status and launchability', () => {
   it('reports per-category counts, labels, root identity, and override gaps', () => {
     const plan = manualPlan({
       missingAgentOverride: 'missing-lead',
-      missingWorkflowAgents: ['writer'],
-      missingToolUseAgents: ['member'],
+      missingAgents: {
+        workflow: ['writer'],
+        toolUse: ['member'],
+      },
     });
 
     expect(teamAvailability(plan)).toEqual({
       status: 'degraded',
-      workflow: {
-        available: 0,
-        total: 1,
-        missing: ['writer'],
-        label: '0/1',
-      },
-      toolUse: {
-        available: 1,
-        total: 2,
-        missing: ['member'],
-        label: '1/2',
+      agents: {
+        workflow: {
+          available: 0,
+          total: 1,
+          missing: ['writer'],
+          label: '0/1',
+        },
+        toolUse: {
+          available: 1,
+          total: 2,
+          missing: ['member'],
+          label: '1/2',
+        },
       },
       rootAgent: {
         key: 'builtInToolUse:lead',
@@ -289,7 +321,7 @@ describe('plan status and launchability', () => {
       },
       missingAgentOverride: 'missing-lead',
     });
-    expect(teamAvailability(manualPlan()).workflow.label).toBe('1');
+    expect(teamAvailability(manualPlan()).agents.workflow.label).toBe('1');
   });
 });
 
@@ -301,8 +333,8 @@ describe('teamExecutionFields', () => {
     expect(teamExecutionFields(plan)).toEqual({
       agent: 'builtInToolUse:lead',
       delegationAgentScope: {
-        workflowAgentKeys: ['builtInWorkflow:writer'],
-        toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
+        workflow: ['builtInWorkflow:writer'],
+        toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
       },
       cliMultiAgentPresetId: 'custom-team',
     });
@@ -327,8 +359,10 @@ describe('buildTeamOptions', () => {
     });
     const customZ = manualPlan({
       preset: preset({ id: 'cz', name: 'Zulu' }),
-      missingWorkflowAgents: ['writer'],
-      missingToolUseAgents: ['member'],
+      missingAgents: {
+        workflow: ['writer'],
+        toolUse: ['member'],
+      },
     });
     const customA = manualPlan({
       preset: preset({ id: 'ca', name: 'Alpha' }),
@@ -457,7 +491,7 @@ describe('resolveTeamLaunch', () => {
   /** A custom team whose single workflow member is missing and TeXRA-hosted. */
   function hostedWriterPreset(): TeamPreset {
     return preset({
-      workflowAgents: ['hosted-writer'],
+      agents: { workflow: ['hosted-writer'], toolUse: ['lead', 'member'] },
       texraHostedAgents: ['hosted-writer'],
     });
   }
@@ -468,8 +502,8 @@ describe('resolveTeamLaunch', () => {
       fields: {
         agent: 'builtInToolUse:lead',
         delegationAgentScope: {
-          workflowAgentKeys: ['builtInWorkflow:writer'],
-          toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
+          workflow: ['builtInWorkflow:writer'],
+          toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
         cliMultiAgentPresetId: 'custom-team',
       },
@@ -502,7 +536,10 @@ describe('resolveTeamLaunch', () => {
 
   it('continues with available members and reports a partial team', async () => {
     const hostedPreset = preset({
-      workflowAgents: ['writer', 'hosted-writer'],
+      agents: {
+        workflow: ['writer', 'hosted-writer'],
+        toolUse: ['lead', 'member'],
+      },
       texraHostedAgents: ['hosted-writer'],
     });
 
@@ -581,7 +618,9 @@ describe('resolveTeamLaunch', () => {
     await expect(
       resolveTeamLaunch(
         launchArgs({
-          customPresetsRaw: [preset({ toolUseAgents: ['plain'] })],
+          customPresetsRaw: [
+            preset({ agents: { workflow: ['writer'], toolUse: ['plain'] } }),
+          ],
           getAgents: (category: string) =>
             category === 'workflow'
               ? [agent('writer', { source: 'builtInWorkflow' })]

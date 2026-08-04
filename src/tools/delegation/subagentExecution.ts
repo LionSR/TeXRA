@@ -159,11 +159,12 @@ export async function executeSubagent(
   // which callers may resolve differently
   // (e.g. an approved agent override's display name vs. its registry name).
   // Derive from the exact same fields, not a parallel formula.
-  const childStreamId = getStreamTabId(config.agent, config.model, {
+  const childStreamId = getStreamTabId(config.agent, {
     executionId,
   });
   await registerExecution(executionId, config, agentName, {
     streamId: childStreamId,
+    identity: { kind: 'agent', agent: config.agent },
     parentExecutionId,
   });
   const runWithOwnership = captureOwnedExecutionLease(executionId);

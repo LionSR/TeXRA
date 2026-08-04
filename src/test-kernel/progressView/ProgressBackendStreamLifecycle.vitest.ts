@@ -108,11 +108,12 @@ describe('ProgressBackend', () => {
       toolUseConfig('search', 'deepseekproT'),
     );
 
-    expect(backend.state.getStreamMetadata(streamId).run).toMatchObject({
-      kind: 'agent',
-      agent: 'search',
+    // The config snapshot is projected; identity stays pending until a
+    // `run.start` supplies it (setRunConfig no longer synthesizes one).
+    expect(backend.state.getStreamMetadata(streamId).config).toMatchObject({
       model: 'deepseekproT',
     });
+    expect(backend.state.getStreamMetadata(streamId).identity).toBeUndefined();
   });
 
   it('clears an empty active-stream selection through the shared fact path', async () => {

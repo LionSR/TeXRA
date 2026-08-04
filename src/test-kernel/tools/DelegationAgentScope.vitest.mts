@@ -32,12 +32,10 @@ vi.mock('@agent/index/agentRegistry', () => {
   return {
     getVisibleAgent: () => customReview,
     resolveDelegationScopeAgents: (
-      scope: { toolUseAgentKeys: readonly string[] } | undefined,
+      scope: { toolUse: readonly string[] } | undefined,
       category: string,
     ) =>
-      scope &&
-      category === 'toolUse' &&
-      scope.toolUseAgentKeys.includes('remote:review')
+      scope && category === 'toolUse' && scope.toolUse.includes('remote:review')
         ? [remoteReview]
         : [],
     findAgentByIdentifier: (
@@ -56,8 +54,8 @@ describe('execution-scoped delegation agents', () => {
       kind: 'launch',
       runScope: {
         delegationAgentScope: {
-          workflowAgentKeys: [],
-          toolUseAgentKeys: ['remote:review'],
+          workflow: [],
+          toolUse: ['remote:review'],
         },
       },
     };
@@ -72,8 +70,8 @@ describe('execution-scoped delegation agents', () => {
   it('can enforce a captured scope without ambient run context', () => {
     mocks.context = undefined;
     const scope = {
-      workflowAgentKeys: [],
-      toolUseAgentKeys: ['remote:review'],
+      workflow: [],
+      toolUse: ['remote:review'],
     };
 
     expect(getDelegationAgentForScope('toolUse', 'review', scope)).toBe(

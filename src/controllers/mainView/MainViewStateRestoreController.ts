@@ -69,11 +69,9 @@ export function buildMainViewState(
   // Note: UIFileFieldsSchema uses catch('') for nullable fields from AgentConfig.
   return MainViewPersistedStateSchema.parse({
     sessionType: isToolUse ? 'toolUse' : 'workflow',
-    workflowAgent: isToolUse ? undefined : resolvedAgent,
-    toolUseAgent: isToolUse ? resolvedAgent : undefined,
+    agent: { [agentCategory]: resolvedAgent },
     model: agentConfig.model,
-    workflowInstruction: isToolUse ? undefined : agentConfig.instruction,
-    toolUseInstruction: isToolUse ? agentConfig.instruction : undefined,
+    instruction: { [agentCategory]: agentConfig.instruction },
     editedFile: agentConfig.editedFile,
     inputFiles: agentConfig.inputFiles,
     contextFiles: agentConfig.contextFiles,

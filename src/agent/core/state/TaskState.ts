@@ -1,11 +1,10 @@
 /**
  * Legacy run-config wrapper. `AgentConfig` is the live run-config vocabulary;
- * this shape survives at exactly two boundaries and has no other callers:
- *
- * - the `meta.taskState` disk-read shim in `StreamSnapshotStore`, which parses
- *   run configs persisted before `runDescriptor`/`executionId` were written;
- * - the frozen CLI NDJSON `setTaskState` event payload, whose wire shape may
- *   not change (projected from `AgentConfig` by `agentConfigToTaskState`).
+ * this shape survives at exactly one boundary and has no other callers: the
+ * frozen CLI NDJSON `setTaskState` event payload, whose wire shape may not
+ * change (projected from `AgentConfig` by `agentConfigToTaskState`). The
+ * `meta.taskState` disk-read shim that once shared it was retired with the
+ * run-classification consolidation.
  */
 import { z } from 'zod';
 

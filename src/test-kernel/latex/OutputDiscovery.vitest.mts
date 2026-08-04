@@ -49,10 +49,11 @@ const { discoverLatestExecutionOutputs } =
 
 function matchingExecution(id: string) {
   return {
-    kind: 'agent',
+    kind: 'run',
+    identity: { kind: 'agent', agent: 'polish' },
     id,
     timestamp: '2026-01-01T00:00:00.000Z',
-    agentConfig: {
+    record: {
       agent: 'polish',
       model: 'deepseek',
       inputFiles: ['paper.tex'],
@@ -117,7 +118,6 @@ describe('discoverLatestExecutionOutputs', () => {
       readMeta: async () => ({
         timestamp: '2026-01-01T00:00:00.000Z',
         streamId: 'polish@earlierModel#exec-registered',
-        streamIdSource: 'registration',
       }),
     } as never);
     const rounds = { 0: [] };

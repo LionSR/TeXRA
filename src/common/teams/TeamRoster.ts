@@ -1,8 +1,11 @@
 import {
   agentKeyOf,
   agentMatchesIdentifier,
+  byCategory,
+  AGENT_CATEGORIES,
   type AgentCategory,
   type AgentSource,
+  type ByCategory,
 } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
@@ -15,8 +18,7 @@ export interface TeamRosterState {
 }
 
 export interface TeamRosterResolution {
-  readonly workflowKeys: string[];
-  readonly toolUseKeys: string[];
+  readonly keys: ByCategory<string[]>;
   readonly unresolvedNames: string[];
 }
 
@@ -42,12 +44,14 @@ export function resolveTeamRoster(
   state: Pick<TeamRosterState, 'getAgents'>,
   preset: AgentModePreset,
 ): TeamRosterResolution {
-  const workflow = resolveAgentKeys(state, 'workflow', preset.workflowAgents);
-  const toolUse = resolveAgentKeys(state, 'toolUse', preset.toolUseAgents);
+  const resolved = byCategory((category) =>
+    resolveAgentKeys(state, category, preset.agents[category]),
+  );
   return {
-    workflowKeys: workflow.keys,
-    toolUseKeys: toolUse.keys,
-    unresolvedNames: [...workflow.unresolved, ...toolUse.unresolved],
+    keys: byCategory((category) => resolved[category].keys),
+    unresolvedNames: AGENT_CATEGORIES.flatMap(
+      (category) => resolved[category].unresolved,
+    ),
   };
 }
 
@@ -56,8 +60,9 @@ export async function commitTeamRoster(
   state: Pick<TeamRosterState, 'setEnabledAgentKeys'>,
   resolution: TeamRosterResolution,
 ): Promise<void> {
-  await state.setEnabledAgentKeys('workflow', resolution.workflowKeys);
-  await state.setEnabledAgentKeys('toolUse', resolution.toolUseKeys);
+  for (const category of AGENT_CATEGORIES) {
+    await state.setEnabledAgentKeys(category, resolution.keys[category]);
+  }
 }
 
 /**

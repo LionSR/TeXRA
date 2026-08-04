@@ -52,8 +52,7 @@ describe('settingsView notification message builders', () => {
     expect(buildSelectionItems).toHaveBeenCalledOnce();
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow: [workflowItem],
-      toolUse: [toolUseItem],
+      agents: { workflow: [workflowItem], toolUse: [toolUseItem] },
     });
   });
 

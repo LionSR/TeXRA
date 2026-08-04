@@ -135,7 +135,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
     // Process agents (e.g. bash) proxy raw stdout/stderr — render them with
     // a dedicated terminal-style container, not the LLM workflow/tool-use
     // chrome.
-    if (streamInfo.kind === 'process') {
+    if (streamInfo.identity?.kind === 'process') {
       return html`<process-stream-content></process-stream-content>`;
     }
 

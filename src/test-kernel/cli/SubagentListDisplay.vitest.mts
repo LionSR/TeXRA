@@ -434,9 +434,7 @@ describe('CLI child list display model', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
     expect(childStatusColor('running')).toBe('green');
     expect(childStatusColor('waiting')).toBe('yellow');
-    expect(childStatusColor('error')).toBe('red');
     expect(childStatusColor('failed')).toBe('red');
-    expect(childStatusColor('exit 2')).toBe('red');
     expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
   });
@@ -447,6 +445,9 @@ describe('CLI child list display model', () => {
     // establishes success, so neither may render green.
     expect(childStatusColor(undefined)).toBe('gray');
     expect(childStatusColor('compacting')).toBe('gray');
+    // Legacy free-form status strings no longer exist on the canonical rail;
+    // an unmapped string is neutral, never a fabricated verdict.
+    expect(childStatusColor('exit 2')).toBe('gray');
   });
 
   it('summarizes what a row is waiting on from its pending approval kinds', () => {
@@ -579,6 +580,7 @@ describe('CLI child list display model', () => {
         bash,
         workflowAgentSlice('bash-1', {
           model: 'gemini35f',
+          identity: { kind: 'process', tool: 'bash' },
           status: STREAM_PHASE.RUNNING,
         }),
       ],
@@ -604,19 +606,18 @@ describe('CLI child list display model', () => {
       parentStreamId: run,
       retained: [
         {
-          kind: 'subagent',
           executionId: 'bash-exec',
           agentName: 'bash',
           childStreamId: bash,
           status: STREAM_PHASE.RUNNING,
-          toolName: 'bash',
+          identity: { kind: 'process', tool: 'bash' },
         },
         {
-          kind: 'subagent',
           executionId: 'agent-exec',
           // A real agent may use the same visible label. Its canonical
           // spawning tool, rather than that label, determines model display.
           agentName: 'bash',
+          identity: { kind: 'agent' as const, agent: 'bash' },
           childStreamId: agent,
           status: STREAM_PHASE.RUNNING,
         },
@@ -640,8 +641,14 @@ describe('CLI child list display model', () => {
       { until: (frame) => frame.includes('5 tool calls') },
     );
 
-    expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
-    expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
+    expect(sessions.find(({ id }) => id === bash)?.identity).toEqual({
+      kind: 'process',
+      tool: 'bash',
+    });
+    expect(sessions.find(({ id }) => id === agent)?.identity).toEqual({
+      kind: 'agent',
+      agent: 'bash',
+    });
     expect(output.match(/bash running/g)).toHaveLength(2);
     expect(output).not.toContain('gemini35f');
     expect(output).toContain('bash running · gpt56');
@@ -803,24 +810,24 @@ describe('CLI child list display model', () => {
       // newest-first, which is what interleaves `loose` between the groups.
       retained: [
         {
-          kind: 'subagent',
           executionId: 'reduce-exec',
           agentName: 'reduce-agent',
+          identity: { kind: 'agent' as const, agent: 'reduce-agent' },
           childStreamId: reduceAgent,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Reduce',
         },
         {
-          kind: 'subagent',
           executionId: 'loose-exec',
           agentName: 'loose-agent',
+          identity: { kind: 'agent' as const, agent: 'loose-agent' },
           childStreamId: looseAgent,
           status: STREAM_PHASE.RUNNING,
         },
         {
-          kind: 'subagent',
           executionId: 'map-exec',
           agentName: 'map-agent',
+          identity: { kind: 'agent' as const, agent: 'map-agent' },
           childStreamId: mapAgent,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Map',
@@ -937,6 +944,10 @@ describe('CLI child list display model', () => {
     const wrongChild = 'wrong-child' as StreamTabId;
     const rootSlice = workflowAgentSlice(run, {
       agent: 'research-workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'research-workflow',
+      },
       status: STREAM_PHASE.RUNNING,
       entries: [
         {
@@ -1103,6 +1114,10 @@ describe('CLI child list display model', () => {
     const missing = 'missing-child' as StreamTabId;
     const rootSlice = workflowAgentSlice(run, {
       agent: 'grouped-workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'grouped-workflow',
+      },
       status: STREAM_PHASE.RUNNING,
       entries: [
         {

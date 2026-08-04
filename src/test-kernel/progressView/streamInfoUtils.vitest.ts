@@ -9,9 +9,9 @@ import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
 function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
   return {
-    kind: 'agent',
     name,
     label: name,
+    identity: { kind: 'agent', agent: name },
     agentCategory: 'workflow',
     creationTimestamp,
   };
@@ -38,25 +38,42 @@ describe('compareByNewestCreationTime', () => {
 });
 
 describe('buildStreamTabInfo', () => {
-  it('classifies stream-id-derived bash child streams as process agents', () => {
+  it('labels a process stream from its identity and surfaces the command', () => {
     const info = buildStreamTabInfo({
       streamId: 'bash@tool#exec:child-stream',
       metadata: {
+        identity: { kind: 'process', tool: 'bash' },
+        config: { instruction: 'ls -la' },
         agentCategory: AgentCategory.ToolUse,
         creationTimestamp: 1,
       },
     });
 
     expect(info.label).toBe('bash');
-    expect(info.agent).toBe('bash');
-    expect(info.kind).toBe('process');
+    expect(info.identity).toEqual({ kind: 'process', tool: 'bash' });
+    expect(info.command).toBe('ls -la');
+    expect(info.model).toBeUndefined();
+  });
+
+  it('renders a pending tab when the identity has not resolved yet', () => {
+    const info = buildStreamTabInfo({
+      streamId: 'bash@tool#exec:child-stream',
+      metadata: {
+        creationTimestamp: 1,
+      },
+    });
+
+    expect(info.label).toBe('bash@tool#exec:child-stream');
+    expect(info.identity).toBeUndefined();
+    expect(info.agentCategory).toBeUndefined();
   });
 
   it('renders the canonical category and remote status without source precedence', () => {
     const info = buildStreamTabInfo({
       streamId: 'search@deepseek#exec',
       metadata: {
-        run: { kind: 'agent', agent: 'search', model: '', instruction: '' },
+        identity: { kind: 'agent', agent: 'search' },
+        config: { instruction: '', model: '' },
         agentCategory: AgentCategory.ToolUse,
         isRemote: true,
         creationTimestamp: 1,

@@ -112,10 +112,9 @@ import {
   toolDashboardItems,
   toolDashboardLoaded,
   toolPathProtectionEnabled,
-  toolUseAgents,
+  agentSelectionItems,
   unsupportedCommands,
   userEmail,
-  workflowAgents,
 } from './settingsState';
 import type { HistoryTab } from './tabs/HistoryTab';
 
@@ -385,8 +384,7 @@ export class SettingsApp extends SettingsAppBase {
       case 'agents':
         return html`
           <agents-tab
-            .workflowAgents=${workflowAgents.get()}
-            .toolUseAgents=${toolUseAgents.get()}
+            .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .initialSubTab=${agentSubTab.get()}

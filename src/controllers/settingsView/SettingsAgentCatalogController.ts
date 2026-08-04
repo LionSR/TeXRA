@@ -21,8 +21,11 @@ import {
 import {
   agentKey,
   agentMatchesIdentifier,
+  byCategory,
+  AGENT_CATEGORIES,
   type AgentCategory,
   type AgentSource,
+  type ByCategory,
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
@@ -60,14 +63,8 @@ export interface SettingsAgentCatalogControllerDeps {
 export class SettingsAgentCatalogController implements TeamRosterCatalog {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
-  buildSelectionItems(): {
-    workflow: AgentSelectionItem[];
-    toolUse: AgentSelectionItem[];
-  } {
-    return {
-      workflow: this.buildCategorySelectionItems('workflow'),
-      toolUse: this.buildCategorySelectionItems('toolUse'),
-    };
+  buildSelectionItems(): ByCategory<AgentSelectionItem[]> {
+    return byCategory((category) => this.buildCategorySelectionItems(category));
   }
 
   getCustomPresets(): AgentModePreset[] {
@@ -125,20 +122,21 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       name: 'Settings preview',
       description: '',
       icon: 'bookmark',
-      workflowAgents: [],
-      toolUseAgents,
+      agents: { workflow: [], toolUse: toolUseAgents },
       source: 'custom',
     };
     const catalogAgents = this.deps.state.getAgents('toolUse');
     return planTeamRun(preset, {
-      workflowAgents: [],
-      toolUseAgents: [
-        ...catalogAgents,
-        ...this.synthesizedBuiltInRootEntries(
-          preset.toolUseAgents,
-          catalogAgents,
-        ),
-      ],
+      agents: {
+        workflow: [],
+        toolUse: [
+          ...catalogAgents,
+          ...this.synthesizedBuiltInRootEntries(
+            preset.agents.toolUse,
+            catalogAgents,
+          ),
+        ],
+      },
     }).rootAgent?.name;
   }
 
@@ -165,20 +163,23 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
   async saveCurrentPreset(name: string): Promise<AgentModePreset> {
     const trimmedName = name.trim();
-    const visibleWorkflow = this.deps.state.getVisibleAgents('workflow');
-    const visibleToolUse = this.deps.state.getVisibleAgents('toolUse');
-    const workflowAgents = visibleWorkflow.map((entry) => entry.name);
-    const toolUseAgents = visibleToolUse.map((entry) => entry.name);
+    const visible = byCategory((category) =>
+      this.deps.state.getVisibleAgents(category),
+    );
+    const agents = byCategory((category) =>
+      visible[category].map((entry) => entry.name),
+    );
     const preset: AgentModePreset = {
       id: `custom-${this.deps.now?.() ?? Date.now()}`,
       name: trimmedName,
-      description: `Custom team: ${[...toolUseAgents, ...workflowAgents].join(', ')}`,
+      description: `Custom team: ${[...agents.toolUse, ...agents.workflow].join(', ')}`,
       icon: 'bookmark',
-      workflowAgents,
-      toolUseAgents,
-      texraHostedAgents: [...visibleWorkflow, ...visibleToolUse]
-        .filter((entry) => entry.source === 'remote')
-        .map((entry) => entry.name),
+      agents,
+      texraHostedAgents: AGENT_CATEGORIES.flatMap((category) =>
+        visible[category]
+          .filter((entry) => entry.source === 'remote')
+          .map((entry) => entry.name),
+      ),
     };
 
     await this.deps.state.setCustomPresets([

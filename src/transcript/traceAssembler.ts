@@ -10,36 +10,21 @@
  * a generic failure.
  */
 import { getExecutionStore } from '@agent/storage';
-import {
-  registeredStreamId,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
-import {
-  resolvePersistedStreamIdForExecution,
-  type PersistedStreamIdResolution,
-} from './legacyExecutionIdentity';
 import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
   | { readonly status: 'ok'; readonly trace: TraceDocument }
-  | { readonly status: 'config_missing' | 'streamLogs_missing' }
-  | {
-      readonly status: 'streamId_ambiguous';
-      readonly candidateStreamIds: readonly StreamTabId[];
-    };
+  | { readonly status: 'config_missing' | 'streamLogs_missing' };
 
 /**
- * `streamId_ambiguous` means several unproven archive roots claim the
- * execution, but persisted evidence does not identify one as canonical. By
- * contrast, `streamLogs_missing` means no replayable execution-root timeline
- * is available, either because the run predates transcript persistence or
- * because its only exact associations are proven children. Callers should
- * surface both distinctions rather than reporting a generic "not found".
+ * `streamLogs_missing` means no replayable execution-root timeline is
+ * available: the run predates transcript persistence, or its metadata
+ * carries no stamped stream id.
  */
 export async function assembleTrace(
   executionId: ExecutionId,
@@ -49,34 +34,14 @@ export async function assembleTrace(
   // mutating persistence while reading the same transcript files.
   const [streamLogStore, config, meta] = await Promise.all([
     StreamLogStore.openReadOnly(),
-    executionStore.readConfig(),
+    executionStore.readRunRecord(),
     executionStore.readMeta(),
   ]);
-  // One call-scoped snapshot store serves both the resolver's sidecar scan and
-  // the snapshot read, so the two share its per-stream KV handles.
   const snapshotStore = new StreamSnapshotStore();
-  // A registration-proven record carries its stream identity directly; only
-  // legacy records (no registration provenance) enter the compatibility
-  // resolver and its sidecar/suffix scans (#9590 A1).
-  const registered = registeredStreamId(meta);
-  const resolved: PersistedStreamIdResolution | null =
-    registered !== undefined
-      ? { streamId: registered, fallbackStreamIds: [] }
-      : await resolvePersistedStreamIdForExecution(executionId, {
-          snapshotStore,
-          streamLogStore,
-        });
-  if (resolved && !resolved.streamId) {
-    const candidateStreamIds =
-      resolved.exactExecutionCandidateStreamIds ??
-      resolved.suffixCandidateStreamIds ??
-      [];
-    return candidateStreamIds.length > 0
-      ? { status: 'streamId_ambiguous', candidateStreamIds }
-      : { status: 'streamLogs_missing' };
-  }
+  // The execution→stream mapping is the streamId stamped at registration;
+  // a row without one has no persisted stream.
   if (!config) return { status: 'config_missing' };
-  const streamId = resolved?.streamId;
+  const streamId = meta?.streamId;
   if (!streamId) return { status: 'streamLogs_missing' };
 
   const [, snapshot] = await Promise.all([

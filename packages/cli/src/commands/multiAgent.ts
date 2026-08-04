@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
+import { byCategory } from '@shared/schemas';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
@@ -217,10 +218,9 @@ export async function runMultiAgentPreset(
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.ToolUse,
         cliMultiAgentPresetId: plan.preset.id,
-        delegationAgentScope: {
-          workflowAgentKeys: [...plan.workflowAgentKeys],
-          toolUseAgentKeys: [...plan.toolUseAgentKeys],
-        },
+        delegationAgentScope: byCategory((category) => [
+          ...plan.agentKeys[category],
+        ]),
       };
 
       const execution = await executeCliToolUseConfig(config, runContext, {

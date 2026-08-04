@@ -84,9 +84,12 @@ function cliMultiAgentPresetAvailabilityParts(
   const parts = [
     formatCliMultiAgentPresetAvailabilityPart(
       'workflow',
-      availability.workflow,
+      availability.agents.workflow,
     ),
-    formatCliMultiAgentPresetAvailabilityPart('tool-use', availability.toolUse),
+    formatCliMultiAgentPresetAvailabilityPart(
+      'tool-use',
+      availability.agents.toolUse,
+    ),
   ].filter(filterNotNullish);
   if (availability.status !== 'available') parts.push(availability.status);
   return parts;
@@ -124,12 +127,12 @@ export function formatCliMultiAgentPresetInspection(
   options: CliMultiAgentPresetFormatOptions = {},
 ): string {
   const availableWorkflowAgents = availablePresetAgents(
-    plan.preset.workflowAgents,
-    plan.missingWorkflowAgents,
+    plan.preset.agents.workflow,
+    plan.missingAgents.workflow,
   );
   const availableToolUseAgents = availablePresetAgents(
-    plan.preset.toolUseAgents,
-    plan.missingToolUseAgents,
+    plan.preset.agents.toolUse,
+    plan.missingAgents.toolUse,
   );
 
   const lines = [
@@ -143,9 +146,9 @@ export function formatCliMultiAgentPresetInspection(
     'Available tool-use agents:',
     formatAgentNames(availableToolUseAgents),
     'Missing workflow agents:',
-    formatAgentNames(plan.missingWorkflowAgents),
+    formatAgentNames(plan.missingAgents.workflow),
     'Missing tool-use agents:',
-    formatAgentNames(plan.missingToolUseAgents),
+    formatAgentNames(plan.missingAgents.toolUse),
   ];
   if (cliMultiAgentPresetShouldIncludeLoginHint(plan, options)) {
     lines.push('', MULTI_AGENT_LOGIN_HINT);
@@ -187,8 +190,8 @@ export function formatCliMultiAgentPresetRunWarnings(
   plan: CliMultiAgentPresetRunPlan,
 ): readonly string[] {
   const missing = [
-    ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
-    ...plan.missingToolUseAgents.map((agent) => `tool-use:${agent}`),
+    ...plan.missingAgents.workflow.map((agent) => `workflow:${agent}`),
+    ...plan.missingAgents.toolUse.map((agent) => `tool-use:${agent}`),
   ];
   if (missing.length === 0) return [];
 
@@ -260,10 +263,14 @@ function formatPresetAvailabilityForLauncher(
   const details = blockReason ? [formatLauncherBlockReason(blockReason)] : [];
   const countStyle = availability.status === 'available' ? 'total' : 'ratio';
   const parts = [
-    formatPresetAgentCountForLauncher('workflow', availability.workflow, {
-      countStyle,
-    }),
-    formatPresetAgentCountForLauncher('tool-use', availability.toolUse, {
+    formatPresetAgentCountForLauncher(
+      'workflow',
+      availability.agents.workflow,
+      {
+        countStyle,
+      },
+    ),
+    formatPresetAgentCountForLauncher('tool-use', availability.agents.toolUse, {
       countStyle,
     }),
   ].filter(filterNotNullish);

@@ -64,7 +64,11 @@ function delegationRegistry(names: readonly string[]) {
 }
 
 function resolveAgentToolsInput(
-  tools: { name: string; description?: string }[],
+  tools: {
+    name: string;
+    description?: string;
+    availabilityCategory?: 'workflow' | 'toolUse';
+  }[],
 ) {
   return {
     tools,
@@ -266,7 +270,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
 
     const { tools } = await resolveAgentTools(
       resolveAgentToolsInput([
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+        {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_DESCRIPTION,
+        },
       ]),
     );
 
@@ -292,7 +300,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
 
     const { tools } = await resolveAgentTools(
       resolveAgentToolsInput([
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+        {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_DESCRIPTION,
+        },
         { name: 'grep', description: 'Search files.' },
       ]),
     );
@@ -311,7 +323,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
     const first = (
       await resolveAgentTools(
         resolveAgentToolsInput([
-          { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+          {
+            name: 'delegate_agent',
+            availabilityCategory: 'toolUse',
+            description: DELEGATE_AGENT_DESCRIPTION,
+          },
         ]),
       )
     ).tools.find((t) => t.name === 'delegate_agent');
@@ -324,7 +340,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
     const second = (
       await resolveAgentTools(
         resolveAgentToolsInput([
-          { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+          {
+            name: 'delegate_agent',
+            availabilityCategory: 'toolUse',
+            description: DELEGATE_AGENT_DESCRIPTION,
+          },
         ]),
       )
     ).tools.find((t) => t.name === 'delegate_agent');
@@ -338,7 +358,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
 
     const { tools } = await resolveAgentTools(
       resolveAgentToolsInput([
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+        {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_DESCRIPTION,
+        },
       ]),
     );
 
@@ -361,9 +385,14 @@ describe('resolveAgentTools delegation roster annotation', () => {
 
     const { tools } = await resolveAgentTools(
       resolveAgentToolsInput([
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+        {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_DESCRIPTION,
+        },
         {
           name: 'delegate_workflow',
+          availabilityCategory: 'workflow',
           description: DELEGATE_WORKFLOW_DESCRIPTION,
         },
       ]),
@@ -387,7 +416,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
 
     const { tools } = await resolveAgentTools(
       resolveAgentToolsInput([
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+        {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_DESCRIPTION,
+        },
       ]),
     );
 

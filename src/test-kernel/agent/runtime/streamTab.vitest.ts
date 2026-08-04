@@ -11,25 +11,25 @@ import type { ExecutionId } from '@shared/schemas';
 describe('getStreamTabId', () => {
   const EXEC_ID = 'abcdef012345' as ExecutionId;
 
-  it('builds an identifier from agent, model, and executionId', () => {
-    const id = getStreamTabId('polish', 'sonnet', { executionId: EXEC_ID });
-    assert.equal(id, `polish@sonnet#${EXEC_ID}`);
+  it('builds an opaque identifier from agent name and executionId', () => {
+    const id = getStreamTabId('polish', { executionId: EXEC_ID });
+    assert.equal(id, `polish#${EXEC_ID}`);
   });
 
   it('strips the source prefix from the agent name', () => {
     // Only valid AgentSource prefixes are stripped ('builtInWorkflow',
     // 'builtInToolUse', 'custom', 'remote'); unknown prefixes are kept.
-    const id = getStreamTabId('builtInWorkflow:polish', 'sonnet', {
+    const id = getStreamTabId('builtInWorkflow:polish', {
       executionId: EXEC_ID,
     });
-    assert.equal(id, `polish@sonnet#${EXEC_ID}`);
+    assert.equal(id, `polish#${EXEC_ID}`);
   });
 
   it('gives each execution a unique tab id', () => {
-    const id1 = getStreamTabId('polish', 'sonnet', {
+    const id1 = getStreamTabId('polish', {
       executionId: 'aaaaaaaaaaaa' as ExecutionId,
     });
-    const id2 = getStreamTabId('polish', 'sonnet', {
+    const id2 = getStreamTabId('polish', {
       executionId: 'bbbbbbbbbbbb' as ExecutionId,
     });
     assert.notEqual(id1, id2);

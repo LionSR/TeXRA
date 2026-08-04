@@ -85,7 +85,7 @@ export const streamMetaHandlers = {
           draft.streamById.set(name, streamInfo);
         }
 
-        draft.streamStates.set(name, mergedState);
+        if (mergedState) draft.streamStates.set(name, mergedState);
 
         if (data.activeStream !== undefined) {
           draft.activeStreamId = data.activeStream || null;
@@ -129,8 +129,7 @@ export const streamMetaHandlers = {
       create(appState.get(), (draft) => {
         const existing = draft.streamById.get(stream);
         // Replace via set() so the Map value identity changes and selectors
-        // observing streamById propagate the update (mirrors the pattern in
-        // stateUtils.updateParentStreamId).
+        // observing streamById propagate the update.
         if (existing) {
           draft.streamById.set(stream, { ...existing, description });
         }

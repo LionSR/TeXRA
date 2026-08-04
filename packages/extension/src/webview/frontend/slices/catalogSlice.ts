@@ -12,14 +12,11 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 // Local imports - main view
 import { SESSION_TYPES } from '../constants';
 import {
+  agent$,
+  agentOptions$,
   modelOptions$,
+  sessionModelOptions$,
   teamOptions$,
-  toolUseAgent$,
-  toolUseAgentOptions$,
-  toolUseModelOptions$,
-  workflowAgent$,
-  workflowAgentOptions$,
-  workflowModelOptions$,
   workingDirectory$,
   workspaceRootOptions$,
 } from '../mainViewState';
@@ -80,12 +77,15 @@ export const catalogHandlers = {
 
     modelOptions$.set(fallbackOptions);
     if (optionsDataByCategory) {
-      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.WORKFLOW)) {
-        workflowModelOptions$.set(optionsDataByCategory.workflow);
-      }
-      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.TOOL_USE)) {
-        toolUseModelOptions$.set(optionsDataByCategory.toolUse);
-      }
+      const current = sessionModelOptions$.get();
+      sessionModelOptions$.set({
+        workflow: Object.hasOwn(optionsDataByCategory, SESSION_TYPES.WORKFLOW)
+          ? optionsDataByCategory.workflow
+          : current.workflow,
+        toolUse: Object.hasOwn(optionsDataByCategory, SESSION_TYPES.TOOL_USE)
+          ? optionsDataByCategory.toolUse
+          : current.toolUse,
+      });
     }
     refreshModelSelectionForActiveSession();
   },
@@ -94,29 +94,41 @@ export const catalogHandlers = {
     const optionsData = message.optionsData ?? {};
 
     if (optionsData.workflow) {
-      workflowAgentOptions$.set(optionsData.workflow);
-      workflowAgent$.set(
-        validateAgentSelection(optionsData.workflow, workflowAgent$.get()),
-      );
+      agentOptions$.set({
+        ...agentOptions$.get(),
+        workflow: optionsData.workflow,
+      });
+      agent$.set({
+        ...agent$.get(),
+        workflow: validateAgentSelection(
+          optionsData.workflow,
+          agent$.get().workflow,
+        ),
+      });
     }
 
     if (optionsData.toolUse) {
-      toolUseAgentOptions$.set(optionsData.toolUse);
+      agentOptions$.set({
+        ...agentOptions$.get(),
+        toolUse: optionsData.toolUse,
+      });
       const selectedToolUseAgent = message.selectedToolUseAgent
         ? findAgentSelection(optionsData.toolUse, message.selectedToolUseAgent)
         : undefined;
-      toolUseAgent$.set(
-        selectedToolUseAgent ??
+      agent$.set({
+        ...agent$.get(),
+        toolUse:
+          selectedToolUseAgent ??
           validateAgentSelection(
             optionsData.toolUse,
-            toolUseAgent$.get(),
+            agent$.get().toolUse,
             // State 2 sanity (PRD: agent-native onboarding): a persisted agent
             // that no longer resolves (e.g. BYOK user with the sign-in-only
             // 'orchestrator' default) falls back along the preferred list
             // instead of leaving the dropdown with no selection.
             PREFERRED_TOOL_USE_AGENTS,
           ),
-      );
+      });
       if (selectedToolUseAgent) {
         enterToolUseSession();
       }

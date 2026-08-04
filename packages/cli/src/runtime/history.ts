@@ -9,17 +9,26 @@ import {
   deriveResumability,
   getExecutionStore,
   isUserVisibleExecution,
-  listExecutionEditedFiles,
   listExecutions,
+  listExecutionWorkspaceFiles,
   unwrapResultMeta,
-  type ExecutionListingEntry,
+  type AgentExecutionListingEntry,
   type ExecutionMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  RunOutcomeSchema,
+  type ExecutionId,
+} from '@shared/schemas';
+import {
+  resolveHistoryRunStatus,
+  type HistoryRunStatus,
+} from '@shared/schemas/historyViewMessages';
+import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
   hasCompletedRunConversationEvidence,
@@ -49,7 +58,7 @@ export interface CliHistoryEntry {
   readonly timestamp: string;
   readonly agent: string;
   readonly model: string;
-  readonly status: string;
+  readonly status: HistoryRunStatus;
   readonly inputBasename: string;
   readonly category?: string;
   readonly description?: string;
@@ -97,18 +106,6 @@ export function resumableCliHistoryEntries<
   return entries.filter(
     (entry) => entry.status === CLI_HISTORY_RESUMABLE_STATUS,
   );
-}
-
-/**
- * The rule `isUserVisibleExecution` applies to storage listings, applied to an
- * already-built entry array: a menu assembled from history handed in by its
- * caller (the TUI harness scenarios build one directly) must not offer an
- * agent-spawned child run either.
- */
-export function userStartedCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'parentExecutionId'>,
->(entries: readonly T[]): T[] {
-  return entries.filter((entry) => entry.parentExecutionId === undefined);
 }
 
 export type CliHistoryDeleteResult =
@@ -178,10 +175,9 @@ export async function readCliHistoryDetails(
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
     : undefined;
-  const workspaceFiles = await listExecutionEditedFiles(
+  const workspaceFiles = await listExecutionWorkspaceFiles(
     config,
     persistedWorkspaceFilePaths,
-    conversation,
   );
   const files = mergeHistoryFiles(
     generatedFiles,
@@ -204,9 +200,9 @@ export async function readCliHistoryDetails(
   }
   return {
     id,
-    status: resolveCliHistoryStatus({
-      terminalStatus: meta?.terminalStatus,
+    status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
+      outcome: meta?.outcome,
     }),
     meta,
     config,
@@ -416,21 +412,37 @@ export function formatInvalidExportFormatText(raw: string): string {
   return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
 }
 
+/**
+ * Frozen-NDJSON status projection (proposal gate G): the public NDJSON stream
+ * keeps the pre-consolidation vocabulary — terminal outcomes emit as
+ * `ExecutionStatus` ('completed' | 'interrupted' | 'error') while
+ * 'resumable'/'unknown' pass through unchanged. Internal and human-readable
+ * output keeps `HistoryRunStatus`.
+ */
+function toNdjsonHistoryStatus(status: string): string {
+  const outcome = RunOutcomeSchema.safeParse(status);
+  return outcome.success ? runOutcomeToExecutionStatus(outcome.data) : status;
+}
+
 export function cliHistoryNdjsonRecords(
   entries: readonly CliHistoryEntry[],
   ts = new Date().toISOString(),
 ): CliNdjsonRecord[] {
-  return entries.map((entry) => ({ kind: 'history-entry', ts, entry }));
+  return entries.map((entry) => ({
+    kind: 'history-entry',
+    ts,
+    entry: { ...entry, status: toNdjsonHistoryStatus(entry.status) },
+  }));
 }
 
-export function resolveCliHistoryStatus(input: {
-  readonly terminalStatus?: string;
-  readonly resumable: boolean;
-}): string {
-  if (input.resumable) return CLI_HISTORY_RESUMABLE_STATUS;
-  // An absent terminal status means the run never reached its terminal write
-  // (crash, kill, old build) — never report that as 'completed'.
-  return input.terminalStatus ?? 'unknown';
+/** `history show`'s NDJSON record, with the frozen-boundary status projection. */
+export function cliHistoryDetailNdjsonRecord(
+  details: CliHistoryDetails,
+): CliNdjsonRecord {
+  return {
+    kind: 'history-detail',
+    detail: { ...details, status: toNdjsonHistoryStatus(details.status) },
+  };
 }
 
 export function formatCliHistoryDetailsText(
@@ -487,9 +499,9 @@ export function formatCliHistoryDetailsText(
 }
 
 async function toCliHistoryEntry(
-  entry: Extract<ExecutionListingEntry, { kind: 'agent' }>,
+  entry: AgentExecutionListingEntry,
 ): Promise<CliHistoryEntry> {
-  const config = entry.agentConfig;
+  const config = entry.record;
   const inputBasename = firstInputBasename(config);
   const resumability = await deriveResumability(entry.id);
   const resumeData = resumability.resumable
@@ -500,12 +512,12 @@ async function toCliHistoryEntry(
     timestamp: entry.timestamp,
     agent: config.agent,
     model: resumeData?.agentConfig.model ?? config.model,
-    status: resolveCliHistoryStatus({
-      terminalStatus: entry.terminalStatus,
+    status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
+      outcome: entry.outcome,
     }),
     inputBasename,
-    category: entry.runtimeCategory ?? config.agentCategory,
+    category: config.agentCategory,
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentExecutionId: entry.parentExecutionId,

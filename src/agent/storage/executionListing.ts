@@ -8,10 +8,19 @@
 import pMap from 'p-map';
 
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId } from '@shared/schemas';
+import type {
+  ExecutionId,
+  ExecutionMeta,
+  RunIdentity,
+  RunOutcome,
+} from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -19,6 +28,7 @@ import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
 import {
+  EXECUTION_LEASE_STALE_MS,
   inspectExecutionLease,
   runWithInactiveExecutionLease,
 } from './executionLease';
@@ -35,37 +45,41 @@ interface ExecutionListingBase {
   id: ExecutionId;
   timestamp: string;
   parentExecutionId?: ExecutionId;
-  terminalStatus?: string;
+  /** Canonical terminal outcome; absent for a run still in flight. */
+  outcome?: RunOutcome;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
 }
 
+/** A native or tool-backed agent run: its record is always an AgentConfig. */
+export type AgentExecutionListingEntry = ExecutionListingBase & {
+  kind: 'run';
+  /** What the run is — the durable authority, stamped at registration. */
+  identity: Extract<RunIdentity, { kind: 'agent' }>;
+  record: AgentConfig;
+};
+
 export type ExecutionListingEntry =
+  | AgentExecutionListingEntry
   | (ExecutionListingBase & {
-      kind: 'agent';
-      agentConfig: AgentConfig;
-      /** Metadata override when it differs from `agentConfig.agentCategory`. */
-      runtimeCategory?: string;
+      kind: 'run';
+      identity: Exclude<RunIdentity, { kind: 'agent' }>;
+      /** Honest non-agent record — or a pre-consolidation fabricated
+       *  AgentConfig, whose extra fields stay identity-suppressed. */
+      record: RunRecord;
     })
   | (ExecutionListingBase & {
-      kind: 'process';
-      agentConfig: AgentConfig;
-    })
-  | (ExecutionListingBase & {
+      /** Row without a readable identity or record — un-healed or corrupt. */
       kind: 'incomplete';
-      /** Preserved metadata for rows whose config is absent. */
-      runtimeCategory?: string;
     });
 
 /**
  * True for executions a user should see in a history list, meaning the runs a
- * user started themselves. Excludes internal bookkeeping entries: the
- * `category: 'process'` rows `registerExecution` writes for background
- * bash/process invocations (see `src/tools/bash.ts` — these do carry a
- * synthetic `AgentConfig`, but don't represent a user-visible run or
- * conversation), entries with no `agentConfig` at all, and runs an agent
- * spawned (delegated subagents, workflow-script children, team members), which
- * belong to their parent's transcript rather than to the history list.
+ * user started themselves. Excludes non-agent runs (background processes,
+ * workflow-script containers — `identity.kind` decides), incomplete rows,
+ * and runs an agent spawned (delegated subagents, workflow-script children,
+ * team members), which belong to their parent's transcript rather than to
+ * the history list.
  *
  * Every host's history listing must apply this filter. Lookups by explicit id
  * (`texra history show <id>`, export, resume) must not: naming a child run is
@@ -73,10 +87,104 @@ export type ExecutionListingEntry =
  * because tool-facing callers like `ExecutionsTool` need the raw listing to
  * manage background processes and child runs.
  */
+/** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
+ *  entry union for TypeScript, so this is the one spelled-out guard. */
+export function isAgentRunEntry(
+  entry: ExecutionListingEntry,
+): entry is AgentExecutionListingEntry {
+  return entry.kind === 'run' && entry.identity.kind === 'agent';
+}
+
 export function isUserVisibleExecution(
   entry: ExecutionListingEntry,
-): entry is Extract<ExecutionListingEntry, { kind: 'agent' }> {
-  return entry.kind === 'agent' && entry.parentExecutionId === undefined;
+): entry is AgentExecutionListingEntry {
+  return isAgentRunEntry(entry) && entry.parentExecutionId === undefined;
+}
+
+// ============================================================================
+// Idempotent entrance stamping — the only legacy-migration artifact.
+//
+// Pre-consolidation rows carry no `identity`. The listing is the store's read
+// entrance that already visits every row, so an unstamped row is healed here:
+// identity derived once from the persisted config and written back under an
+// inactive execution lease. Runs every time with no generation marker —
+// idempotent because stamped rows never reach it, and re-runnable because an
+// old binary's read-modify-write stripping the field, a legacy-bucket merge
+// injecting v1 rows, or a restored backup simply re-heals on the next pass.
+// ============================================================================
+
+/** Rows younger than the lease-stale horizon may be mid-registration by an
+ *  old binary — a half-born row must not be classified. */
+const STAMP_MIN_AGE_MS = EXECUTION_LEASE_STALE_MS;
+
+/**
+ * Un-stamped legacy row → identity, from the surviving evidence: the
+ * persisted config plus the row's stamped `streamId`, whose host prefix
+ * encoded the run kind before `identity` existed. This prefix-reading is
+ * quarantined HERE (and mirrored only by the trace-viewer's immutable-export
+ * fallback) — production classification never inspects stream-id prefixes;
+ * it reads the stamped `identity`. Exported for store-read entrances
+ * (hydration) so an un-healed row behaves identically before its durable
+ * stamp lands; the listing's stamper remains the only WRITER of the derived
+ * value. Rows without usable evidence are left unstamped: they keep parsing
+ * and keep listing as `incomplete`. No sentinel names are fabricated.
+ */
+export function deriveLegacyIdentity(
+  meta: Pick<ExecutionMeta, 'streamId'> | null | undefined,
+  cfg: AgentConfig | null,
+): RunIdentity | undefined {
+  const streamId = meta?.streamId ?? '';
+  if (streamId.startsWith('workflow-script#')) {
+    return {
+      kind: 'multiAgentWorkflow',
+      workflowName: cfg?.agent ?? 'workflow-script',
+    };
+  }
+  if (streamId.startsWith('codex@')) {
+    return cfg ? { kind: 'agent', agent: cfg.agent, tool: 'codex' } : undefined;
+  }
+  if (streamId.startsWith('claude@')) {
+    return cfg
+      ? { kind: 'agent', agent: cfg.agent, tool: 'claude_code' }
+      : undefined;
+  }
+  if (streamId.startsWith('bash@')) {
+    return { kind: 'process', tool: 'bash' };
+  }
+  return cfg ? { kind: 'agent', agent: cfg.agent } : undefined;
+}
+
+/**
+ * Durably stamp a derived identity onto an unstamped row. Best-effort: an
+ * active lease or a write failure leaves the row to heal on the next pass,
+ * and the caller still uses the derived value for this read. The retired
+ * `terminalStatus` bytes some legacy rows still carry are deliberately NOT
+ * converted: `outcome` starts absent for pre-consolidation rows, which
+ * simply have no recorded terminal state.
+ */
+async function stampExecutionRow(
+  id: ExecutionId,
+  meta: ExecutionMeta,
+): Promise<void> {
+  if (Date.now() - Date.parse(meta.timestamp) < STAMP_MIN_AGE_MS) return;
+  try {
+    await runWithInactiveExecutionLease(id, async () => {
+      const store = getExecutionStore(id);
+      const [current, cfg] = await Promise.all([
+        store.readMeta(),
+        store.readConfig(),
+      ]);
+      if (!current || current.identity) return;
+      const identity = deriveLegacyIdentity(current, cfg);
+      if (!identity) return;
+      await store.writeMeta({ ...current, identity });
+    });
+  } catch (error) {
+    logger.warn(
+      CHANNEL,
+      `Could not stamp identity onto execution ${id}: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 /**
@@ -125,9 +233,9 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     async (id): Promise<ExecutionListingEntry | null> => {
       try {
         const store = getExecutionStore(id);
-        const [meta, cfg] = await Promise.all([
+        const [meta, record] = await Promise.all([
           store.readMeta(),
-          store.readConfig(),
+          store.readRunRecord(),
         ]);
 
         if (!meta) return null;
@@ -136,27 +244,25 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           id,
           timestamp: meta.timestamp,
           parentExecutionId: meta.parentExecutionId,
-          terminalStatus: meta.terminalStatus,
+          outcome: meta.outcome,
           description: meta.description,
         };
-        if (!cfg) {
-          return {
-            ...base,
-            kind: 'incomplete',
-            runtimeCategory: meta.category,
-          };
+        const agentRecord = record && isAgentRunRecord(record) ? record : null;
+        const identity =
+          meta.identity ?? deriveLegacyIdentity(meta, agentRecord);
+        // Durable healing is async and best-effort; this read already has
+        // the derived value either way.
+        if (identity !== meta.identity) void stampExecutionRow(id, meta);
+        if (!record || !identity) {
+          return { ...base, kind: 'incomplete' };
         }
-        if (meta.category === 'process') {
-          return { ...base, kind: 'process', agentConfig: cfg };
+        if (identity.kind === 'agent') {
+          // An agent row's record is always an AgentConfig; anything else is
+          // corrupt and lists as incomplete rather than lying about shape.
+          if (!agentRecord) return { ...base, kind: 'incomplete' };
+          return { ...base, kind: 'run', identity, record: agentRecord };
         }
-        return {
-          ...base,
-          kind: 'agent',
-          agentConfig: cfg,
-          ...(meta.category && meta.category !== cfg.agentCategory
-            ? { runtimeCategory: meta.category }
-            : {}),
-        };
+        return { ...base, kind: 'run', identity, record };
       } catch (error) {
         logger.warn(
           CHANNEL,

@@ -26,9 +26,8 @@ import {
   sessionType$,
   statusAnnouncement$,
   teamOptions$,
-  toolUseAgent$,
-  toolUseInstruction$,
-  workflowInstruction$,
+  agent$,
+  instructionDrafts$,
   workingDirectory$,
   workspaceRootOptions$,
 } from '@webview/frontend/mainViewState';
@@ -97,8 +96,14 @@ describe('main-view launch target', () => {
   describe('changeLaunchTarget', () => {
     it('switches workflow to interactive team mode atomically, stashing the workflow draft', async () => {
       sessionType$.set('workflow');
-      workflowInstruction$.set('workflow draft');
-      toolUseInstruction$.set('interactive draft');
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        workflow: 'workflow draft',
+      });
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        toolUse: 'interactive draft',
+      });
 
       changeLaunchTarget('team');
       await flushAnnouncements();
@@ -107,7 +112,7 @@ describe('main-view launch target', () => {
       expect(sessionType$.get()).toBe('toolUse');
       // Draft preservation: the workflow draft stays put and the interactive
       // draft becomes the active one.
-      expect(workflowInstruction$.get()).toBe('workflow draft');
+      expect(instructionDrafts$.get().workflow).toBe('workflow draft');
       expect(instruction$.get()).toBe('interactive draft');
       expect(statusAnnouncement$.get()).toBe(
         'Team launcher selected. Interactive mode.',
@@ -116,7 +121,10 @@ describe('main-view launch target', () => {
 
     it('keeps the interactive draft when selecting Team from an interactive session', async () => {
       sessionType$.set('toolUse');
-      toolUseInstruction$.set('interactive draft');
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        toolUse: 'interactive draft',
+      });
 
       changeLaunchTarget('team');
       await flushAnnouncements();
@@ -189,7 +197,10 @@ describe('main-view launch target', () => {
     it('leaves the session interactive when switching Team back to Agent', async () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
-      toolUseInstruction$.set('team draft');
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        toolUse: 'team draft',
+      });
 
       changeLaunchTarget('agent');
       await flushAnnouncements();
@@ -212,8 +223,14 @@ describe('main-view launch target', () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
       selectedTeamId$.set('physicist');
-      toolUseInstruction$.set('interactive draft');
-      workflowInstruction$.set('workflow draft');
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        toolUse: 'interactive draft',
+      });
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        workflow: 'workflow draft',
+      });
 
       changeSessionType('workflow');
       await flushAnnouncements();
@@ -222,7 +239,7 @@ describe('main-view launch target', () => {
       expect(launchTarget$.get()).toBe('agent');
       // Team runs are interactive-only: the interactive draft survives the
       // switch and the workflow draft becomes the active one.
-      expect(toolUseInstruction$.get()).toBe('interactive draft');
+      expect(instructionDrafts$.get().toolUse).toBe('interactive draft');
       expect(instruction$.get()).toBe('workflow draft');
       expect(statusAnnouncement$.get()).toBe(
         'Workflow uses a single workflow agent.',
@@ -242,8 +259,14 @@ describe('main-view launch target', () => {
   describe('per-mode instruction drafts', () => {
     it('follows the active session mode without a stash step', () => {
       sessionType$.set('workflow');
-      workflowInstruction$.set('workflow draft');
-      toolUseInstruction$.set('interactive draft');
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        workflow: 'workflow draft',
+      });
+      instructionDrafts$.set({
+        ...instructionDrafts$.get(),
+        toolUse: 'interactive draft',
+      });
 
       expect(instruction$.get()).toBe('workflow draft');
 
@@ -256,14 +279,14 @@ describe('main-view launch target', () => {
       });
 
       expect(sessionType$.get()).toBe('toolUse');
-      expect(toolUseAgent$.get()).toBe('coder');
+      expect(agent$.get().toolUse).toBe('coder');
       expect(instruction$.get()).toBe('interactive draft');
-      expect(workflowInstruction$.get()).toBe('workflow draft');
+      expect(instructionDrafts$.get().workflow).toBe('workflow draft');
 
       changeSessionType('workflow');
 
       expect(instruction$.get()).toBe('workflow draft');
-      expect(toolUseInstruction$.get()).toBe('interactive draft');
+      expect(instructionDrafts$.get().toolUse).toBe('interactive draft');
     });
   });
 
@@ -438,7 +461,7 @@ describe('main-view launch target', () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
       selectedTeamId$.set('physicist');
-      toolUseAgent$.set('orchestrator');
+      agent$.set({ ...agent$.get(), toolUse: 'orchestrator' });
       model$.set('gpt-5.4');
 
       const message = buildExecuteMessage();

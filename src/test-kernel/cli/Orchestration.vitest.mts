@@ -93,8 +93,10 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
     name: 'Physicist',
     description: 'Physics team',
     icon: 'cube',
-    workflowAgents: ['criticize'],
-    toolUseAgents: ['orchestrator', 'review'],
+    agents: {
+      workflow: ['criticize'],
+      toolUse: ['orchestrator', 'review'],
+    },
     texraHostedAgents: ['orchestrator'],
     source: 'built-in',
     ...overrides,
@@ -104,13 +106,12 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
 function presetPlan(
   overrides: Partial<CliMultiAgentPreset>,
   agents: {
-    readonly workflowAgents?: readonly AgentEntry[];
-    readonly toolUseAgents?: readonly AgentEntry[];
+    readonly workflow?: readonly AgentEntry[];
+    readonly toolUse?: readonly AgentEntry[];
   } = {},
 ): CliMultiAgentPresetRunPlan {
   return planTeamRun(preset(overrides), {
-    workflowAgents: agents.workflowAgents ?? [],
-    toolUseAgents: agents.toolUseAgents ?? [],
+    agents: { workflow: agents.workflow ?? [], toolUse: agents.toolUse ?? [] },
   });
 }
 
@@ -120,8 +121,8 @@ function readyPresetPlan(
   return presetPlan(
     { id: 'physicist', name: 'Physicist', ...overrides },
     {
-      workflowAgents: [workflowAgent('criticize')],
-      toolUseAgents: [
+      workflow: [workflowAgent('criticize')],
+      toolUse: [
         toolUseAgent('orchestrator', ['delegate_agent']),
         toolUseAgent('review'),
       ],
@@ -564,41 +565,6 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('hides delegated child executions from the resume menu', () => {
-    const items = orchestrationItems({
-      history: [
-        historyEntry('aaaaaaaaaaaa', {
-          agent: 'search',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-          parentExecutionId: 'root-session' as ExecutionId,
-        }),
-        historyEntry('bbbbbbbbbbbb', {
-          agent: 'review',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-          parentExecutionId: 'root-session' as ExecutionId,
-        }),
-        historyEntry('cccccccccccc', {
-          agent: 'orchestrator',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-        }),
-      ],
-      toolUseAgents: [
-        toolUseAgent('assistant'),
-        toolUseAgent('search'),
-        toolUseAgent('review'),
-        toolUseAgent('orchestrator'),
-      ],
-    });
-
-    expect(items.map((item) => item.label)).toEqual([
-      'New chat',
-      'Resume',
-      'Agent',
-      'Settings',
-      'Help',
-    ]);
-  });
-
   it('does not list completed executions as resume launcher rows', () => {
     const items = orchestrationItems({
       history: [
@@ -736,11 +702,13 @@ describe('CLI orchestration items', () => {
           {
             id: 'lean-project',
             name: 'Lean Project',
-            workflowAgents: [],
-            toolUseAgents: ['lean', 'leanSearch'],
+            agents: {
+              workflow: [],
+              toolUse: ['lean', 'leanSearch'],
+            },
           },
           {
-            toolUseAgents: [toolUseAgent('lean')],
+            toolUse: [toolUseAgent('lean')],
           },
         ),
       ],
@@ -849,11 +817,13 @@ describe('CLI orchestration items', () => {
             {
               id: 'lean-project',
               name: 'Lean Project',
-              workflowAgents: [],
-              toolUseAgents: ['lean', 'leanSearch'],
+              agents: {
+                workflow: [],
+                toolUse: ['lean', 'leanSearch'],
+              },
             },
             {
-              toolUseAgents: [toolUseAgent('lean')],
+              toolUse: [toolUseAgent('lean')],
             },
           ),
         ],

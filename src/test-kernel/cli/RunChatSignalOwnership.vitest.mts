@@ -6,9 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -478,13 +478,13 @@ describe('runChat signal ownership wiring', () => {
       .spyOn(agents, 'getVisibleAgents')
       .mockReturnValue([]);
     const delegationAgentScope = {
-      workflowAgentKeys: ['builtInWorkflow:physicsReviewer'],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+      workflow: ['builtInWorkflow:physicsReviewer'],
+      toolUse: ['builtInToolUse:orchestrator'],
     } as const;
     const mediaFiles = ['/tmp/diagram.png'];
     const activationPrompt = '<skill_activation>hidden</skill_activation>';
     const streamId = 'stream-resume' as StreamTabId;
-    const resolution: CliToolUseResumeResolution = createToolUseResumeData({
+    const resolution: ToolUseResumeData = createToolUseResumeData({
       executionId: 'exec-resume' as ExecutionId,
       streamId,
       agentConfig: AgentConfigSchema.parse({

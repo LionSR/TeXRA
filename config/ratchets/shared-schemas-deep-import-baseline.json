@@ -172,10 +172,6 @@
       "type": [],
       "value": ["roundIndexedEntries"]
     },
-    "@shared/schemas/runDescriptor": {
-      "type": ["RunDescriptor"],
-      "value": []
-    },
     "@shared/schemas/settingsViewMessages": {
       "type": [
         "AgentSelectionItem",
@@ -673,7 +669,6 @@
     "@shared/schemas/roundIndexed": [
       "packages/extension/src/progressView/frontend/components/FileList.ts"
     ],
-    "@shared/schemas/runDescriptor": ["src/agent/trace/events.ts (type-only)"],
     "@shared/schemas/settingsViewMessages": [
       "packages/desktop/src/main/desktopSettingsIpc.ts",
       "packages/desktop/src/main/desktopSettingsIpcHelpers.ts (type-only)",

@@ -16,7 +16,10 @@ import {
   type ExecutionHandle,
   type ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 import {
@@ -24,6 +27,7 @@ import {
   formatTodoSection,
   getAvailablePaths,
   getExecutionStatusInfo,
+  type ExecutionDisplayCategory,
 } from '../executionFormatters';
 
 /** Options controlling how showSummary renders a result report. */
@@ -32,20 +36,21 @@ export interface ExecutionSummaryOptions {
 }
 
 /**
- * True when `handle` is a tool-use subagent whose parent stream is the
- * calling stream — i.e. the caller already receives this subagent's report
+ * True when `handle` is a tool-use child whose parent stream is the calling
+ * stream — i.e. the caller already receives this child's report
  * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
+ * Deliberately identity-kind-agnostic: background bash processes
+ * (`kind: 'process'`, category ToolUse) auto-deliver their reports exactly
+ * like delegated agents do, and must stay suppressed too.
  */
 function isCallerParentOfToolUseSubagent(
   handle: unknown,
   callerStreamId: StreamTabId | undefined,
 ): boolean {
   return (
-    callerStreamId != null &&
     handle instanceof AgentExecutionHandle &&
     handle.category === 'toolUse' &&
-    handle.parentStreamId !== handle.childStreamId &&
-    handle.parentStreamId === callerStreamId
+    handle.isOwnedBy(callerStreamId)
   );
 }
 
@@ -75,7 +80,7 @@ export function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
 ): string {
-  const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
+  const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
@@ -106,16 +111,20 @@ export function buildRunningSummaryLines(
 /** Build the summary lines for a completed execution (full KV fetch). */
 export function buildCompletedSummaryLines(
   executionId: ExecutionId,
-  config: AgentConfig | null,
-  category: string | undefined,
+  record: RunRecord | null,
+  category: ExecutionDisplayCategory | undefined,
   info: ExecutionStatusInfo,
   meta: ExecutionMeta | null,
 ): string[] {
+  const name =
+    record && (isAgentRunRecord(record) ? record.agent : record.name);
   const lines = [
     `Execution: ${executionId}`,
-    `Agent: ${config?.agent ?? 'unknown'}`,
+    `Agent: ${name ?? 'unknown'}`,
     ...(category ? [`Category: ${category}`] : []),
-    ...(category === 'process' ? [] : [`Model: ${config?.model ?? 'default'}`]),
+    ...(category === 'process' || category === 'multiAgentWorkflow'
+      ? []
+      : [`Model: ${record?.model ?? 'default'}`]),
     `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
     `Status: ${formatStatusInfo(info)}`,
   ];
@@ -143,7 +152,7 @@ export interface SummaryTailOptions {
  */
 export function buildSummaryTailLines(
   executionId: ExecutionId,
-  category: string | undefined,
+  category: ExecutionDisplayCategory | undefined,
   hasChildren: boolean,
   todos: TodoEntry[],
   report: string | null,

@@ -56,10 +56,8 @@ import {
   singleFiles$,
   statusAnnouncement$,
   teamOptions$,
-  toolUseAgent$,
-  toolUseInstruction$,
-  workflowAgent$,
-  workflowInstruction$,
+  agent$,
+  instructionDrafts$,
   workingDirectory$,
 } from './mainViewState';
 import {
@@ -79,11 +77,10 @@ export function showInformation(text: string): void {
 // ---------------------------------------------------------------------------
 
 export function setInstruction(value: string): void {
-  if (sessionType$.get() === SESSION_TYPES.WORKFLOW) {
-    workflowInstruction$.set(value);
-  } else {
-    toolUseInstruction$.set(value);
-  }
+  instructionDrafts$.set({
+    ...instructionDrafts$.get(),
+    [sessionType$.get()]: value,
+  });
 }
 
 export function refreshInstructionPlaceholder(): void {
@@ -348,11 +345,7 @@ export function validateTeamSelection(): void {
 }
 
 export function changeAgent(sessionType: SessionType, value: string): void {
-  if (sessionType === SESSION_TYPES.WORKFLOW) {
-    workflowAgent$.set(value);
-  } else {
-    toolUseAgent$.set(value);
-  }
+  agent$.set({ ...agent$.get(), [sessionType]: value });
   sessionType$.set(sessionType);
   refreshModelSelectionForActiveSession();
   refreshInstructionPlaceholder();
@@ -376,12 +369,11 @@ export function buildExecuteMessage(): MainViewExecuteMessage {
   const launchTarget =
     sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : launchTarget$.get();
   const workingDirectory = workingDirectory$.get().trim();
+  // Team runs still send the current tool-use agent: the host resolves the
+  // roster root from teamId, and `agent` stays required by validation.
   return buildMainViewExecuteMessage({
     sessionType,
-    workflowAgent: workflowAgent$.get(),
-    // Team runs still send the current tool-use agent: the host resolves the
-    // roster root from teamId, and `agent` stays required by validation.
-    toolUseAgent: toolUseAgent$.get(),
+    agent: agent$.get(),
     model: model$.get(),
     instruction: instruction$.get(),
     singleFiles: singleFiles$.get(),
@@ -461,10 +453,9 @@ export function runPanelAction(action: ActionDetail['action']): void {
         ? MULTI_FILE_PACK_COMMANDS[action]
         : SINGLE_FILE_PACK_COMMANDS[action];
 
-      const isToolUse = sessionType$.get() === SESSION_TYPES.TOOL_USE;
       postMessage(command, {
         inputFile,
-        agent: isToolUse ? toolUseAgent$.get() : workflowAgent$.get(),
+        agent: agent$.get()[sessionType$.get()],
         model: selectedModel,
         inputFiles: useMultiple ? additionalInputFiles : undefined,
       } satisfies Omit<PackMultipleMessage, 'command'>);

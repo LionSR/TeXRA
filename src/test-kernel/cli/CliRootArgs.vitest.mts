@@ -1313,33 +1313,6 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toBe('');
 
     stderr = '';
-    const resumeResult = await runCli(['resume', 'abc123', '--print']);
-    expect(resumeResult.exitCode).toBe(2);
-    expect(stderr).toContain(
-      'texra resume is interactive and does not support --print.',
-    );
-    expect(stderr).not.toContain('--output-format');
-    expect(stderr).not.toContain('--no-input');
-    expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
-
-    stderr = '';
-    const resumeShortcutResult = await runCli([
-      '--output-format',
-      'json',
-      '--resume',
-      'abc123',
-    ]);
-    expect(resumeShortcutResult.exitCode).toBe(2);
-    expect(stderr).toContain(
-      'texra resume is interactive and does not support --output-format.',
-    );
-    expect(stderr).not.toContain('--print');
-    expect(stderr).not.toContain('--no-input');
-    expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
-
-    stderr = '';
     const setupResult = await runCli(['setup', '--no-input']);
     expect(setupResult.exitCode).toBe(2);
     expect(stderr).toContain(
@@ -1413,15 +1386,39 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
-  it('does not advertise headless-only globals in resume --help', async () => {
+  // Resume is dual-mode: a workflow run resumes headless, so the headless
+  // globals are accepted and advertised alongside the interactive ones.
+  it('advertises headless globals in resume --help', async () => {
     const result = await runCli(['resume', '--help']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('USAGE texra resume');
     expect(stdout).toContain('--approval-policy');
-    expect(stdout).not.toContain('--print');
-    expect(stdout).not.toContain('--output-format');
-    expect(stdout).not.toContain('--no-input');
+    expect(stdout).toContain('--print');
+    expect(stdout).toContain('--output-format');
+    expect(stdout).toContain('--no-input');
     expect(stderr).toBe('');
+  });
+
+  it('accepts headless globals on resume instead of rejecting them', async () => {
+    const result = await runCli(['resume', 'abc123', '--print']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain('Execution not found: abc123');
+    expect(stderr).not.toContain('is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
+
+    stderr = '';
+    const shortcutResult = await runCli([
+      '--output-format',
+      'json',
+      '--resume',
+      'abc123',
+    ]);
+    expect(shortcutResult.exitCode).toBe(2);
+    expect(stderr).toContain('Execution not found: abc123');
+    expect(stderr).not.toContain('is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
   });
 
   it('points setup users at the existing auth status command', async () => {
