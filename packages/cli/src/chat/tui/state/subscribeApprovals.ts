@@ -34,14 +34,16 @@ import {
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
-  askUserQuestionDenial,
-  immediateDecision,
-  immediateDecisionForApproval,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
-} from '@cli/runtime/approval/approvalPolicy';
-import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
+} from '@cli/runtime/approval/approvalPrompts';
+import {
+  denyExternalInquiryIfNoHumanInput,
+  settleExecutable,
+  settleHumanInputDenial,
+  settleRetry,
+} from '@cli/runtime/approval/settleApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
@@ -54,11 +56,13 @@ import {
 } from '@model/apiProviders';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
   type ExternalInquiryPermission,
   type PlanApprovalPermission,
+  type RetryPermission,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -76,7 +80,6 @@ import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
-  type ApprovalBypassKind,
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
   clearApprovalsForOwner,
@@ -88,6 +91,14 @@ import {
   type ApprovalPayload,
   type TuiRetryRequest,
 } from './approvalQueue';
+
+function settleTuiHumanInputDenial(
+  context: CliContext,
+): UserQuestionSettlement | undefined {
+  const denial = settleHumanInputDenial(context);
+  if (denial == null) return undefined;
+  return { action: 'reject', feedback: denial.userMessage };
+}
 
 // =========================================================================
 // Retry auto-switch: skip the modal when a usable personal key exists
@@ -269,7 +280,7 @@ async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
   kind: K,
   payload: P,
 ): Promise<ApprovalDecision> {
-  const policy = immediateDecision(context);
+  const policy = settleExecutable(context);
   return policy ?? decidePresentedApproval(context, kind, payload);
 }
 
@@ -342,11 +353,7 @@ async function requestRetryInteraction(
     source: 'human',
   };
 
-  const immediate = immediateDecisionForApproval(
-    'showRetryRequest',
-    request,
-    context,
-  );
+  const immediate = settleRetry(request, context);
   if (immediate) {
     reservation.settle(immediate);
   } else {
@@ -463,7 +470,7 @@ async function requestUserQuestionInteraction(
   payload: HostUserQuestionRequest,
   context: CliContext,
 ): Promise<UserQuestionSettlement> {
-  const denial = askUserQuestionDenial(context);
+  const denial = settleTuiHumanInputDenial(context);
   if (denial) return denial;
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });

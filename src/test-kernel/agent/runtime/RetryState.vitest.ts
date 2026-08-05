@@ -1561,7 +1561,7 @@ describe('RetryState', () => {
 
     requestRetry.mockResolvedValueOnce({
       action: 'deny',
-      reason: 'Denied by CLI approval policy.',
+      reason: 'Denied by TeXRA approval policy.',
     });
     const error = new Error('stream dropped before first token');
 

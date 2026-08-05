@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-} from '@cli/runtime/approval/approvalPolicy';
+} from '@cli/runtime/approval/approvalPrompts';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import { isApiProvider } from '@model/apiProviders';

@@ -15,6 +15,7 @@ vi.mock('@agent/runtime/SessionHandle', async (importOriginal) => {
     await importOriginal<typeof import('@agent/runtime/SessionHandle')>();
   const bypass = { isBypassed: () => false, setBypass: vi.fn() };
   const session = {
+    approvalPolicy: 'ask',
     approvals: { bash: { bypass }, toolEdit: { bypass } },
     events: { emit: vi.fn() },
   };
