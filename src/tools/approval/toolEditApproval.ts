@@ -12,7 +12,8 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import {
   decideTexraApproval,
-  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+  isTexraApprovalDenied,
+  texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
@@ -261,11 +262,11 @@ export async function requestToolEditApproval(
     canPresent: context?.approvalPromptsUnavailable !== true,
   });
   if (decision === 'allow') return acceptProposedAsIs();
-  if (decision === 'deny') {
+  if (isTexraApprovalDenied(decision)) {
     context?.onApprovalPolicyDenial?.();
     return {
       accepted: false,
-      userMessage: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+      userMessage: texraApprovalDenialMessage(decision),
     };
   }
 

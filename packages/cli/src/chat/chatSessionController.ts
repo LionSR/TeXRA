@@ -21,10 +21,8 @@ import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedTo
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
-import {
-  approvalPromptsUnavailable,
-  markApprovalDenied,
-} from '@cli/runtime/approval/approvalPolicy';
+import { markApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
+import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -341,7 +339,10 @@ export function createChatSessionController(
 
     return {
       presentationHost,
-      approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
+      approvalsUnavailable: cliApprovalPromptsUnavailable(
+        sessionContext,
+        runtimeSession.approvalPolicy,
+      ),
       ownExecution: (executionId): void => ownership.claim(executionId),
       finalize: (): void => {
         // The root terminal result is published before its run promise

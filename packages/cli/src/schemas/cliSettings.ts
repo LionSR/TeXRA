@@ -23,7 +23,6 @@ export const CLI_SETTING_PATHS = [
   'agent',
   'model',
   'outputFormat',
-  'approvalPolicy',
   'chat',
   'run',
 ] as const;

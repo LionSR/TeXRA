@@ -17,7 +17,7 @@ import {
   CLI_PERSONAL_API_RETRY_HINT,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-} from './approvalPolicy';
+} from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;

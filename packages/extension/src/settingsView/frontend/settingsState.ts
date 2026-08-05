@@ -21,6 +21,10 @@
  */
 
 import { createTrackedSignalRegistry } from '@shared/signals';
+import {
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import type {
   MemoryViewItem,
   HistoryItem,
@@ -174,6 +178,9 @@ export const detachSubagentsOnStop = trackedSignal(() => false);
 // ---------------------------------------------------------------------------
 export const bashApprovalEnabled = trackedSignal(() => true);
 export const editApprovalEnabled = trackedSignal(() => true);
+export const approvalPolicy = trackedSignal<TexraApprovalPolicy>(
+  () => TEXRA_APPROVAL_POLICY_DEFAULT,
+);
 export const toolPathProtectionEnabled = trackedSignal(
   () => DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
 );

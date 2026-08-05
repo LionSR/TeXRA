@@ -12,12 +12,10 @@
 
 import PQueue from 'p-queue';
 
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { StreamTabId } from '@shared/schemas';
 
-import {
-  SessionHostInteractions,
-  type ApprovalBypassKind,
-} from './HostInteractions';
+import { SessionHostInteractions } from './HostInteractions';
 
 /** The three independently-tracked bypass kinds `SessionApprovals` owns. */
 type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
