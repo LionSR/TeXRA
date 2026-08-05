@@ -412,7 +412,7 @@ Two switches are environment-only:
 
 | Variable                              | Effect                                                                                                        |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage Logging](./configuration#usage-logging)) |
+| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage Logging](./configuration.md#usage-logging)) |
 | `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release                                                              |
 
 Both take `1`, `true`, or any other value; `0`, `false`, `no`, `off`, empty,

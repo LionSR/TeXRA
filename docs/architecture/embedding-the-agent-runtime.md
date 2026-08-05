@@ -328,13 +328,13 @@ real disk and finds nothing, so the scan yields zero agents.
 
 ### The repo's own tests prove the constraint
 
-`src/test-kernel/agent/AgentRegistryAlias.vitest.mts` is a memfs-backed test
+`src/test-kernel/agent/AgentRegistry.vitest.mts` is a memfs-backed test
 kernel (`createFakePlatform` defaults to `new FakeFileSystemProvider(...)`,
 `src/test-kernel/support/FakePlatform.ts:503`, backed by `memfs` at `:5`). To
 test the agent registry it has to opt _out_ of memfs:
 
 ```ts
-// src/test-kernel/agent/AgentRegistryAlias.vitest.mts:96-98
+// src/test-kernel/agent/AgentRegistry.vitest.mts
 createFakePlatform(
   { workspaceState },
   { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
@@ -345,7 +345,7 @@ createFakePlatform(
 write a real YAML file:
 
 ```ts
-// src/test-kernel/agent/AgentRegistryAlias.vitest.mts:440-461
+// src/test-kernel/agent/AgentRegistry.vitest.mts
 const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
 await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
 …
@@ -354,7 +354,7 @@ useAgentDirectories({ custom: async () => customDir });
 
 Its `builtIn()`/`builtInToolUse()` point at the real repo tree
 (`packages/extension/resources/agents`, `…/tool_use_agents`) —
-`src/test-kernel/agent/AgentRegistryAlias.vitest.mts:51-72`.
+`src/test-kernel/agent/AgentRegistry.vitest.mts`.
 
 If the codebase's own memfs kernel cannot avoid touching real disk to register
 one agent, an embedder cannot either.
