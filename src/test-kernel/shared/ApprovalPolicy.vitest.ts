@@ -77,9 +77,9 @@ describe('TeXRA approval policy', () => {
 
   it('warns and falls back when the persisted policy value is invalid', () => {
     vi.mocked(warn).mockClear();
-    expect(
-      readPersistedTexraApprovalPolicy(() => 'auto' as never),
-    ).toBe(TEXRA_APPROVAL_POLICY_DEFAULT);
+    expect(readPersistedTexraApprovalPolicy(() => 'auto' as never)).toBe(
+      TEXRA_APPROVAL_POLICY_DEFAULT,
+    );
     expect(warn).toHaveBeenCalledWith(
       `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "auto"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
     );
@@ -87,9 +87,9 @@ describe('TeXRA approval policy', () => {
 
   it('warns and falls back when the persisted policy value is not a string', () => {
     vi.mocked(warn).mockClear();
-    expect(
-      readPersistedTexraApprovalPolicy(() => 42 as never),
-    ).toBe(TEXRA_APPROVAL_POLICY_DEFAULT);
+    expect(readPersistedTexraApprovalPolicy(() => 42 as never)).toBe(
+      TEXRA_APPROVAL_POLICY_DEFAULT,
+    );
     expect(warn).toHaveBeenCalledWith(
       `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value 42; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
     );

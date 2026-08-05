@@ -415,9 +415,7 @@ describe.skipIf(process.platform === 'win32')(
 
       workspaceRoot = secondWorkspace;
       mocks.workspaceListeners[0]?.();
-      await vi.waitFor(() =>
-        expect(mocks.showErrorMessage).toHaveBeenCalled(),
-      );
+      await vi.waitFor(() => expect(mocks.showErrorMessage).toHaveBeenCalled());
       // Commit briefly seeds yolo from the failed target, then rollback
       // restores the prior workspace store and re-seeds ask.
       expect(mocks.setApprovalPolicy.mock.calls.map((call) => call[0])).toEqual(
