@@ -6,6 +6,7 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   isCliOrchestrationModelPickAction,
@@ -400,7 +401,7 @@ export function OrchestrationApp(
   if (step.kind === 'model-access') {
     return (
       <Box flexDirection="column" paddingX={1}>
-        <Text bold color="cyan">
+        <Text bold color={COLOR_HINT}>
           {title}
         </Text>
         <Text dimColor>{subtitle}</Text>
@@ -425,7 +426,7 @@ export function OrchestrationApp(
   if (step.kind === 'resume') {
     return (
       <Box flexDirection="column" paddingX={1}>
-        <Text bold color="cyan">
+        <Text bold color={COLOR_HINT}>
           {title}
         </Text>
         <Text dimColor>{subtitle}</Text>
@@ -461,7 +462,7 @@ export function OrchestrationApp(
     }
     return (
       <Box flexDirection="column" paddingX={1}>
-        <Text bold color="cyan">
+        <Text bold color={COLOR_HINT}>
           {title}
         </Text>
         <Text dimColor>{subtitle}</Text>
@@ -494,7 +495,7 @@ export function OrchestrationApp(
   if (pending) {
     return (
       <Box flexDirection="column" paddingX={1}>
-        <Text bold color="cyan">
+        <Text bold color={COLOR_HINT}>
           {title}
         </Text>
         <Text dimColor>{subtitle}</Text>
@@ -518,7 +519,7 @@ export function OrchestrationApp(
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box gap={1}>
-        <Text bold color="cyan">
+        <Text bold color={COLOR_HINT}>
           {'{ T } TeXRA'}
         </Text>
         <Text dimColor>v{props.version}</Text>
