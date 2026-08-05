@@ -140,7 +140,7 @@ export const BackendOwnedFieldsSchema = z.object({
 export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
   // Nullable over the wire: an explicit `null` clears a stage the frontend
   // still holds, which a plain omission cannot express.
-  stage: StreamStageSchema.nullable().optional(),
+  stage: StreamStageSchema.nullish(),
   /** Absent while the stream's run identity is still pending. */
   category: AgentCategorySchema.optional(),
 });
