@@ -9,6 +9,7 @@ import { describe, it, vi } from 'vitest';
 // Local imports
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import * as logger from '@logger/logUtils';
+import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
   CLI_CORE_SETTING_CONSUMERS,
   CORE_SETTING_PATHS,
@@ -389,6 +390,8 @@ describe('state settings catalog', () => {
     //    dual-backend Kimi models in CLI runs.
     //  - agent skills is read by buildUserVars (userVars) when assembling
     //    tool-use agent prompts, skipping skill discovery when disabled.
+    //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
+    //    SessionHandle before bash/edit approval boundaries decide.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.
@@ -422,6 +425,7 @@ describe('state settings catalog', () => {
         GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
         AGENT_SKILLS_CONFIG_KEY,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ].sort(),
     );
   });

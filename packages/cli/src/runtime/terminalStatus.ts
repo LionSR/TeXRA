@@ -4,9 +4,7 @@ import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { hasCliApprovalDenied } from './approval/approvalPolicy';
 import { CliExitCode } from './exitCodes';
-import type { CliContext } from './cliContext';
 
 export type ExecuteAgentResult = Awaited<ReturnType<typeof runAgent>>;
 
@@ -39,28 +37,22 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
   );
 }
 
-/** Map a run outcome to the CLI process exit code, treating an
- *  approval-denied error distinctly from a generic agent error. A resumed
- *  subagent that parks back to WAITING is a successfully completed turn.
+/** Map a run outcome to the CLI process exit code. A resumed subagent that
+ *  parks back to WAITING is a successfully completed turn.
  *
- *  The denial check is nested inside FAILED on purpose. A denied approval gate
- *  is not, by itself, a failed run: under `--approval-policy never` the gate
- *  returns feedback to the model, the model works around it, and the run
- *  completes normally. Hoisting the check above the outcome made every such run
- *  exit 4, which silently broke any caller that treats a nonzero exit as "did
- *  not produce a result" — TeXRA's own PR review workflow among them, where the
- *  review completed and was then thrown away before it could be posted. */
+ *  A denied approval gate never reaches this mapping. The gate returns feedback
+ *  to the model, which routes around it, so a denial is not a run outcome at
+ *  all — it has no dedicated exit code. An earlier design gave it one, which
+ *  made callers that treat a nonzero exit as "did not produce a result" discard
+ *  perfectly good runs; TeXRA's own PR review workflow was among them. */
 export function runOutcomeExitCode(
   outcome: RunOutcome | typeof STREAM_PHASE.WAITING,
-  context: CliContext,
 ): CliExitCode {
   if (outcome === RUN_OUTCOME.CANCELLED) {
     return CliExitCode.Interrupted;
   }
   if (outcome === RUN_OUTCOME.FAILED) {
-    return hasCliApprovalDenied(context)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
+    return CliExitCode.AgentError;
   }
   return CliExitCode.Success;
 }

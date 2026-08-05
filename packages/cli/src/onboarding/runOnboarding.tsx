@@ -24,6 +24,7 @@ import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { warn as logWarning } from '@logger/logUtils';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
@@ -452,15 +453,15 @@ function OnboardingFrame(props: {
   return (
     <Box
       borderStyle="round"
-      borderColor="cyan"
+      borderColor={COLOR_HINT}
       flexDirection="column"
       paddingX={1}
     >
-      <Text bold color="cyan">
+      <Text bold color={COLOR_HINT}>
         {props.title}
       </Text>
       {props.subtitle ? <Text dimColor>{props.subtitle}</Text> : null}
-      {props.error ? <Text color="red">{props.error}</Text> : null}
+      {props.error ? <Text color={COLOR_ERROR}>{props.error}</Text> : null}
       <Box marginTop={1} flexDirection="column">
         {props.children}
       </Box>
@@ -673,7 +674,7 @@ function RelayProgressFrame(props: {
 }): React.JSX.Element {
   return (
     <BorderedPanel
-      color="cyan"
+      color={COLOR_HINT}
       title={props.title ?? 'Sign in · Researcher Access'}
       footer={<LoadingIndicator label={props.spinnerLabel} />}
     >
@@ -714,7 +715,7 @@ function RelayProgressStep(
           : `Opening your browser to sign in with ${provider}…`}
       </Text>
       {url ? (
-        <Text color="cyan">{url}</Text>
+        <Text color={COLOR_HINT}>{url}</Text>
       ) : (
         <Text dimColor>
           {noBrowser
@@ -749,10 +750,10 @@ function RelayDeviceProgressStep(
       <Text>{CLI_DEVICE_AUTH_URL_PROMPT}</Text>
       {deviceAuth ? (
         <>
-          <Text color="cyan">{deviceAuth.verification_uri}</Text>
+          <Text color={COLOR_HINT}>{deviceAuth.verification_uri}</Text>
           <Text>
             and enter this code:{' '}
-            <Text bold color="cyan">
+            <Text bold color={COLOR_HINT}>
               {deviceAuth.user_code}
             </Text>
           </Text>

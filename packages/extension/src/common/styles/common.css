@@ -21,8 +21,8 @@
     var(--vscode-foreground)
   );
   /* Some VS Code themes (notably dark) set descriptionForeground too dim to
-     read against tinted surface cards. Mix at least 65% of the normal text
-     color in to guarantee a readable contrast in every theme. */
+     read against tinted surface cards. Mix 70% of the normal text color in
+     to guarantee a readable contrast in every theme. */
   --wa-color-text-quiet: color-mix(
     in srgb,
     var(--vscode-editor-foreground, var(--vscode-foreground)) 70%,
@@ -50,15 +50,55 @@
   --wa-form-control-text-color: var(--vscode-input-foreground);
   --wa-form-control-border-color: var(--vscode-input-border);
 
-  /* Brand variant — primary buttons, links, focus accents. */
+  /* ── Semantic variants ──────────────────────────────────────────────────
+     One rule, no per-variant judgement: derive only what VS Code does not
+     ship, and derive it from what VS Code does ship.
+
+       ships background AND foreground → pass both through
+       ships one side                  → derive the other
+       ships only a role colour        → derive both sides from it
+
+     Each variant below names which case it is, so no line is a decision on
+     its own. Neutral and brand-loud are host pairs; warning-loud is a host
+     pair too (statusBarItem ships a background and a foreground); the status
+     roles ship a colour but no surface, so their quiet tiers derive.
+
+     A derived on-colour mixes toward --wa-color-text-normal rather than
+     toward black or white. That is what makes a single expression correct in
+     both appearances: it darkens the role colour on light themes and lightens
+     it on dark ones, holding hue either way.
+
+     Measured worst case over Dark Modern / Light Modern / Dark+ / Light+,
+     against each theme's own editorWidget.background: 4.74:1 quiet (warning
+     on Light Modern), 4.33:1 loud (success on light). Danger-on-quiet is the
+     APCA floor on dark themes at Lc 47.2 (5.6:1), which is VS Code's own
+     mid-lightness editorError colour — a lighter red stops reading as an
+     error.
+
+     The three steps are inputs to this sheet, not consumer tokens. */
+  --wa-variant-fill: 8%; /* role over the raised surface */
+  --wa-variant-border: 45%; /* role over transparent */
+  --wa-variant-ink: 55%; /* role toward the normal text colour */
+
+  /* Brand — primary buttons, links, focus accents.
+     loud: host pair. quiet: host ships the background only, and
+     inputValidation.infoForeground is null in every stock theme, so the
+     foreground derives to the colour that by definition reads on host
+     surfaces. Deriving it from the brand hue instead measures worse
+     (Lc 39.2 versus 68.7 on Dark+), because callout prose is body text
+     rather than a status label. */
   --wa-color-brand-fill-loud: var(--vscode-button-background);
   --wa-color-brand-on-loud: var(--vscode-button-foreground);
   --wa-color-brand-border-loud: var(--vscode-button-border, transparent);
   --wa-color-brand-fill-quiet: var(--vscode-inputValidation-infoBackground);
   --wa-color-brand-border-quiet: var(--vscode-inputValidation-infoBorder);
-  --wa-color-brand-on-quiet: var(--vscode-inputValidation-infoForeground);
+  --wa-color-brand-on-quiet: var(
+    --vscode-inputValidation-infoForeground,
+    var(--wa-color-text-normal)
+  );
 
-  /* Neutral variant — outlined wa-button / wa-callout, hovers. */
+  /* Neutral — outlined wa-button / wa-callout, hovers. Host pair throughout
+     (button.secondary*), so nothing derives. */
   --wa-color-neutral-fill-quiet: var(--vscode-button-secondaryBackground);
   --wa-color-neutral-border-quiet: var(
     --vscode-button-border,
@@ -72,46 +112,70 @@
   );
   --wa-color-neutral-on-loud: var(--vscode-button-secondaryForeground);
 
-  /* Warning variant. */
+  /* Warning — role colour editorWarning.foreground.
+     loud: host pair (statusBarItem.warningBackground is
+     darken(editorWarning.foreground, 0.4) in BOTH appearances, and the host
+     ships the matching foreground for it). quiet: host ships neither side for
+     this role, so both derive. */
   --wa-color-warning-fill-loud: var(--vscode-statusBarItem-warningBackground);
-  --wa-color-warning-on-loud: var(--vscode-editor-foreground);
-  --wa-color-warning-border-loud: var(--vscode-inputValidation-warningBorder);
-  --wa-color-warning-fill-quiet: var(
-    --vscode-editorWarning-background,
-    var(--vscode-inputValidation-warningBackground)
+  --wa-color-warning-on-loud: var(--vscode-statusBarItem-warningForeground);
+  --wa-color-warning-border-loud: transparent;
+  --wa-color-warning-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) var(--wa-variant-fill),
+    var(--wa-color-surface-raised)
   );
-  --wa-color-warning-border-quiet: var(--vscode-inputValidation-warningBorder);
-  --wa-color-warning-on-quiet: var(
-    --vscode-editorWarning-foreground,
-    var(--vscode-inputValidation-warningForeground)
+  --wa-color-warning-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) var(--wa-variant-border),
+    transparent
+  );
+  --wa-color-warning-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) var(--wa-variant-ink),
+    var(--wa-color-text-normal)
   );
 
-  /* Danger variant. */
+  /* Danger — role colour editorError.foreground.
+     loud: host ships the role colour but no on-colour, so that side derives.
+     quiet: both sides derive. */
   --wa-color-danger-fill-loud: var(--vscode-editorError-foreground);
-  --wa-color-danger-on-loud: #ffffff;
+  --wa-color-danger-on-loud: var(--vscode-editor-background);
   --wa-color-danger-border-loud: transparent;
-  --wa-color-danger-fill-quiet: var(--vscode-inputValidation-errorBackground);
-  --wa-color-danger-border-quiet: var(--vscode-inputValidation-errorBorder);
-  --wa-color-danger-on-quiet: var(
-    --vscode-editorError-foreground,
-    var(--vscode-errorForeground)
+  --wa-color-danger-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) var(--wa-variant-fill),
+    var(--wa-color-surface-raised)
+  );
+  --wa-color-danger-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) var(--wa-variant-border),
+    transparent
+  );
+  --wa-color-danger-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) var(--wa-variant-ink),
+    var(--wa-color-text-normal)
   );
 
-  /* Success variant. */
-  --wa-color-success-fill-loud: var(
-    --vscode-charts-green,
-    var(--vscode-testing-iconPassed)
-  );
-  --wa-color-success-on-loud: #ffffff;
+  /* Success — role colour charts.green. Same two cases as danger. */
+  --wa-color-success-fill-loud: var(--vscode-charts-green);
+  --wa-color-success-on-loud: var(--vscode-editor-background);
   --wa-color-success-border-loud: transparent;
-  --wa-color-success-fill-quiet: var(
-    --vscode-charts-green,
-    var(--vscode-inputValidation-infoBackground)
+  --wa-color-success-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) var(--wa-variant-fill),
+    var(--wa-color-surface-raised)
   );
-  --wa-color-success-border-quiet: var(--vscode-inputValidation-infoBorder);
-  --wa-color-success-on-quiet: var(
-    --vscode-testing-iconPassed,
-    var(--vscode-charts-green)
+  --wa-color-success-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) var(--wa-variant-border),
+    transparent
+  );
+  --wa-color-success-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) var(--wa-variant-ink),
+    var(--wa-color-text-normal)
   );
 
   /* Buttons — niche tokens consumers still need. */
@@ -143,8 +207,7 @@
   --wa-color-chart-orange: var(--vscode-charts-orange);
   --wa-color-chart-red: var(--vscode-charts-red);
   --wa-color-chart-yellow: var(--vscode-charts-yellow);
-  /* VS Code does not ship a charts.purple — fall back to keyword colour. */
-  --wa-color-chart-purple: light-dark(#8250df, #c586c0);
+  --wa-color-chart-purple: var(--vscode-charts-purple);
 
   /* Diff editor. */
   --wa-color-diff-inserted: var(--vscode-diffEditor-insertedTextBackground);

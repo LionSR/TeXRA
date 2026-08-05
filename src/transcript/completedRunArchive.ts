@@ -7,10 +7,7 @@
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import {
-  formatConversationMessage,
-  stringifyConversationValue,
-} from '@agent/storage/conversationFormat';
+import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -25,7 +22,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { ToolResultSchema } from '@shared/schemas/toolResult';
-import { assertNever, generateShortId, isObject } from '@utils/core';
+import { assertNever, isObject } from '@utils/core';
 
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
@@ -312,56 +309,6 @@ function streamLogEntriesToConversation(
       ? conversationMessagesForEntry(entry)
       : [],
   );
-}
-
-/**
- * Import a pre-sidecar persisted conversation into an otherwise
- * conversation-empty stream before a resumed reflection run appends new
- * turns. This is the one legacy-to-canonical migration boundary: subsequent
- * completed reads remain sidecar-first and never have to splice two histories.
- */
-export async function seedResumedConversationSidecar(
-  streamLogStore: StreamLogStore,
-  streamId: StreamTabId,
-  executionId: ExecutionId,
-  messages: readonly unknown[],
-): Promise<boolean> {
-  if (messages.length === 0) return false;
-  await streamLogStore.ensureLoaded(streamId);
-  const existing = streamLogStore.get(streamId);
-  if (
-    existing &&
-    streamLogEntriesToConversation(existing.toJSON()).length > 0
-  ) {
-    return false;
-  }
-
-  const normalized = messages
-    .map((message) => formatConversationMessage(message))
-    .filter(({ content }) => content.length > 0);
-  if (normalized.length === 0) return false;
-
-  const writer = streamLogStore.acquireWriter(streamId, executionId);
-  try {
-    for (const { role, content } of normalized) {
-      writer.appendSettled({
-        id: generateShortId(),
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: 'info',
-        timestamp: Date.now(),
-        messageType:
-          role === 'assistant' || role === 'model'
-            ? MESSAGE_TYPES.MODEL_RESPONSE
-            : MESSAGE_TYPES.USER_MESSAGE,
-        text: content,
-        data: { archivedRole: role },
-        verbose: false,
-      });
-    }
-  } finally {
-    writer.close();
-  }
-  return true;
 }
 
 /** Reconstruct one stream's conversation; `[]` when the log is absent/empty. */

@@ -101,7 +101,7 @@ export class SearchBar extends LitElement {
               ? renderIconActionButton({
                   id: 'history-search-clear-button',
                   icon: 'trash',
-                  label: 'Clear history',
+                  label: 'Clear all history',
                   tooltip: 'Clear all history',
                   action: 'clear-history',
                   onClick: this.handleClearHistory,

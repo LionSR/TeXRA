@@ -42,7 +42,7 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
       );
       break;
     case 'missingParams':
-      void showLoggedMessage(CHANNEL, 'Missing required parameters for pack');
+      void showLoggedMessage(CHANNEL, 'Select an input file before packing.');
       break;
     case 'error':
       void vscode.window.showErrorMessage(

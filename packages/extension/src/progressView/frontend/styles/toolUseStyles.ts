@@ -27,8 +27,7 @@ export const toolUseStyles = css`
 
   .tool-use-sublabel {
     font-weight: var(--font-weight-medium);
-    color: var(--wa-color-text-normal);
-    opacity: var(--opacity-normal);
+    color: var(--color-text-muted);
     font-size: var(--font-size-sm);
   }
 
@@ -52,8 +51,11 @@ export const toolUseStyles = css`
   }
 
   .banner-details--relay-error {
-    border-left: var(--border-medium) solid var(--color-warning);
-    border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+    border-inline-start: var(--border-medium) solid var(--color-warning);
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    border-start-end-radius: var(--border-radius-small);
+    border-end-end-radius: var(--border-radius-small);
   }
 
   .banner-details--relay-error > .details-summary .label {
@@ -173,7 +175,7 @@ export const toolUseStyles = css`
   }
 
   .proposal-banner-setup {
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   /* Diff styles */

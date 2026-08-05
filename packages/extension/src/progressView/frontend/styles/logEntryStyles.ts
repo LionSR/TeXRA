@@ -62,7 +62,7 @@ export const logEntryStyles = css`
     margin: var(--wa-space-2xs) 0;
     padding: var(--wa-space-xs);
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-left: 2px solid var(--color-text-secondary);
+    border-left: 2px solid var(--border-control);
     border-radius: var(--wa-border-radius-m, var(--border-radius));
     background: color-mix(
       in srgb,
@@ -191,17 +191,15 @@ export const logEntryStyles = css`
 
   .file-list-content .file-var,
   .file-list-content .file-source {
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
   }
 
   .file-list-content .file-var {
-    opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
-    margin-left: var(--wa-space-3xs);
+    margin-inline-start: var(--wa-space-3xs);
   }
 
   .file-list-content .file-source {
-    opacity: var(--opacity-subtle);
     font-size: 0.85em;
     font-style: italic;
   }
@@ -217,12 +215,11 @@ export const logEntryStyles = css`
   }
 
   .xml-link-container wa-icon {
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
   }
 
   .xml-link-container .document-tag {
-    color: var(--color-text-secondary);
-    opacity: var(--opacity-normal);
+    color: var(--color-text-muted);
     font-style: italic;
   }
 
@@ -252,7 +249,7 @@ export const logEntryStyles = css`
   }
 
   .memory-path wa-icon {
-    margin-right: var(--wa-space-2xs);
+    margin-inline-end: var(--wa-space-2xs);
   }
 
   .memory-path .file-source {
@@ -294,7 +291,7 @@ export const logEntryStyles = css`
     min-width: 0;
     padding: 0 var(--wa-space-3xs);
     opacity: 0;
-    margin-left: auto;
+    margin-inline-start: auto;
     cursor: pointer;
   }
 
@@ -406,7 +403,7 @@ export const logEntryStyles = css`
   }
 
   .details-summary > .icon {
-    opacity: var(--opacity-muted);
+    color: var(--color-text-muted);
   }
 
   .banner-content {
@@ -435,8 +432,13 @@ export const logEntryStyles = css`
      markdown-rendered content this class normally wraps), so preserve them.
      Unlike .log-line, this text is actively being read while it grows, so
      prefer breaking at word boundaries (break-word) over .log-line's
-     break-all — mid-word breaks are more disruptive mid-stream. */
-  .banner-content--streaming {
+     break-all — mid-word breaks are more disruptive mid-stream.
+     Double-class selector on purpose: .banner-content--model (shared
+     markdown sheet, adopted later) sets white-space: normal at the same
+     0,1,0 specificity, and stylesheet order handed it the tie - collapsing
+     every newline in streaming Assistant text. 0,2,0 wins regardless of
+     sheet order; the element always carries both classes. */
+  .banner-content.banner-content--streaming {
     white-space: pre-wrap;
     overflow-wrap: break-word;
   }
@@ -472,7 +474,7 @@ export const logEntryStyles = css`
     overflow-wrap: anywhere;
   }
 
-  @media (max-width: 640px) {
+  @container (max-width: 640px) {
     .log-container {
       padding-inline: var(--wa-space-xs);
     }

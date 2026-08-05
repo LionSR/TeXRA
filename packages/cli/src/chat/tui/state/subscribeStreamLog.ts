@@ -11,7 +11,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPolicy';
+import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPrompts';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
@@ -717,7 +717,10 @@ function trySyncStreamLog(streamId: StreamTabId): void {
   try {
     syncStreamLog(streamId);
   } catch (error) {
-    setTransientNotice(`Could not update transcript: ${toErrorMessage(error)}`);
+    setTransientNotice(
+      `Could not update transcript: ${toErrorMessage(error)}`,
+      { ttlMs: Number.POSITIVE_INFINITY },
+    );
   }
 }
 
@@ -771,6 +774,7 @@ export function subscribeStreamLog(): () => void {
         if (activeStreamId.get() === nextActiveStreamId) {
           setTransientNotice(
             `Could not load transcript: ${toErrorMessage(error)}`,
+            { ttlMs: Number.POSITIVE_INFINITY },
           );
         }
       });

@@ -81,7 +81,7 @@ export class BackgroundTasksPanel extends LitElement {
 
       /* The shared panel header already supplies the section boundary and
          lowered surface. Strip Web Awesome's surrounding card so expanding
-         Background Tasks does not introduce a second white, rounded panel
+         Background tasks does not introduce a second white, rounded panel
          around the quiet child sections. */
       wa-details.panel-collapsible::part(base) {
         background: transparent;
@@ -133,6 +133,7 @@ export class BackgroundTasksPanel extends LitElement {
 
       .task-name--clickable {
         cursor: pointer;
+        color: var(--color-text-link);
         text-decoration: underline;
         text-decoration-color: transparent;
         transition: text-decoration-color var(--transition-fast);
@@ -143,9 +144,11 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       /* Sits between the name and the description: a run's phase identifies
-         where it is, so it never shrinks and never wraps the row. */
+         where it is, so it shrinks only to an ellipsis floor and never wraps
+         the row. */
       .task-phase {
-        flex: 0 0 auto;
+        flex: 0 1 auto;
+        min-width: 6ch;
         max-width: 10rem;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -182,7 +185,7 @@ export class BackgroundTasksPanel extends LitElement {
          wa-tag — tags are for removable/category chips, badges for status. */
       wa-badge.task-status {
         flex: 0 0 auto;
-        margin-left: auto;
+        margin-inline-start: auto;
       }
 
       wa-badge.task-status::part(base) {
@@ -277,7 +280,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details
         class="panel-collapsible"
-        summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background Tasks'}
+        summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background tasks'}
         ?open=${this.open}
         @wa-show=${this.handleShow}
         @wa-hide=${this.handleHide}

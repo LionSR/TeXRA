@@ -339,9 +339,6 @@ export async function runChat(
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
     apiMode: sessionMetaSignal.get().apiMode,
-    get approvalPolicy(): TexraApprovalPolicy {
-      return getApprovalPolicy();
-    },
     helperModel,
     quietLogs: true,
   });

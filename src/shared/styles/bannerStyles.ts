@@ -39,7 +39,7 @@ const bannerFrameStyles: CSSResult = css`
   .banner-row .hint {
     width: 100%;
     font-size: var(--font-size-sm);
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     line-height: var(--line-height-relaxed, 1.5);
   }
 

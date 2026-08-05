@@ -34,7 +34,11 @@ async function announceSelection<T extends string | string[]>(
     logger.info(CHANNEL, message);
     return result;
   } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error selecting files', err);
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'File selection failed. See the TeXRA log for details.',
+      err,
+    );
     return null;
   }
 }

@@ -121,7 +121,7 @@ function isReplayableTerminalResult(event: ResultEvent): boolean {
 export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
   /**
    * Delay store repair until {@link SessionHandle.waitUntilReady} is called.
-   * Desktop uses this while claiming legacy stream identities.
+   * Desktop uses this so repair runs only after its process stores are wired.
    */
   restartRepair?: 'deferred';
 } & Partial<

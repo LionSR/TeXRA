@@ -187,8 +187,17 @@ function effectiveContextWindow(
 function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
   const label = shortCliModelAccessRoute(access);
   return label === 'subscription'
-    ? { text: label, color: COLOR_HINT, compactText: 'sub' }
-    : { text: label, color: 'dim' };
+    ? {
+        text: label,
+        color: COLOR_HINT,
+        compactText: 'sub',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+      }
+    : {
+        text: label,
+        color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+      };
 }
 
 // Relay spend only constrains the included-access route; a subscription or a
@@ -291,12 +300,23 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   usage: 40,
   queuedFollowUp: 50,
   approvalPolicy: 55,
+  ephemeralBadge: 58,
   approvalDepth: 60,
   rootActive: 65,
   relayQuota: 68,
   elapsed: 70,
+  // Durable session status: outlives the transient counts above but must
+  // still be compactable — a priority-less segment breaks narrow bars (see
+  // bypassBadge below).
+  accessMode: 72,
   thinking: 75,
   compacting: 80,
+  // Bypass badges announce active auto-approval — the one thing the bar must
+  // not silently drop, so they compact dead last. Every segment carries SOME
+  // priority: the fitting sweeps only visit prioritized segments, and a
+  // priority-less segment is unfittable — the row then soft-wraps and breaks
+  // the 2-row chrome budget on narrow terminals.
+  bypassBadge: 85,
 } as const;
 
 function queuedFollowUpsCountSegment(
@@ -314,7 +334,7 @@ function queuedFollowUpsCountSegment(
 function subagentsSegment(subagents: number): StatusBarSegment | undefined {
   return subagents > 0
     ? {
-        text: `${subagents} subagent${subagents === 1 ? '' : 's'}`,
+        text: formatResultCount(subagents, 'subagent'),
         compactText: `${subagents} sub`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
@@ -691,7 +711,7 @@ function childListBindingsText(
     : undefined;
   const candidates = [
     statusBarBindingRow([
-      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: '↑/↓', action: 'select' }),
       enterBinding,
       fullOutputBinding,
       killBinding,
@@ -702,7 +722,7 @@ function childListBindingsText(
       ctrlCBinding,
     ]),
     statusBarBindingRow([
-      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: '↑/↓', action: 'select' }),
       enterBinding,
       fullOutputBinding,
       killBinding,
@@ -711,7 +731,7 @@ function childListBindingsText(
       ctrlCBinding,
     ]),
     statusBarBindingRow([
-      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: '↑/↓', action: 'select' }),
       enterBinding,
       keyHintText({ key: 'Tab', action: 'input' }),
       keyHintText({ key: 'Esc', action: 'input' }),
@@ -776,8 +796,10 @@ function approvalPolicySegment(
     case 'ask':
       return undefined;
     case 'never':
+      // Same word the /approval picker uses for this policy — the bar is how
+      // users confirm their selection took effect.
       return {
-        text: 'deny',
+        text: 'never',
         color: COLOR_WARNING,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
       };
@@ -908,6 +930,7 @@ export function buildStatusBarDisplay(
       compactText: 'EPHEMERAL',
       badge: true,
       badgeColor: COLOR_WARNING,
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.ephemeralBadge,
     });
   }
 
@@ -953,16 +976,19 @@ export function buildStatusBarDisplay(
       });
     }
   }
+  // Routine activity, not caution: these sit onscreen for whole turns, and
+  // painting them yellow trains the eye to ignore the color that also
+  // announces auto-approval bypasses and quota exhaustion.
   if (input.compactingActive === true && isActivePhase(input.status)) {
     left.push({
       text: 'compacting...',
-      color: COLOR_WARNING,
+      color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
   } else if (input.thinkingActive === true && isActivePhase(input.status)) {
     left.push({
       text: 'thinking...',
-      color: COLOR_WARNING,
+      color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
     });
   }
@@ -1006,6 +1032,7 @@ export function buildStatusBarDisplay(
         text: badge.text,
         badge: true,
         badgeColor: badge.badgeColor,
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.bypassBadge,
       });
     }
   }

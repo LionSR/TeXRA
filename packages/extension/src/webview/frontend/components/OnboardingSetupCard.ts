@@ -48,10 +48,6 @@ export class OnboardingSetupCard extends LitElement {
         flex-wrap: wrap;
         gap: var(--wa-space-2xs);
       }
-
-      wa-button::part(base) {
-        min-height: 28px;
-      }
     `,
   ];
 
@@ -78,20 +74,23 @@ export class OnboardingSetupCard extends LitElement {
             id="onboardingRunSetupButton"
             variant="brand"
             appearance="filled"
+            size="s"
             @click=${this.handleRunSetup}
           >
-            ${waIcon('rocket')} Run setup assistant
+            ${waIcon('rocket', { slot: 'start' })} Run setup assistant
           </wa-button>
           <wa-button
             id="onboardingOpenWalkthroughButton"
             appearance="outlined"
+            size="s"
             @click=${this.handleOpenGettingStarted}
           >
-            ${waIcon('book')} Open walkthrough
+            ${waIcon('book', { slot: 'start' })} Open walkthrough
           </wa-button>
           <wa-button
             id="onboardingSkipSetupButton"
             appearance="plain"
+            size="s"
             @click=${this.handleSkipSetup}
           >
             Skip setup

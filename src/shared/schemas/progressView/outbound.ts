@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   createDispatcher,
@@ -226,7 +227,7 @@ const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
     id: z.string(),
   }),
 ]);
-const BypassTypeSchema = z.enum(['bash', 'toolEdit', 'superYolo']);
+const BypassTypeSchema = z.enum(APPROVAL_BYPASS_KINDS);
 
 const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),

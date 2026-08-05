@@ -147,9 +147,13 @@ export class MultiAgentTab extends LitElement {
 
       .preset-delete-btn {
         position: absolute;
-        top: var(--wa-space-2xs);
-        right: var(--wa-space-2xs);
-        display: none;
+        inset-block-start: var(--wa-space-2xs);
+        inset-inline-end: var(--wa-space-2xs);
+        opacity: 0;
+        /* Destructive and invisible: a tap on the card corner must not delete a
+           team. Keyboard focus is unaffected, and focusing reveals the button
+           through :focus-within below. */
+        pointer-events: none;
         z-index: 10;
       }
 
@@ -169,8 +173,10 @@ export class MultiAgentTab extends LitElement {
         border-radius: var(--border-radius-small);
       }
 
-      .preset-card:hover .preset-delete-btn {
-        display: inline-flex;
+      .preset-card:hover .preset-delete-btn,
+      .preset-card:focus-within .preset-delete-btn {
+        opacity: var(--opacity-full);
+        pointer-events: auto;
       }
     `,
   ];
@@ -342,7 +348,7 @@ export class MultiAgentTab extends LitElement {
               ),
           })}
           ${renderSettingsToggleRow({
-            label: 'Keep agents running after I stop the orchestrator',
+            label: 'Keep agents running after you stop the orchestrator',
             description:
               'Let agents that are already mid-task finish independently.',
             checked: this.detachSubagentsOnStop,

@@ -207,7 +207,7 @@ export const mainViewStyles: CSSResult = css`
   }
 
   .desktop-file-context-count {
-    margin-left: auto;
+    margin-inline-start: auto;
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-sm);
   }
@@ -338,7 +338,7 @@ export const mainViewStyles: CSSResult = css`
   .launcher-loading-controls wa-skeleton:last-child {
     width: 34px;
     height: 34px;
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .launcher-loading-controls wa-skeleton:last-child::part(indicator) {

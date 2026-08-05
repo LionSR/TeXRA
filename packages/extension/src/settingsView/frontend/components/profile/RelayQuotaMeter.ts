@@ -27,7 +27,7 @@ function quotaNote(
 ): string | null {
   if (state === 'exhausted') {
     return autoSwitched
-      ? "Monthly relay quota reached — switched you to your own API keys. Toggle 'Use Included Access' back on to retry the relay."
+      ? "Monthly relay quota reached — switched you to your own API keys. Select 'Included Access' under Model access to retry the relay."
       : 'Monthly relay quota reached. Switch to your own API keys to keep going.';
   }
   if (state === 'warning') {

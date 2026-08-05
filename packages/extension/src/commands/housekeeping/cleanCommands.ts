@@ -29,7 +29,7 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
       );
       break;
     case 'missingParams':
-      void showLoggedMessage(CHANNEL, 'Missing required parameters for clean');
+      void showLoggedMessage(CHANNEL, 'Select an input file before cleaning.');
       break;
     case 'error':
       void vscode.window.showErrorMessage(

@@ -571,7 +571,7 @@
             },
             {
               "completionEvents": ["onCommand:texra.runSetupAssistant"],
-              "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant Agent](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
+              "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
               "id": "texra.gettingStarted.setupAssistant",
               "media": {
                 "markdown": "resources/walkthroughs/getting-started.md"
@@ -619,13 +619,13 @@
             },
             {
               "completionEvents": ["onCommand:texra.execute"],
-              "description": "You're all set. Click Execute and the orchestrator will start working through your paper.\n\n[Execute](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
+              "description": "You're all set. Click Run agent and the orchestrator will start working through your paper.\n\n[Run agent](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
               "id": "texra.gettingStarted.progress",
               "media": {
                 "altText": "Screenshot of the Progress view",
                 "image": "resources/walkthroughs/media/texra-progressboard.png"
               },
-              "title": "Manual path: hit Execute!"
+              "title": "Manual path: run the agent"
             },
             {
               "description": "Your originals are safe -- TeXRA writes edits to new files. Open them up and use VS Code's diff view to see exactly what changed. Accept what you like, ignore what you don't.",
@@ -704,7 +704,7 @@
   ],
   "requiredVscodeIgnoreLines": [
     "src/**",
-    "resources/traceViewer/**",
+    "resources/traceViewerShared/**",
     "!src/common/styles/*.css",
     "!src/progressView/*.html",
     "!src/settingsView/*.html",

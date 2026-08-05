@@ -68,7 +68,7 @@ export const fileListStyles: CSSResult = css`
   }
 
   .file-dir {
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     font-size: var(--font-size-sm);
   }
 
@@ -85,32 +85,27 @@ export const fileListStyles: CSSResult = css`
   }
 
   .file-stats span:first-child {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 
   .added {
     color: var(--wa-color-chart-green, green);
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
   }
 
   .removed {
     color: var(--wa-color-chart-red, red);
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
   }
 
   .file-actions {
     display: flex;
-    gap: var(--wa-space-3xs);
+    gap: var(--wa-space-2xs);
     flex-shrink: 0;
     flex-wrap: nowrap;
     align-items: center;
-  }
-
-  .file-actions wa-button {
-    margin-right: 0;
-    margin-left: var(--wa-space-3xs);
   }
 
   /* Nested round collapsibles inherit the shared .panel-collapsible
@@ -138,7 +133,7 @@ export const fileListStyles: CSSResult = css`
     margin-top: var(--wa-space-3xs);
   }
 
-  @media (max-width: 500px) {
+  @container (max-width: 500px) {
     .file-item {
       flex-wrap: wrap;
       gap: var(--wa-space-2xs);
@@ -151,7 +146,7 @@ export const fileListStyles: CSSResult = css`
     }
 
     .file-actions {
-      margin-left: auto;
+      margin-inline-start: auto;
     }
   }
 `;

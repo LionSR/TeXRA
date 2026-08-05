@@ -565,7 +565,7 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'api',
     description:
-      'Choose ChatGPT, Kimi Code, included TeXRA, or personal model access',
+      'Choose ChatGPT, Grok, Kimi Code, included TeXRA, or personal model access',
     category: 'configuration',
     echo: 'ifPersists',
     handler: applyCliModelAccessInput,
@@ -593,7 +593,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'auth',
-    description: 'Show both accounts and active model access',
+    description: 'Show signed-in accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
     handler: showCliAuthStatus,
@@ -673,7 +673,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'skills',
-    description: 'List available skills',
+    description: 'List skills or activate one',
     aliases: ['skill'],
     category: 'configuration',
     echo: 'never',

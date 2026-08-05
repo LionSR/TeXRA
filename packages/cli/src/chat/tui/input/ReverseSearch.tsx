@@ -69,7 +69,12 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
           }}
         />
         <Text color={COLOR_ACCENT}>`: </Text>
-        <Text>{match?.value ?? ''}</Text>
+        {/* The popup owns a fixed 5-row reserve (REVERSE_SEARCH_ROWS); a long
+            recalled command must truncate, not soft-wrap the search line into
+            a 6th row that shifts the pinned input/status chrome. */}
+        <Box flexGrow={1} flexShrink={1} height={1} overflowY="hidden">
+          <Text wrap="truncate-end">{match?.value ?? ''}</Text>
+        </Box>
       </Box>
       <Box marginTop={1}>
         <KeyHints

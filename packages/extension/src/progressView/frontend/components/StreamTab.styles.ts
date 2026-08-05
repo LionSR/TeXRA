@@ -20,44 +20,23 @@ export const streamTabStyles = css`
     min-width: 0;
     max-width: 100%;
     gap: var(--wa-space-3xs);
-    border-left: var(--border-medium) solid transparent;
+    border-inline-start: var(--border-medium) solid transparent;
     box-sizing: border-box;
     overflow: hidden;
   }
 
-  /*
-   * Subtle hairline below each row — keeps a refined rhythm for long
-   * stream lists without imposing hard grid lines. Drops to invisible
-   * on selected/hovered rows so the highlight reads cleanly.
-   */
-  .tab-container::after {
-    content: '';
-    position: absolute;
-    left: var(--wa-space-3xs);
-    right: var(--wa-space-3xs);
-    bottom: 0;
-    height: 1px;
-    background: color-mix(in srgb, var(--color-border) 50%, transparent);
-    pointer-events: none;
-  }
-
-  .tab-container:hover::after,
-  .tab-container.is-active::after {
-    opacity: 0;
-  }
-
   .tab-container.status-running {
-    border-left-color: var(--color-success);
+    border-inline-start-color: var(--color-success);
   }
 
   .tab-container.status-error,
   .tab-container.status-failed {
-    border-left-color: var(--color-error);
+    border-inline-start-color: var(--color-error);
   }
 
   .tab-container.status-waiting,
   .tab-container.status-resuming {
-    border-left-color: var(--wa-color-text-link);
+    border-inline-start-color: var(--wa-color-text-link);
   }
 
   /* Finished states (stopped/completed/cancelled/ready) keep the
@@ -66,12 +45,12 @@ export const streamTabStyles = css`
 
   .tab-container.status-initializing,
   .tab-container.status-starting {
-    border-left-color: var(--color-warning);
+    border-inline-start-color: var(--color-warning);
   }
 
-  /* Pending approval — solid orange left rail. */
+  /* Pending approval — solid orange start rail. */
   .tab-container.has-pending-approval {
-    border-left-color: var(--wa-color-chart-orange, #d18616);
+    border-inline-start-color: var(--wa-color-chart-orange, #d18616);
   }
 
   .tab {
@@ -120,16 +99,14 @@ export const streamTabStyles = css`
     align-items: center;
     gap: var(--wa-space-3xs);
     font-size: var(--font-size-xs);
-    color: var(--wa-color-text-normal);
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     width: 100%;
     min-width: 0;
     overflow: hidden;
   }
 
-  /* The metadata line stays out of the way until the row is hovered,
-     focused, or selected — the full details also live in the tooltip. */
-  .tab-container:hover .tab-meta,
+  /* The metadata line stays out of the way until the row is focused or
+     selected — the full details also live in the tooltip. */
   .tab-container:focus-within .tab-meta,
   .tab-container.is-active .tab-meta {
     display: flex;
@@ -137,7 +114,7 @@ export const streamTabStyles = css`
 
   .tab-meta .remote-agent,
   .tab-meta .stream-kind {
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
   }
 
   /* 24px literal, not --control-size-s: that step is bridged to 20px in the
@@ -155,7 +132,8 @@ export const streamTabStyles = css`
     width: 24px;
     min-width: 24px;
     height: 24px;
-    margin: 0 0 0 var(--wa-space-2xs);
+    margin-block: 0;
+    margin-inline: var(--wa-space-2xs) 0;
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: 0;
     position: relative;
@@ -241,15 +219,15 @@ export const streamTabStyles = css`
 
   .compact-subagent-hint {
     font-size: var(--font-size-xs);
-    opacity: var(--opacity-faint);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 
   .nested-stream-icon {
     font-size: var(--font-size-xs);
-    opacity: var(--opacity-faint);
+    color: var(--color-text-muted);
     flex-shrink: 0;
-    margin-right: var(--wa-space-3xs);
+    margin-inline-end: var(--wa-space-3xs);
   }
 
   .tab-delete::part(base) {
@@ -273,8 +251,7 @@ export const streamTabStyles = css`
     width: 24px;
     min-width: 24px;
     height: 100%;
-    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-    opacity: var(--opacity-muted);
+    color: var(--color-text-muted);
   }
 
   .tab-expand::part(base) {

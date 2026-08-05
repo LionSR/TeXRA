@@ -116,7 +116,7 @@ function verifyRequiredPaths(entries, snapshot, failures) {
   }
 }
 
-// See packages/extension/.vscodeignore for why resources/traceViewer is
+// See packages/extension/.vscodeignore for why resources/traceViewerShared is
 // excluded from the packaged VSIX (~3.4MB of CLI-only dead weight).
 const RESOURCE_HASH_EXCLUDED_PREFIX = `${EXCLUDED_TRACE_VIEWER_DIR}/`;
 

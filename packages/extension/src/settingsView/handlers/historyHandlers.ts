@@ -21,6 +21,8 @@ import {
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+  CLEAR_HISTORY_CONFIRM_LABEL,
+  CLEAR_HISTORY_CONFIRM_MESSAGE,
   describeClearHistoryResult,
   describeDeleteExecutionResult,
   describeLatexExportResult,
@@ -30,6 +32,7 @@ import {
   HISTORY_CONFIG_UNREADABLE_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
+import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 // Bundled in the extension's resources/ tree and loaded as raw text by the
 // esbuild `.tex: text` loader, then injected into the host-neutral
@@ -56,14 +59,14 @@ export class HistoryHandlers {
     latexPreamble,
   });
 
-  /** Path to the bundled trace-viewer standalone template (under extension resources). */
-  private readonly traceViewerStandaloneTemplate: string;
+  /** Path to the bundled trace-viewer template (under extension resources). */
+  private readonly traceViewerTemplate: string;
 
   constructor(private readonly ctx: SettingsHandlerContext) {
-    this.traceViewerStandaloneTemplate = path.join(
+    this.traceViewerTemplate = path.join(
       ctx.extensionContext.extensionPath,
       'resources',
-      'traceViewerStandalone',
+      'traceViewer',
       'index.html',
     );
   }
@@ -132,6 +135,11 @@ export class HistoryHandlers {
       this.ctx,
       'Failed to clear history',
       async () => {
+        const confirmed = await confirmModal(
+          CLEAR_HISTORY_CONFIRM_MESSAGE,
+          CLEAR_HISTORY_CONFIRM_LABEL,
+        );
+        if (!confirmed) return;
         const result = await deleteAllExecutions();
         await GoalStore.forgetByExecutionIds(result.deleted);
         const outcome = describeClearHistoryResult(result);
@@ -241,7 +249,7 @@ export class HistoryHandlers {
   private async exportAndOpenHtml(historyId: string): Promise<void> {
     const outcome = await this.chatExportController.exportAsHtml(
       historyId,
-      this.traceViewerStandaloneTemplate,
+      this.traceViewerTemplate,
     );
 
     // assembleTrace's failure statuses, surfaced through exportAsHtml.
