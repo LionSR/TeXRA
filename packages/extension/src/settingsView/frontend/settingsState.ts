@@ -33,6 +33,7 @@ import type {
 } from '@shared/schemas';
 import {
   byCategory,
+  SETTINGS_TAB,
   type AgentCategory,
   type ByCategory,
 } from '@shared/schemas';
@@ -101,7 +102,17 @@ const { trackedSignal, resetAll: resetTrackedSignals } =
 // ---------------------------------------------------------------------------
 // Tab state
 // ---------------------------------------------------------------------------
-export const selectedTabIndex = trackedSignal(() => 0);
+/**
+ * Opening panel when the host asks for the settings view without naming a tab.
+ *
+ * Named, not `0`: SETTINGS_TAB_ORDER is an append-only wire format, so index 0
+ * means whichever panel happened to be added first (MEMORY) rather than
+ * anything intended. Account is also the first nav group, so this matches what
+ * the nav already presents as the entry point.
+ */
+export const selectedTabIndex = trackedSignal<number>(
+  () => SETTINGS_TAB.ACCOUNT,
+);
 
 // ---------------------------------------------------------------------------
 // Memory state

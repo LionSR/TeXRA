@@ -175,13 +175,6 @@ export class SettingsApp extends SettingsAppBase {
     });
   }
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    if (this.isDesktopHost && selectedTabIndex.get() === 0) {
-      selectedTabIndex.set(SETTINGS_TAB.ACCOUNT);
-    }
-  }
-
   private selectSettingsEntry(entry: SettingsNavEntry): void {
     const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(entry.panel);
     if (selectedIndex < 0) return;
@@ -493,7 +486,8 @@ export class SettingsApp extends SettingsAppBase {
       SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
     );
     const requestedPanel =
-      SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory';
+      SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ??
+      SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT;
     const activePanel =
       !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
         ? SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT
