@@ -54,12 +54,12 @@ const ACTION_CONFIG: Record<
   },
   clear_tool_uses: {
     icon: 'trash',
-    label: 'Cleared Tool Uses',
+    label: 'Cleared tool uses',
     color: 'var(--wa-color-chart-green)',
   },
   clear_thinking: {
     icon: 'lightbulb',
-    label: 'Cleared Thinking',
+    label: 'Cleared thinking',
     color: 'var(--wa-color-chart-green)',
   },
   truncation: {
@@ -69,7 +69,7 @@ const ACTION_CONFIG: Record<
   },
   max_tokens_reduced: {
     icon: 'caret-down',
-    label: 'Max Tokens Reduced',
+    label: 'Max tokens reduced',
     color: 'var(--wa-color-chart-yellow)',
   },
 };
@@ -84,7 +84,7 @@ function buildContextManagementItems(data: ContextManagementData): {
 
   const config: ActionConfig = ACTION_CONFIG[action] ?? {
     icon: 'clock-rotate-left',
-    label: action || 'Context Management',
+    label: action || 'Context management',
     color: 'var(--wa-color-text-normal)',
   };
 

@@ -111,7 +111,7 @@ export class QueuedFollowUps extends LitElement {
       <wa-details
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
         class="queued-collapsible"
-        summary="Queued Messages"
+        summary="Queued messages"
         open
       >
         <div

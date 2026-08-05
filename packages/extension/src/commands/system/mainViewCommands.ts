@@ -135,7 +135,7 @@ export async function showImportOptions(): Promise<void> {
         command: 'texra.createSampleProject',
       },
       {
-        label: '$(rocket) Run the setup assistant agent',
+        label: '$(rocket) Run the setup assistant',
         description: 'Check tools, credentials, and LaTeX setup',
         command: 'texra.runSetupAssistant',
       },

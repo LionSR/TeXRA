@@ -61,7 +61,7 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
             size="s"
             @click=${() => this.handleAction('docs')}
           >
-            ${waIcon('book', { slot: 'start' })} Docs
+            ${waIcon('book', { slot: 'start' })} Open docs
           </wa-button>
         </div>
       `,
