@@ -108,7 +108,8 @@ describe('retained finished children', () => {
     applyRoster(backend, PARENT, []);
 
     const badgeMessages = messages.filter(
-      (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
     );
     expect(badgeMessages).toHaveLength(1);
     expect(badgeMessages[0]).toMatchObject({ stream: PARENT });
