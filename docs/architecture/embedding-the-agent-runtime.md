@@ -492,7 +492,8 @@ the runtime already knows the parking behaviour exists.
   `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:199`). It does not
   touch `requestRetry` or `askUserQuestion`, and it does not change dispatch.
   The CLI sets it for `policy === 'never'` and for headless `ask`
-  (`packages/cli/src/runtime/approval/approvalPolicy.ts:111-118`) _in addition
+  (`packages/cli/src/runtime/approval/settleApprovals.ts` —
+  `cliApprovalPromptsUnavailable`) _in addition
   to_ attaching real interactions.
 
 ### The typed shape
@@ -532,9 +533,10 @@ degradation instead of a hang. Trace the wiring end to end:
   in its tool list (`src/agent/runtime/agentToolResolution.ts:150-157`).
 
 The worked example is the CLI's own headless path: it derives the flag from
-policy and mode (`packages/cli/src/runtime/approval/approvalPolicy.ts:111-118`)
+policy and mode (`packages/cli/src/runtime/approval/settleApprovals.ts` —
+`cliApprovalPromptsUnavailable`)
 and passes it straight into the real `runAgent` call
-(`packages/cli/src/runtime/runExecution.ts:264`). As the "Escape hatches"
+(`packages/cli/src/runtime/runExecution.ts`). As the "Escape hatches"
 note above says, the flag does not touch `requestRetry` or `askUserQuestion`
 dispatch — it only narrows which tools can raise the approval kinds that were
 the reachable hang.
