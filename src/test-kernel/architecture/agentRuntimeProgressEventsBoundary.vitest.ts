@@ -33,9 +33,9 @@ const ALLOWED_PRODUCTION_IMPORTERS = [CLI_PROJECTION_MODULE] as const;
 // vocabulary, so its own importers are part of the same containment chain.
 const ALLOWED_CLI_PROJECTION_IMPORTERS = [
   'packages/cli/src/runtime/runExecution.ts',
-  'src/test-kernel/cli/CliSessionProgressSubscription.vitest.mts',
-  'src/test-kernel/cli/RunExecution.vitest.mts',
-  'src/test-kernel/cli/RunProgressRenderer.vitest.mts',
+  'src/test-kernel/cli/CliSessionProgressSubscription.vitest.ts',
+  'src/test-kernel/cli/RunExecution.vitest.ts',
+  'src/test-kernel/cli/RunProgressRenderer.vitest.ts',
 ] as const;
 
 const SCAN_ROOTS = [
