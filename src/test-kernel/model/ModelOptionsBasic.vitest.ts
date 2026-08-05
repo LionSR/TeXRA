@@ -56,6 +56,19 @@ describe('default model list', () => {
     expect(config.maxOutputTokens).toBe(128_000);
   });
 
+  it('includes Grok 4.5 as a default xAI model', () => {
+    const config = MODEL_CONFIGS.grok45;
+
+    expect(DEFAULT_MODELS).toContain('grok45');
+    expect(config).toMatchObject({
+      fullName: 'grok-4.5',
+      provider: 'xai',
+      openRouterOnly: false,
+    });
+    expect(config.retired ?? false).toBe(false);
+    expect(config.deprecated ?? false).toBe(false);
+  });
+
   it('only contains model ids known by llm-zoo', () => {
     expect(DEFAULT_MODELS.filter((model) => !MODEL_CONFIGS[model])).toEqual([]);
   });

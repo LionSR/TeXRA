@@ -52,7 +52,7 @@ const SETUP_PROVIDER_DEFAULTS: Readonly<Record<string, SetupProviderDefaults>> =
       preferredModel: 'sonnet46T',
       fallbackSource: ModelProvider.ANTHROPIC,
     },
-    xai: { preferredModel: 'grok4', fallbackSource: ModelProvider.XAI },
+    xai: { preferredModel: 'grok45', fallbackSource: ModelProvider.XAI },
     moonshot: {
       preferredModel: 'kimi25T',
       fallbackSource: ModelProvider.MOONSHOT,

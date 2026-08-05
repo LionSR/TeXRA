@@ -41,15 +41,14 @@ import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
  * together from that one `AgentConfig`. Display data only — what the run IS
  * travels as the parsed {@link RunIdentity} beside it.
  */
-interface ProgressStreamConfigDetails {
+interface SessionStreamConfigDetails {
   instruction: string;
-  inputFile?: string;
   model?: string;
   workingDirectory?: string;
 }
 
-/** Canonical current metadata used by every progress-view stream consumer. */
-export interface ProgressStreamMetadata {
+/** Canonical current metadata used by every session stream consumer. */
+export interface SessionStreamMetadata {
   /** The run's identity, verbatim from `run.start` or the durable store. */
   identity?: RunIdentity;
   agentCategory?: AgentCategory;
@@ -58,15 +57,15 @@ export interface ProgressStreamMetadata {
   executionId?: ExecutionId;
   parentStreamId?: StreamTabId;
   description?: string;
-  config?: ProgressStreamConfigDetails;
+  config?: SessionStreamConfigDetails;
 }
 
 /**
- * The stored slice of {@link ProgressStreamMetadata}. `creationTimestamp` is
+ * The stored slice of {@link SessionStreamMetadata}. `creationTimestamp` is
  * not in it: the transcript dates a tab, so it is computed on read rather than
  * carried through every patch that has nothing to say about it.
  */
-type StoredStreamMetadata = Omit<ProgressStreamMetadata, 'creationTimestamp'>;
+type StoredStreamMetadata = Omit<SessionStreamMetadata, 'creationTimestamp'>;
 
 /** Ephemeral session state per stream (not persisted). */
 interface StreamSessionState {
@@ -83,12 +82,12 @@ interface StreamSessionState {
 /** Active stream identifier, or empty string when no stream is selected. */
 export type ActiveStreamId = StreamTabId | '';
 
-/** Schema for consolidated progress view preferences. */
-const ProgressViewPrefsSchema = z.object({
+/** Schema for consolidated session presentation preferences. */
+const SessionPrefsSchema = z.object({
   activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
 });
 
-type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
+type SessionPrefs = z.infer<typeof SessionPrefsSchema>;
 
 /**
  * Backend-owned ephemeral counters, updated during streaming.
@@ -110,7 +109,7 @@ export interface StreamExecutionState {
 export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
 
 /**
- * Core state management for the progress view.
+ * Host-neutral session presentation state.
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and
  * `snapshots` (all per-stream sidecar: output files, usage, todos, plan, and
@@ -118,7 +117,7 @@ export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
  * instructions live in the log stream (new runs write them directly; legacy
  * runs are backfilled there during load), not in separate progress-view state.
  */
-export class ProgressViewState {
+export class SessionState {
   // -- Persistence managers ---------------------------------------------------
   readonly streamLogs: StreamLogStore;
   /** Single owner of all per-stream sidecar state (output files, usage, todos,
@@ -128,7 +127,7 @@ export class ProgressViewState {
   readonly stores: SessionStores;
 
   // -- Preferences ------------------------------------------------------------
-  private readonly _prefs: PersistedState<ProgressViewPrefs>;
+  private readonly _prefs: PersistedState<SessionPrefs>;
 
   // -- Ephemeral state (session-only, not persisted) --------------------------
   private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
@@ -145,13 +144,13 @@ export class ProgressViewState {
     session: SessionHandle = defaultSession(),
     stores?: SessionStores,
   ) {
-    this.logger = createChannelTrace('ProgressViewState');
+    this.logger = createChannelTrace('SessionState');
     this.session = session;
     this.streamStatus = session.status;
     this._prefs = new PersistedState(
       createBackendStorage(storage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
-      ProgressViewPrefsSchema,
+      SessionPrefsSchema,
     );
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
@@ -191,7 +190,7 @@ export class ProgressViewState {
 
   /**
    * Release a previously-active stream's entries if its status is not
-   * in-flight. `ProgressFactApplier.setStreamStatus` intentionally skips
+   * in-flight. `SessionFactApplier.setStreamStatus` intentionally skips
    * eviction for the active tab, so the switch below closes the loop on the
    * stream being moved away from.
    */
@@ -296,7 +295,6 @@ export class ProgressViewState {
       patch.agentCategory = config.agentCategory;
       patch.config = {
         instruction: config.instruction,
-        inputFile: config.inputFiles?.at(0),
         model: config.model,
         workingDirectory: config.workingDirectory ?? undefined,
       };
@@ -353,7 +351,7 @@ export class ProgressViewState {
    * transcript's first entry dates the tab as soon as one exists; until then
    * the record's provisional timestamp stands in.
    */
-  getStreamMetadata(stream: StreamTabId): Readonly<ProgressStreamMetadata> {
+  getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
     const session = this.getOrCreateSession(stream);
     const firstTimestamp = this.streamLogs.getFirstTimestamp(stream);
     if (firstTimestamp !== undefined) {
@@ -389,11 +387,21 @@ export class ProgressViewState {
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamExecutionState {
     const existing = this._streamStates.get(stream);
-    if (!existing || existing.category !== agentCategory) {
+    if (!existing) {
       const state: StreamExecutionState = {
         category: agentCategory,
         conversationProgress: { toolCallCount: 0 },
         subagents: [],
+      };
+      this._streamStates.set(stream, state);
+      return state;
+    }
+    // Roster facts may provision a ToolUse placeholder before RUNNING supplies
+    // the real category. Refresh category in place — do not wipe `subagents`.
+    if (existing.category !== agentCategory) {
+      const state: StreamExecutionState = {
+        ...existing,
+        category: agentCategory,
       };
       this._streamStates.set(stream, state);
       return state;

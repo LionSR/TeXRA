@@ -64,10 +64,9 @@ the metadata patch so parent viewports see them, rounds go targeted to the
 active stream; the frozen public NDJSON wire keeps
 `updateRoundStage`/`RoundStage`).
 Still remaining — detailed handoff in the tracking issue for step 16/18
-(see "Remaining work" below and the issue filed from it): the session
-view-model generalization + TUI-as-renderer recut (step 16 remainder), the
-step-18 gate sweep, and the `taskRuns` legacy directory probe (#6981, its
-own dated retention policy).
+(see "Remaining work" below and #9713): the `taskRuns` legacy directory
+probe (#6981, its own dated retention policy). Step 16 remainder + step 18
+gate sweep landed in #9716.
 Date: 2026-08-03
 Revision: 10 (holistic build order; open-problems register)
 
@@ -1203,11 +1202,12 @@ _Gate:_ `rg -c 'resolveCliResume|resolveCliHistoryStatus|userStartedCliHistoryEn
 **Step 18 — Part III gate sweep.** Ratchets shrink; no new `@agent/*`
 specifiers; the NDJSON byte-parity suite passes against the unified stack.
 
-## Remaining work — handoff (2026-08-04, after #9705/#9710/#9712)
+## Remaining work — handoff (2026-08-04, updated after #9716)
 
 What is done, what is left, and the load-bearing facts a fresh session
-needs. Everything below step 16's "canonical field shapes" bullet is
-landed; the rest of step 16 and step 18 are open.
+needs. Step 16's canonical field shapes, the session view-model + TUI
+renderer port, and the step-18 gate sweep are landed; only #6981 remains
+from this handoff.
 
 **Landed (do not redo):**
 
@@ -1217,67 +1217,38 @@ landed; the rest of step 16 and step 18 are open.
   `roundStageFromStageStart`; the phase helper is module-private). All four
   stage-guard clones are gone.
 - The Lit stack carries `stage` end-to-end (state, wire `UPDATE_STAGE`,
-  `StreamMetadata`, `SYNC_STREAM_CONTENT` active state, frontend). The
-  applier's `handleUpdateStage` keeps the two delivery policies: phase →
-  per-stream metadata patch (parent viewports read a child's phase), round
-  → targeted message to the active stream only.
+  `StreamMetadata`, `SYNC_STREAM_CONTENT` active state, frontend). Delivery
+  policy: phase → per-stream metadata patch (parent viewports read a child's
+  phase), round → targeted message to the active stream only.
 - The CLI TUI already holds the canonical slot (`StreamSlice.stage`), and
   the frozen public NDJSON vocabulary keeps `updateRoundStage` /
   `UpdateRoundStagePayload` — never migrate that wire.
+- **Step 16 remainder (#9716):** `src/controllers/session/` owns
+  `SessionState` + `SessionFactApplier` + `SessionRendererPort`; Lit via
+  `LitSessionRenderer`; TUI via `attachSessionSignalsAdapter`. Deleted
+  `ProgressViewState` / `ProgressFactApplier` /
+  `subscribeRuntimeHost` / `TUI_RUN_FACT_HANDLERS`. Gate
+  `TUI_RUN_FACT_HANDLERS|applySubagentRoster|mergeArtifactSnapshot` → 0 in
+  `packages/cli/`. Fact coverage: `followUpSent` refreshes the queue;
+  `goalPaused` notifies (TUI transcript); `goalStateChanged` /
+  `inquiryThreadUpdated` notify (TUI chrome-thin OK). Attachment vs focus
+  are separate; host registration is applier-local
+  (`registeredWithRenderer`), not `streamLogs.has`. `StreamTabInfo.inputFile`
+  removed from the wire.
+- **Step 18 (#9716):** host-agent mock/import, shared-schemas-deep-import,
+  and architecture-edges baselines shrunk; dead-code ratchet ≤ 18.
 
-**Open A — step 16 remainder: one session view-model, hosts as renderers.**
-Generalize `src/controllers/progressView/backend/ProgressViewState.ts`
-(~600 lines; already `vscode`-free, host seam is the injected `StateStore`)
-plus the fact→state half of
-`src/controllers/progressView/backend/events/ProgressFactApplier.ts`
-(~800 lines) into `src/controllers/session/`. The applier interleaves state
-mutation with webview push policy at ~25 `webviewUpdater.*` call sites —
-the split is: shared applier owns fact→state and notifies a host-renderer
-port; the Lit renderer keeps `sendIfActive`, the conversation-progress
-debounce (500 ms), tab-switch suppression under `hasPendingPermissions`,
-and the async log rehydrate/evict ordering in `setStreamStatus`
-(state-mutations-first already holds). Hub wiring today:
-`ProgressBackend.ts` subscribes twice (session + run scopes) and forwards
-to `handleSessionFact`/`handleRunFact`. `WebviewUpdater`'s
-`Pick<ProgressViewState, ...>` types enumerate the read surface the
-renderer needs (`getStreamMetadata`, `getStreamState`, `streamLogs`,
-`selectableStreamNames`, `rotateActiveStream`).
-Then port the TUI onto the shared model (a signals adapter mirrors model
-change notifications into `cliState` slices) and delete the CLI's parallel
-derivations, per the step-16 _Delete_ list: `setStreamStatusInCliState`
-mirror, `applySubagentRoster` + `ParentProvenance` reconciliation +
-`REMOVED_STREAM_TOMBSTONE_CAP` value-copy
-(`packages/cli/src/chat/tui/state/childExecutions.ts` — note the shared
-applier's `RETAINED_FINISHED_CHILDREN_CAP`/roster retention in
-`updateChildRoster` and `recordChildPhase` already implement the same
-semantics once), the full-rebuild task-group driver, the duplicate
-`subagentExecutionLabels` (the Lit twin is `subagentExecutionLabels$` in
-`packages/extension/src/progressView/frontend/progressState.ts`), the
-duplicated phase grouping, and the TUI dispatch table
-(`TUI_RUN_FACT_HANDLERS` in
-`packages/cli/src/chat/tui/state/subscribeRuntimeHost.ts`). The headless
-line renderer (`packages/cli/src/runtime/runProgressRenderer.ts`) and the
-frozen NDJSON projection
-(`packages/cli/src/runtime/sessionProgressSubscription.ts`) stay as
-boundary projections — they are projections, not accumulators, and merging
-them into the store would couple a public wire to a view-model.
-Fact-coverage deltas to reconcile deliberately (one decided behavior per
-fact, same on every host): `followUpSent` (TUI refreshes immediately, Lit
-ignores), `goalPaused` (TUI appends a transcript notice, Lit ignores),
-`goalStateChanged`/`inquiryThreadUpdated` (Lit renders, TUI ignores).
-_Tests:_ TUI snapshots unchanged (`node scripts/validate-tui.mjs` from
-packages/cli); NDJSON byte-parity; the recut Lit suites from #9712 keep
-passing. _Gate:_
-`rg -c 'TUI_RUN_FACT_HANDLERS|applySubagentRoster|mergeArtifactSnapshot' packages/cli/` → 0.
+**Intentional residuals (boundary projections — do not fold into the store):**
 
-**Open B — step 18 gate sweep.** After A: shrink
-`config/ratchets/host-agent-mock-baseline.json` (deleting
-`chatSessionController`/TUI mocks should drop sites), re-run
-`architecture-edges` and `host-agent-import-baseline` expecting shrink, no
-new `@agent/*` specifiers, dead-code ratchet ≤ 18.
+- Headless `runProgressRenderer` / `sessionProgressSubscription` (NDJSON).
+- `setStreamStatusInCliState` + `subscribeStreamStatus` (TUI skips `status`
+  session facts so eviction does not key off `SessionState.activeStream`).
+- `projectChildRoster` (+ `ParentProvenance` / tombstones in
+  `childExecutions.ts`) and `subagentExecutionLabels` — CLI topology
+  projection fed from roster badges, not a second fact engine.
 
 **Open C — `taskRuns` legacy directory probe.** Tracked in #6981 with its
-own dated retention policy; independent of A/B.
+own dated retention policy; independent of the session view-model work.
 
 ## Build order — holistic
 

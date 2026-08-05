@@ -1,8 +1,8 @@
 <script setup>
 // Frameless artifact-tree card for guide/latex-diff.md "Manage Diff Outputs":
 // the diff file-naming scheme is scattered across the page in prose — latexdiff
-// emits `_diff.tex`, latexdiff-vc emits `_diff_rev<hash>.tex`, and between-round
-// runs emit `_diff_rN-rM.tex`. This grounds the set: the source pair on top,
+// emits `_diff.tex`, latexdiff-vc emits `-diff<hash>.tex`, and between-round
+// runs emit `_diffr<newer>r<older>.tex`. This grounds the set: the source pair on top,
 // then each generated diff with its .tex source + compiled .pdf, tagged by the
 // tool that made it. The header carries the same Pack / Clean toolbar the
 // LaTeXDiffs section exposes (mirrors LatexDiffHero's .act buttons) so it's
@@ -41,24 +41,24 @@ const groups = [
       },
       { name: 'spectral-gap_diff.pdf', icon: 'file-pdf', kind: 'pdf' },
       {
-        name: 'spectral-gap_diff_reva3f9c1.tex',
+        name: 'spectral-gap-diffa3f9c1.tex',
         icon: 'file-code',
         kind: 'tex',
         tag: 'latexdiff-vc',
         commit: 'a3f9c1',
       },
       {
-        name: 'spectral-gap_diff_reva3f9c1.pdf',
+        name: 'spectral-gap-diffa3f9c1.pdf',
         icon: 'file-pdf',
         kind: 'pdf',
       },
       {
-        name: 'spectral-gap_diff_r1-r0.tex',
+        name: 'spectral-gap_diffr1r0.tex',
         icon: 'file-code',
         kind: 'tex',
         tag: 'between-round',
       },
-      { name: 'spectral-gap_diff_r1-r0.pdf', icon: 'file-pdf', kind: 'pdf' },
+      { name: 'spectral-gap_diffr1r0.pdf', icon: 'file-pdf', kind: 'pdf' },
     ],
   },
 ];

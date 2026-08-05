@@ -14,7 +14,7 @@ import {
 } from '@shared/schemas';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
-import { askCliQuestion } from '../logSinks';
+import { askCliQuestion, writeTextStderr } from '../logSinks';
 
 /**
  * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
@@ -65,8 +65,16 @@ function denyMessage(policy: CliContext['approvalPolicy']): string {
     : 'Denied by CLI approval policy.';
 }
 
-export function markApprovalDenied(context: CliContext): void {
+export function markApprovalDenied(context: CliContext, gate?: string): void {
+  if (deniedApprovalContexts.has(context)) {
+    return;
+  }
   deniedApprovalContexts.add(context);
+  // Operator-facing CLI warnings go to stderr (not @logger/logUtils, which can
+  // fall through to stdout/console before the CLI log backend is wired).
+  writeTextStderr(
+    `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${context.approvalPolicy}".`,
+  );
 }
 
 export function hasCliApprovalDenied(context: CliContext): boolean {
@@ -202,7 +210,7 @@ export function immediateDecision(
   const decision = cliExecutableApprovalDecision(context);
   if (decision === 'allow') return { accepted: true };
   if (decision === 'present') return undefined;
-  markApprovalDenied(context);
+  markApprovalDenied(context, 'Approval policy');
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }
 
@@ -228,7 +236,7 @@ export function immediateDecisionForApproval(
 ): ApprovalDecision | undefined {
   if (isCredentialRetryRequest(event, payload)) {
     if (approvalPromptAllowed(context)) return undefined;
-    markApprovalDenied(context);
+    markApprovalDenied(context, 'Credential-exhausted retry');
     return {
       accepted: false,
       userMessage: 'Retry skipped: credential exhausted or unauthorized.',
@@ -258,7 +266,7 @@ export async function askApproval(
       prompt: 'Approve? [y/N, or n <feedback>] ',
     });
   } catch {
-    markApprovalDenied(context);
+    markApprovalDenied(context, 'Approval prompt');
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
 
@@ -278,7 +286,7 @@ export async function askApproval(
     }
   }
 
-  if (!parsed.accepted) markApprovalDenied(context);
+  if (!parsed.accepted) markApprovalDenied(context, 'Interactive approval');
   return {
     accepted: parsed.accepted,
     userMessage: parsed.accepted
@@ -292,7 +300,7 @@ export function humanInputDenialFeedback(
   yoloMessage: string,
 ): string {
   if (context.approvalPolicy === 'yolo') return yoloMessage;
-  markApprovalDenied(context);
+  markApprovalDenied(context, 'Human-input request');
   return denyMessage(context.approvalPolicy);
 }
 

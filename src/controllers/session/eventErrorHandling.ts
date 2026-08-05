@@ -3,7 +3,7 @@ import { createChannelTrace } from '@agent/trace';
 import { isThenable, serializeError } from '@utils/core';
 
 // Shared logger for all event handlers
-const eventLogger = createChannelTrace('ProgressEvents');
+const eventLogger = createChannelTrace('SessionEvents');
 
 /** Log an error with module context, preserving the original error reference. */
 function logError(moduleName: string, context: string, error: unknown): void {

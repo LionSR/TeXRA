@@ -313,7 +313,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     const activeStream = this.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.backend.factApplier.getAllStreamStates(),
+      this.state.streamStatus.getAllStreamStates(),
       theme,
     );
     if (!syncActiveStream) return;
@@ -330,7 +330,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
           .ensureLoaded(activeStream)
           .then(() => {
             if (this.state.activeStream !== activeStream) return;
-            this.backend.factApplier.syncStreamContent(activeStream);
+            this.backend.syncStreamContent(activeStream);
           })
           .catch((error: unknown) => {
             this.logger.error(
@@ -342,7 +342,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
             );
           });
       } else {
-        this.backend.factApplier.syncStreamContent(activeStream);
+        this.backend.syncStreamContent(activeStream);
       }
     }
   }
@@ -408,7 +408,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
-    this.backend.factApplier.syncStreamContent(streamId, {
+    this.backend.syncStreamContent(streamId, {
       includeActiveState: true,
     });
   }

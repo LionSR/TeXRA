@@ -38,7 +38,8 @@ describe('formatSlashCommandHelp', () => {
       '- `/goal` (`/goals`) — Explain autonomous goal mode',
     );
     expect(help).toContain('- `/exit` (`/quit`) — Exit the CLI session');
-    expect(help).toContain('- `/model` (`/models`) — List available models');
+    expect(help).toContain('- `/model` — Choose the model for this chat');
+    expect(help).toContain('- `/models` — Enable or disable models in pickers');
     expect(help).toContain(
       '- `/key` (`/keys`) — Add a provider API key with masked input',
     );

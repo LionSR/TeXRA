@@ -8,12 +8,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
-  ProgressFactApplier,
+  LitSessionRenderer,
   type GetProgressStreamControls,
-} from '@controllers/progressView/backend/events/ProgressFactApplier';
-import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
+} from '@controllers/progressView/backend/LitSessionRenderer';
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import { SessionState } from '@controllers/session/SessionState';
 import type {
   ActiveChildInfo,
   CompileFailure,
@@ -40,7 +40,7 @@ const plan: Plan = {
   objective: [
     'Hydrate plan and todo state from one backend owner.',
     '',
-    'Read todos and plan from ProgressViewState.workPlan.',
+    'Read todos and plan from SessionState work-plan snapshot.',
   ].join('\n'),
 };
 
@@ -85,16 +85,16 @@ const compileFailure: CompileFailure = {
 };
 
 interface SyncHarness {
-  state: ProgressViewState;
+  state: SessionState;
   messages: SyncStreamContentPayload[];
   bridge: WebviewBridge;
-  handler: ProgressFactApplier;
+  renderer: LitSessionRenderer;
 }
 
 async function createSyncHarness(
   getControls?: GetProgressStreamControls,
 ): Promise<SyncHarness> {
-  const state = new ProgressViewState(new FakeStateStore());
+  const state = new SessionState(new FakeStateStore());
   await state.snapshots.load([]);
   const messages: SyncStreamContentPayload[] = [];
   const updater = {
@@ -107,20 +107,13 @@ async function createSyncHarness(
     syncStream: vi.fn(),
     clearAll: vi.fn(),
   } as unknown as WebviewBridge;
-  const handler = new ProgressFactApplier(
-    state,
-    updater,
-    bridge,
-    () => false,
-    vi.fn(),
-    getControls,
-  );
-  return { state, messages, bridge, handler };
+  const renderer = new LitSessionRenderer(state, updater, bridge, getControls);
+  return { state, messages, bridge, renderer };
 }
 
 describe('progress view stream-content projection', () => {
   it('projects the tool-use snapshot and active state', async () => {
-    const { state, messages, bridge, handler } = await createSyncHarness();
+    const { state, messages, bridge, renderer } = await createSyncHarness();
 
     snapshotFacts(state.snapshots).addUsage(stream, runId, usage);
     snapshotFacts(state.snapshots).setTodos(stream, [todo]);
@@ -137,7 +130,7 @@ describe('progress view stream-content projection', () => {
       subagents: [activeSubagent],
     }));
 
-    handler.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream, { includeActiveState: true });
 
     expect(bridge.syncStream).toHaveBeenCalledWith(stream);
     expect(messages.at(-1)).toMatchObject({
@@ -173,7 +166,7 @@ describe('progress view stream-content projection', () => {
   });
 
   it('projects the phase stage of a workflow-script run', async () => {
-    const { state, messages, handler } = await createSyncHarness();
+    const { state, messages, renderer } = await createSyncHarness();
 
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
@@ -184,7 +177,7 @@ describe('progress view stream-content projection', () => {
       stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
     }));
 
-    handler.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream, { includeActiveState: true });
 
     expect(messages.at(-1)).toMatchObject({
       stream,
@@ -197,7 +190,7 @@ describe('progress view stream-content projection', () => {
   });
 
   it('projects workflow outputs without tool-use capabilities', async () => {
-    const { state, messages, handler } = await createSyncHarness();
+    const { state, messages, renderer } = await createSyncHarness();
 
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
@@ -211,7 +204,7 @@ describe('progress view stream-content projection', () => {
     });
     snapshotFacts(state.snapshots).addUsage(stream, runId, usage);
 
-    handler.syncStreamContent(stream);
+    renderer.syncStreamContent(stream);
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
@@ -230,7 +223,7 @@ describe('progress view stream-content projection', () => {
   });
 
   it('preserves a provisional tool-use execution across metadata reset', async () => {
-    const { state, messages, handler } = await createSyncHarness();
+    const { state, messages, renderer } = await createSyncHarness();
 
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.ToolUse,
@@ -247,7 +240,7 @@ describe('progress view stream-content projection', () => {
     }));
     messages.length = 0;
 
-    handler.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream, { includeActiveState: true });
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
@@ -262,32 +255,34 @@ describe('progress view stream-content projection', () => {
   });
 
   it('projects clear without placeholder stream content', async () => {
-    const { messages, handler } = await createSyncHarness();
+    const { messages, renderer } = await createSyncHarness();
 
-    handler.syncStreamContent('');
+    renderer.syncStreamContent('');
 
     expect(messages).toEqual([{ action: 'clear' }]);
   });
 
   it('includes host-provided stream controls in synced content', async () => {
     const controlledStream = 'stream:controls' as StreamTabId;
-    const { state, messages, handler } = await createSyncHarness((streamId) => {
-      expect(streamId).toBe(controlledStream);
-      return {
-        bashBypass: true,
-        toolEditBypass: true,
-        superYoloBypass: true,
-        goalActive: true,
-        goalStatus: 'active',
-        goalObjective: 'Keep making progress.',
-      };
-    });
+    const { state, messages, renderer } = await createSyncHarness(
+      (streamId) => {
+        expect(streamId).toBe(controlledStream);
+        return {
+          bashBypass: true,
+          toolEditBypass: true,
+          superYoloBypass: true,
+          goalActive: true,
+          goalStatus: 'active',
+          goalObjective: 'Keep making progress.',
+        };
+      },
+    );
 
     state.updateStreamMetadata(controlledStream, {
       agentCategory: AgentCategory.ToolUse,
     });
 
-    handler.syncStreamContent(controlledStream);
+    renderer.syncStreamContent(controlledStream);
 
     expect(messages.at(-1)).toMatchObject({
       stream: controlledStream,

@@ -126,7 +126,7 @@ The Wolfram card sits under **Dashboard → Tools → Computation** (<wa-icon li
 
 Control how TeXRA uses these tools from the UI:
 
-- **Tool Config Dropdown** (<wa-icon library="texra" name="tools"></wa-icon>): enable per-run helpers like **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>) or **Attach Diagnostics** (<wa-icon library="texra" name="tools"></wa-icon>). See [Configuration](./configuration.md#agent-execution-settings-webview-interface).
+- **Tool Config Dropdown** (<wa-icon library="texra" name="tools"></wa-icon>): toggle the **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>) per-run helper. See [Configuration](./configuration.md#agent-execution-settings-webview-interface).
 - **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): toggle automatic extraction of Figures or TikZ Figures. See [Working with Figures](./working-with-figures.md).
 - **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>): enable/disable whole tool groups, view install guides, and run one-click installers.
 

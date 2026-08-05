@@ -121,6 +121,7 @@ describe('slashRegistry', () => {
       expect.arrayContaining([
         'agent',
         'model',
+        'models',
         'api',
         'key',
         'auth',
@@ -141,7 +142,14 @@ describe('slashRegistry', () => {
       formComponent: expect.any(Function),
     };
     const expectedShapes: ReadonlyArray<readonly [string, object]> = [
-      ['model', { description: 'List available models' }],
+      ['model', { description: 'Choose the model for this chat' }],
+      [
+        'models',
+        {
+          description: 'Enable or disable models in pickers',
+          ...withForm,
+        },
+      ],
       ['agent', { description: 'List or choose the root agent', ...withForm }],
       ['approval', { description: 'Switch approval policy', ...withForm }],
       ['memory', { description: 'List stored memories', ...withForm }],

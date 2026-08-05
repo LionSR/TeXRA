@@ -3,7 +3,7 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, expect, it } from 'vitest';
-import { buildStreamTabInfo } from '@controllers/progressView/backend/streamTabInfo';
+import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 

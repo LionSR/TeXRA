@@ -60,7 +60,7 @@ import {
   type TuiSession,
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
-import { attachTuiRunFactSubscription } from './tui/state/subscribeRuntimeHost';
+import { attachSessionSignalsAdapter } from './tui/state/sessionSignalsAdapter';
 import { notify } from './tui/notifications/terminalNotifier';
 import {
   appendLocalErrorTranscript,
@@ -195,7 +195,11 @@ export function createChatSessionController(
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
   disposers.push(
-    attachTuiRunFactSubscription(runtimeSession.events, snapshotStore),
+    attachSessionSignalsAdapter({
+      events: runtimeSession.events,
+      session: runtimeSession,
+      snapshots: snapshotStore,
+    }),
   );
 
   // Shared prelude of the three run-starting paths (start, resume,
@@ -373,7 +377,8 @@ export function createChatSessionController(
             registerExecution: true,
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () => markApprovalDenied(sessionContext),
+            onApprovalPolicyDenial: () =>
+              markApprovalDenied(sessionContext, 'Tool or edit approval'),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             onStreamResolved: (resolvedStreamId) => {
               // Each chat round mints a fresh root StreamTabId (new
@@ -535,7 +540,8 @@ export function createChatSessionController(
         .then(() =>
           resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () => markApprovalDenied(sessionContext),
+            onApprovalPolicyDenial: () =>
+              markApprovalDenied(sessionContext, 'Tool or edit approval'),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
               ...followUp,
@@ -664,7 +670,7 @@ export function createChatSessionController(
                   recovery: claimedRecovery,
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
-                    markApprovalDenied(sessionContext),
+                    markApprovalDenied(sessionContext, 'Tool or edit approval'),
                   runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                   extraFollowUps: options.extraFollowUps,
                   onFollowUpQueueReady: (lease) => {

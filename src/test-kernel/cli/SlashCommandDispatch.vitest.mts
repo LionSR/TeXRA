@@ -205,10 +205,19 @@ describe('handleTuiSlashCommand', () => {
     ]);
   });
 
-  it('opens alias-addressed structured forms through the canonical command', async () => {
+  it('opens /models as the enable/disable catalog (not the active-model picker)', async () => {
     registerBuiltinSlashCommands();
 
     const handled = await handleTuiSlashCommand('/models', createContext());
+
+    expect(handled).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('models');
+  });
+
+  it('opens /model as the active-model picker', async () => {
+    registerBuiltinSlashCommands();
+
+    const handled = await handleTuiSlashCommand('/model', createContext());
 
     expect(handled).toBe(true);
     expect(activeForm.get()?.commandName).toBe('model');

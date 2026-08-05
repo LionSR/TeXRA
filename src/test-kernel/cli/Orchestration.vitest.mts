@@ -503,6 +503,9 @@ describe('CLI orchestration items', () => {
       'Settings',
       'Help',
     ]);
+    expect(items.find((item) => item.label === 'Account')?.description).toBe(
+      'TeXRA · researcher@example.com',
+    );
     expect(buildCliAccountItems(account)).toEqual([
       expect.objectContaining({
         value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
@@ -516,6 +519,29 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
     ]);
+  });
+
+  it('summarizes multiple signed-in accounts with natural list grammar', () => {
+    // #9719: "A and B and C" is awkward once Grok is a third account.
+    expect(
+      orchestrationItems({
+        account: {
+          texraSignedIn: true,
+          chatGptSignedIn: true,
+          grokSignedIn: false,
+        },
+      }).find((item) => item.label === 'Account')?.description,
+    ).toBe('TeXRA and ChatGPT signed in');
+
+    expect(
+      orchestrationItems({
+        account: {
+          texraSignedIn: true,
+          chatGptSignedIn: true,
+          grokSignedIn: true,
+        },
+      }).find((item) => item.label === 'Account')?.description,
+    ).toBe('TeXRA, ChatGPT, and Grok signed in');
   });
 
   it('offers both sign-in paths when no account is present', () => {
