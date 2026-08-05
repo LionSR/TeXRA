@@ -19,7 +19,10 @@ import * as path from 'node:path';
 import { isModuleNotFoundError } from '@common/errors';
 import { AbsoluteFS } from '@utils/files';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
-import { resolveBinary } from './support/externalBinaryUtils';
+import {
+  createCachedBinaryResolver,
+  resolveSdkExport,
+} from './support/externalBinaryUtils';
 
 // The native `Codex` class value; `typeof` gives its construct signature
 // (`new (options?: CodexOptions) => Codex`) so construction stays type-checked.
@@ -50,22 +53,11 @@ export async function importCodexClass(): Promise<CodexConstructor> {
     throw err;
   }
 
-  // esbuild CJS output: named exports are direct properties.
-  // Handle possible interop shapes just in case.
-  const Codex =
-    mod.Codex ??
-    (mod.default as Record<string, unknown> | undefined)?.Codex ??
-    mod.default;
-
-  if (typeof Codex !== 'function') {
-    const keys = Object.keys(mod).join(', ');
-    throw new Error(
-      `Codex class not found in @openai/codex-sdk. Module keys: [${keys}]. ` +
-        'Ensure @openai/codex-sdk is NOT in esbuild externals.',
-    );
-  }
-
-  return Codex as CodexConstructor;
+  return resolveSdkExport<CodexConstructor>(mod, {
+    exportName: 'Codex',
+    specifier: '@openai/codex-sdk',
+    errorLabel: 'Codex class',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -100,9 +92,6 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
   },
 };
 
-/** Cached result — found paths are cached; misses are retried. */
-let cachedBinaryPath: string | undefined;
-
 /** Native CLI binary filename for the current platform. */
 const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
 
@@ -131,13 +120,11 @@ async function codexBinaryInPlatformPackage(
  * The caller should pass the result as `codexPathOverride` to the Codex
  * constructor.
  */
-export async function findCodexBinaryPath(): Promise<string | undefined> {
-  if (cachedBinaryPath !== undefined) return cachedBinaryPath;
-
+export const findCodexBinaryPath = createCachedBinaryResolver(() => {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
-  const result = await resolveBinary({
+  return {
     platformPackages: [info.pkg],
     binaryInPlatformPackage: (dir) => codexBinaryInPlatformPackage(dir, info),
     // The npm global prefix hosts the `@openai/codex` meta-package; the
@@ -147,10 +134,8 @@ export async function findCodexBinaryPath(): Promise<string | undefined> {
       path.join(prefix, 'node_modules', '@openai', 'codex'),
     ],
     pathCommand: 'codex',
-  });
-  if (result) cachedBinaryPath = result;
-  return result;
-}
+  };
+});
 
 /**
  * Locate Codex inside an Electron packaged app's unpacked resources directory.
