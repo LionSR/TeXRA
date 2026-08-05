@@ -5,6 +5,7 @@ import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 
@@ -33,11 +34,11 @@ function LoginProviderPicker(props: {
   return (
     <Box
       borderStyle="round"
-      borderColor="cyan"
+      borderColor={COLOR_HINT}
       flexDirection="column"
       paddingX={1}
     >
-      <Text bold color="cyan">
+      <Text bold color={COLOR_HINT}>
         TeXRA login
       </Text>
       <Text dimColor>Choose how to sign in:</Text>
