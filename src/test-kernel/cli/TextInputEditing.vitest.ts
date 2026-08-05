@@ -16,6 +16,7 @@ import {
   verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
+  textInputCappedRowCount,
   textInputDisplayRowCount,
   textInputDisplayWindow,
 } from '@cli/chat/tui/input/BaseTextInput';
