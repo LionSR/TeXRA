@@ -71,10 +71,6 @@ export class FollowUpInput extends LitElement {
         max-width: 100%;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       /* VS Code only (see useCollapsibleShell): match Todos / Plan chrome. */
       wa-details.panel-collapsible {
         min-width: 0;
@@ -123,9 +119,13 @@ export class FollowUpInput extends LitElement {
             color-mix(in srgb, var(--wa-color-surface-shadow) 16%, transparent);
       }
 
-      /* Give substantial instructions six lines by default. Web Awesome's
-         vertical mode puts the resize affordance on the native textarea and
-         mirrors its bounded height onto the wrapper. */
+      /* The composer rests at two lines and grows with what you type, up to
+         the max below, so a substantial instruction still gets room without
+         an empty draft reserving it. field-sizing does the growing; the drag
+         affordance stays for anyone who wants a taller box than their text.
+         Not Web Awesome's resize="auto": that copies the scroll height into an
+         invisible grid item which, inside a constrained composer, keeps an
+         oversized row for an empty draft. */
       #followUpInput {
         display: block;
         min-width: 0;
@@ -134,7 +134,7 @@ export class FollowUpInput extends LitElement {
         line-height: var(--line-height-relaxed);
         height: auto;
         --textarea-min-height: calc(
-          6lh + var(--wa-space-xs) + var(--wa-space-3xs)
+          2lh + var(--wa-space-xs) + var(--wa-space-3xs)
         );
         --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
       }
@@ -151,7 +151,9 @@ export class FollowUpInput extends LitElement {
       /* The one place a textarea renders sans rather than mono: this is prose a
          user writes to an agent, not code. */
       #followUpInput::part(textarea) {
+        field-sizing: content;
         width: 100%;
+        height: auto;
         min-height: var(--textarea-min-height);
         max-height: var(--textarea-max-height);
         padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
@@ -447,7 +449,7 @@ export class FollowUpInput extends LitElement {
             id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
             aria-label="Follow-up message"
             placeholder="Message TeXRA…"
-            rows="6"
+            rows="2"
             resize="vertical"
             .value=${live(this.value)}
             @input=${this.handleInput}

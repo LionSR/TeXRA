@@ -155,36 +155,6 @@ export const settingsBannerStyles: CSSResult = css`
     max-width: min(42rem, 46%);
   }
 
-  .settings-banner-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-    gap: var(--wa-space-2xs) var(--wa-space-s);
-    margin: var(--wa-space-3xs) 0 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .settings-banner-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--wa-space-2xs);
-  }
-
-  .settings-banner-step {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
-    border-radius: 50%;
-    background: var(--wa-color-brand-fill-loud);
-    color: var(--wa-color-brand-on-loud);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    line-height: var(--line-height-tight);
-  }
-
   @container settings (max-width: 720px) {
     .settings-banner-layout {
       grid-template-columns: auto minmax(0, 1fr);

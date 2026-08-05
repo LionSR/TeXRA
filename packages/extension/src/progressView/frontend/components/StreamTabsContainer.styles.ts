@@ -14,10 +14,6 @@ export const streamTabsContainerStyles = css`
     overflow: hidden;
   }
 
-  :host([hidden]) {
-    display: none;
-  }
-
   /*
    * No own border-left: the single separator between this rail and the
    * conversation is owned by the host layout — the wa-split-panel divider

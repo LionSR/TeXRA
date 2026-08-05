@@ -35,10 +35,6 @@ export class TodoList extends LitElement {
         display: block;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .todo-list {
         display: flex;
         flex-direction: column;
