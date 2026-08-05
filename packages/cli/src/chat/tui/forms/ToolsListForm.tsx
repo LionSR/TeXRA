@@ -17,30 +17,31 @@ export interface ToolsListFormProps {
 }
 
 function formatToolEnablementForTui(tool: CliToolStatusRecord): string {
-  if (tool.comingSoon) return 'coming soon';
   if (!tool.toggleable) return 'always on';
   return tool.enabled === false ? 'disabled' : 'enabled';
 }
 
+// Undefined when detection has not run: the status part already says the tool
+// has not been checked, and a bare "unknown" segment names nothing.
 function formatToolDetectionForTui(
   detected: CliToolStatusRecord['detected'],
-): string {
+): string | undefined {
   if (detected === true) return 'detected';
   if (detected === false) return 'not detected';
-  return 'detection unknown';
-}
-
-function formatToolStatusForTui(tool: CliToolStatusRecord): string {
-  if (tool.comingSoon) return 'not yet usable';
-  return toolStatusLabel(tool.status, tool.statusLabel);
+  return undefined;
 }
 
 export function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
+  // "Coming soon" already says the tool is off and cannot run, so the
+  // enablement and status parts would only repeat it.
+  if (tool.comingSoon) return 'coming soon';
   return [
     formatToolEnablementForTui(tool),
     formatToolDetectionForTui(tool.detected),
-    formatToolStatusForTui(tool),
-  ].join(' · ');
+    toolStatusLabel(tool.status, tool.statusLabel),
+  ]
+    .filter((part): part is string => part !== undefined)
+    .join(' · ');
 }
 
 export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {

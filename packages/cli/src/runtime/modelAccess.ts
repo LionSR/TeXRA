@@ -10,6 +10,7 @@ import {
   type ModelAvailabilityKind,
   type ModelOptionData,
 } from '@shared/schemas';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { unique } from '@utils/core';
@@ -112,15 +113,17 @@ const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
   ]),
 } satisfies Record<ApiAccessMode, ReadonlySet<ModelAvailabilityKind>>;
 
+const INCLUDED = INCLUDED_ACCESS.inline;
+
 const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
-  'included-access': 'included: available',
-  'not-included': 'included: unavailable',
-  'included-login-required': 'included: sign-in required',
-  'relay-quota-exhausted': 'included: usage limit reached',
-  'provider-key': 'included: unavailable; API key set',
-  'openrouter-key': 'included: unavailable; OpenRouter key set',
-  'missing-key': 'included: unavailable; missing API key',
-  'subscription-access': 'chatgpt subscription',
+  'included-access': `${INCLUDED}: available`,
+  'not-included': `${INCLUDED}: unavailable`,
+  'included-login-required': `${INCLUDED}: sign-in required`,
+  'relay-quota-exhausted': `${INCLUDED}: usage limit reached`,
+  'provider-key': `${INCLUDED}: unavailable; API key set`,
+  'openrouter-key': `${INCLUDED}: unavailable; OpenRouter key set`,
+  'missing-key': `${INCLUDED}: unavailable; missing API key`,
+  'subscription-access': 'ChatGPT subscription',
   'copilot-access': 'copilot: unavailable in CLI',
   'copilot-consent-required': 'copilot: unavailable in CLI',
   'copilot-unavailable': 'copilot: unavailable in CLI',
@@ -129,23 +132,12 @@ const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'unknown-model': 'unknown model',
 } satisfies Record<ModelAvailabilityKind, string>;
 
+/** One statement per reason; the launcher shows it bare, messages add a period. */
 const NO_RUNNABLE_MODEL_ACCESS_COPY = {
-  includedLoginRequired: {
-    launchBlock: 'Sign in with texra login for included TeXRA models',
-    summary: 'Included TeXRA models require sign-in.',
-  },
-  included: {
-    launchBlock: 'No included TeXRA models are runnable',
-    summary: 'No included TeXRA models are runnable.',
-  },
-  personal: {
-    launchBlock: 'No personal API-key models are runnable',
-    summary: 'No personal API-key models are runnable.',
-  },
-} satisfies Record<
-  NoRunnableModelAccessReason,
-  { readonly launchBlock: string; readonly summary: string }
->;
+  includedLoginRequired: `Sign in to use ${INCLUDED}`,
+  included: `No models are available with ${INCLUDED}`,
+  personal: `No models are available with ${OWN_API_KEYS.inline}`,
+} satisfies Record<NoRunnableModelAccessReason, string>;
 
 const DEFAULT_CLI_MODEL_RECOVERY_ACTIONS = {
   includedModeAction: 'retry with `--api-mode included`',
@@ -231,7 +223,7 @@ export function noRunnableModelAccessReason(
 export function formatCliNoRunnableModelsLaunchBlock(
   reason: NoRunnableModelAccessReason,
 ): string {
-  return NO_RUNNABLE_MODEL_ACCESS_COPY[reason].launchBlock;
+  return NO_RUNNABLE_MODEL_ACCESS_COPY[reason];
 }
 
 function formatCliNoRunnableModelsRecovery(
@@ -258,7 +250,7 @@ export function formatCliNoRunnableModelsMessage(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_COPY[reason].summary} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_COPY[reason]}. ${formatCliNoRunnableModelsRecovery(reason, options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -282,7 +274,7 @@ export function formatModelStatusForCliMode(
   }
 
   const availability = model.model.availability;
-  if (availability == null) return `included: ${model.status}`;
+  if (availability == null) return `${INCLUDED}: ${model.status}`;
   // Prefer the availability label for subscription rows so Grok OAuth is not
   // hard-coded as "chatgpt subscription" (kind is shared with ChatGPT).
   if (availability === 'subscription-access') {
@@ -345,12 +337,12 @@ export function formatCliNoAvailableModelsRecovery(
   } = cliModelRecoveryActions(options);
 
   if (apiMode === 'personal') {
-    return `${startSentence(configureKeyAction)} for personal mode, or ${includedModeAction} and ${loginAction} for included TeXRA access.`;
+    return `${startSentence(configureKeyAction)}, or ${includedModeAction} and ${loginAction}.`;
   }
   if (apiMode === 'included') {
-    return `${startSentence(loginAction)} for included TeXRA access, or ${personalModeAction} after configuring a provider API key.`;
+    return `${startSentence(loginAction)} for ${INCLUDED}, or ${personalModeAction} after configuring a provider API key.`;
   }
-  return `${startSentence(loginAction)} for included TeXRA access, ${includedModeAction}, or ${configureKeyAction}.`;
+  return `${startSentence(loginAction)}, ${includedModeAction}, or ${configureKeyAction}.`;
 }
 
 function toCliModelAccess(
@@ -416,13 +408,13 @@ export function formatNoListableModelsMessage(
   apiMode: ApiAccessMode | undefined,
   options: CliModelListOptions = {},
 ): string {
-  const statusHint =
-    options.includeUnavailable === true
-      ? 'No model records were returned for this installation.'
-      : 'Run `texra models list --all` to see unavailable models and access status.';
   return [
     'No models are currently available.',
-    statusHint,
+    ...(options.includeUnavailable === true
+      ? []
+      : [
+          'Run `texra models list --all` to see unavailable models and access status.',
+        ]),
     formatCliNoAvailableModelsRecovery(apiMode),
   ].join('\n');
 }
@@ -445,15 +437,15 @@ function formatCliModelRecovery(
   switch (availability) {
     case 'included-login-required':
       return apiMode === 'personal'
-        ? `${startSentence(loginAction)} for included TeXRA access, then ${includedModeAction}.`
-        : `${startSentence(loginAction)} for included TeXRA access, or ${personalModeAction} after configuring a provider API key.`;
+        ? `${startSentence(loginAction)} for ${INCLUDED}, then ${includedModeAction}.`
+        : `${startSentence(loginAction)} for ${INCLUDED}, or ${personalModeAction} after configuring a provider API key.`;
     case 'relay-quota-exhausted':
       return apiMode === 'personal'
         ? 'Retry later.'
         : `Retry later, or ${personalModeAction} after configuring a provider API key.`;
     case 'missing-key':
       return apiMode === 'personal'
-        ? `${startSentence(configureKeyAction)} for personal mode, or ${loginAction} and ${includedModeAction} if this model is included.`
+        ? `${startSentence(configureKeyAction)}, or ${loginAction} and ${includedModeAction} if your plan covers this model.`
         : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
     case 'provider-key':
     case 'openrouter-key':
@@ -466,7 +458,7 @@ function formatCliModelRecovery(
         : undefined;
     case 'not-included':
       return apiMode === 'personal'
-        ? `${startSentence(configureKeyAction)} for personal mode.`
+        ? `${startSentence(configureKeyAction)}.`
         : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
     case 'retired':
       return 'Choose an active model.';

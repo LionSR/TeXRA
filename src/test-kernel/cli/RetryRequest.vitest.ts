@@ -33,7 +33,7 @@ describe('CLI retry request', () => {
     expect(card.type).toBe(ConfirmCard);
     expect(card.props).toMatchObject({
       approveLabel: 'retry',
-      rejectLabel: 'give up',
+      rejectLabel: 'dismiss',
       rejectionMode: 'immediate',
     });
   });
@@ -109,7 +109,7 @@ describe('CLI retry request', () => {
         },
         personalApiKeyAvailable: false,
         missingPersonalApiKeyMessage:
-          'No Anthropic API key is configured. Press n to give up, then use `/key` to add one.',
+          'No Anthropic API key is configured. Press n to dismiss, then use `/key` to add one.',
       },
       'Anthropic',
     ],
@@ -128,7 +128,7 @@ describe('CLI retry request', () => {
       );
 
       expect(output).toContain(`No ${provider} API key is configured.`);
-      expect(output).toContain('Press n to give up');
+      expect(output).toContain('Press n to dismiss');
       expect(output).toContain('/key');
       expect(output).not.toContain('k use API key and retry');
     },

@@ -615,7 +615,7 @@ describe('TUI retry approvals', () => {
       streamId: 's2',
       personalApiKeyAvailable: false,
       missingPersonalApiKeyMessage:
-        'TeXRA could not check whether the OpenAI API key is available. Press n to give up, then use `/key` to try again.',
+        'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
     });
   });
 

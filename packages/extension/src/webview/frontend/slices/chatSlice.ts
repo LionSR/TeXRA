@@ -19,14 +19,14 @@ export const chatHandlers = {
     isPolishing$.set(false);
     if (message.text.trim()) {
       setInstruction(message.text);
-      showInformation('Instruction text has been polished!');
+      showInformation('Instruction polished.');
     }
   },
 
   [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (message) => {
     isPolishing$.set(false);
     showInformation(
-      `Error polishing text: ${message.error || 'Unknown error'}`,
+      `Could not polish the instruction. ${message.error || 'Try again.'}`,
     );
   },
 
@@ -40,7 +40,7 @@ export const chatHandlers = {
     const updated = current ? `${current} ${message.text}` : message.text;
     setInstruction(updated);
     isRecording$.set(false);
-    showInformation('Instruction text transcribed!');
+    showInformation('Instruction transcribed.');
   },
 
   [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () => {

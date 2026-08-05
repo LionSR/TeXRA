@@ -273,7 +273,7 @@ describe('setup assistant routing check ordering', () => {
     expect(mocks.showQuickPick).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ id: 'chatgpt' })]),
       expect.objectContaining({
-        placeHolder: expect.stringContaining('credential'),
+        placeHolder: expect.stringContaining('reaches models'),
       }),
     );
   });

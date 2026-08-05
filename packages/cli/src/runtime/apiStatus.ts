@@ -1,6 +1,7 @@
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
@@ -75,7 +76,7 @@ export async function loadCliModelAccessOverview(
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
     `Grok preference: ${formatCliGrokPreference(access)}`,
     `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
-    `API fallback: ${formatCliModelAccessRoute(access.apiFallback)}`,
+    `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`,
     formatAccountStatusLine(
       'TeXRA',
       profile.authenticated,
@@ -92,7 +93,7 @@ export async function loadCliModelAccessOverview(
 /** Format a neutral personal-key inventory. */
 export function formatPersonalApiKeysLine(
   personalKeyProviders: readonly string[],
-  label = 'personal API keys',
+  label: string = OWN_API_KEYS.inline,
 ): string | undefined {
   if (personalKeyProviders.length === 0) return undefined;
   const providers = personalKeyProviders
@@ -101,6 +102,9 @@ export function formatPersonalApiKeysLine(
   return `${label}: ${providers}`;
 }
 
+const SIGN_IN_ACTION_HINT =
+  'actions: choose Model access below; `texra login` signs in with Researcher Access';
+
 const CLI_API_STATUS_ACTION_HINTS: Record<
   ApiAccessMode,
   Record<'signedIn' | 'signedOut' | 'signedOutWithPersonalKey', string>
@@ -108,10 +112,8 @@ const CLI_API_STATUS_ACTION_HINTS: Record<
   included: {
     signedIn:
       'actions: choose Model access below; `texra login --select-account` changes account',
-    signedOut:
-      'actions: choose Model access below; `texra login` signs in to Researcher Access',
-    signedOutWithPersonalKey:
-      'actions: choose Model access below; `texra login` signs in to Researcher Access',
+    signedOut: SIGN_IN_ACTION_HINT,
+    signedOutWithPersonalKey: SIGN_IN_ACTION_HINT,
   },
   personal: {
     signedIn: 'actions: choose Model access below; `texra logout` signs out',
@@ -162,7 +164,7 @@ async function loadIncludedUsageLine(
     profile.credentialSource !== 'relayToken' ||
     (await getCliSessionAccessToken()) !== null;
   if (!canReadUsage) {
-    return 'included usage: not available with a CI relay token (run `texra login` to view usage)';
+    return 'included usage: run `texra login` to view usage (TEXRA_RELAY_TOKEN on its own cannot read it)';
   }
   try {
     const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
@@ -170,7 +172,7 @@ async function loadIncludedUsageLine(
       await fetchRelayUsageSummary({ tier: usageTier }),
     );
   } catch (error: unknown) {
-    return `included usage: unavailable (${toErrorMessage(error)})`;
+    return `included usage: ${toErrorMessage(error)}`;
   }
 }
 
@@ -288,10 +290,11 @@ export async function loadCliDetailedAccountStatusLines(options: {
       `Kimi Code: ${routes.kimiCode.preferred ? 'preferred' : 'not preferred'} · ${credential}`,
     );
   }
+  const fallbackLine = `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`;
   if (routes.fallback.kind === 'included') {
     lines.push(
       [
-        'Fallback: Included TeXRA access',
+        fallbackLine,
         routes.fallback.account,
         routes.fallback.tier,
         routes.fallback.usage,
@@ -300,12 +303,12 @@ export async function loadCliDetailedAccountStatusLines(options: {
         .join(' · '),
     );
   } else {
-    lines.push('Fallback: Personal API keys');
+    lines.push(fallbackLine);
   }
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
     providers.filter((provider) => provider !== 'kimiCode'),
-    'Other personal keys',
+    'Other API keys',
   );
   if (otherPersonalKeys) lines.push(otherPersonalKeys);
   if (profile.note) lines.push(profile.note);

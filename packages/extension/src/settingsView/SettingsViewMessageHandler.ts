@@ -70,6 +70,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
@@ -900,12 +901,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendProfileAndModelSelectionData(w),
     );
     const modeLabel =
-      update.mode === 'included' ? 'Included Access' : 'My Own Keys';
+      update.mode === 'included' ? INCLUDED_ACCESS.inline : OWN_API_KEYS.inline;
     const suffix = update.openRouterDisabled
-      ? ' OpenRouter has been turned off (not compatible with Included Access).'
+      ? ' OpenRouter has been turned off, because OpenRouter models always use your own OpenRouter key.'
       : '';
     void vscode.window.showInformationMessage(
-      `Model access changed to: ${modeLabel}.${suffix}`,
+      `Now using ${modeLabel}.${suffix}`,
     );
   }
 

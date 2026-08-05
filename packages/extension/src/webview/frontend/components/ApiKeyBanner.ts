@@ -44,8 +44,7 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
             size="s"
             @click=${() => this.handleAction('set')}
           >
-            ${waIcon('key', { slot: 'start' })}
-            ${provider ? 'Set Key' : 'Set API Key'}
+            ${waIcon('key', { slot: 'start' })} Set API key
           </wa-button>
           <wa-button
             id="apiKeyGuideButton"
@@ -54,7 +53,7 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
             @click=${() => this.handleAction('guide')}
           >
             ${waIcon('book', { slot: 'start' })}
-            ${provider ? 'Get Key' : 'API Key Guide'}
+            ${provider ? 'Get a key' : 'Open key guide'}
           </wa-button>
         </div>
         <span class="hint">

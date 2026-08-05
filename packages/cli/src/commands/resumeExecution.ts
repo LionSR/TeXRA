@@ -19,7 +19,11 @@ import {
 import type { CliContext } from '../runtime/cliContext';
 
 function noResumeStateMessage(id: ExecutionId): string {
-  return `Execution ${id} has no resumable session state (it completed or was cleared).`;
+  return `Execution ${id} cannot be resumed (it completed or was cleared).`;
+}
+
+function loadFailureMessage(id: ExecutionId, error: unknown): string {
+  return `Could not load session ${id}: ${toErrorMessage(error)}`;
 }
 
 /**
@@ -40,9 +44,7 @@ export async function runResumeExecution(
   try {
     [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
   } catch (error) {
-    writeTextStderr(
-      `Failed to load resumable session ${id}: ${toErrorMessage(error)}`,
-    );
+    writeTextStderr(loadFailureMessage(id, error));
     return CliExitCode.AgentError;
   }
   if (!config) {
@@ -123,9 +125,7 @@ export async function runResumeExecution(
     },
     reportFailure: (_streamId, error) => {
       failed = true;
-      writeTextStderr(
-        `Failed to load resumable session ${id}: ${toErrorMessage(error)}`,
-      );
+      writeTextStderr(loadFailureMessage(id, error));
     },
   });
   if (failed) return CliExitCode.AgentError;

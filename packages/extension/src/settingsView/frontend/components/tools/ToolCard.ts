@@ -300,7 +300,7 @@ export class ToolCard extends LitElement {
     return html`
       <wa-details
         class="collapsible-quiet tool-guide-details"
-        summary="Installation Guide"
+        summary="Setup guide"
         ?open=${this.guideExpanded}
         @wa-show=${this.handleGuideShow}
         @wa-hide=${this.handleGuideHide}

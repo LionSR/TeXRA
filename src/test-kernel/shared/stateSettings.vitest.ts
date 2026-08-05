@@ -364,8 +364,8 @@ describe('state settings catalog', () => {
         (option) => `${option.value} — ${option.label} — ${option.description}`,
       ),
       [
-        'included — Use Included Access — Works automatically. No setup needed. Does not apply to OpenRouter — those models always use your OpenRouter key. Bring your own provider API keys to use more of your own quota and avoid relay caps.',
-        'personal — Use My Own Keys — Provide your own API keys from OpenAI, Anthropic, etc. This uses your provider account directly for higher limits and models outside Included Access.',
+        'included — Use included access — Model calls are covered by your TeXRA plan, with no setup needed. OpenRouter is the exception: those models always use your OpenRouter key.',
+        'personal — Use your own API keys — Model calls are billed to your own accounts at OpenAI, Anthropic, and other providers. You get higher limits, plus the models your plan does not cover.',
       ],
     );
   });

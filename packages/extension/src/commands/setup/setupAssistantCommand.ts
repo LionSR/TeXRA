@@ -110,12 +110,12 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   ];
 
   type CredentialPick = (typeof picks)[number];
+  // Each option already carries its own description, so the picker needs no
+  // second explanation of the same three choices.
   const picked = await vscode.window.showQuickPick<CredentialPick>(picks, {
-    title: 'TeXRA Setup',
+    title: 'TeXRA setup',
     placeHolder:
-      'TeXRA needs a credential before the setup assistant can run models.',
-    prompt:
-      'ChatGPT uses your Plus/Pro subscription; Researcher Access uses your TeXRA account; API Key requires a provider key.',
+      'Choose how the setup assistant reaches models before it starts.',
   });
 
   if (!picked) return false;
@@ -158,7 +158,7 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   if (await isRoutingConfigured()) return true;
 
   const choice = await vscode.window.showWarningMessage(
-    '"Use OpenRouter" is enabled in settings, but no runnable OpenRouter or managed direct setup credential is configured. Add an OpenRouter key, configure a managed direct provider, or disable "Use OpenRouter" in the Models tab, then retry.',
+    '"Use OpenRouter" is on, but there is no OpenRouter key and no other provider TeXRA can reach. Add an OpenRouter key, or turn off "Use OpenRouter" in the Models tab, then try again.',
     { modal: true },
     'Open Models tab',
     'Add OpenRouter key',
@@ -192,7 +192,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
         .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
     ) {
       void vscode.window.showInformationMessage(
-        'The setup assistant is already running — follow it in the Progress view.',
+        'The setup assistant is already running. Follow it in the Progress view.',
       );
       await vscode.commands.executeCommand('texra.showProgressView');
       return 'already-running';
@@ -205,7 +205,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
     if (!(await ensureRoutingConfigured())) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Resolve the "Use OpenRouter" configuration (add an OpenRouter key or disable the setting in Dashboard → Models), then run `TeXRA: Run Setup Assistant` again.',
+        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
       );
       return 'not-started';
     }
@@ -213,7 +213,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     const proceed = await ensureCredentialOrPrompt();
     if (!proceed) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, enabled ChatGPT subscription, or set an API key.',
+        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
       );
       return 'not-started';
     }
@@ -224,7 +224,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       // setup-model candidate, and no direct/OR keys to fall back on.
       // Refuse launch rather than pick a model that crashes at runtime.
       const choice = await vscode.window.showWarningMessage(
-        'No model is available for your current credentials and tier. Sign in with ChatGPT for Codex models, add a provider API key, or upgrade your Researcher Access tier, then retry.',
+        'No model is available with your current keys and Researcher Access tier. Add a provider API key, sign in with your ChatGPT subscription, or upgrade your tier, then try again.',
         { modal: true },
         'Open Models tab',
         'Set API key',

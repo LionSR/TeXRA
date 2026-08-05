@@ -7,8 +7,10 @@ import {
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import {
+  resolveCliModelAccessRoute,
+  shortCliModelAccessRoute,
+} from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import {
   NO_BYPASS,
@@ -17,7 +19,12 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
-const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
+// The bar renders the access route, not the raw `ApiAccessMode` enum.
+const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
+const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('personal');
+// Narrow rows shrink the access segment to its compact stem instead of
+// dropping how the session is paid for.
+const PERSONAL_API_MODE_COMPACT = 'API keys';
 
 const statusBarSegmentText = (segment: { readonly text: string }): string =>
   segment.text;
@@ -82,8 +89,10 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses clear compact labels for API access mode', () => {
-    expect(shortCliApiMode('included')).toBe('included');
-    expect(shortCliApiMode('personal')).toBe('personal');
+    // The session header and the status bar share one mapper, so neither can
+    // print the raw enum value ('included' / 'personal') the way they once did.
+    expect(shortCliModelAccessRoute('included')).toBe('included access');
+    expect(shortCliModelAccessRoute('personal')).toBe('own API keys');
   });
 
   it('keeps an ephemeral transcript warning in the durable status row', () => {
@@ -569,7 +578,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      'included',
+      INCLUDED_ACCESS_LABEL,
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
@@ -727,10 +736,10 @@ describe('CLI StatusBar display model', () => {
       ).left.map(statusBarSegmentText);
 
     expect(accessLabel('chatgpt-subscription')).toContain('subscription');
-    expect(accessLabel('kimi-code-subscription')).toContain('kimi-code');
-    expect(accessLabel('relay')).toContain('included');
+    expect(accessLabel('kimi-code-subscription')).toContain('subscription');
+    expect(accessLabel('relay')).toContain(INCLUDED_ACCESS_LABEL);
     expect(accessLabel('relay')).not.toContain('subscription');
-    expect(accessLabel('api-key')).toContain('personal');
+    expect(accessLabel('api-key')).toContain(PERSONAL_API_MODE_LABEL);
     expect(accessLabel('api-key')).not.toContain('subscription');
   });
 
@@ -834,11 +843,11 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '1m 15s',
-      PERSONAL_API_MODE_LABEL,
+      PERSONAL_API_MODE_COMPACT,
       '3 sub',
     ]);
     expect(display.left.map(statusBarSegmentText).join(' ')).not.toContain(
-      `${PERSONAL_API_MODE_LABEL}3`,
+      `${PERSONAL_API_MODE_COMPACT}3`,
     );
   });
 
@@ -857,7 +866,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '1m 15s',
-      PERSONAL_API_MODE_LABEL,
+      PERSONAL_API_MODE_COMPACT,
     ]);
   });
 
@@ -871,7 +880,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    // At 16 columns even `◆ running personal` (18 cols + gaps) cannot fit —
+    // At 16 columns even `◆ running API keys` (18 cols + gaps) cannot fit —
     // the fitting sweep now removes access mode too instead of returning an
     // over-wide row that soft-wraps the 1-row status line.
     expect(display.left.map(statusBarSegmentText)).toEqual(['◆', 'running']);
@@ -893,7 +902,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '1m 15s',
-      PERSONAL_API_MODE_LABEL,
+      PERSONAL_API_MODE_COMPACT,
     ]);
   });
 
@@ -1733,7 +1742,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('quota 16% left');
+    expect(display.left.map(statusBarSegmentText)).toContain(
+      'included access 16% left',
+    );
   });
 
   it('keeps the quota silent below the warning threshold', () => {
@@ -1752,7 +1763,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'idle',
-      'included',
+      INCLUDED_ACCESS_LABEL,
     ]);
   });
 
@@ -1769,7 +1780,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('quota exhausted');
+    expect(display.left.map(statusBarSegmentText)).toContain(
+      'included access used up',
+    );
   });
 
   it('hides the relay quota when the route does not spend it', () => {
