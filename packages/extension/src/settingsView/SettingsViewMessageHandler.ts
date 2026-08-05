@@ -66,7 +66,7 @@ import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
+  readPersistedTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
@@ -743,7 +743,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
         defaultSession().setApprovalPolicy(
           write.kind === 'reset'
-            ? TEXRA_APPROVAL_POLICY_DEFAULT
+            ? readPersistedTexraApprovalPolicy((key, fallback) =>
+                platform().config.get(key, fallback),
+              )
             : (write.value as TexraApprovalPolicy),
         );
         refreshApprovalPolicyTooltip();
