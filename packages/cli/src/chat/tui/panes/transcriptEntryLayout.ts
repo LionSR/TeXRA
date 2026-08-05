@@ -278,6 +278,14 @@ function entryLines(
   }
 }
 
+/** Separator rows an entry declares below itself, without laying out its
+ *  lines. Needed to collapse the next entry's top margin against it. */
+function entryMarginBottomRows(entry: ConversationEntry): number {
+  if (entry.role === 'tool') return toolUseMarginBottomRows(entry.toolUse);
+  if (entry.role === 'user' && isInquiryContinuationText(entry.text)) return 0;
+  return ROLE_GEOMETRY[entry.role].marginBottomRows;
+}
+
 export function transcriptEntryLayout(
   entry: ConversationEntry,
   {
@@ -285,12 +293,18 @@ export function transcriptEntryLayout(
     maxRows,
     mode = 'scrollback',
     executionLabels,
+    previousEntry,
     width,
   }: {
     readonly colorEnabled?: boolean;
     readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
     readonly executionLabels?: ExecutionLabels;
+    /** The entry rendered directly above this one, when the caller knows it.
+     *  Yoga does not collapse adjacent margins, so without this a boundary
+     *  where both sides declare a separator costs two blank rows instead of
+     *  one (user to user, user to phase, multi-line tool to phase). */
+    readonly previousEntry?: ConversationEntry;
     readonly width?: number;
   } = {},
 ): TranscriptEntryLayout {
@@ -298,7 +312,11 @@ export function transcriptEntryLayout(
   const inset = base.inset;
   const isInquiryContinuation =
     entry.role === 'user' && isInquiryContinuationText(entry.text);
-  const marginTopRows = isInquiryContinuation ? 0 : base.marginTopRows;
+  const declaredTopRows = isInquiryContinuation ? 0 : base.marginTopRows;
+  const marginTopRows =
+    previousEntry === undefined
+      ? declaredTopRows
+      : Math.max(0, declaredTopRows - entryMarginBottomRows(previousEntry));
   let marginBottomRows: number;
   if (entry.role === 'tool') {
     marginBottomRows = toolUseMarginBottomRows(entry.toolUse);

@@ -202,6 +202,7 @@ function staticTranscriptItemRowCount(
   item: StaticTranscriptItem,
   width?: number,
   executionLabels?: ExecutionLabels,
+  previousItem?: StaticTranscriptItem,
 ): number {
   if (item.kind === 'header') {
     return item.compact
@@ -219,20 +220,32 @@ function staticTranscriptItemRowCount(
     transcriptEntryLayout(item.entry, {
       executionLabels,
       mode: 'scrollback-budget',
+      previousEntry: entryAbove(previousItem),
       width,
     }),
   );
+}
+
+/** The transcript entry an item sits directly below, when that neighbor is
+ *  itself an entry. A header or printed-output block above carries no margin
+ *  for the next entry to collapse against. */
+function entryAbove(
+  item: StaticTranscriptItem | undefined,
+): ConversationEntry | undefined {
+  return item?.kind === 'entry' ? item.entry : undefined;
 }
 
 function StaticTranscriptItemContent({
   colorEnabled,
   executionLabels,
   item,
+  previousItem,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly executionLabels?: ExecutionLabels;
   readonly item: StaticTranscriptItem;
+  readonly previousItem?: StaticTranscriptItem;
   readonly width: number;
 }): React.JSX.Element {
   switch (item.kind) {
@@ -252,6 +265,7 @@ function StaticTranscriptItemContent({
         <EntryErrorBoundary label={item.entry.role}>
           <TranscriptEntry
             entry={item.entry}
+            previousEntry={entryAbove(previousItem)}
             subagentExecutionLabels={executionLabels}
             width={width}
             colorEnabled={colorEnabled}
@@ -324,8 +338,14 @@ export function appendStaticTranscriptItems({
     const fitsBudget =
       maxRows === undefined ||
       currentItems.reduce(
-        (total, item) =>
-          total + staticTranscriptItemRowCount(item, width, executionLabels),
+        (total, item, index) =>
+          total +
+          staticTranscriptItemRowCount(
+            item,
+            width,
+            executionLabels,
+            index === 0 ? header : currentItems[index - 1],
+          ),
         staticTranscriptItemRowCount(header, width, executionLabels),
       ) <= maxRows;
     if (fitsBudget) {
@@ -501,12 +521,13 @@ export function StaticConversationTranscript({
       key={`transcript:${renderKey}:${normalizedWidth}`}
       items={staticItems}
     >
-      {(item: StaticTranscriptItem) => (
+      {(item: StaticTranscriptItem, index: number) => (
         <Box key={item.id} flexDirection="column">
           <StaticTranscriptItemContent
             colorEnabled={colorEnabled}
             executionLabels={subagentExecutionLabels}
             item={item}
+            previousItem={staticItems[index - 1]}
             width={normalizedWidth}
           />
         </Box>
