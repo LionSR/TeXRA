@@ -37,7 +37,7 @@ if (!A.area) {
 const GROUND_RULES = `
 Repository: the current TeXRA working tree (VS Code extension + Electron desktop + Ink CLI over one shared core). Resolve every path from the repository root; never assume a user name or absolute checkout path.
 STRICTLY READ-ONLY: never edit files, never run git-mutating commands (no stash/checkout/commit), never run installs/builds/tests. Greps, wc, git log/show/diff (read-only) are fine. The repo is live; other sessions may commit. Use HEAD as-is.
-Include .mts/.cts in every glob and grep (--include="*.ts" --include="*.tsx" --include="*.mts" --include="*.cts"); test-kernel uses .vitest.mts and it is invisible to plain *.ts globs.
+Include TypeScript sources in every glob and grep (\`--include="*.ts" --include="*.tsx"\`); test-kernel suites are \`*.vitest.ts\` and are covered by plain \`*.ts\` globs.
 Cite evidence as file:line. Count with grep -c / wc -l rather than estimating. Your final structured output is data for a downstream program, not prose for a human.`
 
 const PHILOSOPHY = `
@@ -239,7 +239,7 @@ ${MEASURED}
 YOUR SEAM: ${s.key}
 ${s.brief}
 
-The brief is a starting point, not a fence: follow the debt where it actually leads, and report load-bearing findings outside the brief rather than dropping them. Read the real code, not just names; grep for consumers before calling anything dead or single-caller (remember .mts).
+The brief is a starting point, not a fence: follow the debt where it actually leads, and report load-bearing findings outside the brief rather than dropping them. Read the real code, not just names; grep for consumers before calling anything dead or single-caller.
 
 Also inspect the seam for:
 - DECLARATIVE opportunities: value-mapping switch/if ladders, repeated near-identical blocks, hardcoded ordered sequences, and parallel registrations that can become one typed data table. Reject conversions that obscure distinct side effects, weaken discriminated-union exhaustiveness, or change evaluation order, short-circuiting, defaults, or fallthrough.
@@ -424,7 +424,7 @@ ${PHILOSOPHY}
 
 CANDIDATE: ${JSON.stringify(cand)}
 
-Do the work: answer each verifyQuestion with actual greps/wc (remember .mts). Check (a) every 'deletes' symbol exists and count its real consumers, (b) the replacement cost, (c) whether it already shipped (git log --oneline -80, grep the symbols; this repo merges dozens of PRs a day, so ALREADY_DONE is common), (d) risk realism: persisted-format breaks (transcript/resume), headless parity (texra run/--print byte-identical), the host @agent deep-import ratchet test, recent deliberate design decisions the deletion would reverse (git log the target files and read the PRs). Then give the corrected netLoC/elementDelta and verdict. A scope cut that makes it REAL belongs in corrections.`,
+Do the work: answer each verifyQuestion with actual greps/wc. Check (a) every 'deletes' symbol exists and count its real consumers, (b) the replacement cost, (c) whether it already shipped (git log --oneline -80, grep the symbols; this repo merges dozens of PRs a day, so ALREADY_DONE is common), (d) risk realism: persisted-format breaks (transcript/resume), headless parity (texra run/--print byte-identical), the host @agent deep-import ratchet test, recent deliberate design decisions the deletion would reverse (git log the target files and read the PRs). Then give the corrected netLoC/elementDelta and verdict. A scope cut that makes it REAL belongs in corrections.`,
       { label: 'verify:' + cand.title.slice(0, 40), phase: 'Verify', schema: VERDICT_SCHEMA, effort: 'high' },
     )
     verdicts.push({ title: cand.title, candidate: cand, verdict: v })
