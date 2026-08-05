@@ -272,12 +272,13 @@ export const requestPanelSharedStyles: CSSResult = css`
     ${truncateTextRule}
   }
 
-  /* Shared action button colors */
-  :is(${ACTIONS}) wa-button[data-action='approve']::part(base),
-  :is(${ACTIONS}) wa-button[data-action='submit']::part(base) {
-    color: var(--wa-color-success-fill-loud);
-  }
+  /* Approve and Submit carry the shared .btn-primary skin (each panel's one
+     primary action), so they take their colours from that skin rather than a
+     rule here. They previously used --wa-color-success-fill-loud as a
+     foreground: a fill token read as text, measuring 4.07:1 (Light Modern)
+     and 3.90:1 (Light+) against the panel surface, under AA. */
 
+  /* Shared action button colors */
   :is(${ACTIONS}) wa-button[data-action='setup']::part(base) {
     color: var(--wa-color-text-link);
   }

@@ -72,6 +72,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
               ? 'Submit answers (y)'
               : 'Select or type at least one answer before submitting',
             action: 'submit',
+            kind: 'primary',
             disabled: !canSubmit,
             onClick: () => this.submitAnswers(),
           })}
