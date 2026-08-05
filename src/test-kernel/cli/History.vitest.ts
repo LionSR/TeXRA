@@ -1310,9 +1310,9 @@ describe('CLI history runtime', () => {
         tempDirs,
       );
       const cwd = await makeTempDir('texra-history-export-dest-', tempDirs);
-      const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-      await mkdir(traceViewerDir, { recursive: true });
-      await writeFile(path.join(traceViewerDir, 'index.html'), '<html></html>');
+      const sharedDir = path.join(resourcesPath, 'traceViewerShared');
+      await mkdir(sharedDir, { recursive: true });
+      await writeFile(path.join(sharedDir, 'index.html'), '<html></html>');
 
       const destDir = path.join(cwd, 'shared-assets');
       const result = await stageCliHistoryTraceViewerAssets({
@@ -1343,19 +1343,17 @@ describe('CLI history runtime', () => {
 
     it('merges into a pre-existing destination directory instead of nesting under it', async () => {
       // A repeat export pointed at the same --assets-dir must not turn
-      // `<dir>/assets/index-xxx.js` into `<dir>/traceViewer/assets/index-xxx.js`.
+      // `<dir>/assets/index-xxx.js` into
+      // `<dir>/traceViewerShared/assets/index-xxx.js`.
       const resourcesPath = await makeTempDir(
         'texra-history-export-src-',
         tempDirs,
       );
       const cwd = await makeTempDir('texra-history-export-dest-', tempDirs);
-      const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-      await mkdir(path.join(traceViewerDir, 'assets'), { recursive: true });
-      await writeFile(path.join(traceViewerDir, 'index.html'), '<html></html>');
-      await writeFile(
-        path.join(traceViewerDir, 'assets', 'index.js'),
-        'js-bytes',
-      );
+      const sharedDir = path.join(resourcesPath, 'traceViewerShared');
+      await mkdir(path.join(sharedDir, 'assets'), { recursive: true });
+      await writeFile(path.join(sharedDir, 'index.html'), '<html></html>');
+      await writeFile(path.join(sharedDir, 'assets', 'index.js'), 'js-bytes');
 
       const destDir = path.join(cwd, 'shared-assets');
       await mkdir(destDir, { recursive: true });
@@ -1383,15 +1381,15 @@ describe('CLI history runtime', () => {
       );
     });
 
-    it('reads the bundled trace-viewer standalone template', async () => {
+    it('reads the bundled trace-viewer default template', async () => {
       const resourcesPath = await makeTempDir(
         'texra-history-standalone-',
         tempDirs,
       );
-      const standaloneDir = path.join(resourcesPath, 'traceViewerStandalone');
-      await mkdir(standaloneDir, { recursive: true });
+      const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+      await mkdir(traceViewerDir, { recursive: true });
       await writeFile(
-        path.join(standaloneDir, 'index.html'),
+        path.join(traceViewerDir, 'index.html'),
         '<html>standalone</html>',
       );
 
@@ -1400,7 +1398,7 @@ describe('CLI history runtime', () => {
       ).resolves.toBe('<html>standalone</html>');
     });
 
-    it('returns null instead of throwing when the standalone template is absent', async () => {
+    it('returns null instead of throwing when the default template is absent', async () => {
       const resourcesPath = await makeTempDir(
         'texra-history-standalone-empty-',
         tempDirs,
@@ -1457,15 +1455,12 @@ describe('CLI history runtime', () => {
         stderrSpy.mockRestore();
       });
 
-      /** Temp resources dir holding the bundled trace-viewer assets. */
+      /** Temp resources dir holding the bundled shared trace-viewer assets. */
       async function makeStagedResources(prefix: string): Promise<string> {
         const resourcesPath = await makeTempDir(prefix, tempDirs);
-        const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-        await mkdir(traceViewerDir, { recursive: true });
-        await writeFile(
-          path.join(traceViewerDir, 'index.html'),
-          '<html></html>',
-        );
+        const sharedDir = path.join(resourcesPath, 'traceViewerShared');
+        await mkdir(sharedDir, { recursive: true });
+        await writeFile(path.join(sharedDir, 'index.html'), '<html></html>');
         return resourcesPath;
       }
 

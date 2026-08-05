@@ -59,14 +59,14 @@ export class HistoryHandlers {
     latexPreamble,
   });
 
-  /** Path to the bundled trace-viewer standalone template (under extension resources). */
-  private readonly traceViewerStandaloneTemplate: string;
+  /** Path to the bundled trace-viewer template (under extension resources). */
+  private readonly traceViewerTemplate: string;
 
   constructor(private readonly ctx: SettingsHandlerContext) {
-    this.traceViewerStandaloneTemplate = path.join(
+    this.traceViewerTemplate = path.join(
       ctx.extensionContext.extensionPath,
       'resources',
-      'traceViewerStandalone',
+      'traceViewer',
       'index.html',
     );
   }
@@ -249,7 +249,7 @@ export class HistoryHandlers {
   private async exportAndOpenHtml(historyId: string): Promise<void> {
     const outcome = await this.chatExportController.exportAsHtml(
       historyId,
-      this.traceViewerStandaloneTemplate,
+      this.traceViewerTemplate,
     );
 
     // assembleTrace's failure statuses, surfaced through exportAsHtml.

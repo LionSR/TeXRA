@@ -503,7 +503,7 @@ describe('DesktopHistoryHandlers', () => {
 
     expect(chatExportMocks.exportAsHtml).toHaveBeenCalledWith(
       'abc',
-      `${RESOURCES_PATH}/traceViewerStandalone/index.html`,
+      `${RESOURCES_PATH}/traceViewer/index.html`,
     );
     expect(openPath).toHaveBeenCalledWith('/tmp/executions/abc/chat.html');
   });
