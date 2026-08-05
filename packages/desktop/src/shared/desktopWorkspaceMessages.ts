@@ -98,8 +98,8 @@ export const DesktopFileErrorMessageSchema = z.object({
 const DesktopTerminalStartMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START),
   sessionId: z.string(),
-  cols: z.number().int().positive(),
-  rows: z.number().int().positive(),
+  cols: z.int().positive(),
+  rows: z.int().positive(),
   initialCommand: z.string().min(1).optional(),
 });
 
@@ -112,8 +112,8 @@ const DesktopTerminalInputMessageSchema = z.object({
 const DesktopTerminalResizeMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE),
   sessionId: z.string(),
-  cols: z.number().int().positive(),
-  rows: z.number().int().positive(),
+  cols: z.int().positive(),
+  rows: z.int().positive(),
 });
 
 const DesktopTerminalCloseMessageSchema = z.object({
@@ -130,7 +130,7 @@ export const DesktopTerminalDataMessageSchema = z.object({
 export const DesktopTerminalExitMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT),
   sessionId: z.string(),
-  exitCode: z.number().int(),
+  exitCode: z.int(),
 });
 
 export const DesktopTerminalErrorMessageSchema = z.object({
