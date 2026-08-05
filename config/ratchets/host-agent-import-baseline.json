@@ -18,6 +18,7 @@
       "@agent/runtime/detachSubagentsOnStop",
       "@agent/runtime/executeAgent",
       "@agent/runtime/executionRegistry",
+      "@agent/runtime/helperModelName",
       "@agent/runtime/HostInteractions",
       "@agent/runtime/resolveAndResumeStream",
       "@agent/runtime/resumeQueuedToolUse",
@@ -56,8 +57,8 @@
       "@agent/runtime/selectAutoOpenFinalOutput",
       "@agent/runtime/SessionHandle",
       "@agent/runtime/terminalResultToast",
+      "@agent/runtime/textEnhancement",
       "@agent/storage",
-      "@agent/storage/detectWaitingStreams",
       "@agent/templates/agentTemplateRenderer",
       "@agent/trace"
     ],
@@ -72,12 +73,10 @@
       "@agent/index",
       "@agent/index/AgentDirectorySync",
       "@agent/index/platformAgentDirectories",
-      "@agent/modelHandlers/openai/modelHandlerOpenAI",
       "@agent/remote/remoteAgentConfigClient",
       "@agent/review/reviewDiff",
       "@agent/review/reviewIssues",
       "@agent/runtime/AgentFlowResult",
-      "@agent/runtime/agentLoad",
       "@agent/runtime/agentShutdown",
       "@agent/runtime/detachSubagentsOnStop",
       "@agent/runtime/ExecutionHandle",
@@ -94,13 +93,10 @@
       "@agent/runtime/SessionHandle",
       "@agent/runtime/SessionResumeRetrieval",
       "@agent/runtime/terminalResultToast",
-      "@agent/runtime/textConnection",
       "@agent/runtime/textEnhancement",
       "@agent/storage",
-      "@agent/storage/detectWaitingStreams",
       "@agent/templates/agentTemplateRenderer",
-      "@agent/trace",
-      "@agent/utils/agentConfigToTaskState"
+      "@agent/trace"
     ]
   }
 }
