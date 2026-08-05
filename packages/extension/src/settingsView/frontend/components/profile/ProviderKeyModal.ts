@@ -181,7 +181,7 @@ export class ProviderKeyModal extends LitElement {
             type="submit"
             form="provider-key-form"
           >
-            ${waIcon('key', { slot: 'start' })} Save Key
+            ${waIcon('key', { slot: 'start' })} Save key
           </wa-button>
         </div>
       </wa-dialog>

@@ -314,7 +314,7 @@ function queuedFollowUpsCountSegment(
 function subagentsSegment(subagents: number): StatusBarSegment | undefined {
   return subagents > 0
     ? {
-        text: `${subagents} subagent${subagents === 1 ? '' : 's'}`,
+        text: formatResultCount(subagents, 'subagent'),
         compactText: `${subagents} sub`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,

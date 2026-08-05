@@ -1,7 +1,7 @@
 /**
  * UI panel for external inquiry requests.
  *
- * Displays a question formulated by the agent, with a "Copy Question" button
+ * Displays a question formulated by the agent, with a "Copy question" button
  * for the user to paste into an external AI model (ChatGPT, Gemini, Claude, etc.).
  * Provides a textarea for the user to paste the answer back.
  *
@@ -345,7 +345,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private renderQuestion(question: string): TemplateResult {
     const { copied } = this.copyController.state;
-    const text = copied ? 'Copied!' : 'Copy Question';
+    const text = copied ? 'Copied!' : 'Copy question';
 
     return html`
       <div class="external-inquiry-request__question">
@@ -498,7 +498,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
       <div class="external-inquiry-request__actions">
         ${renderLabeledActionButton({
           icon: 'check',
-          text: 'Submit Answer',
+          text: 'Submit answer',
           title: 'Submit the answer from the external model',
           action: INQUIRY_SUBMIT_ACTION,
           disabled: !this.hasAnswer,

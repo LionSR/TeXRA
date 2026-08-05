@@ -48,7 +48,11 @@ export interface PromptMessageOptions<T extends string = string> {
 export interface PromptConfirmOptions {
   detail?: string;
   modal?: boolean;
-  confirmLabel?: string;
+  /**
+   * Required so no confirmation ships with a content-free "OK"/"Yes" button:
+   * every caller must name the action being confirmed.
+   */
+  confirmLabel: string;
   cancelLabel?: string;
 }
 
@@ -77,7 +81,7 @@ export interface PromptHost {
     message: string,
     options?: PromptMessageOptions<T>,
   ): Promise<T | undefined>;
-  confirm(message: string, options?: PromptConfirmOptions): Promise<boolean>;
+  confirm(message: string, options: PromptConfirmOptions): Promise<boolean>;
   input(options: PromptInputOptions): Promise<string | undefined>;
 }
 

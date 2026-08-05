@@ -124,14 +124,15 @@ async function handleRequestEnsureProgressView(
   // This preserves the original two-check semantics that relied on await.
   const fb = payload.fallbackNotification;
   if (fb && !progressViewProvider.isViewVisible()) {
+    const outputPart = fb.outputInfo ? ` (${fb.outputInfo})` : '';
     const selection = await vscode.window.showInformationMessage(
-      `TeXRA Agent Started: "${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName} ${fb.outputInfo}. View in ProgressBoard for progress.`,
+      `"${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName}${outputPart}.`,
       {
         modal: false,
         detail:
-          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+          'TeXRA agents run in the background; track them in the Progress view.',
       },
-      'Show ProgressBoard',
+      'Show Progress View',
     );
     if (selection) {
       await vscode.commands.executeCommand('texra.showProgressView');

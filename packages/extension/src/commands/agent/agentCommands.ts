@@ -23,7 +23,7 @@ export async function compactResponse(streamId: StreamTabId): Promise<void> {
       return;
     case 'unsupported':
       await vscode.window.showInformationMessage(
-        'Manual context compaction is not yet available for this model. Stay tuned!',
+        'Manual context compaction is not available for this model.',
       );
       return;
     case 'requested':

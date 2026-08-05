@@ -60,7 +60,7 @@ export class MemoryTab extends LitElement {
       })}
       ${renderLabeledActionButton({
         icon: 'folder-open',
-        text: 'Open Folder',
+        text: 'Open folder',
         kind: 'secondary',
         appearance: 'outlined',
         title: 'Open memory folder in file explorer',
