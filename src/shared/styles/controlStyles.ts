@@ -531,8 +531,14 @@ export const formControlStyles: CSSResult = css`
  * alongside their own prefixed ones, which they keep because their tests and
  * per-panel width rules query them.
  *
- * Consumers set `--split-accent` to tint both halves (approve uses success);
- * it defaults to `currentColor` so an untinted split button just inherits.
+ * Consumers set `--split-accent` to tint both halves; it defaults to
+ * `currentColor` so an untinted split button just inherits. `--split-fill`
+ * backs the caret half and defaults to `transparent`, so a split button whose
+ * label half carries a skin (`.btn-primary`) can extend that fill across the
+ * caret instead of leaving it a floating transparent stub. Hover stays
+ * `--surface-hover`: it is a translucent overlay, so it composites correctly
+ * over both the transparent default and a filled half.
+ *
  * The host is expected to own the width budget — `.split-button` fills its
  * container, so cap it on the container, not here.
  */
@@ -582,7 +588,7 @@ export const splitButtonStyles: CSSResult = css`
     height: auto;
     min-height: var(--height-control-compact);
     padding: 0;
-    background: transparent;
+    background: var(--split-fill, transparent);
     color: var(--split-accent, currentColor);
     border: var(--border-thin) solid transparent;
     border-start-start-radius: 0;

@@ -46,8 +46,8 @@ const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
  * the item), so the menu stays keyboard-accessible.
  *
  * The fused-pill layout comes from the shared `splitButtonStyles`; this
- * component contributes only its success tint (`--split-accent`) and the host
- * width cap that matches the `.action-button` rule in
+ * component contributes only its primary skin (`--split-fill`/`--split-accent`)
+ * and the host width cap that matches the `.action-button` rule in
  * `requestPanelSharedStyles` (#6658), so Approve stays button-sized like its
  * siblings. The `.approve-split*` class names are kept alongside the shared
  * ones because the component's tests query them.
@@ -68,13 +68,18 @@ export class ApproveSplitButton extends LitElement {
         flex: 0 1 auto;
         min-width: auto;
         max-width: min(14rem, 100%);
-        /* Tints both halves of the shared split-button skin. The on-quiet
-           token, not fill-loud: the skin applies this as the label color, and
-           a fill token used as a foreground measured 3.90:1 (Light+) and
-           4.07:1 (Light Modern) against the panel surface — under AA for the
-           primary action of the approval flow. The on-quiet token is the
-           role-correct one and measures 5.63 / 5.88 / 7.65:1. */
-        --split-accent: var(--wa-color-success-on-quiet);
+        /* Approve is the panel's one primary action, so it takes the shared
+           .btn-primary fill (see the primary kind passed in render). These
+           carry that skin across the caret half, which the split skin would
+           otherwise leave transparent beside a filled label.
+
+           Both are brand tokens because .btn-primary is the accent fill and
+           the design system allows one per view — a second, green fill would
+           be a competing accent. Tinting the label green instead is what made
+           Approve read as plain text: it is a transparent button whose only
+           weight is its label colour. */
+        --split-fill: var(--wa-color-brand-fill-loud);
+        --split-accent: var(--wa-color-brand-on-loud);
       }
     `,
   ];
@@ -103,6 +108,7 @@ export class ApproveSplitButton extends LitElement {
       text: 'Approve',
       title: this.approveTitle,
       action: 'approve',
+      kind: 'primary',
       className: 'approve-split-main split-button-main',
       disabled: this.disabled,
       onClick: () => this.emit('approve'),
