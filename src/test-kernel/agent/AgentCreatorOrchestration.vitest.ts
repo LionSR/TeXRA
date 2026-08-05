@@ -239,7 +239,7 @@ describe('agent creator orchestration', () => {
   });
 });
 
-// Folded from AgentCreatorToolCatalogParity.vitest.mts (R7: one suite per
+// Folded from AgentCreatorToolCatalogParity.vitest.ts (R7: one suite per
 // module — both suites exercise agentCreatorFlow). This describe only reads
 // the static TOOL_GROUPS export and a docs file; it never imports or calls
 // runAgentCreator, so the helperModel/agentLoad vi.mock()s above (which only
