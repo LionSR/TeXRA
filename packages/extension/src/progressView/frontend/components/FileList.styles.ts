@@ -7,10 +7,6 @@ export const fileListStyles: CSSResult = css`
     display: block;
   }
 
-  :host([hidden]) {
-    display: none;
-  }
-
   .files-container {
     padding: 0;
     font-size: var(--wa-editor-font-size);
@@ -57,14 +53,6 @@ export const fileListStyles: CSSResult = css`
     white-space: nowrap;
     flex: 1;
     min-width: 200px;
-  }
-
-  .file-path {
-    cursor: pointer;
-  }
-
-  .file-path:hover {
-    text-decoration: underline;
   }
 
   .file-dir {
