@@ -334,7 +334,7 @@ kernel (`createFakePlatform` defaults to `new FakeFileSystemProvider(...)`,
 test the agent registry it has to opt _out_ of memfs:
 
 ```ts
-// src/test-kernel/agent/AgentRegistry.vitest.ts:96-98
+// src/test-kernel/agent/AgentRegistry.vitest.ts
 createFakePlatform(
   { workspaceState },
   { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
@@ -345,7 +345,7 @@ createFakePlatform(
 write a real YAML file:
 
 ```ts
-// src/test-kernel/agent/AgentRegistry.vitest.ts:440-461
+// src/test-kernel/agent/AgentRegistry.vitest.ts
 const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
 await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
 …
@@ -354,7 +354,7 @@ useAgentDirectories({ custom: async () => customDir });
 
 Its `builtIn()`/`builtInToolUse()` point at the real repo tree
 (`packages/extension/resources/agents`, `…/tool_use_agents`) —
-`src/test-kernel/agent/AgentRegistry.vitest.ts:51-72`.
+`src/test-kernel/agent/AgentRegistry.vitest.ts`.
 
 If the codebase's own memfs kernel cannot avoid touching real disk to register
 one agent, an embedder cannot either.
