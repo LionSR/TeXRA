@@ -30,7 +30,7 @@ export function requestCliCompaction({
       return;
     case 'unsupported':
       appendTranscript(
-        'Manual context compaction is not available for the current model.',
+        'Manual context compaction is not available for this model.',
         result.streamId,
       );
       return;

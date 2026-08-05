@@ -38,9 +38,9 @@ export class VscodePromptHost implements PromptHost {
 
   async confirm(
     message: string,
-    options: PromptConfirmOptions = {},
+    options: PromptConfirmOptions,
   ): Promise<boolean> {
-    const confirmLabel = options.confirmLabel ?? 'OK';
+    const confirmLabel = options.confirmLabel;
     const cancelLabel = options.cancelLabel ?? 'Cancel';
     const selected = await vscode.window.showWarningMessage(
       message,

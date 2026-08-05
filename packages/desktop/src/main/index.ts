@@ -557,7 +557,7 @@ function createWindow(options: {
       },
     }).openDiff,
     confirmAcceptFile: (message) =>
-      confirmDialog({ message, confirmLabel: 'Yes' }),
+      confirmDialog({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability: (unavailableNames) =>
       chooseTeamAvailability(unavailableNames),
     signInForRemoteAgentCatalog,
@@ -814,6 +814,7 @@ function createWindow(options: {
       (await getAgentExecution()).restoreRunConfig(config),
     openPath: settingsUi.openPath,
     showInfoMessage: settingsUi.showInfoMessage,
+    confirmAction: settingsUi.confirmAction,
     showWarningMessage,
     showErrorMessage: settingsUi.showErrorMessage,
     onError: settingsUi.onError,

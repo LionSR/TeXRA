@@ -32,8 +32,7 @@ const CASES: readonly {
     streamId: 'stream-1',
     result: { kind: 'unsupported', streamId: 'stream-1' },
     wakesFlow: false,
-    message:
-      'Manual context compaction is not available for the current model.',
+    message: 'Manual context compaction is not available for this model.',
   },
   {
     name: 'requests compaction and wakes the active tool-use flow',

@@ -31,6 +31,7 @@ export function createStubDesktopHistoryOptions(
     postToRenderer: () => undefined,
     openPath: noOp,
     showInfoMessage: noOp,
+    confirmAction: async () => true,
     showWarningMessage: noOp,
     showErrorMessage: noOp,
     onError: () => undefined,

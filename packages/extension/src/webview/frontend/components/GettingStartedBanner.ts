@@ -109,7 +109,8 @@ export class GettingStartedBanner extends LitElement {
                 size="s"
                 @click=${() => this.handleAction('createSampleProject')}
               >
-                ${waIcon('file-circle-plus', { slot: 'start' })} Sample project
+                ${waIcon('file-circle-plus', { slot: 'start' })} Create sample
+                project
               </wa-button>
               <wa-button
                 appearance="outlined"
@@ -130,7 +131,7 @@ export class GettingStartedBanner extends LitElement {
                 size="s"
                 @click=${() => this.handleAction('openWalkthrough')}
               >
-                ${waIcon('book', { slot: 'start' })} Walkthrough
+                ${waIcon('book', { slot: 'start' })} Open walkthrough
               </wa-button>
             </div>
           </div>

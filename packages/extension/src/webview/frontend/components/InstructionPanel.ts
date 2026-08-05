@@ -315,7 +315,7 @@ export class InstructionPanel extends LitElement {
     if (!selectedAgentId(session)) return 'Choose an agent before sending';
     return this.desktopHost
       ? 'Send (Enter) · New line (Shift+Enter)'
-      : `Execute (${this.executeShortcutLabel})`;
+      : `Run agent (${this.executeShortcutLabel})`;
   }
 
   private handleExecute(): void {

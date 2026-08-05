@@ -565,7 +565,7 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'api',
     description:
-      'Choose ChatGPT, Kimi Code, included TeXRA, or personal model access',
+      'Choose ChatGPT, Grok, Kimi Code, included TeXRA, or personal model access',
     category: 'configuration',
     echo: 'ifPersists',
     handler: applyCliModelAccessInput,
