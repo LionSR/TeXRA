@@ -20,7 +20,10 @@ import * as path from 'node:path';
 import { isModuleNotFoundError } from '@common/errors';
 import { AbsoluteFS } from '@utils/files';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
-import { resolveBinary } from './support/externalBinaryUtils';
+import {
+  createCachedBinaryResolver,
+  resolveSdkExport,
+} from './support/externalBinaryUtils';
 // Mirror the native `query` signature exactly (no hand-rolled structural copy).
 type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
 
@@ -52,20 +55,11 @@ export async function importClaudeAgentSdk(): Promise<QueryFn> {
     throw err;
   }
 
-  const queryFn =
-    mod.query ??
-    (mod.default as Record<string, unknown> | undefined)?.query ??
-    mod.default;
-
-  if (typeof queryFn !== 'function') {
-    const keys = Object.keys(mod).join(', ');
-    throw new Error(
-      `query() not found in @anthropic-ai/claude-agent-sdk. Module keys: [${keys}]. ` +
-        'Ensure @anthropic-ai/claude-agent-sdk is NOT in esbuild externals.',
-    );
-  }
-
-  cachedQuery = queryFn as QueryFn;
+  cachedQuery = resolveSdkExport<QueryFn>(mod, {
+    exportName: 'query',
+    specifier: '@anthropic-ai/claude-agent-sdk',
+    errorLabel: 'query()',
+  });
   return cachedQuery;
 }
 
@@ -96,8 +90,13 @@ const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
 /** Native CLI binary filename for the current platform. */
 const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
 
-/** Cached result — found paths are cached; misses are retried. */
-let cachedBinaryPath: string | undefined;
+/** The platform binary sits directly in the platform-package directory. */
+async function claudeBinaryInPlatformPackage(
+  platformPkgDir: string,
+): Promise<string | undefined> {
+  const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
+  return (await AbsoluteFS.exists(binary)) ? binary : undefined;
+}
 
 /**
  * Locate the native Claude Code CLI binary. Results are cached for the session
@@ -107,24 +106,14 @@ let cachedBinaryPath: string | undefined;
  * SDK's `query()` options. Returning `undefined` lets the SDK fall back to
  * its own resolution.
  */
-export async function findClaudeBinaryPath(): Promise<string | undefined> {
-  if (cachedBinaryPath !== undefined) return cachedBinaryPath;
-
+export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
   const platformPackages =
     PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
   if (!platformPackages) return undefined;
 
-  // The platform binary sits directly in the platform-package directory.
-  const binaryInPlatformPackage = async (
-    platformPkgDir: string,
-  ): Promise<string | undefined> => {
-    const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-    return (await AbsoluteFS.exists(binary)) ? binary : undefined;
-  };
-
-  const result = await resolveBinary({
+  return {
     platformPackages,
-    binaryInPlatformPackage,
+    binaryInPlatformPackage: claudeBinaryInPlatformPackage,
     // The npm global prefix hosts the `@anthropic-ai/claude-agent-sdk`
     // package; the platform packages resolve relative to those roots.
     globalPrefixRoots: (prefix) => [
@@ -138,7 +127,5 @@ export async function findClaudeBinaryPath(): Promise<string | undefined> {
       path.join(prefix, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'),
     ],
     pathCommand: 'claude',
-  });
-  if (result) cachedBinaryPath = result;
-  return result;
-}
+  };
+});
