@@ -380,19 +380,11 @@ export const logEntryStyles = css`
     contain-intrinsic-size: auto 40px;
   }
 
-  wa-details.banner-details::part(base) {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
+  /* Base/content resets and the header's padding come from
+     commonViewStyles, which every consumer of this sheet loads first. Only
+     the compact header height is specific to log banners. */
   wa-details.banner-details::part(header) {
     min-height: 26px;
-    padding: 0;
-  }
-
-  wa-details.banner-details::part(content) {
-    padding: 0;
   }
 
   .details-summary {

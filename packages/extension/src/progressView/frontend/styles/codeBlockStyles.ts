@@ -93,11 +93,6 @@ export const codeBlockStyles = css`
   }
 
   /* Syntax highlighted code blocks */
-  pre.hljs {
-    padding: var(--wa-space-2xs);
-    overflow-x: auto;
-  }
-
   pre.hljs code {
     background: transparent;
     padding: 0;
