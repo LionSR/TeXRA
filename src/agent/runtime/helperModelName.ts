@@ -3,8 +3,6 @@ import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
 
-export { resolveEffectiveHelperModel } from '@model/helperModelSelection';
-
 /**
  * Resolve the configured helper model name from global state.
  *
