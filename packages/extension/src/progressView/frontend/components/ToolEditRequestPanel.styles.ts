@@ -35,9 +35,8 @@ export const toolEditRequestPanelStyles: CSSResult = css`
   }
 
   .approval-request__diff-label {
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     font-size: var(--font-size-xs);
-    opacity: var(--opacity-normal);
   }
 
   /*

@@ -395,7 +395,7 @@ export const commonViewStyles: CSSResult = css`
 
   .empty-state wa-icon {
     font-size: calc(var(--font-size) * 2.5);
-    opacity: var(--opacity-disabled);
+    color: var(--color-text-muted);
   }
 
   /* Class hooks consumed by the shared renderEmptyState() helper

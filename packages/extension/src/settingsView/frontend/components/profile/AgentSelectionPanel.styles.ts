@@ -86,7 +86,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   .agent-list-item[data-source='remote']:hover,
   .agent-list-item[data-source='remote'].selected {
-    border-inline-start-color: var(--wa-color-text-quiet);
+    border-inline-start-color: var(--border-control);
   }
 
   .agent-list-item:hover {
