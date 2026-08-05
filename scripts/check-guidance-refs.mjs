@@ -30,7 +30,14 @@ const repoRoot = process.argv[2]
 
 // Files whose prose is read as instructions by an agent or contributor.
 const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md', 'src/README.md'];
-const GUIDANCE_DIRS = ['.claude/skills', 'docs/dev'];
+// Standing docs: architecture notes and the published guide. Dated proposals
+// and PRDs stay out — they are historical by design (see issue #9730).
+const GUIDANCE_DIRS = [
+  '.claude/skills',
+  'docs/dev',
+  'docs/architecture',
+  'docs/guide',
+];
 
 // Dated point-in-time records, not standing instructions. They describe the
 // tree as it was and are expected to cite paths that have since moved; the same
@@ -309,11 +316,20 @@ for (const file of targets) {
         decodedDestination = localDestination;
       }
       const absolute = resolve(repoRoot, dirname(file), decodedDestination);
-      const repoRelative = relative(repoRoot, absolute).replaceAll('\\', '/');
+      const withMarkdown =
+        !decodedDestination.endsWith('.md') &&
+        !existsSync(absolute) &&
+        existsSync(`${absolute}.md`)
+          ? `${absolute}.md`
+          : absolute;
+      const repoRelative = relative(repoRoot, withMarkdown).replaceAll(
+        '\\',
+        '/',
+      );
       if (
         repoRelative === '..' ||
         repoRelative.startsWith('../') ||
-        !existsSync(absolute)
+        !existsSync(withMarkdown)
       ) {
         failures.push({
           file,
@@ -325,11 +341,12 @@ for (const file of targets) {
     }
 
     for (const [, token] of line.matchAll(/`([^`\n]+)`/g)) {
-      // Trim a trailing `:12` line cite, then trailing sentence punctuation
-      // that fell inside the backticks.
+      // Trim trailing line cites (`:12`, `:73-80`, `:25-29,59-65`, `:18,27,28`),
+      // then trailing sentence punctuation that fell inside the backticks.
+      // Line numbers are not validated — only path existence (issue #9730).
       const candidate = token
         .trim()
-        .replace(/:\d+$/, '')
+        .replace(/:(?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*$/, '')
         .replace(/[.,;:)]+$/, '');
       if (!PATH_PREFIXES.some((prefix) => candidate.startsWith(prefix)))
         continue;
