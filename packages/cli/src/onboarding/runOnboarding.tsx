@@ -25,6 +25,7 @@ import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
+import { CROSS } from '@cli/tui/ui/glyphs';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { warn as logWarning } from '@logger/logUtils';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
@@ -461,7 +462,9 @@ function OnboardingFrame(props: {
         {props.title}
       </Text>
       {props.subtitle ? <Text dimColor>{props.subtitle}</Text> : null}
-      {props.error ? <Text color={COLOR_ERROR}>{props.error}</Text> : null}
+      {props.error ? (
+        <Text color={COLOR_ERROR}>{`${CROSS} ${props.error}`}</Text>
+      ) : null}
       <Box marginTop={1} flexDirection="column">
         {props.children}
       </Box>
