@@ -160,9 +160,9 @@ export const requestPanelSharedStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
-  /* The section title is a real h2 so the section has an accessible name and
-     pending requests appear in the heading list. It inherits the header rule
-     above, so this only strips the UA margin and size. */
+  /* The section title is a heading element rather than a styled span. It
+     inherits the header rule above, so this only strips the UA margin and
+     size. */
   :is(${HEADERS}) h2 {
     margin: 0;
     font: inherit;
@@ -321,8 +321,8 @@ export const requestPanelSharedStyles: CSSResult = css`
   }
 
   /* Visible label for the rejection textarea. The field previously carried
-     only a placeholder plus an aria-label repeating it, so the description
-     vanished on the first keystroke. */
+     only a placeholder, so its description vanished on the first
+     keystroke. */
   :is(${FEEDBACKS}) label {
     display: block;
     margin-bottom: ${sp.tiny};

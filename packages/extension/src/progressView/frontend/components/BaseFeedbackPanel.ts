@@ -92,16 +92,14 @@ export abstract class BaseFeedbackPanel<
   ): TemplateResult | typeof nothing {
     if (!this.showFeedback) return nothing;
 
-    // The label is visible, not just an aria-label duplicating the
-    // placeholder: a placeholder disappears on first keystroke, taking the
-    // only description of the field with it.
-    const labelId = `${inputClass}-label`;
+    // A visible label, not a placeholder doing the label's job: the
+    // placeholder disappears on the first keystroke, taking the only
+    // description of the field with it.
     return html`
       <div class=${containerClass}>
-        <label id=${labelId}>${placeholder}</label>
+        <label>${placeholder}</label>
         <wa-textarea
           class=${inputClass}
-          aria-labelledby=${labelId}
           placeholder="Optional — this is sent back to the agent"
           rows="3"
           data-feedback-input
