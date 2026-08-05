@@ -11,14 +11,21 @@
 // chalk is only a transitive dependency of `ink` here, not one the CLI
 // declares directly.
 
-// ANSI green, yellow and cyan are tuned for dark terminals and carry no
-// lightness guarantee — the terminal owns the value. Against a white
-// background they measure APCA Lc 30-47 (WCAG 1.70-2.56:1) on the xterm and
-// macOS Basic palettes, under the Lc 60 floor for non-body text. Red, blue,
-// magenta and gray are fine in both directions (Lc 66-91), so only these three
-// roles take a light-background substitute: oklch(0.48) at each role's hue,
-// clamped to sRGB, measuring Lc 80.1/82.5/80.8 on white and 74.2/76.5/74.9 on
-// #f5f5f5.
+// A named ANSI colour carries no lightness guarantee — the terminal owns the
+// value, and the sixteen are tuned for dark backgrounds. Which roles need a
+// light-background substitute is measured, not assumed: against white, red,
+// blue, magenta and gray hold Lc 66-91 on the xterm, macOS Basic and VS Code
+// Light+ palettes and are left alone, while green, yellow and cyan collapse to
+// Lc 30-47 (WCAG 1.70-2.56:1), under the Lc 60 floor for non-body text.
+//
+// The three substitutes are one derivation rather than three picks: oklch
+// lightness 0.48 at each role's own hue, chroma at the sRGB gamut boundary.
+// Shared lightness is what makes them a scale; only the hue differs.
+//
+//   role       hue    value      Lc on #ffffff / #f5f5f5
+//   success    150    #007132    80.1 / 74.2
+//   warning     75    #7f5400    82.5 / 76.5
+//   hint       220    #006980    80.8 / 74.9
 //
 // COLORFGBG is "<fg>;<bg>"; some terminals insert extra fields, so the
 // background is always the last one, and 7 (light gray) and 15 (white) are the
