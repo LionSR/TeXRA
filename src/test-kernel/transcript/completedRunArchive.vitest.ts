@@ -91,7 +91,6 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
   readCompletedRunTodos,
-  seedResumedConversationSidecar,
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
@@ -665,50 +664,6 @@ describe('completedRunArchive facade', () => {
     expect(result.source).toBe('streamLog');
     expect(result.streamId).toBe(streamId);
     expect(result.conversation).not.toBeNull();
-  });
-
-  it('seeds a resumed legacy conversation into an empty transcript once', async () => {
-    const executionId = '0dd4440dd444' as ExecutionId;
-    const streamId = 'orchestrator@deepseekproT#0dd4440dd444' as StreamTabId;
-    await seedStreams(executionId, [{ streamId }]);
-    await stampStreamId(executionId, streamId);
-
-    const logs = await StreamLogStore.open();
-    logs.ensureStream(streamId);
-    appendTranscriptEntry(
-      logs,
-      streamId,
-      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Resuming...' }),
-    );
-    const messages = [
-      { role: 'system', content: 'Follow the proof protocol.' },
-      { role: 'user', content: 'Prove the legacy lemma.' },
-      { role: 'assistant', content: 'Here is the legacy proof.' },
-    ];
-
-    await expect(
-      seedResumedConversationSidecar(logs, streamId, executionId, messages),
-    ).resolves.toBe(true);
-    await expect(
-      seedResumedConversationSidecar(logs, streamId, executionId, [
-        { role: 'assistant', content: 'Duplicate seed' },
-      ]),
-    ).resolves.toBe(false);
-    await logs.flush();
-
-    const result = await readCompletedRunConversation(executionId);
-    expect(result).toEqual({
-      source: 'streamLog',
-      streamId,
-      conversation: [
-        { role: 'system', content: 'Follow the proof protocol.' },
-        { role: 'user', content: 'Prove the legacy lemma.' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Here is the legacy proof.' }],
-        },
-      ],
-    });
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
