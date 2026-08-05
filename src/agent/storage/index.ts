@@ -45,7 +45,6 @@ export {
   deleteAllExecutions,
   isAgentRunEntry,
   isUserVisibleExecution,
-  deriveLegacyIdentity,
 } from './executionListing';
 export {
   RESUMABILITY_CAUSE,

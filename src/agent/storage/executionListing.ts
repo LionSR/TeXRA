@@ -15,12 +15,7 @@ import {
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import type {
-  ExecutionId,
-  ExecutionMeta,
-  RunIdentity,
-  RunOutcome,
-} from '@shared/schemas';
+import type { ExecutionId, RunIdentity, RunOutcome } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -28,7 +23,6 @@ import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
 import {
-  EXECUTION_LEASE_STALE_MS,
   inspectExecutionLease,
   runWithInactiveExecutionLease,
 } from './executionLease';
@@ -101,92 +95,6 @@ export function isUserVisibleExecution(
   return isAgentRunEntry(entry) && entry.parentExecutionId === undefined;
 }
 
-// ============================================================================
-// Idempotent entrance stamping — the only legacy-migration artifact.
-//
-// Pre-consolidation rows carry no `identity`. The listing is the store's read
-// entrance that already visits every row, so an unstamped row is healed here:
-// identity derived once from the persisted config and written back under an
-// inactive execution lease. Runs every time with no generation marker —
-// idempotent because stamped rows never reach it, and re-runnable because an
-// old binary's read-modify-write stripping the field, a legacy-bucket merge
-// injecting v1 rows, or a restored backup simply re-heals on the next pass.
-// ============================================================================
-
-/** Rows younger than the lease-stale horizon may be mid-registration by an
- *  old binary — a half-born row must not be classified. */
-const STAMP_MIN_AGE_MS = EXECUTION_LEASE_STALE_MS;
-
-/**
- * Un-stamped legacy row → identity, from the surviving evidence: the
- * persisted config plus the row's stamped `streamId`, whose host prefix
- * encoded the run kind before `identity` existed. This prefix-reading is
- * quarantined HERE (and mirrored only by the trace-viewer's immutable-export
- * fallback) — production classification never inspects stream-id prefixes;
- * it reads the stamped `identity`. Exported for store-read entrances
- * (hydration) so an un-healed row behaves identically before its durable
- * stamp lands; the listing's stamper remains the only WRITER of the derived
- * value. Rows without usable evidence are left unstamped: they keep parsing
- * and keep listing as `incomplete`. No sentinel names are fabricated.
- */
-export function deriveLegacyIdentity(
-  meta: Pick<ExecutionMeta, 'streamId'> | null | undefined,
-  cfg: AgentConfig | null,
-): RunIdentity | undefined {
-  const streamId = meta?.streamId ?? '';
-  if (streamId.startsWith('workflow-script#')) {
-    return {
-      kind: 'multiAgentWorkflow',
-      workflowName: cfg?.agent ?? 'workflow-script',
-    };
-  }
-  if (streamId.startsWith('codex@')) {
-    return cfg ? { kind: 'agent', agent: cfg.agent, tool: 'codex' } : undefined;
-  }
-  if (streamId.startsWith('claude@')) {
-    return cfg
-      ? { kind: 'agent', agent: cfg.agent, tool: 'claude_code' }
-      : undefined;
-  }
-  if (streamId.startsWith('bash@')) {
-    return { kind: 'process', tool: 'bash' };
-  }
-  return cfg ? { kind: 'agent', agent: cfg.agent } : undefined;
-}
-
-/**
- * Durably stamp a derived identity onto an unstamped row. Best-effort: an
- * active lease or a write failure leaves the row to heal on the next pass,
- * and the caller still uses the derived value for this read. The retired
- * `terminalStatus` bytes some legacy rows still carry are deliberately NOT
- * converted: `outcome` starts absent for pre-consolidation rows, which
- * simply have no recorded terminal state.
- */
-async function stampExecutionRow(
-  id: ExecutionId,
-  meta: ExecutionMeta,
-): Promise<void> {
-  if (Date.now() - Date.parse(meta.timestamp) < STAMP_MIN_AGE_MS) return;
-  try {
-    await runWithInactiveExecutionLease(id, async () => {
-      const store = getExecutionStore(id);
-      const [current, cfg] = await Promise.all([
-        store.readMeta(),
-        store.readConfig(),
-      ]);
-      if (!current || current.identity) return;
-      const identity = deriveLegacyIdentity(current, cfg);
-      if (!identity) return;
-      await store.writeMeta({ ...current, identity });
-    });
-  } catch (error) {
-    logger.warn(
-      CHANNEL,
-      `Could not stamp identity onto execution ${id}: ${toErrorMessage(error)}`,
-    );
-  }
-}
-
 /**
  * Read a storage directory, returning an empty array if it doesn't exist.
  * Other I/O errors propagate.
@@ -226,6 +134,11 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
 
+  // Rows registered before `identity` stamping existed. Their reader (derive
+  // + write-back healing) was retired per #9590 Stage 7; they now list as
+  // `incomplete`, loudly, and are never reconstructed.
+  const preIdentityIds: ExecutionId[] = [];
+
   // Read meta + config with bounded concurrency. Large histories should not
   // enqueue one storage read pair per execution all at once.
   const results = await pMap(
@@ -248,11 +161,8 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           description: meta.description,
         };
         const agentRecord = record && isAgentRunRecord(record) ? record : null;
-        const identity =
-          meta.identity ?? deriveLegacyIdentity(meta, agentRecord);
-        // Durable healing is async and best-effort; this read already has
-        // the derived value either way.
-        if (identity !== meta.identity) void stampExecutionRow(id, meta);
+        const identity = meta.identity;
+        if (!identity) preIdentityIds.push(id);
         if (!record || !identity) {
           return { ...base, kind: 'incomplete' };
         }
@@ -273,6 +183,15 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     },
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
+
+  // One warning per listing pass, not one per row — a directory full of old
+  // rows must degrade loudly, not spam.
+  if (preIdentityIds.length > 0) {
+    logger.warn(
+      CHANNEL,
+      `${preIdentityIds.length} pre-identity execution row(s) listed as incomplete (e.g. ${preIdentityIds[0]}): reader retired per #9590 Stage 7`,
+    );
+  }
 
   return toNewestFirstByTimestamp(
     results.filter(filterNotNull),

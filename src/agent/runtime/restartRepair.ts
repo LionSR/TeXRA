@@ -253,8 +253,8 @@ export async function repairRestartedStreams(
   )) {
     if (options.signal?.aborted) break;
     // `executionIds` is the caller-owned identity channel: SessionHandle
-    // populates it from snapshot sidecars plus the explicit legacy suffix
-    // boundary. No second suffix decode happens here (#9590 A2).
+    // populates it from snapshot sidecars. No suffix decode happens here
+    // (#9590 A2).
     const executionId = options.executionIds.get(streamId);
     let repairStarted = false;
     try {

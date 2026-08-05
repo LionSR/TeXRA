@@ -11,7 +11,8 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function config(agent: string): AgentConfig {
@@ -31,7 +32,15 @@ async function writeExecution(
   parentExecutionId?: ExecutionId,
 ): Promise<void> {
   const store = getExecutionStore(id);
-  await store.writeMeta({ timestamp, parentExecutionId });
+  // Current-era registration always stamps identity into the first meta
+  // write; an identity-less row models the pre-identity (incomplete) case.
+  await store.writeMeta({
+    timestamp,
+    parentExecutionId,
+    ...(agentConfig
+      ? { identity: { kind: 'agent', agent: agentConfig.agent } }
+      : {}),
+  });
   if (agentConfig) await store.writeRunRecord(agentConfig);
 }
 
@@ -168,109 +177,35 @@ describe('execution listing normalization', () => {
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(0);
   });
 
-  it('heals unstamped legacy rows durably on the listing read', async () => {
-    const legacyId = 'abc777' as ExecutionId;
-    const store = getExecutionStore(legacyId);
-    // Legacy row: pre-identity metadata, old enough to be safely classified
-    // and written back. No stream-prefix evidence → native agent.
-    await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
-    await store.writeRunRecord(config('assistant'));
+  it('lists a pre-identity row as incomplete, warns once per pass, and never heals it', async () => {
+    // Rows registered before identity stamping lost their reader (#9590
+    // Stage 7): no derivation from config or stream-id prefixes, no
+    // write-back healing. They degrade loudly to `incomplete`.
+    const firstId = 'abc777' as ExecutionId;
+    const secondId = 'abc778' as ExecutionId;
+    for (const id of [firstId, secondId]) {
+      const store = getExecutionStore(id);
+      await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
+      await store.writeRunRecord(config('assistant'));
+    }
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     const entries = await listExecutions();
-    expect(entries).toEqual([
-      expect.objectContaining({
-        kind: 'run',
-        identity: { kind: 'agent', agent: 'assistant' },
-      }),
+
+    expect(entries.map(({ kind }) => kind)).toEqual([
+      'incomplete',
+      'incomplete',
     ]);
-
-    // The async best-effort write-back stamps the derived identity durably.
-    await vi.waitFor(async () => {
-      const healed = await store.readMeta();
-      expect(healed?.identity).toEqual({ kind: 'agent', agent: 'assistant' });
-    });
-  });
-
-  it('stamps the four legacy cohorts from quarantined stream-prefix evidence', async () => {
-    // Pre-identity rows carried their run kind only in the stream-id prefix.
-    // One fixture per real cohort, asserting both the stamped identity and
-    // that resume gating (isNativeAgentRun: kind 'agent' with no tool) keeps
-    // excluding the non-native ones after healing.
-    const isNativeAgentRun = (identity: {
-      kind: string;
-      tool?: string;
-    }): boolean => identity.kind === 'agent' && identity.tool === undefined;
-    const cohorts = [
-      {
-        id: 'aaa001' as ExecutionId,
-        streamId: 'bash@tool#aaa001',
-        agent: 'bash',
-        identity: { kind: 'process', tool: 'bash' },
-      },
-      {
-        id: 'aaa002' as ExecutionId,
-        streamId: 'workflow-script#aaa002',
-        agent: 'engineer',
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'engineer' },
-      },
-      {
-        id: 'aaa003' as ExecutionId,
-        streamId: 'codex@codex-sdk#aaa003',
-        agent: 'coder',
-        identity: { kind: 'agent', agent: 'coder', tool: 'codex' },
-      },
-      {
-        id: 'aaa004' as ExecutionId,
-        streamId: 'claude@agent-sdk#aaa004',
-        agent: 'assistant',
-        identity: { kind: 'agent', agent: 'assistant', tool: 'claude_code' },
-      },
-    ] as const;
-
-    for (const cohort of cohorts) {
-      const store = getExecutionStore(cohort.id);
-      await store.writeMeta({
-        timestamp: '2026-07-15T06:00:00.000Z',
-        streamId: cohort.streamId as StreamTabId,
-      });
-      await store.writeRunRecord(config(cohort.agent));
-    }
-
-    const entries = await listExecutions();
-    for (const cohort of cohorts) {
-      const entry = entries.find((candidate) => candidate.id === cohort.id);
-      expect(entry).toMatchObject({ kind: 'run', identity: cohort.identity });
-      expect(isNativeAgentRun(cohort.identity)).toBe(false);
-    }
-
-    // The durable stamp carries the same prefix-derived identity.
-    for (const cohort of cohorts) {
-      await vi.waitFor(async () => {
-        const healed = await getExecutionStore(cohort.id).readMeta();
-        expect(healed?.identity).toEqual(cohort.identity);
-      });
-    }
-  });
-
-  it('lists a legacy terminalStatus-bearing row with no outcome', async () => {
-    // The retired terminalStatus vocabulary is deliberately not converted:
-    // pre-consolidation rows simply have no recorded terminal state. The
-    // stray bytes must not break parsing or identity healing.
-    const id = 'abd001' as ExecutionId;
-    const store = getExecutionStore(id);
-    await store.write('meta', {
-      timestamp: '2026-07-15T06:00:00.000Z',
-      terminalStatus: 'interrupted',
-    });
-    await store.writeRunRecord(config('assistant'));
-
-    const entries = await listExecutions();
-    const entry = entries.find((candidate) => candidate.id === id);
-    expect(entry).toMatchObject({
-      kind: 'run',
-      identity: { kind: 'agent', agent: 'assistant' },
-    });
-    expect(entry?.outcome).toBeUndefined();
+    // One warning per listing pass — a directory of old rows must not spam.
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [, message] = warn.mock.calls[0] as [string, string];
+    expect(message).toContain('2 pre-identity execution row(s)');
+    expect(message).toContain('#9590');
+    // The row stays unstamped on disk: readers never reconstruct identity.
+    expect(
+      (await getExecutionStore(firstId).readMeta())?.identity,
+    ).toBeUndefined();
+    warn.mockRestore();
   });
 
   it('lists a pre-PR team-run config with the legacy delegation-scope pair as kind run', async () => {
