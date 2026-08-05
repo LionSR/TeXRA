@@ -122,7 +122,7 @@ export class ProviderKeyList extends LitElement {
             <label for=${`endpoint-${entry.provider}`}>Custom endpoint</label>
             <wa-input
               id=${`endpoint-${entry.provider}`}
-              class="endpoint-input"
+              class="endpoint-input form-control-fill"
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"
               @change=${(e: Event) => {

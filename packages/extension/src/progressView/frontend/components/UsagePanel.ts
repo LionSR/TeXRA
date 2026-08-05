@@ -116,6 +116,8 @@ export class UsagePanel extends LitElement {
         background-color: var(--wa-color-surface-lowered);
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         display: flex;
+        flex-wrap: wrap;
+        row-gap: var(--wa-space-3xs);
         justify-content: space-between;
         align-items: center;
         font-size: var(--font-size-sm);
@@ -181,7 +183,7 @@ export class UsagePanel extends LitElement {
       }
 
       .run-summary {
-        margin-left: auto;
+        margin-inline-start: auto;
       }
 
       /* Token counts and cost tick on every stream event inside a

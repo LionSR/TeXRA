@@ -199,7 +199,7 @@ export class StreamHeader extends LitElement {
         flex: 0 0 auto;
         min-width: 0;
         max-width: 100%;
-        margin-left: auto;
+        margin-inline-start: auto;
       }
 
       .header-actions wa-button-group {
@@ -234,16 +234,16 @@ export class StreamHeader extends LitElement {
 
       /* Button type styles */
       .stop-button {
-        margin-right: var(--wa-space-3xs);
+        margin-inline-end: var(--wa-space-3xs);
         color: var(--color-error);
       }
 
       .pack-button {
-        margin-left: var(--wa-space-3xs);
+        margin-inline-start: var(--wa-space-3xs);
       }
 
       .run-button {
-        margin-left: var(--wa-space-3xs);
+        margin-inline-start: var(--wa-space-3xs);
         color: var(--color-success);
       }
 
@@ -305,7 +305,7 @@ export class StreamHeader extends LitElement {
 
         .header-actions {
           width: 100%;
-          margin-left: 0;
+          margin-inline-start: 0;
           justify-content: flex-start;
         }
       }

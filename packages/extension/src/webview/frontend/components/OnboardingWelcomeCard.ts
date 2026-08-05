@@ -208,7 +208,7 @@ export class OnboardingWelcomeCard extends LitElement {
         }
 
         .choice-description {
-          text-align: left;
+          text-align: start;
         }
       }
     `,
