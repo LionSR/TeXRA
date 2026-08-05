@@ -80,7 +80,10 @@ export class EntryErrorBoundary extends Component<
     const detail = formatRenderError(this.state.error);
     return (
       <Box paddingX={1}>
-        <Text color={COLOR_ERROR} dimColor>
+        {/* Not dimmed: this is the only signal that an entry failed to
+            render, and dimming the one message reporting a failure is the
+            opposite of what its salience should be. */}
+        <Text color={COLOR_ERROR}>
           {`${WARNING} failed to render ${this.props.label ?? 'entry'}${detail ? `: ${detail}` : ''}`}
         </Text>
       </Box>
