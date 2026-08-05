@@ -175,11 +175,16 @@ export const requestPanelSharedStyles: CSSResult = css`
 
      Targets the panel host element in RequestPanels' shadow root, not the
      ITEMS class: that class is on a div inside each panel's own shadow root,
-     which this selector cannot reach. */
+     which this selector cannot reach.
+
+     Inset rather than offset outward: the panel fills its container's inline
+     width, and a container that clips horizontally would shave the left and
+     right edges off an outward ring. Drawing it inside the card's own edge
+     stays intact regardless of what hosts the panel. */
   [data-request-panel][data-armed] {
     display: block;
     outline: var(--border-medium) solid var(--wa-color-focus);
-    outline-offset: ${sp.tiny};
+    outline-offset: calc(-1 * ${sp.tiny});
     border-radius: var(--border-radius-medium);
   }
 
