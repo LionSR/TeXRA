@@ -1,13 +1,14 @@
-// QA-2 host-side mock ratchet (issue #7684). Host suites (CLI + desktop, in
-// src/test-kernel/cli and src/test-kernel/desktop) reach into `@agent/*`
-// internals via `mock('@agent/...')` or `doMock('@agent/...')` — on `vi` or on
-// a suite's `createModuleMocks()` recorder — pinning agent's current internal
-// module layout from outside src/agent.
-// Clones the checked-in-baseline +
-// AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts,
-// PR #7774): baseline the current site count and fail only on an increase;
-// a decrease (or an @agent restructor removing the need for a mock) is
-// always welcome and should shrink
+// QA-2 host-side mock ratchet (issue #7684, entry-based check #9731). Host
+// suites (CLI + desktop, in src/test-kernel/cli and src/test-kernel/desktop)
+// reach into `@agent/*` internals via `mock('@agent/...')` or
+// `doMock('@agent/...')` — on `vi` or on a suite's `createModuleMocks()`
+// recorder — pinning agent's current internal module layout from outside
+// src/agent.
+//
+// The ratchet is entry-based on the (file, form, specifier) tuple: a live site
+// absent from the baseline is a new edge; a baseline entry with no live site
+// is stale headroom that could silently absorb a future new edge. Regenerating
+// to remove stale entries (or retiring a mock) is welcome and should shrink
 // config/ratchets/host-agent-mock-baseline.json.
 
 // Node imports
@@ -41,6 +42,14 @@ function compareSites(a: MockSite, b: MockSite): number {
     a.form.localeCompare(b.form) ||
     a.specifier.localeCompare(b.specifier)
   );
+}
+
+function siteKey(site: MockSite): string {
+  return `${site.file}\0${site.form}\0${site.specifier}`;
+}
+
+function formatSite(site: MockSite): string {
+  return `${site.file}: ${site.form}('${site.specifier}')`;
 }
 
 const BASELINE_FILE = 'config/ratchets/host-agent-mock-baseline.json';
@@ -100,53 +109,70 @@ function collectAgentMockSites(file: string): MockSite[] {
   return sites;
 }
 
+/** Distinct (file, form, specifier) mock edges, sorted. */
 function collectHostAgentMockSites(): MockSite[] {
-  return HOST_DIRS.flatMap((dir) =>
-    sourceFilesUnder(dir).flatMap(collectAgentMockSites),
-  ).toSorted(compareSites);
-}
-
-function countSitesByForm(sites: MockSite[]): Record<MockForm, number> {
-  const counts: Record<MockForm, number> = { mock: 0, doMock: 0 };
-  for (const { form } of sites) {
-    if (!(form in counts)) {
-      throw new Error(
-        `${BASELINE_FILE} entry has unknown form ${JSON.stringify(form)} — expected one of: ${MOCK_FORMS.join(', ')}`,
-      );
+  const byKey = new Map<string, MockSite>();
+  for (const dir of HOST_DIRS) {
+    for (const file of sourceFilesUnder(dir)) {
+      for (const site of collectAgentMockSites(file)) {
+        byKey.set(siteKey(site), site);
+      }
     }
-    counts[form] += 1;
   }
-  return counts;
+  return [...byKey.values()].toSorted(compareSites);
 }
 
 function readBaseline(): MockBaseline {
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as MockBaseline;
 }
 
-describe('QA-2 host-side @agent mock ratchet', () => {
-  it("does not increase the count of either mock or doMock('@agent/...') sites in CLI/desktop suites", () => {
-    const baseline = readBaseline();
-    const current = collectHostAgentMockSites();
-    const baselineCounts = countSitesByForm(baseline.sites);
-    const currentCounts = countSitesByForm(current);
-
-    for (const form of MOCK_FORMS) {
-      expect(
-        currentCounts[form],
-        `host-side @agent ${form} sites grew from ${baselineCounts[form]} to ${currentCounts[form]}:\n` +
-          `${current
-            .filter((site) => site.form === form)
-            .map((site) => `${site.file}: ${site.form}('${site.specifier}')`)
-            .join('\n')}\n\n` +
-          `If this growth is intentional, update ${BASELINE_FILE} in this PR.`,
-      ).toBeLessThanOrEqual(baselineCounts[form]);
+function assertKnownForms(sites: readonly MockSite[]): void {
+  for (const { form } of sites) {
+    if (!(MOCK_FORMS as readonly string[]).includes(form)) {
+      throw new Error(
+        `${BASELINE_FILE} entry has unknown form ${JSON.stringify(form)} — expected one of: ${MOCK_FORMS.join(', ')}`,
+      );
     }
+  }
+}
+
+describe('QA-2 host-side @agent mock ratchet', () => {
+  const baseline = readBaseline();
+  const current = collectHostAgentMockSites();
+
+  it('rejects any live @agent mock edge that is not in the baseline', () => {
+    assertKnownForms(baseline.sites);
+    assertKnownForms(current);
+    const baselineKeys = new Set(baseline.sites.map(siteKey));
+    const added = current.filter((site) => !baselineKeys.has(siteKey(site)));
+
+    expect(
+      added,
+      `New host-side @agent mock edge(s) not in ${BASELINE_FILE}:\n` +
+        added.map((site) => `  + ${formatSite(site)}`).join('\n') +
+        `\n\nIf this growth is intentional, update ${BASELINE_FILE} in this PR.`,
+    ).toEqual([]);
   });
 
-  it('keeps the baseline ordered (an empty baseline is a valid, welcome outcome)', () => {
-    const baseline = readBaseline();
-    const sortedSites = baseline.sites.toSorted(compareSites);
+  it('rejects baseline entries with no live site (stale headroom)', () => {
+    const currentKeys = new Set(current.map(siteKey));
+    const stale = baseline.sites.filter(
+      (site) => !currentKeys.has(siteKey(site)),
+    );
 
-    expect(baseline.sites).toEqual(sortedSites);
+    expect(
+      stale,
+      `Stale host-side @agent mock baseline entries in ${BASELINE_FILE}:\n` +
+        stale.map((site) => `  - ${formatSite(site)}`).join('\n') +
+        `\n\nRemove them from ${BASELINE_FILE} so they cannot absorb a future new edge.`,
+    ).toEqual([]);
+  });
+
+  it('keeps the baseline ordered and duplicate-free (an empty baseline is a valid, welcome outcome)', () => {
+    const sortedUnique = [
+      ...new Map(baseline.sites.map((site) => [siteKey(site), site])).values(),
+    ].toSorted(compareSites);
+
+    expect(baseline.sites).toEqual(sortedUnique);
   });
 });
