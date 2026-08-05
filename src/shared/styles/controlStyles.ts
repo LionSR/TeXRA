@@ -369,7 +369,7 @@ export const buttonStyles: CSSResult = css`
      composers. The accessible label carries the host-specific verb; the
      visible affordance is deliberately identical. */
   .action-icon-button.composer-primary-action {
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .action-icon-button.composer-primary-action::part(base) {

@@ -80,7 +80,7 @@ export const instructionPanelStyles: CSSResult = css`
 
   .instruction-header-actions {
     display: flex;
-    gap: var(--wa-space-3xs);
+    gap: var(--wa-space-2xs);
     align-items: center;
   }
 
@@ -144,7 +144,7 @@ export const instructionPanelStyles: CSSResult = css`
 
   .session-hint-dismiss {
     flex: 0 0 auto;
-    margin-left: var(--wa-space-3xs);
+    margin-inline-start: var(--wa-space-3xs);
   }
 
   /* Sizing, font, and padding come from formControlStyles' wa-textarea rules;

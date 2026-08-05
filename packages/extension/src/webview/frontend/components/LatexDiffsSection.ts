@@ -142,7 +142,7 @@ export class LatexDiffsSection extends LitElement {
       }
 
       .latexdiffs-details::part(header) {
-        padding: var(--wa-space-s) 0 0;
+        padding: var(--wa-space-s) var(--wa-space-xs) 0;
         min-height: var(--height-control-compact);
       }
 
@@ -373,6 +373,12 @@ export class LatexDiffsSection extends LitElement {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
+                <label id="editedFileLabel" for="editedFile">Edited</label>
+                <wa-tooltip for="editedFileLabel">
+                  File containing edits to merge into the base file
+                </wa-tooltip>
+              </div>
+              <div class="file-select-actions">
                 ${renderIconActionButton({
                   id: 'refreshEditedFileButton',
                   icon: 'pencil',
@@ -380,12 +386,6 @@ export class LatexDiffsSection extends LitElement {
                   tooltip: 'Refresh edited files',
                   onClick: this.handleRefreshEditedFiles,
                 })}
-                <label id="editedFileLabel" for="editedFile">Edited</label>
-                <wa-tooltip for="editedFileLabel">
-                  File containing edits to merge into the base file
-                </wa-tooltip>
-              </div>
-              <div class="file-select-actions">
                 ${renderIconActionButton({
                   id: 'currentEditedFileButton',
                   icon: 'file-code',
@@ -430,6 +430,9 @@ export class LatexDiffsSection extends LitElement {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
+                <label for="commit">Commit</label>
+              </div>
+              <div class="file-select-actions">
                 ${renderIconActionButton({
                   id: 'refreshCommitsButton',
                   icon: 'circle-dot',
@@ -437,7 +440,6 @@ export class LatexDiffsSection extends LitElement {
                   tooltip: 'Refresh commit list',
                   onClick: this.handleRefreshCommits,
                 })}
-                <label for="commit">Commit</label>
               </div>
             </div>
             <wa-select

@@ -22,7 +22,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
     width: 30%;
     min-width: 200px;
     max-width: 300px;
-    border-right: var(--border-thin) solid var(--color-border);
+    border-inline-end: var(--border-thin) solid var(--color-border);
     overflow-y: auto;
     overscroll-behavior: contain;
     flex-shrink: 0;
@@ -65,7 +65,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
     cursor: pointer;
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
-    border-left: var(--border-medium) solid transparent;
+    border-inline-start: var(--border-medium) solid transparent;
   }
 
   /*
@@ -76,17 +76,17 @@ export const agentSelectionPanelStyles: CSSResult = css`
    */
   .agent-list-item[data-source='inline']:hover,
   .agent-list-item[data-source='inline'].selected {
-    border-left-color: var(--wa-color-warning-fill-loud);
+    border-inline-start-color: var(--wa-color-warning-fill-loud);
   }
 
   .agent-list-item[data-source='custom']:hover,
   .agent-list-item[data-source='custom'].selected {
-    border-left-color: var(--wa-color-success-fill-loud);
+    border-inline-start-color: var(--wa-color-success-fill-loud);
   }
 
   .agent-list-item[data-source='remote']:hover,
   .agent-list-item[data-source='remote'].selected {
-    border-left-color: var(--wa-color-text-quiet);
+    border-inline-start-color: var(--wa-color-text-quiet);
   }
 
   .agent-list-item:hover {
@@ -96,7 +96,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
   .agent-list-item.selected {
     background: var(--wa-color-brand-fill-quiet);
     color: var(--wa-color-text-normal);
-    border-left-color: var(--wa-color-brand-fill-loud);
+    border-inline-start-color: var(--wa-color-brand-fill-loud);
   }
 
   .agent-list-item.selected .agent-list-item-name,
@@ -220,5 +220,31 @@ export const agentSelectionPanelStyles: CSSResult = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  @container settings (max-width: 520px) {
+    .agent-split-panel {
+      flex-direction: column;
+    }
+
+    .agent-list-pane {
+      width: 100%;
+      max-width: none;
+      /* A length, not a percentage: the panel sets min-/max-height but never
+         height, so a percentage max-height resolves against an indefinite
+         containing block and is dropped. */
+      max-height: 12rem;
+      /* Stacked, the list is the pane that yields space to the detail pane;
+         the row layout's flex-shrink: 0 would let it starve the detail. */
+      flex-shrink: 1;
+      border-inline-end: 0;
+      border-block-end: var(--border-thin) solid var(--color-border);
+    }
+
+    .agent-detail-pane {
+      /* Without a floor, a tall list can shrink the detail pane to nothing
+         inside the panel's 500px cap. */
+      min-height: 8rem;
+    }
   }
 `;

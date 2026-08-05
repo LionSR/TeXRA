@@ -29,7 +29,6 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .helper-model-select {
-    flex: 1;
     max-width: 300px;
   }
 
@@ -39,7 +38,7 @@ export const modelSelectionListStyles: CSSResult = css`
     justify-content: center;
     width: 16px;
     height: 16px;
-    margin-right: var(--wa-space-2xs);
+    margin-inline-end: var(--wa-space-2xs);
     transition: transform var(--transition-fast);
     color: var(--color-text-secondary);
   }
@@ -85,6 +84,10 @@ export const modelSelectionListStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
+  .model-row wa-switch::part(base) {
+    min-width: 0;
+  }
+
   .short-names-toggle {
     display: flex;
     align-items: center;
@@ -101,6 +104,9 @@ export const modelSelectionListStyles: CSSResult = css`
   .model-name {
     font-family: var(--wa-font-family-mono);
     white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .model-shortname {
@@ -114,7 +120,7 @@ export const modelSelectionListStyles: CSSResult = css`
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     white-space: nowrap;
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .model-route {
@@ -123,8 +129,9 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .reasoning-level-select {
-    flex-shrink: 0;
-    width: 120px;
+    width: auto;
+    min-width: 0;
+    max-width: 120px;
     font-size: var(--font-size-xs);
   }
 
@@ -164,7 +171,7 @@ export const modelSelectionListStyles: CSSResult = css`
    */
   .model-row-icon {
     font-size: var(--font-size-xs);
-    margin-left: var(--wa-space-3xs);
+    margin-inline-start: var(--wa-space-3xs);
     color: var(--_icon-color, var(--color-text-secondary));
   }
 
@@ -173,5 +180,11 @@ export const modelSelectionListStyles: CSSResult = css`
       --wa-color-list-warning-fg,
       var(--wa-color-warning-on-quiet)
     );
+  }
+
+  @container settings (max-width: 520px) {
+    .model-row {
+      flex-wrap: wrap;
+    }
   }
 `;
