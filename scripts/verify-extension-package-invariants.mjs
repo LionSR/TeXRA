@@ -67,7 +67,7 @@ const BUILD_TIME_PACKAGED_PATHS = new Set([
   'resources/skills',
 ]);
 
-// See packages/extension/.vscodeignore for why resources/traceViewer is
+// See packages/extension/.vscodeignore for why resources/traceViewerShared is
 // excluded (and why there is deliberately no blanket `!resources/**` line).
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
@@ -79,7 +79,7 @@ const REQUIRED_VSCODEIGNORE_LINES = [
 ];
 
 // A blanket `!resources/**` (or an equivalent whitespace variant) would
-// silently re-include resources/traceViewer no matter where the required
+// silently re-include resources/traceViewerShared no matter where the required
 // line above sits in .vscodeignore, since vsce applies every `!`-negated
 // line after all plain ignore lines regardless of file position. Guard
 // against a future PR reintroducing it for an unrelated reason.

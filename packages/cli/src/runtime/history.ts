@@ -262,11 +262,13 @@ export async function readCliHistoryExportInput(
   return { status: 'incomplete' };
 }
 
-const TRACE_VIEWER_STANDALONE_DIR_NAME = 'traceViewerStandalone';
-const TRACE_VIEWER_SHARED_DIR_NAME = 'traceViewer';
+/** Single-file default export template (file://-safe, inlined assets). */
+const TRACE_VIEWER_DIR_NAME = 'traceViewer';
+/** Multi-file shared-assets bundle for CLI `--assets-dir` site hosting. */
+const TRACE_VIEWER_SHARED_DIR_NAME = 'traceViewerShared';
 
 /**
- * Read the trace-viewer's single-file standalone bundle — one self-contained
+ * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
  * default export opens correctly via `file://` with no server. Returns `null`
  * (without throwing) when the CLI install doesn't have the bundled template
@@ -278,7 +280,7 @@ export async function readCliHistoryStandaloneTemplate(
 ): Promise<string | null> {
   const templatePath = path.join(
     resourcesPath,
-    TRACE_VIEWER_STANDALONE_DIR_NAME,
+    TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
   return readFile(templatePath, 'utf8').catch(() => null);
@@ -288,11 +290,11 @@ export async function readCliHistoryStandaloneTemplate(
  * Stage the trace-viewer's multi-file bundle (`index.html` + `assets/`) into
  * `destDir` for the shared-assets export mode (`--assets-dir`) — a site
  * hosting many traces points every trace's `?trace=` query param at one
- * shared bundle instead of duplicating it per trace. Unlike the standalone
- * bundle, this one keeps external `assets/` references, which is fine here:
- * shared-assets mode targets pages served over http(s), which never hits the
- * `file://` module-script CORS restriction the standalone bundle exists to
- * avoid (see `packages/trace-viewer/vite.standalone.config.ts`).
+ * shared bundle instead of duplicating it per trace. Unlike the default
+ * single-file bundle, this one keeps external `assets/` references, which is
+ * fine here: shared-assets mode targets pages served over http(s), which
+ * never hits the `file://` module-script CORS restriction the default
+ * bundle exists to avoid (see `packages/trace-viewer/vite.standalone.config.ts`).
  *
  * `fs.cp`'s recursive copy merges into an existing `destDir` rather than
  * nesting under it, so staging is safe to repeat across multiple exports

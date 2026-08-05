@@ -628,8 +628,8 @@ async function checkBundledResources(app, failures) {
 
   await checkExists(
     app,
-    'resources/traceViewerStandalone/index.html',
-    'trace-viewer standalone HTML template',
+    'resources/traceViewer/index.html',
+    'trace-viewer HTML template',
     failures,
   );
 }
@@ -719,7 +719,7 @@ const summary = [
   '- dist/renderer/assets/*.css',
   '- dist/renderer/assets Monaco worker chunks',
   '- resources/agents, resources/tool_use_agents, and resources/skills',
-  '- resources/traceViewerStandalone/index.html',
+  '- resources/traceViewer/index.html',
   '- package.json runtime dependencies',
   '- node_modules runtime dependency packages',
   '- no bundled Codex or Claude Code CLI payload',

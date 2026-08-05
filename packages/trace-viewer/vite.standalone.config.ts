@@ -19,12 +19,13 @@ import { aliases } from '../../scripts/aliases.mjs';
  * leaving no external file for the module to fetch. This build backs the
  * CLI's/extension's default self-contained export, which must open via
  * `file://` with no server running. The regular multi-file build
- * (`vite.config.ts`) stays for the shared-assets, site-hosting case, which
- * is always served over http(s) and never hits this restriction.
+ * (`vite.config.ts` → resources/traceViewerShared) stays for the
+ * shared-assets, site-hosting case, which is always served over http(s)
+ * and never hits this restriction.
  */
 const RESOURCES_OUT_DIR = resolve(
   __dirname,
-  '../extension/resources/traceViewerStandalone',
+  '../extension/resources/traceViewer',
 );
 
 export default defineConfig({

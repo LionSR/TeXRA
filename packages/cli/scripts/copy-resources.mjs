@@ -30,7 +30,7 @@ const runtimeResourceEntries = [
 // too as a defensive fallback for anyone invoking copy-resources.mjs in
 // isolation, so a missing prerequisite build warns instead of failing the
 // whole resource copy.
-const optionalRuntimeResourceEntries = ['traceViewer', 'traceViewerStandalone'];
+const optionalRuntimeResourceEntries = ['traceViewer', 'traceViewerShared'];
 
 async function copyEntry(entry, { optional = false } = {}) {
   try {
