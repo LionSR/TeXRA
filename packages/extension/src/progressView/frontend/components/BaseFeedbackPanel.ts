@@ -97,8 +97,9 @@ export abstract class BaseFeedbackPanel<
     // description of the field with it.
     return html`
       <div class=${containerClass}>
-        <label>${placeholder}</label>
+        <label for="feedback-input">${placeholder}</label>
         <wa-textarea
+          id="feedback-input"
           class=${inputClass}
           placeholder="Optional — this is sent back to the agent"
           rows="3"
