@@ -162,14 +162,16 @@ export class UserMessage extends LitElement {
        * editor-foreground text (rendering the bubble unreadable) and the panel
        * border resolves to transparent. Fall back to the editor background plus
        * a solid contrast border so the message stays visible and delineated.
+       * The bubble's outline is the inset box-shadow above, not a border, so
+       * the contrast color has to replace that shadow: the base rule sets
+       * border: 0, which zeroes border-style, so overriding border-color alone
+       * painted nothing and this fallback never rendered.
        */
       :host-context(.vscode-high-contrast) .user-message,
       :host-context(.vscode-high-contrast-light) .user-message {
         background-color: var(--wa-color-surface-default);
-        border-color: var(
-          --vscode-contrastBorder,
-          var(--wa-color-surface-border)
-        );
+        box-shadow: inset 0 0 0 1px
+          var(--vscode-contrastBorder, var(--wa-color-surface-border));
       }
     `,
   ];
