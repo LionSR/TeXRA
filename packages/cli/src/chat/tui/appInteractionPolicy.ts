@@ -201,7 +201,7 @@ export function foregroundEscapeAction({
       ) {
         return 'skip';
       }
-      return approvalKind === 'retry' ? 'dismiss' : 'reject';
+      return approvalKind === 'retry' ? 'give up' : 'reject';
   }
 }
 

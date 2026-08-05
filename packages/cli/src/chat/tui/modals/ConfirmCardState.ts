@@ -83,7 +83,7 @@ export function confirmCardKeyAction(
 
 export function confirmCardKeyHints({
   approveLabel = 'approve',
-  rejectLabel = 'reject with note',
+  rejectLabel = 'reject & note',
   escapeLabel = 'reject',
   alwaysAllowLabel,
   extraActions = [],
@@ -121,7 +121,7 @@ function hintsFit(
 
 function compactHintAction(action: string): string {
   switch (action) {
-    case 'reject with note':
+    case 'reject & note':
       return 'reject';
     case 'approve commands for session':
       return 'all commands';
