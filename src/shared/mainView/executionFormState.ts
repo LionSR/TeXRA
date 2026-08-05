@@ -1,4 +1,4 @@
-import type { ByCategory } from '../schemas/agent';
+import { AgentCategory, type ByCategory } from '../schemas/agent';
 import type { MainViewExecuteMessage } from '../schemas/mainView/executeMessage';
 import type {
   CheckboxValues,
@@ -31,13 +31,16 @@ export interface MainViewExecutionFormState {
 export function buildMainViewExecuteMessage(
   state: MainViewExecutionFormState,
 ): MainViewExecuteMessage {
-  const isToolUseAgent = state.sessionType === 'toolUse';
+  const agentCategory =
+    state.sessionType === 'toolUse'
+      ? AgentCategory.ToolUse
+      : AgentCategory.Workflow;
   const { inputFiles, contextFiles, mediaFiles } = state.multiFiles;
   return {
     agent: state.agent[state.sessionType],
     model: state.model,
     instruction: state.instruction,
-    isToolUseAgent,
+    agentCategory,
     files: {
       editedFile: state.singleFiles.editedFile,
       baseFile: state.singleFiles.baseFile,

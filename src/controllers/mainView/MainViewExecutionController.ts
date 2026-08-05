@@ -38,7 +38,7 @@ export function prepareMainViewExecutionRequest(
   return buildMainViewExecutionRequest(
     message,
     message.agent,
-    message.isToolUseAgent ? AgentCategory.ToolUse : AgentCategory.Workflow,
+    message.agentCategory ?? AgentCategory.Workflow,
   );
 }
 
