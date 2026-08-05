@@ -25,6 +25,5 @@ export {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
   readCompletedRunTodos,
-  seedResumedConversationSidecar,
 } from './completedRunArchive';
 export { injectStandaloneTrace } from './standaloneTraceHtml';
