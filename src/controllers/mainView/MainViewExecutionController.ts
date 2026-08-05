@@ -27,18 +27,18 @@ export function prepareMainViewExecutionRequest(
 ): MainViewExecutionPreparationResult {
   // AgentConfigSchema prefaults agent/model; reject missing UI selections before
   // schema parsing so the user sees the real form problem.
-  if (!message.agent || !message.model) {
+  if (!message.agent || !message.model || !message.agentCategory) {
     return {
       valid: false,
       message:
-        'Agent and model selection required. Please select both before running.',
+        'Agent, model, and run type selection required. Please select all before running.',
     };
   }
 
   return buildMainViewExecutionRequest(
     message,
     message.agent,
-    message.isToolUseAgent ? AgentCategory.ToolUse : AgentCategory.Workflow,
+    message.agentCategory,
   );
 }
 

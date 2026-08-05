@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import type { TeamOptionData } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 
 // Local imports - main-view actions, catalog slice, state, and test utilities
 import {
@@ -473,7 +474,7 @@ describe('main-view launch target', () => {
       // The renderer still sends its current agent; the host replaces it with
       // the planned team root at the execution boundary.
       expect(message.agent).toBe('orchestrator');
-      expect(message.isToolUseAgent).toBe(true);
+      expect(message.agentCategory).toBe(AgentCategory.ToolUse);
     });
 
     it('sends the selected working directory through the existing session payload', () => {
