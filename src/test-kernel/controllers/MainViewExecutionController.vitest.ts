@@ -14,8 +14,14 @@ describe('MainViewExecutionController', () => {
     expect(prepareMainViewExecutionRequest({ agent: 'direct-agent' })).toEqual({
       valid: false,
       message:
-        'Agent and model selection required. Please select both before running.',
+        'Agent, model, and run type selection required. Please select all before running.',
     });
+    expect(
+      prepareMainViewExecutionRequest({
+        agent: 'direct-agent',
+        model: 'gpt-5.4',
+      }).valid,
+    ).toBe(false);
   });
 
   it('requires an input file for workflow runs', () => {
@@ -23,6 +29,7 @@ describe('MainViewExecutionController', () => {
       prepareMainViewExecutionRequest({
         agent: 'direct-agent',
         model: 'gpt-5.4',
+        agentCategory: AgentCategory.Workflow,
       }),
     ).toEqual({
       valid: false,
@@ -35,6 +42,7 @@ describe('MainViewExecutionController', () => {
     const result = prepareMainViewExecutionRequest({
       agent: 'direct-agent',
       model: 'gpt-5.4',
+      agentCategory: AgentCategory.Workflow,
       files: {
         inputFiles: ['paper/main.tex'],
         mediaFiles: ['diagram.png', null],
@@ -111,6 +119,7 @@ describe('MainViewExecutionController', () => {
     const result = prepareMainViewExecutionRequest({
       agent: 'direct-agent',
       model: 'gpt-5.4',
+      agentCategory: AgentCategory.Workflow,
       files: {
         inputFiles: ['paper/main.tex'],
         outputFiles: ['paper/old-output.tex'],

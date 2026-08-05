@@ -147,6 +147,6 @@ export async function buildDesktopSetupExecuteMessage(): Promise<MainViewExecute
     agent: SETUP_AGENT_NAME,
     model,
     instruction: SETUP_INSTRUCTION,
-    isToolUseAgent: true,
+    agentCategory: AgentCategory.ToolUse,
   };
 }

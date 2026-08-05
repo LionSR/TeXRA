@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
+import { AgentCategorySchema } from '../agent';
 import { ToolConfigInputFieldsSchema } from '../toolConfig';
 import { LaunchTargetSchema } from './state';
 
@@ -40,7 +41,7 @@ export const MainViewExecuteMessageSchema = z.object({
   model: z.string().optional(),
   instruction: z.string().optional(),
   displayInstruction: z.string().nullish(),
-  isToolUseAgent: z.boolean().optional(),
+  agentCategory: AgentCategorySchema.optional(),
   memories: z.array(z.string()).optional(),
   files: MainViewExecuteFilesSchema.optional(),
   session: MainViewExecuteSessionSchema.optional(),
