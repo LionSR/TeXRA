@@ -4,7 +4,7 @@
 // an already-settled map directly here instead of driving
 // `projectChildRoster`/`setParentStream` through a real event sequence —
 // ordering/race-transition coverage belongs to the ordered matrix in
-// TuiStateAndFocus.vitest.mts.
+// TuiStateAndFocus.vitest.ts.
 
 import type {
   ChildStreamEntries,
