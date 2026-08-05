@@ -1276,48 +1276,6 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('derives identity in memory for an un-healed legacy row and replaces the pair on handoff', async () => {
-    await installPlatform();
-    // Un-healed legacy row: the execution meta carries no stamped `identity`,
-    // but its config is readable — hydration derives the identity in memory
-    // with the stamper's rule instead of leaving it undefined.
-    const legacyExecutionId = 'abc123' as ExecutionId;
-    const legacyConfig = toolUseConfig('legacy-search');
-    await getExecutionStore(legacyExecutionId).writeRunRecord(legacyConfig);
-    await getExecutionStore(legacyExecutionId).writeMeta({
-      timestamp: new Date(0).toISOString(),
-    });
-    await writeMetaFile(STREAM, { executionId: legacyExecutionId });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-    expect(store.getRunConfig(STREAM)).toEqual(legacyConfig);
-    expect(store.getRunIdentity(STREAM)).toEqual({
-      kind: 'agent',
-      agent: 'legacy-search',
-    });
-
-    // Once meta names a stamped execution, the identity/config pair moves
-    // together to the new execution's durable record.
-    const executionId = 'def456' as ExecutionId;
-    const handoffConfig = toolUseConfig('handoff-search');
-    await getExecutionStore(executionId).writeRunRecord(handoffConfig);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: new Date(0).toISOString(),
-      identity: { kind: 'agent', agent: 'handoff-search' },
-    });
-    await writeMetaFile(STREAM, {
-      executionId,
-    });
-    await store.load([STREAM]);
-
-    expect(store.getRunConfig(STREAM)).toEqual(handoffConfig);
-    expect(store.getRunIdentity(STREAM)).toEqual({
-      kind: 'agent',
-      agent: 'handoff-search',
-    });
-  });
-
   it('drops run identity when disk meta no longer names an execution', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;

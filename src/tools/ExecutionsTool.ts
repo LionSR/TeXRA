@@ -19,7 +19,6 @@ import {
   type TodoEntry,
   listExecutions,
   resolveExecutionWorkspaceFilePath,
-  deriveLegacyIdentity,
 } from '@agent/storage';
 import {
   currentSession,
@@ -36,10 +35,8 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  isAgentRunRecord,
-  type RunRecord,
-} from '@agent/core/definition/RunRecord';
+import { type RunRecord } from '@agent/core/definition/RunRecord';
+import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   ExecutionIdSchema,
@@ -109,6 +106,8 @@ import {
   type ExecutionSummaryOptions,
 } from './executions/summaryFormat';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
+
+const CHANNEL = 'ExecutionsTool';
 
 // ============================================================================
 // Resource path catalog
@@ -646,12 +645,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const identity =
-      meta?.identity ??
-      deriveLegacyIdentity(
-        meta,
-        record && isAgentRunRecord(record) ? record : null,
+    // Identity comes only from the stamped execution row; pre-identity rows
+    // lost their reader per #9590 Stage 7 and degrade to the config-derived
+    // display category, loudly.
+    const identity = meta?.identity;
+    if (meta && !identity) {
+      logger.warn(
+        CHANNEL,
+        `Execution ${executionId} is a pre-identity row; showing config-derived category only (reader retired per #9590 Stage 7)`,
       );
+    }
     const category = executionDisplayCategory(identity, record);
     const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const lines = buildCompletedSummaryLines(
@@ -877,11 +880,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       throw new ToolError(`Config not found for execution: ${executionId}.`);
     }
 
-    // Filter out fields irrelevant to this agent's category
+    // Filter out fields irrelevant to this agent's category. Identity comes
+    // only from the stamped execution row; a pre-identity row (reader retired
+    // per #9590 Stage 7) degrades to the config-derived category, loudly.
     const meta = await getExecutionStore(executionId).readMeta();
-    const identity =
-      meta?.identity ??
-      deriveLegacyIdentity(meta, isAgentRunRecord(record) ? record : null);
+    const identity = meta?.identity;
+    if (meta && !identity) {
+      logger.warn(
+        CHANNEL,
+        `Execution ${executionId} is a pre-identity row; filtering config by its config-derived category only (reader retired per #9590 Stage 7)`,
+      );
+    }
     const category = executionDisplayCategory(identity, record);
     return executed(serializeFilteredConfig(record, category));
   }
