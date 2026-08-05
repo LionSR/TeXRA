@@ -90,6 +90,30 @@ describe('retained finished children', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('pushes a roster drop for a parent that is not the active stream', () => {
+    // The Background Tasks roster is parent-viewport data about children, so
+    // it cannot ride the active-stream gate: a child that finishes while the
+    // user is looking at another tab (clicking its own row is enough to move
+    // the active stream) must still retire its row.
+    const { backend, messages } = createRecordingBackend();
+    seedParent(backend);
+    applyRoster(backend, PARENT, [subagent('bg')]);
+
+    const other = 'other-stream' as StreamTabId;
+    backend.state.streamLogs.ensureStream(other);
+    backend.state.getOrCreateStreamState(other, AgentCategory.ToolUse);
+    backend.state.switchActiveStream(other);
+    messages.length = 0;
+
+    applyRoster(backend, PARENT, []);
+
+    const badgeMessages = messages.filter(
+      (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+    );
+    expect(badgeMessages).toHaveLength(1);
+    expect(badgeMessages[0]).toMatchObject({ stream: PARENT });
+  });
+
   it('promotes a retained child back to one live row when it reappears', () => {
     const { backend } = createRecordingBackend();
     seedParent(backend);
