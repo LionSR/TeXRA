@@ -341,7 +341,6 @@ export async function runChat(
     apiMode: sessionMetaSignal.get().apiMode,
     helperModel,
     quietLogs: true,
-    approvalDenied: false,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
     runtimeSession.setApprovalPolicy(policy);

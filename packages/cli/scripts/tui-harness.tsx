@@ -331,7 +331,6 @@ const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
   apiMode: HARNESS_API_MODE,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
-  approvalDenied: false,
   cliConfig: {},
   commandName: 'texra',
   configWarnings: [],

@@ -28,7 +28,6 @@ import {
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
   askApproval,
-  markApprovalDenied,
   queueCliApprovalQuestion,
 } from './approval/approvalPrompts';
 import {
@@ -171,7 +170,6 @@ async function askHeadlessUserQuestion(
       if (parsed != null) answers[question.question] = parsed;
     }
   } catch {
-    markApprovalDenied(context, 'User-question prompt');
     return {
       action: 'reject',
       feedback: 'CLI user question prompt failed.',
