@@ -377,6 +377,53 @@ describe.skipIf(process.platform === 'win32')(
       provider.dispose();
     });
 
+    it('re-seeds the default session approval policy after a transition rolls back', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
+      const firstWorkspace = join(tempDir, 'first');
+      const secondWorkspace = join(tempDir, 'second');
+      const storageRoot = join(tempDir, 'storage');
+      await Promise.all([
+        createProject(firstWorkspace, 24001),
+        mkdir(join(secondWorkspace, '.texra'), { recursive: true }),
+        mkdir(storageRoot),
+      ]);
+      await writeFile(
+        join(firstWorkspace, '.texra', 'config.json'),
+        '{"texra.bib.zoteroPort": 24001, "texra.approvalPolicy": "ask"}\n',
+      );
+      await writeFile(
+        join(secondWorkspace, '.texra', 'config.json'),
+        '{"texra.approvalPolicy": "yolo"}\n',
+      );
+
+      let workspaceRoot: string | undefined = firstWorkspace;
+      const storage = new WorkspaceStorageProvider(
+        storageRoot,
+        () => workspaceRoot,
+      );
+      const config = await createExtensionTexraConfig(storage, workspaceRoot);
+      driveTransitions(storage, {
+        failWorkspaceRoots: new Set([secondWorkspace]),
+      });
+      const provider = new ProgressViewProvider(
+        {
+          storageUri: { fsPath: join(tempDir, 'extension-storage') },
+        } as unknown as vscode.ExtensionContext,
+        config,
+        { getWorkspacePath: () => workspaceRoot } as never,
+      );
+
+      workspaceRoot = secondWorkspace;
+      mocks.workspaceListeners[0]?.();
+      await vi.waitFor(() => expect(mocks.showErrorMessage).toHaveBeenCalled());
+      // Commit briefly seeds yolo from the failed target, then rollback
+      // restores the prior workspace store and re-seeds ask.
+      expect(mocks.setApprovalPolicy.mock.calls.map((call) => call[0])).toEqual(
+        ['yolo', 'ask'],
+      );
+      provider.dispose();
+    });
+
     it('serializes rapid moves, rolls a failed move back, and preserves watchers for retry', async () => {
       tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const firstWorkspace = join(tempDir, 'first');
