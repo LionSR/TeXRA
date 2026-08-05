@@ -27,6 +27,7 @@ resources/poster
 resources/poster-app
 
 supabase/.temp
+supabase/migrations/
 
 slides/
 .texpadtmp
