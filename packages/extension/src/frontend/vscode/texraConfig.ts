@@ -126,11 +126,24 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
 
       let previousStore: JsonStore | undefined;
       let finalized = false;
+      const seedSessionApprovalPolicy = (): void => {
+        // No default session exists yet during activation's own config setup,
+        // and unit tests exercise transitions without one; a live session
+        // always exists by the time a real workspace-folder change can fire.
+        tryDefaultSession()?.setApprovalPolicy(
+          readPersistedTexraApprovalPolicy((key, fallback) =>
+            this.get(key, fallback),
+          ),
+        );
+        refreshApprovalPolicyTooltip();
+      };
       const rollbackConfig = () => {
-        if (previousStore) {
-          this.replaceWorkspaceStore(previousStore);
-          previousStore = undefined;
-        }
+        if (!previousStore) return;
+        this.replaceWorkspaceStore(previousStore);
+        previousStore = undefined;
+        // Commit may have already re-seeded from the new workspace; restore
+        // the session + tooltip to match the rolled-back config store.
+        seedSessionApprovalPolicy();
       };
 
       try {
@@ -142,16 +155,7 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
               path.join(this.storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
             );
             previousStore = this.replaceWorkspaceStore(workspaceStore);
-            // No default session exists yet during activation's own config
-            // setup, and unit tests exercise transitions without one; a live
-            // session always exists by the time a real workspace-folder
-            // change can fire.
-            tryDefaultSession()?.setApprovalPolicy(
-              readPersistedTexraApprovalPolicy((key, fallback) =>
-                this.get(key, fallback),
-              ),
-            );
-            refreshApprovalPolicyTooltip();
+            seedSessionApprovalPolicy();
           },
           afterStorageRollback: rollbackConfig,
           afterStorageFinalize: () => {

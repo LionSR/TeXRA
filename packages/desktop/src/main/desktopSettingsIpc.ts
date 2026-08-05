@@ -13,7 +13,7 @@ import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
+  readPersistedTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
@@ -270,7 +270,9 @@ export function createDesktopSettingsIpc(
       if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
         options.session.setApprovalPolicy(
           write.kind === 'reset'
-            ? TEXRA_APPROVAL_POLICY_DEFAULT
+            ? readPersistedTexraApprovalPolicy((key, fallback) =>
+                options.config.get(key, fallback),
+              )
             : (write.value as TexraApprovalPolicy),
         );
       }

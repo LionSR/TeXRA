@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { warn } from '@logger/logUtils';
 import {
   TEXRA_APPROVAL_POLICIES,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
   TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
   TEXRA_APPROVAL_POLICY_DISPLAY_ORDER,
   TEXRA_APPROVAL_POLICY_OPTIONS,
@@ -12,10 +15,15 @@ import {
   decideRetryApproval,
   decideTexraApproval,
   parseTexraApprovalPolicy,
+  readPersistedTexraApprovalPolicy,
   texraApprovalDenialMessage,
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
 } from '@shared/approvalPolicy';
+
+vi.mock('@logger/logUtils', () => ({
+  warn: vi.fn(),
+}));
 
 describe('TeXRA approval policy', () => {
   it.each([
@@ -54,6 +62,37 @@ describe('TeXRA approval policy', () => {
     );
     expect(parseTexraApprovalPolicy(' Yolo ')).toBe('yolo');
     expect(parseTexraApprovalPolicy('auto')).toBeUndefined();
+  });
+
+  it('reads a valid persisted policy without warning', () => {
+    vi.mocked(warn).mockClear();
+    expect(
+      readPersistedTexraApprovalPolicy((key, fallback) => {
+        expect(key).toBe(TEXRA_APPROVAL_POLICY_CONFIG_KEY);
+        return 'never' as typeof fallback;
+      }),
+    ).toBe('never');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns and falls back when the persisted policy value is invalid', () => {
+    vi.mocked(warn).mockClear();
+    expect(
+      readPersistedTexraApprovalPolicy(() => 'auto' as never),
+    ).toBe(TEXRA_APPROVAL_POLICY_DEFAULT);
+    expect(warn).toHaveBeenCalledWith(
+      `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "auto"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+    );
+  });
+
+  it('warns and falls back when the persisted policy value is not a string', () => {
+    vi.mocked(warn).mockClear();
+    expect(
+      readPersistedTexraApprovalPolicy(() => 42 as never),
+    ).toBe(TEXRA_APPROVAL_POLICY_DEFAULT);
+    expect(warn).toHaveBeenCalledWith(
+      `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value 42; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+    );
   });
 
   it('maps deny reasons to distinct user-facing messages', () => {
