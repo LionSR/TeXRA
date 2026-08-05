@@ -212,13 +212,28 @@ export class RequestPanels extends LitElement {
   }
 
   /**
-   * Key of the request the y/n accelerators will act on — the newest, matching
-   * `getActivePanel`. Panels render it as `data-armed` so the target is
-   * visible rather than inferred from queue order.
+   * The request the y/n accelerators will act on.
+   *
+   * Single source of truth: `getActivePanel` resolves the DOM node from this,
+   * and the renderers mark that same permission `data-armed`. Deriving the
+   * two separately let them disagree — the newest permission is not the
+   * target while the external-inquiry carousel is active, so an indicator
+   * keyed off `permissions[0]` would ring a panel the carousel does not even
+   * render, while the keypress landed on the visible one.
    */
-  private armedPermissionKey(): string | null {
+  private get armedPermission(): PermissionState | null {
     const newest = this.permissions[0];
-    return newest ? getPermissionKey(newest) : null;
+    if (!newest) return null;
+    return (
+      (this.externalInquiryCarouselActive
+        ? this.externalInquiries[this.externalInquiryIndex]
+        : newest) ?? null
+    );
+  }
+
+  private armedPermissionKey(): string | null {
+    const armed = this.armedPermission;
+    return armed ? getPermissionKey(armed) : null;
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -333,7 +348,14 @@ export class RequestPanels extends LitElement {
       <section class=${config.cssClass}>
         ${this.renderSectionHeader(config, nav)}
         <div class="${config.cssClass}__list">
-          ${keyed(getPermissionKey(current), renderPanel(config, current))}
+          ${keyed(
+            getPermissionKey(current),
+            renderPanel(
+              config,
+              current,
+              getPermissionKey(current) === this.armedPermissionKey(),
+            ),
+          )}
         </div>
       </section>
     `;
@@ -428,12 +450,7 @@ export class RequestPanels extends LitElement {
    * would target the wrong panel when mixed kinds are pending.
    */
   private getActivePanel(): BaseRequestPanel | null {
-    const newest = this.permissions[0];
-    if (!newest) return null;
-
-    const target = this.externalInquiryCarouselActive
-      ? this.externalInquiries[this.externalInquiryIndex]
-      : newest;
+    const target = this.armedPermission;
     if (!target) return null;
 
     const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(
