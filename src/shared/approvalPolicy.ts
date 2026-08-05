@@ -77,7 +77,8 @@ export function readPersistedTexraApprovalPolicy(
   if (typeof raw !== 'string') {
     if (raw !== undefined && raw !== null) {
       warn(
-        `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value ${JSON.stringify(raw)}; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+        'approval-policy',
+        `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value ${JSON.stringify(raw)}; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
       );
     }
     return TEXRA_APPROVAL_POLICY_DEFAULT;
@@ -85,7 +86,8 @@ export function readPersistedTexraApprovalPolicy(
   const parsed = parseTexraApprovalPolicy(raw);
   if (parsed) return parsed;
   warn(
-    `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "${raw}"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+    'approval-policy',
+    `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "${raw}"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
   );
   return TEXRA_APPROVAL_POLICY_DEFAULT;
 }

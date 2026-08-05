@@ -81,7 +81,8 @@ describe('TeXRA approval policy', () => {
       TEXRA_APPROVAL_POLICY_DEFAULT,
     );
     expect(warn).toHaveBeenCalledWith(
-      `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "auto"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+      'approval-policy',
+      `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "auto"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
     );
   });
 
@@ -91,7 +92,8 @@ describe('TeXRA approval policy', () => {
       TEXRA_APPROVAL_POLICY_DEFAULT,
     );
     expect(warn).toHaveBeenCalledWith(
-      `[approval-policy] Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value 42; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+      'approval-policy',
+      `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value 42; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
     );
   });
 
