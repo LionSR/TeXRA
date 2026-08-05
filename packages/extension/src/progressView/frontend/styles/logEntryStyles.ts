@@ -62,7 +62,7 @@ export const logEntryStyles = css`
     margin: var(--wa-space-2xs) 0;
     padding: var(--wa-space-xs);
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-left: 2px solid var(--color-text-secondary);
+    border-left: 2px solid var(--border-control);
     border-radius: var(--wa-border-radius-m, var(--border-radius));
     background: color-mix(
       in srgb,
@@ -191,17 +191,15 @@ export const logEntryStyles = css`
 
   .file-list-content .file-var,
   .file-list-content .file-source {
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
   }
 
   .file-list-content .file-var {
-    opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
     margin-inline-start: var(--wa-space-3xs);
   }
 
   .file-list-content .file-source {
-    opacity: var(--opacity-subtle);
     font-size: 0.85em;
     font-style: italic;
   }
@@ -217,12 +215,11 @@ export const logEntryStyles = css`
   }
 
   .xml-link-container wa-icon {
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
   }
 
   .xml-link-container .document-tag {
-    color: var(--color-text-secondary);
-    opacity: var(--opacity-normal);
+    color: var(--color-text-muted);
     font-style: italic;
   }
 
@@ -406,7 +403,7 @@ export const logEntryStyles = css`
   }
 
   .details-summary > .icon {
-    opacity: var(--opacity-muted);
+    color: var(--color-text-muted);
   }
 
   .banner-content {
