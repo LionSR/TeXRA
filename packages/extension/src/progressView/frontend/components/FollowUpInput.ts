@@ -419,8 +419,11 @@ export class FollowUpInput extends LitElement {
     if (this.archived) return nothing;
     const body = this.renderComposerBody();
     // VS Code only: restore the pre-desktop-modernize wa-details chrome.
-    // Desktop already has a roomy conversation pane — leave the composer open.
-    if (!this.useCollapsibleShell) return body;
+    // Desktop already has a roomy conversation pane — leave the composer open,
+    // but keep a region landmark so the follow-up area stays named for AT.
+    if (!this.useCollapsibleShell) {
+      return html` <section aria-label="Follow-up message">${body}</section> `;
+    }
     return html`
       <wa-details class="panel-collapsible" summary="Followup">
         ${body}
