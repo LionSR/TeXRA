@@ -197,7 +197,7 @@ export const logEntryStyles = css`
   .file-list-content .file-var {
     opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
-    margin-left: var(--wa-space-3xs);
+    margin-inline-start: var(--wa-space-3xs);
   }
 
   .file-list-content .file-source {
@@ -252,7 +252,7 @@ export const logEntryStyles = css`
   }
 
   .memory-path wa-icon {
-    margin-right: var(--wa-space-2xs);
+    margin-inline-end: var(--wa-space-2xs);
   }
 
   .memory-path .file-source {
@@ -294,7 +294,7 @@ export const logEntryStyles = css`
     min-width: 0;
     padding: 0 var(--wa-space-3xs);
     opacity: 0;
-    margin-left: auto;
+    margin-inline-start: auto;
     cursor: pointer;
   }
 
@@ -472,7 +472,7 @@ export const logEntryStyles = css`
     overflow-wrap: anywhere;
   }
 
-  @media (max-width: 640px) {
+  @container (max-width: 640px) {
     .log-container {
       padding-inline: var(--wa-space-xs);
     }

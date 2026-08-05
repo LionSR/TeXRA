@@ -41,6 +41,7 @@ import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizePlatform } from '@shared/constants/latex';
 import {
@@ -1203,6 +1204,11 @@ if (protocolLifecycle.shouldContinue) {
           await initializeDesktopProcessStores(processSession);
         disposeProcessStores = () => processStores.dispose();
         await processSession.waitUntilReady();
+        processSession.setApprovalPolicy(
+          readPersistedTexraApprovalPolicy((key, fallback) =>
+            platform().config.get(key, fallback),
+          ),
+        );
         sessionStores = processStores.stores;
         disposeAgentResumeHandler = processResumeOwner.attach({
           session: processSession,

@@ -569,7 +569,7 @@ export class MainApp extends MainAppBase {
         ${this.renderViewHeader()}
 
         <div class="main-content">
-          ${setupCard} ${instructionPanel} ${banners}
+          ${setupCard} ${banners} ${instructionPanel}
 
           <wa-divider></wa-divider>
           <section class="file-selection" aria-label="Files">

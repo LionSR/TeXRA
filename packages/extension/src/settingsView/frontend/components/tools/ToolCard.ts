@@ -148,19 +148,19 @@ export class ToolCard extends LitElement {
         display: inline-flex;
         align-items: center;
         flex-shrink: 0;
-        margin-left: auto;
+        margin-inline-start: auto;
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
       }
 
-      @media (max-width: 420px) {
+      @container settings (max-width: 520px) {
         .tool-header {
           align-items: flex-start;
         }
 
         .tool-toggle {
           width: 100%;
-          margin-left: 0;
+          margin-inline-start: 0;
         }
       }
 

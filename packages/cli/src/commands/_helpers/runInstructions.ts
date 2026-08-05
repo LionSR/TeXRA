@@ -4,7 +4,12 @@
  * notices, and the tool-use/multi-agent instruction assemblers built on top
  * of them. Formerly one file per concern under `_helpers/`.
  */
-import type { ApprovalInstructionContext } from '@cli/runtime/approval/approvalPolicy';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+
+type ApprovalRunContext = {
+  readonly mode: 'headless' | 'interactive';
+  readonly approvalPolicy: TexraApprovalPolicy;
+};
 
 const TERMINAL_RUN_GUIDANCE =
   'This CLI run exits after your final response. Do not end by asking the user whether to perform more work; either complete the requested work now or state the exact artifacts and next command/action for a future run.';
@@ -73,7 +78,7 @@ const CLI_APPROVAL_POLICY_GUIDANCE =
   'Valid CLI approval policies are "ask", "never", and "yolo" only. If suggesting a rerun, use --approval-policy yolo for headless auto-approval or an interactive run with --approval-policy ask; do not invent other approval mode names.';
 
 export function formatUnavailableApprovalInstruction(
-  context: ApprovalInstructionContext,
+  context: ApprovalRunContext,
 ): string | undefined {
   if (context.approvalPolicy === 'never') {
     return [
@@ -108,7 +113,7 @@ export function formatMultiAgentRunInstruction(
     readonly inputFiles: readonly string[];
     readonly contextFiles: readonly string[];
     readonly instruction: string;
-    readonly approvalContext: ApprovalInstructionContext;
+    readonly approvalContext: ApprovalRunContext;
     readonly workingDirectory: string;
   },
 ): string {

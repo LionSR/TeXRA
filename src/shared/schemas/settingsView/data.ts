@@ -9,6 +9,7 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
@@ -388,6 +389,7 @@ const UpdateToolDashboardMessageSchema = z.object({
  */
 const UpdateApprovalAndSafetySettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
+  approvalPolicy: TexraApprovalPolicySchema,
   editApprovalEnabled: z.boolean(),
   bashApprovalEnabled: z.boolean(),
   toolPathProtectionEnabled: z.boolean(),

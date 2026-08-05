@@ -17,7 +17,7 @@ import {
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
   .file-select {
-    margin-bottom: var(--wa-space-3xs);
+    margin-bottom: var(--wa-space-xs);
   }
 
   .file-select-header {
@@ -34,10 +34,6 @@ export const fileSelectLayoutStyles = css`
   .file-select-header > wa-button {
     opacity: var(--opacity-full);
     flex-shrink: 0;
-  }
-
-  .file-select-header label {
-    margin-right: var(--wa-space-2xs);
   }
 
   .file-select label {
@@ -66,10 +62,6 @@ export const fileSelectLayoutStyles = css`
     margin: 0;
   }
 
-  .file-select-label-group label {
-    margin-right: var(--wa-space-2xs);
-  }
-
   .file-select-icon {
     display: inline-flex;
     align-items: center;
@@ -80,12 +72,17 @@ export const fileSelectLayoutStyles = css`
     flex-shrink: 0;
   }
 
+  .file-select-count {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
   .file-select-actions {
     display: flex;
     flex-direction: row;
     align-items: center;
     flex-wrap: nowrap;
-    margin-left: auto;
+    margin-inline-start: auto;
     gap: var(--wa-space-2xs);
   }
 
@@ -168,7 +165,7 @@ const multiFilesStyles = css`
 
   .file-folder wa-icon {
     font-size: var(--font-size-xs);
-    margin-right: var(--wa-space-3xs);
+    margin-inline-end: var(--wa-space-3xs);
   }
 
   /* .remove-button is a wa-button.action-icon-button now; sizing comes from

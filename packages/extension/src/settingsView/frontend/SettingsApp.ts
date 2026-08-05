@@ -62,6 +62,7 @@ import {
   allowOrchestratorKill,
   apiAccessMode,
   authenticated,
+  approvalPolicy,
   bashApprovalEnabled,
   chatgptAuth,
   grokAuth,
@@ -410,6 +411,7 @@ export class SettingsApp extends SettingsAppBase {
           <tools-tab
             .items=${toolDashboardItems.get()}
             .loaded=${toolDashboardLoaded.get()}
+            .approvalPolicy=${approvalPolicy.get()}
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}

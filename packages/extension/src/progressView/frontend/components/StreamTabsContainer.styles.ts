@@ -52,8 +52,8 @@ export const streamTabsContainerStyles = css`
   /* Recursive child stream nesting — indentation alone carries the
      hierarchy (child rows also render a nested-stream chevron). */
   .child-streams {
-    padding-left: var(--wa-space-xs, 12px);
-    margin-left: var(--wa-space-2xs);
+    padding-inline-start: var(--wa-space-xs, 12px);
+    margin-inline-start: var(--wa-space-2xs);
     box-sizing: border-box;
     min-width: 0;
     max-width: 100%;

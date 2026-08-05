@@ -112,7 +112,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { hasCliApprovalDenied } from '@cli/runtime/approval/approvalPolicy';
+import { hasCliApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   AgentCategory,
@@ -159,6 +159,7 @@ function tui(
   readonly dispose: () => void;
 } {
   const cliContext = context(contextOverrides);
+  defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   const hostInteractions = createTuiHostInteractions(
     presentationHost,
     cliContext,
