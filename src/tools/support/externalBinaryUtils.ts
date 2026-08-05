@@ -1,10 +1,20 @@
 /**
- * Shared utilities for locating external CLI binaries shipped as npm platform
- * packages (e.g. @anthropic-ai/claude-agent-sdk-*, @openai/codex-*).
+ * Shared utilities for the Claude Code and Codex CLI vendor tools, which ship
+ * their SDKs and native binaries as npm platform packages
+ * (e.g. @anthropic-ai/claude-agent-sdk-*, @openai/codex-*).
  *
- * Both the Claude Code and Codex tool implementations follow the same
- * 4-strategy resolution pattern and require identical Electron-detection and
- * path-existence helpers. Centralising them here prevents silent drift.
+ * Both tools follow the same shapes and would otherwise drift:
+ * - `resolveSdkExport()` — resolve and validate the SDK's main export across
+ *   the ESM/CJS interop shapes esbuild can produce.
+ * - `resolveBinary()` — the 4-strategy native-binary probe, plus the identical
+ *   Electron-detection and path-existence helpers it needs.
+ * - `createCachedBinaryResolver()` — the per-session cache wrapper around
+ *   `resolveBinary`.
+ *
+ * NOTE: the `await import('<specifier>')` that loads each SDK stays inline in
+ * the tool files on purpose — esbuild only rewrites dynamic `import()` to
+ * `require()` when the specifier is a static string literal, so it cannot be
+ * hoisted here. Only the post-import export resolution is shared.
  */
 
 import { createRequire } from 'node:module';
@@ -30,6 +40,48 @@ function getPackagedElectronResourcesPath(): string | undefined {
   if (electronProcess.versions.electron == null) return undefined;
   if (electronProcess.defaultApp === true) return undefined;
   return electronProcess.resourcesPath;
+}
+
+// ---------------------------------------------------------------------------
+// SDK export resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve and validate the main export of a dynamically-imported SDK module.
+ *
+ * esbuild's CJS output for an ESM-only package can surface the named export
+ * directly (`mod.exportName`), under `default` (`mod.default.exportName`), or
+ * as `mod.default` itself; this checks all three and asserts the result is
+ * callable. The caller keeps its own `await import('<literal>')` (see the file
+ * header) and passes the resulting module here.
+ *
+ * @throws if the export is missing or not a function — a build-configuration
+ * error (the package landed in esbuild's `external` array).
+ */
+export function resolveSdkExport<T>(
+  mod: Record<string, unknown>,
+  opts: {
+    /** Property name of the export inside the module (e.g. `query`, `Codex`). */
+    readonly exportName: string;
+    /** Package specifier, for the error message (e.g. `@openai/codex-sdk`). */
+    readonly specifier: string;
+    /** Human label for the export in the error (e.g. `query()`, `Codex class`). */
+    readonly errorLabel: string;
+  },
+): T {
+  const value =
+    mod[opts.exportName] ??
+    (mod.default as Record<string, unknown> | undefined)?.[opts.exportName] ??
+    mod.default;
+
+  if (typeof value !== 'function') {
+    const keys = Object.keys(mod).join(', ');
+    throw new Error(
+      `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
+        `Ensure ${opts.specifier} is NOT in esbuild externals.`,
+    );
+  }
+  return value as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,9 +121,9 @@ export interface ResolveBinaryConfig {
 /**
  * Resolve a native CLI binary via the shared 4-stage probe. Returns the
  * resolved path, or `undefined` to let the caller fall back to its own
- * resolution. Caching is the caller's responsibility.
+ * resolution. Caching is handled by {@link createCachedBinaryResolver}.
  */
-export async function resolveBinary(
+async function resolveBinary(
   config: ResolveBinaryConfig,
 ): Promise<string | undefined> {
   if (config.platformPackages.length === 0) return undefined;
@@ -150,6 +202,29 @@ export async function resolveBinary(
   }
 
   return undefined;
+}
+
+/**
+ * Wrap a per-session cache around {@link resolveBinary}. The returned function
+ * caches a resolved path for the process lifetime but always retries misses
+ * (so a mid-session `npm install -g` is picked up).
+ *
+ * `buildConfig` returns the {@link ResolveBinaryConfig} for the current
+ * platform, or `undefined` when the platform is unsupported — in which case the
+ * resolver short-circuits to `undefined` without probing.
+ */
+export function createCachedBinaryResolver(
+  buildConfig: () => ResolveBinaryConfig | undefined,
+): () => Promise<string | undefined> {
+  let cached: string | undefined;
+  return async () => {
+    if (cached !== undefined) return cached;
+    const config = buildConfig();
+    if (!config) return undefined;
+    const result = await resolveBinary(config);
+    if (result) cached = result;
+    return result;
+  };
 }
 
 /**
