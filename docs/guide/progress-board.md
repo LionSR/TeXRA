@@ -57,8 +57,8 @@ This area shows the details for the stream selected in the Stream Tabs section.
 The header provides a summary and actions for the selected stream:
 
 - **Stream Name**: Displays the identifier of the current run.
-  Workflow agents show `agent: inputFile` so parallel runs are easy to tell apart.
-  Tool-use sessions show just the agent name so they stand alone even without an associated input file.
+  Tabs show the agent name (with `#executionId` when parallel runs would
+  otherwise collide). Input files stay on the files panel, not on the tab chip.
   The model rides on the second line of the tab.
 - **Status Indicator**: A colored circle shows the current status — the four states read at a glance:
 
