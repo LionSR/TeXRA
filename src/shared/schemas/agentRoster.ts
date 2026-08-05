@@ -56,7 +56,7 @@ const AgentDelegationScopeCanonicalSchema = z.record(
  * rewritten, so there is no rewrite event to retire on. Retires only with a
  * policy decision to stop reading pre-record run history.
  */
-const AgentDelegationScopeLegacySchema = z
+export const AgentDelegationScopeLegacySchema = z
   .strictObject({
     workflowAgentKeys: AgentKeyListSchema,
     toolUseAgentKeys: AgentKeyListSchema,
