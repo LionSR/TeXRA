@@ -18,7 +18,6 @@
       "@agent/runtime/detachSubagentsOnStop",
       "@agent/runtime/executeAgent",
       "@agent/runtime/executionRegistry",
-      "@agent/runtime/helperModelName",
       "@agent/runtime/HostInteractions",
       "@agent/runtime/resolveAndResumeStream",
       "@agent/runtime/resumeQueuedToolUse",
