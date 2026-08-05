@@ -12,7 +12,7 @@ import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
 // Local file imports
-import { repoPath } from './desktopTestPaths.mjs';
+import { repoPath } from './desktopTestPaths.ts';
 
 const noOp = async (): Promise<void> => undefined;
 
