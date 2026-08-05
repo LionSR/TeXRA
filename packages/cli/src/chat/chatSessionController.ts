@@ -21,7 +21,7 @@ import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedTo
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { markApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
+import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
@@ -379,7 +379,7 @@ export function createChatSessionController(
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
             onApprovalPolicyDenial: () =>
-              markApprovalDenied(sessionContext, 'Tool or edit approval'),
+              warnApprovalDenied(sessionContext, 'Tool or edit approval'),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             onStreamResolved: (resolvedStreamId) => {
               // Each chat round mints a fresh root StreamTabId (new
@@ -413,10 +413,7 @@ export function createChatSessionController(
         ),
       )
       .then((result) => {
-        session.runExitCode = runOutcomeExitCode(
-          result.outcome,
-          sessionContext,
-        );
+        session.runExitCode = runOutcomeExitCode(result.outcome);
         if (result.streamId) {
           projectStreamTranscript(result.streamId, { finalize: true });
         }
@@ -542,7 +539,7 @@ export function createChatSessionController(
           resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
             onApprovalPolicyDenial: () =>
-              markApprovalDenied(sessionContext, 'Tool or edit approval'),
+              warnApprovalDenied(sessionContext, 'Tool or edit approval'),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
               ...followUp,
@@ -583,7 +580,7 @@ export function createChatSessionController(
     if (session.streamId) {
       projectStreamTranscript(session.streamId, { finalize: true });
     }
-    session.runExitCode = runOutcomeExitCode(outcome, sessionContext);
+    session.runExitCode = runOutcomeExitCode(outcome);
     if (outcome !== STREAM_PHASE.WAITING) {
       notify({ kind: 'agentFinished' });
     }
@@ -671,7 +668,7 @@ export function createChatSessionController(
                   recovery: claimedRecovery,
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
-                    markApprovalDenied(sessionContext, 'Tool or edit approval'),
+                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
                   runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                   extraFollowUps: options.extraFollowUps,
                   onFollowUpQueueReady: (lease) => {

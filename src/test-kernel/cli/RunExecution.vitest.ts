@@ -678,13 +678,10 @@ describe('executeCliRequest', () => {
 
     await executeCliRequest(request, context);
 
-    // Exit 4 is reserved for a run that FAILED because a gate was denied.
-    // A denial the model routed around does not make the run unsuccessful,
-    // and reporting it as one makes every caller discard a good result.
-    expect(runOutcomeExitCode('completed', context)).toBe(CliExitCode.Success);
-    expect(runOutcomeExitCode('failed', context)).toBe(
-      CliExitCode.ApprovalDenied,
-    );
+    // A denied gate is feedback the model routes around, so it never affects
+    // the exit code; reporting it as failure made callers discard good results.
+    expect(runOutcomeExitCode('completed')).toBe(CliExitCode.Success);
+    expect(runOutcomeExitCode('failed')).toBe(CliExitCode.AgentError);
   });
 
   it('closes the runtime host when sidecar flush fails', async () => {

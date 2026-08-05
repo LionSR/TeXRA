@@ -2,7 +2,7 @@
  * Shared CLI settlement of TeXRA policy decisions into host results.
  *
  * Decision authority is `@shared/approvalPolicy`; this module only maps
- * decisions into CLI shapes and marks `context.approvalDenied` when needed.
+ * decisions into CLI shapes and warns once when policy closes a gate.
  * Both the headless adapter and the TUI import from here — do not duplicate
  * settle helpers in the adapters.
  */
@@ -28,7 +28,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 
 import { type CliContext } from '../cliContext';
 
-import { markApprovalDenied } from './approvalPrompts';
+import { warnApprovalDenied } from './approvalPrompts';
 
 const EXTERNAL_INQUIRY_YOLO_MESSAGE =
   'External inquiry requires human input; yolo mode cannot synthesize an external answer.';
@@ -77,7 +77,7 @@ export function settleExecutable(
   const decision = executableDecision(context);
   if (decision === 'allow') return { accepted: true };
   if (decision === 'present') return undefined;
-  markApprovalDenied(context, 'Approval policy');
+  warnApprovalDenied(context, 'Approval policy');
   return {
     accepted: false,
     userMessage: texraApprovalDenialMessage(decision),
@@ -103,7 +103,7 @@ export function settleRetry(
   });
   if (retryDecision === 'present') return undefined;
   if (retryDecision.deny !== 'yolo-retry') {
-    markApprovalDenied(
+    warnApprovalDenied(
       context,
       retryDecision.deny === 'credential'
         ? 'Credential-exhausted retry'
@@ -130,7 +130,7 @@ export function settleHumanInputDenial(
   });
   if (decision === 'present') return undefined;
   if (decision.deny !== 'yolo-no-human') {
-    markApprovalDenied(context, 'Human-input request');
+    warnApprovalDenied(context, 'Human-input request');
   }
   return {
     userMessage: texraHumanInputDenialMessage(decision.deny, yoloMessage),
