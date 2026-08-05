@@ -103,7 +103,10 @@ forbids production `src/**` and `packages/agent/src/**` from importing host laye
 ratchets under `config/ratchets/` freeze the remaining edges: `host-agent-import-baseline.json` (a host may
 not add a NEW distinct `@agent/*` deep-import specifier, type-only included), plus the
 `shared-schemas-deep-import`, `host-agent-mock`, and `architecture-edges` baselines. Never widen a baseline;
-a decrease is always welcome. The remaining boundary work is the Tier-1 public manifest and shrinking the
+a decrease is always welcome. Kernel architecture tests under
+`src/test-kernel/architecture/` (for example
+`approvalPolicyAuthorityRatchet.vitest.ts`) pin single-authority invariants with
+hardcoded allowlists rather than baseline JSON. The remaining boundary work is the Tier-1 public manifest and shrinking the
 frozen deep-import lists, not another lint rule.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.

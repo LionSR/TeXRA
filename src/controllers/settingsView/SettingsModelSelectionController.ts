@@ -1,6 +1,5 @@
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
-import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
 import {
   hasConfigurableReasoningEffort,
   LEVEL_TO_EFFORT,
@@ -13,6 +12,7 @@ import {
   staticModelConfigEntries,
   type CopilotModelRoute,
 } from '@model/runtimeModelRegistry';
+import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { isGpt5ModelName } from '@model/modelNames';
 import { computeModelOptionsData } from '@model/computeModelOptions';

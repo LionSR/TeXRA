@@ -4,7 +4,9 @@ import path from 'node:path';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
-  TEXRA_APPROVAL_POLICIES,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
+  parseTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
@@ -38,6 +40,12 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
+  /**
+   * Mutable per-run flag: a policy or unpresentable denial settled against
+   * this context. Replaces the former WeakSet marker so exit-code 4 follows
+   * the same context object the run threaded end-to-end.
+   */
+  approvalDenied: boolean;
   readonly helperModel?: string;
   /** Absent until the invocation or initialized platform selects a mode. */
   readonly apiMode?: ApiAccessMode;
@@ -404,7 +412,9 @@ export async function buildCliContext(
   const stdoutColorEnabled = noColor ? false : ambient.stdoutColorEnabled;
   const stderrColorEnabled = noColor ? false : ambient.stderrColorEnabled;
   const noInput = init.globalArgs.noInput === true;
-  const approvalPolicyFallback = noInput ? 'never' : 'ask';
+  const approvalPolicyFallback = noInput
+    ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
+    : TEXRA_APPROVAL_POLICY_DEFAULT;
   const approvalPolicyCandidates = noInput
     ? [init.globalArgs.approvalPolicy]
     : [
@@ -412,6 +422,18 @@ export async function buildCliContext(
         envValue(env, 'TEXRA_APPROVAL_POLICY'),
         loadedConfig.values.approvalPolicy,
       ];
+  let approvalPolicy = approvalPolicyFallback;
+  for (const candidate of approvalPolicyCandidates) {
+    if (!candidate) continue;
+    const parsed = parseTexraApprovalPolicy(candidate);
+    if (parsed) {
+      approvalPolicy = parsed;
+      break;
+    }
+    configWarnings.push(
+      `Ignoring invalid TEXRA_APPROVAL_POLICY "${candidate}".`,
+    );
+  }
   return {
     cwd,
     mode: cliMode(init.globalArgs, ambient),
@@ -426,16 +448,8 @@ export async function buildCliContext(
       configWarnings,
       'TEXRA_OUTPUT_FORMAT',
     ),
-    approvalPolicy: pickEnum(
-      approvalPolicyCandidates,
-      TEXRA_APPROVAL_POLICIES,
-      // Interactive sessions default to prompting. `--no-input` forces
-      // headless mode and intentionally ignores env/config approval defaults;
-      // only an explicit CLI flag should opt that invocation into yolo.
-      approvalPolicyFallback,
-      configWarnings,
-      'TEXRA_APPROVAL_POLICY',
-    ),
+    approvalPolicy,
+    approvalDenied: false,
     apiMode,
     quietLogs: init.globalArgs.quiet === true,
     stdoutIsTty: ambient.stdoutIsTty,

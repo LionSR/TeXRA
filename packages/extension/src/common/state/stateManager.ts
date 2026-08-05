@@ -15,7 +15,6 @@ import { WorktreeMemento } from './worktreeMemento';
 const WORKTREE_SHARED_KEYS: ReadonlySet<WorkspaceStateKey> =
   new Set<WorkspaceStateKey>([
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    WorkspaceStateKey.SUPER_YOLO_ENABLED,
     WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
     WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,

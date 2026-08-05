@@ -34,7 +34,7 @@ import { formControlStyles } from './controlStyles';
 /**
  * Single source of truth for request panel types. Each entry pairs the outer
  * container class (plural), the item class (singular, used for cards and BEM
- * children), and the accent color used for the item's left border and its
+ * children), and the accent color used for the item's start border and its
  * matching header icon. Add a panel type here and the shared layout, accent,
  * and icon rules all follow — no parallel arrays to keep in sync.
  */
@@ -108,12 +108,12 @@ const CONTEXTS = selectorGroup(
   '__context',
 );
 
-/** Per-type accent rules: item left-border plus matching header icon color. */
+/** Per-type accent rules: item start-border plus matching header icon color. */
 const ACCENT_RULES = unsafeCSS(
   PANEL_TYPES.map(
     ({ item, container, accent }) =>
       `.${item} {
-    border-left: var(--border-medium) solid ${accent};
+    border-inline-start: var(--border-medium) solid ${accent};
   }
   .${container}__header wa-icon {
     color: ${accent};
@@ -223,6 +223,10 @@ export const requestPanelSharedStyles: CSSResult = css`
     gap: ${sp.small};
     min-width: 0;
     max-width: 100%;
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
+    background: var(--wa-color-surface-raised);
   }
 
   :is(${ACTIONS}) > * {
@@ -306,7 +310,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: ${sp.small};
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .external-inquiry-requests__counter {

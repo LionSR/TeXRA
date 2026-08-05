@@ -4,7 +4,7 @@ import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { hasCliApprovalDenied } from './approval/approvalPolicy';
+import { hasCliApprovalDenied } from './approval/approvalPrompts';
 import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
 

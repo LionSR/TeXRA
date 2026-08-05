@@ -353,7 +353,7 @@ export class ModelSelectionList extends LitElement {
       <div class="helper-model-row">
         <label>Helper model:</label>
         <wa-select
-          class="helper-model-select"
+          class="helper-model-select form-control-fill"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >

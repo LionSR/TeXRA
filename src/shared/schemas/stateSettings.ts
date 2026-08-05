@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 // Local imports - shared constants & state keys
 import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  TexraApprovalPolicySchema,
+} from '@shared/approvalPolicy';
+import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
@@ -269,6 +274,12 @@ const AGENT_SKILLS_RUNTIME_REACHABILITY = {
     'texra agents run <tool-use-agent> --instruction "answer a short question"',
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/utils/userVars.ts',
+} satisfies CliRuntimeReachability;
+const TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "run a shell command"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
 } satisfies CliRuntimeReachability;
 
 const PROXY_CONFIG_CONSUMER =
@@ -818,9 +829,9 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireEditApproval,
-    title: 'Require edit approval',
+    title: 'Under Ask: require approval for file edits',
     description:
-      'Show a diff and ask for approval before an agent changes workspace files.',
+      'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
     category: 'tools',
     store: 'config',
     hosts: ['vscode', 'desktop'],
@@ -829,12 +840,26 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: BASH_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireBashApproval,
-    title: 'Require bash approval',
+    title: 'Under Ask: require approval for shell commands',
     description:
-      'Ask for approval before an agent runs a shell command in this workspace.',
+      'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
     category: 'tools',
     store: 'config',
     hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'approval',
+  },
+  {
+    key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
+    title: 'Approval policy',
+    description:
+      'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
+    category: 'tools',
+    store: 'config',
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'packages/cli/src/runtime/cliConfig.ts',
+    cliRuntimeReachability: TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY,
+    enumLabels: ['Never', 'Ask', 'Auto-approve'],
     settingsViewSnapshot: 'approval',
   },
   {
