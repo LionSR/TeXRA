@@ -8,6 +8,7 @@ import { useState } from 'react';
 
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
@@ -76,7 +77,7 @@ function StepFrame(props: {
 }): React.JSX.Element {
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold color="cyan">
+      <Text bold color={COLOR_HINT}>
         texra init
       </Text>
       <Text dimColor>
