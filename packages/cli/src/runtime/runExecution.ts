@@ -17,10 +17,8 @@ import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  approvalPromptsUnavailable,
-  markApprovalDenied,
-} from './approval/approvalPolicy';
+import { markApprovalDenied } from './approval/approvalPrompts';
+import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { finalizeCliExecution } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
@@ -293,7 +291,10 @@ export async function executeCliRequest(
           settleLeaseScope(runWithOwnership);
         },
         stopAfterCycle: options.stopAfterCycle,
-        approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
+        approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
+          runContext,
+          runContext.approvalPolicy,
+        ),
         onApprovalPolicyDenial: () =>
           markApprovalDenied(runContext, 'Tool or edit approval'),
         runtimeUnavailableTools: [

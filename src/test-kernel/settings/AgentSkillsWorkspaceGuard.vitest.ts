@@ -130,8 +130,14 @@ describe('agent skills workspace guard', () => {
       SettingsViewMessageHandler.prototype,
     ) as SnapshotHarness;
     const webview = {};
-    const sendSuperYoloEnabled = vi.fn(async () => undefined);
-    Reflect.set(handler, 'sendSuperYoloEnabled', sendSuperYoloEnabled);
+    const sendReliabilityAndOrchestrationSettings = vi.fn(
+      async () => undefined,
+    );
+    Reflect.set(
+      handler,
+      'sendReliabilityAndOrchestrationSettings',
+      sendReliabilityAndOrchestrationSettings,
+    );
     Reflect.set(
       handler,
       'withActiveWebview',
@@ -142,6 +148,8 @@ describe('agent skills workspace guard', () => {
 
     await handler.postStateSettingSnapshot('multi-agent');
 
-    expect(sendSuperYoloEnabled).toHaveBeenCalledWith(webview);
+    expect(sendReliabilityAndOrchestrationSettings).toHaveBeenCalledWith(
+      webview,
+    );
   });
 });

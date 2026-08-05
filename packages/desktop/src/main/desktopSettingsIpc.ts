@@ -11,6 +11,11 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
@@ -23,7 +28,7 @@ import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
-import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
@@ -90,7 +95,7 @@ export interface DesktopSettingsIpcOptions {
    * emitted on it, so the Goals tab follows a run without a manual refresh.
    * The desktop has no process-default session, so it must be passed.
    */
-  session: Pick<SessionHandle, 'events'>;
+  session: Pick<SessionHandle, 'events' | 'setApprovalPolicy'>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -149,9 +154,9 @@ export function createDesktopSettingsIpc(
     await options.ui.openPath(StorageFS.fullPath(resolveMemoryStoragePath()));
   }
 
-  function postSuperYoloEnabled(): void {
+  function postReliabilityAndOrchestrationSettings(): void {
     options.postToRenderer(
-      buildSuperYoloMessage({
+      buildReliabilityAndOrchestrationMessage({
         workspaceState,
         globalState,
         getReliabilitySettings: () => [],
@@ -200,7 +205,7 @@ export function createDesktopSettingsIpc(
     const goalListPosted = postGoalList();
     const memoryEnabledPosted = settingsHost.sendMemoryEnabled();
     const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
-    postSuperYoloEnabled();
+    postReliabilityAndOrchestrationSettings();
     postApprovalSettings();
     postAgentSkillsSettings();
     postTelemetrySettings();
@@ -262,6 +267,13 @@ export function createDesktopSettingsIpc(
       await (write.kind === 'reset'
         ? resetSetting(write.entry, stores)
         : writeSetting(write.entry, write.value, stores));
+      if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
+        options.session.setApprovalPolicy(
+          write.kind === 'reset'
+            ? TEXRA_APPROVAL_POLICY_DEFAULT
+            : (write.value as TexraApprovalPolicy),
+        );
+      }
     } catch (error) {
       options.ui.onError(error);
       await options.ui.showErrorMessage(
@@ -290,7 +302,7 @@ export function createDesktopSettingsIpc(
         options.toolingSettingsController.postLatexConfigValues();
         break;
       case 'multi-agent':
-        postSuperYoloEnabled();
+        postReliabilityAndOrchestrationSettings();
         break;
       case 'telemetry':
         postTelemetrySettings();

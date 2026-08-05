@@ -6,7 +6,10 @@ import {
   formatToolUseAgentRunInstruction,
   formatUnavailableApprovalInstruction,
 } from '@cli/commands/_helpers/runInstructions';
-import { approvalPromptsUnavailable } from '@cli/runtime/approval/approvalPolicy';
+import {
+  decideTexraApproval,
+  isTexraApprovalDenied,
+} from '@shared/approvalPolicy';
 
 const workingDirectory = '/tmp/texra-workspace';
 
@@ -37,37 +40,25 @@ function multiAgentInstruction(
 }
 
 describe('formatUnavailableApprovalInstruction', () => {
-  it('classifies approval-unavailable CLI contexts', () => {
-    expect(
-      approvalPromptsUnavailable({
-        mode: 'headless',
-        approvalPolicy: 'never',
-      }),
-    ).toBe(true);
-    expect(
-      approvalPromptsUnavailable({
-        mode: 'interactive',
-        approvalPolicy: 'never',
-      }),
-    ).toBe(true);
-    expect(
-      approvalPromptsUnavailable({
-        mode: 'headless',
-        approvalPolicy: 'ask',
-      }),
-    ).toBe(true);
-    expect(
-      approvalPromptsUnavailable({
-        mode: 'headless',
-        approvalPolicy: 'yolo',
-      }),
-    ).toBe(false);
-    expect(
-      approvalPromptsUnavailable({
-        mode: 'interactive',
-        approvalPolicy: 'ask',
-      }),
-    ).toBe(false);
+  it('classifies approval-unavailable CLI contexts via the shared evaluator', () => {
+    const unavailable = (
+      policy: 'ask' | 'never' | 'yolo',
+      canPresent: boolean,
+    ) =>
+      isTexraApprovalDenied(
+        decideTexraApproval({
+          policy,
+          promptRequired: true,
+          scopedBypass: false,
+          canPresent,
+        }),
+      );
+
+    expect(unavailable('never', false)).toBe(true);
+    expect(unavailable('never', true)).toBe(true);
+    expect(unavailable('ask', false)).toBe(true);
+    expect(unavailable('yolo', false)).toBe(false);
+    expect(unavailable('ask', true)).toBe(false);
   });
 
   it('describes never as an automatic approval rejection', () => {

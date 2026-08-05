@@ -9,6 +9,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  TEXRA_APPROVAL_POLICY_OPTIONS,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
@@ -31,6 +36,9 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 // Side-effect imports - register WA button, icon, and switch components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Side-effect: register tool card component
@@ -151,6 +159,7 @@ export class ToolsTab extends LitElement {
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
+  @property({ type: String }) approvalPolicy: TexraApprovalPolicy = 'ask';
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
@@ -167,6 +176,18 @@ export class ToolsTab extends LitElement {
       value: Boolean(target?.checked),
     });
   }
+
+  private handleApprovalPolicyChange = (e: Event): void => {
+    const target = e.target as WaSelect | null;
+    const value = target?.value;
+    if (value !== 'ask' && value !== 'never' && value !== 'yolo') {
+      return;
+    }
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      value,
+    });
+  };
 
   private handleBashApprovalToggle = (e: Event): void => {
     this.postStateToggle(BASH_APPROVAL_CONFIG_KEY, e);
@@ -222,15 +243,36 @@ export class ToolsTab extends LitElement {
           description: 'Choose when agents pause for approval before acting.',
         })}
         <div class="settings-section">
+          <div class="setting-block">
+            <label class="setting-label" for="texra-approval-policy">
+              Approval policy
+            </label>
+            <wa-select
+              id="texra-approval-policy"
+              value=${this.approvalPolicy}
+              class="setting-enum-select"
+              @change=${this.handleApprovalPolicyChange}
+            >
+              ${TEXRA_APPROVAL_POLICY_OPTIONS.map(
+                (option) => html`
+                  <wa-option value=${option.value}
+                    >${option.label} — ${option.description}</wa-option
+                  >
+                `,
+              )}
+            </wa-select>
+          </div>
           ${renderSettingsToggleRow({
-            label: 'Approve workspace edits',
-            description: 'Review a diff before an agent changes files.',
+            label: 'Under Ask: require approval for file edits',
+            description:
+              'When policy is Ask, review a diff before an agent changes files. Inert under Never and Auto-approve.',
             checked: this.editApprovalEnabled,
             onChange: this.handleEditApprovalToggle,
           })}
           ${renderSettingsToggleRow({
-            label: 'Approve shell commands',
-            description: 'Pause before an agent runs a shell command.',
+            label: 'Under Ask: require approval for shell commands',
+            description:
+              'When policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
             checked: this.bashApprovalEnabled,
             onChange: this.handleBashApprovalToggle,
           })}

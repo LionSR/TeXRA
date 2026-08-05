@@ -7,8 +7,8 @@
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import {
   DEFAULT_MODELS,
   isDeprecatedModel,

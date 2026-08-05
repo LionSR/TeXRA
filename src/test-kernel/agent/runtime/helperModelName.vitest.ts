@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getHelperModelName,
-  resolveEffectiveHelperModel,
-} from '@agent/runtime/helperModelName';
+import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
+import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';

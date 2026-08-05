@@ -227,7 +227,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test CLI workflow input paths
-        run: pnpm exec vitest run --config vitest.config.mjs src/test-kernel/cli/CliRootArgs.vitest.mts
+        run: pnpm exec vitest run --config vitest.config.mjs src/test-kernel/cli/CliRootArgs.vitest.ts
 
   build:
     name: build artifacts (linux)

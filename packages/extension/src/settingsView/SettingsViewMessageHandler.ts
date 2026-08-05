@@ -42,6 +42,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { refreshApprovalPolicyTooltip } from '@frontend/statusBar/approvalPolicyTooltipRefresh';
 import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -63,6 +64,11 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
@@ -77,7 +83,7 @@ import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
-import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -559,7 +565,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.historyHandlers.sendHistoryData(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
-      this.sendSuperYoloEnabled(webview),
+      this.sendReliabilityAndOrchestrationSettings(webview),
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
       this.githubHandlers.sendGitHubTokenStatus(webview),
@@ -644,9 +650,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Multi-agent coordination handler implementations
   // ============================================================
 
-  private async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
+  private async sendReliabilityAndOrchestrationSettings(
+    webview: vscode.Webview,
+  ): Promise<void> {
     await webview.postMessage(
-      buildSuperYoloMessage({
+      buildReliabilityAndOrchestrationMessage({
         workspaceState: workspaceSM,
         globalState: globalSM,
         getReliabilitySettings: () =>
@@ -732,6 +740,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await (write.kind === 'reset'
         ? resetSetting(write.entry, stores)
         : writeSetting(write.entry, write.value, stores));
+      if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
+        defaultSession().setApprovalPolicy(
+          write.kind === 'reset'
+            ? TEXRA_APPROVAL_POLICY_DEFAULT
+            : (write.value as TexraApprovalPolicy),
+        );
+        refreshApprovalPolicyTooltip();
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -765,7 +781,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         );
         break;
       case 'multi-agent':
-        await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+        await this.withActiveWebview((w) =>
+          this.sendReliabilityAndOrchestrationSettings(w),
+        );
         break;
       case 'telemetry':
         await this.withActiveWebview((w) => this.sendTelemetrySettings(w));
@@ -1022,7 +1040,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
-        this.sendSuperYoloEnabled(w),
+        this.sendReliabilityAndOrchestrationSettings(w),
         result.affectsModelAvailability
           ? this.sendModelSelectionData(w)
           : Promise.resolve(),

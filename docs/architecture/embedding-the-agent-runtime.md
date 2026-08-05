@@ -328,13 +328,13 @@ real disk and finds nothing, so the scan yields zero agents.
 
 ### The repo's own tests prove the constraint
 
-`src/test-kernel/agent/AgentRegistryAlias.vitest.ts` is a memfs-backed test
+`src/test-kernel/agent/AgentRegistry.vitest.ts` is a memfs-backed test
 kernel (`createFakePlatform` defaults to `new FakeFileSystemProvider(...)`,
 `src/test-kernel/support/FakePlatform.ts:503`, backed by `memfs` at `:5`). To
 test the agent registry it has to opt _out_ of memfs:
 
 ```ts
-// src/test-kernel/agent/AgentRegistryAlias.vitest.ts:96-98
+// src/test-kernel/agent/AgentRegistry.vitest.ts:96-98
 createFakePlatform(
   { workspaceState },
   { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
@@ -345,7 +345,7 @@ createFakePlatform(
 write a real YAML file:
 
 ```ts
-// src/test-kernel/agent/AgentRegistryAlias.vitest.ts:440-461
+// src/test-kernel/agent/AgentRegistry.vitest.ts:440-461
 const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
 await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
 …
@@ -354,7 +354,7 @@ useAgentDirectories({ custom: async () => customDir });
 
 Its `builtIn()`/`builtInToolUse()` point at the real repo tree
 (`packages/extension/resources/agents`, `…/tool_use_agents`) —
-`src/test-kernel/agent/AgentRegistryAlias.vitest.ts:51-72`.
+`src/test-kernel/agent/AgentRegistry.vitest.ts:51-72`.
 
 If the codebase's own memfs kernel cannot avoid touching real disk to register
 one agent, an embedder cannot either.
@@ -492,7 +492,8 @@ the runtime already knows the parking behaviour exists.
   `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:199`). It does not
   touch `requestRetry` or `askUserQuestion`, and it does not change dispatch.
   The CLI sets it for `policy === 'never'` and for headless `ask`
-  (`packages/cli/src/runtime/approval/approvalPolicy.ts:111-118`) _in addition
+  (`packages/cli/src/runtime/approval/settleApprovals.ts` —
+  `cliApprovalPromptsUnavailable`) _in addition
   to_ attaching real interactions.
 
 ### The typed shape
@@ -532,9 +533,10 @@ degradation instead of a hang. Trace the wiring end to end:
   in its tool list (`src/agent/runtime/agentToolResolution.ts:150-157`).
 
 The worked example is the CLI's own headless path: it derives the flag from
-policy and mode (`packages/cli/src/runtime/approval/approvalPolicy.ts:111-118`)
+policy and mode (`packages/cli/src/runtime/approval/settleApprovals.ts` —
+`cliApprovalPromptsUnavailable`)
 and passes it straight into the real `runAgent` call
-(`packages/cli/src/runtime/runExecution.ts:264`). As the "Escape hatches"
+(`packages/cli/src/runtime/runExecution.ts`). As the "Escape hatches"
 note above says, the flag does not touch `requestRetry` or `askUserQuestion`
 dispatch — it only narrows which tools can raise the approval kinds that were
 the reachable hang.
