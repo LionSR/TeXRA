@@ -114,11 +114,13 @@ export function withoutCatalogDerivedContributes(packageJson) {
   return { ...packageJson, contributes: trimmedContributes };
 }
 
-// packages/extension/resources/traceViewer is the multi-file, external-assets
-// trace-viewer build (shared-assets/site-hosting export mode) — CLI-only
-// (packages/cli/src/runtime/history.ts), never referenced by the extension
-// host, so packages/extension/.vscodeignore deliberately excludes it from the
-// packaged VSIX. One source of truth for the directory name so
-// verify-extension-package-invariants.mjs's required .vscodeignore line and
-// verify-vsix-contents.mjs's resource-hash exclusion can't drift apart.
-export const EXCLUDED_TRACE_VIEWER_DIR = 'traceViewer';
+// packages/extension/resources/traceViewerShared is the multi-file,
+// external-assets trace-viewer build (shared-assets/site-hosting export
+// mode) — CLI-only (packages/cli/src/runtime/history.ts), never referenced by
+// the extension host, so packages/extension/.vscodeignore deliberately
+// excludes it from the packaged VSIX. resources/traceViewer is the
+// single-file default template and is packaged. One source of truth for the
+// directory name so verify-extension-package-invariants.mjs's required
+// .vscodeignore line and verify-vsix-contents.mjs's resource-hash exclusion
+// can't drift apart.
+export const EXCLUDED_TRACE_VIEWER_DIR = 'traceViewerShared';

@@ -201,11 +201,7 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
     const controller = await this.getChatExportController();
     const outcome = await controller.exportAsHtml(
       historyId,
-      path.join(
-        this.dependencies.resourcesPath,
-        'traceViewerStandalone',
-        'index.html',
-      ),
+      path.join(this.dependencies.resourcesPath, 'traceViewer', 'index.html'),
     );
     if (outcome.status !== 'ok') {
       await this.dependencies.showInfoMessage(
