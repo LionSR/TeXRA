@@ -72,10 +72,13 @@ export abstract class BaseFeedbackPanel<
   }
 
   protected renderRejectButton(rejectTitle: string): TemplateResult {
+    // Both states keep the reject icon and name the consequence. Switching to
+    // a checkmark labelled "Submit" made the confirm step of a rejection wear
+    // the approval glyph, which is the one misreading this flow cannot afford.
     return renderLabeledActionButton({
-      icon: this.showFeedback ? 'check' : 'xmark',
-      text: this.showFeedback ? 'Submit' : 'Reject',
-      title: this.showFeedback ? 'Submit rejection (n)' : rejectTitle,
+      icon: 'xmark',
+      text: this.showFeedback ? 'Send rejection' : 'Reject',
+      title: this.showFeedback ? 'Send rejection (n)' : rejectTitle,
       action: 'reject',
       disabled: this.archived,
       onClick: () => this.handleRejectAction(),
@@ -89,12 +92,17 @@ export abstract class BaseFeedbackPanel<
   ): TemplateResult | typeof nothing {
     if (!this.showFeedback) return nothing;
 
+    // The label is visible, not just an aria-label duplicating the
+    // placeholder: a placeholder disappears on first keystroke, taking the
+    // only description of the field with it.
+    const labelId = `${inputClass}-label`;
     return html`
       <div class=${containerClass}>
+        <label id=${labelId}>${placeholder}</label>
         <wa-textarea
           class=${inputClass}
-          aria-label=${placeholder}
-          placeholder=${placeholder}
+          aria-labelledby=${labelId}
+          placeholder="Optional — this is sent back to the agent"
           rows="3"
           data-feedback-input
         ></wa-textarea>

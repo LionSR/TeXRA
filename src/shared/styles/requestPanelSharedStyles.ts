@@ -160,6 +160,29 @@ export const requestPanelSharedStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
+  /* The section title is a real h2 so the section has an accessible name and
+     pending requests appear in the heading list. It inherits the header rule
+     above, so this only strips the UA margin and size. */
+  :is(${HEADERS}) h2 {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  /* The request the y/n accelerators will act on. Sections render in a fixed
+     kind order while the accelerators target the newest request, so the top
+     panel on screen is not always the one a keypress hits.
+
+     Targets the panel host element in RequestPanels' shadow root, not the
+     ITEMS class: that class is on a div inside each panel's own shadow root,
+     which this selector cannot reach. */
+  [data-request-panel][data-armed] {
+    display: block;
+    outline: var(--border-medium) solid var(--wa-color-focus);
+    outline-offset: ${sp.tiny};
+    border-radius: var(--border-radius-medium);
+  }
+
   :is(${LISTS}) {
     display: flex;
     flex-direction: column;
@@ -295,6 +318,16 @@ export const requestPanelSharedStyles: CSSResult = css`
   /* Rejection feedback (shared across panels with feedback support) */
   :is(${FEEDBACKS}) {
     margin-top: ${sp.small};
+  }
+
+  /* Visible label for the rejection textarea. The field previously carried
+     only a placeholder plus an aria-label repeating it, so the description
+     vanished on the first keystroke. */
+  :is(${FEEDBACKS}) label {
+    display: block;
+    margin-bottom: ${sp.tiny};
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
   }
 
   :is(${FEEDBACK_INPUTS}) {

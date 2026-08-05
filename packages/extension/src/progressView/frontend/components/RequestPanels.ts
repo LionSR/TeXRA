@@ -125,12 +125,24 @@ const SECTIONS: readonly SectionConfig[] = [
  */
 const PANEL_MARKER_SELECTOR = '[data-request-panel]';
 
+/** Stable id for a section's heading, used as the section's accessible name. */
+function sectionTitleId(section: SectionConfig): string {
+  return `${section.cssClass}__title`;
+}
+
 function renderPanel(
   section: SectionConfig,
   permission: PermissionState,
+  armed = false,
 ): TemplateResult {
+  // `armed` marks the panel the y/n accelerators will act on. Sections render
+  // in a fixed kind order while the accelerators target the newest request,
+  // so with mixed kinds pending the top panel on screen is not the one a
+  // keypress hits. Without a visible mark that divergence is invisible, and
+  // the action it triggers can be executing a shell command.
   return staticHtml`<${section.tag}
     data-request-panel
+    ?data-armed=${armed}
     .permission=${permission}
   ></${section.tag}>`;
 }
@@ -204,10 +216,40 @@ export class RequestPanels extends LitElement {
     super.disconnectedCallback();
   }
 
+  /**
+   * Key of the request the y/n accelerators will act on — the newest, matching
+   * `getActivePanel`. Panels render it as `data-armed` so the target is
+   * visible rather than inferred from queue order.
+   */
+  private armedPermissionKey(): string | null {
+    const newest = this.permissions[0];
+    return newest ? getPermissionKey(newest) : null;
+  }
+
+  /**
+   * What a screen reader hears when a request arrives. The agent blocks until
+   * the user answers, so an unannounced panel reads as a hung run. The region
+   * is rendered on every pass (empty when idle) rather than inserted on
+   * demand, because a live region has to exist before its text changes for the
+   * change to be announced.
+   */
+  private announcement(): string {
+    const newest = this.permissions[0];
+    if (!newest) return '';
+    const section = SECTIONS.find((s) => s.kind === newest.kind);
+    if (!section) return '';
+    const waiting =
+      this.permissions.length > 1
+        ? ` ${this.permissions.length} requests waiting.`
+        : '';
+    return `${section.title} needed.${waiting} Press y to approve, n to reject.`;
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
 
     return html`
+      <div class="visually-hidden" role="status">${this.announcement()}</div>
       ${SECTIONS.map((section) => {
         const permissions = this.permissionsFor(section.kind);
         return section.kind === PERMISSION_KIND.EXTERNAL_INQUIRY
@@ -229,10 +271,15 @@ export class RequestPanels extends LitElement {
     config: SectionConfig,
     extra: TemplateResult | typeof nothing = nothing,
   ): TemplateResult {
+    // A real heading, not a styled span: it gives the section an accessible
+    // name (via aria-labelledby below) and puts every pending request in the
+    // screen reader's heading list. Visual weight is unchanged — the shared
+    // header rule already sets font-weight and colour, and the h2 reset in
+    // requestPanelSharedStyles removes the UA margin and size.
     return html`
       <div class="${config.cssClass}__header">
         ${waIcon(config.icon)}
-        <span>${config.title}</span>
+        <h2 id=${sectionTitleId(config)}>${config.title}</h2>
         ${extra}
       </div>
     `;
@@ -244,14 +291,18 @@ export class RequestPanels extends LitElement {
   ): TemplateResult | typeof nothing {
     if (permissions.length === 0) return nothing;
 
+    const armedKey = this.armedPermissionKey();
     return html`
-      <section class=${config.cssClass}>
+      <section
+        class=${config.cssClass}
+        aria-labelledby=${sectionTitleId(config)}
+      >
         ${this.renderSectionHeader(config)}
         <div class="${config.cssClass}__list">
           ${repeat(
             permissions,
             (p) => getPermissionKey(p),
-            (p) => renderPanel(config, p),
+            (p) => renderPanel(config, p, getPermissionKey(p) === armedKey),
           )}
         </div>
       </section>
