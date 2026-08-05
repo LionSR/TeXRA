@@ -189,6 +189,11 @@ export const requestPanelSharedStyles: CSSResult = css`
     box-sizing: border-box;
     min-width: 0;
     max-width: 100%;
+    /* Keep the action row in the card even when details scroll; the dock
+       that hosts request-panels is height-capped, so the card must not grow
+       past that budget and hide Approve/Reject below the fold. */
+    max-height: 100%;
+    min-height: 0;
   }
 
   :is(${DETAILS}) {
@@ -199,9 +204,13 @@ export const requestPanelSharedStyles: CSSResult = css`
 
   /* Scroll constraint for panels with potentially long content.
      Excluded: workflow-proposal__details (has an absolutely-positioned
-     dropdown that would be clipped by overflow-y: auto). */
+     dropdown that would be clipped by overflow-y: auto).
+     Cap below the approval dock so header + details + actions fit without
+     forcing the primary buttons off-screen. */
   :is(${SCROLLABLE_DETAILS}) {
-    max-height: min(34vh, 26rem);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(28vh, 16rem);
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
@@ -223,10 +232,18 @@ export const requestPanelSharedStyles: CSSResult = css`
     gap: ${sp.small};
     min-width: 0;
     max-width: 100%;
+    /* Pin under the details block inside the card (not only sticky within a
+       scroll ancestor). flex-shrink: 0 keeps Approve/Reject visible while
+       long commands scroll in __details. */
+    flex: 0 0 auto;
     position: sticky;
     inset-block-end: 0;
     z-index: 1;
+    margin-block-start: auto;
+    padding-block-start: ${sp.small};
     background: var(--wa-color-surface-raised);
+    box-shadow: 0 -0.5rem 0.75rem -0.5rem
+      color-mix(in srgb, var(--wa-color-surface-raised) 85%, transparent);
   }
 
   :is(${ACTIONS}) > * {
@@ -327,7 +344,7 @@ export const requestPanelSharedStyles: CSSResult = css`
      that used to share this block live in ExternalInquiryPanel.styles.ts. */
   @media (max-height: 900px) {
     :is(${SCROLLABLE_DETAILS}) {
-      max-height: min(28vh, 20rem);
+      max-height: min(22vh, 12rem);
     }
   }
 `;

@@ -38,6 +38,27 @@ export const conversationContentStyles: CSSResult = css`
     box-sizing: border-box;
   }
 
+  /* Pending approvals sit above the transcript and are not height-capped
+     with todos/plans. A shared prelude max-height used to clip the Approve
+     row when command details filled the pane (sticky actions alone could
+     not recover once the whole card sat below the fold). */
+  .conversation-approval-dock {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: min(52%, 30rem);
+    padding-top: var(--wa-space-xs);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    position: relative;
+    z-index: 2;
+    background: var(--wa-color-surface-default);
+  }
+
+  .conversation-approval-dock:empty {
+    display: none;
+  }
+
   .conversation-prelude,
   .conversation-epilogue {
     flex: 0 1 auto;
@@ -95,6 +116,10 @@ export const conversationContentStyles: CSSResult = css`
   @container (max-width: 640px) {
     .conversation-column {
       width: calc(100% - 2 * var(--wa-space-xs));
+    }
+
+    .conversation-approval-dock {
+      max-height: min(48%, 24rem);
     }
 
     .conversation-prelude {
