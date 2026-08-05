@@ -193,10 +193,15 @@ export function foregroundEscapeAction({
     case 'infoPane':
       return 'close';
     case 'approval':
-      return approvalKind === 'externalInquiry' ||
+      // Esc on an approval card sends a rejection (see `confirmCardKeyAction`),
+      // so the status bar names the consequence rather than saying "cancel".
+      if (
+        approvalKind === 'externalInquiry' ||
         approvalKind === 'userQuestion'
-        ? 'skip'
-        : 'cancel';
+      ) {
+        return 'skip';
+      }
+      return approvalKind === 'retry' ? 'give up' : 'reject';
   }
 }
 

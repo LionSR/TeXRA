@@ -28,7 +28,7 @@ import {
   type TaskGroupStatus,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
-import { formatDuration } from '@utils/text/stringUtils';
+import { formatCompactDuration } from '@utils/core';
 
 import { safeTerminalText } from '../render/terminalText';
 import type { StreamSlice } from '../state/cliState';
@@ -80,7 +80,7 @@ function taskGroupLine(group: TaskGroup, label: string): WorkflowRunDetailLine {
   const appearance = TASK_GROUP_APPEARANCE[group.status];
   const duration =
     group.endTime !== undefined
-      ? ` · ${formatDuration(group.endTime - group.startTime)}`
+      ? ` · ${formatCompactDuration(group.endTime - group.startTime)}`
       : '';
   return {
     key: `group:${group.id}`,
@@ -190,7 +190,9 @@ function workflowRunDetailGroups(
             : ` (+${file.diff.added ?? 0} -${file.diff.removed ?? 0})`;
         lines.push({
           key: `output:${round}:${file.location.absolutePath}:${index}`,
-          text: `    › ${safeTerminalText(path)}${diff}`,
+          // Neutral bullet, not `›` — POINTER means "focused row / your
+          // input" everywhere else, and these are static file rows.
+          text: `    • ${safeTerminalText(path)}${diff}`,
           tone: 'neutral',
           role: 'output',
         });

@@ -203,13 +203,15 @@ function SessionRow({
       minWidth={0}
       overflowY="hidden"
     >
-      <Text color={focused ? COLOR_HINT : undefined}>
+      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
         {focused ? POINTER : ' '}
       </Text>
-      <Text color={active ? COLOR_HINT : undefined}>
+      <Text aria-hidden color={active ? COLOR_HINT : undefined}>
         {active ? ` ${TICK} ` : '   '}
       </Text>
-      <Text color={childStatusColor(status)}>{CHILD_STATUS_MARKER}</Text>
+      <Text aria-hidden color={childStatusColor(status)}>
+        {CHILD_STATUS_MARKER}
+      </Text>
       <Box minWidth={0} flexShrink={1}>
         <Text bold={active} wrap="truncate-end">
           {session.label}

@@ -717,7 +717,10 @@ function trySyncStreamLog(streamId: StreamTabId): void {
   try {
     syncStreamLog(streamId);
   } catch (error) {
-    setTransientNotice(`Could not update transcript: ${toErrorMessage(error)}`);
+    setTransientNotice(
+      `Could not update transcript: ${toErrorMessage(error)}`,
+      { ttlMs: Number.POSITIVE_INFINITY },
+    );
   }
 }
 
@@ -771,6 +774,7 @@ export function subscribeStreamLog(): () => void {
         if (activeStreamId.get() === nextActiveStreamId) {
           setTransientNotice(
             `Could not load transcript: ${toErrorMessage(error)}`,
+            { ttlMs: Number.POSITIVE_INFINITY },
           );
         }
       });

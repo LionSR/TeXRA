@@ -85,7 +85,7 @@ describe('CLI queued follow-up panel display model', () => {
 
     expect(display.rows.map((row) => row.text)).toEqual([
       '1. first',
-      '... 2 queued follow-ups hidden',
+      '… 2 queued follow-ups hidden',
     ]);
     expect(display.hiddenCount).toBe(2);
   });
@@ -98,7 +98,7 @@ describe('CLI queued follow-up panel display model', () => {
     });
 
     expect(display.rows.map((row) => row.text)).toEqual([
-      '... 2 queued follow-ups hidden',
+      '… 2 queued follow-ups hidden',
     ]);
     expect(display.hiddenCount).toBe(2);
   });

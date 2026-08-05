@@ -67,7 +67,7 @@ export function coerceSettingInput(
   if (!isNumber) return { ok: true, value: raw };
   const trimmed = raw.trim();
   if (trimmed === '') {
-    return { ok: false, message: 'Enter a number, or press Ctrl+R to reset.' };
+    return { ok: false, message: 'Enter a number, or press Ctrl-R to reset.' };
   }
   const parsed = Number(trimmed);
   return Number.isFinite(parsed)
@@ -236,7 +236,7 @@ function ConfigTextEditor(props: {
         <KeyHints
           hints={[
             { key: 'Enter', action: 'save' },
-            { key: 'Ctrl+R', action: 'reset' },
+            { key: 'Ctrl-R', action: 'reset' },
             { key: 'Esc', action: 'back' },
           ]}
           confirmCancel={false}
@@ -350,7 +350,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
             hints={[
               { key: '↑/↓', action: 'navigate' },
               { key: 'Enter', action: 'select' },
-              { key: 'Ctrl+R', action: 'reset' },
+              { key: 'Ctrl-R', action: 'reset' },
               { key: 'Esc', action: 'back' },
             ]}
             confirmCancel={false}

@@ -432,8 +432,13 @@ export const logEntryStyles = css`
      markdown-rendered content this class normally wraps), so preserve them.
      Unlike .log-line, this text is actively being read while it grows, so
      prefer breaking at word boundaries (break-word) over .log-line's
-     break-all — mid-word breaks are more disruptive mid-stream. */
-  .banner-content--streaming {
+     break-all — mid-word breaks are more disruptive mid-stream.
+     Double-class selector on purpose: .banner-content--model (shared
+     markdown sheet, adopted later) sets white-space: normal at the same
+     0,1,0 specificity, and stylesheet order handed it the tie - collapsing
+     every newline in streaming Assistant text. 0,2,0 wins regardless of
+     sheet order; the element always carries both classes. */
+  .banner-content.banner-content--streaming {
     white-space: pre-wrap;
     overflow-wrap: break-word;
   }

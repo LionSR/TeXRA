@@ -29,6 +29,10 @@ export interface ConfirmCardKeyOptions {
 export interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
+  /** What Esc actually does. Esc maps to the `reject` action
+   *  (`confirmCardKeyAction`), never a consequence-free dismiss, so the
+   *  hint must name the rejection — "cancel" here was a mislabel. */
+  readonly escapeLabel?: string;
   readonly alwaysAllowLabel?: string;
   readonly extraActions?: readonly KeyHint[];
 }
@@ -80,6 +84,7 @@ export function confirmCardKeyAction(
 export function confirmCardKeyHints({
   approveLabel = 'approve',
   rejectLabel = 'reject & note',
+  escapeLabel = 'reject',
   alwaysAllowLabel,
   extraActions = [],
 }: ConfirmCardHintOptions): KeyHint[] {
@@ -90,7 +95,7 @@ export function confirmCardKeyHints({
       ? []
       : [{ key: 'a', action: alwaysAllowLabel }]),
     ...extraActions,
-    { key: 'Esc', action: 'cancel' },
+    { key: 'Esc', action: escapeLabel },
   ];
 }
 
@@ -155,7 +160,7 @@ export function confirmCardKeyHintsForWidth(
   const coreHints = compactHints.filter(isCoreApprovalHint);
   if (hintsFit(coreHints, options.maxColumns)) return coreHints;
 
-  return [{ key: 'Esc', action: 'cancel' }];
+  return [{ key: 'Esc', action: options.escapeLabel ?? 'reject' }];
 }
 
 export function confirmCardCompactHintLayout({
@@ -163,6 +168,7 @@ export function confirmCardCompactHintLayout({
   columns,
   approveLabel,
   rejectLabel,
+  escapeLabel,
   alwaysAllowLabel,
   extraActions,
 }: ConfirmCardCompactHintLayoutOptions): ConfirmCardCompactHintLayout {
@@ -170,6 +176,7 @@ export function confirmCardCompactHintLayout({
   const inlineHints = confirmCardKeyHintsForWidth({
     approveLabel,
     rejectLabel,
+    escapeLabel,
     alwaysAllowLabel,
     extraActions,
     maxColumns: Math.max(
@@ -180,6 +187,7 @@ export function confirmCardCompactHintLayout({
   const stackedHints = confirmCardKeyHintsForWidth({
     approveLabel,
     rejectLabel,
+    escapeLabel,
     alwaysAllowLabel,
     extraActions,
     maxColumns: columns,

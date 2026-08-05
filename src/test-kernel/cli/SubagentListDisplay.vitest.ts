@@ -432,7 +432,8 @@ describe('CLI child list display model', () => {
 
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
-    expect(childStatusColor('running')).toBe('green');
+    expect(childStatusColor('running')).toBe('cyan');
+    expect(childStatusColor('completed')).toBe('green');
     expect(childStatusColor('waiting')).toBe('yellow');
     expect(childStatusColor('failed')).toBe('red');
     expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');

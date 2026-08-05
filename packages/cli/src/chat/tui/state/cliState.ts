@@ -547,6 +547,12 @@ export function closeInfoPane(): void {
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
+/** Windowed content rows of the chat input's current draft (≥ 1), reported
+ * by `InputBar`. The row allocator budgets the input bar from this instead of
+ * assuming the single-line height, so a multi-line draft shrinks the
+ * transcript rather than growing the live frame past the terminal. */
+export const inputBarContentRows = signal<number>(1);
+
 // ---------------------------------------------------------------------------
 // transientNoticeSlice
 // ---------------------------------------------------------------------------
@@ -579,7 +585,12 @@ const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 export const transientNotice = signal<TransientNotice | undefined>(undefined);
 let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Show a regenerable status-bar notice for a bounded interval. */
+/** Show a regenerable status-bar notice for a bounded interval.
+ *
+ * `ttlMs: Infinity` makes the notice sticky — it stays until replaced by a
+ * later notice or cleared explicitly. Error reports use this: a 4-second
+ * auto-dismiss is a silent failure for anyone who glances away, and the
+ * single-slot model already bounds how long a stale notice can linger. */
 export function setTransientNotice(
   text: string,
   options: TransientNoticeOptions = {},
@@ -598,6 +609,10 @@ export function setTransientNotice(
       : { kind: 'message', text: singleLineText, expiresAt };
   if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
   transientNotice.set(notice);
+  if (!Number.isFinite(ttlMs)) {
+    transientNoticeTimer = undefined;
+    return;
+  }
   transientNoticeTimer = setTimeout(() => {
     if (transientNotice.get() === notice) {
       transientNotice.set(undefined);
