@@ -77,7 +77,7 @@ function userQuestionInlineClipIndicator({
   readonly line: UserQuestionPromptLine;
   readonly width: number;
 }): UserQuestionPromptLine {
-  const prefix = `... ${hiddenRows} clipped rows - `;
+  const prefix = `… ${hiddenRows} clipped rows - `;
   const clippedPrefix = clipToWidth(prefix, width);
   const remainingWidth = Math.max(0, width - textDisplayWidth(clippedPrefix));
   if (remainingWidth <= 0) return { kind: 'overflow', text: clippedPrefix };

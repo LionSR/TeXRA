@@ -245,7 +245,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             </Text>
           ))}
           {selectWindow.showWorkflowOverflow ? (
-            <Text dimColor>{`... ${
+            <Text dimColor>{`… ${
               workflowRows.length - visibleWorkflowRows.length
             } more workflows`}</Text>
           ) : null}

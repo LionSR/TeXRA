@@ -12,10 +12,7 @@ import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  BaseTextInput,
-  textInputDisplayRowCount,
-} from '../input/BaseTextInput';
+import { BaseTextInput, textInputCappedRowCount } from '../input/BaseTextInput';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,
@@ -122,7 +119,9 @@ export function submitSlashCommandWhenReady({
 }
 
 /** Cap on visible draft rows: a huge paste windows instead of consuming the
- *  transcript. Mirrors the modal free-text inputs' bounded-rows approach. */
+ *  transcript. Mirrors the modal free-text inputs' bounded-rows approach.
+ *  Must match `maxDisplayRows` on BaseTextInput so the caret-aware window
+ *  and the Box height stay one budget (see textInputCappedRowCount). */
 const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 /** Round border (2) + paddingX (2) + pointer prompt `› ` (2). Must match
  *  the rendered chrome exactly: telling the window a wider width than Ink
@@ -131,10 +130,11 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 function draftDisplayRows(value: string, width: number): number {
-  return Math.min(
-    INPUT_BAR_MAX_CONTENT_ROWS,
-    Math.max(1, textInputDisplayRowCount(value, width)),
-  );
+  // Do not clamp soft-wrap content alone and then forget the caret: the
+  // capped helper keeps height and maxDisplayRows on the same budget, and
+  // textInputDisplayWindow reserves a row for the end-of-value caret when
+  // content would otherwise fill every row of that budget.
+  return textInputCappedRowCount(value, width, INPUT_BAR_MAX_CONTENT_ROWS);
 }
 
 export function InputBar(props: InputBarProps): React.JSX.Element {

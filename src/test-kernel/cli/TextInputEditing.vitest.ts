@@ -16,6 +16,7 @@ import {
   verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
+  textInputCappedRowCount,
   textInputDisplayRowCount,
   textInputDisplayWindow,
 } from '@cli/chat/tui/input/BaseTextInput';
@@ -354,9 +355,12 @@ describe('textInputDisplayWindow', () => {
     const value = 'aaaa\nbbbb\ncccc\ndddd\neeee';
     const width = 4;
     expect(textInputDisplayRowCount(value, width)).toBe(6);
+    // InputBar pairs this height with maxDisplayRows so the window and Box
+    // share one budget (the caret row is not discarded by the ceiling).
+    expect(textInputCappedRowCount(value, width, 5)).toBe(5);
     const windowed = textInputDisplayWindow({
       cursor: value.length,
-      maxDisplayRows: 5,
+      maxDisplayRows: textInputCappedRowCount(value, width, 5),
       value,
       width,
     });

@@ -271,6 +271,24 @@ export function textInputDisplayRowCount(value: string, width: number): number {
   return rows.length + (lastRowFull ? 1 : 0);
 }
 
+/**
+ * Height to allocate for a height-capped text input (InputBar, modal free
+ * text). Includes the end-of-value caret wrap when it fits under `maxRows`.
+ *
+ * When the uncapped need exceeds `maxRows`, returns `maxRows` — callers must
+ * pass the **same** value as `maxDisplayRows` so {@link textInputDisplayWindow}
+ * can reserve one of those rows for the caret instead of painting five full
+ * content rows and clipping the wrap under `overflowY="hidden"`.
+ */
+export function textInputCappedRowCount(
+  value: string,
+  width: number,
+  maxRows: number,
+): number {
+  const cap = Math.max(1, maxRows);
+  return Math.min(cap, Math.max(1, textInputDisplayRowCount(value, width)));
+}
+
 export function textInputDisplayWindow({
   cursor,
   maxDisplayRows,
