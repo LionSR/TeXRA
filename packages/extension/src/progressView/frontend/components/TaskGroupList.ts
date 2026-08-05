@@ -589,18 +589,18 @@ export class TaskGroupList extends LitElement {
       return renderEmptyState({
         icon: 'terminal',
         title: 'No runs yet',
-        body: 'Use TeXRA commands to start.',
+        body: 'Start an agent from the New tab or Commands.',
         headingTag: 'h3',
         className: 'log-placeholder',
         actions: [
           {
-            label: 'Run setup',
+            label: 'Run setup assistant',
             icon: 'rocket',
             size: 's',
             onClick: () => this.handleGettingStartedAction('runSetup'),
           },
           {
-            label: 'Sample project',
+            label: 'Create sample project',
             icon: 'file-circle-plus',
             size: 's',
             onClick: () =>
@@ -619,7 +619,7 @@ export class TaskGroupList extends LitElement {
             onClick: () => this.handleGettingStartedAction('downloadArxiv'),
           },
           {
-            label: 'Walkthrough',
+            label: 'Open walkthrough',
             icon: 'book',
             size: 's',
             onClick: () => this.handleGettingStartedAction('openWalkthrough'),

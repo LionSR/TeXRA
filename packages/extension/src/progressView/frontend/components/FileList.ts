@@ -155,7 +155,7 @@ export class FileList extends LitElement {
       <wa-details
         id=${ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE}
         class="panel-collapsible"
-        summary="Generated Files"
+        summary="Generated files"
         open
       >
         ${this.renderStorageHint()}

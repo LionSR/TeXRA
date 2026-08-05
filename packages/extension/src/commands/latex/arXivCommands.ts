@@ -54,10 +54,10 @@ export async function downloadArXivSource(): Promise<void> {
     // Auto-indent is not supported for root destination (would reformat all workspace files)
     const autoIndent =
       destination !== 'root' &&
-      (await vscode.window.showQuickPick(['Yes', 'No'], {
+      (await vscode.window.showQuickPick(['Indent files', 'Skip'], {
         placeHolder: 'Auto-indent LaTeX files after download?',
         canPickMany: false,
-      })) === 'Yes';
+      })) === 'Indent files';
     const extractedPath = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,

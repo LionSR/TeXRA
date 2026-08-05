@@ -26,7 +26,6 @@ import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 
 // Local imports - utilities
-import { capitalize } from '@utils/text/stringUtils';
 
 // Local imports - main view
 import {
@@ -460,11 +459,11 @@ export function runPanelAction(action: ActionDetail['action']): void {
         inputFiles: useMultiple ? additionalInputFiles : undefined,
       } satisfies Omit<PackMultipleMessage, 'command'>);
 
-      const actionLabel = capitalize(action);
+      const progressLabel = action === 'clean' ? 'Cleaning' : 'Packing';
       showInformation(
         useMultiple
-          ? `${actionLabel}ing multiple files: ${filteredInputs.join(', ')}`
-          : `${actionLabel}ing single file: ${inputFile}`,
+          ? `${progressLabel} multiple files: ${filteredInputs.join(', ')}`
+          : `${progressLabel} single file: ${inputFile}`,
       );
       break;
     }
@@ -518,9 +517,9 @@ export function runLatexDiffsAction(
         commitHash,
         clean,
       } satisfies Omit<PackLatexdiffvcMessage, 'command'>);
-      const actionLabel = clean ? 'Clean' : 'Pack';
+      const progressLabel = clean ? 'Cleaning' : 'Packing';
       showInformation(
-        `${actionLabel}ing LaTeX diff with version control: ${sf.baseFile} at commit ${commitHash}`,
+        `${progressLabel} LaTeX diff with version control: ${sf.baseFile} at commit ${commitHash}`,
       );
       break;
     }

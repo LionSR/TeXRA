@@ -129,7 +129,7 @@ export async function handleCompare(
       if (message.includes(`command '${contextKeyCommandId}' not found`)) {
         logger.warn(
           CHANNEL,
-          `Could not check ProgressBoard location: command '${contextKeyCommandId}' not found`,
+          `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
         );
       } else {
         throw err;
@@ -240,7 +240,7 @@ export async function handleAcceptEdited(
       return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
         ...COMMIT_PORTS,
         exists: (location) => AbsoluteFS.exists(location.absolutePath),
-        confirm: (message) => confirmModal(message, 'Yes', 'Cancel'),
+        confirm: (message) => confirmModal(message, 'Replace file', 'Cancel'),
       });
     }
 

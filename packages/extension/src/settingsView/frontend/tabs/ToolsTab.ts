@@ -352,7 +352,7 @@ export class ToolsTab extends LitElement {
                         ${renderSettingsToggleRow({
                           label: 'Restrict tool paths to the working directory',
                           description:
-                            'When disabled, file, search, diagnostics, and PDF tools may use arbitrary filesystem paths.',
+                            'Keep file, search, diagnostics, and PDF tools inside the working directory.',
                           checked: this.toolPathProtectionEnabled,
                           onChange: this.handleToolPathProtectionToggle,
                         })}
