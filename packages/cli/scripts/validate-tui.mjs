@@ -2395,7 +2395,7 @@ const SCENARIOS = [
   },
   // PTY ordering tests (issue #7972): the harness drives one child stream's
   // attachment/roster/edge/status/removal facts through the real
-  // `attachTuiRunFactSubscription`/`subscribeStreamStatus` subscription path,
+  // `attachSessionSignalsAdapter`/`subscribeStreamStatus` subscription path,
   // not the CHILD_STREAMS map mutators directly. After each fact, the harness
   // awaits the Ink render flush and emits an out-of-band marker. The validator
   // snapshots xterm at that exact byte-stream boundary, so a transiently-wrong
