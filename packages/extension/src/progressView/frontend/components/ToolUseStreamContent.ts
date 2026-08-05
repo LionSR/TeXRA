@@ -47,11 +47,19 @@ export class ToolUseStreamContent extends BaseStreamContent {
       )}
 
       <div class="conversation-content">
-        <div class="conversation-column conversation-prelude">
-          <request-panels
-            .permissions=${this.filteredPermissions}
-          ></request-panels>
+        ${
+          this.filteredPermissions.length > 0
+            ? html`
+                <div class="conversation-column conversation-approval-dock">
+                  <request-panels
+                    .permissions=${this.filteredPermissions}
+                  ></request-panels>
+                </div>
+              `
+            : nothing
+        }
 
+        <div class="conversation-column conversation-prelude">
           <todo-list
             .todos=${currentState.todos}
             .collapseKey=${streamInfo.name}
