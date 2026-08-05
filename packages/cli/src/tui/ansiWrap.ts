@@ -45,7 +45,7 @@ function markdownContinuationPrefix(line: string):
     }
   | undefined {
   const plain = stripAnsi(line);
-  const list = plain.match(/^((?:│ )*)( {2}(?:•|\d+[.)]) )/);
+  const list = plain.match(/^((?:│ )*)( {2,}(?:•|\d+[.)]) )/);
   if (list) {
     const quote = list[1] ?? '';
     const marker = list[2] ?? '';

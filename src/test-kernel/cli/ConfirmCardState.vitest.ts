@@ -34,7 +34,7 @@ describe('CLI confirm-card key handling', () => {
     rejectionMode: 'immediate',
   } as const;
 
-  it('approves with y, collects rejection feedback with n, and cancels with escape', () => {
+  it('approves with y, collects rejection feedback with n, and rejects with escape', () => {
     expect(confirmCardKeyAction('y', {}, feedbackRejection)).toBe('approve');
     expect(confirmCardKeyAction('Y', {}, feedbackRejection)).toBe('approve');
     expect(confirmCardKeyAction('n', {}, feedbackRejection)).toBe('feedback');
@@ -80,7 +80,7 @@ describe('CLI confirm-card key handling', () => {
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject & note' },
       { key: 'a', action: 'approve all' },
-      { key: 'Esc', action: 'cancel' },
+      { key: 'Esc', action: 'reject' },
     ]);
 
     expect(
@@ -128,7 +128,7 @@ describe('CLI confirm-card key handling', () => {
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject & note' },
       { key: 'a', action: 'approve all' },
-      { key: 'Esc', action: 'cancel' },
+      { key: 'Esc', action: 'reject' },
     ]);
     expect(
       compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
@@ -164,7 +164,7 @@ describe('CLI confirm-card key handling', () => {
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
       { key: 'a', action: 'all' },
-      { key: 'Esc', action: 'cancel' },
+      { key: 'Esc', action: 'reject' },
     ]);
     expect(
       compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
@@ -181,7 +181,7 @@ describe('CLI confirm-card key handling', () => {
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
       { key: 'a', action: 'all' },
-      { key: 'Esc', action: 'cancel' },
+      { key: 'Esc', action: 'reject' },
     ]);
 
     expect(
@@ -192,7 +192,7 @@ describe('CLI confirm-card key handling', () => {
     ).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'Esc', action: 'cancel' },
+      { key: 'Esc', action: 'reject' },
     ]);
 
     expect(
@@ -200,7 +200,7 @@ describe('CLI confirm-card key handling', () => {
         alwaysAllowLabel: 'approve all',
         maxColumns: 10,
       }),
-    ).toEqual([{ key: 'Esc', action: 'cancel' }]);
+    ).toEqual([{ key: 'Esc', action: 'reject' }]);
   });
 
   it('reports stacked compact chrome rows for long extra actions', () => {

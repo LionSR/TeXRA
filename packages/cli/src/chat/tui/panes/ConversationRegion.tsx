@@ -34,6 +34,8 @@ import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList, workflowDashboardPanelItemCount } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
+import { inputBarContentRows } from '../state/cliState';
+import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ChildListTarget } from '../state/childControls';
@@ -130,9 +132,13 @@ export function ConversationRegion({
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
+  // Input-bar height follows the windowed draft (borders + reported content
+  // rows) so a multi-line draft shrinks the transcript instead of pushing
+  // the pinned chrome off-screen.
+  const inputRows =
+    PINNED_CHROME_ROWS.input - 1 + useSignal(inputBarContentRows);
   const footerRows =
-    PINNED_CHROME_ROWS.status +
-    (inputBarVisible ? PINNED_CHROME_ROWS.input : 0);
+    PINNED_CHROME_ROWS.status + (inputBarVisible ? inputRows : 0);
   const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
@@ -159,6 +165,7 @@ export function ConversationRegion({
     foregroundMaxRows: snapshot.foregroundMaxRows,
     foregroundOpen,
     inputVisible: inputBarVisible,
+    inputRows,
     queuedFollowUpPanelRows,
     reverseSearchOpen: snapshot.reverseSearchOpen,
     rows,
