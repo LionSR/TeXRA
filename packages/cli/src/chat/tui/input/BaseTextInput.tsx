@@ -291,15 +291,27 @@ export function textInputDisplayWindow({
   const sourceCursor = clampCursor(cursor, value.length);
   const rows = textInputDisplayRows(value, columnCount);
   const cursorRowIndex = cursorDisplayRowIndex(rows, sourceCursor);
+  // End-of-value caret on a full last row wraps to its own visual line. When
+  // the caller clamps height (e.g. InputBar's 5-row ceiling), reserve one of
+  // those rows for the caret so the wrap is not clipped by overflowY=hidden.
+  const last = rows.at(-1);
+  const caretNeedsExtraRow =
+    sourceCursor >= value.length &&
+    last !== undefined &&
+    textDisplayWidth(textInputDisplayRowValue(value, last)) >= columnCount;
+  const contentRowBudget =
+    caretNeedsExtraRow && rows.length >= rowCount
+      ? Math.max(1, rowCount - 1)
+      : rowCount;
   let startRow = 0;
   let endRow = rows.length;
-  if (rows.length > rowCount) {
+  if (rows.length > contentRowBudget) {
     const keepRowsAfterCursor = Math.min(
       rows.length - cursorRowIndex - 1,
-      Math.floor(rowCount / 4),
+      Math.floor(contentRowBudget / 4),
     );
     endRow = Math.min(rows.length, cursorRowIndex + keepRowsAfterCursor + 1);
-    startRow = Math.max(0, endRow - rowCount);
+    startRow = Math.max(0, endRow - contentRowBudget);
   }
   const visibleRows = rows.slice(startRow, endRow);
   const clipped = startRow > 0 || endRow < rows.length;
@@ -631,8 +643,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   // The caret is reverse-video, which is SGR — under NO_COLOR / --no-color /
   // TERM=dumb the output stream strips every SGR sequence and the cursor
-  // would be invisible. Fall back to a literal caret glyph inserted at the
-  // cursor position (one extra column, only in colorless sessions).
+  // would be invisible. Fall back to a literal caret glyph that replaces the
+  // character under the cursor in place (same column budget as inverse),
+  // rather than inserting beside it and overflowing the wrap math.
   const glyphCaret = !isTuiColorEnabled();
 
   if (value.length === 0) {
@@ -676,14 +689,13 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       </Text>
     );
   }
+  // Glyph caret replaces the under-cursor cell (or occupies the EOF cell)
+  // instead of prepending beside it — otherwise near-full lines wrap and the
+  // height-capped input box clips the overflow.
   return (
     <Text>
       {before}
-      {glyphCaret ? (
-        <Text>{`▏${ch ?? ''}`}</Text>
-      ) : (
-        <Text inverse>{ch ?? ' '}</Text>
-      )}
+      {glyphCaret ? <Text>▏</Text> : <Text inverse>{ch ?? ' '}</Text>}
       {after}
     </Text>
   );

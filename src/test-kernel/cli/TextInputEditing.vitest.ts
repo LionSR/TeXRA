@@ -15,7 +15,10 @@ import {
   previousWordCursor,
   verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
-import { textInputDisplayRowCount } from '@cli/chat/tui/input/BaseTextInput';
+import {
+  textInputDisplayRowCount,
+  textInputDisplayWindow,
+} from '@cli/chat/tui/input/BaseTextInput';
 import {
   isCtrlInput,
   isEscapeInput,
@@ -340,5 +343,26 @@ describe('textInputDisplayRowCount', () => {
     // Hard newlines count as rows.
     expect(textInputDisplayRowCount('one\ntwo', 38)).toBe(2);
     expect(textInputDisplayRowCount('', 38)).toBe(1);
+  });
+});
+
+describe('textInputDisplayWindow', () => {
+  it('reserves a height-capped row for the end-of-value caret on a full last line', () => {
+    // Five full rows of content (width 4 → 4 chars each). Caret at EOF wants a
+    // sixth visual row; with maxDisplayRows=5 the window must drop one content
+    // row so the caret wrap fits inside the budget instead of clipping.
+    const value = 'aaaa\nbbbb\ncccc\ndddd\neeee';
+    const width = 4;
+    expect(textInputDisplayRowCount(value, width)).toBe(6);
+    const windowed = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 5,
+      value,
+      width,
+    });
+    // Four content rows + room for the caret row; leading content is clipped.
+    expect(windowed.clipped).toBe(true);
+    expect(windowed.value.split('\n')).toHaveLength(4);
+    expect(windowed.cursor).toBe(windowed.value.length);
   });
 });

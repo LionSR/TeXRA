@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
-import { COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_ERROR, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import {
   clampModalWidth,

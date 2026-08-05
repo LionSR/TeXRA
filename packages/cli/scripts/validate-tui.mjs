@@ -669,7 +669,12 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
-    expect: ['/model', 'Choose the model for this chat', 'Esc close', 'Tab complete'],
+    expect: [
+      '/model',
+      'Choose the model for this chat',
+      'Esc close',
+      'Tab complete',
+    ],
   },
   {
     name: 'slash-help',

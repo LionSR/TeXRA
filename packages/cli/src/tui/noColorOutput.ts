@@ -1,3 +1,5 @@
+import { signal } from '@lit-labs/signals';
+
 import { ANSI_ESCAPE_START } from '@cli/runtime/ansiEscapes';
 
 interface SgrStripState {
@@ -96,17 +98,18 @@ export function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(
 // and one-shot prompts route their stdout through it), and components whose
 // only styling is SGR — the text-input caret's reverse-video — need a glyph
 // fallback when everything SGR is stripped. One Ink instance renders at a
-// time, so a single module slot is safe.
-let tuiColorEnabled = true;
+// time, so a single slot is enough. Use a signal (not a bare `let`) so tests
+// can reset it the same way other CLI TUI publish-once state does.
+const tuiColorEnabled = signal(true);
 
 export function isTuiColorEnabled(): boolean {
-  return tuiColorEnabled;
+  return tuiColorEnabled.get();
 }
 
 export function tuiOutputStreamForColor<T extends NodeJS.WriteStream>(
   stream: T,
   colorEnabled: boolean,
 ): T {
-  tuiColorEnabled = colorEnabled;
+  tuiColorEnabled.set(colorEnabled);
   return colorEnabled ? stream : sgrStrippingWriteStream(stream);
 }
