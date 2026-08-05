@@ -42,7 +42,19 @@ import {
 import './QueuedFollowUps';
 
 // Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+
+/** True when any shadow host or light ancestor has `data-desktop-view`. */
+function hostHasDesktopViewAttribute(start: Element): boolean {
+  let el: Element | null = start;
+  while (el) {
+    if (el.hasAttribute('data-desktop-view')) return true;
+    const root = el.getRootNode();
+    el = root instanceof ShadowRoot ? root.host : el.parentElement;
+  }
+  return false;
+}
 
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
@@ -61,6 +73,11 @@ export class FollowUpInput extends LitElement {
 
       :host([hidden]) {
         display: none;
+      }
+
+      /* VS Code only (see useCollapsibleShell): match Todos / Plan chrome. */
+      wa-details.panel-collapsible {
+        min-width: 0;
       }
 
       .follow-up-container {
@@ -238,6 +255,9 @@ export class FollowUpInput extends LitElement {
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
 
+  @query('wa-details')
+  declare private detailsEl: (HTMLElement & { open: boolean }) | null;
+
   private recordingController = new RecordingButtonController(this, {
     startCommand: PROGRESS_VIEW_COMMANDS.START_RECORDING,
     stopCommand: PROGRESS_VIEW_COMMANDS.STOP_RECORDING,
@@ -385,14 +405,32 @@ export class FollowUpInput extends LitElement {
     this.updateValue(insertText, streamId, 'append', eventSink);
   }
 
+  /**
+   * Desktop mounts `<stream-conversation data-desktop-view="progress">` and
+   * keeps the composer always open. VS Code Progress Board uses the collapsible
+   * shell so the six-line Message box does not permanently own the footer.
+   * Walk shadow hosts because FollowUpInput sits under nested shadow roots.
+   */
+  private get useCollapsibleShell(): boolean {
+    return !hostHasDesktopViewAttribute(this);
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (this.archived) return nothing;
+    const body = this.renderComposerBody();
+    // VS Code only: restore the pre-desktop-modernize wa-details chrome.
+    // Desktop already has a roomy conversation pane — leave the composer open.
+    if (!this.useCollapsibleShell) return body;
     return html`
-      <section
-        id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
-        class="follow-up-container"
-        aria-label="Follow-up message"
-      >
+      <wa-details class="panel-collapsible" summary="Followup">
+        ${body}
+      </wa-details>
+    `;
+  }
+
+  private renderComposerBody(): TemplateResult {
+    return html`
+      <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
         ${
           this.queuedMessages.length > 0
             ? html`<queued-follow-ups
@@ -459,7 +497,7 @@ export class FollowUpInput extends LitElement {
             })}
           </div>
         </div>
-      </section>
+      </div>
     `;
   }
 
@@ -472,7 +510,12 @@ export class FollowUpInput extends LitElement {
     // Don't focus if not visible
     if (!this.visible) return;
 
-    // Wait for Lit to finish rendering (replaces setTimeout debounce)
+    // VS Code collapsible shell: expand so the composer is visible.
+    if (this.detailsEl && !this.detailsEl.open) {
+      this.detailsEl.open = true;
+    }
+
+    // Wait for Lit / wa-details to finish laying out
     await this.updateComplete;
 
     if (!this.textAreaEl || !this.visible) return;
