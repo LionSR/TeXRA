@@ -27,8 +27,7 @@ export const toolUseStyles = css`
 
   .tool-use-sublabel {
     font-weight: var(--font-weight-medium);
-    color: var(--wa-color-text-normal);
-    opacity: var(--opacity-normal);
+    color: var(--color-text-muted);
     font-size: var(--font-size-sm);
   }
 

@@ -99,8 +99,7 @@ export const streamTabStyles = css`
     align-items: center;
     gap: var(--wa-space-3xs);
     font-size: var(--font-size-xs);
-    color: var(--wa-color-text-normal);
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -220,13 +219,13 @@ export const streamTabStyles = css`
 
   .compact-subagent-hint {
     font-size: var(--font-size-xs);
-    opacity: var(--opacity-faint);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 
   .nested-stream-icon {
     font-size: var(--font-size-xs);
-    opacity: var(--opacity-faint);
+    color: var(--color-text-muted);
     flex-shrink: 0;
     margin-inline-end: var(--wa-space-3xs);
   }
@@ -252,8 +251,7 @@ export const streamTabStyles = css`
     width: 24px;
     min-width: 24px;
     height: 100%;
-    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-    opacity: var(--opacity-muted);
+    color: var(--color-text-muted);
   }
 
   .tab-expand::part(base) {

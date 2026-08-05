@@ -34,7 +34,7 @@ export const groupStyles = css`
     /* A user stop is neither success nor error, so the rail reads neutral,
        matching the shared status dot and the CLI row marker. */
     &.is-cancelled {
-      border-left-color: var(--wa-color-text-quiet);
+      border-left-color: var(--border-control);
     }
   }
 
@@ -67,13 +67,13 @@ export const groupStyles = css`
   .group-progress {
     font-size: var(--font-size-sm);
     font-variant-numeric: tabular-nums;
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     margin-inline-start: var(--wa-space-2xs);
   }
 
   .group-time {
     font-size: var(--font-size-sm);
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     margin-inline-start: var(--wa-space-2xs);
   }
 
