@@ -95,7 +95,7 @@ describe('selectWorkflowRunDetailLines', () => {
       '✓ Repository audit Finished · 9s',
       '✓ r1/2 Finished · 7s',
       '  Generated files',
-      '    › output/paper.tex (+12 -3)',
+      '    • output/paper.tex (+12 -3)',
       '  ⚠ r1 · Missing expected output: appendix.tex',
       '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
       '□ r2/2 Planned',
@@ -278,7 +278,7 @@ describe('selectWorkflowRunDetailLines', () => {
     );
 
     expect(lines.map((line) => line.text)).toEqual([
-      '✓ r1/2 Finished · 1s',
+      '✓ r1/2 Finished · 0s',
       '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
       '□ r2/2 Planned',
     ]);

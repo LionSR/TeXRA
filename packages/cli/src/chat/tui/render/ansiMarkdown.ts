@@ -176,6 +176,10 @@ function configureAnsi(
   const r = md.renderer.rules;
   let quoteDepth = 0;
   let headingDepth = 0;
+  let headingLevel = 0;
+  let listDepth = 0;
+  let linkHref: string | undefined;
+  let linkText = '';
 
   const quotePrefix = (): string =>
     quoteDepth > 0 ? style.dim('│ '.repeat(quoteDepth)) : '';
@@ -205,9 +209,15 @@ function configureAnsi(
     )}`;
   };
 
+  // Styled sessions keep the tested no-visible-markers look (level is carried
+  // by styling in `styleHeadingText`). Without color there is no styling left
+  // at all — a heading would render as a plain paragraph — so the `#` markers
+  // are re-emitted as the only structure cue a bare terminal can show.
   r.heading_open = (tokens, idx) => {
     headingDepth += 1;
-    return quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
+    headingLevel = Number(tokens[idx]?.tag.slice(1)) || 1;
+    const gutter = quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
+    return style.enabled ? gutter : `${gutter}${'#'.repeat(headingLevel)} `;
   };
   r.heading_close = () => {
     headingDepth = Math.max(0, headingDepth - 1);
@@ -240,8 +250,15 @@ function configureAnsi(
   r.s_open = () => style.sgr(9);
   r.s_close = () => style.sgr(29);
 
-  const styleHeadingText = (text: string): string =>
-    headingDepth > 0 ? style.bold(style.cyan(text)) : text;
+  // One rank per level instead of a single uniform heading look: h1 adds an
+  // underline, h2 keeps the classic bold cyan, h3+ steps down to plain bold —
+  // otherwise `#` and `####` are visually the same heading.
+  const styleHeadingText = (text: string): string => {
+    if (headingDepth === 0) return text;
+    if (headingLevel <= 1) return style.underline(style.bold(style.cyan(text)));
+    if (headingLevel === 2) return style.bold(style.cyan(text));
+    return style.bold(text);
+  };
 
   r.code_inline = (tokens, idx) => {
     const code = `\`${tokens[idx]?.content ?? ''}\``;
@@ -267,20 +284,34 @@ function configureAnsi(
       style.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? ''),
     )}\n\n`;
 
-  r.bullet_list_open = () => '';
-  r.bullet_list_close = () => '';
-  r.ordered_list_open = () => '';
-  r.ordered_list_close = () => '';
+  r.bullet_list_open = () => {
+    listDepth += 1;
+    return '';
+  };
+  r.bullet_list_close = () => {
+    listDepth = Math.max(0, listDepth - 1);
+    return '';
+  };
+  r.ordered_list_open = () => {
+    listDepth += 1;
+    return '';
+  };
+  r.ordered_list_close = () => {
+    listDepth = Math.max(0, listDepth - 1);
+    return '';
+  };
   // The first item in a list inherits the blockquote gutter from
   // `blockquote_open`; continuation items follow a `list_item_close → \n`
   // and need the gutter re-injected so the second bullet doesn't render
-  // at column 0.
+  // at column 0. Indent scales with `listDepth` so nested items sit under
+  // their parent instead of flattening to one level.
   r.list_item_open = (tokens, idx) => {
     const token = tokens[idx];
     const marker = token?.info ? `${token.info}${token.markup || '.'}` : '•';
     const prev = tokens[idx - 1]?.type;
     const fresh = prev === 'bullet_list_open' || prev === 'ordered_list_open';
-    return `${fresh ? '' : quotePrefix()}  ${style.dim(marker)} `;
+    const indent = '  '.repeat(Math.max(1, listDepth));
+    return `${fresh ? '' : quotePrefix()}${indent}${style.dim(marker)} `;
   };
   r.list_item_close = () => '';
 
@@ -296,20 +327,45 @@ function configureAnsi(
   };
 
   r.hr = (tokens, idx) =>
-    `${quoteBlockStart(tokens, idx)}${style.dim('─'.repeat(40))}\n`;
+    `${quoteBlockStart(tokens, idx)}${style.dim(
+      '─'.repeat(Math.max(1, Math.min(40, width ?? 40))),
+    )}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The
   // bracket characters are part of the styled run; if we used `pico.blue('[')`
   // here the close-code would land immediately and the link text would render
-  // unstyled (Cursor finding).
-  r.link_open = () => `${style.sgr(4)}${style.sgr(34)}[`;
-  r.link_close = () => `]${style.sgr(39)}${style.sgr(24)}`;
+  // unstyled (Cursor finding). Bright blue (94), not blue (34): non-bright
+  // ANSI blue is near-unreadable on stock dark palettes (~2.3:1 on xterm
+  // black). The destination is appended after the link text — the terminal
+  // has no other way to hand the URL to the reader — except when the text
+  // already is the URL (autolinks).
+  r.link_open = (tokens, idx) => {
+    const token = tokens[idx];
+    // Autolinks and linkified bare domains already show their destination as
+    // the link text; only explicit `[text](url)` needs the url appended.
+    const auto = token?.markup === 'linkify' || token?.info === 'auto';
+    const href = token?.attrGet('href');
+    linkHref = auto || href == null ? undefined : String(href);
+    linkText = '';
+    return `${style.sgr(4)}${style.sgr(94)}[`;
+  };
+  r.link_close = () => {
+    const href = linkHref;
+    linkHref = undefined;
+    const suffix =
+      href && href !== linkText ? ` ${style.dim(`(${href})`)}` : '';
+    return `]${style.sgr(39)}${style.sgr(24)}${suffix}`;
+  };
 
   r.softbreak = () => `\n${quotePrefix()}`;
   r.hardbreak = () => `\n${quotePrefix()}`;
 
   // markdown-it default `text` rule escapes HTML; we want raw text.
-  r.text = (tokens, idx) => styleHeadingText(tokens[idx]?.content ?? '');
+  r.text = (tokens, idx) => {
+    const content = tokens[idx]?.content ?? '';
+    if (linkHref !== undefined) linkText += content;
+    return styleHeadingText(content);
+  };
   r.image = (tokens, idx) =>
     style.dim(`[image: ${tokens[idx]?.content ?? ''}]`);
 
@@ -331,6 +387,8 @@ function configureAnsi(
   md.renderer.render = (rawTokens, options, env) => {
     quoteDepth = 0;
     headingDepth = 0;
+    listDepth = 0;
+    linkHref = undefined;
     const tokens = rawTokens as Token[];
     const collapsed: Token[] = [];
     for (let i = 0; i < tokens.length; i++) {
@@ -392,6 +450,8 @@ function configureAnsi(
     } finally {
       quoteDepth = 0;
       headingDepth = 0;
+      listDepth = 0;
+      linkHref = undefined;
     }
   };
 }

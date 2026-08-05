@@ -75,7 +75,7 @@ describe('CLI scrollable modal text section', () => {
     expect(visible).toHaveLength(budget);
     expect(visible.at(-1)).toEqual({
       kind: 'overflow',
-      text: '... 6 more rows',
+      text: '… 6 more rows',
     });
     expect(visible.map((line) => line.text)).not.toContain(
       '  print(solutions)',
@@ -98,7 +98,7 @@ describe('CLI scrollable modal text section', () => {
 
     expect(visible.at(0)).toEqual({
       kind: 'overflow',
-      text: `... ${offset} previous rows`,
+      text: `… ${offset} previous rows`,
     });
     expect(visible.map((line) => line.text)).toContain('  print(solutions)');
     expect(visible.map((line) => line.text)).toContain('  EOF');
@@ -125,7 +125,7 @@ describe('CLI scrollable modal text section', () => {
     );
     expect(visible.at(-1)).toEqual({
       kind: 'overflow',
-      text: '... 3 previous, 8 more rows',
+      text: '… 3 previous, 8 more rows',
     });
   });
 

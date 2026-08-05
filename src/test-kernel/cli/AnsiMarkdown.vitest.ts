@@ -107,7 +107,7 @@ describe('renderAnsiMarkdown', () => {
     );
     const plain = stripAnsi(out);
 
-    expect(plain).toContain('│ Quoted Report');
+    expect(plain).toContain('│ ### Quoted Report');
     expect(plain).toContain('│ The proof is fully verified.');
     expect(plain).not.toContain('\nQuoted Report');
     expect(plain).not.toContain('<blockquote>');
@@ -203,6 +203,65 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('Core objects');
     expect(plain).not.toContain('## What');
     expect(plain).not.toContain('### Core');
+  });
+
+  it('re-emits heading markers only when color is disabled', () => {
+    expect(stripAnsi(renderAnsiMarkdown('## Section'))).not.toContain(
+      '## Section',
+    );
+    expect(renderAnsiMarkdown('## Section', { colorEnabled: false })).toContain(
+      '## Section',
+    );
+  });
+
+  it('styles heading levels distinctly', () => {
+    const h1 = renderAnsiMarkdown('# Title');
+    const h2 = renderAnsiMarkdown('## Title');
+    const h3 = renderAnsiMarkdown('### Title');
+    expect(h1).toContain(`${ESC}[4m`);
+    expect(h2).not.toContain(`${ESC}[4m`);
+    expect(h2).toContain(`${ESC}[36m`);
+    expect(h3).not.toContain(`${ESC}[36m`);
+    expect(h3).toContain(`${ESC}[1m`);
+  });
+
+  it('indents nested list items deeper than their parents', () => {
+    const out = stripAnsi(renderAnsiMarkdown('- parent\n  - child'));
+    expect(out).toContain('  • parent');
+    expect(out).toContain('    • child');
+  });
+
+  it('keeps nested-list indent on wrapped continuation lines', () => {
+    const lines = stripAnsi(
+      renderAnsiMarkdown('- parent\n  - abcdef ghijkl mnopqr', { width: 12 }),
+    ).split('\n');
+    const childIndex = lines.findIndex((line) => line.includes('• abcdef'));
+    expect(childIndex).toBeGreaterThan(-1);
+    expect(lines[childIndex]).toMatch(/^ {4}• /);
+    const continuations = lines
+      .slice(childIndex + 1)
+      .filter((line) => line.trim().length > 0);
+    expect(continuations.length).toBeGreaterThan(0);
+    for (const line of continuations) expect(line).toMatch(/^ {6}/);
+  });
+
+  it('appends link destinations that differ from the link text', () => {
+    const out = stripAnsi(
+      renderAnsiMarkdown('[docs](https://example.com/x)', {
+        colorEnabled: false,
+      }),
+    );
+    expect(out).toContain('[docs] (https://example.com/x)');
+  });
+
+  it('does not duplicate autolinked destinations', () => {
+    const out = stripAnsi(
+      renderAnsiMarkdown('Visit example.com and <https://a.io>', {
+        colorEnabled: false,
+      }),
+    );
+    expect(out).not.toContain('(http://example.com)');
+    expect(out).not.toContain('(https://a.io)');
   });
 
   it('renders markdown without ANSI styles when color is disabled', () => {

@@ -404,7 +404,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   return (
     <Box flexDirection="column" aria-role="listbox">
       {props.showOverflow && hiddenBefore > 0 ? (
-        <Text dimColor>{`... ${hiddenBefore} earlier`}</Text>
+        <Text dimColor>{`… ${hiddenBefore} earlier`}</Text>
       ) : null}
       {visibleItems.map((item, offset) => {
         const i = visibleRange.start + offset;
@@ -482,7 +482,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         );
       })}
       {props.showOverflow && hiddenAfter > 0 ? (
-        <Text dimColor>{`... ${hiddenAfter} more`}</Text>
+        <Text dimColor>{`… ${hiddenAfter} more`}</Text>
       ) : null}
     </Box>
   );

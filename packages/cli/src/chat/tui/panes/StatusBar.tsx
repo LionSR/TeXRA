@@ -254,7 +254,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      <Box paddingX={1}>
+      {/* height+overflow clamp: if the fitting sweep ever misses, clip the
+          row instead of letting Text soft-wrap the status area to 3 rows and
+          break the pinned 2-row chrome budget (scrollback churn, no alt
+          screen to hide it). */}
+      <Box paddingX={1} height={1} overflow="hidden">
         <Box gap={1}>
           {display.left.map((segment, index) =>
             segment.badge ? (

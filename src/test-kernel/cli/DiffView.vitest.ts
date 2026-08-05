@@ -54,7 +54,7 @@ describe('CLI diff display', () => {
     expect(lines).toHaveLength(4);
     expect(lines[0]).toMatchObject({
       kind: 'overflow',
-      text: '... 2 previous rows',
+      text: '… 2 previous rows',
     });
     expect(lines.at(-1)).toMatchObject({
       kind: 'overflow',
