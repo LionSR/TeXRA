@@ -12,7 +12,7 @@ import { useState } from 'react';
 
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
-import { POINTER } from '@cli/tui/ui/glyphs';
+import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import { stripPrefix } from '@shared/config/configKeys';
@@ -229,7 +229,7 @@ function ConfigTextEditor(props: {
       </Box>
       {error ? (
         <Box marginTop={1}>
-          <Text color={COLOR_ERROR}>{error}</Text>
+          <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
         </Box>
       ) : null}
       <Box marginTop={1}>
