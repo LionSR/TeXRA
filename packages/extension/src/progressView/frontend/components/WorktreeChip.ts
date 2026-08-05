@@ -8,7 +8,7 @@ import {
   type WorktreePRState,
   type WorktreeCIState,
 } from '@shared/schemas';
-import { designTokens } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
@@ -60,6 +60,7 @@ const CI_LABEL: Record<WorktreeCIState, string> = {
 export class WorktreeChip extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     css`
       :host {
         display: inline-flex;
@@ -103,18 +104,6 @@ export class WorktreeChip extends LitElement {
         border-radius: 50%;
         background-color: var(--wa-color-chart-orange, #d18616);
         flex-shrink: 0;
-      }
-
-      .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
       }
 
       .pr-number {
@@ -208,7 +197,7 @@ export class WorktreeChip extends LitElement {
                   role="img"
                   aria-label="uncommitted changes"
                 ></span>
-                <span class="sr-only">uncommitted changes</span>`
+                <span class="visually-hidden">uncommitted changes</span>`
             : nothing
         }
       </span>
