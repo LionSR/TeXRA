@@ -1019,8 +1019,9 @@ All notable changes to this project will be documented in this file.
   lookups stop at their next cancellation point (their client libraries are
   not mid-request abortable).
 - **Duplicate parallel tool calls no longer waste a model turn** — identical
-  read-only calls share one execution's result, and identical side-effect
-  calls are answered with a clear skip message instead of a retry prompt.
+  calls in one batch (including accidental GPT re-emissions of bash/write)
+  execute once and share that result with the duplicates, so the model does
+  not see skip errors or re-run the same side effect.
 - **Faster subagent result delivery** — the orchestrator wakes as soon as a
   subagent finishes instead of waiting for report persistence, and
   consecutive maintenance follow-ups batch into a single turn.

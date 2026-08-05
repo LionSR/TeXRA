@@ -25,7 +25,6 @@ import {
   normalizeToolCallError,
   parseToolInput,
   partitionDuplicateCalls,
-  UNSAFE_DUPLICATE_CALL_ERROR,
 } from './toolCallParsing';
 import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
@@ -79,10 +78,8 @@ function endsToolUseTurn(result: ToolExecutionResult | null): boolean {
  * under a small semaphore; any other tool acts as a barrier and runs alone,
  * preserving ordering guarantees when tools have dependencies (e.g., read
  * file then edit file). Duplicate parallel calls (identical name+arguments)
- * to parallel-safe tools execute once, with duplicates receiving a copy of
- * the primary's result; duplicates of side-effect tools get a synthetic
- * error instead, since sharing a success would misreport an effect that
- * never ran.
+ * execute once; duplicates receive a side-effect-stripped copy of the
+ * primary's result (including accidental GPT re-emissions of bash/write).
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
@@ -101,19 +98,9 @@ export class ToolUseDispatchNode<C> extends Node<
    */
   private _duplicateToPrimary = new Map<string, number>();
 
-  /**
-   * Duplicates of side-effect tools. Fanning the primary's success out
-   * would report an effect that never ran (two identical appends would
-   * "succeed" twice while running once), so these are answered with a
-   * synthetic error instead — the model can re-issue sequentially if it
-   * truly wants the effect twice.
-   */
-  private _unsafeDuplicateCallIds = new Map<string, number>();
-
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
     this._duplicateToPrimary.clear();
-    this._unsafeDuplicateCallIds.clear();
     this._currentUserInstruction = shared.currentUserInstruction;
     const toolCalls = shared.toolCalls ?? [];
 
@@ -127,22 +114,20 @@ export class ToolUseDispatchNode<C> extends Node<
     }
 
     // Deduplicate parallel calls (same tool name + identical arguments):
-    // parallel-safe duplicates share their primary's result, but only
-    // within a contiguous safe segment — a side-effect call in between may
-    // change what a repeated read returns. Side-effect duplicates are
-    // rejected with a synthetic error (see _unsafeDuplicateCallIds).
+    // execute once and fan the primary's result out to every duplicate.
+    // Parallel-safe sharing is limited to a contiguous safe segment; a
+    // side-effect call in between may change what a repeated read returns.
+    // Side-effect identicals share too (models often re-emit bash by
+    // accident); a different mutation between two identical mutations
+    // re-opens the window so intentional restores still run.
     if (toolCalls.length > 1) {
-      const partition = partitionDuplicateCalls(toolCalls, (call) =>
+      this._duplicateToPrimary = partitionDuplicateCalls(toolCalls, (call) =>
         this.isParallelSafe(call),
       );
-      this._duplicateToPrimary = partition.sharedWithPrimary;
-      this._unsafeDuplicateCallIds = partition.rejected;
 
-      const duplicateCount =
-        this._duplicateToPrimary.size + this._unsafeDuplicateCallIds.size;
-      if (duplicateCount > 0) {
+      if (this._duplicateToPrimary.size > 0) {
         this.services.logger.debug(
-          `Deduplicated ${duplicateCount} parallel tool call(s) with identical name and arguments (${this._unsafeDuplicateCallIds.size} side-effect duplicate(s) rejected)`,
+          `Deduplicated ${this._duplicateToPrimary.size} parallel tool call(s) with identical name and arguments`,
         );
       }
     }
@@ -166,12 +151,9 @@ export class ToolUseDispatchNode<C> extends Node<
       calls.length,
     ).fill(null);
     // Duplicates execute nothing — schedule only the live calls, then copy
-    // the primaries' results (or synthetic errors) onto them afterwards.
+    // the primaries' results onto them afterwards.
     const live = calls.flatMap((call, index) =>
-      this._duplicateToPrimary.has(call.callId) ||
-      this._unsafeDuplicateCallIds.has(call.callId)
-        ? []
-        : [index],
+      this._duplicateToPrimary.has(call.callId) ? [] : [index],
     );
     const { signal } = this.services.runScope;
     const queue = new PQueue({ concurrency: MAX_PARALLEL_TOOL_CALLS });
@@ -207,38 +189,13 @@ export class ToolUseDispatchNode<C> extends Node<
       if (run.some((index) => endsToolUseTurn(results[index]))) break;
     }
     this.fanOutDuplicateResults(calls, results);
-    this.rejectUnsafeDuplicates(calls, results);
     return results;
-  }
-
-  /** Answer side-effect duplicates with a synthetic error (never executed). */
-  private rejectUnsafeDuplicates(
-    calls: SdkToolCall[],
-    results: (ToolExecutionResult | null)[],
-  ): void {
-    for (const [index, call] of calls.entries()) {
-      const primaryIndex = this._unsafeDuplicateCallIds.get(call.callId);
-      if (primaryIndex === undefined) continue;
-      // If the primary never ran (interrupted batch), the duplicate stays
-      // null too — a "side effects" skip message would be misleading when
-      // no effect happened at all.
-      if (!results[primaryIndex]) continue;
-      const duplicateResult: ToolResult = {
-        status: 'error',
-        error: UNSAFE_DUPLICATE_CALL_ERROR,
-      };
-      results[index] = this.makeSyntheticResult(
-        call,
-        duplicateResult,
-        call.input,
-      );
-    }
   }
 
   /**
    * Build a synthetic ToolExecutionResult for a call that never actually
-   * executed a tool (duplicate fan-out, rejected duplicate, or cancelled
-   * call) — always empty edits/attachments, and a fresh logRef.
+   * executed a tool (duplicate fan-out or cancelled call) — always empty
+   * edits/attachments, and a fresh logRef.
    */
   private makeSyntheticResult(
     call: SdkToolCall,
@@ -310,7 +267,6 @@ export class ToolUseDispatchNode<C> extends Node<
   clone(): this {
     const cloned = super.clone();
     cloned._duplicateToPrimary = new Map();
-    cloned._unsafeDuplicateCallIds = new Map();
     cloned._currentUserInstruction = undefined;
     return cloned;
   }
