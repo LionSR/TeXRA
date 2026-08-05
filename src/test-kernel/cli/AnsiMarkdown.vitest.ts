@@ -209,9 +209,9 @@ describe('renderAnsiMarkdown', () => {
     expect(stripAnsi(renderAnsiMarkdown('## Section'))).not.toContain(
       '## Section',
     );
-    expect(
-      renderAnsiMarkdown('## Section', { colorEnabled: false }),
-    ).toContain('## Section');
+    expect(renderAnsiMarkdown('## Section', { colorEnabled: false })).toContain(
+      '## Section',
+    );
   });
 
   it('styles heading levels distinctly', () => {

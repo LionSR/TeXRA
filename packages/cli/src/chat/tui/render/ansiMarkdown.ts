@@ -217,9 +217,7 @@ function configureAnsi(
     headingDepth += 1;
     headingLevel = Number(tokens[idx]?.tag.slice(1)) || 1;
     const gutter = quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
-    return style.enabled
-      ? gutter
-      : `${gutter}${'#'.repeat(headingLevel)} `;
+    return style.enabled ? gutter : `${gutter}${'#'.repeat(headingLevel)} `;
   };
   r.heading_close = () => {
     headingDepth = Math.max(0, headingDepth - 1);

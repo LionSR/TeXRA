@@ -464,40 +464,40 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             height={draftContentRows}
             overflowY="hidden"
           >
-          <BaseTextInput
-            value={value}
-            focus={keyboardActive && !disabled && !reverseSearchOpen}
-            onChange={setValue}
-            displayWidth={inputDisplayWidth}
-            maxDisplayRows={draftContentRows}
-            // While the palette shows multiple rows it owns ↑/↓ for row
-            // selection; history recall would clobber the draft mid-navigation.
-            onHistoryUp={
-              paletteOwnsArrows ? undefined : () => browseHistory(-1)
-            }
-            onHistoryDown={
-              paletteOwnsArrows ? undefined : () => browseHistory(1)
-            }
-            imagePasteQueue={imagePasteQueue}
-            readLatestValue={() => draftValueRef.current}
-            prepareInputChunk={
-              showPalette ? replaceSlashTriggerInput : undefined
-            }
-            shouldDropInputChunk={
-              showPalette ? dropSlashPaletteControlTail : undefined
-            }
-            escapeEdit={showPalette ? clearDraftEdit : undefined}
-            transformPaste={transformPaste}
-            onImagePaste={onImagePaste}
-            onImagePasteError={(error) =>
-              setTransientNotice(
-                `Image paste failed: ${toErrorMessage(error)}`,
-                { ttlMs: Number.POSITIVE_INFINITY },
-              )
-            }
-            onInputChunkSubmit={handleInputChunkSubmit}
-            onSubmit={showPalette ? () => undefined : handleSubmit}
-          />
+            <BaseTextInput
+              value={value}
+              focus={keyboardActive && !disabled && !reverseSearchOpen}
+              onChange={setValue}
+              displayWidth={inputDisplayWidth}
+              maxDisplayRows={draftContentRows}
+              // While the palette shows multiple rows it owns ↑/↓ for row
+              // selection; history recall would clobber the draft mid-navigation.
+              onHistoryUp={
+                paletteOwnsArrows ? undefined : () => browseHistory(-1)
+              }
+              onHistoryDown={
+                paletteOwnsArrows ? undefined : () => browseHistory(1)
+              }
+              imagePasteQueue={imagePasteQueue}
+              readLatestValue={() => draftValueRef.current}
+              prepareInputChunk={
+                showPalette ? replaceSlashTriggerInput : undefined
+              }
+              shouldDropInputChunk={
+                showPalette ? dropSlashPaletteControlTail : undefined
+              }
+              escapeEdit={showPalette ? clearDraftEdit : undefined}
+              transformPaste={transformPaste}
+              onImagePaste={onImagePaste}
+              onImagePasteError={(error) =>
+                setTransientNotice(
+                  `Image paste failed: ${toErrorMessage(error)}`,
+                  { ttlMs: Number.POSITIVE_INFINITY },
+                )
+              }
+              onInputChunkSubmit={handleInputChunkSubmit}
+              onSubmit={showPalette ? () => undefined : handleSubmit}
+            />
           </Box>
         )}
       </Box>
