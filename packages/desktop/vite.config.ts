@@ -6,13 +6,13 @@ import { aliases } from '../../scripts/aliases.mjs';
 
 export default defineConfig({
   base: './',
-  root: resolve(__dirname, 'src/renderer'),
+  root: resolve(import.meta.dirname, 'src/renderer'),
   build: {
-    outDir: resolve(__dirname, 'dist/renderer'),
+    outDir: resolve(import.meta.dirname, 'dist/renderer'),
     emptyOutDir: true,
     target: 'es2022',
     rollupOptions: {
-      input: resolve(__dirname, 'src/renderer/index.html'),
+      input: resolve(import.meta.dirname, 'src/renderer/index.html'),
     },
   },
   resolve: {
