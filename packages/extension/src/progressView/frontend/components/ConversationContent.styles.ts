@@ -55,10 +55,6 @@ export const conversationContentStyles: CSSResult = css`
     background: var(--wa-color-surface-default);
   }
 
-  .conversation-approval-dock:empty {
-    display: none;
-  }
-
   .conversation-prelude,
   .conversation-epilogue {
     flex: 0 1 auto;

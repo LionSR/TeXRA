@@ -189,11 +189,6 @@ export const requestPanelSharedStyles: CSSResult = css`
     box-sizing: border-box;
     min-width: 0;
     max-width: 100%;
-    /* Keep the action row in the card even when details scroll; the dock
-       that hosts request-panels is height-capped, so the card must not grow
-       past that budget and hide Approve/Reject below the fold. */
-    max-height: 100%;
-    min-height: 0;
   }
 
   :is(${DETAILS}) {
