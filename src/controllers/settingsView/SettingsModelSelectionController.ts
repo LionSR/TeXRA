@@ -1,6 +1,6 @@
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
-import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
+import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import {
   hasConfigurableReasoningEffort,
   LEVEL_TO_EFFORT,
