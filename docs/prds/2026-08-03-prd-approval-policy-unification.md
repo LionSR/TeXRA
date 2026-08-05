@@ -256,13 +256,16 @@ The CLI then consumes shared decisions directly:
   predicates are deleted (the evaluator short-circuits `never`/`yolo`
   before consulting `canPresent`, so their policy dependence was dead
   weight).
-- The `WeakSet` denial marker is replaced by an explicit boolean on the
-  context object; exit code 4 (`CliExitCode.ApprovalDenied`) is reserved for a
-  run that FAILED with a denied gate, and is covered by tests on both the
-  headless and TUI paths. A denial the model routed around leaves the run
-  COMPLETED and exits 0 — #9692 briefly hoisted the denial check above the
-  outcome, which made every `--approval-policy never` run exit 4 and silently
-  discarded results in callers that read a nonzero exit as "no result".
+- Denial stops being run state at all. Exit code 4 (`CliExitCode.ApprovalDenied`)
+  is retired along with the `approvalDenied` context flag, its
+  `hasCliApprovalDenied` reader, and the exit-code branch that consumed them. A
+  denied gate returns feedback to the model, which routes around it, so it is
+  not a run outcome and must not colour the exit code: #9692 briefly hoisted the
+  denial check above the outcome, which made every `--approval-policy never` run
+  exit 4 and silently discarded results in callers that read a nonzero exit as
+  "no result". What survives is `warnApprovalDenied`, which writes one
+  `[warn] [cli-approval]` line per run to stderr so an operator can still see
+  that policy closed a gate.
 - `CliContext.approvalPolicy` reverts to a plain pre-session seed. The TUI
   live-alias getter (`runChatTui.tsx:342-344`, inside the per-run
   `currentSessionContext` literal at `:339-347`) is deleted; the genuinely
@@ -399,23 +402,23 @@ Every stage: `npm run typecheck` (builds do not type check),
 The migration is complete only if all of these are gone. This list is also
 the negative space of the Stage E allowlist: nothing below may appear in it.
 
-| #   | Deletion                                                                                                           | Location                                                                                         | Stage |
-| --- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----- |
-| 1   | `denyMessage` — second denial-message vocabulary                                                                   | `packages/cli/src/runtime/approval/approvalPolicy.ts:62-66`                                      | A     |
-| 2   | `cliExecutableApprovalDecision` wrapper evaluator                                                                  | same file `:118-125`                                                                             | B     |
-| 3   | `approvalPromptAllowed` / `approvalPromptsUnavailable` policy predicates                                           | `:106-114`                                                                                       | B     |
-| 4   | `immediateDecision` / `immediateDecisionForApproval`                                                               | `:199-245`                                                                                       | B     |
-| 5   | `isCredentialRetryRequest` + yolo-retry branch (hoisted to shared)                                                 | `:213-244`                                                                                       | B     |
-| 6   | `humanInputDenialFeedback` / `askUserQuestionDenial` (hoisted to shared)                                           | `:290-316`                                                                                       | B     |
-| 7   | `WeakSet<CliContext>` denial marker (`markApprovalDenied` / `hasCliApprovalDenied`)                                | `:59, 68-74`                                                                                     | B     |
-| 8   | `ApprovalInstructionContext` pick type                                                                             | `:54-57`                                                                                         | B     |
-| 9   | The module `runtime/approval/approvalPolicy.ts` itself (survivors move to `approvalPrompts.ts`; no re-export shim) | whole file                                                                                       | B     |
-| 10  | TUI live-alias `get approvalPolicy()` on the per-run context                                                       | `packages/cli/src/chat/tui/runChatTui.tsx:342-344`                                               | B     |
-| 11  | Bare `'never'`/`'ask'` fallback literals and unnormalized env parsing                                              | `packages/cli/src/runtime/cliContext.ts:407, 429-438`                                            | B     |
-| 12  | CLI-local declaration of the `approvalPolicy` settings key (hoisted to shared catalog)                             | `packages/cli/src/schemas/cliSettings.ts:26`                                                     | C     |
-| 13  | `WorkspaceStateKey.SUPER_YOLO_ENABLED` + `WORKTREE_SHARED_KEYS` entry                                              | `src/shared/state/stateKeys.ts:22`, `packages/extension/src/common/state/stateManager.ts:18`     | D     |
-| 14  | One of two copies of the bypass-kind union                                                                         | `src/shared/schemas/progressView/outbound.ts:235` vs `src/agent/runtime/HostInteractions.ts:226` | D     |
-| 15  | `superYolo`-named internal identifiers on the reliability/orchestration message                                    | `src/shared/settingsView/handlers/superYoloHandlers.ts` and its two host callers                 | D     |
+| #   | Deletion                                                                                                                         | Location                                                                                         | Stage |
+| --- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----- |
+| 1   | `denyMessage` — second denial-message vocabulary                                                                                 | `packages/cli/src/runtime/approval/approvalPolicy.ts:62-66`                                      | A     |
+| 2   | `cliExecutableApprovalDecision` wrapper evaluator                                                                                | same file `:118-125`                                                                             | B     |
+| 3   | `approvalPromptAllowed` / `approvalPromptsUnavailable` policy predicates                                                         | `:106-114`                                                                                       | B     |
+| 4   | `immediateDecision` / `immediateDecisionForApproval`                                                                             | `:199-245`                                                                                       | B     |
+| 5   | `isCredentialRetryRequest` + yolo-retry branch (hoisted to shared)                                                               | `:213-244`                                                                                       | B     |
+| 6   | `humanInputDenialFeedback` / `askUserQuestionDenial` (hoisted to shared)                                                         | `:290-316`                                                                                       | B     |
+| 7   | `approvalDenied` context flag (`markApprovalDenied` / `hasCliApprovalDenied`) and the `CliExitCode.ApprovalDenied` branch it fed | `cliContext.ts`, `approvalPrompts.ts`                                                            | B     |
+| 8   | `ApprovalInstructionContext` pick type                                                                                           | `:54-57`                                                                                         | B     |
+| 9   | The module `runtime/approval/approvalPolicy.ts` itself (survivors move to `approvalPrompts.ts`; no re-export shim)               | whole file                                                                                       | B     |
+| 10  | TUI live-alias `get approvalPolicy()` on the per-run context                                                                     | `packages/cli/src/chat/tui/runChatTui.tsx:342-344`                                               | B     |
+| 11  | Bare `'never'`/`'ask'` fallback literals and unnormalized env parsing                                                            | `packages/cli/src/runtime/cliContext.ts:407, 429-438`                                            | B     |
+| 12  | CLI-local declaration of the `approvalPolicy` settings key (hoisted to shared catalog)                                           | `packages/cli/src/schemas/cliSettings.ts:26`                                                     | C     |
+| 13  | `WorkspaceStateKey.SUPER_YOLO_ENABLED` + `WORKTREE_SHARED_KEYS` entry                                                            | `src/shared/state/stateKeys.ts:22`, `packages/extension/src/common/state/stateManager.ts:18`     | D     |
+| 14  | One of two copies of the bypass-kind union                                                                                       | `src/shared/schemas/progressView/outbound.ts:235` vs `src/agent/runtime/HostInteractions.ts:226` | D     |
+| 15  | `superYolo`-named internal identifiers on the reliability/orchestration message                                                  | `src/shared/settingsView/handlers/superYoloHandlers.ts` and its two host callers                 | D     |
 
 Explicitly **kept**: all pinned wire literals (§6); the per-stream bypass
 machinery; `proposalFlow.ts:147` (a comment, not logic); both
@@ -437,9 +440,10 @@ display copy, exhaustively switched, not a decision fork).
    `src/shared/approvalPolicy.ts`.
 6. User questions and external inquiries are denied under `yolo` with the
    no-synthesized-answer message; one definition, shared.
-7. No-input paths settle deterministically; CLI exit code 4 fires from both
-   headless and TUI denial paths (regression tests pinned before the
-   WeakSet is replaced).
+7. No-input paths settle deterministically, and no denial path changes the
+   process exit code on either the headless or the TUI side: a denied gate
+   yields model feedback plus one stderr warn, and the run exits on its own
+   outcome alone.
 8. Scoped grants never cross permission kinds or streams (existing tests
    remain green; no changes to `streamApprovalQueue`).
 9. Goal lifecycle keeps the Bash-only grant (existing tests).
