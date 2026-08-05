@@ -113,9 +113,7 @@ function readAgentRosterSelection(
   return INHERITED_AGENT_ROSTER;
 }
 
-function repairLegacySelection(
-  raw: unknown,
-): AgentRosterSelection | undefined {
+function repairLegacySelection(raw: unknown): AgentRosterSelection | undefined {
   const legacy = AgentDelegationScopeLegacySchema.safeParse(raw);
   if (!legacy.success) return undefined;
   return {
