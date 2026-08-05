@@ -76,7 +76,12 @@ export const externalInquiryPanelStyles: CSSResult = css`
     scrollbar-gutter: stable;
   }
 
-  .external-inquiry-request__transcript-turn {
+  .external-inquiry-request__transcript-turn,
+  .external-inquiry-request__attach-files,
+  .external-inquiry-request__answer-area,
+  .external-inquiry-request__session-links,
+  .external-inquiry-request__session-links-known,
+  .external-inquiry-request__session-links-input-group {
     display: flex;
     flex-direction: column;
     gap: ${sp.small};
@@ -95,7 +100,10 @@ export const externalInquiryPanelStyles: CSSResult = css`
     color: var(--wa-color-text-quiet);
   }
 
-  .external-inquiry-request__transcript-context {
+  .external-inquiry-request__transcript-context,
+  .external-inquiry-request__session-links-hint,
+  .external-inquiry-request__chat-links,
+  .external-inquiry-request__answer-hint {
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);
   }
@@ -123,12 +131,6 @@ export const externalInquiryPanelStyles: CSSResult = css`
     padding: ${sp.small} 0;
   }
 
-  .external-inquiry-request__attach-files {
-    display: flex;
-    flex-direction: column;
-    gap: ${sp.small};
-  }
-
   .external-inquiry-request__attach-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
@@ -138,7 +140,8 @@ export const externalInquiryPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  .external-inquiry-request__file-list {
+  .external-inquiry-request__file-list,
+  .external-inquiry-request__session-links-list {
     display: flex;
     flex-direction: column;
     gap: ${sp.tiny};
@@ -156,38 +159,11 @@ export const externalInquiryPanelStyles: CSSResult = css`
     color: var(--wa-color-text-link);
   }
 
-  .external-inquiry-request__answer-area {
-    display: flex;
-    flex-direction: column;
-    gap: ${sp.small};
-  }
-
-  .external-inquiry-request__session-links {
-    display: flex;
-    flex-direction: column;
-    gap: ${sp.small};
-  }
-
-  .external-inquiry-request__session-links-known,
-  .external-inquiry-request__session-links-input-group {
-    display: flex;
-    flex-direction: column;
-    gap: ${sp.small};
-  }
-
-  .external-inquiry-request__session-links-label {
+  .external-inquiry-request__session-links-label,
+  .external-inquiry-request__answer-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     color: var(--wa-color-text-normal);
-  }
-
-  .external-inquiry-request__session-links-list {
-    display: flex;
-    flex-direction: column;
-    gap: ${sp.tiny};
-    padding: ${sp.small};
-    background: var(--wa-color-surface-lowered);
-    border-radius: var(--border-radius-small);
   }
 
   .external-inquiry-request__session-link-item {
@@ -203,22 +179,11 @@ export const externalInquiryPanelStyles: CSSResult = css`
     text-decoration: underline;
   }
 
-  /* Sizing via the canonical skin's tokens (formControlStyles, now in
-     requestPanelSharedStyles); font/line rules come from the skin itself. */
+  /* Sizing via the canonical skin's tokens (formControlStyles, reached
+     through commonViewStyles); font/line rules come from the skin itself. */
   .external-inquiry-request__session-links-input {
-    width: 100%;
     --textarea-min-height: 2.75rem;
     --textarea-max-height: min(12vh, 5rem);
-  }
-
-  .external-inquiry-request__session-links-hint {
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
-  }
-
-  .external-inquiry-request__chat-links {
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
   }
 
   .external-inquiry-request__chat-links a {
@@ -230,14 +195,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
     text-decoration: underline;
   }
 
-  .external-inquiry-request__answer-label {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--wa-color-text-normal);
-  }
-
   .external-inquiry-request__answer-input {
-    width: 100%;
     --textarea-min-height: 96px;
     --textarea-max-height: min(24vh, 12rem);
   }
@@ -245,11 +203,6 @@ export const externalInquiryPanelStyles: CSSResult = css`
   /* Answer text stays at body size, larger than the skin's sm default. */
   .external-inquiry-request__answer-input::part(textarea) {
     font-size: var(--font-size);
-  }
-
-  .external-inquiry-request__answer-hint {
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
   }
 
   /* The SCROLLABLE_DETAILS short-viewport override that used to share this
