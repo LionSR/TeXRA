@@ -422,7 +422,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     }
   });
 
-  it('leaves unsafe duplicates cancelled when their primary never ran', async () => {
+  it('leaves side-effect duplicates cancelled when their primary never ran', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const runController = new AbortController();
     const { node, dispose } = dispatchHarness({
@@ -441,8 +441,8 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       const results = (await execPrepped(node, prepped)) as ExecResult[];
 
       assert.equal(probe.events.length, 0, 'nothing should execute');
-      // The duplicate must not claim a "side effects" skip when no effect
-      // happened at all — it is cancelled along with its primary.
+      // The duplicate stays cancelled with its primary — no synthetic
+      // success when no effect happened at all.
       assert.deepEqual(results, [null, null]);
     } finally {
       dispose();
@@ -465,7 +465,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       ])) as ExecResult[];
 
       // The edit changed state, so re-issuing the identical write is a
-      // plausible restore — it must execute, not be rejected as a glitch.
+      // plausible restore — it must execute, not be swallowed as a glitch.
       const writeStarts = countStarts(probe, 'write_file');
       assert.equal(writeStarts, 2, 'post-mutation identical write must run');
       assert.equal(results[2]?.result.status, 'executed');
@@ -474,7 +474,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     }
   });
 
-  it('rejects duplicates of side-effect tools instead of sharing the result', async () => {
+  it('shares the primary result for side-effect tool duplicates', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
     const { node, dispose } = dispatchHarness({
       tools: { write_file: probeTool(probe, 'write_file', 5) },
@@ -488,12 +488,20 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       const startCount = countStarts(probe);
       assert.equal(startCount, 1, 'the side effect must run exactly once');
       assert.equal(results[0]?.result.status, 'executed');
-      // The duplicate must NOT claim the effect ran twice.
-      assert.equal(results[1]?.result.status, 'error');
-      assert.ok(
-        results[1]?.result.status === 'error' &&
-          results[1].result.error.includes('side effects'),
-        'duplicate should explain why it was skipped',
+      // Accidental GPT re-emissions get the primary's result, not an error.
+      assert.equal(results[1]?.result.status, 'executed');
+      assert.equal(
+        results[1]?.result.status === 'executed'
+          ? results[1].result.output
+          : undefined,
+        results[0]?.result.status === 'executed'
+          ? results[0].result.output
+          : 'missing',
+      );
+      assert.deepEqual(
+        results[1]?.editedFiles,
+        [],
+        'duplicate must not re-track edits',
       );
     } finally {
       dispose();

@@ -14,44 +14,35 @@ import {
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export const UNSAFE_DUPLICATE_CALL_ERROR =
-  'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch, ' +
-  'and this tool has side effects, so its result cannot be shared. ' +
-  'If you intend the effect to run twice, invoke it again sequentially in your next response.';
-
-/** Duplicate-call partition for one model response (see partitionDuplicateCalls). */
-export interface DuplicateCallPartition {
-  /** Duplicate callId → index of its primary within the same safe segment. */
-  sharedWithPrimary: Map<string, number>;
-  /**
-   * Duplicates of side-effect tools, mapped to their primary's index —
-   * never executed; answered with an error only when the primary actually
-   * ran (an interrupted primary leaves the duplicate cancelled with it).
-   */
-  rejected: Map<string, number>;
-}
+/**
+ * Map of duplicate callId → index of its primary within this model response
+ * (see {@link partitionDuplicateCalls}).
+ */
+export type DuplicateCallMap = Map<string, number>;
 
 /**
  * Partition duplicate parallel tool calls (same name + identical arguments).
  *
- * Parallel-safe (read-only) duplicates share their primary's result — but
- * only within a contiguous run of parallel-safe calls: any side-effect call
- * in between may change what a repeated read would return, so it acts as a
- * barrier that invalidates earlier shareable signatures.
+ * Every duplicate is answered with a copy of its primary's result and is
+ * never executed — models (especially GPT) routinely emit identical calls in
+ * one batch by accident, and a synthetic error for that noise confuses the
+ * model and the UI more than a shared success does. Execution still happens
+ * only once.
  *
- * Side-effect duplicates are rejected with a synthetic error (sharing a
- * success would misreport an effect that never ran; running it silently
- * twice is equally wrong) — a false positive only costs the model one
- * explicit sequential re-issue. The rejection window resets when a
- * different side-effect call runs in between, since changed state makes an
- * identical repeat plausibly intentional.
+ * Parallel-safe (read-only) sharing is limited to a contiguous run of
+ * parallel-safe calls: any side-effect call in between may change what a
+ * repeated read would return, so it acts as a barrier that invalidates
+ * earlier shareable signatures.
+ *
+ * Side-effect sharing uses a separate window that resets when a different
+ * side-effect call runs in between, since changed state makes an identical
+ * repeat plausibly intentional (e.g. write x; edit x; write x as a restore).
  */
 export function partitionDuplicateCalls(
   toolCalls: SdkToolCall[],
   isParallelSafe: (call: SdkToolCall) => boolean,
-): DuplicateCallPartition {
-  const sharedWithPrimary = new Map<string, number>();
-  const rejected = new Map<string, number>();
+): DuplicateCallMap {
+  const sharedWithPrimary: DuplicateCallMap = new Map();
   const segmentPrimaries = new Map<string, number>();
   const unsafeSeen = new Map<string, number>();
   for (const [index, call] of toolCalls.entries()) {
@@ -68,7 +59,7 @@ export function partitionDuplicateCalls(
       segmentPrimaries.clear();
       const unsafePrimary = unsafeSeen.get(key);
       if (unsafePrimary !== undefined) {
-        rejected.set(call.callId, unsafePrimary);
+        sharedWithPrimary.set(call.callId, unsafePrimary);
       } else {
         // A different mutation changes workspace state, which makes an
         // identical repeat of an earlier mutation plausibly intentional
@@ -80,7 +71,7 @@ export function partitionDuplicateCalls(
       }
     }
   }
-  return { sharedWithPrimary, rejected };
+  return sharedWithPrimary;
 }
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
