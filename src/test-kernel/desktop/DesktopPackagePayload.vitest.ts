@@ -125,16 +125,14 @@ describe('desktop package native CLI payload', () => {
     }
   });
 
-  it('requires the standalone trace-viewer template in packaged resources', () => {
+  it('requires the trace-viewer template in packaged resources', () => {
     const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-    rmSync(
-      join(resourcesDir, 'resources', 'traceViewerStandalone', 'index.html'),
-    );
+    rmSync(join(resourcesDir, 'resources', 'traceViewer', 'index.html'));
 
     const result = runVerifier(packageRoot);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      'Missing trace-viewer standalone HTML template: resources/traceViewerStandalone/index.html',
+      'Missing trace-viewer HTML template: resources/traceViewer/index.html',
     );
   });
 
@@ -244,7 +242,7 @@ function createFakeDesktopPackage(
     'name: example\n\ndescription: Example bundled skill.\n',
   );
   writeText(
-    join(appRoot, 'resources/traceViewerStandalone/index.html'),
+    join(appRoot, 'resources/traceViewer/index.html'),
     '<!doctype html>\n',
   );
 

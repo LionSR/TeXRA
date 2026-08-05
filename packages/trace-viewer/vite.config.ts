@@ -9,12 +9,12 @@ import { aliases } from '../../scripts/aliases.mjs';
 // `packages/extension/resources/**` staging step
 // (packages/cli/scripts/copy-resources.mjs) picks it up without a separate
 // build-then-copy script. This is the shared, multi-file bundle (external
-// `assets/`) used by the shared-assets export mode — see
+// `assets/`) used by the shared-assets export mode (`--assets-dir`) — see
 // vite.standalone.config.ts for the single-file, self-contained bundle used
-// by the default export mode.
+// by the default export mode (resources/traceViewer).
 const RESOURCES_OUT_DIR = resolve(
   __dirname,
-  '../extension/resources/traceViewer',
+  '../extension/resources/traceViewerShared',
 );
 
 export default defineConfig({
