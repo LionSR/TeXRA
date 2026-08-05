@@ -70,10 +70,6 @@ export class BackgroundTasksPanel extends LitElement {
         display: block;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .task-list {
         display: flex;
         flex-direction: column;

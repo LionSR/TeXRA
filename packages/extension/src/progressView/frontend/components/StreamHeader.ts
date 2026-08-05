@@ -145,10 +145,6 @@ export class StreamHeader extends LitElement {
         container-type: inline-size;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .log-header {
         padding: var(--wa-space-2xs)
           max(
