@@ -952,7 +952,7 @@ Each phase is independently reviewable. The extension and the desktop port never
 - Plan / proposal / retry / external-inquiry handlers via `ClackPromptHost` (C3).
 - `--allowed-tools` / `--disallowed-tools` flag wiring through `resolveTools()`.
 - `texra resume [<run-id>]` for tool-use snapshots.
-- **Exit criteria:** `texra run orchestrator --instruction "..." --approval-policy yolo` runs an end-to-end multi-tool flow against a real LaTeX project. `--approval-policy never` correctly fails when an approval is needed (exit code 4). Approvals on TTY render diffs and respect user input.
+- **Exit criteria:** `texra run orchestrator --instruction "..." --approval-policy yolo` runs an end-to-end multi-tool flow against a real LaTeX project. `--approval-policy never` denies the gate and returns the denial to the model as feedback (exit code 4 was retired in 2026-08). Approvals on TTY render diffs and respect user input.
 
 ### Phase 2 — File-backed config + secrets + auth (1–1.5 weeks)
 
@@ -1962,7 +1962,7 @@ Phase B largely gates Phase C — `texra chat` cannot _ship_ without working app
 - `npm install -g @texra/cli && texra run polish --input paper.tex --output paper.polished.tex` succeeds with only `ANTHROPIC_API_KEY` set.
 - `texra chat` boots into the Ink REPL on TTY, runs an orchestrator session against `cwd`, streams tool calls + responses live, prompts inline for edit / bash approval, respects Ctrl-C cancellation.
 - `texra chat --approval-policy yolo` runs an end-to-end multi-tool flow without prompts.
-- `texra chat --approval-policy never` correctly fails when an approval is needed (exit code 4).
+- `texra chat --approval-policy never` denies the gate and returns the denial to the model as feedback (exit code 4 was retired in 2026-08).
 - `texra agents list -o json | jq` parses; schema matches `@shared/schemas`.
 - Cold start `texra --help` < 100 ms (Ink only loads when entering chat).
 - No regression in extension or desktop builds.

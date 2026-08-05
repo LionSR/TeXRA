@@ -23,9 +23,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   appendCliApiSwitchHint,
-  hasCliApprovalDenied,
   isCliApiSwitchableRetry,
-  markApprovalDenied,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPrompts';
 import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/settleApprovals';
@@ -138,7 +136,7 @@ describe('shared retry and human-input decisions', () => {
     },
   );
 
-  it('denies an ordinary transient retry in yolo without policy-denial classification', async () => {
+  it('denies an ordinary transient retry in yolo', async () => {
     const ctx = context({ approvalPolicy: 'yolo' });
     const result = await createHeadlessCliHostInteractions(ctx).requestRetry?.({
       requestId: 'transient-retry',
@@ -148,10 +146,6 @@ describe('shared retry and human-input decisions', () => {
     });
 
     expect(result).toMatchObject({ action: 'deny' });
-    expect(hasCliApprovalDenied(ctx)).toBe(false);
-    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
-      CliExitCode.AgentError,
-    );
   });
 });
 
@@ -173,8 +167,7 @@ describe('human input approval policy', () => {
     expect(gate('ask', false)).toBe(true);
   });
 
-  it('uses yolo-specific human-input feedback without marking approval denied', () => {
-    const ctx = context({ approvalPolicy: 'yolo' });
+  it('uses yolo-specific human-input feedback', () => {
     const decision = decideHumanInputRequest({
       policy: 'yolo',
       canPresent: true,
@@ -187,10 +180,9 @@ describe('human input approval policy', () => {
         TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
       ),
     ).toBe(TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE);
-    expect(hasCliApprovalDenied(ctx)).toBe(false);
   });
 
-  it('denies external inquiry under never and marks approval denied', () => {
+  it('denies external inquiry under never', () => {
     const ctx = context({ approvalPolicy: 'never' });
     expect(denyExternalInquiryIfNoHumanInput('ei_test', ctx)).toBe(true);
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
@@ -198,26 +190,26 @@ describe('human input approval policy', () => {
       threadId: 'ei_test',
       feedback: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
     });
-    expect(hasCliApprovalDenied(ctx)).toBe(true);
   });
 
-  it('classifies a shared edit-policy denial as approval denied', async () => {
+  it('reports a shared edit-policy denial through the run-context hook', async () => {
     const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
     useCliHostInteractions(ctx);
+    let policyDenials = 0;
 
     const result = await withRunContext(
       createRunContext({
-        onApprovalPolicyDenial: () => markApprovalDenied(ctx),
+        onApprovalPolicyDenial: () => {
+          policyDenials += 1;
+        },
       }),
       requestNewProofEdit,
     );
     expect(result).toMatchObject({ accepted: false });
-    expect(hasCliApprovalDenied(ctx)).toBe(true);
-    // A denied gate the model worked around still completed the run.
-    expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED, ctx)).toBe(
-      CliExitCode.Success,
-    );
-    expect(runOutcomeExitCode(RUN_OUTCOME.CANCELLED, ctx)).toBe(
+    expect(policyDenials).toBe(1);
+    // The model routes around the denial, so the run's exit code is untouched.
+    expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED)).toBe(CliExitCode.Success);
+    expect(runOutcomeExitCode(RUN_OUTCOME.CANCELLED)).toBe(
       CliExitCode.Interrupted,
     );
   });
@@ -345,16 +337,12 @@ describe('requestRetry classification (#7331)', () => {
     const result =
       await createHeadlessCliHostInteractions(ctx).requestRetry?.(retryRequest);
 
-    // A policy/headless auto-denial is a distinct failure, not a user cancel,
-    // so a zero-output run reports FAILED rather than COMPLETED.
+    // A policy/headless auto-denial is a deny, not a user cancel: the model
+    // receives the reason as feedback instead of the turn being abandoned.
     expect(result).toEqual({
       action: 'deny',
       reason: 'Denied by TeXRA approval policy.',
     });
-    expect(hasCliApprovalDenied(ctx)).toBe(true);
-    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
-      CliExitCode.ApprovalDenied,
-    );
   });
 
   it.each([
@@ -375,10 +363,6 @@ describe('requestRetry classification (#7331)', () => {
         action: 'deny',
         reason: 'Retry skipped: credential exhausted or unauthorized.',
       });
-      expect(hasCliApprovalDenied(ctx)).toBe(true);
-      expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
-        CliExitCode.ApprovalDenied,
-      );
     },
   );
 
@@ -392,10 +376,7 @@ describe('requestRetry classification (#7331)', () => {
       reason:
         'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     });
-    expect(hasCliApprovalDenied(ctx)).toBe(false);
-    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
-      CliExitCode.AgentError,
-    );
+    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(CliExitCode.AgentError);
   });
 
   it.each([
@@ -403,7 +384,7 @@ describe('requestRetry classification (#7331)', () => {
     { message: 'Unauthorized', statusCode: 401 },
     { message: 'Forbidden', statusCode: 403 },
   ])(
-    'preserves ApprovalDenied for yolo credential/auth failure %#',
+    'preserves the credential denial reason for yolo credential/auth failure %#',
     async (errorDetails) => {
       const ctx = context({ approvalPolicy: 'yolo' });
       const result = await createHeadlessCliHostInteractions(
@@ -414,10 +395,6 @@ describe('requestRetry classification (#7331)', () => {
         action: 'deny',
         reason: 'Retry skipped: credential exhausted or unauthorized.',
       });
-      expect(hasCliApprovalDenied(ctx)).toBe(true);
-      expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
-        CliExitCode.ApprovalDenied,
-      );
     },
   );
 

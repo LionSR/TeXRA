@@ -212,7 +212,7 @@ export async function executeCliWorkflowConfig(
     text: formatWorkflowTextResult(workflowResult),
   });
 
-  return runOutcomeExitCode(result.outcome, runContext);
+  return runOutcomeExitCode(result.outcome);
 }
 
 async function persistWorkflowResultMeta(

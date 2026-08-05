@@ -36,7 +36,6 @@ import {
 import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-  markApprovalDenied,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -263,14 +262,12 @@ async function decidePresentedApproval<
       { kind: K }
     >;
     const decision = await enqueueTuiApproval(queuePayload);
-    markIfRejected(context, decision);
     return decision;
   } catch {
     const decision: ApprovalDecision = {
       accepted: false,
       userMessage: 'CLI approval prompt failed.',
     };
-    markIfRejected(context, decision);
     return decision;
   }
 }
@@ -426,10 +423,6 @@ async function requestRetryInteraction(
       if (immediate) {
         return { action: 'deny', reason: decision.userMessage };
       }
-      // A cleared or replaced entry was never denied by a user, so it must not
-      // mark the run as approval-denied.
-      if (!reservation.signal.aborted)
-        markApprovalDenied(context, 'Interactive approval');
       return { action: 'cancel' };
     }
     if (
@@ -474,7 +467,6 @@ async function requestUserQuestionInteraction(
   if (denial) return denial;
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
-  markIfRejected(context, decision);
   return decision.accepted && decision.userQuestionAnswers
     ? { action: 'submit', answers: decision.userQuestionAnswers }
     : {
@@ -502,10 +494,6 @@ function announceApproval(payload: ApprovalPayload): void {
     });
   }
   notify({ kind: 'approvalNeeded' });
-}
-
-function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
-  if (!decision.accepted) markApprovalDenied(context, 'Interactive approval');
 }
 
 function setTuiApprovalBypassState({
@@ -704,7 +692,6 @@ function handleExternalInquiry(
   if (denyExternalInquiryIfNoHumanInput(threadId, context)) return;
   void enqueueTuiApproval({ kind: 'externalInquiry', payload }).then(
     (decision) => {
-      markIfRejected(context, decision);
       // User-accept with text submits an answer; empty text, reject, and
       // modal-cancel all drop the durable inquiry thread.
       if (decision.accepted && decision.userMessage) {

@@ -112,7 +112,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { hasCliApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   AgentCategory,
@@ -340,10 +339,7 @@ describe('TUI retry approvals', () => {
       reason:
         'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     });
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
-    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, cliContext)).toBe(
-      CliExitCode.AgentError,
-    );
+    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(CliExitCode.AgentError);
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -1160,10 +1156,10 @@ describe('TUI retry approvals', () => {
     await expect(retry).resolves.toEqual({ action: 'cancel' });
   });
 
-  it('records an approval denial for a refused retry but not for a cleared one', async () => {
+  it('cancels both a cleared retry and one the user refuses', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
 
-    const { cliContext, interactions } = tui();
+    const { interactions } = tui();
     const cleared = interactions.requestRetry?.(
       relayRetry({ streamId: 'cleared-retry', provider: 'openai' }),
     );
@@ -1171,7 +1167,6 @@ describe('TUI retry approvals', () => {
     clearApprovals();
 
     await expect(cleared).resolves.toEqual({ action: 'cancel' });
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
 
     const refused = interactions.requestRetry?.(
       relayRetry({ streamId: 'refused-retry', provider: 'openai' }),
@@ -1180,7 +1175,6 @@ describe('TUI retry approvals', () => {
     decideRetry({ accepted: false });
 
     await expect(refused).resolves.toEqual({ action: 'cancel' });
-    expect(hasCliApprovalDenied(cliContext)).toBe(true);
   });
 
   it('cancels ordinary retry preparation after approval', async () => {
@@ -1419,13 +1413,12 @@ describe('TUI retry approvals', () => {
   it('shows the retry modal when pre-modal preparation fails', async () => {
     mocks.retryCopyFailure = new Error('retry copy unavailable');
 
-    const { cliContext, interactions, prepareRetry } = tui();
+    const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(
       relayRetry({ streamId: 'preparation-failure', provider: 'openai' }),
     );
 
     await waitForApproval('retry', { streamId: 'preparation-failure' });
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
     decideRetry({ accepted: true });
 
     await expect(result).resolves.toEqual({
@@ -1433,7 +1426,6 @@ describe('TUI retry approvals', () => {
       feedback: undefined,
     });
     expect(prepareRetry).toHaveBeenCalledWith('configured', expect.anything());
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
   });
 
   it('cancels a retry parked behind another commit without waiting for it', async () => {

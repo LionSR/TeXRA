@@ -6,7 +6,6 @@ const BASE_CLI_CONTEXT = {
   mode: 'headless',
   outputFormat: 'text',
   approvalPolicy: 'never',
-  approvalDenied: false,
   quietLogs: false,
   stdoutIsTty: false,
   termIsDumb: false,

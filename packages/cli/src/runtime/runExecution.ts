@@ -17,7 +17,7 @@ import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { markApprovalDenied } from './approval/approvalPrompts';
+import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { finalizeCliExecution } from './executionFinalization';
@@ -162,7 +162,7 @@ export async function executeCliToolUseConfig(
       ...result,
       workingDirectory: runContext.cwd,
     },
-    exitCode: runOutcomeExitCode(result.outcome, runContext),
+    exitCode: runOutcomeExitCode(result.outcome),
   };
 }
 
@@ -296,7 +296,7 @@ export async function executeCliRequest(
           runContext.approvalPolicy,
         ),
         onApprovalPolicyDenial: () =>
-          markApprovalDenied(runContext, 'Tool or edit approval'),
+          warnApprovalDenied(runContext, 'Tool or edit approval'),
         runtimeUnavailableTools: [
           ...CLI_UNAVAILABLE_TOOLS,
           ...(options.runtimeUnavailableTools ?? []),
@@ -355,7 +355,7 @@ export async function executeCliRequest(
     // uses below, so approval-denied stays distinct from a generic failure.
     return {
       ok: false,
-      exitCode: runOutcomeExitCode(RUN_OUTCOME.FAILED, runContext),
+      exitCode: runOutcomeExitCode(RUN_OUTCOME.FAILED),
     };
   }
 

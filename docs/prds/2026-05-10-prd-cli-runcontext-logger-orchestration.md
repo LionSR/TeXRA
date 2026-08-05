@@ -288,7 +288,7 @@ Scheduled refactorings:
 
 Acceptance:
 
-- `never` denies gated edit/bash actions and exits with the documented approval-denied code.
+- `never` denies gated edit/bash actions and returns the denial to the model as feedback. (Originally specified as a dedicated approval-denied exit code; that code was retired in 2026-08 — see the exit-code contract below.)
 - `yolo` approves edit/bash actions without prompting.
 - `ask` prompts in TTY contexts.
 - Non-TTY `ask` fails clearly instead of hanging.
@@ -563,17 +563,23 @@ The CLI approval adapter is the single owner of policy-to-decision mapping. It m
 
 `packages/cli/src/runtime/exitCodes.ts` is the single source of truth for CLI process exit codes. Command handlers may choose which semantic code applies, but they must not invent numeric codes locally.
 
-| Code | Name                  | Meaning                                                                           |
-| ---- | --------------------- | --------------------------------------------------------------------------------- |
-| 0    | `Success`             | Command or agent run completed successfully                                       |
-| 1    | `AgentError`          | Agent execution reported failure                                                  |
-| 2    | `Usage`               | Invalid arguments, unsupported mode, or unimplemented command surface             |
-| 3    | `ModelOrNetworkError` | Model/provider/network failure once distinguishable at the CLI boundary           |
-| 4    | `ApprovalDenied`      | A required edit/bash/plan/proposal/retry/inquiry gate was denied or failed closed |
-| 124  | `Cancelled`           | Timed cancellation, matching common `timeout(1)` convention                       |
-| 130  | `Interrupted`         | User interrupt, matching common shell `SIGINT` convention                         |
+| Code | Name                  | Meaning                                                                 |
+| ---- | --------------------- | ----------------------------------------------------------------------- |
+| 0    | `Success`             | Command or agent run completed successfully                             |
+| 1    | `AgentError`          | Agent execution reported failure                                        |
+| 2    | `Usage`               | Invalid arguments, unsupported mode, or unimplemented command surface   |
+| 3    | `ModelOrNetworkError` | Model/provider/network failure once distinguishable at the CLI boundary |
+| 124  | `Cancelled`           | Timed cancellation, matching common `timeout(1)` convention             |
+| 130  | `Interrupted`         | User interrupt, matching common shell `SIGINT` convention               |
 
 This table belongs to the CLI host because process exit status is host presentation. Core agent execution should return typed results and errors; the CLI maps those outcomes to process codes at the boundary.
+
+Code 4 (`ApprovalDenied`) was retired in 2026-08. A denied gate is not a run
+outcome: the gate hands the denial back to the model as tool feedback, the model
+routes around it, and the turn continues. Giving denial its own exit code made
+every caller that reads a nonzero exit as "produced no result" discard runs that
+had in fact succeeded. Denials are now reported to the operator as a single
+`[warn] [cli-approval]` line on stderr and never influence the exit code.
 
 ## Current implementation status ledger
 

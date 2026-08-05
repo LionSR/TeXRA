@@ -45,23 +45,26 @@ export interface CliApprovalPromptHooks {
 }
 
 const cliPromptQueues = new WeakMap<CliContext, PQueue>();
+const warnedApprovalContexts = new WeakSet<CliContext>();
 
-export function markApprovalDenied(context: CliContext, gate?: string): void {
-  if (context.approvalDenied === true) {
+/**
+ * Tell the operator, once per run, that the policy closed a gate. The model
+ * already receives the denial as tool feedback and routes around it, so this
+ * is diagnostics only — a denied gate never changes the process exit code.
+ *
+ * Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
+ * frozen CliContext.approvalPolicy can be stale. Operator-facing warnings go
+ * to stderr (not `@logger/logUtils`).
+ */
+export function warnApprovalDenied(context: CliContext, gate?: string): void {
+  if (warnedApprovalContexts.has(context)) {
     return;
   }
-  context.approvalDenied = true;
-  // Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
-  // frozen CliContext.approvalPolicy can be stale. Operator-facing warnings
-  // go to stderr (not @logger/logUtils).
+  warnedApprovalContexts.add(context);
   const policy = defaultSession().approvalPolicy;
   writeTextStderr(
     `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${policy}".`,
   );
-}
-
-export function hasCliApprovalDenied(context: CliContext): boolean {
-  return context.approvalDenied === true;
 }
 
 /** Whether the failed retry was a ChatGPT-subscription (Codex) usage limit, so
@@ -180,7 +183,6 @@ export async function askApproval(
       prompt: 'Approve? [y/N, or n <feedback>] ',
     });
   } catch {
-    markApprovalDenied(context, 'Approval prompt');
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
 
@@ -200,7 +202,6 @@ export async function askApproval(
     }
   }
 
-  if (!parsed.accepted) markApprovalDenied(context, 'Interactive approval');
   return {
     accepted: parsed.accepted,
     userMessage: parsed.accepted

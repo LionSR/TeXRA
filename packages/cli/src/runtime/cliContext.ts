@@ -40,12 +40,6 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
-  /**
-   * Mutable per-run flag: a policy or unpresentable denial settled against
-   * this context. Replaces the former WeakSet marker so exit-code 4 follows
-   * the same context object the run threaded end-to-end.
-   */
-  approvalDenied: boolean;
   readonly helperModel?: string;
   /** Absent until the invocation or initialized platform selects a mode. */
   readonly apiMode?: ApiAccessMode;
@@ -449,7 +443,6 @@ export async function buildCliContext(
       'TEXRA_OUTPUT_FORMAT',
     ),
     approvalPolicy,
-    approvalDenied: false,
     apiMode,
     quietLogs: init.globalArgs.quiet === true,
     stdoutIsTty: ambient.stdoutIsTty,

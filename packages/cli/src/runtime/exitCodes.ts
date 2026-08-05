@@ -4,7 +4,6 @@ export const CliExitCode = {
   AgentError: 1,
   Usage: 2,
   ModelOrNetworkError: 3,
-  ApprovalDenied: 4,
   Cancelled: 124,
   Interrupted: 130,
   Terminated: 143,
