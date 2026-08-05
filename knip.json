@@ -4,8 +4,8 @@
   "ignoreBinaries": [".*"],
   "workspaces": {
     ".": {
-      "entry": ["src/test-kernel/**/*.vitest.{ts,mts}", "scripts/**/*.mjs"],
-      "project": ["src/**/*.{ts,mts}"],
+      "entry": ["src/test-kernel/**/*.vitest.ts", "scripts/**/*.mjs"],
+      "project": ["src/**/*.ts"],
       "ignore": ["src/platform/index.ts"]
     },
     "packages/extension": {
