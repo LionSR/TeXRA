@@ -39,7 +39,7 @@ export const contextManagementStyles: CSSResult = css`
   }
 
   .stat-item wa-icon {
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
   }
 
   .summary-block {

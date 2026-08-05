@@ -68,7 +68,7 @@ export const fileListStyles: CSSResult = css`
   }
 
   .file-dir {
-    opacity: var(--opacity-subtle);
+    color: var(--color-text-muted);
     font-size: var(--font-size-sm);
   }
 

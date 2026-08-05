@@ -1578,7 +1578,7 @@ wa-card.desktop-onboarding::part(footer) {
   height: 1em;
   flex: 0 0 1em;
   place-items: center;
-  opacity: 0.7;
+  color: var(--color-text-muted);
 }
 
 .desktop-editor-tree-icon wa-icon {
