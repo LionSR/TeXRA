@@ -67,10 +67,6 @@ export class GitTab extends LitElement {
         font-size: var(--font-size-sm);
       }
 
-      .input-row wa-input {
-        flex: 1;
-      }
-
       .identity-fields {
         margin-top: var(--wa-space-xs);
       }
@@ -102,7 +98,7 @@ export class GitTab extends LitElement {
       }
       .instructions ol {
         margin: var(--wa-space-3xs) 0 0 0;
-        padding-left: 1.25em;
+        padding-inline-start: 1.25em;
       }
       .instructions li {
         margin: var(--wa-space-3xs) 0;
@@ -423,6 +419,7 @@ export class GitTab extends LitElement {
                       <label for="git-author-name">Name</label>
                       <wa-input
                         id="git-author-name"
+                        class="form-control-fill"
                         .value=${this.authorName}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                         @change=${this.handleAuthorNameChange}
@@ -432,6 +429,7 @@ export class GitTab extends LitElement {
                       <label for="git-author-email">Email</label>
                       <wa-input
                         id="git-author-email"
+                        class="form-control-fill"
                         .value=${this.authorEmail}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                         @change=${this.handleAuthorEmailChange}

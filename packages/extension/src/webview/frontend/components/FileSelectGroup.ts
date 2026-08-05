@@ -318,6 +318,13 @@ export class FileSelectGroup extends LitElement {
             </span>
             <label>${config.label}</label>
             ${
+              this.currentFiles.length > 1
+                ? html`<span class="file-select-count">
+                    ${this.currentFiles.length} files
+                  </span>`
+                : nothing
+            }
+            ${
               config.toolConfig === 'tool'
                 ? this.renderToolConfigMenu()
                 : nothing

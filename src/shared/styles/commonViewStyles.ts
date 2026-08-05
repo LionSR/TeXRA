@@ -142,7 +142,7 @@ export const commonViewStyles: CSSResult = css`
     background: transparent;
     color: inherit;
     font: inherit;
-    text-align: left;
+    text-align: start;
   }
 
   .settings-disclosure-toggle::part(label) {
