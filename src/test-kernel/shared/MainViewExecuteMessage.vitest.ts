@@ -5,6 +5,7 @@ import {
   buildMainViewExecuteMessage,
   type MainViewExecutionFormState,
 } from '@shared/mainView/executionFormState';
+import { AgentCategory } from '@shared/schemas/agent';
 import {
   MainViewExecuteInboundMessageSchema,
   MainViewExecuteMessageSchema,
@@ -59,7 +60,7 @@ describe('MainView execute message builder', () => {
       agent: 'orchestrator',
       model: 'gpt-5.4',
       instruction: 'Solve a small enumeration problem.',
-      isToolUseAgent: true,
+      agentCategory: AgentCategory.ToolUse,
       files: {
         baseFile: 'old.tex',
         editedFile: 'new.tex',
@@ -94,7 +95,7 @@ describe('MainView execute message builder', () => {
     );
 
     expect(message.agent).toBe('correct');
-    expect(message.isToolUseAgent).toBe(false);
+    expect(message.agentCategory).toBe(AgentCategory.Workflow);
     expect(message.files?.inputFilesActive).toBe(false);
   });
 
