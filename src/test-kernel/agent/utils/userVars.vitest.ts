@@ -131,7 +131,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
   });
 });
 
-// Folded from OutputFilesPrompt.vitest.mts (R7: one suite per module). This
+// Folded from OutputFilesPrompt.vitest.ts (R7: one suite per module). This
 // describe is a pure-function test (resolveOutputFiles takes plain data in,
 // plain data out) and does not touch platform state, so it is safe to run in
 // any position relative to the platform-dependent describes above/below.
@@ -180,7 +180,7 @@ describe('output file prompt variables', () => {
   });
 });
 
-// Folded from UserVarsMissingFiles.vitest.mts (R7: one suite per module).
+// Folded from UserVarsMissingFiles.vitest.ts (R7: one suite per module).
 // This describe replaces the whole global platform singleton in its own
 // beforeEach (a from-scratch createFakePlatform, not the fakeConfig-backed
 // platform the describes above rely on) and never restores it — it MUST stay

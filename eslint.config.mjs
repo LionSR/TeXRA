@@ -527,7 +527,6 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.ts',
-      'src/**/*.mts',
       'packages/agent/src/**/*.ts',
       'packages/extension/src/**/*.ts',
       'packages/desktop/src/**/*.ts',
@@ -659,10 +658,7 @@ export default tseslint.config(
   // intentional prose reference in this area is a JSDoc note in
   // src/shared/state/PersistedState.ts; import declarations stay forbidden.
   {
-    files: [
-      'src/**/*.{ts,tsx,mts,cts}',
-      'packages/agent/src/**/*.{ts,tsx,mts,cts}',
-    ],
+    files: ['src/**/*.{ts,tsx}', 'packages/agent/src/**/*.{ts,tsx}'],
     ignores: ['src/test-kernel/**'],
     rules: {
       'no-restricted-imports': [
@@ -678,7 +674,7 @@ export default tseslint.config(
   // Agent core is the neutral execution layer. It may depend on shared agent
   // contracts, but not on concrete provider-handler implementations.
   {
-    files: ['src/agent/core/**/*.{ts,tsx,mts,cts}'],
+    files: ['src/agent/core/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -693,7 +689,7 @@ export default tseslint.config(
   // Authentication owns credentials, sessions, and preferences. Model policy
   // may consume that state, but auth must not depend back on the model layer.
   {
-    files: ['src/auth/**/*.{ts,tsx,mts,cts}'],
+    files: ['src/auth/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',

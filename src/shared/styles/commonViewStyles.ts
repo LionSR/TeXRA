@@ -285,8 +285,8 @@ export const commonViewStyles: CSSResult = css`
   ${focusRingStyles}
 
   /* Available to the accessibility tree, absent from the layout. The canonical
-     copy: InstructionPanel carried its own and WorktreeChip a differently-named
-     .sr-only, which is how two names for one utility start. */
+     copy across every view surface (InstructionPanel and WorktreeChip both
+     used to carry their own). */
   .visually-hidden {
     position: absolute;
     width: 1px;
