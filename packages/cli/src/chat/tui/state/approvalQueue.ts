@@ -15,7 +15,7 @@
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 
-import type { ApprovalBypassKind as HostApprovalBypassKind } from '@agent/runtime/HostInteractions';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { StreamTabId } from '@shared/schemas';
 import type {
   AgentProposalPermission,
@@ -32,7 +32,7 @@ import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
 
-export type ApprovalBypassKind = HostApprovalBypassKind;
+export type { ApprovalBypassKind };
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 export type TuiRetryRequest = RetryPermission & {

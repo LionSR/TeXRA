@@ -45,7 +45,10 @@ Things the tree won't tell you:
   `architecture-edges`. The invariant to hold is "never widen a baseline"; the
   open work is the Tier-1 public manifest and shrinking the frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
-  consumer exists.
+  consumer exists. Kernel architecture tests under
+  `src/test-kernel/architecture/` (including
+  `approvalPolicyAuthorityRatchet.vitest.ts`) also pin single-authority
+  invariants with hardcoded allowlists rather than baseline JSON.
 - **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly five
   modules are browser-reachable today: `@utils/core`,
   `@utils/core/boundedIdSet`, `@utils/errors/errorMessage`,

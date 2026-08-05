@@ -1,10 +1,12 @@
 /**
- * Multi-agent coordination ("super yolo") settings message builder.
+ * Reliability-and-orchestration settings message builder.
  *
- * The outbound message carries reliability tuning, orchestrator-kill
- * permissions, and subagent-detach behaviour. Reliability settings are
- * host-specific (VS Code config-backed in the extension; absent in the
- * desktop build), so callers supply them.
+ * The outbound wire command remains `updateSuperYoloEnabled` for compatibility;
+ * the payload is reliability tuning, orchestrator-kill permissions, and
+ * subagent-detach behaviour — not a TeXRA approval-policy value.
+ *
+ * Reliability settings are host-specific (VS Code config-backed in the
+ * extension; absent in the desktop build), so callers supply them.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -13,16 +15,17 @@ import type { UpdateReliabilityAndOrchestrationMessage } from '@shared/schemas/s
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
-export interface SuperYoloHandlerPorts extends SettingsStatePorts {
+export interface ReliabilityAndOrchestrationHandlerPorts extends SettingsStatePorts {
   /** Host-provided reliability settings (extension only — desktop returns []). */
   readonly getReliabilitySettings: () => NumberSetting[];
 }
 
-export function buildSuperYoloMessage(
-  ports: SuperYoloHandlerPorts,
+export function buildReliabilityAndOrchestrationMessage(
+  ports: ReliabilityAndOrchestrationHandlerPorts,
 ): UpdateReliabilityAndOrchestrationMessage {
   const { workspaceState } = ports;
   return {
+    // Compatibility-pinned wire literal — see settingsView/data.ts.
     command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
     reliabilitySettings: ports.getReliabilitySettings(),
     allowOrchestratorKill: workspaceState.get<boolean>(

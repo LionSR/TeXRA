@@ -7,7 +7,7 @@ import type {
 import {
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
-} from './approvalPolicy';
+} from './approvalPrompts';
 import { formatAgentProposalApprovalSummary } from './approvalSummaries';
 
 export function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(

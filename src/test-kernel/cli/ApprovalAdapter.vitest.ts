@@ -23,19 +23,26 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   appendCliApiSwitchHint,
-  approvalPromptAllowed,
   hasCliApprovalDenied,
-  humanInputDenialFeedback,
-  immediateDecisionForApproval,
   isCliApiSwitchableRetry,
   markApprovalDenied,
   type CliApprovalPromptHooks,
-} from '@cli/runtime/approval/approvalPolicy';
+} from '@cli/runtime/approval/approvalPrompts';
+import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/settleApprovals';
 import {
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
 } from '@cli/runtime/approval/approvalSummaries';
+import {
+  decideHumanInputRequest,
+  decideRetryApproval,
+  decideTexraApproval,
+  isTexraApprovalDenied,
+  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+  TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
+  texraHumanInputDenialMessage,
+} from '@shared/approvalPolicy';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -48,13 +55,15 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
+  const ctx = createTestCliContext({
     cwd: '/tmp',
     mode: 'interactive',
     approvalPolicy: 'ask',
     version: 'test',
     ...overrides,
   });
+  defaultSession().setApprovalPolicy(ctx.approvalPolicy);
+  return ctx;
 }
 
 function useCliHostInteractions(
@@ -101,49 +110,44 @@ afterEach(() => {
   handleExternalInquiryActionMock.mockClear();
 });
 
-describe('immediateDecisionForApproval', () => {
-  it('shows the retry panel in interactive ask mode', () => {
+describe('shared retry and human-input decisions', () => {
+  it('presents credential retries only under interactive ask', () => {
     expect(
-      immediateDecisionForApproval(
-        'showRetryRequest',
-        credentialExhaustedRetry,
-        context(),
-      ),
-    ).toBeUndefined();
+      decideRetryApproval({
+        policy: 'ask',
+        canPresent: true,
+        isCredentialFailure: true,
+      }),
+    ).toBe('present');
   });
 
   it.each([
-    { approvalPolicy: 'yolo' as const, mode: 'interactive' as const },
-    { approvalPolicy: 'never' as const, mode: 'interactive' as const },
-    { approvalPolicy: 'ask' as const, mode: 'headless' as const },
+    { policy: 'yolo' as const, canPresent: true },
+    { policy: 'never' as const, canPresent: true },
+    { policy: 'ask' as const, canPresent: false },
   ])(
-    'denies retries without an interactive human in $approvalPolicy/$mode mode',
-    ({ approvalPolicy, mode }) => {
+    'denies credential retries when policy=$policy canPresent=$canPresent',
+    ({ policy, canPresent }) => {
       expect(
-        immediateDecisionForApproval(
-          'showRetryRequest',
-          credentialExhaustedRetry,
-          context({ approvalPolicy, mode }),
-        ),
-      ).toMatchObject({ accepted: false });
+        decideRetryApproval({
+          policy,
+          canPresent,
+          isCredentialFailure: true,
+        }),
+      ).toMatchObject({ deny: expect.any(String) });
     },
   );
 
-  it('denies an ordinary transient retry in yolo mode without marking approval denied', () => {
+  it('denies an ordinary transient retry in yolo without policy-denial classification', async () => {
     const ctx = context({ approvalPolicy: 'yolo' });
+    const result = await createHeadlessCliHostInteractions(ctx).requestRetry?.({
+      requestId: 'transient-retry',
+      streamId: 'test-stream' as StreamTabId,
+      operation: 'Model request',
+      errorMessage: 'stream dropped before first token',
+    });
 
-    expect(
-      immediateDecisionForApproval(
-        'showRetryRequest',
-        {
-          requestId: 'transient-retry',
-          streamId: 'test-stream' as StreamTabId,
-          operation: 'Model request',
-          errorMessage: 'stream dropped before first token',
-        },
-        ctx,
-      ),
-    ).toMatchObject({ accepted: false });
+    expect(result).toMatchObject({ action: 'deny' });
     expect(hasCliApprovalDenied(ctx)).toBe(false);
     expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
       CliExitCode.AgentError,
@@ -152,37 +156,48 @@ describe('immediateDecisionForApproval', () => {
 });
 
 describe('human input approval policy', () => {
-  it('allows prompts only for interactive ask mode', () => {
-    expect(approvalPromptAllowed(context())).toBe(true);
-    expect(approvalPromptAllowed(context({ approvalPolicy: 'yolo' }))).toBe(
-      false,
-    );
-    expect(approvalPromptAllowed(context({ approvalPolicy: 'never' }))).toBe(
-      false,
-    );
-    expect(approvalPromptAllowed(context({ mode: 'headless' }))).toBe(false);
+  it('withholds approval-gated tools via the shared evaluator', () => {
+    const gate = (policy: 'ask' | 'never' | 'yolo', canPresent: boolean) =>
+      isTexraApprovalDenied(
+        decideTexraApproval({
+          policy,
+          promptRequired: true,
+          scopedBypass: false,
+          canPresent,
+        }),
+      );
+
+    expect(gate('ask', true)).toBe(false);
+    expect(gate('yolo', false)).toBe(false);
+    expect(gate('never', true)).toBe(true);
+    expect(gate('ask', false)).toBe(true);
   });
 
   it('uses yolo-specific human-input feedback without marking approval denied', () => {
     const ctx = context({ approvalPolicy: 'yolo' });
+    const decision = decideHumanInputRequest({
+      policy: 'yolo',
+      canPresent: true,
+    });
 
+    expect(decision).toEqual({ deny: 'yolo-no-human' });
     expect(
-      humanInputDenialFeedback(
-        ctx,
-        'User question requires human input; yolo mode cannot synthesize an answer.',
+      texraHumanInputDenialMessage(
+        'yolo-no-human',
+        TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
       ),
-    ).toBe(
-      'User question requires human input; yolo mode cannot synthesize an answer.',
-    );
+    ).toBe(TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE);
     expect(hasCliApprovalDenied(ctx)).toBe(false);
   });
 
-  it('uses approval denial feedback and marks denied outside yolo mode', () => {
+  it('denies external inquiry under never and marks approval denied', () => {
     const ctx = context({ approvalPolicy: 'never' });
-
-    expect(humanInputDenialFeedback(ctx, 'unused yolo message')).toBe(
-      'Denied by CLI approval policy.',
-    );
+    expect(denyExternalInquiryIfNoHumanInput('ei_test', ctx)).toBe(true);
+    expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
+      action: 'drop',
+      threadId: 'ei_test',
+      feedback: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+    });
     expect(hasCliApprovalDenied(ctx)).toBe(true);
   });
 
@@ -277,7 +292,7 @@ describe('approval prompt hooks', () => {
 
     expect(result).toEqual({
       action: 'reject',
-      feedback: 'Denied by CLI approval policy.',
+      feedback: 'Denied by TeXRA approval policy.',
     });
   });
 
@@ -334,7 +349,7 @@ describe('requestRetry classification (#7331)', () => {
     // so a zero-output run reports FAILED rather than COMPLETED.
     expect(result).toEqual({
       action: 'deny',
-      reason: 'Denied by CLI approval policy.',
+      reason: 'Denied by TeXRA approval policy.',
     });
     expect(hasCliApprovalDenied(ctx)).toBe(true);
     expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(

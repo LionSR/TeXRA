@@ -1,7 +1,4 @@
-// The headless CLI's `HostInteractions` implementation. Approval policy and
-// summary formatting live in the focused modules under ./approval/; import
-// those directly.
-
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type {
   HostAgentProposalRequest,
   HostApprovalBypassStateUpdate,
@@ -11,29 +8,29 @@ import type {
   RetryResult,
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import type { RetryPermission, UserQuestionAnswers } from '@shared/schemas';
-
+import {
+  type ApprovalDecision,
+  type RetryPermission,
+  type UserQuestionAnswers,
+} from '@shared/schemas';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-
-import { type CliContext } from './cliContext';
-import { writeTextStderr } from './logSinks';
-
 import {
-  type ApprovalDecision,
+  settleExecutable,
+  settleHumanInputDenial,
+  settleRetry,
+} from './approval/settleApprovals';
+import {
   type CliApprovalPromptHooks,
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
   askApproval,
-  askUserQuestionDenial,
-  approvalPromptAllowed,
-  immediateDecisionForApproval,
   markApprovalDenied,
   queueCliApprovalQuestion,
-} from './approval/approvalPolicy';
+} from './approval/approvalPrompts';
 import {
   formatBashApprovalSummary,
   formatRetryRequestMessage,
@@ -42,12 +39,25 @@ import {
 } from './approval/approvalSummaries';
 import { summarizeApprovalEvent } from './approval/eventDispatch';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
+import { type CliContext } from './cliContext';
+import { writeTextStderr } from './logSinks';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   readonly emit?: HostInteractions['emit'];
   readonly setApprovalBypassState?: (
     update: HostApprovalBypassStateUpdate,
   ) => void;
+}
+
+function settleApprovalEvent(
+  event: CliDecisionApprovalEvent,
+  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
+  context: CliContext,
+): ApprovalDecision | undefined {
+  if (event === 'showRetryRequest') {
+    return settleRetry(payload as RetryPermission, context);
+  }
+  return settleExecutable(context);
 }
 
 export function toToolEditResult(
@@ -78,8 +88,8 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
   options: { writeRejectionToStderr?: boolean } = {},
-): Promise<ApprovalDecision> {
-  const immediate = immediateDecisionForApproval(event, payload, context);
+): Promise<{ decision: ApprovalDecision; prompted: boolean }> {
+  const immediate = settleApprovalEvent(event, payload, context);
 
   if (event === 'showRetryRequest') {
     const data = payload as RetryPermission;
@@ -87,7 +97,7 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
     writeTextStderr(formatRetryRequestMessage(data));
   }
 
-  if (immediate) return immediate;
+  if (immediate) return { decision: immediate, prompted: false };
 
   const summary = summarizeApprovalEvent(event, payload);
   const decision = await askApproval(context, summary, hooks);
@@ -96,7 +106,7 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
       decision.userMessage ? `${summary}\n${decision.userMessage}` : summary,
     );
   }
-  return decision;
+  return { decision, prompted: true };
 }
 
 /** Approve/reject settlement shared by the bash, plan, and proposal ports of
@@ -138,8 +148,10 @@ async function askHeadlessUserQuestion(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<UserQuestionSettlement> {
-  const denial = askUserQuestionDenial(context);
-  if (denial) return denial;
+  const denial = settleHumanInputDenial(context);
+  if (denial != null) {
+    return { action: 'reject', feedback: denial.userMessage };
+  }
 
   const answers: UserQuestionAnswers = {};
   try {
@@ -176,6 +188,10 @@ export function createHeadlessCliHostInteractions(
   context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
 ): HostInteractions {
+  // Headless composition seeds the session before attaching; tests often attach
+  // without that step, so mirror the seed here. TUI uses a different adapter
+  // and keeps the live session value from `/approval`.
+  defaultSession().setApprovalPolicy(context.approvalPolicy);
   return {
     emit: hooks.emit,
     setApprovalBypassState: hooks.setApprovalBypassState,
@@ -191,7 +207,7 @@ export function createHeadlessCliHostInteractions(
       return toApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
-      const decision = await decideApprovalEvent(
+      const { decision } = await decideApprovalEvent(
         'showPlanApproval',
         request,
         context,
@@ -200,7 +216,7 @@ export function createHeadlessCliHostInteractions(
       return toApprovalSettlement(decision);
     },
     async requestAgentProposal(request: HostAgentProposalRequest) {
-      const decision = await decideApprovalEvent(
+      const { decision } = await decideApprovalEvent(
         'showAgentProposal',
         request,
         context,
@@ -217,14 +233,14 @@ export function createHeadlessCliHostInteractions(
         ...(request.errorMessage ? { errorMessage: request.errorMessage } : {}),
         ...(request.errorDetails ? { errorDetails: request.errorDetails } : {}),
       };
-      const decision = await decideApprovalEvent(
+      const { decision, prompted } = await decideApprovalEvent(
         'showRetryRequest',
         payload,
         context,
         hooks,
         { writeRejectionToStderr: true },
       );
-      return toRetryResult(decision, approvalPromptAllowed(context));
+      return toRetryResult(decision, prompted);
     },
     askUserQuestion(request) {
       return askHeadlessUserQuestion(request, context, hooks);

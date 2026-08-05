@@ -21,7 +21,8 @@ import {
 } from '@shared/schemas';
 import {
   decideTexraApproval,
-  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+  isTexraApprovalDenied,
+  texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
@@ -108,11 +109,11 @@ export async function requestBashApproval(
   });
 
   if (decision === 'allow') return { action: 'approve' };
-  if (decision === 'deny') {
+  if (isTexraApprovalDenied(decision)) {
     context?.onApprovalPolicyDenial?.();
     return {
       action: 'reject',
-      feedback: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+      feedback: texraApprovalDenialMessage(decision),
     };
   }
 
