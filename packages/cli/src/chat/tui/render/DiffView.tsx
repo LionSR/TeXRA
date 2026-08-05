@@ -225,11 +225,11 @@ function overflowMarkerCandidates(
 ): readonly [string, string] {
   switch (kind) {
     case 'hidden':
-      return [hiddenRowsText(count), `... ${count} hidden`];
+      return [hiddenRowsText(count), `… ${count} hidden`];
     case 'previous':
-      return [previousRowsText(count), `... ${count} prev rows`];
+      return [previousRowsText(count), `… ${count} prev rows`];
     case 'more':
-      return [moreRowsText(count), `... +${count} rows`];
+      return [moreRowsText(count), `… +${count} rows`];
   }
 }
 

@@ -106,7 +106,7 @@ function elideOutputLines(lines: readonly string[]): ElidedOutput {
 }
 
 function elisionMarker(hiddenCount: number): string {
-  return `… +${hiddenCount} lines (ctrl + t to print full output)`;
+  return `… +${hiddenCount} lines (Ctrl-T to print full output)`;
 }
 
 // Generic fallback for tools without a curated preview field in

@@ -16,6 +16,11 @@ import {
   verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
+  textInputCappedRowCount,
+  textInputDisplayRowCount,
+  textInputDisplayWindow,
+} from '@cli/chat/tui/input/BaseTextInput';
+import {
   isCtrlInput,
   isEscapeInput,
   isUnhandledControlInput,
@@ -323,5 +328,45 @@ describe('CLI TUI text input editing', () => {
     expect(verticalCursorMove('alpha\nbe', 7, 1)).toBeUndefined();
     expect(verticalCursorMove('single line', 4, -1)).toBeUndefined();
     expect(verticalCursorMove('single line', 4, 1)).toBeUndefined();
+  });
+});
+
+describe('textInputDisplayRowCount', () => {
+  it('matches the component soft-break rows and reserves the caret row', () => {
+    // Fits with room to spare: one row.
+    expect(textInputDisplayRowCount('short', 38)).toBe(1);
+    // Word-boundary soft wrap: two rows, last row not full — no caret row.
+    expect(
+      textInputDisplayRowCount('draft survives resize and accepts input', 38),
+    ).toBe(2);
+    // Exactly-full single row: the end-of-value caret wraps to its own row.
+    expect(textInputDisplayRowCount('a'.repeat(38), 38)).toBe(2);
+    // Hard newlines count as rows.
+    expect(textInputDisplayRowCount('one\ntwo', 38)).toBe(2);
+    expect(textInputDisplayRowCount('', 38)).toBe(1);
+  });
+});
+
+describe('textInputDisplayWindow', () => {
+  it('reserves a height-capped row for the end-of-value caret on a full last line', () => {
+    // Five full rows of content (width 4 → 4 chars each). Caret at EOF wants a
+    // sixth visual row; with maxDisplayRows=5 the window must drop one content
+    // row so the caret wrap fits inside the budget instead of clipping.
+    const value = 'aaaa\nbbbb\ncccc\ndddd\neeee';
+    const width = 4;
+    expect(textInputDisplayRowCount(value, width)).toBe(6);
+    // InputBar pairs this height with maxDisplayRows so the window and Box
+    // share one budget (the caret row is not discarded by the ceiling).
+    expect(textInputCappedRowCount(value, width, 5)).toBe(5);
+    const windowed = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: textInputCappedRowCount(value, width, 5),
+      value,
+      width,
+    });
+    // Four content rows + room for the caret row; leading content is clipped.
+    expect(windowed.clipped).toBe(true);
+    expect(windowed.value.split('\n')).toHaveLength(4);
+    expect(windowed.cursor).toBe(windowed.value.length);
   });
 });

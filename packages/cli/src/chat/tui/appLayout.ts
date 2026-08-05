@@ -23,12 +23,17 @@ export const PINNED_CHROME_ROWS = {
 
 function pinnedChromeRows({
   inputVisible = true,
+  inputRows = PINNED_CHROME_ROWS.input,
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   slashPaletteOpen,
   staticTranscriptRows = 0,
 }: {
   readonly inputVisible?: boolean;
+  /** Measured input-bar height (borders + windowed draft rows). Defaults to
+   *  the single-line height; a multi-line draft reports its real height so
+   *  the transcript shrinks instead of the frame outgrowing the terminal. */
+  readonly inputRows?: number;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
@@ -36,7 +41,7 @@ function pinnedChromeRows({
 }): number {
   const baseRows =
     PINNED_CHROME_ROWS.status +
-    (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
+    (inputVisible ? inputRows : 0) +
     queuedFollowUpPanelRows +
     staticTranscriptRows;
   return (
@@ -50,6 +55,7 @@ export function allocateMiddleRows({
   foregroundMaxRows,
   foregroundOpen,
   inputVisible = true,
+  inputRows,
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   rows,
@@ -59,6 +65,7 @@ export function allocateMiddleRows({
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
   readonly inputVisible?: boolean;
+  readonly inputRows?: number;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
@@ -73,6 +80,7 @@ export function allocateMiddleRows({
     rows -
       pinnedChromeRows({
         inputVisible,
+        inputRows,
         queuedFollowUpPanelRows,
         reverseSearchOpen,
         slashPaletteOpen,

@@ -256,7 +256,7 @@ describe('ConfigForm helpers', () => {
     });
     expect(coerceSettingInput('', true)).toEqual({
       ok: false,
-      message: 'Enter a number, or press Ctrl+R to reset.',
+      message: 'Enter a number, or press Ctrl-R to reset.',
     });
     expect(coerceSettingInput('abc', true)).toEqual({
       ok: false,
@@ -282,7 +282,7 @@ describe('ConfigForm helpers', () => {
     if (!invalid.ok) expect(invalid.message).not.toBe('');
   });
 
-  it('recognizes parsed and raw Ctrl+R reset input', () => {
+  it('recognizes parsed and raw Ctrl-R reset input', () => {
     expect(isConfigResetInput('r', { ctrl: true })).toBe(true);
     expect(isConfigResetInput('\u0012', {})).toBe(true);
     expect(isConfigResetInput('r', { meta: true })).toBe(false);

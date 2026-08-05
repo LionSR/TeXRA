@@ -348,7 +348,9 @@ describe('app interaction policy', () => {
     ] satisfies readonly (readonly [ForegroundEscapeInput, string])[];
     const approvalCases = [
       ['externalInquiry', 'skip'],
-      ['bash', 'cancel'],
+      // Esc on an approval card rejects — the label names the consequence.
+      ['bash', 'reject'],
+      ['retry', 'give up'],
     ] satisfies readonly (readonly [ApprovalKind, string])[];
 
     for (const [input, expected] of surfaceCases) {
