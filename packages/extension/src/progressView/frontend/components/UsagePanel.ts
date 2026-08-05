@@ -107,10 +107,6 @@ export class UsagePanel extends LitElement {
         display: block;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .usage-summary-footer {
         border-top: var(--border-thin) solid var(--color-border);
         background-color: var(--wa-color-surface-lowered);
