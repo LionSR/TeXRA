@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
-import { POINTER } from '@cli/tui/ui/glyphs';
+import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
 import { apiKeyEnvName, type ApiProvider } from '@model/apiProviders';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -62,7 +62,7 @@ export function ApiKeyEntryForm(
       </Box>
       <Box marginTop={1} flexDirection="column">
         {props.error ? (
-          <Text color={COLOR_ERROR}>{props.error}</Text>
+          <Text color={COLOR_ERROR}>{`${CROSS} ${props.error}`}</Text>
         ) : (
           <Text dimColor>
             Stored in TeXRA secrets on Enter — or set{' '}

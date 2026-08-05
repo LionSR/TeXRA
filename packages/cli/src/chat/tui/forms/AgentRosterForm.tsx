@@ -9,7 +9,7 @@ import {
 } from '@cli/runtime/agentRoster';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { TICK } from '@cli/tui/ui/glyphs';
+import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
@@ -171,11 +171,11 @@ export function AgentRosterForm(
     });
     return (
       <FormFrame title="/config · Agents" showCloseHint={false}>
-        {error ? <Text color={COLOR_ERROR}>{error}</Text> : null}
+        {error ? <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text> : null}
         {data.record.missingTeamId ? (
           <Text color={COLOR_WARNING}>
-            Team "{data.record.missingTeamId}" is unavailable; showing all
-            agents.
+            {WARNING} Team "{data.record.missingTeamId}" is unavailable; showing
+            all agents.
           </Text>
         ) : null}
         <Select
