@@ -1,5 +1,7 @@
 // Project shared session facts into the CLI TUI signal state.
 
+import { isDeepStrictEqual } from 'node:util';
+
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -46,12 +48,41 @@ import type { StreamArtifactReader } from './subscribeStreamArtifacts';
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
+/** Element-wise equality for the string-list slices patched below, so an
+ *  unchanged list never churns the `streams` signal identity. */
+function sameStringList(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length && left.every((x, i) => x === right[i]);
+}
+
 class TuiSessionRenderer implements SessionRendererPort {
+  /**
+   * Generation captured when the adapter dispatched the fact currently being
+   * applied. The applier can suspend between dispatch and callback
+   * (`handleSetActiveStream` awaits `streamLogs.ensureLoaded`); if
+   * `resetCliState` runs during that await, the continuation still fires
+   * these callbacks, and an unguarded `patchStream`/`focusStream` would
+   * re-mint and re-focus a stream the reset just retired. Every callback
+   * below no-ops when the captured generation is no longer current.
+   */
+  private dispatchGeneration = getCliStateGeneration();
+
   constructor(
     private readonly state: SessionState,
     private readonly snapshots: StreamArtifactReader,
     private readonly session: SessionHandle,
   ) {}
+
+  /** Called by the adapter immediately before each applier dispatch. */
+  captureDispatchGeneration(): void {
+    this.dispatchGeneration = getCliStateGeneration();
+  }
+
+  private isStaleDispatch(): boolean {
+    return this.dispatchGeneration !== getCliStateGeneration();
+  }
 
   isAvailable(): boolean {
     return true;
@@ -62,6 +93,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   clearPendingConversationProgress(_streamId: StreamTabId): void {}
 
   onStreamMetadataChanged(streamId: StreamTabId): void {
+    if (this.isStaleDispatch()) return;
     if (isChildStreamRemoved(streamId)) return;
     const metadata = this.state.getStreamMetadata(streamId);
     const config = this.state.snapshots.getRunConfig(streamId);
@@ -113,6 +145,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     childStreamId: StreamTabId,
     parentStreamId: StreamTabId | null,
   ): void {
+    if (this.isStaleDispatch()) return;
     setParentStream(childStreamId, parentStreamId);
   }
 
@@ -122,10 +155,12 @@ class TuiSessionRenderer implements SessionRendererPort {
     _lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
+    if (this.isStaleDispatch()) return;
     setStreamStatusInCliState({ streamId, status, substate });
   }
 
   onActiveStreamChanged(streamId: ActiveStreamId): void {
+    if (this.isStaleDispatch()) return;
     if (!streamId) {
       activeStreamId.set(undefined);
       return;
@@ -135,6 +170,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
+    if (this.isStaleDispatch()) return;
     patchStream(streamId, (slice) => ({ ...slice, description }));
   }
 
@@ -142,17 +178,22 @@ class TuiSessionRenderer implements SessionRendererPort {
     streamId: StreamTabId,
     progress: ConversationProgress,
   ): void {
+    if (this.isStaleDispatch()) return;
     patchStream(streamId, (slice) => ({ ...slice, conversation: progress }));
   }
 
   onStageChanged(streamId: StreamTabId, stage: StreamStage): void {
-    patchStream(streamId, (slice) => ({ ...slice, stage }));
+    if (this.isStaleDispatch()) return;
+    patchStream(streamId, (slice) =>
+      isDeepStrictEqual(slice.stage, stage) ? slice : { ...slice, stage },
+    );
   }
 
   onBadgesChanged(
     streamId: StreamTabId,
     badges: Parameters<SessionRendererPort['onBadgesChanged']>[1],
   ): void {
+    if (this.isStaleDispatch()) return;
     projectChildRoster(
       streamId,
       badges.subagents.filter((child) => child.finishedAt === undefined),
@@ -160,6 +201,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onFilesChanged(streamId: StreamTabId): void {
+    if (this.isStaleDispatch()) return;
     patchStream(streamId, (slice) => ({
       ...slice,
       outputFilesByRound: this.snapshots.getOutputFiles(streamId),
@@ -167,13 +209,24 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onMissingOutputsChanged(streamId: StreamTabId): void {
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      missingOutputsByRound: this.snapshots.getMissingOutputs(streamId),
-    }));
+    if (this.isStaleDispatch()) return;
+    const missingOutputsByRound = this.snapshots.getMissingOutputs(streamId);
+    // `clearMissingOutputs` on a stream with no slice (or an already-empty
+    // record) must stay a no-op: calling `patchStream` would mint a slice via
+    // the `emptySlice` fallback — and un-retire the id — just to hold an
+    // empty record.
+    const current = streams.get().get(streamId)?.missingOutputsByRound;
+    if (
+      Object.keys(missingOutputsByRound).length === 0 &&
+      Object.keys(current ?? {}).length === 0
+    ) {
+      return;
+    }
+    patchStream(streamId, (slice) => ({ ...slice, missingOutputsByRound }));
   }
 
   onCompileFailuresChanged(streamId: StreamTabId): void {
+    if (this.isStaleDispatch()) return;
     patchStream(streamId, (slice) => ({
       ...slice,
       compileFailuresByRound: this.snapshots.getCompileFailures(streamId),
@@ -185,6 +238,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     storageKey: string,
     latestUsage: Parameters<SessionRendererPort['onRunUsageChanged']>[2],
   ): void {
+    if (this.isStaleDispatch()) return;
     const runUsage = this.snapshots.getRunUsage(streamId);
     patchStream(streamId, (slice) => ({
       ...slice,
@@ -196,22 +250,26 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onTodosChanged(streamId: StreamTabId, todos: TodoItem[]): void {
+    if (this.isStaleDispatch()) return;
     patchStream(streamId, (slice) => ({ ...slice, todos }));
   }
 
   onPlanChanged(streamId: StreamTabId, plan: Plan | null): void {
+    if (this.isStaleDispatch()) return;
     patchStream(streamId, (slice) => ({ ...slice, plan }));
   }
 
   onQueuedFollowUpsChanged(streamId: StreamTabId): void {
+    if (this.isStaleDispatch()) return;
     // Prefer the process session queue: tests and production both enqueue
     // there, while a harness may construct a throwaway SessionHandle for the
     // hub alone.
     const messages = this.session.followUps.getAll(streamId);
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      queuedFollowUpMessages: messages,
-    }));
+    patchStream(streamId, (slice) =>
+      sameStringList(slice.queuedFollowUpMessages, messages)
+        ? slice
+        : { ...slice, queuedFollowUpMessages: messages },
+    );
   }
 
   onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
@@ -223,6 +281,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   ): void {}
 
   onGoalPaused(streamId: StreamTabId): void {
+    if (this.isStaleDispatch()) return;
     appendLocalAssistantTranscript(GOAL_PAUSED_TRANSCRIPT_NOTICE, streamId);
   }
 
@@ -249,6 +308,8 @@ export function attachSessionSignalsAdapter({
   const applier = new SessionFactApplier(state, renderer, {
     hasPendingPermissions: () => false,
     deleteStream: removeStream,
+    // CLI focus is the `activeStreamId` signal, not `SessionState.activeStream`.
+    evictOnStreamSwitch: false,
   });
   let generation = getCliStateGeneration();
   const detachResetHook = registerCliStateResetHook(() => {
@@ -263,6 +324,7 @@ export function attachSessionSignalsAdapter({
       // eviction keys off `SessionState.activeStream`, which is not the CLI
       // focus id, and the old TUI ignored status facts here.
       if (event.event.type === 'status') return;
+      renderer.captureDispatchGeneration();
       applier.handleSessionFact(event.event);
     },
     { scope: 'session' },
@@ -276,6 +338,7 @@ export function attachSessionSignalsAdapter({
       ) {
         return;
       }
+      renderer.captureDispatchGeneration();
       applier.handleRunFact(event.streamId, event.event as SessionRunFactEvent);
     },
     { scope: 'run', types: RUN_FACT_EVENT_TYPES },

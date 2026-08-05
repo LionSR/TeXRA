@@ -203,13 +203,21 @@ export class SessionState {
   /**
    * The single writer of the active tab: moves the selection to `next` and
    * releases the tab left behind. There is no `activeStream` setter, so no
-   * switching path can forget the release above.
+   * switching path can forget the release above. `evictPrevious: false` is
+   * for hosts whose visible focus is not this active stream (the CLI TUI
+   * keys focus off its own signal), where the release would evict the wrong
+   * stream's transcript.
    */
-  switchActiveStream(next: ActiveStreamId): void {
+  switchActiveStream(
+    next: ActiveStreamId,
+    options?: { evictPrevious?: boolean },
+  ): void {
     const previous = this._prefs.get('activeStream');
     if (previous === next) return;
     this._prefs.update({ activeStream: next });
-    if (previous) this.releasePreviousActive(previous);
+    if (previous && options?.evictPrevious !== false) {
+      this.releasePreviousActive(previous);
+    }
   }
 
   /**
