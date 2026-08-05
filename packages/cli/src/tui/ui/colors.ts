@@ -11,17 +11,38 @@
 // chalk is only a transitive dependency of `ink` here, not one the CLI
 // declares directly.
 
+// ANSI green, yellow and cyan are tuned for dark terminals and carry no
+// lightness guarantee — the terminal owns the value. Against a white
+// background they measure APCA Lc 30-47 (WCAG 1.70-2.56:1) on the xterm and
+// macOS Basic palettes, under the Lc 60 floor for non-body text. Red, blue,
+// magenta and gray are fine in both directions (Lc 66-91), so only these three
+// roles take a light-background substitute: oklch(0.48) at each role's hue,
+// clamped to sRGB, measuring Lc 80.1/82.5/80.8 on white and 74.2/76.5/74.9 on
+// #f5f5f5.
+//
+// COLORFGBG is "<fg>;<bg>"; some terminals insert extra fields, so the
+// background is always the last one, and 7 (light gray) and 15 (white) are the
+// only light backgrounds terminals report. Terminals that never set it
+// (Terminal.app, iTerm2, Alacritty) fall through to the dark assumption the
+// ANSI names are already tuned for, so this can only improve a light terminal,
+// never regress a dark one. Resolved once here so every call site keeps
+// consuming a plain string.
+const LIGHT_TERMINAL_BACKGROUND = ((): boolean => {
+  const background = process.env.COLORFGBG?.split(';').at(-1);
+  return background === '7' || background === '15';
+})();
+
 /** Positive/affirmative state: completed tool runs, "agent asks" prompts. */
-export const COLOR_SUCCESS = 'green';
+export const COLOR_SUCCESS = LIGHT_TERMINAL_BACKGROUND ? '#007132' : 'green';
 
 /** Caution: retryable failures, bash/edit auto-approval, queued/empty states. */
-export const COLOR_WARNING = 'yellow';
+export const COLOR_WARNING = LIGHT_TERMINAL_BACKGROUND ? '#7f5400' : 'yellow';
 
 /** Failure/destructive state: errors, non-zero exit codes, the yolo policy. */
 export const COLOR_ERROR = 'red';
 
 /** Default informational emphasis: form/panel borders, headings, previews. */
-export const COLOR_HINT = 'cyan';
+export const COLOR_HINT = LIGHT_TERMINAL_BACKGROUND ? '#006980' : 'cyan';
 
 /** Distinctive one-off highlight: reverse-search mode, agent-proposal review. */
 export const COLOR_ACCENT = 'magenta';

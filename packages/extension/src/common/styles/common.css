@@ -21,8 +21,8 @@
     var(--vscode-foreground)
   );
   /* Some VS Code themes (notably dark) set descriptionForeground too dim to
-     read against tinted surface cards. Mix at least 65% of the normal text
-     color in to guarantee a readable contrast in every theme. */
+     read against tinted surface cards. Mix 70% of the normal text color in
+     to guarantee a readable contrast in every theme. */
   --wa-color-text-quiet: color-mix(
     in srgb,
     var(--vscode-editor-foreground, var(--vscode-foreground)) 70%,
@@ -56,7 +56,12 @@
   --wa-color-brand-border-loud: var(--vscode-button-border, transparent);
   --wa-color-brand-fill-quiet: var(--vscode-inputValidation-infoBackground);
   --wa-color-brand-border-quiet: var(--vscode-inputValidation-infoBorder);
-  --wa-color-brand-on-quiet: var(--vscode-inputValidation-infoForeground);
+  /* infoForeground is null in every stock theme, so this token would otherwise
+     be invalid and brand callouts would inherit body text by accident. */
+  --wa-color-brand-on-quiet: var(
+    --vscode-inputValidation-infoForeground,
+    var(--wa-color-text-normal)
+  );
 
   /* Neutral variant — outlined wa-button / wa-callout, hovers. */
   --wa-color-neutral-fill-quiet: var(--vscode-button-secondaryBackground);
@@ -72,46 +77,87 @@
   );
   --wa-color-neutral-on-loud: var(--vscode-button-secondaryForeground);
 
-  /* Warning variant. */
+  /* ── Warning / danger / success variants ────────────────────────────────
+     One shape for all three, driven by a single theme-aware role colour:
+
+       fill-quiet   8% role over the raised surface
+       border-quiet 45% role
+       on-quiet     55% role mixed toward the normal text colour
+       fill-loud    the role colour itself
+       on-loud      the editor background
+
+     The on-quiet mix is what lets one expression work in both appearances:
+     it darkens the role colour on light themes and lightens it on dark ones
+     while holding hue. Binding a quiet fill and its on-colour to two members
+     of the same palette (as success did with charts.green + testing.iconPassed)
+     renders the variant on itself — 1.10:1 on dark themes.
+
+     Worst case across Dark Modern / Light Modern / Dark+ / Light+: quiet
+     4.54:1, loud 4.33:1. Danger-on-quiet is the floor at 5.33:1 (APCA Lc 46.5)
+     in dark themes, bounded by VS Code's own mid-lightness editorError colour;
+     going lighter to clear APCA's Lc 60 stops reading as an error. */
+
+  /* Warning variant. Loud keeps VS Code's own status-bar pairing: that fill is
+     darken(editorWarning.foreground, 0.4) in BOTH appearances, so an on-colour
+     that follows the theme's text lightness gives dark-on-dark in light
+     themes (1.57:1). */
   --wa-color-warning-fill-loud: var(--vscode-statusBarItem-warningBackground);
-  --wa-color-warning-on-loud: var(--vscode-editor-foreground);
-  --wa-color-warning-border-loud: var(--vscode-inputValidation-warningBorder);
-  --wa-color-warning-fill-quiet: var(
-    --vscode-editorWarning-background,
-    var(--vscode-inputValidation-warningBackground)
+  --wa-color-warning-on-loud: var(--vscode-statusBarItem-warningForeground);
+  --wa-color-warning-border-loud: transparent;
+  --wa-color-warning-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) 8%,
+    var(--wa-color-surface-raised)
   );
-  --wa-color-warning-border-quiet: var(--vscode-inputValidation-warningBorder);
-  --wa-color-warning-on-quiet: var(
-    --vscode-editorWarning-foreground,
-    var(--vscode-inputValidation-warningForeground)
+  --wa-color-warning-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) 45%,
+    transparent
+  );
+  --wa-color-warning-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) 55%,
+    var(--wa-color-text-normal)
   );
 
   /* Danger variant. */
   --wa-color-danger-fill-loud: var(--vscode-editorError-foreground);
-  --wa-color-danger-on-loud: #ffffff;
+  --wa-color-danger-on-loud: var(--vscode-editor-background);
   --wa-color-danger-border-loud: transparent;
-  --wa-color-danger-fill-quiet: var(--vscode-inputValidation-errorBackground);
-  --wa-color-danger-border-quiet: var(--vscode-inputValidation-errorBorder);
-  --wa-color-danger-on-quiet: var(
-    --vscode-editorError-foreground,
-    var(--vscode-errorForeground)
+  --wa-color-danger-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) 8%,
+    var(--wa-color-surface-raised)
+  );
+  --wa-color-danger-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) 45%,
+    transparent
+  );
+  --wa-color-danger-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) 55%,
+    var(--wa-color-text-normal)
   );
 
   /* Success variant. */
-  --wa-color-success-fill-loud: var(
-    --vscode-charts-green,
-    var(--vscode-testing-iconPassed)
-  );
-  --wa-color-success-on-loud: #ffffff;
+  --wa-color-success-fill-loud: var(--vscode-charts-green);
+  --wa-color-success-on-loud: var(--vscode-editor-background);
   --wa-color-success-border-loud: transparent;
-  --wa-color-success-fill-quiet: var(
-    --vscode-charts-green,
-    var(--vscode-inputValidation-infoBackground)
+  --wa-color-success-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) 8%,
+    var(--wa-color-surface-raised)
   );
-  --wa-color-success-border-quiet: var(--vscode-inputValidation-infoBorder);
-  --wa-color-success-on-quiet: var(
-    --vscode-testing-iconPassed,
-    var(--vscode-charts-green)
+  --wa-color-success-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) 45%,
+    transparent
+  );
+  --wa-color-success-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) 55%,
+    var(--wa-color-text-normal)
   );
 
   /* Buttons — niche tokens consumers still need. */
@@ -143,8 +189,7 @@
   --wa-color-chart-orange: var(--vscode-charts-orange);
   --wa-color-chart-red: var(--vscode-charts-red);
   --wa-color-chart-yellow: var(--vscode-charts-yellow);
-  /* VS Code does not ship a charts.purple — fall back to keyword colour. */
-  --wa-color-chart-purple: light-dark(#8250df, #c586c0);
+  --wa-color-chart-purple: var(--vscode-charts-purple);
 
   /* Diff editor. */
   --wa-color-diff-inserted: var(--vscode-diffEditor-insertedTextBackground);

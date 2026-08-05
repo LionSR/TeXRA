@@ -366,7 +366,14 @@ interface DiffLineStyle {
 }
 
 // Light-background diff band colors: green for additions, rose for removals.
-// Both pairs pass WCAG AA contrast at typical terminal font weights.
+// Both pairs pass WCAG AA contrast at typical terminal font weights (added
+// 11.67:1 / APCA Lc 90.2, removed 11.13:1 / Lc 82.8).
+//
+// On 16-color terminals chalk downsamples both backgrounds to brightWhite and
+// both foregrounds to black, so the two bands become visually identical. The
+// `+`/`-` marker kept in `line.text` still distinguishes them, so this degrades
+// rather than breaks; gating the bands on truecolor support would add a code
+// path for a case that already reads correctly.
 const DIFF_ADDED_BG = '#dff4e8';
 const DIFF_ADDED_FG = '#16351f';
 const DIFF_REMOVED_BG = '#f7d9dc';
