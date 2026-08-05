@@ -5,14 +5,17 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { BaseTextInput } from '../input/BaseTextInput';
+import {
+  BaseTextInput,
+  textInputDisplayRowCount,
+} from '../input/BaseTextInput';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,
@@ -38,6 +41,7 @@ import {
   type SlashPickIntent,
 } from '../commands/slashRegistry';
 import {
+  inputBarContentRows,
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
   slashPaletteOpen,
@@ -117,11 +121,28 @@ export function submitSlashCommandWhenReady({
   });
 }
 
+/** Cap on visible draft rows: a huge paste windows instead of consuming the
+ *  transcript. Mirrors the modal free-text inputs' bounded-rows approach. */
+const INPUT_BAR_MAX_CONTENT_ROWS = 5;
+/** Round border (2) + paddingX (2) + pointer prompt `› ` (2). Must match
+ *  the rendered chrome exactly: telling the window a wider width than Ink
+ *  actually gives the inner Text makes Ink re-wrap the windowed row and the
+ *  overflow row gets clipped by the height-capped Box. */
+const INPUT_BAR_DECORATION_COLUMNS = 6;
+
+function draftDisplayRows(value: string, width: number): number {
+  return Math.min(
+    INPUT_BAR_MAX_CONTENT_ROWS,
+    Math.max(1, textInputDisplayRowCount(value, width)),
+  );
+}
+
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
+  const { columns } = useWindowSize();
   const draftValueRef = useRef(value);
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
   // `savedDraft` restores whatever was typed before browsing began, and
@@ -229,7 +250,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         });
       } catch (error) {
         if (attempt.isCurrent()) {
-          setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`);
+          setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`, {
+            ttlMs: Number.POSITIVE_INFINITY,
+          });
         }
         return null;
       }
@@ -384,6 +407,19 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // useSignal above), so only the unmount reset needs an effect here.
   useEffect(() => () => reverseSearchOpenSignal.set(false), []);
 
+  // Report the windowed draft height so the row allocator shrinks the
+  // transcript for a multi-line draft instead of the input box growing the
+  // live frame past the terminal (per-keystroke scrollback churn). One frame
+  // of lag (signal set post-render) beats a whole draft-lifetime of overflow.
+  const inputDisplayWidth = Math.max(1, columns - INPUT_BAR_DECORATION_COLUMNS);
+  const draftContentRows = disabled
+    ? 1
+    : draftDisplayRows(value, inputDisplayWidth);
+  useEffect(() => {
+    inputBarContentRows.set(draftContentRows);
+  }, [draftContentRows]);
+  useEffect(() => () => inputBarContentRows.set(1), []);
+
   if (disabled && props.collapseWhenDisabled) return <></>;
 
   return (
@@ -422,10 +458,18 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         {disabled && props.disabledMessage ? (
           <Text dimColor>{props.disabledMessage}</Text>
         ) : (
+          <Box
+            flexGrow={1}
+            flexShrink={1}
+            height={draftContentRows}
+            overflowY="hidden"
+          >
           <BaseTextInput
             value={value}
             focus={keyboardActive && !disabled && !reverseSearchOpen}
             onChange={setValue}
+            displayWidth={inputDisplayWidth}
+            maxDisplayRows={draftContentRows}
             // While the palette shows multiple rows it owns ↑/↓ for row
             // selection; history recall would clobber the draft mid-navigation.
             onHistoryUp={
@@ -446,11 +490,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             transformPaste={transformPaste}
             onImagePaste={onImagePaste}
             onImagePasteError={(error) =>
-              setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`)
+              setTransientNotice(
+                `Image paste failed: ${toErrorMessage(error)}`,
+                { ttlMs: Number.POSITIVE_INFINITY },
+              )
             }
             onInputChunkSubmit={handleInputChunkSubmit}
             onSubmit={showPalette ? () => undefined : handleSubmit}
           />
+          </Box>
         )}
       </Box>
     </Box>

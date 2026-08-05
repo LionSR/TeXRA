@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 
+import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
   applyTerminalInputChunk,
   clampCursor,
@@ -253,6 +254,21 @@ function leadingEllipsisDisplay(
     text: `…${suffix}`,
     removedPrefixCodeUnits: text.length - suffix.length,
   };
+}
+
+/** Rows the input will occupy at `width`, using the SAME soft-break
+ *  algorithm the component windows with — a caller-side estimate from plain
+ *  character math disagrees at exactly-full rows (word-boundary wrapping)
+ *  and would clip the caret row. When the last row is exactly full, the
+ *  end-of-value caret occupies one cell past it and wraps to its own row. */
+export function textInputDisplayRowCount(value: string, width: number): number {
+  const columns = Math.max(1, width);
+  const rows = textInputDisplayRows(value, columns);
+  const last = rows.at(-1);
+  const lastRowFull =
+    last !== undefined &&
+    textDisplayWidth(textInputDisplayRowValue(value, last)) >= columns;
+  return rows.length + (lastRowFull ? 1 : 0);
 }
 
 export function textInputDisplayWindow({
@@ -613,13 +629,19 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     { isActive: focus },
   );
 
+  // The caret is reverse-video, which is SGR — under NO_COLOR / --no-color /
+  // TERM=dumb the output stream strips every SGR sequence and the cursor
+  // would be invisible. Fall back to a literal caret glyph inserted at the
+  // cursor position (one extra column, only in colorless sessions).
+  const glyphCaret = !isTuiColorEnabled();
+
   if (value.length === 0) {
     if (!focus) {
       return placeholder ? <Text dimColor>{placeholder}</Text> : <Text> </Text>;
     }
     return (
       <Text>
-        <Text inverse> </Text>
+        {glyphCaret ? <Text>▏</Text> : <Text inverse> </Text>}
         {placeholder ? <Text dimColor>{placeholder}</Text> : null}
       </Text>
     );
@@ -648,7 +670,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     return (
       <Text>
         {before}
-        <Text inverse> </Text>
+        {glyphCaret ? <Text>▏</Text> : <Text inverse> </Text>}
         {'\n'}
         {after}
       </Text>
@@ -657,7 +679,11 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   return (
     <Text>
       {before}
-      <Text inverse>{ch ?? ' '}</Text>
+      {glyphCaret ? (
+        <Text>{`▏${ch ?? ''}`}</Text>
+      ) : (
+        <Text inverse>{ch ?? ' '}</Text>
+      )}
       {after}
     </Text>
   );

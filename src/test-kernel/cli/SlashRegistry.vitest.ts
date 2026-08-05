@@ -161,7 +161,7 @@ describe('slashRegistry', () => {
       [
         'skills',
         {
-          description: 'List available skills',
+          description: 'List skills or activate one',
           aliases: ['skill'],
           ...withForm,
         },

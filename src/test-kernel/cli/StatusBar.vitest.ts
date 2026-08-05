@@ -120,7 +120,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'idle',
       PERSONAL_API_MODE_LABEL,
-      'deny',
+      'never',
     ]);
     expect(deny.left.at(-1)).toMatchObject({ color: 'yellow' });
 
@@ -330,7 +330,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Up/Down select');
+    expect(display.bindings).toContain('↑/↓ select');
     expect(display.bindings).toContain('Enter focus');
     expect(display.bindings).toContain('v full output');
     expect(display.bindings).not.toContain('i details');
@@ -361,7 +361,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toContain('Esc close');
     expect(display.bindings).not.toContain('Esc back');
-    expect(display.bindings).not.toContain('Up/Down select');
+    expect(display.bindings).not.toContain('↑/↓ select');
     expect(display.bindings).not.toContain('v full output');
   });
 
@@ -861,7 +861,7 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
-  it('drops elapsed before returning an over-wide critical-only status', () => {
+  it('drops elapsed and access mode rather than overflowing the row', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
@@ -871,11 +871,10 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'running',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    // At 16 columns even `◆ running personal` (18 cols + gaps) cannot fit —
+    // the fitting sweep now removes access mode too instead of returning an
+    // over-wide row that soft-wraps the 1-row status line.
+    expect(display.left.map(statusBarSegmentText)).toEqual(['◆', 'running']);
   });
 
   it('drops the queued count segment before durable status on narrow bars', () => {

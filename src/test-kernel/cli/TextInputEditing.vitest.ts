@@ -15,6 +15,7 @@ import {
   previousWordCursor,
   verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
+import { textInputDisplayRowCount } from '@cli/chat/tui/input/BaseTextInput';
 import {
   isCtrlInput,
   isEscapeInput,
@@ -323,5 +324,21 @@ describe('CLI TUI text input editing', () => {
     expect(verticalCursorMove('alpha\nbe', 7, 1)).toBeUndefined();
     expect(verticalCursorMove('single line', 4, -1)).toBeUndefined();
     expect(verticalCursorMove('single line', 4, 1)).toBeUndefined();
+  });
+});
+
+describe('textInputDisplayRowCount', () => {
+  it('matches the component soft-break rows and reserves the caret row', () => {
+    // Fits with room to spare: one row.
+    expect(textInputDisplayRowCount('short', 38)).toBe(1);
+    // Word-boundary soft wrap: two rows, last row not full — no caret row.
+    expect(
+      textInputDisplayRowCount('draft survives resize and accepts input', 38),
+    ).toBe(2);
+    // Exactly-full single row: the end-of-value caret wraps to its own row.
+    expect(textInputDisplayRowCount('a'.repeat(38), 38)).toBe(2);
+    // Hard newlines count as rows.
+    expect(textInputDisplayRowCount('one\ntwo', 38)).toBe(2);
+    expect(textInputDisplayRowCount('', 38)).toBe(1);
   });
 });

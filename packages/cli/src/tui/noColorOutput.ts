@@ -91,9 +91,22 @@ export function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(
   }) as T;
 }
 
+// Whether the current Ink mount renders SGR at all. Recorded here because
+// this function IS the session's one color decision point (both the chat TUI
+// and one-shot prompts route their stdout through it), and components whose
+// only styling is SGR — the text-input caret's reverse-video — need a glyph
+// fallback when everything SGR is stripped. One Ink instance renders at a
+// time, so a single module slot is safe.
+let tuiColorEnabled = true;
+
+export function isTuiColorEnabled(): boolean {
+  return tuiColorEnabled;
+}
+
 export function tuiOutputStreamForColor<T extends NodeJS.WriteStream>(
   stream: T,
   colorEnabled: boolean,
 ): T {
+  tuiColorEnabled = colorEnabled;
   return colorEnabled ? stream : sgrStrippingWriteStream(stream);
 }

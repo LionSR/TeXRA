@@ -12,6 +12,7 @@ import {
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
@@ -91,7 +92,7 @@ export function ConfirmCard({
   function feedbackInput(marginTop: number): React.JSX.Element {
     return (
       <Box marginTop={marginTop}>
-        <Text>{'> '}</Text>
+        <Text>{`${POINTER} `}</Text>
         <BaseTextInput
           value={feedback}
           placeholder={feedbackPlaceholder}
@@ -151,12 +152,17 @@ export function ConfirmCard({
     key: action.key,
     action: action.label,
   }));
+  // Esc performs the reject action, so its hint names the rejection: with
+  // immediate rejection Esc and `n` are the same decision (same label), and
+  // with feedback rejection Esc is the note-free variant ("reject").
+  const escapeLabel = rejectionMode === 'immediate' ? rejectLabel : 'reject';
   const compactHintLayout =
     compact && !feedbackMode
       ? confirmCardCompactHintLayout({
           title,
           approveLabel,
           rejectLabel,
+          escapeLabel,
           alwaysAllowLabel: alwaysAllow?.label,
           extraActions: mappedExtraActions,
           columns,
@@ -171,6 +177,7 @@ export function ConfirmCard({
     hints = confirmCardKeyHintsForWidth({
       approveLabel,
       rejectLabel,
+      escapeLabel,
       alwaysAllowLabel: alwaysAllow?.label,
       extraActions: mappedExtraActions,
       maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
-import { COLOR_SUCCESS, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -293,7 +294,7 @@ export function ExternalInquiry(
           Agent asks:
           {copyStatus !== 'idle' ? (
             <Text
-              color={copyStatus === 'failed' ? COLOR_WARNING : COLOR_SUCCESS}
+              color={copyStatus === 'failed' ? COLOR_ERROR : COLOR_SUCCESS}
               dimColor={copyStatus === 'copying'}
             >
               {copyStatusLabel(copyStatus)}
@@ -311,7 +312,7 @@ export function ExternalInquiry(
         ))}
       </Box>
       <Box marginTop={1}>
-        <Text>{'> '}</Text>
+        <Text>{`${POINTER} `}</Text>
         <Box flexGrow={1} flexShrink={1} height={answerRows} overflowY="hidden">
           <BaseTextInput
             displayWidth={Math.max(1, contentWidth - 2)}

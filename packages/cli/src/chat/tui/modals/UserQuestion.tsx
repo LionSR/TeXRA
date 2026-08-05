@@ -3,6 +3,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { parseUserQuestionAnswer } from '@cli/runtime/userQuestionAnswer';
 import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -417,7 +418,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
         ))}
       </Box>
       <Box marginTop={optionRows > 0 ? 1 : 0}>
-        <Text>{'> '}</Text>
+        <Text>{`${POINTER} `}</Text>
         <Box flexGrow={1} flexShrink={1} height={1} overflowY="hidden">
           <BaseTextInput
             displayWidth={Math.max(1, contentWidth - 2)}
