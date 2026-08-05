@@ -102,10 +102,10 @@ function image(fileName: string): ExtractedClipboardImage {
 
 describe('follow-up-input layout', () => {
   // The composer sizes from its own content rather than reserving a fixed
-  // block for an empty draft. resize="none" is deliberate: Web Awesome's
-  // "auto" mode keeps an oversized row for an empty draft inside a
-  // constrained composer, which is what the two-line floor exists to avoid.
-  it('rests at two rows and sizes from content', async () => {
+  // block for an empty draft, and keeps the manual drag affordance. Not Web
+  // Awesome's "auto" mode: it holds an oversized row for an empty draft inside
+  // a constrained composer, which is the failure the two-line floor avoids.
+  it('rests at two rows and stays vertically resizable', async () => {
     const element = createFollowUpInput('stream-layout');
     await element.updateComplete;
 
@@ -120,7 +120,7 @@ describe('follow-up-input layout', () => {
     await textarea?.updateComplete;
 
     expect(textarea?.rows).toBe(2);
-    expect(textarea?.resize).toBe('none');
+    expect(textarea?.resize).toBe('vertical');
     expect(textarea?.input.rows).toBe(2);
   });
 });

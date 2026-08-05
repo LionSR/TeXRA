@@ -121,10 +121,11 @@ export class FollowUpInput extends LitElement {
 
       /* The composer rests at two lines and grows with what you type, up to
          the max below, so a substantial instruction still gets room without
-         an empty draft reserving it. Not Web Awesome's resize="auto": that
-         copies the scroll height into an invisible grid item which, inside a
-         constrained composer, keeps an oversized row for an empty draft. Size
-         the native textarea part from its own content instead. */
+         an empty draft reserving it. field-sizing does the growing; the drag
+         affordance stays for anyone who wants a taller box than their text.
+         Not Web Awesome's resize="auto": that copies the scroll height into an
+         invisible grid item which, inside a constrained composer, keeps an
+         oversized row for an empty draft. */
       #followUpInput {
         display: block;
         min-width: 0;
@@ -449,7 +450,7 @@ export class FollowUpInput extends LitElement {
             aria-label="Follow-up message"
             placeholder="Message TeXRA…"
             rows="2"
-            resize="none"
+            resize="vertical"
             .value=${live(this.value)}
             @input=${this.handleInput}
             @keydown=${this.handleKeydown}
