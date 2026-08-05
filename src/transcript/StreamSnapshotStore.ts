@@ -25,7 +25,6 @@ import { getExecutionStore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { deriveLegacyIdentity } from '@agent/storage/executionListing';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
@@ -378,6 +377,10 @@ export class StreamSnapshotStore {
   private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
 
   private hasAuthoritativeStreamSet = false;
+
+  /** Streams already warned about a pre-identity execution row (#9590 Stage
+   *  7), so repeated hydrations of the same old row stay one warning each. */
+  private readonly preIdentityWarned = new Set<StreamTabId>();
 
   private getOrCreateRecord(stream: StreamTabId): StreamRecord {
     return this.records.getOrCreate(stream);
@@ -1591,9 +1594,9 @@ export class StreamSnapshotStore {
   /**
    * Execution id recorded in a stream sidecar's `meta.json`, without seeding
    * memory or reading the stream's other sidecar files. Callers that scan
-   * every persisted stream (the `legacyExecutionIdentity` meta-match, bulk
-   * admin sweeps in `SessionStores`) only ever need this one field, so this
-   * reads just `meta.json` rather than the full 6-file `readStreamData()`.
+   * every persisted stream (bulk admin sweeps in `SessionStores`) only ever
+   * need this one field, so this reads just `meta.json` rather than the full
+   * 6-file `readStreamData()`.
    */
   async readPersistedExecutionId(
     stream: StreamTabId,
@@ -2042,19 +2045,18 @@ export class StreamSnapshotStore {
           store.readMeta(),
           store.readConfig(),
         ]);
-        // Un-healed legacy row: derive in memory with the stamper's rule so
-        // resume/rerun and rendering behave identically before the durable
-        // stamp lands (the listing entrance remains the only writer). When
-        // the execution row predates registration-time streamId stamping,
-        // this sidecar's own id is still valid evidence — its association
-        // with the execution is proven by the registration-written
-        // `meta.executionId` edge, not by name resemblance.
-        identity =
-          execMeta?.identity ??
-          deriveLegacyIdentity(
-            { streamId: execMeta?.streamId ?? stream },
-            execConfig,
+        // Identity comes only from the stamped execution row. Pre-identity
+        // rows (registered before identity stamping) lost their reader per
+        // #9590 Stage 7: hydrate without an identity, loudly — never
+        // reconstruct one from stream-id prefixes or config.
+        identity = execMeta?.identity;
+        if (execMeta && !identity && !this.preIdentityWarned.has(stream)) {
+          this.preIdentityWarned.add(stream);
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} maps to pre-identity execution row ${executionId}; hydrating without a run identity (reader retired per #9590 Stage 7)`,
           );
+        }
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {

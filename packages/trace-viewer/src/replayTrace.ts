@@ -186,9 +186,9 @@ export function replayTrace(trace: TraceDocument): void {
   // The embedded ExecutionMeta carries the run's identity. Pre-migration
   // exports have no identity and are NOT all agent runs (bash process and
   // workflow-script traces exist), so classify from the trace's stream-id
-  // prefix — the same quarantined evidence rule as the storage entrance
-  // stamper (`deriveLegacyIdentity`); an immutable exported file is the one
-  // permanent home for this fallback.
+  // prefix. An exported trace file is immutable, so unlike the storage-side
+  // readers retired in #9590 Stage 7 this fallback is permanent: it is the
+  // only place a stream-id prefix may be read as evidence.
   const identity: RunIdentity =
     trace.meta?.identity ?? legacyTraceIdentity(trace);
   const streamTabInfo: StreamTabInfo =
