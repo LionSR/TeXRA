@@ -55,7 +55,9 @@ export class StreamConversation extends SignalWatcher(LitElement) {
          60-75 that keeps the eye finding the next line. Code blocks and
          diffs are free to overflow this column. */
       --conversation-reading-width: 680px;
+      --conversation-header-width: 1040px;
 
+      container-type: inline-size;
       display: flex;
       flex-direction: column;
       flex: 1;

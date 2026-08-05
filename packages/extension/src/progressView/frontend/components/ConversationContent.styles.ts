@@ -92,7 +92,7 @@ export const conversationContentStyles: CSSResult = css`
     display: block;
   }
 
-  @media (max-width: 640px) {
+  @container (max-width: 640px) {
     .conversation-column {
       width: calc(100% - 2 * var(--wa-space-xs));
     }

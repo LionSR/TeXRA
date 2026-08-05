@@ -39,8 +39,8 @@ export const groupStyles = css`
   }
 
   .log-group-content {
-    padding-left: var(--wa-space-xs);
-    border-left: var(--border-thin) solid
+    padding-inline-start: var(--wa-space-xs);
+    border-inline-start: var(--border-thin) solid
       color-mix(in srgb, var(--wa-color-tabs-border) 60%, transparent);
   }
 
@@ -49,12 +49,12 @@ export const groupStyles = css`
   }
 
   .log-run > .log-group-content {
-    padding-left: 0;
-    border-left: none;
+    padding-inline-start: 0;
+    border-inline-start: none;
   }
 
   .group-status-icon {
-    margin-right: var(--wa-space-2xs);
+    margin-inline-end: var(--wa-space-2xs);
   }
 
   .group-title {
@@ -68,17 +68,17 @@ export const groupStyles = css`
     font-size: var(--font-size-sm);
     font-variant-numeric: tabular-nums;
     opacity: var(--opacity-subtle);
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
   }
 
   .group-time {
     font-size: var(--font-size-sm);
     opacity: var(--opacity-subtle);
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
   }
 
   :is(.group-start-time, .group-duration) {
-    margin-right: var(--wa-space-2xs);
+    margin-inline-end: var(--wa-space-2xs);
   }
 
   .log-group {
@@ -122,7 +122,7 @@ export const groupStyles = css`
       context-management,
       latexdiff-results
     ) {
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
   }
 
   .log-group-content .log-group-header {
@@ -132,6 +132,6 @@ export const groupStyles = css`
   .log-group-content
     .log-group-content
     :is(.log-line, .banner-details, context-management, latexdiff-results) {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 `;

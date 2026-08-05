@@ -84,7 +84,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
         gap: var(--wa-space-2xs);
       }
 
-      @media (max-width: 600px) {
+      @container (max-width: 600px) {
         .followup__controls {
           grid-template-columns: 1fr;
         }
