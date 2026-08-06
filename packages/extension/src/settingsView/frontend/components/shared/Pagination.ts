@@ -147,9 +147,7 @@ export class Pagination extends LitElement {
             page - 1,
             atFirst,
           )}
-          <span class="pagination-status" role="status" aria-atomic="true">
-            ${page + 1}/${totalPages}
-          </span>
+          <span class="pagination-status"> ${page + 1}/${totalPages} </span>
           ${this.renderNavButton('chevron-right', 'Next page', page + 1, atLast)}
           ${this.renderNavButton(
             'forward-step',

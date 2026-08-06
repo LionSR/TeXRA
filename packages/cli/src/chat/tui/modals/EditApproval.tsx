@@ -33,7 +33,7 @@ const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
-const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Why reject?';
+const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
 
 export interface EditApprovalProps {
   readonly availableRows?: number;
