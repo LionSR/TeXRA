@@ -48,7 +48,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { formatDuration, generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
+import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // Local file imports
@@ -253,25 +253,23 @@ function usesShellLevelBackgrounding(command: string): boolean {
   return SHELL_BACKGROUNDING_PATTERN.test(command);
 }
 
+/**
+ * Interrupt handle for a background bash run. Termination is delegated to
+ * `executeCommand`'s own abort-signal path (SIGTERM → SIGKILL escalation,
+ * stream cleanup) rather than duplicating a kill ladder here — see
+ * `executeCommand`'s `terminateSubprocess`.
+ */
 class BashBackgroundSession implements ExecutionInterruptHandler {
   /** Shutdown drain reaches this handler via `interruptBackgroundProcess()`. */
   readonly ownsBackgroundProcess = true;
-  private pid: number | undefined;
-  private interrupted = false;
+  private readonly abortController = new AbortController();
 
-  setPid(pid: number): void {
-    this.pid = pid;
-    // If interrupt() was called before pid arrived, kill now
-    if (this.interrupted) {
-      signalProcessGroup(pid, 'SIGTERM');
-    }
+  get signal(): AbortSignal {
+    return this.abortController.signal;
   }
 
   interrupt(): void {
-    this.interrupted = true;
-    if (this.pid) {
-      signalProcessGroup(this.pid, 'SIGTERM');
-    }
+    this.abortController.abort();
   }
 }
 
@@ -494,9 +492,7 @@ export class BashTool extends defineTool({
           cwd,
           timeout: timeoutMs,
           buffer: false,
-          onPid: (p) => {
-            session.setPid(p);
-          },
+          signal: session.signal,
           onStdout: (chunk) => {
             stdout.append(chunk);
             logChunk(chunk, 'info');
