@@ -39,6 +39,7 @@ import { formatRelativeTime } from '@shared/utils/string';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
+import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
@@ -128,7 +129,7 @@ export class StreamTab extends LitElement {
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;
   @property({ type: Boolean }) hasPendingApproval = false;
-  /** Number of child streams (0 = no toggle shown). */
+  /** Number of nested background tasks (0 = no toggle shown). */
   @property({ type: Number }) childCount = 0;
   /** Whether the child list is expanded. */
   @property({ type: Boolean, reflect: true }) expanded = false;
@@ -182,9 +183,12 @@ export class StreamTab extends LitElement {
     const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
     const showCompactChildHint = this.childCount > 0 && this.compact;
-    const childStreamLabel = formatResultCount(this.childCount, 'child stream');
+    const childStreamLabel = formatResultCount(
+      this.childCount,
+      BACKGROUND_TASK.countNoun,
+    );
     const childToggleLabel = this.expanded
-      ? 'Collapse child streams'
+      ? BACKGROUND_TASK.collapseAction
       : childStreamLabel;
 
     return html`

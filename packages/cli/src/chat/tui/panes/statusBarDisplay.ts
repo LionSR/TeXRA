@@ -27,6 +27,11 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import {
+  FOREGROUND_OWNERSHIP,
+  SESSION_LIST,
+  SUBAGENT,
+} from '@shared/copy/nestedRuns';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import {
@@ -338,8 +343,8 @@ function queuedFollowUpsCountSegment(
 function subagentsSegment(subagents: number): StatusBarSegment | undefined {
   return subagents > 0
     ? {
-        text: formatResultCount(subagents, 'subagent'),
-        compactText: `${subagents} sub`,
+        text: formatResultCount(subagents, SUBAGENT.countNoun),
+        compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
       }
@@ -591,7 +596,7 @@ function statusBarBindingsText(
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
   const childList = childNavigationAvailable
-    ? keyHintText({ key: 'Tab', action: 'children' })
+    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
     : undefined;
   const parentBack = parentNavigationAvailable
     ? keyHintText({ key: 'Esc', action: 'back' })
@@ -687,9 +692,11 @@ function foregroundBindingsText(
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const escBinding = keyHintText({ key: 'Esc', action: escapeAction });
-  const full = ['Keys go to the panel above', escBinding, ctrlCBinding].join(
-    KEY_HINT_SEPARATOR,
-  );
+  const full = [
+    FOREGROUND_OWNERSHIP.keysGoAbove,
+    escBinding,
+    ctrlCBinding,
+  ].join(KEY_HINT_SEPARATOR);
   if (fitsStatusBindings(full, maxColumns)) return full;
 
   const compact = [escBinding, ctrlCBinding].join(KEY_HINT_SEPARATOR);
