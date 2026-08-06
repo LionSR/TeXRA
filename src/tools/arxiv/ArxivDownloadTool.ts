@@ -8,6 +8,7 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -99,10 +100,6 @@ export class ArxivDownloadTool extends defineTool({
       formatToolOutput(`Directory listing for ${displayPath}`, listingOutput),
     ].join('\n');
 
-    return {
-      status: 'executed',
-      summary,
-      output,
-    };
+    return executed(output, summary);
   }
 }

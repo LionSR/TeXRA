@@ -11,8 +11,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
@@ -20,20 +18,19 @@ import { renderLoadingState } from '@shared/wa/loadingState';
 // Local imports - shared schemas
 import type {
   ToolDashboardItem,
-  CodexSandboxMode,
-  CodexReasoningEffort,
-  CodexApprovalPolicy,
   ClaudeAgentEffort,
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
 } from '@shared/schemas/settingsViewMessages';
-import {
-  settingEnumChoices,
-  stateSettingByKey,
-} from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { CLAUDE_AGENT_DEFAULT_MODEL } from '@shared/schemas/agentCliSettings';
 import { readSelectValue } from '@shared/utils/selectTemplates';
+
+// Local imports - catalog-driven settings rows
+import {
+  catalogEnumChoices,
+  postStateSetting,
+} from '../components/shared/stateSettingRows';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -42,33 +39,6 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
-
-function catalogSelectOptions<T extends string>(
-  key: WorkspaceStateKey,
-): readonly { value: T; label: string }[] {
-  const entry = stateSettingByKey(key);
-  return entry ? (settingEnumChoices<T>(entry) ?? []) : [];
-}
-
-const SANDBOX_MODE_OPTIONS = catalogSelectOptions<CodexSandboxMode>(
-  WorkspaceStateKey.CODEX_SANDBOX_MODE,
-);
-const REASONING_EFFORT_OPTIONS = catalogSelectOptions<CodexReasoningEffort>(
-  WorkspaceStateKey.CODEX_REASONING_EFFORT,
-);
-const APPROVAL_POLICY_OPTIONS = catalogSelectOptions<CodexApprovalPolicy>(
-  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-);
-const CLAUDE_MODEL_OPTIONS = catalogSelectOptions<ClaudeAgentModel>(
-  WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-);
-const CLAUDE_PERMISSION_MODE_OPTIONS =
-  catalogSelectOptions<ClaudeAgentPermissionMode>(
-    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-  );
-const CLAUDE_EFFORT_OPTIONS = catalogSelectOptions<ClaudeAgentEffort>(
-  WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-);
 
 @customElement('ai-agents-tab')
 export class AIAgentsTab extends LitElement {
@@ -130,19 +100,21 @@ export class AIAgentsTab extends LitElement {
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
 
+  /**
+   * One catalog-backed select row: the allowed values and their labels come
+   * from the `stateSettings` entry for `key`, and the change handler writes
+   * that same key.
+   */
   private renderSelectRow(
     label: string,
     key: WorkspaceStateKey,
     value: string,
-    options: readonly { value: string; label: string }[],
   ): TemplateResult {
+    const options = catalogEnumChoices(key);
     const onChange = (e: Event): void => {
       const selected = readSelectValue(e);
       if (selected) {
-        postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-          key,
-          value: selected,
-        });
+        postStateSetting(key, selected);
       }
     };
     return html`
@@ -178,19 +150,16 @@ export class AIAgentsTab extends LitElement {
           'Sandbox mode',
           WorkspaceStateKey.CODEX_SANDBOX_MODE,
           this.codexSandboxMode,
-          SANDBOX_MODE_OPTIONS,
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
           this.codexReasoningEffort,
-          REASONING_EFFORT_OPTIONS,
         )}
         ${this.renderSelectRow(
           'Approval policy',
           WorkspaceStateKey.CODEX_APPROVAL_POLICY,
           this.codexApprovalPolicy,
-          APPROVAL_POLICY_OPTIONS,
         )}
       </div>
     `;
@@ -203,19 +172,16 @@ export class AIAgentsTab extends LitElement {
           'Model',
           WorkspaceStateKey.CLAUDE_AGENT_MODEL,
           this.claudeAgentModel,
-          CLAUDE_MODEL_OPTIONS,
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
           WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
           this.claudeAgentEffort,
-          CLAUDE_EFFORT_OPTIONS,
         )}
         ${this.renderSelectRow(
           'Permission mode',
           WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
           this.claudeAgentPermissionMode,
-          CLAUDE_PERMISSION_MODE_OPTIONS,
         )}
       </div>
     `;

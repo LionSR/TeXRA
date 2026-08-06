@@ -22,13 +22,12 @@ import type { SessionProblem } from '@shared/schemas/profileViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { createEvent } from '@shared/utils/events';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
+
+// Local imports - catalog-driven settings rows
+import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 
 // Local imports - settings view components
 import '../components/profile/RelayQuotaMeter';
@@ -71,13 +70,6 @@ export class AccountTab extends LitElement {
   private handleManageProviderKeys(): void {
     this.dispatchEvent(createEvent('manage-provider-keys'));
   }
-
-  private readonly handleTelemetryChange = (event: Event): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key: 'texra.telemetry.enabled',
-      value: (event.target as WaSwitch).checked,
-    });
-  };
 
   private renderUsageNotice(id: string, body: string): TemplateResult {
     return renderBannerFrame({
@@ -253,11 +245,11 @@ export class AccountTab extends LitElement {
             icon: 'shield',
           })}
           <div class="settings-section">
-            ${renderSettingsToggleRow({
+            ${renderStateSettingToggleRow({
+              key: 'texra.telemetry.enabled',
               label: 'Share usage telemetry',
               description: `Sends model, token, cost, timing, and host metadata. Prompt text, document content, and file names are never sent. Turning this off stops reporting for rounds billed to ${OWN_API_KEYS.inline}; rounds covered by ${INCLUDED_ACCESS.inline} or a subscription are still recorded, because they meter your usage against your plan.`,
               checked: this.telemetryEnabled,
-              onChange: this.handleTelemetryChange,
             })}
           </div>
         </section>

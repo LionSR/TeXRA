@@ -14,10 +14,50 @@ import {
   LEAN_FILE_COMMANDS,
   LEAN_PROJECT_COMMANDS,
   extractHoverText,
+  type LeanCommandSpec,
   type LeanFileCommand,
   type LeanProjectCommand,
 } from './leanTypes';
 import { getLeanLanguageServices } from './leanLanguageServices';
+
+/** `- "name": Description (hint)` — the prose line for one command. */
+function commandLine([name, spec]: [string, LeanCommandSpec]): string {
+  return `- "${name}": ${spec.description}${spec.hint ? ` (${spec.hint})` : ''}`;
+}
+
+const FILE_COMMAND_NAMES = Object.keys(LEAN_FILE_COMMANDS) as LeanFileCommand[];
+const FILE_COMMAND_PROSE = Object.entries(LEAN_FILE_COMMANDS)
+  .map(commandLine)
+  .join('\n');
+
+const PROJECT_COMMAND_NAMES = Object.keys(
+  LEAN_PROJECT_COMMANDS,
+) as LeanProjectCommand[];
+
+/** Project commands bucketed by their declared group, in declaration order. */
+const PROJECT_COMMAND_GROUPS = ((): Map<
+  string,
+  [string, LeanCommandSpec][]
+> => {
+  const groups = new Map<string, [string, LeanCommandSpec][]>();
+  for (const [name, spec] of Object.entries(LEAN_PROJECT_COMMANDS)) {
+    const entries = groups.get(spec.group) ?? [];
+    entries.push([name, spec]);
+    groups.set(spec.group, entries);
+  }
+  return groups;
+})();
+
+const PROJECT_COMMAND_PROSE = [...PROJECT_COMMAND_GROUPS]
+  .map(
+    ([group, entries]) =>
+      `${group} commands:\n${entries.map(commandLine).join('\n')}`,
+  )
+  .join('\n\n');
+
+const PROJECT_COMMAND_GROUP_INDEX = [...PROJECT_COMMAND_GROUPS]
+  .map(([group, entries]) => `${group}: ${entries.map(([n]) => n).join(', ')}`)
+  .join('\n');
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
@@ -31,43 +71,24 @@ const LeanDiagnosticsInputSchema = z.strictObject({
 
 export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 
-const FILE_COMMAND_DESCRIPTIONS: Record<LeanFileCommand, string> = {
-  restart: 'Restart Lean server for this file',
-  refresh_dependencies: 'Refresh file dependencies without full restart',
-};
-
 const LeanFileInputSchema = z.strictObject({
   /** Command to execute on the file */
   command: z
-    .enum(LEAN_FILE_COMMANDS)
-    .describe('Command: "restart" or "refresh_dependencies"'),
+    .enum(FILE_COMMAND_NAMES)
+    .describe(
+      `Command: ${FILE_COMMAND_NAMES.map((name) => `"${name}"`).join(' or ')}`,
+    ),
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
 });
 
 export type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
 
-const PROJECT_COMMAND_DESCRIPTIONS: Record<LeanProjectCommand, string> = {
-  restart_server: 'Restart the entire Lean language server',
-  stop_server: 'Stop the Lean language server',
-  build: 'Build the project (runs lake build)',
-  clean: 'Clean project build artifacts',
-  fetch_cache: 'Download Mathlib build cache for the project',
-  fetch_file_cache: "Download Mathlib cache for current file's imports only",
-  install_elan: 'Install Elan (Lean version manager)',
-  install_deps: 'Install Lean dependencies',
-  update_elan: 'Update Elan to latest version',
-  select_toolchain: 'Select default Lean toolchain version',
-};
-
 const LeanProjectInputSchema = z.strictObject({
   /** Command to execute */
-  command: z.enum(LEAN_PROJECT_COMMANDS).describe(
-    `Global command to execute:
-Server: restart_server, stop_server
-Project: build, clean, fetch_cache, fetch_file_cache
-Setup: install_elan, install_deps, update_elan, select_toolchain`,
-  ),
+  command: z
+    .enum(PROJECT_COMMAND_NAMES)
+    .describe(`Global command to execute:\n${PROJECT_COMMAND_GROUP_INDEX}`),
 });
 
 export type LeanProjectInput = z.infer<typeof LeanProjectInputSchema>;
@@ -174,15 +195,14 @@ export class LeanFileTool extends defineTool({
   description: `Execute Lean 4 extension commands on a specific file.
 
 Commands:
-- "restart": Restart Lean server for this file (use when diagnostics are stale or after editing imports)
-- "refresh_dependencies": Refresh file dependencies without full restart (lighter than restart)
+${FILE_COMMAND_PROSE}
 
 Requires: Lean 4 VS Code extension installed and active.`,
   schema: LeanFileInputSchema,
 }) {
   protected async execute(input: LeanFileInput): Promise<ToolResult> {
     const { command, file } = input;
-    const description = FILE_COMMAND_DESCRIPTIONS[command];
+    const { description } = LEAN_FILE_COMMANDS[command];
 
     try {
       const success = await getLeanLanguageServices().executeFileCommand(
@@ -209,28 +229,14 @@ export class LeanProjectTool extends defineTool({
   name: 'lean_project',
   description: `Execute global Lean 4 extension commands (no file required).
 
-Server commands:
-- "restart_server": Restart the entire Lean language server
-- "stop_server": Stop the Lean language server
-
-Project commands:
-- "build": Build the project (runs lake build)
-- "clean": Clean project build artifacts
-- "fetch_cache": Download Mathlib build cache for the entire project
-- "fetch_file_cache": Download Mathlib cache for current file's imports only (faster)
-
-Setup commands:
-- "install_elan": Install Elan (the Lean version manager)
-- "install_deps": Install Lean dependencies for the project
-- "update_elan": Update Elan to the latest version
-- "select_toolchain": Select the default Lean toolchain version
+${PROJECT_COMMAND_PROSE}
 
 In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanProjectInputSchema,
 }) {
   protected async execute(input: LeanProjectInput): Promise<ToolResult> {
     const { command } = input;
-    const description = PROJECT_COMMAND_DESCRIPTIONS[command];
+    const { description } = LEAN_PROJECT_COMMANDS[command];
 
     try {
       await getLeanLanguageServices().executeProjectCommand(command);
@@ -280,20 +286,13 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const col0 = column - 1;
     const location = `${file}:${line}:${column}`;
 
-    try {
-      switch (type) {
-        case 'goal':
-          return this.executeGoal(file, line0, col0, location);
-        case 'term_goal':
-          return this.executeTermGoal(file, line0, col0, location);
-        case 'hover':
-          return this.executeHover(file, line0, col0, location);
-      }
-    } catch (error) {
-      throw new ToolError(`Error: ${toErrorMessage(error)}`, {
-        cause: error,
-        summary: `Failed to get ${type}`,
-      });
+    switch (type) {
+      case 'goal':
+        return this.executeGoal(file, line0, col0, location);
+      case 'term_goal':
+        return this.executeTermGoal(file, line0, col0, location);
+      case 'hover':
+        return this.executeHover(file, line0, col0, location);
     }
   }
 

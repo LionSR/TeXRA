@@ -5,7 +5,7 @@
  * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
  * focused handler classes in `./handlers/`: `AgentHandlers`,
  * `LatexSettingsHandlers`, `HistoryHandlers`, `GitHubSubscriptionHandlers`, and
- * `ChatGptSubscriptionHandlers`.
+ * `SubscriptionHandlers` (one instance per subscription provider).
  */
 import * as path from 'node:path';
 
@@ -119,8 +119,11 @@ import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
-import { ChatGptSubscriptionHandlers } from './handlers/chatgptSubscriptionHandlers';
-import { GrokSubscriptionHandlers } from './handlers/grokSubscriptionHandlers';
+import {
+  CHATGPT_SUBSCRIPTION_PROVIDER,
+  GROK_SUBSCRIPTION_PROVIDER,
+  SubscriptionHandlers,
+} from './handlers/subscriptionHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -139,8 +142,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly latexHandlers: LatexSettingsHandlers;
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
-  private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
-  private readonly grokHandlers: GrokSubscriptionHandlers;
+  private readonly chatgptHandlers: SubscriptionHandlers;
+  private readonly grokHandlers: SubscriptionHandlers;
   private readonly settingsHost: SettingsViewHost;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
@@ -214,11 +217,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
-    this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx, () =>
-      this.refreshAfterSubscriptionAuthChange(),
+    this.chatgptHandlers = new SubscriptionHandlers(
+      CHATGPT_SUBSCRIPTION_PROVIDER,
+      ctx,
+      () => this.refreshAfterSubscriptionAuthChange(),
     );
-    this.grokHandlers = new GrokSubscriptionHandlers(ctx, () =>
-      this.refreshAfterSubscriptionAuthChange(),
+    this.grokHandlers = new SubscriptionHandlers(
+      GROK_SUBSCRIPTION_PROVIDER,
+      ctx,
+      () => this.refreshAfterSubscriptionAuthChange(),
     );
     this.handlerRegistry = this.createHandlerRegistry();
 
@@ -456,12 +463,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.githubHandlers.handleUnsubscribePR(message),
       openPRSubscriptionStream: (message) =>
         this.githubHandlers.handleOpenPRSubscriptionStream(message),
-      signInChatGpt: () => this.chatgptHandlers.handleSignInChatGpt(),
-      signOutChatGpt: () => this.chatgptHandlers.handleSignOutChatGpt(),
+      signInChatGpt: () => this.chatgptHandlers.handleSignIn(),
+      signOutChatGpt: () => this.chatgptHandlers.handleSignOut(),
       setChatGptPreferSubscription: (message) =>
         this.chatgptHandlers.handleSetPreferSubscription(message.enabled),
-      signInGrok: () => this.grokHandlers.handleSignInGrok(),
-      signOutGrok: () => this.grokHandlers.handleSignOutGrok(),
+      signInGrok: () => this.grokHandlers.handleSignIn(),
+      signOutGrok: () => this.grokHandlers.handleSignOut(),
       setGrokPreferSubscription: (message) =>
         this.grokHandlers.handleSetPreferSubscription(message.enabled),
       updateStateSetting: (message) =>
@@ -570,8 +577,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
       this.githubHandlers.sendGitHubTokenStatus(webview),
-      this.chatgptHandlers.sendChatGptAuthStatus(webview),
-      this.grokHandlers.sendGrokAuthStatus(webview),
+      this.chatgptHandlers.sendAuthStatus(webview),
+      this.grokHandlers.sendAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.sendAgentSkillsSettings(webview),

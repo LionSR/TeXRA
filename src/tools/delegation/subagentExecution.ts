@@ -221,10 +221,8 @@ export async function executeSubagent(
         `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
       );
     }
-    return {
-      status: 'executed',
-      summary: `Launched '${agentName}' (async)`,
-      output: [
+    return executed(
+      [
         `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
         `Execution ID: ${executionId}`,
         ...metaLines,
@@ -235,6 +233,7 @@ export async function executeSubagent(
             ]
           : []),
       ].join('\n'),
-    };
+      `Launched '${agentName}' (async)`,
+    );
   });
 }

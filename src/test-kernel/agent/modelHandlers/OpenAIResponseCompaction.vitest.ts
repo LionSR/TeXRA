@@ -316,7 +316,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
   it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {
     // PocketFlow's Node._exec retries a failed exec() with the identical
     // prepRes, so a same-turn retry resends the exact same `messages` array
-    // reference. Compaction's chain-anchor clear (on ResponseChainState)
+    // reference. Compaction's chain-anchor clear (on ServerChainState)
     // commits immediately and survives that retry permanently; its computed
     // payload (compactionResult) must now survive the same retry too, or the
     // retry silently redoes the compact() call for no reason.

@@ -18,6 +18,7 @@ import {
   setMemoryPinned,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
+import { executed } from '@tools/core/result';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -287,11 +288,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     // instead of error (consistent with MemoryViewMessageHandler behavior)
     if (!exists) {
       if (resolvedPath === MEMORY_STORAGE_DIR) {
-        return {
-          status: 'executed',
-          summary: 'Viewed empty memory directory',
-          output: `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
-        };
+        return executed(
+          `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
+          'Viewed empty memory directory',
+        );
       }
       throw new ToolError(
         `The path ${inputPath} does not exist. Please provide a valid path.`,
@@ -310,11 +310,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
 
       const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to 2 levels deep):`;
-      return {
-        status: 'executed',
-        summary: `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,
-        output: `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
-      };
+      return executed(
+        `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
+        `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,
+      );
     }
 
     const { meta, content } = await this.readMemoryFile(resolvedPath);
@@ -358,11 +357,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     await this.writeMemoryFile(resolvedPath, fileText);
     recordToolFileRead(inputPath);
 
-    return {
-      status: 'executed',
-      summary: `Created memory file: ${inputPath}`,
-      output: `File created successfully at: ${inputPath}`,
-    };
+    return executed(
+      `File created successfully at: ${inputPath}`,
+      `Created memory file: ${inputPath}`,
+    );
   }
 
   private async strReplace(
@@ -401,11 +399,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const updatedLines = updated.split('\n');
     const numbered = formatLinesWithNumbers(updatedLines);
 
-    return {
-      status: 'executed',
-      summary: `Replaced text in: ${inputPath}`,
-      output: `The file has been edited.\n${numbered.join('\n')}`,
-    };
+    return executed(
+      `The file has been edited.\n${numbered.join('\n')}`,
+      `Replaced text in: ${inputPath}`,
+    );
   }
 
   private async insert(
@@ -438,11 +435,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     await this.writeMemoryFile(resolvedPath, updatedLines.join('\n'), meta);
     recordToolFileRead(inputPath);
 
-    return {
-      status: 'executed',
-      summary: `Inserted text at line ${insertLine} in: ${inputPath}`,
-      output: `The file ${inputPath} has been edited.`,
-    };
+    return executed(
+      `The file ${inputPath} has been edited.`,
+      `Inserted text at line ${insertLine} in: ${inputPath}`,
+    );
   }
 
   private async delete(loc: MemoryLocation): Promise<ToolResult> {
@@ -456,11 +452,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     if (readGate) return readGate;
 
     await StorageFS.delete(resolvedPath, { recursive: true });
-    return {
-      status: 'executed',
-      summary: `Deleted: ${inputPath}`,
-      output: `Successfully deleted ${inputPath}`,
-    };
+    return executed(
+      `Successfully deleted ${inputPath}`,
+      `Deleted: ${inputPath}`,
+    );
   }
 
   private async rename(
@@ -484,11 +479,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     }
 
     await StorageFS.rename(resolvedOldPath, resolvedNewPath);
-    return {
-      status: 'executed',
-      summary: `Renamed: ${oldPathInput} to ${newPathInput}`,
-      output: `Successfully renamed ${oldPathInput} to ${newPathInput}`,
-    };
+    return executed(
+      `Successfully renamed ${oldPathInput} to ${newPathInput}`,
+      `Renamed: ${oldPathInput} to ${newPathInput}`,
+    );
   }
 
   private async pin(loc: MemoryLocation): Promise<ToolResult> {
@@ -497,11 +491,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     const result = await setMemoryPinned(resolvedPath, true);
     if (result.status === 'already') {
-      return {
-        status: 'executed',
-        summary: `Already pinned: ${inputPath}`,
-        output: `The memory file ${inputPath} is already pinned.`,
-      };
+      return executed(
+        `The memory file ${inputPath} is already pinned.`,
+        `Already pinned: ${inputPath}`,
+      );
     }
     if (result.status === 'cap-reached') {
       throw new ToolError(
@@ -509,11 +502,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    return {
-      status: 'executed',
-      summary: `Pinned memory: ${inputPath}`,
-      output: `Successfully pinned ${inputPath} as a core long-term memory. (${result.pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
-    };
+    return executed(
+      `Successfully pinned ${inputPath} as a core long-term memory. (${result.pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
+      `Pinned memory: ${inputPath}`,
+    );
   }
 
   private async unpin(loc: MemoryLocation): Promise<ToolResult> {
@@ -522,18 +514,16 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     const result = await setMemoryPinned(resolvedPath, false);
     if (result.status === 'already') {
-      return {
-        status: 'executed',
-        summary: `Not pinned: ${inputPath}`,
-        output: `The memory file ${inputPath} is not pinned.`,
-      };
+      return executed(
+        `The memory file ${inputPath} is not pinned.`,
+        `Not pinned: ${inputPath}`,
+      );
     }
 
-    return {
-      status: 'executed',
-      summary: `Unpinned memory: ${inputPath}`,
-      output: `Successfully unpinned ${inputPath}.`,
-    };
+    return executed(
+      `Successfully unpinned ${inputPath}.`,
+      `Unpinned memory: ${inputPath}`,
+    );
   }
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
