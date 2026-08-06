@@ -47,7 +47,7 @@ export function focusedChildInputDisabledMessage(init: {
   ) {
     return undefined;
   }
-  return 'Subagent is no longer accepting follow-ups; press Tab to select a session.';
+  return 'This background task is no longer accepting follow-ups; press Tab to select a session.';
 }
 
 export function stoppedFocusedChildFollowUpMessage(init: {
@@ -60,6 +60,6 @@ export function stoppedFocusedChildFollowUpMessage(init: {
       activeStreamId: init.streamId,
       parentStream: init.parentStream,
       status: init.streams.get(init.streamId)?.status,
-    }) ?? 'The selected subagent is no longer accepting follow-ups.'
+    }) ?? 'The selected background task is no longer accepting follow-ups.'
   );
 }

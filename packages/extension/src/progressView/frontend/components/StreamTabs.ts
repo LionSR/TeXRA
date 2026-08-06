@@ -182,10 +182,16 @@ export class StreamTab extends LitElement {
     const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
     const showCompactChildHint = this.childCount > 0 && this.compact;
-    const childStreamLabel = formatResultCount(this.childCount, 'child stream');
+    // "Background task" covers every nested run — delegated agents, agent CLIs
+    // and background commands — matching the Background tasks panel; "child
+    // stream" is the internal stream-tree name and stays out of the UI.
+    const childCountLabel = formatResultCount(
+      this.childCount,
+      'background task',
+    );
     const childToggleLabel = this.expanded
-      ? 'Collapse child streams'
-      : childStreamLabel;
+      ? 'Collapse background tasks'
+      : childCountLabel;
 
     return html`
       <div
@@ -242,7 +248,7 @@ export class StreamTab extends LitElement {
                 ? waIcon('chevron-right', {
                     id: 'stream-tab-compact-children',
                     className: 'compact-subagent-hint',
-                    label: childStreamLabel,
+                    label: childCountLabel,
                   })
                 : nothing
             }
@@ -290,7 +296,7 @@ export class StreamTab extends LitElement {
         ${
           showCompactChildHint
             ? html`<wa-tooltip for="stream-tab-compact-children"
-                >${childStreamLabel}</wa-tooltip
+                >${childCountLabel}</wa-tooltip
               >`
             : nothing
         }
