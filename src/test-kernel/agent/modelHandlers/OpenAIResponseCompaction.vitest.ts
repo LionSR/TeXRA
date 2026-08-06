@@ -55,6 +55,16 @@ function createHandler(): ModelHandlerOpenAIResponse {
   );
 }
 
+/** A request routed through OpenRouter (`openRouterOnly` forces the route on
+ *  regardless of the global toggle). */
+function createOpenRouterRoutedHandler(): ModelHandlerOpenAIResponse {
+  return configureHandler(
+    new ModelHandlerOpenAIResponse(
+      buildTestModelConfig(COMPACTION_TEST_CONFIG, { openRouterOnly: true }),
+    ),
+  );
+}
+
 class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
   override get supportsManualCompaction(): boolean {
     return false;
@@ -497,6 +507,39 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(requests[1].previous_response_id).toBe('resp-before-threshold');
     expect(requests[1].input).toEqual([secondTurnMessages.at(-1)]);
     expect(result.updatedMessages).toBeUndefined();
+  });
+
+  it('leaves an OpenRouter-routed conversation uncompacted past the threshold', async () => {
+    // OpenRouter conversations compact through ModelHandlerOpenRouterNative,
+    // so this handler reports compaction unsupported on that route and must
+    // never reach for /responses/compact — not even when the cumulative token
+    // count is over the threshold. That capability gate fires before any
+    // routing check inside shouldCompact(), which is why the skip needs no
+    // log line (and no once-only flag to de-duplicate one).
+    const handler = createOpenRouterRoutedHandler();
+    const requests: any[] = [];
+    const compactRequests: any[] = [];
+    const client = withSdkOptions({
+      responses: {
+        compact: async (params: any) => {
+          compactRequests.push(params);
+          return { output: createMessages(1), usage: { output_tokens: 100 } };
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          // 800 is over the 750-token threshold of the 1000-token window, so
+          // a compaction-capable route would compact on the second turn.
+          return createResponse(`resp-${requests.length}`, 800);
+        },
+      },
+    });
+
+    await sendTurn(handler, client, createMessages(2));
+    await sendTurn(handler, client, createMessages(3));
+
+    expect(handler.supportsManualCompaction).toBe(false);
+    expect(compactRequests).toHaveLength(0);
+    expect(requests).toHaveLength(2);
   });
 
   it('summarizes locally and resends a single message when the backend has no stateful compact endpoint (#7213)', async () => {

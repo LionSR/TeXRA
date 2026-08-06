@@ -439,12 +439,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    *  instead of mutating chain fields directly. */
   private readonly chainState = new ServerChainState();
 
-  /** Whether the OpenRouter compaction-skip debug line has already been logged.
-   *  Route-specific log de-duplication rather than chain state, so it lives on
-   *  the handler; {@link initializeMessages} resets it alongside
-   *  {@link ServerChainState.resetChainForNewSession}. */
-  private openRouterSkipLogged = false;
-
   /** Pending background-response id + poll/resume choreography. See
    *  {@link BackgroundRunLifecycle} for the narrow interface this handler
    *  uses instead of mutating background-response fields directly. */
@@ -681,10 +675,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       return false;
     }
     if (this.isOpenRouterRoutingEnabled()) {
-      if (!this.openRouterSkipLogged) {
-        this.logger.debug('Skipping compaction: OpenRouter routing is enabled');
-        this.openRouterSkipLogged = true;
-      }
+      // Same exclusion as canCompactRoute(): OpenRouter conversations compact
+      // through ModelHandlerOpenRouterNative. Nothing is logged here because
+      // the capability gate above already returns for every OpenRouter-routed
+      // request — no provider profile grants supportsManualCompaction on that
+      // route — so this only pins the invariant.
       return false;
     }
     const threshold = this.getCompactionTokenThreshold();
@@ -1119,7 +1114,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
     this.chainState.resetChainForNewSession();
-    this.openRouterSkipLogged = false;
     this.backgroundLifecycle.clearPending();
     this.wsTransport?.dispose();
 
