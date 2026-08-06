@@ -105,8 +105,9 @@ export const streamTabStyles = css`
     overflow: hidden;
   }
 
-  /* The metadata line stays out of the way until the row is focused or
-     selected — the full details also live in the tooltip. */
+  /* Reveal the metadata line on hover, focus, or selection. The agent name
+     rides a tooltip on this line when the title is the AI session one-liner. */
+  .tab-container:hover .tab-meta,
   .tab-container:focus-within .tab-meta,
   .tab-container.is-active .tab-meta {
     display: flex;
