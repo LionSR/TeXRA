@@ -1,40 +1,31 @@
-# TeXRA code review, powered by the external texra-ai/texra-action.
-# (Replaces the former in-repo .github/actions/texra-code-review composite
-# action + scripts, which now live in texra-ai/texra-action.)
-name: TeXRA Code Review
+# Temporary dogfood for TeXRA GitHub App OIDC auth.
+# Production review stays in texra-code-review.yml until this path is proven.
+# Trigger: add the `texra-oidc-dogfood` label on a PR (removed after consume).
+# Requires the workflow file to already be on the default branch (OIDC trust gate).
+name: TeXRA Code Review (OIDC dogfood)
 
-# Reviews run once when a PR opens (or leaves draft), not on every push:
-# per-push `synchronize` reviews doubled API spend and re-reviewed stale
-# heads that were about to be pushed over. To request a fresh review after
-# addressing feedback, add the `re-review` label (the workflow removes it so
-# it can be re-applied).
 on:
   pull_request:
-    types: [opened, ready_for_review, labeled]
+    types: [labeled]
 
 concurrency:
-  # Irrelevant `labeled` events (e.g. auto-label applying area labels right
-  # after open) get a unique group so they skip without cancelling an
-  # in-flight review in the PR's real group.
-  group: texra-review-${{ github.event.pull_request.number }}${{ (github.event.action == 'labeled' && github.event.label.name != 're-review') && format('-label-{0}', github.run_id) || '' }}
+  group: texra-oidc-dogfood-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   review:
     if: |
       vars.TEXRA_REVIEW_ENABLED != 'false' &&
-      (github.event.action != 'labeled' || github.event.label.name == 're-review')
+      github.event.label.name == 'texra-oidc-dogfood'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
       pull-requests: write
+      id-token: write
     steps:
-      # Consume the trigger label so a later `re-review` re-application fires
-      # a fresh run. Fork PR tokens are read-only and their provider-key check
-      # below skips the review.
-      - name: Remove re-review label
-        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
+      - name: Remove texra-oidc-dogfood label
+        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@v7
         with:
           script: |
@@ -43,14 +34,12 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                name: 're-review',
+                name: 'texra-oidc-dogfood',
               });
             } catch (error) {
               if (error.status !== 404) throw error;
             }
 
-      # Provider keys are unavailable to pull_request runs from forks; skip
-      # gracefully instead of failing the agent when no key is configured.
       - name: Check provider key
         id: keys
         env:
@@ -60,7 +49,7 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA review: no model provider key is configured."
+            echo "::notice::Skipping TeXRA OIDC dogfood: no model provider key is configured."
           fi
 
       - name: Check pull request merge ref
@@ -74,7 +63,7 @@ jobs:
           ref="pull/${PR_NUMBER}/merge"
           if ! matches="$(gh api "repos/${REPOSITORY}/git/matching-refs/${ref}" --jq 'length')"; then
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA review: could not confirm that refs/${ref} is available."
+            echo "::notice::Skipping TeXRA OIDC dogfood: could not confirm that refs/${ref} is available."
             exit 0
           fi
 
@@ -82,7 +71,7 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA review: refs/${ref} is not available."
+            echo "::notice::Skipping TeXRA OIDC dogfood: refs/${ref} is not available."
           fi
 
       - name: Checkout pull request
@@ -103,13 +92,10 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: TeXRA review
+      - name: TeXRA review (GitHub App OIDC)
         if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        # texra-ai/texra-action v1.1.3; pin the reviewed release commit so
-        # PR review behavior only changes through an explicit workflow update.
-        # Keep the secret-bearing review job read-only: provider keys and the
-        # GitHub token are present, so shell/tool mutations must stay disabled.
-        uses: texra-ai/texra-action/review@94bd5336d31ac62b1a196c6039a71d69e15ba0c5
+        # Pin: texra-ai/texra-action feat/github-app-oidc @71a6b1d
+        uses: texra-ai/texra-action/review@71a6b1dca9ef23d66c1f1d10afd65b6ba866dd9a
         with:
           prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
           approval-policy: yolo
@@ -118,9 +104,8 @@ jobs:
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
           model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
           texra-version: ${{ vars.TEXRA_CLI_VERSION }}
-          github-token: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN || github.token }}
-          review-marker: '<!-- texra-review -->'
-          resolve-threads: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN != '' && 'true' || 'false' }}
+          review-marker: '<!-- texra-oidc-dogfood -->'
+          resolve-threads: 'true'
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
