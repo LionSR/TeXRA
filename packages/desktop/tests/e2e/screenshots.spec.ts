@@ -102,7 +102,7 @@ test('command palette opens and dismisses', async () => {
   }
   await expect(launched.page.locator('.task-conversation')).toBeVisible();
   await launched.page
-    .locator('.task-header-button[aria-label="Open commands"]')
+    .locator('.task-header-button[aria-label="Show Commands"]')
     .click();
   await expect.poll(commandPaletteEntryCount).toBeGreaterThan(0);
   await launched.page.keyboard.press('Escape');

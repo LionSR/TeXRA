@@ -371,10 +371,13 @@ export class StreamHeader extends LitElement {
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
 
-    // Precompute per-button view metadata once so the button-group and the
-    // sibling <wa-tooltip> elements share the same active-state-aware title.
-    // The tooltips live OUTSIDE <wa-button-group>: the group's rounded-corner
-    // styling keys off ::slotted(:first-child)/(:last-child), so interleaving
+    // Precompute per-button view metadata once. Only the tooltip is
+    // active-state-aware; the accessible name stays constant because
+    // `aria-pressed` already carries the toggle state — a name that swaps
+    // with state announces a full sentence on every change (same rationale
+    // as the wa-switch toggles in settingsView's ToolCard). The tooltips
+    // live OUTSIDE <wa-button-group>: the group's rounded-corner styling
+    // keys off ::slotted(:first-child)/(:last-child), so interleaving
     // tooltip nodes between the buttons would break those selectors —
     // `renderIconActionButtonParts` keeps them apart, and each anchors by
     // `for=${btn.id}` within this shadow root.
@@ -407,7 +410,7 @@ export class StreamHeader extends LitElement {
       const { button, tooltip } = renderIconActionButtonParts({
         id: btn.id,
         icon: btn.icon,
-        label: tooltipText,
+        label: btn.label ?? btn.title,
         tooltip: tooltipText,
         className,
         size: 'm',
