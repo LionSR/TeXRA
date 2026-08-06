@@ -102,12 +102,16 @@ function PlainEntryRows({
 // limits wrapping and Markdown work to the entry that actually changed.
 export const TranscriptEntry = memo(function TranscriptEntry({
   entry,
+  previousEntry,
   width,
   colorEnabled,
   fillWidth,
   subagentExecutionLabels,
 }: {
   readonly entry: ConversationEntry;
+  /** The entry printed directly above this one, so its bottom separator can
+   *  absorb this entry's top one. Yoga does not collapse margins. */
+  readonly previousEntry?: ConversationEntry;
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
@@ -126,6 +130,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   const layout = transcriptEntryLayout(entry, {
     colorEnabled,
     mode: 'scrollback',
+    previousEntry,
     width,
   });
 
