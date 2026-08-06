@@ -9,7 +9,7 @@
  * (WCAG 2.1.4); see handleGlobalKeydown for the rationale. So those
  * shortcuts are actually reachable, a newly appeared request moves keyboard
  * focus to its primary action unless the user is typing elsewhere
- * (focusNewestRequest).
+ * (`updated` → `focusPanel`).
  */
 
 // Third-party imports
@@ -57,11 +57,13 @@ import {
 // Local imports - progress view contexts
 import {
   EMPTY_STREAM_BY_ID,
+  permissionsContext,
   streamByIdContext,
   type StreamByIdMap,
 } from '../streamContexts';
 
 // Local imports - progress view component types
+import type { ApproveSplitButton } from './ApproveSplitButton';
 import type { BaseRequestPanel } from './BaseRequestPanel';
 import type { PermissionState } from '../permissionState';
 
@@ -212,6 +214,15 @@ export class RequestPanels extends LitElement {
   @state()
   private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
+  /**
+   * All pending permissions across streams. `permissions` is already scoped to
+   * the active stream, so multi-run captions must read this unfiltered list —
+   * otherwise `runIds.size > 1` can never become true.
+   */
+  @consume({ context: permissionsContext, subscribe: true })
+  @state()
+  private allPermissions: PermissionState[] = [];
+
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionsByKind: ReadonlyMap<
     PermissionState['kind'],
@@ -224,24 +235,31 @@ export class RequestPanels extends LitElement {
   /** Pending keys seen after the previous update — drives first-appearance focus. */
   private seenPermissionKeys = new Set<string>();
 
-  protected override willUpdate(changedProperties: PropertyValues<this>): void {
-    if (!changedProperties.has('permissions')) return;
-
-    const previousKeys = externalInquiryKeys(
-      changedProperties.get('permissions') ?? [],
-    );
-    this.permissionsByKind = groupByKind(this.permissions);
-    this.selectedExternalInquiryKey = selectExternalInquiryKey(
-      this.selectedExternalInquiryKey,
-      previousKeys,
-      externalInquiryKeys(this.permissions),
-    );
-
-    const runIds = new Set<StreamTabId>();
-    for (const permission of this.permissions) {
-      if (permission.data.streamId) runIds.add(permission.data.streamId);
+  protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('permissions')) {
+      const previousKeys = externalInquiryKeys(
+        (changedProperties.get('permissions') as
+          PermissionState[] | undefined) ?? [],
+      );
+      this.permissionsByKind = groupByKind(this.permissions);
+      this.selectedExternalInquiryKey = selectExternalInquiryKey(
+        this.selectedExternalInquiryKey,
+        previousKeys,
+        externalInquiryKeys(this.permissions),
+      );
     }
-    this.multiRunPending = runIds.size > 1;
+
+    if (
+      changedProperties.has('permissions') ||
+      changedProperties.has('allPermissions')
+    ) {
+      // Captions key off every pending run, not the stream-filtered prop.
+      const runIds = new Set<StreamTabId>();
+      for (const permission of this.allPermissions) {
+        if (permission.data.streamId) runIds.add(permission.data.streamId);
+      }
+      this.multiRunPending = runIds.size > 1;
+    }
   }
 
   override connectedCallback(): void {
@@ -572,7 +590,15 @@ export class RequestPanels extends LitElement {
     if (this.matches(':focus-within')) return;
 
     const panel = this.findPanelFor(firstNew);
-    if (panel) this.focusPanel(panel);
+    if (!panel) return;
+    // The panel (and nested <approve-split-button>) was just connected in this
+    // render pass — its first Lit update is a microtask that cannot run until
+    // this `updated()` returns. Wait like LogList does for TaskGroupList.
+    void panel.updateComplete.then(() => {
+      if (isTextInput(document.activeElement)) return;
+      if (this.matches(':focus-within')) return;
+      void this.focusPanel(panel);
+    });
   }
 
   /**
@@ -581,16 +607,26 @@ export class RequestPanels extends LitElement {
    * panel's first control, else the panel container itself as a focusable
    * landmark.
    */
-  private focusPanel(panel: BaseRequestPanel): void {
+  private async focusPanel(panel: BaseRequestPanel): Promise<void> {
+    await panel.updateComplete;
     const root = panel.shadowRoot;
-    if (!root) return;
-
-    const approveButton = root
-      .querySelector('approve-split-button')
-      ?.shadowRoot?.querySelector<HTMLElement>('wa-button');
-    if (approveButton) {
-      approveButton.focus();
+    if (!root) {
+      panel.tabIndex = -1;
+      panel.focus();
       return;
+    }
+
+    const split = root.querySelector<ApproveSplitButton>(
+      'approve-split-button',
+    );
+    if (split) {
+      await split.updateComplete;
+      const approveButton =
+        split.shadowRoot?.querySelector<HTMLElement>('wa-button');
+      if (approveButton) {
+        approveButton.focus();
+        return;
+      }
     }
 
     const control = root.querySelector<HTMLElement>(
