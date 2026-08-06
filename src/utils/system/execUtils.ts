@@ -189,7 +189,7 @@ function workspacePathOrProcessCwd(): string {
  * Best-effort and fire-and-forget — a process that already exited is a no-op,
  * matching the previous contract where every caller ignored the result.
  */
-export function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   if (IS_WINDOWS) {
     treeKill(pid, signal, (error) => {
       if (error) {
