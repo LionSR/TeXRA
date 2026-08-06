@@ -69,6 +69,7 @@
 
 import { Hono } from '@hono/hono';
 import { cors } from '@hono/hono/cors';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { bearerToken } from '../_shared/auth.ts';
 import {
   adminClient,
@@ -183,10 +184,15 @@ type ProviderKey = keyof typeof PROVIDER_CONFIGS;
 // Helper Functions
 // =============================================================================
 
+// Providers with a configured server-side API key. Env vars are fixed at
+// cold start (secret changes restart every function), so this is computed
+// once per isolate instead of on every /providers and /tier-config request.
+const ENABLED_PROVIDERS: string[] = Object.entries(PROVIDER_CONFIGS)
+  .filter(([, config]) => Deno.env.get(config.envKey))
+  .map(([name]) => name);
+
 function getEnabledProviders(): string[] {
-  return Object.entries(PROVIDER_CONFIGS)
-    .filter(([, config]) => Deno.env.get(config.envKey))
-    .map(([name]) => name);
+  return ENABLED_PROVIDERS;
 }
 
 /**
@@ -210,6 +216,19 @@ function extractJwtFromRequest(req: Request): string | null {
 function extractModelFromPath(apiPath: string): string | null {
   const match = apiPath.match(/^(?:\/v1(?:beta)?)?\/models\/([^:]+)/);
   return match ? match[1] : null;
+}
+
+/**
+ * Fetch the profile columns the relay enforces (tier, expiry, ban state).
+ * Shared by the public tier-config status check and the provider-proxy
+ * enforcement path so the selected column list can't drift between them.
+ */
+function fetchRelayProfile(profileClient: SupabaseClient<any>, userId: string) {
+  return profileClient
+    .from('profiles')
+    .select('tier, access_expires_at, banned_until')
+    .eq('user_id', userId)
+    .single();
 }
 
 /** Milliseconds in one day */
@@ -330,11 +349,10 @@ app.get('/tier-config', async (c) => {
 
       if (credential.ok) {
         const { userId, profileClient } = credential;
-        const { data: profile } = await profileClient
-          .from('profiles')
-          .select('tier, access_expires_at, banned_until')
-          .eq('user_id', userId)
-          .single();
+        const { data: profile } = await fetchRelayProfile(
+          profileClient,
+          userId,
+        );
 
         if (profile) {
           const now = new Date();
@@ -464,11 +482,10 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   const { userId, profileClient } = credential;
 
   // 6. Get user profile and check ban / expiration
-  const { data: profile, error: profileError } = await profileClient
-    .from('profiles')
-    .select('tier, access_expires_at, banned_until')
-    .eq('user_id', userId)
-    .single();
+  const { data: profile, error: profileError } = await fetchRelayProfile(
+    profileClient,
+    userId,
+  );
 
   if (profileError || !profile) {
     return jsonError('Profile not found', 403);
@@ -825,7 +842,6 @@ app.all('/:provider{[^/]+}/*', async (c) => {
         upstreamResponse.body,
         releaseRelaySlot,
         refreshRelaySlot ?? undefined,
-        undefined,
         () => {
           logRelayFailure({
             relayRequestId,

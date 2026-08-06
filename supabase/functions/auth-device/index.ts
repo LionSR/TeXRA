@@ -291,7 +291,9 @@ app.post('/token', async (c) => {
     const deviceCodeHash = await sha256Hex(deviceCode);
     const { data: row, error } = await supabase
       .from('device_auth_requests')
-      .select('*')
+      .select(
+        'id, status, expires_at, last_polled_at, poll_interval_seconds, user_id',
+      )
       .eq('device_code_hash', deviceCodeHash)
       .maybeSingle();
 
