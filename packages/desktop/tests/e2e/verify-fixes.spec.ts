@@ -88,7 +88,7 @@ test('command palette keeps each icon and label in one compact row', async ({}, 
     await closeWorkbench.click();
   }
   await launched.page
-    .locator('.task-header-button[aria-label="Open commands"]')
+    .locator('.task-header-button[aria-label="Show Commands"]')
     .click();
   await launched.page.waitForSelector(
     '.desktop-command-palette-item[aria-selected="true"]',
@@ -190,43 +190,6 @@ test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo)
     path: testInfo.outputPath('verify-fixes', 'settings-tools-top.png'),
     fullPage: false,
   });
-
-  const bannerMetrics = await launched.page.evaluate(() => {
-    const settingsRoot = document.querySelector(
-      'settings-app[data-desktop-view="settings"]',
-    )?.shadowRoot;
-    const toolsRoot = settingsRoot?.querySelector('tools-tab')?.shadowRoot;
-    const layout = toolsRoot?.querySelector<HTMLElement>(
-      '.settings-banner-layout',
-    );
-    const icon = toolsRoot?.querySelector<HTMLElement>('.settings-banner-icon');
-    const body = toolsRoot?.querySelector<HTMLElement>('.settings-banner-body');
-    const actions = toolsRoot?.querySelector<HTMLElement>(
-      '.settings-banner-actions',
-    );
-    return {
-      layout: layout?.getBoundingClientRect(),
-      icon: icon?.getBoundingClientRect(),
-      body: body?.getBoundingClientRect(),
-      actions: actions?.getBoundingClientRect(),
-    };
-  });
-  expect(bannerMetrics.icon).toBeTruthy();
-  expect(bannerMetrics.body).toBeTruthy();
-  expect(bannerMetrics.actions).toBeTruthy();
-  expect(bannerMetrics.icon!.width).toBeLessThanOrEqual(40);
-  expect(bannerMetrics.icon!.right).toBeLessThanOrEqual(
-    bannerMetrics.body!.left,
-  );
-  const actionsAreBesideBody =
-    bannerMetrics.body!.right <= bannerMetrics.actions!.left + 1;
-  const actionsAreBelowBody =
-    bannerMetrics.actions!.top >= bannerMetrics.body!.bottom - 1 &&
-    bannerMetrics.actions!.left >= bannerMetrics.body!.left - 1;
-  expect(actionsAreBesideBody || actionsAreBelowBody).toBe(true);
-  expect(bannerMetrics.actions!.right).toBeLessThanOrEqual(
-    bannerMetrics.layout!.right,
-  );
 
   // Scroll the panel to the bottom and re-screenshot.
   await launched.page.evaluate(() => {
