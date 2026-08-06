@@ -211,15 +211,17 @@ export class ProgressApp extends ProgressAppBase {
               `
             : this.renderEmptyState()
         }
-        ${/*
+        ${
+          /*
           One stable, visually-hidden polite region for the whole shell:
           new approval requests and terminal run outcomes land here (see
           updateStatusAnnouncement). Stability matters — a region that is
           always mounted re-announces reliably on every text change, unlike
           a dynamically inserted alert. */
-        html`<div class="visually-hidden" role="status">
-          ${this.statusAnnouncement}
-        </div>`}
+          html`<div class="visually-hidden" role="status">
+            ${this.statusAnnouncement}
+          </div>`
+        }
       </div>
     `;
   }
