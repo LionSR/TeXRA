@@ -140,21 +140,11 @@ function renderActionButtonParts({
   const tooltipTemplate = useWebAwesomeTooltip
     ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
     : nothing;
-  // `title` is the one attribute wa-button forwards into its shadow <button>,
-  // so it doubles as the accessible name of an ICON-ONLY button — suppressing
-  // it outright left every id+tooltip icon button unnamed. A button with
-  // visible text is already named by that text, so adding `title` there only
-  // stacks a native browser tooltip on top of the wa-tooltip showing the same
-  // hint. Fall back to it only when there is no visible text to name the
-  // button.
-  let nativeTitle: string | undefined;
-  if (useWebAwesomeTooltip) {
-    nativeTitle = text ? undefined : (title ?? ariaLabel);
-  } else if (tooltip && !id) {
-    nativeTitle = tooltip;
-  } else {
-    nativeTitle = title ?? ariaLabel;
-  }
+  // `aria-label` (below) already names the button unconditionally, so `title`
+  // is only needed as a fallback hint when there's no `wa-tooltip` sibling to
+  // show one — setting both here would double up the hover hint (native
+  // tooltip + wa-tooltip) for every id+tooltip icon button.
+  const nativeTitle = tooltip && !id ? tooltip : (title ?? ariaLabel);
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {
     content = html`${icon ? waIcon(icon, { slot: 'start' }) : nothing}${text}`;
@@ -174,7 +164,7 @@ function renderActionButtonParts({
       aria-pressed=${ifDefined(
         pressed === undefined ? undefined : String(pressed),
       )}
-      title=${ifDefined(nativeTitle)}
+      title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
       ?hidden=${hidden}
