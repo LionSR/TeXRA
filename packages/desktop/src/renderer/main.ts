@@ -882,11 +882,7 @@ function environmentSyncTemplate(
     .filter(Boolean)
     .join(', ');
   return html`
-    <span
-      class="task-environment-trailing"
-      role="img"
-      aria-label=${syncLabel}
-    >
+    <span class="task-environment-trailing" role="img" aria-label=${syncLabel}>
       ${summary.ahead > 0 ? `↑${summary.ahead}` : nothing}
       ${summary.behind > 0 ? `↓${summary.behind}` : nothing}
     </span>
