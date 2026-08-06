@@ -88,12 +88,6 @@ import {
   createDesktopSettingsIpc,
   type DesktopSettingsUiHost,
 } from './desktopSettingsIpc.js';
-import {
-  buildDefaultToolDashboardItems,
-  getCachedToolCheckResults,
-  planDefaultToolTerminalAction,
-  refreshDefaultToolAvailability,
-} from './desktopSettingsIpcHelpers.js';
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
@@ -752,10 +746,26 @@ function createWindow(options: {
         postToRenderer,
       },
       dashboard: {
-        buildItems: buildDefaultToolDashboardItems,
-        getCachedCheckResults: getCachedToolCheckResults,
-        refreshAvailability: refreshDefaultToolAvailability,
-        planTerminalAction: planDefaultToolTerminalAction,
+        buildItems: async (cachedResults) => {
+          const { buildToolDashboardItems } =
+            await import('@controllers/settingsView/ToolDashboardData');
+          return buildToolDashboardItems(cachedResults);
+        },
+        getCachedCheckResults: async () => {
+          const { getLastCheckResults } =
+            await import('@tools/toolAvailability');
+          return getLastCheckResults() ?? undefined;
+        },
+        refreshAvailability: async () => {
+          const { refreshToolAvailability } =
+            await import('@tools/toolAvailability');
+          await refreshToolAvailability();
+        },
+        planTerminalAction: async (toolId, kind) => {
+          const { planToolTerminalAction } =
+            await import('@controllers/settingsView/ToolDashboardData');
+          return planToolTerminalAction({ toolId, commandKind: kind });
+        },
       },
       navigation: { openExternal: previewHost.openExternal },
       commands: { run: runSetupCommand },

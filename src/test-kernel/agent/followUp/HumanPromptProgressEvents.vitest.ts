@@ -13,13 +13,13 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
-import { AskUserQuestionTool } from '@tools/userQuestion';
 import {
   cleanupAllApprovals,
   proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
+import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import {
   requestToolEditApproval,
