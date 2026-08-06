@@ -41,10 +41,7 @@ export const toolUseStyles = css`
   .banner-content--error .error-details {
     margin: 0;
     padding: var(--wa-space-2xs);
-    background-color: var(
-      --texra-inputValidation-errorBackground,
-      rgba(255, 0, 0, 0.1)
-    );
+    background-color: var(--wa-color-danger-fill-quiet);
     border-radius: var(--border-radius-small);
     white-space: pre-wrap;
     word-break: break-word;
@@ -90,20 +87,17 @@ export const toolUseStyles = css`
   :is(.tool-user-feedback, .tool-error-content) {
     padding: var(--wa-space-2xs);
     border-radius: var(--border-radius-small);
-    border-left: var(--border-medium) solid;
+    border-inline-start: var(--border-medium) solid;
   }
 
   .tool-user-feedback {
     background-color: var(--wa-color-brand-fill-quiet, rgba(55, 148, 255, 0.1));
-    border-left-color: var(--color-text-link);
+    border-inline-start-color: var(--color-text-link);
   }
 
   .tool-error-content {
-    background-color: var(
-      --texra-inputValidation-errorBackground,
-      rgba(255, 0, 0, 0.1)
-    );
-    border-left-color: var(--color-error);
+    background-color: var(--wa-color-danger-fill-quiet);
+    border-inline-start-color: var(--color-error);
     color: var(--color-error);
   }
 

@@ -254,6 +254,12 @@ export class AgentSelectionPanel extends LitElement {
         @click=${() => this.selectAgent(agent)}
         @keydown=${(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
+            // Ignore Enter/Space that bubbled out of the nested wa-switch —
+            // it owns its own activation and must not also select the row
+            // (same guard as the preset cards in MultiAgentTab).
+            if ((e.target as HTMLElement | null)?.closest('wa-switch')) {
+              return;
+            }
             e.preventDefault();
             this.selectAgent(agent);
           }
@@ -267,12 +273,16 @@ export class AgentSelectionPanel extends LitElement {
             e.stopPropagation();
             this.handleToggleEnabled(agent);
           }}
-          title=${
-            agent.enabled
-              ? 'Hide from agent selector'
-              : 'Show in agent selector'
-          }
-        ></wa-switch>
+          title="Show in agent selector"
+        >
+          <!-- Slotted (not a host aria-label, which names the custom element
+               rather than the inner switch — see settingsSection.ts). The
+               constant wording keeps the name stable across state; checked
+               carries the state. -->
+          <span class="visually-hidden"
+            >Show ${agent.name} in agent selector</span
+          >
+        </wa-switch>
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${

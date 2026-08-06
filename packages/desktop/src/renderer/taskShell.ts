@@ -30,6 +30,8 @@ export interface TaskSidebarModel {
   readonly streamCount: number;
   readonly workspaceName: string;
   readonly workspacePath?: string;
+  /** Canonical name of the command palette action, from the command catalog. */
+  readonly commandsLabel: string;
 }
 
 export interface TaskSidebarCallbacks {
@@ -92,7 +94,8 @@ export function taskSidebarTemplate(
           class="task-sidebar-brand-menu icon-button is-size-s"
           appearance="plain"
           size="s"
-          aria-label="Open commands"
+          aria-label=${model.commandsLabel}
+          title=${model.commandsLabel}
           @click=${callbacks.onSearch}
         >
           ${waIcon('chevron-down')}

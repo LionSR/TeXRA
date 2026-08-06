@@ -490,7 +490,7 @@ export class StreamTabs extends LitElement {
           ${when(this.streams.length === 0, () =>
             renderEmptyState({
               icon: 'terminal',
-              title: 'No streams yet',
+              title: 'No runs yet',
               body: 'Run a TeXRA command to get started.',
               headingTag: 'h3',
               className: 'log-placeholder',

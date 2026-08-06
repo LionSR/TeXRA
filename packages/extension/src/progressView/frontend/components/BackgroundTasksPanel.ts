@@ -424,8 +424,8 @@ export class BackgroundTasksPanel extends LitElement {
             'task-name': true,
             'task-name--clickable': isClickable,
           })}
-          role=${isClickable ? 'link' : 'text'}
-          tabindex=${isClickable ? '0' : '-1'}
+          role=${isClickable ? 'link' : nothing}
+          tabindex=${isClickable ? '0' : nothing}
           @click=${
             childStreamId !== undefined
               ? () => this.navigateToStream(childStreamId)
