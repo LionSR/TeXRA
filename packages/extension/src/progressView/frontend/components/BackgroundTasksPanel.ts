@@ -37,12 +37,11 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
-  runIdentityName,
+  runIdentityDisplayName,
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { getCleanAgentName } from '@shared/schemas/agent';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -421,7 +420,7 @@ export class BackgroundTasksPanel extends LitElement {
     const idPrefix = `background-subagent-${index}`;
     // RunIdentity is the declared authority; agentName is only a fallback.
     const displayName = child.identity
-      ? getCleanAgentName(runIdentityName(child.identity))
+      ? runIdentityDisplayName(child.identity)
       : child.agentName;
     const nameTooltip = isClickable ? `Go to ${displayName}` : displayName;
 

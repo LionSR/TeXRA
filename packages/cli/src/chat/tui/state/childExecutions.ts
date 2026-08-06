@@ -11,12 +11,11 @@
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import {
-  runIdentityName,
+  runIdentityDisplayName,
   type ActiveChildInfo,
   type RunIdentity,
   type StreamTabId,
 } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas/agent';
 
 import type { StreamSlice } from './cliState';
 
@@ -582,7 +581,7 @@ export function childExecutionLabel(
   // RunIdentity is the declared authority for the row label; agentName and
   // executionId are only fallbacks for a malformed roster entry.
   if (child.identity) {
-    return getCleanAgentName(runIdentityName(child.identity));
+    return runIdentityDisplayName(child.identity);
   }
   return child.agentName || child.executionId;
 }

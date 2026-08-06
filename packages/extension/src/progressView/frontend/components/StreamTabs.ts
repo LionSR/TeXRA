@@ -16,13 +16,12 @@ import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  runIdentityName,
+  runIdentityDisplayName,
   type StreamSubstate,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { getCleanAgentName } from '@shared/schemas/agent';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   formatStreamStatusLabel,
@@ -93,7 +92,7 @@ function buildTooltip(
     : undefined;
   // Prefer the declared RunIdentity over the derived tab label.
   const identityDisplay = info.identity
-    ? getCleanAgentName(runIdentityName(info.identity))
+    ? runIdentityDisplayName(info.identity)
     : undefined;
   const mainLine = [
     identityDisplay || info.label || info.name,
@@ -203,7 +202,7 @@ export class StreamTab extends LitElement {
     // title is the AI one-liner, keep that explicit identity on metadata hover.
     const metaAgentName =
       stream.identity?.kind === 'agent'
-        ? getCleanAgentName(stream.identity.agent)
+        ? runIdentityDisplayName(stream.identity)
         : undefined;
 
     return html`
