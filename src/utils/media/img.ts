@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
+import { imageSize } from 'image-size';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
@@ -44,26 +45,16 @@ async function removeConversionTempDir(tempDir: string): Promise<void> {
   }
 }
 
-/** Get the dimensions of an image file using ImageMagick or GraphicsMagick. */
-async function getImageDimensions(
-  imagePath: string,
-  tool: 'magick' | 'gm',
-): Promise<{ width: number; height: number }> {
-  const identifyArgs = [tool, 'identify', '-format', '%w %h', imagePath];
-  const result = await executeCommand(identifyArgs, { channel: CHANNEL });
-  if (!result.success || !result.stdout) {
-    throw new Error(result.stderr || 'Failed to get image dimensions');
+/** Get the dimensions of an image file. Pure JS — no external binary required. */
+function getImageDimensions(imagePath: string): {
+  width: number;
+  height: number;
+} {
+  try {
+    return imageSize(AbsoluteFS.readBytesSync(imagePath));
+  } catch (err) {
+    throw new Error(`Failed to get image dimensions: ${toErrorMessage(err)}`);
   }
-  const [widthStr, heightStr] = result.stdout.trim().split(/\s+/);
-  const width = Number.parseInt(widthStr, 10);
-  const height = Number.parseInt(heightStr, 10);
-
-  if (Number.isNaN(width) || Number.isNaN(height)) {
-    throw new Error(
-      `Invalid dimensions parsed: width=${widthStr}, height=${heightStr}`,
-    );
-  }
-  return { width, height };
 }
 
 /** Maximum image dimension (pixels) accepted by provider APIs. */
@@ -71,18 +62,21 @@ const API_MAX_IMAGE_DIMENSION = 8000;
 
 /** Resize an image if it exceeds the maximum dimensions. Returns the original path if no resize needed. */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
-  const tool = await detectImageTool();
-  if (!tool) {
-    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
-  }
   const maxDimension = Math.min(
     getConfig<number>('texra.maxImageDimension', 2000),
     API_MAX_IMAGE_DIMENSION,
   );
-  const { width, height } = await getImageDimensions(imagePath, tool);
+  const { width, height } = getImageDimensions(imagePath);
 
   if (width <= maxDimension && height <= maxDimension) {
     return imagePath;
+  }
+
+  // Resizing (unlike measuring) still needs an external tool — only
+  // required once we know the image actually exceeds the limit.
+  const tool = await detectImageTool();
+  if (!tool) {
+    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
   }
 
   const ext = path.extname(imagePath);
