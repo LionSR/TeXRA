@@ -26,9 +26,12 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 // Local imports - utilities
 import { pluralize } from '@utils/text/stringUtils';
 
-// Local imports - settings view components (side-effect: register)
-import '../components/profile/CodexSubscriptionSection';
-import '../components/profile/GrokSubscriptionSection';
+// Local imports - settings view components (importing the descriptors also
+// registers the <subscription-section> element)
+import {
+  CHATGPT_SUBSCRIPTION_SECTION,
+  GROK_SUBSCRIPTION_SECTION,
+} from '../components/profile/SubscriptionSection';
 
 const KIMI_CODE_CONSOLE_URL = 'https://www.kimi.com/code/console';
 
@@ -65,12 +68,14 @@ export class SubscriptionsTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="subscriptions-container tab-content-container">
-        <codex-subscription-section
-          .chatgptAuth=${this.chatgptAuth}
-        ></codex-subscription-section>
-        <grok-subscription-section
-          .grokAuth=${this.grokAuth}
-        ></grok-subscription-section>
+        <subscription-section
+          .provider=${CHATGPT_SUBSCRIPTION_SECTION}
+          .auth=${this.chatgptAuth}
+        ></subscription-section>
+        <subscription-section
+          .provider=${GROK_SUBSCRIPTION_SECTION}
+          .auth=${this.grokAuth}
+        ></subscription-section>
         ${this.renderKimiCodeSection()} ${this.renderCopilotSection()}
       </div>
     `;

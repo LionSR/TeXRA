@@ -14,6 +14,7 @@ import {
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedRequest } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string().describe('arXiv identifier or URL for the paper.'),
@@ -79,10 +80,9 @@ export class ArxivMetadataTool extends defineTool({
       ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
     };
 
-    return {
-      status: 'executed',
-      summary: `Retrieved: ${metadata.id}`,
-      output: JSON.stringify(metadata, null, 2),
-    };
+    return executed(
+      JSON.stringify(metadata, null, 2),
+      `Retrieved: ${metadata.id}`,
+    );
   }
 }

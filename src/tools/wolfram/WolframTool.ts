@@ -9,6 +9,7 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
+import { executed } from '@tools/core/result';
 import {
   splitContentLines,
   truncateWithEllipsis,
@@ -72,11 +73,7 @@ export class WolframTool extends defineTool({
       timeout: effectiveTimeout,
     });
     if (result.success) {
-      return {
-        status: 'executed',
-        summary: wolframRunSummary(input.code),
-        output: result.output ?? '',
-      };
+      return executed(result.output ?? '', wolframRunSummary(input.code));
     }
 
     // Build informative error message with all available context

@@ -21,6 +21,7 @@ import {
   replaceLiteralMatches,
 } from '@tools/fileEditFlow';
 import { recordToolFileRead } from '@tools/fileInteractions';
+import { executed } from '@tools/core/result';
 import { assertNever } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -332,11 +333,7 @@ export class TextEditorTool extends defineTool({
           })
           .join('\n');
 
-        return {
-          status: 'executed',
-          summary: `Listed directory: ${displayPath}`,
-          output: formattedContents,
-        };
+        return executed(formattedContents, `Listed directory: ${displayPath}`);
       }
 
       const fileContent = expandTabs(await WorkspaceFS.read(filePath));

@@ -6,6 +6,7 @@ import { REVIEW_SEVERITIES } from '@agent/review/reviewIssues';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import * as logger from '@logger/logUtils';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -59,11 +60,10 @@ export class ReportReviewIssueTool extends defineTool({
   protected async execute(input: ReportReviewIssueInput): Promise<ToolResult> {
     const sink = currentSession().interactions.reportReviewIssue;
     if (!sink) {
-      return {
-        status: 'executed',
-        summary: 'Review issue not accepted',
-        output: 'Agent review is not available in this host.',
-      };
+      return executed(
+        'Agent review is not available in this host.',
+        'Review issue not accepted',
+      );
     }
 
     try {
@@ -77,14 +77,13 @@ export class ReportReviewIssueTool extends defineTool({
         suggestion: input.suggestion ?? undefined,
       });
       if (!result.accepted) {
-        return {
-          status: 'executed',
-          summary: 'Review issue not accepted',
-          output: result.reason ?? 'The review issue was not accepted.',
-        };
+        return executed(
+          result.reason ?? 'The review issue was not accepted.',
+          'Review issue not accepted',
+        );
       }
       const summary = `Reported review issue ${input.file}:${input.startLine} [${input.severity}] ${input.title}`;
-      return { status: 'executed', summary, output: summary };
+      return executed(summary, summary);
     } catch (error) {
       const detail = toErrorMessage(error);
       logger.error(CHANNEL, `Failed to report review issue: ${detail}`);

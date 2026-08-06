@@ -1,7 +1,9 @@
-// Shared ToolResult builders. Most tools hand-build the `status: 'executed'`
-// and `status: 'error'` object literals inline; these cover the dominant
-// shapes so call sites read as intent ("executed with this output", "nothing
-// found") rather than object-literal boilerplate.
+// Shared ToolResult builders for the two dominant shapes, so call sites read
+// as intent ("executed with this output") rather than object-literal
+// boilerplate. Use these instead of hand-building a literal whenever the
+// result carries only `output` and an optional `summary`; a result that also
+// carries `diagnostics`, `files`, `edits`, `endTurn`, … stays an explicit
+// literal, since those fields are the point of the call site.
 //
 // Host-agnostic, VS Code-free.
 

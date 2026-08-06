@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { apiKeySecretName } from '@model/apiProviders';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -34,12 +35,10 @@ export class ListApiKeysTool extends defineTool({
     const storedKeys = await setupSecrets.listStoredKeys();
 
     if (storedKeys.length === 0) {
-      return {
-        status: 'executed',
-        summary: 'No secrets stored',
-        output:
-          'The credential store is empty — no API keys or tokens are persisted.',
-      };
+      return executed(
+        'The credential store is empty — no API keys or tokens are persisted.',
+        'No secrets stored',
+      );
     }
 
     const { providers } = setupSecrets;
@@ -108,10 +107,9 @@ export class ListApiKeysTool extends defineTool({
         ? 'no persisted provider API keys'
         : `${providerKeys.length}/${providers.length} persisted provider API keys`;
 
-    return {
-      status: 'executed',
-      summary: `${formatResultCount(storedKeys.length, 'stored secret')}: ${providerSummary}`,
-      output: lines.join('\n'),
-    };
+    return executed(
+      lines.join('\n'),
+      `${formatResultCount(storedKeys.length, 'stored secret')}: ${providerSummary}`,
+    );
   }
 }

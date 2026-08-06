@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -131,11 +132,10 @@ export class CrossrefSearchTool extends defineTool({
         licenses: work.license ?? [],
       };
 
-      return {
-        status: 'executed',
-        summary: `Retrieved: DOI ${metadata.doi}`,
-        output: JSON.stringify(metadata, null, 2),
-      };
+      return executed(
+        JSON.stringify(metadata, null, 2),
+        `Retrieved: DOI ${metadata.doi}`,
+      );
     }
 
     const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
@@ -179,10 +179,9 @@ export class CrossrefSearchTool extends defineTool({
       results,
     };
 
-    return {
-      status: 'executed',
-      summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
-      output: JSON.stringify(payload, null, 2),
-    };
+    return executed(
+      JSON.stringify(payload, null, 2),
+      `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
+    );
   }
 }

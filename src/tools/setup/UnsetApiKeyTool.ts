@@ -10,6 +10,7 @@ import {
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
+import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { getSetupPlatform, setupSecrets } from './platform';
 import { refreshApiKeyCaches } from './apiKeyHelpers';
@@ -49,17 +50,15 @@ export class UnsetApiKeyTool extends defineTool({
       // supplying credentials.
       const envExists = await setupSecrets.hasUsableApiKey(provider);
       if (envExists) {
-        return {
-          status: 'executed',
-          summary: `${provider} key is env-var-backed`,
-          output: `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear — unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
-        };
+        return executed(
+          `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear — unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
+          `${provider} key is env-var-backed`,
+        );
       }
-      return {
-        status: 'executed',
-        summary: `No stored ${provider} API key`,
-        output: `There was no stored API key for provider "${provider}" to remove.`,
-      };
+      return executed(
+        `There was no stored API key for provider "${provider}" to remove.`,
+        `No stored ${provider} API key`,
+      );
     }
 
     await setupSecrets.deleteApiKey(provider);
@@ -74,17 +73,15 @@ export class UnsetApiKeyTool extends defineTool({
     // "env var still active" branch.
     const stillPresent = await setupSecrets.hasUsableApiKey(provider);
     if (stillPresent) {
-      return {
-        status: 'executed',
-        summary: `Removed stored ${provider} key (env var still active)`,
-        output: `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,
-      };
+      return executed(
+        `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,
+        `Removed stored ${provider} key (env var still active)`,
+      );
     }
 
-    return {
-      status: 'executed',
-      summary: `Removed ${provider} API key`,
-      output: `Removed stored API key for provider "${provider}".`,
-    };
+    return executed(
+      `Removed stored API key for provider "${provider}".`,
+      `Removed ${provider} API key`,
+    );
   }
 }

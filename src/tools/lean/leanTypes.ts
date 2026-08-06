@@ -12,30 +12,92 @@ import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting'
 /** Marketplace ID of the Lean 4 VS Code extension. */
 export const LEAN4_EXTENSION_ID = 'leanprover.lean4';
 
-/** Per-file commands surfaced by `lean_file`. */
-export const LEAN_FILE_COMMANDS = Object.freeze([
-  'restart',
-  'refresh_dependencies',
-] as const);
-export type LeanFileCommand = (typeof LEAN_FILE_COMMANDS)[number];
+/**
+ * One command surfaced by a Lean tool. `description` is both the line the tool
+ * prose shows for the command and the summary on its executed result; `hint` is
+ * extra usage guidance carried only by the prose, where length is cheap.
+ */
+export interface LeanCommandSpec {
+  readonly description: string;
+  readonly hint?: string;
+}
 
-/** Project-scope commands surfaced by `lean_project`. */
-export const LEAN_PROJECT_COMMANDS = Object.freeze([
-  // Server commands
-  'restart_server',
-  'stop_server',
-  // Project commands
-  'build',
-  'clean',
-  'fetch_cache',
-  'fetch_file_cache',
-  // Setup commands
-  'install_elan',
-  'install_deps',
-  'update_elan',
-  'select_toolchain',
-] as const);
-export type LeanProjectCommand = (typeof LEAN_PROJECT_COMMANDS)[number];
+/** A `lean_project` command additionally names the prose section it lists under. */
+interface LeanProjectCommandSpec extends LeanCommandSpec {
+  readonly group: string;
+}
+
+/**
+ * Freeze a command table and every spec in it. `Object.freeze` is shallow, so
+ * the entries need freezing too before the table crosses a module boundary.
+ */
+function freezeCommands<T extends Record<string, LeanCommandSpec>>(
+  commands: T,
+): Readonly<T> {
+  for (const spec of Object.values(commands)) Object.freeze(spec);
+  return Object.freeze(commands);
+}
+
+/**
+ * Per-file commands surfaced by `lean_file`, in declaration order. Single
+ * source of truth: the tool's input enum, its prose, and its result summaries
+ * all derive from this table (see `LspTools.ts`).
+ */
+export const LEAN_FILE_COMMANDS = freezeCommands({
+  restart: {
+    description: 'Restart Lean server for this file',
+    hint: 'use when diagnostics are stale or after editing imports',
+  },
+  refresh_dependencies: {
+    description: 'Refresh file dependencies without full restart',
+    hint: 'lighter than restart',
+  },
+});
+export type LeanFileCommand = keyof typeof LEAN_FILE_COMMANDS;
+
+/**
+ * Project-scope commands surfaced by `lean_project`, in declaration order.
+ * Same single-source role as {@link LEAN_FILE_COMMANDS}, plus the `group` that
+ * sections the generated prose.
+ */
+export const LEAN_PROJECT_COMMANDS = freezeCommands({
+  restart_server: {
+    group: 'Server',
+    description: 'Restart the entire Lean language server',
+  },
+  stop_server: {
+    group: 'Server',
+    description: 'Stop the Lean language server',
+  },
+  build: {
+    group: 'Project',
+    description: 'Build the project (runs lake build)',
+  },
+  clean: { group: 'Project', description: 'Clean project build artifacts' },
+  fetch_cache: {
+    group: 'Project',
+    description: 'Download Mathlib build cache for the project',
+  },
+  fetch_file_cache: {
+    group: 'Project',
+    description: "Download Mathlib cache for current file's imports only",
+    hint: 'faster',
+  },
+  install_elan: {
+    group: 'Setup',
+    description: 'Install Elan (Lean version manager)',
+  },
+  install_deps: { group: 'Setup', description: 'Install Lean dependencies' },
+  update_elan: {
+    group: 'Setup',
+    description: 'Update Elan to latest version',
+  },
+  select_toolchain: {
+    group: 'Setup',
+    description: 'Select default Lean toolchain version',
+  },
+} satisfies Record<string, LeanProjectCommandSpec>);
+export type LeanProjectCommand = keyof typeof LEAN_PROJECT_COMMANDS;
 
 /** Human-readable label for each server mode (used in the dashboard surface). */
 export const LEAN_SERVER_MODE_LABELS = Object.freeze({

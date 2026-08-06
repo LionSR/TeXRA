@@ -9,6 +9,7 @@ import {
 import * as logger from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -139,12 +140,10 @@ export class InlineCommentTool extends defineTool({
 }) {
   protected async execute(input: InlineCommentInput): Promise<ToolResult> {
     if (!provider.available()) {
-      return {
-        status: 'executed',
-        summary: 'Inline comments unavailable',
-        output:
-          'Inline comments require the VS Code extension host and are not available in this environment.',
-      };
+      return executed(
+        'Inline comments require the VS Code extension host and are not available in this environment.',
+        'Inline comments unavailable',
+      );
     }
     switch (input.command) {
       case 'add':
@@ -183,11 +182,10 @@ export class InlineCommentTool extends defineTool({
       }
       const where = result.resolvedPath || resolved.absolute;
       const summary = `Opened comment thread ${result.threadId} at ${where}:${line}`;
-      return {
-        status: 'executed',
+      return executed(
+        `${summary}\nThe user can reply or resolve it in the editor; read replies with the "list" command.`,
         summary,
-        output: `${summary}\nThe user can reply or resolve it in the editor; read replies with the "list" command.`,
-      };
+      );
     } catch (error) {
       if (error instanceof ToolError) throw error;
       const detail = toErrorMessage(error);
@@ -205,7 +203,7 @@ export class InlineCommentTool extends defineTool({
       return this.threadNotFound(threadId);
     }
     const summary = `Replied to comment thread ${threadId}`;
-    return { status: 'executed', summary, output: summary };
+    return executed(summary, summary);
   }
 
   private setResolved(
@@ -222,7 +220,7 @@ export class InlineCommentTool extends defineTool({
       return this.threadNotFound(threadId);
     }
     const summary = `${resolved ? 'Resolved' : 'Reopened'} comment thread ${threadId}`;
-    return { status: 'executed', summary, output: summary };
+    return executed(summary, summary);
   }
 
   private list(input: InlineCommentInput): ToolResult {
@@ -237,27 +235,21 @@ export class InlineCommentTool extends defineTool({
     }
     const threads = provider.list({ absolutePath });
     if (threads.length === 0) {
-      return {
-        status: 'executed',
-        summary: 'No comment threads',
-        output: input.path
+      return executed(
+        input.path
           ? `No comment threads in ${input.path}.`
           : 'No comment threads are open.',
-      };
+        'No comment threads',
+      );
     }
     const summary = formatResultCount(threads.length, 'comment thread');
-    return {
-      status: 'executed',
-      summary,
-      output: threads.map(formatThread).join('\n\n'),
-    };
+    return executed(threads.map(formatThread).join('\n\n'), summary);
   }
 
   private threadNotFound(threadId: string): ToolResult {
-    return {
-      status: 'executed',
-      summary: 'Thread not found',
-      output: `No comment thread with id "${threadId}". Use the "list" command to see open threads.`,
-    };
+    return executed(
+      `No comment thread with id "${threadId}". Use the "list" command to see open threads.`,
+      'Thread not found',
+    );
   }
 }

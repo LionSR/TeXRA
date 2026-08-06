@@ -546,6 +546,24 @@ function statusBarBindingRow(
     .join(KEY_HINT_SEPARATOR);
 }
 
+// Every bindings row below is a widest-first cascade: candidates are built
+// eagerly, and the first one that fits the row wins. Inapplicable candidates
+// are left in place as `false`/`undefined` so each list still reads top to
+// bottom as "this layout, else this one".
+function firstRowThatFits(
+  candidates: readonly (string | false | undefined)[],
+  maxColumns: number | undefined,
+  fallback: string,
+): string {
+  return (
+    candidates.find(
+      (candidate): candidate is string =>
+        typeof candidate === 'string' &&
+        (maxColumns === undefined || textDisplayWidth(candidate) <= maxColumns),
+    ) ?? fallback
+  );
+}
+
 // Single-slot memo for the bindings cascade below: it eagerly builds ~13
 // candidate rows and stringWidth-measures them until one fits, yet its
 // inputs are a handful of flags that change far less often than the
@@ -651,22 +669,10 @@ function statusBarBindingsText(
   );
   if (parentBack) candidates.push(parentBack);
 
-  const text =
-    candidates.find(
-      (candidate): candidate is string =>
-        typeof candidate === 'string' &&
-        fitsStatusBindings(candidate, maxColumns),
-    ) ?? ctrlC;
+  const text = firstRowThatFits(candidates, maxColumns, ctrlC);
   lastBindingsKey = memoKey;
   lastBindingsText = text;
   return text;
-}
-
-function fitsStatusBindings(
-  text: string,
-  maxColumns: number | undefined,
-): boolean {
-  return maxColumns === undefined || textDisplayWidth(text) <= maxColumns;
 }
 
 function foregroundBindingsText(
@@ -676,17 +682,18 @@ function foregroundBindingsText(
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const escBinding = keyHintText({ key: 'Esc', action: escapeAction });
-  const full = [
-    'Use foreground panel shortcuts',
-    escBinding,
+  return firstRowThatFits(
+    [
+      statusBarBindingRow([
+        'Use foreground panel shortcuts',
+        escBinding,
+        ctrlCBinding,
+      ]),
+      statusBarBindingRow([escBinding, ctrlCBinding]),
+    ],
+    maxColumns,
     ctrlCBinding,
-  ].join(KEY_HINT_SEPARATOR);
-  if (fitsStatusBindings(full, maxColumns)) return full;
-
-  const compact = [escBinding, ctrlCBinding].join(KEY_HINT_SEPARATOR);
-  if (fitsStatusBindings(compact, maxColumns)) return compact;
-
-  return ctrlCBinding;
+  );
 }
 
 function childListBindingsText(
@@ -713,44 +720,43 @@ function childListBindingsText(
   const retryBinding = selectionWorkflowControllable
     ? keyHintText({ key: 'r', action: 'retry' })
     : undefined;
-  const candidates = [
-    statusBarBindingRow([
-      keyHintText({ key: '↑/↓', action: 'select' }),
-      enterBinding,
-      fullOutputBinding,
-      killBinding,
-      skipBinding,
-      retryBinding,
-      keyHintText({ key: 'Tab', action: 'input' }),
-      keyHintText({ key: 'Esc', action: 'input' }),
+  const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
+  const tabBinding = keyHintText({ key: 'Tab', action: 'input' });
+  const escBinding = keyHintText({ key: 'Esc', action: 'input' });
+  return firstRowThatFits(
+    [
+      statusBarBindingRow([
+        selectBinding,
+        enterBinding,
+        fullOutputBinding,
+        killBinding,
+        skipBinding,
+        retryBinding,
+        tabBinding,
+        escBinding,
+        ctrlCBinding,
+      ]),
+      statusBarBindingRow([
+        selectBinding,
+        enterBinding,
+        fullOutputBinding,
+        killBinding,
+        tabBinding,
+        escBinding,
+        ctrlCBinding,
+      ]),
+      statusBarBindingRow([
+        selectBinding,
+        enterBinding,
+        tabBinding,
+        escBinding,
+        ctrlCBinding,
+      ]),
+      statusBarBindingRow([enterBinding, escBinding, ctrlCBinding]),
       ctrlCBinding,
-    ]),
-    statusBarBindingRow([
-      keyHintText({ key: '↑/↓', action: 'select' }),
-      enterBinding,
-      fullOutputBinding,
-      killBinding,
-      keyHintText({ key: 'Tab', action: 'input' }),
-      keyHintText({ key: 'Esc', action: 'input' }),
-      ctrlCBinding,
-    ]),
-    statusBarBindingRow([
-      keyHintText({ key: '↑/↓', action: 'select' }),
-      enterBinding,
-      keyHintText({ key: 'Tab', action: 'input' }),
-      keyHintText({ key: 'Esc', action: 'input' }),
-      ctrlCBinding,
-    ]),
-    statusBarBindingRow([
-      enterBinding,
-      keyHintText({ key: 'Esc', action: 'input' }),
-      ctrlCBinding,
-    ]),
+    ],
+    maxColumns,
     ctrlCBinding,
-  ];
-  return (
-    candidates.find((candidate) => fitsStatusBindings(candidate, maxColumns)) ??
-    ctrlCBinding
   );
 }
 

@@ -67,6 +67,7 @@ import {
   BackgroundPoller,
   type BackgroundPollStats,
 } from '../support/BackgroundPoller';
+import { ServerChainState } from '../support/ServerChainState';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
@@ -317,9 +318,9 @@ interface PendingStepBuffer {
  * local transcript verbatim — in stateless mode they are resent; in chained mode
  * the server retains them and only the new turn is sent (see
  * {@link buildAssistantTurnSteps}, spec §6.1-§6.2). Chaining state lives on the
- * instance ({@link finalizeChain} / {@link invalidateChain}); a restored run or
- * model switch gets a fresh instance and safely full-resends, never reusing a
- * stale interaction id.
+ * instance ({@link finalizeChain} / {@link ServerChainState.invalidateChain});
+ * a restored run or model switch gets a fresh instance and safely full-resends,
+ * never reusing a stale interaction id.
  *
  * Known limitation: a TERMINAL turn (model emits text with no tool call) is
  * recorded via the base `createAssistantMessageFromResponse`, which yields a
@@ -401,22 +402,22 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // STATEFUL chaining state (store:true + previous_interaction_id)
   // ===========================================================================
   //
-  // These fields live on the handler INSTANCE — not on workspaceState, Step[],
+  // This state lives on the handler INSTANCE — not on workspaceState, Step[],
   // or any snapshot — because the handler is created once per run and reused
   // across rounds. A restored run (resume / model-switch) constructs a FRESH
-  // instance with chainedInteractionId === null, which naturally starts a full
+  // instance whose chain anchor is null, which naturally starts a full
   // resend, so a dead (possibly expired) interaction id is never referenced
-  // cross-session. Mirrors ModelHandlerOpenAIResponse (previousResponseId +
-  // conversationState), see {@link finalizeChain} / {@link invalidateChain}.
+  // cross-session. The anchor id (`previous_interaction_id` here,
+  // `previous_response_id` on the OpenAI Responses handler), the sent-Step
+  // count that anchors the delta slice, and the cumulative input-token count
+  // that drives the compaction trigger are the same three facts on both
+  // handlers, so they are owned by the shared {@link ServerChainState}; see
+  // {@link finalizeChain} for the Google-specific capture rules.
 
-  /** Server-side interaction id to chain the next turn onto (null = full resend). */
-  private chainedInteractionId: string | null = null;
-
-  /** Number of Steps already sent to the server (anchors the delta slice). */
-  private sentStepCount = 0;
-
-  /** Last-known input token count, used for the compaction trigger (tool-use mode). */
-  private lastKnownInputTokens = 0;
+  /** Chain anchor + sent-Step/token bookkeeping. See {@link ServerChainState}
+   *  for the narrow interface this handler uses instead of mutating chain
+   *  fields directly. */
+  private readonly chainState = new ServerChainState();
 
   /** Whether server-side conversation state (store:true chaining) is enabled. */
   private serverStateEnabled(): boolean {
@@ -424,12 +425,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       'texra.model.useGoogleInteractionsServerState',
       true,
     );
-  }
-
-  /** Drop the chain so the next request rebuilds from full local history. */
-  private invalidateChain(): void {
-    this.chainedInteractionId = null;
-    this.sentStepCount = 0;
   }
 
   // ===========================================================================
@@ -508,16 +503,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         response.status === 'requires_action') &&
       typeof response.id === 'string';
     if (safeToChain) {
-      this.chainedInteractionId = response.id;
       // The server now holds the full transcript up to this point; the next
       // round chains onto this id and sends only Steps appended after it
       // (whether this turn was a full resend or a delta).
-      this.sentStepCount = totalStepCount;
+      this.chainState.recordChained(response.id, totalStepCount);
     } else {
       this.logger.debug(
         `Interaction ${response.id} not safe for chaining (status="${response.status}"); resending full history next round`,
       );
-      this.invalidateChain();
+      this.chainState.invalidateChain();
     }
   }
 
@@ -819,7 +813,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // never under-budgets. Exact server-side token accounting under chaining is
     // unconfirmed offline (spec §6 S1); revisit only if a real-key run shows
     // the conservative estimate harms output budget materially.
-    this.lastKnownInputTokens = totalTokens;
+    this.chainState.setCumulativeInputTokens(totalTokens);
     return totalTokens;
   }
 
@@ -1408,7 +1402,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     if (media.length === 0) return [];
     const trailing = messages.at(-1);
     const lastUser =
-      trailing?.type === 'user_input' && messages.length > this.sentStepCount
+      trailing?.type === 'user_input' &&
+      messages.length > this.chainState.getSentCount()
         ? trailing
         : ({ type: 'user_input', content: [] } satisfies UserInputStep);
     if (lastUser !== trailing) messages.push(lastUser);
@@ -1421,8 +1416,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
 
   /**
-   * Single-turn guard: concurrent callers would race chainedInteractionId /
-   * sentStepCount and corrupt the chain.
+   * Single-turn guard: concurrent callers would race the chain-state
+   * collaborator's anchor id / sent-Step count and corrupt the chain.
    */
   protected override withCreateResponseGuard<T>(
     run: () => Promise<T>,
@@ -1451,7 +1446,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // deliberately before token work, pending retrieval, and dispatch so every
     // exit path (including timeout, abort, terminal status, or retrieval error)
     // leaves a later re-enable on a safe full-resend boundary.
-    if (!stateful) this.invalidateChain();
+    if (!stateful) this.chainState.invalidateChain();
 
     const pending = this.pendingBackgroundInteraction;
     if (pending) {
@@ -1473,7 +1468,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // Phase: COUNT + VALIDATE — adjust max_output_tokens to fit the context
     // window. Estimate on the FULL local transcript (conservative — see
     // estimateTokenCount's SMOKE-TEST note); this also refreshes
-    // lastKnownInputTokens, which drives the compaction trigger below.
+    // the chain state's cumulative input-token count, which drives the
+    // compaction trigger below.
     await this.applyTokenCountLimit({
       countTokens: () =>
         this.estimateTokenCount(messages, {
@@ -1501,19 +1497,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       const { compactedMessages, didCompact } =
         await this.maybeCompactByInputTokens(
           messages,
-          this.lastKnownInputTokens,
+          this.chainState.getCumulativeInputTokens(),
           () =>
             this.compactConversation(
               client,
               messages,
-              this.lastKnownInputTokens,
+              this.chainState.getCumulativeInputTokens(),
               systemPrompt,
               signal,
             ),
         );
       if (didCompact) {
         updatedMessages = compactedMessages;
-        this.invalidateChain();
+        this.chainState.invalidateChain();
       }
     }
 
@@ -1528,15 +1524,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // tool round returns HTTP 400, while sending only the function_result
     // completes. Filtering to client-input steps fixes both the tool-round 400
     // and the text-round assistant-turn re-send.
-    const shouldSendAll = !stateful || this.chainedInteractionId === null;
+    const shouldSendAll = !stateful || this.chainState.getAnchorId() === null;
     const inputSteps = omitEmptyTextContentFromSteps(
       shouldSendAll
         ? base
-        : base.slice(this.sentStepCount).filter(isClientInputStep),
+        : base.slice(this.chainState.getSentCount()).filter(isClientInputStep),
     );
     const previousId =
       stateful && !shouldSendAll
-        ? (this.chainedInteractionId ?? undefined)
+        ? (this.chainState.getAnchorId() ?? undefined)
         : undefined;
 
     // Dispatch order: background > streaming > non-streaming. When background is
@@ -1694,18 +1690,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         return this.createResponseImpl(options);
       }
       // Expired/unknown previous_interaction_id ⇒ drop the chain and full-resend
-      // exactly once. Bounded: invalidateChain() nulls chainedInteractionId, so
+      // exactly once. Bounded: invalidateChain() nulls the chain anchor, so
       // the retry takes the shouldSendAll path with no previous_interaction_id
       // and cannot re-trigger the same stale-id error.
       if (
         stateful &&
-        this.chainedInteractionId !== null &&
+        this.chainState.getAnchorId() !== null &&
         isStaleInteractionChainError(error)
       ) {
         this.logger.debug(
-          `Clearing chainedInteractionId=${this.chainedInteractionId} (stale/expired); retrying with a full resend`,
+          `Clearing chainedInteractionId=${this.chainState.getAnchorId()} (stale/expired); retrying with a full resend`,
         );
-        this.invalidateChain();
+        this.chainState.invalidateChain();
         return this.createResponseImpl(options);
       }
       if (aggregatedText) {

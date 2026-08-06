@@ -56,16 +56,7 @@ import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_FIELD_TO_KEY,
   LATEX_CONFIG_RANGES,
-  type LatexdiffMathMarkupValue,
-  type LatexFormatterValue,
 } from '@shared/constants/latex';
-
-// Local imports - state-backed settings catalog (single source for enum options)
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  settingEnumOptions,
-  stateSettingByKey,
-} from '@shared/schemas/stateSettings';
 
 // Local imports - shared constants
 import {
@@ -83,50 +74,18 @@ import {
 
 // Local imports - shared utilities
 import { clampOptional, filterNotNullish } from '@utils/core';
+
+// Local imports - catalog-driven settings rows
+import {
+  catalogEnumChoices,
+  postStateSetting,
+} from '../components/shared/stateSettingRows';
 import { latexTabStyles } from './LaTeXTab.styles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
-
-/**
- * Build the `<wa-select>` option list for an enum setting from the shared
- * catalog so the allowed values + per-option text live in one place
- * (`stateSettings.ts`) rather than being hand-listed here. The label format
- * stays this tab's own: `value — description` for math markup, bare `value`
- * for the formatter, with ` (default)` appended to the default option.
- */
-function catalogEnumOptions<T extends string>(
-  key: string,
-  defaultValue: T,
-  withDescription: boolean,
-): Array<{ value: T; label: string }> {
-  const entry = stateSettingByKey(key);
-  const values = entry ? (settingEnumOptions(entry) ?? []) : [];
-  const descriptions = entry?.enumDescriptions ?? [];
-  return values.map((value, index) => {
-    const base =
-      withDescription && descriptions[index]
-        ? `${value} — ${descriptions[index]}`
-        : value;
-    const label = value === defaultValue ? `${base} (default)` : base;
-    return { value: value as T, label };
-  });
-}
-
-const LATEXDIFF_MATH_MARKUP_OPTIONS =
-  catalogEnumOptions<LatexdiffMathMarkupValue>(
-    WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-    LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-    true,
-  );
-
-const LATEX_FORMATTER_OPTIONS = catalogEnumOptions<LatexFormatterValue>(
-  WorkspaceStateKey.LATEX_FORMATTER,
-  LATEX_CONFIG_DEFAULTS.latexFormatter,
-  false,
-);
 
 const LATEX_CONFIG_FIELD_TO_KEY = {
   ...LATEX_FIELD_TO_KEY,
@@ -799,10 +758,7 @@ export class LaTeXTab extends LitElement {
     field: F,
     value: LatexConfigValueFor<F> | undefined,
   ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key: LATEX_CONFIG_FIELD_TO_KEY[field],
-      value: value ?? null,
-    });
+    postStateSetting(LATEX_CONFIG_FIELD_TO_KEY[field], value ?? null);
   }
 
   private renderCompileDiffSettings(): TemplateResult {
@@ -870,7 +826,7 @@ export class LaTeXTab extends LitElement {
           description: 'Granularity of markup in displayed math environments.',
           defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
           currentValue: cv.latexdiffMathMarkup,
-          options: LATEXDIFF_MATH_MARKUP_OPTIONS,
+          withDescription: true,
         })}
         ${this.renderBooleanSetting({
           field: 'latexdiffChangesOnly',
@@ -887,7 +843,7 @@ export class LaTeXTab extends LitElement {
             '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
           defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
           currentValue: cv.latexFormatter,
-          options: LATEX_FORMATTER_OPTIONS,
+          withDescription: false,
         })}
       </div>
     `;
@@ -1037,6 +993,12 @@ export class LaTeXTab extends LitElement {
     });
   }
 
+  /**
+   * Enum row whose allowed values come from the shared `stateSettings` catalog
+   * entry for this field. The option label format stays this tab's own:
+   * `value — description` when `withDescription`, bare `value` otherwise, with
+   * ` (default)` appended to the default option.
+   */
   private renderEnumSetting<
     F extends 'latexdiffMathMarkup' | 'latexFormatter',
   >(opts: {
@@ -1045,11 +1007,23 @@ export class LaTeXTab extends LitElement {
     description: string;
     defaultValue: LatexConfigValueFor<F>;
     currentValue: LatexConfigValueFor<F> | undefined;
-    options: Array<{ value: LatexConfigValueFor<F>; label: string }>;
+    withDescription: boolean;
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
     const controlId = `latex-setting-${opts.field}`;
+    const options = catalogEnumChoices<LatexConfigValueFor<F>>(
+      LATEX_CONFIG_FIELD_TO_KEY[opts.field],
+    ).map((choice) => {
+      const base =
+        opts.withDescription && choice.description
+          ? `${choice.value} — ${choice.description}`
+          : choice.value;
+      return {
+        value: choice.value,
+        label: choice.value === opts.defaultValue ? `${base} (default)` : base,
+      };
+    });
     return this.renderConfigRow({
       label: opts.label,
       description: opts.description,
@@ -1065,7 +1039,7 @@ export class LaTeXTab extends LitElement {
           }}
           class="setting-enum-select"
         >
-          ${opts.options.map(
+          ${options.map(
             (o) =>
               html`<wa-option value=${String(o.value)}>${o.label}</wa-option>`,
           )}

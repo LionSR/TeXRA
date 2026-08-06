@@ -19,10 +19,7 @@ import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -38,8 +35,13 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+
+// Local imports - catalog-driven settings rows
+import {
+  postStateSetting,
+  renderStateSettingToggleRow,
+} from '../components/shared/stateSettingRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
@@ -169,70 +171,14 @@ export class ToolsTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
   }
 
-  private postStateToggle(key: string, e: Event): void {
-    const target = e.target as WaSwitch | null;
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key,
-      value: Boolean(target?.checked),
-    });
-  }
-
   private handleApprovalPolicyChange = (e: Event): void => {
     const target = e.target as WaSelect | null;
     const value = target?.value;
     if (value !== 'ask' && value !== 'never' && value !== 'yolo') {
       return;
     }
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      value,
-    });
+    postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, value);
   };
-
-  private handleBashApprovalToggle = (e: Event): void => {
-    this.postStateToggle(BASH_APPROVAL_CONFIG_KEY, e);
-  };
-
-  private handleEditApprovalToggle = (e: Event): void => {
-    this.postStateToggle(TOOL_EDIT_APPROVAL_CONFIG_KEY, e);
-  };
-
-  private handleToolPathProtectionToggle = (e: Event): void => {
-    this.postStateToggle(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED, e);
-  };
-
-  private handleAgentSkillsToggle = (e: Event): void => {
-    this.postStateToggle(AGENT_SKILLS_CONFIG_KEY, e);
-  };
-
-  /** Section holding a single labelled toggle. */
-  private renderToggleSection(opts: {
-    icon: TeXRAIconName;
-    title: string;
-    description: string;
-    label: string;
-    help: string;
-    checked: boolean;
-    onChange: (event: Event) => void;
-  }): TemplateResult {
-    return html`
-      <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: opts.icon,
-          title: opts.title,
-          description: opts.description,
-        })}
-        <div class="settings-section">
-          ${renderSettingsToggleRow({
-            label: opts.label,
-            description: opts.help,
-            checked: opts.checked,
-            onChange: opts.onChange,
-          })}
-        </div>
-      </div>
-    `;
-  }
 
   private renderApprovalSettings(): TemplateResult {
     return html`
@@ -262,19 +208,19 @@ export class ToolsTab extends LitElement {
               )}
             </wa-select>
           </div>
-          ${renderSettingsToggleRow({
+          ${renderStateSettingToggleRow({
+            key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
             label: 'Under Ask: require approval for file edits',
             description:
               'When policy is Ask, review a diff before an agent changes files. Inert under Never and Auto-approve.',
             checked: this.editApprovalEnabled,
-            onChange: this.handleEditApprovalToggle,
           })}
-          ${renderSettingsToggleRow({
+          ${renderStateSettingToggleRow({
+            key: BASH_APPROVAL_CONFIG_KEY,
             label: 'Under Ask: require approval for shell commands',
             description:
               'When policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
             checked: this.bashApprovalEnabled,
-            onChange: this.handleBashApprovalToggle,
           })}
         </div>
       </div>
@@ -282,15 +228,23 @@ export class ToolsTab extends LitElement {
   }
 
   private renderAgentSkillsSettings(): TemplateResult {
-    return this.renderToggleSection({
-      icon: 'robot',
-      title: 'Agent skills',
-      description: 'Extend tool-use agents with reusable skill packages.',
-      label: 'Make skills available to tool-use agents',
-      help: 'Includes built-in TeXRA skills and imported skills.',
-      checked: this.agentSkillsEnabled,
-      onChange: this.handleAgentSkillsToggle,
-    });
+    return html`
+      <div class="category-section">
+        ${renderSettingsSectionHeading({
+          icon: 'robot',
+          title: 'Agent skills',
+          description: 'Extend tool-use agents with reusable skill packages.',
+        })}
+        <div class="settings-section">
+          ${renderStateSettingToggleRow({
+            key: AGENT_SKILLS_CONFIG_KEY,
+            label: 'Make skills available to tool-use agents',
+            description: 'Includes built-in TeXRA skills and imported skills.',
+            checked: this.agentSkillsEnabled,
+          })}
+        </div>
+      </div>
+    `;
   }
 
   private visibleItems(): ToolDashboardItem[] {
@@ -349,12 +303,12 @@ export class ToolsTab extends LitElement {
                         slot="details"
                         class="setting-block tool-path-setting"
                       >
-                        ${renderSettingsToggleRow({
+                        ${renderStateSettingToggleRow({
+                          key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
                           label: 'Restrict tool paths to the working directory',
                           description:
                             'Keep file, search, diagnostics, and PDF tools inside the working directory.',
                           checked: this.toolPathProtectionEnabled,
-                          onChange: this.handleToolPathProtectionToggle,
                         })}
                       </div>
                     `

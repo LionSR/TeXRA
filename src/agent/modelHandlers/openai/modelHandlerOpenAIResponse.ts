@@ -91,7 +91,7 @@ import {
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
 import { BackgroundRunLifecycle } from './BackgroundRunLifecycle';
-import { ResponseChainState } from './ResponseChainState';
+import { ServerChainState } from '../support/ServerChainState';
 import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
   createInputText,
@@ -278,7 +278,7 @@ function mergeMissingStreamedOutputItems(
  * so we only submit the new messages for each turn.
  *
  * THREAD SAFETY: This handler delegates its mutable conversation state to two
- * collaborators — {@link ResponseChainState} (the `previous_response_id` chain
+ * collaborators — {@link ServerChainState} (the `previous_response_id` chain
  * anchor + sent-messages/token bookkeeping) and {@link BackgroundRunLifecycle}
  * (the pending background-response id + poll/resume choreography) — and
  * neither is thread-safe. Each handler instance (and the collaborators it
@@ -435,9 +435,15 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /** The `previous_response_id` chain anchor + conversation bookkeeping. See
-   *  {@link ResponseChainState} for the narrow interface this handler uses
+   *  {@link ServerChainState} for the narrow interface this handler uses
    *  instead of mutating chain fields directly. */
-  private readonly chainState = new ResponseChainState();
+  private readonly chainState = new ServerChainState();
+
+  /** Whether the OpenRouter compaction-skip debug line has already been logged.
+   *  Route-specific log de-duplication rather than chain state, so it lives on
+   *  the handler; {@link initializeMessages} resets it alongside
+   *  {@link ServerChainState.resetChainForNewSession}. */
+  private openRouterSkipLogged = false;
 
   /** Pending background-response id + poll/resume choreography. See
    *  {@link BackgroundRunLifecycle} for the narrow interface this handler
@@ -604,7 +610,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     }
 
     // Reset compacted flag after successful request (ready for next compaction if needed)
-    this.chainState.clearCompactedFlag();
+    this.chainState.clearSendAllNextTurn();
 
     return { response, updatedMessages: ctx.compactedMessages };
   }
@@ -675,9 +681,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       return false;
     }
     if (this.isOpenRouterRoutingEnabled()) {
-      if (!this.chainState.hasLoggedOpenRouterSkip()) {
+      if (!this.openRouterSkipLogged) {
         this.logger.debug('Skipping compaction: OpenRouter routing is enabled');
-        this.chainState.markOpenRouterSkipLogged();
+        this.openRouterSkipLogged = true;
       }
       return false;
     }
@@ -695,7 +701,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * (PocketFlow's `Node._exec` reuses the same `prepRes`, hence the same
    * `messages` reference, across retry attempts) and reuses this result
    * instead of re-running compaction. That reuse is what keeps this payload's
-   * retry lifetime matched to {@link ResponseChainState.clearChainForCompaction}'s
+   * retry lifetime matched to {@link ServerChainState.clearChainForCompaction}'s
    * anchor clear, which already survives retries permanently — without it, the
    * anchor clear alone would survive while this payload got wiped every
    * attempt, forcing a redundant re-compaction on each retry.
@@ -724,10 +730,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * - Otherwise: small buffer (10) for exact counting
    */
   private getTokenSafetyBuffer(): number {
-    if (
-      this.supportsResponseChaining &&
-      this.chainState.hasPreviousResponseId()
-    ) {
+    if (this.supportsResponseChaining && this.chainState.hasAnchor()) {
       // Proportional margin scales with context window size - critical at high utilization
       // where even a small percentage error can cause overflow.
       const proportionalMargin = Math.floor(
@@ -746,10 +749,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * headroom for server-side context framing with previous_response_id.
    */
   private applyChainedOutputTokenBudget(maxOutputTokens: number): number {
-    if (
-      !this.supportsResponseChaining ||
-      !this.chainState.hasPreviousResponseId()
-    ) {
+    if (!this.supportsResponseChaining || !this.chainState.hasAnchor()) {
       return maxOutputTokens;
     }
 
@@ -1119,6 +1119,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
     this.chainState.resetChainForNewSession();
+    this.openRouterSkipLogged = false;
     this.backgroundLifecycle.clearPending();
     this.wsTransport?.dispose();
 
@@ -1320,8 +1321,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       model: this.config.fullName,
       input: messages,
       ...(this.supportsResponseChaining &&
-        this.chainState.getPreviousResponseId() && {
-          previous_response_id: this.chainState.getPreviousResponseId(),
+        this.chainState.getAnchorId() && {
+          previous_response_id: this.chainState.getAnchorId(),
         }),
       ...(options?.systemPrompt && { instructions: options.systemPrompt }),
       ...(options?.tools?.length && {
@@ -1475,8 +1476,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       input: newMessages,
       ...(systemPrompt && { instructions: systemPrompt }),
       ...(this.supportsResponseChaining &&
-        this.chainState.getPreviousResponseId() && {
-          previous_response_id: this.chainState.getPreviousResponseId(),
+        this.chainState.getAnchorId() && {
+          previous_response_id: this.chainState.getAnchorId(),
         }),
       ...(convertedTools?.length && { tools: convertedTools }),
       ...(reasoning && { reasoning }),
@@ -1549,8 +1550,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         {
           data: {
             model: this.config.fullName,
-            previousResponseId:
-              this.chainState.getPreviousResponseId() ?? undefined,
+            previousResponseId: this.chainState.getAnchorId() ?? undefined,
           },
         },
       );
@@ -1810,10 +1810,10 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     const shouldSendAll =
       !this.supportsResponseChaining ||
       compactedThisCall ||
-      this.chainState.getIsCompacted();
+      this.chainState.getSendAllNextTurn();
     const newMessages = shouldSendAll
       ? effectiveMessages
-      : effectiveMessages.slice(this.chainState.getSentMessagesCount());
+      : effectiveMessages.slice(this.chainState.getSentCount());
 
     if (this.supportsInlineInputFileUpload) {
       await uploadInlineInputFiles(client, newMessages, {
@@ -2248,7 +2248,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
             data: {
               responseId: response.id,
               status: response.status,
-              hasPreviousResponseId: !!this.chainState.getPreviousResponseId(),
+              hasPreviousResponseId: !!this.chainState.getAnchorId(),
             },
           },
         );
@@ -2286,7 +2286,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // This allows retry logic to recover by starting a fresh conversation
     if (isPreviousResponseIdError(error)) {
       this.logger.debug(
-        `Clearing previousResponseId=${this.chainState.getPreviousResponseId()} due to invalid/expired response - ` +
+        `Clearing previousResponseId=${this.chainState.getAnchorId()} due to invalid/expired response - ` +
           'next retry will rebuild conversation from local history',
       );
       this.chainState.invalidateChain();
@@ -2296,7 +2296,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       isContextWindowError(error) &&
       !compactedThisCall &&
       this.compactionRetrySource !== 'overflow' &&
-      (this.chainState.hasPreviousResponseId() || this.canCompactRoute())
+      (this.chainState.hasAnchor() || this.canCompactRoute())
     ) {
       // Recovery for a context-window overflow (API-side or pre-flight):
       // - When chaining, accumulated reasoning tokens from prior turns are
@@ -2325,11 +2325,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       // Call the impl directly — we're still inside the outer createResponse's
       // inFlight guard, and the public entry would trip the assertion.
       return this.createResponseImpl(options);
-    } else if (this.chainState.hasPreviousResponseId()) {
+    } else if (this.chainState.hasAnchor()) {
       // Log diagnostic info for other errors when chaining was active
       this.logger.debug('Request failed while response chaining was active', {
         data: {
-          previousResponseId: this.chainState.getPreviousResponseId(),
+          previousResponseId: this.chainState.getAnchorId(),
           error: providerError.message,
         },
       });
@@ -2619,7 +2619,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // OpenAI's server-side history. We should only send NEW items (function_call_output).
     // Including them again causes "Duplicate item found" errors.
     const isResponseChaining =
-      this.supportsResponseChaining && this.chainState.hasPreviousResponseId();
+      this.supportsResponseChaining && this.chainState.hasAnchor();
 
     if (text && !isResponseChaining) {
       // Only include assistant text when not chaining (it's in previous response)

@@ -9,6 +9,7 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -180,13 +181,11 @@ export class GrepTool extends defineTool({
     const totalCount = allLines.length;
 
     if (totalCount === 0) {
-      return {
-        status: 'executed',
-        summary: `No matches for "${input.pattern}" in ${display}`,
-        output:
-          `No matches found for "${input.pattern}" in ${display}. ` +
+      return executed(
+        `No matches found for "${input.pattern}" in ${display}. ` +
           `Try a broader pattern, { "-i": true } for case-insensitive, or search a wider directory.`,
-      };
+        `No matches for "${input.pattern}" in ${display}`,
+      );
     }
 
     // Apply pagination to filtered lines for consistent offset calculation
@@ -202,10 +201,6 @@ export class GrepTool extends defineTool({
       ? `${paginatedLines.join('\n')}\n\n[Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.]`
       : paginatedLines.join('\n');
 
-    return {
-      status: 'executed',
-      summary,
-      output,
-    };
+    return executed(output, summary);
   }
 }
