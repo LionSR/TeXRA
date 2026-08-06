@@ -193,8 +193,7 @@ export function foregroundEscapeAction({
     case 'infoPane':
       return 'close';
     case 'approval':
-      // Esc on an approval card sends a rejection (see `confirmCardKeyAction`),
-      // so the status bar names the consequence rather than saying "cancel".
+      // Esc rejects (confirmCardKeyAction); label the consequence, not "cancel".
       if (
         approvalKind === 'externalInquiry' ||
         approvalKind === 'userQuestion'

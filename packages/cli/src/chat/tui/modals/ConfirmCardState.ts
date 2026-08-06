@@ -29,9 +29,7 @@ export interface ConfirmCardKeyOptions {
 export interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
-  /** What Esc actually does. Esc maps to the `reject` action
-   *  (`confirmCardKeyAction`), never a consequence-free dismiss, so the
-   *  hint must name the rejection — "cancel" here was a mislabel. */
+  /** Esc maps to `reject` (`confirmCardKeyAction`), not a dismiss — label the consequence. */
   readonly escapeLabel?: string;
   readonly alwaysAllowLabel?: string;
   readonly extraActions?: readonly KeyHint[];
