@@ -71,7 +71,8 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
     return GROK_AUTH.startingBrowser;
   }
   if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
-  if (args.noBrowser) return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
+  if (args.noBrowser)
+    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
   return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
 }
 
@@ -152,9 +153,7 @@ async function loginToTexraIncludedAccess(
         signal,
       });
   setCliSessionApiMode('included');
-  output.appendOutcome(
-    RESEARCHER_ACCESS_AUTH.signedIn(session.account.label),
-  );
+  output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 }
 
 /**
