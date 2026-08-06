@@ -63,7 +63,9 @@ function buildTree(collections: BbtCollection[]): CollectionNode[] {
     nodeMap.set(c.key, { key: c.key, name: c.name, children: [] });
   }
 
-  // Link children to parents
+  // Link children to parents. Safe: this loop walks the same `collections`
+  // array the first loop just used to key every node by `c.key`, so the
+  // lookup below can never miss.
   for (const c of collections) {
     const node = nodeMap.get(c.key)!;
     if (c.parentCollection && typeof c.parentCollection === 'string') {

@@ -255,6 +255,9 @@ export class ModelRetryGate {
 
     const healthyPermit = this.acquireHealthy(route);
     if (healthyPermit) return Promise.resolve(healthyPermit);
+    // Safe: acquireHealthy only returns undefined when it found an existing,
+    // non-healthy state for `route` (the create-on-miss branch always returns
+    // a permit), so the state it read is still in the map here.
     const state = this.routes.get(route)!;
 
     if (options.signal.aborted) {
