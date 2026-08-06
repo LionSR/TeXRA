@@ -13,19 +13,25 @@ import { aliases } from '../../scripts/aliases.mjs';
 // vite.standalone.config.ts for the single-file, self-contained bundle used
 // by the default export mode (resources/traceViewer).
 const RESOURCES_OUT_DIR = resolve(
-  __dirname,
+  import.meta.dirname,
   '../extension/resources/traceViewerShared',
 );
 
 export default defineConfig({
   base: './',
-  root: resolve(__dirname, 'src'),
+  root: resolve(import.meta.dirname, 'src'),
   build: {
     outDir: RESOURCES_OUT_DIR,
     emptyOutDir: true,
     target: 'es2022',
+    // Single large chunk is intentional for a static trace viewer served over
+    // http(s). The standalone build shares this content but inlines everything
+    // into a single HTML file via vite-plugin-singlefile (which sets its own
+    // larger limit). Keep the warning suppressed here too so the reporter
+    // output is clean across both configs.
+    chunkSizeWarningLimit: 5000,
     rollupOptions: {
-      input: resolve(__dirname, 'src/index.html'),
+      input: resolve(import.meta.dirname, 'src/index.html'),
     },
   },
   resolve: {
