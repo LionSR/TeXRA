@@ -756,6 +756,7 @@ function childListBindingsText(
       ctrlCBinding,
     ],
     maxColumns,
+    ctrlCBinding,
   );
 }
 
