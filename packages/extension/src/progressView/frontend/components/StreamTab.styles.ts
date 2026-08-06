@@ -199,12 +199,6 @@ export const streamTabStyles = css`
     background: transparent;
   }
 
-  /* Drop the dim-by-default opacity so the flipped foreground renders
-   * at full contrast on the selection background. */
-  .tab-container.is-active .tab-meta {
-    opacity: var(--opacity-full);
-  }
-
   .tab-container.is-compact .tab {
     padding: var(--wa-space-3xs) var(--wa-space-3xs);
   }

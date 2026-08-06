@@ -131,7 +131,7 @@ describe('CLI tools runtime', () => {
           status: 'unknown',
         }),
       ),
-    ).toBe('enabled · detection unknown · Not checked');
+    ).toBe('enabled · Not checked');
 
     expect(
       formatToolDescriptionForTui(
@@ -143,6 +143,6 @@ describe('CLI tools runtime', () => {
           status: 'coming-soon',
         }),
       ),
-    ).toBe('coming soon · detected · not yet usable');
+    ).toBe('coming soon');
   });
 });

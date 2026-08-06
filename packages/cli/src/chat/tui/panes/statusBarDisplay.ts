@@ -26,6 +26,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import {
@@ -196,6 +197,9 @@ function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
     : {
         text: label,
         color: 'dim',
+        // Narrow rows keep a recognizable stem of the full name rather than
+        // dropping how the session is paid for altogether.
+        compactText: access === 'included' ? 'included' : 'API keys',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       };
 }
@@ -216,16 +220,16 @@ function relayQuotaSegment(
     case 'warning': {
       const remaining = spendingQuotaRemainingPercent(quota);
       return {
-        text: `quota ${remaining}% left`,
-        compactText: `quota ${remaining}%`,
+        text: `${INCLUDED_ACCESS.inline} ${remaining}% left`,
+        compactText: `incl. ${remaining}%`,
         color: COLOR_WARNING,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.relayQuota,
       };
     }
     case 'exhausted':
       return {
-        text: 'quota exhausted',
-        compactText: 'quota 0%',
+        text: `${INCLUDED_ACCESS.inline} used up`,
+        compactText: 'incl. 0%',
         color: COLOR_ERROR,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.relayQuota,
       };

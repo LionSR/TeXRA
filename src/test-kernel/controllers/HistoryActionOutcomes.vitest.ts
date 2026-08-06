@@ -40,7 +40,7 @@ describe('HistoryActionOutcomes', () => {
       'History item not found',
     );
     expect(htmlExportErrorMessage('streamLogs_missing')).toBe(
-      'No replayable execution-root transcript is available — it may predate transcript persistence or have only child transcripts.',
+      'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
     );
   });
 

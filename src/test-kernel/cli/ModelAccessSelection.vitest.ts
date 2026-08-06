@@ -246,22 +246,24 @@ describe('CLI model access routes', () => {
     expect(formatCliModelAccessRoute('kimi-code')).toBe(
       'Kimi Code subscription',
     );
-    expect(formatCliModelAccessRoute('included')).toBe('Included TeXRA access');
-    expect(formatCliModelAccessRoute('personal')).toBe('Personal API keys');
+    expect(formatCliModelAccessRoute('included')).toBe('Included access');
+    expect(formatCliModelAccessRoute('personal')).toBe('Your own API keys');
     expect(formatCliModelAccessRouteInline('chatgpt')).toBe(
       'ChatGPT subscription',
     );
     expect(formatCliModelAccessRouteInline('kimi-code')).toBe(
       'Kimi Code subscription',
     );
-    expect(formatCliModelAccessRouteInline('included')).toBe(
-      'included TeXRA access',
-    );
+    expect(formatCliModelAccessRouteInline('included')).toBe('included access');
     expect(formatCliModelAccessRouteInline('personal')).toBe(
-      'personal API keys',
+      'your own API keys',
     );
+    // Every arm is display text; the enum value never reaches the status bar.
     expect(shortCliModelAccessRoute('chatgpt')).toBe('subscription');
-    expect(shortCliModelAccessRoute('kimi-code')).toBe('kimi-code');
+    expect(shortCliModelAccessRoute('grok')).toBe('subscription');
+    expect(shortCliModelAccessRoute('kimi-code')).toBe('subscription');
+    expect(shortCliModelAccessRoute('included')).toBe('included access');
+    expect(shortCliModelAccessRoute('personal')).toBe('own API keys');
   });
 
   it('applies a launcher access choice to the launched session', () => {
@@ -353,7 +355,7 @@ describe('CLI model access routes', () => {
     expect(result).toEqual({
       apiMode: 'personal',
       message:
-        'Prefer Kimi Code subscription enabled for Kimi models · API fallback remains Personal API keys.',
+        'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
     });
   });
 
@@ -382,7 +384,7 @@ describe('CLI model access routes', () => {
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     expect(result).toEqual({
       apiMode: 'personal',
-      message: 'API fallback: Personal API keys.',
+      message: 'Now using your own API keys.',
     });
   });
 

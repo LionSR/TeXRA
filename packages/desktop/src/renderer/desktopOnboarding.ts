@@ -23,6 +23,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
@@ -286,8 +287,8 @@ export function createStartupTeamPanel({
           <div>
             <strong>Model access</strong>
             <span>
-              Sign in for included access, or add your own provider keys in
-              Settings.
+              Sign in for ${INCLUDED_ACCESS.inline}, or add
+              ${OWN_API_KEYS.inline} in Settings.
             </span>
           </div>
         </li>

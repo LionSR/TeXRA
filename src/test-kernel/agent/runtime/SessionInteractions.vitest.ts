@@ -254,11 +254,9 @@ describe('session.interactions immediate capabilities', () => {
       accepted: true,
       resolvedPath: criticism.absolutePath,
     }));
-    const notifyUnavailableTools = vi.fn();
     session.useHostInteractions({
       readDiagnostics,
       addCriticism,
-      notifyUnavailableTools,
       cancel: vi.fn(),
     });
 
@@ -270,19 +268,9 @@ describe('session.interactions immediate capabilities', () => {
         accepted: true,
         resolvedPath: criticism.absolutePath,
       });
-      session.interactions.notifyUnavailableTools?.(
-        'Lean tools are unavailable.',
-        'texra.showTools',
-        'Open Tools Dashboard',
-      );
 
       expect(readDiagnostics).toHaveBeenCalledWith(criticism.absolutePath);
       expect(addCriticism).toHaveBeenCalledWith(criticism);
-      expect(notifyUnavailableTools).toHaveBeenCalledWith(
-        'Lean tools are unavailable.',
-        'texra.showTools',
-        'Open Tools Dashboard',
-      );
     } finally {
       session.dispose();
     }
@@ -296,31 +284,26 @@ describe('session.interactions immediate capabilities', () => {
         accepted: true,
         resolvedPath: criticism.absolutePath,
       })),
-      notifyUnavailableTools: vi.fn(),
       cancel: vi.fn(),
     });
     detach();
 
     expect(session.interactions.readDiagnostics).toBeUndefined();
     expect(session.interactions.addCriticism).toBeUndefined();
-    expect(session.interactions.notifyUnavailableTools).toBeUndefined();
 
     const readDiagnostics = vi.fn(async () => [diagnostic]);
     const addCriticism = vi.fn(() => ({
       accepted: true,
       resolvedPath: criticism.absolutePath,
     }));
-    const notifyUnavailableTools = vi.fn();
     session.useHostInteractions({
       readDiagnostics,
       addCriticism,
-      notifyUnavailableTools,
       cancel: vi.fn(),
     });
 
     expect(readDiagnostics).not.toHaveBeenCalled();
     expect(addCriticism).not.toHaveBeenCalled();
-    expect(notifyUnavailableTools).not.toHaveBeenCalled();
     session.dispose();
   });
 

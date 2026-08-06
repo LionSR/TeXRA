@@ -449,7 +449,7 @@ export function createProgressViewSecondTierHandlers(
       });
       if (result.proceeded && !result.retried) {
         await deps.host.showInfo(
-          'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
+          'Switched to your own API key. There is no pending retry to resume, so run the agent again when you are ready.',
         );
       }
     },
@@ -486,7 +486,7 @@ export function createProgressViewSecondTierHandlers(
           return;
         case 'unsupported':
           await deps.host.showInfo(
-            'Manual context compaction is not yet available for this model. Stay tuned!',
+            'Manual context compaction is not available for this model yet.',
           );
           return;
         case 'requested':

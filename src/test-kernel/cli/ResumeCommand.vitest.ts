@@ -227,7 +227,7 @@ describe('runResumeExecution', () => {
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Execution ${EXECUTION_ID} has no resumable session state (it completed or was cleared).`,
+      `Execution ${EXECUTION_ID} cannot be resumed (it completed or was cleared).`,
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -238,7 +238,7 @@ describe('runResumeExecution', () => {
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Execution ${EXECUTION_ID} has no resumable session state (it completed or was cleared).`,
+      `Execution ${EXECUTION_ID} cannot be resumed (it completed or was cleared).`,
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
@@ -250,7 +250,7 @@ describe('runResumeExecution', () => {
 
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
+      `Could not load session ${EXECUTION_ID}: KV timeout`,
     );
   });
 });

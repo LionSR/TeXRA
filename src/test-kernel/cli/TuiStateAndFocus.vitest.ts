@@ -2953,6 +2953,52 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
+  it('does not resurrect a stream retired while attachment awaited rehydrate', async () => {
+    // Inline setup instead of `withRunFacts`: the applier's
+    // `handleSetActiveStream` awaits `streamLogs.ensureLoaded`, so the body
+    // must stay attached across a microtask flush.
+    const hub = new SessionEventHub();
+    const snapshots = new StreamSnapshotStore();
+    const session = new SessionHandle({
+      events: hub,
+      snapshots,
+      transcripts: StreamLogStore.ephemeral('TUI reset-race test'),
+    });
+    const detach = attachSessionSignalsAdapter({
+      events: hub,
+      session,
+      snapshots,
+    });
+    try {
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: root,
+            agentCategory: AgentCategory.ToolUse,
+          },
+        },
+      });
+      // The synchronous half of the attachment already minted the slice; the
+      // applier is now suspended in `streamLogs.ensureLoaded`.
+      expect(streams.get().has(root)).toBe(true);
+
+      // `/clear` lands during that await and retires the stream identity.
+      resetCliState();
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // The resumed continuation must not re-mint, un-retire, or focus it.
+      expect(streams.get().has(root)).toBe(false);
+      expect(activeStreamId.get()).toBeUndefined();
+      focusStream(root);
+      expect(activeStreamId.get()).toBeUndefined();
+    } finally {
+      detach();
+      snapshots.evictAll();
+    }
+  });
+
   it('applies typed updateTodos run facts without host emission', () => {
     withRunFacts((hub) => {
       const todos: TodoItem[] = [

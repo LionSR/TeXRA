@@ -23,7 +23,6 @@
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
 import { truncateTextRule } from './commonViewStyles';
-import { formControlStyles } from './controlStyles';
 
 /**
  * Shared selector groups for :is() consolidation.
@@ -160,6 +159,34 @@ export const requestPanelSharedStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
+  /* The section title is a heading element rather than a styled span. It
+     inherits the header rule above, so this only strips the UA margin and
+     size. */
+  :is(${HEADERS}) h2 {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  /* The request the y/n accelerators will act on. Sections render in a fixed
+     kind order while the accelerators target the newest request, so the top
+     panel on screen is not always the one a keypress hits.
+
+     Targets the panel host element in RequestPanels' shadow root, not the
+     ITEMS class: that class is on a div inside each panel's own shadow root,
+     which this selector cannot reach.
+
+     Inset rather than offset outward: the panel fills its container's inline
+     width, and a container that clips horizontally would shave the left and
+     right edges off an outward ring. Drawing it inside the card's own edge
+     stays intact regardless of what hosts the panel. */
+  [data-request-panel][data-armed] {
+    display: block;
+    outline: var(--border-medium) solid var(--wa-color-focus);
+    outline-offset: calc(-1 * ${sp.tiny});
+    border-radius: var(--border-radius-medium);
+  }
+
   :is(${LISTS}) {
     display: flex;
     flex-direction: column;
@@ -199,9 +226,13 @@ export const requestPanelSharedStyles: CSSResult = css`
 
   /* Scroll constraint for panels with potentially long content.
      Excluded: workflow-proposal__details (has an absolutely-positioned
-     dropdown that would be clipped by overflow-y: auto). */
+     dropdown that would be clipped by overflow-y: auto).
+     Cap below the approval dock so header + details + actions fit without
+     forcing the primary buttons off-screen. */
   :is(${SCROLLABLE_DETAILS}) {
-    max-height: min(34vh, 26rem);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(28vh, 16rem);
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
@@ -223,10 +254,18 @@ export const requestPanelSharedStyles: CSSResult = css`
     gap: ${sp.small};
     min-width: 0;
     max-width: 100%;
+    /* Pin under the details block inside the card (not only sticky within a
+       scroll ancestor). flex-shrink: 0 keeps Approve/Reject visible while
+       long commands scroll in __details. */
+    flex: 0 0 auto;
     position: sticky;
     inset-block-end: 0;
     z-index: 1;
+    margin-block-start: auto;
+    padding-block-start: ${sp.small};
     background: var(--wa-color-surface-raised);
+    box-shadow: 0 -0.5rem 0.75rem -0.5rem
+      color-mix(in srgb, var(--wa-color-surface-raised) 85%, transparent);
   }
 
   :is(${ACTIONS}) > * {
@@ -261,7 +300,6 @@ export const requestPanelSharedStyles: CSSResult = css`
   .approval-request__actions wa-button[data-action]::part(base) {
     justify-content: center;
     width: 100%;
-    inline-size: 100%;
     min-width: 0;
     max-width: 100%;
   }
@@ -297,13 +335,19 @@ export const requestPanelSharedStyles: CSSResult = css`
     margin-top: ${sp.small};
   }
 
+  /* Visible label for the rejection textarea. The field previously carried
+     only a placeholder, so its description vanished on the first
+     keystroke. */
+  :is(${FEEDBACKS}) label {
+    display: block;
+    margin-bottom: ${sp.tiny};
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
   :is(${FEEDBACK_INPUTS}) {
     width: 100%;
   }
-
-  /* Canonical form-control skin: without it wa-textarea's stock padding eats
-     most of the feedback box's height. */
-  ${formControlStyles}
 
   /* Carousel navigation for multiple external inquiries (rendered directly by
      RequestPanels.ts, not by ExternalInquiryPanel). */
@@ -327,7 +371,7 @@ export const requestPanelSharedStyles: CSSResult = css`
      that used to share this block live in ExternalInquiryPanel.styles.ts. */
   @media (max-height: 900px) {
     :is(${SCROLLABLE_DETAILS}) {
-      max-height: min(28vh, 20rem);
+      max-height: min(22vh, 12rem);
     }
   }
 `;

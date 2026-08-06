@@ -152,21 +152,19 @@ describe('auth commands for unavailable stored sessions', () => {
 
   it('removes an unavailable stored session without resolving it first', async () => {
     mockUnavailableStoredSession('invalid');
-    authMocks.showWarningMessage.mockResolvedValue('Sign Out');
+    authMocks.showWarningMessage.mockResolvedValue('Sign out');
 
     await signOut();
 
     expect(authMocks.getSession).not.toHaveBeenCalled();
     expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
-    expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
-      'Signed out successfully',
-    );
+    expect(authMocks.showInformationMessage).toHaveBeenCalledWith('Signed out');
   });
 
   it('says a configured relay token keeps authenticating after sign-out', async () => {
     vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}ci-token`);
     mockUnavailableStoredSession('invalid');
-    authMocks.showWarningMessage.mockResolvedValue('Sign Out');
+    authMocks.showWarningMessage.mockResolvedValue('Sign out');
 
     await signOut();
 

@@ -198,12 +198,12 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model).toMatchObject({
       availability: 'included-login-required',
-      availabilityLabel: 'Login required',
+      availabilityLabel: 'Sign in required',
       requiresKey: false,
       disabled: true,
     });
     expect(reason).toBe(
-      'Model "gpt55" is served by included TeXRA model access, which needs an account. Sign in, or provide a provider API key and switch to personal API keys.',
+      'Model "gpt55" is served by included access, which needs an account. Sign in, or provide a provider API key and switch to your own API keys.',
     );
   });
 

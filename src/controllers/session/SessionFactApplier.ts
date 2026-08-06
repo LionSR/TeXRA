@@ -63,6 +63,13 @@ type RunFactHandlers = {
 export type SessionFactApplierOptions = {
   hasPendingPermissions: (streamId: string) => boolean;
   deleteStream: (stream: StreamTabId) => void | Promise<void>;
+  /**
+   * Set false to skip evicting the stream left behind on an active-stream
+   * switch. The CLI TUI needs this: its focus id is a CLI signal, not
+   * `SessionState.activeStream`, so switch-time eviction would key off the
+   * wrong stream. Defaults to evicting (Lit progress view behavior).
+   */
+  evictOnStreamSwitch?: boolean;
 };
 
 /**
@@ -79,7 +86,11 @@ export type SessionFactApplierOptions = {
 export class SessionFactApplier {
   private readonly logger: AgentTrace;
 
-  /** Streams this renderer has already received metadata for. */
+  /** Streams this renderer has already received metadata for. Not reset when
+   * a webview closes and reopens — `ProgressViewProvider.markWebviewReady`'s
+   * resolve-time full metadata resync (`syncFullView`) re-registers every
+   * stream with the reopened view, so a stale "already delivered" entry here
+   * cannot starve it. */
   private readonly registeredWithRenderer = new Set<StreamTabId>();
 
   /**
@@ -301,8 +312,9 @@ export class SessionFactApplier {
     payload: SetActiveStreamPayload,
   ): Promise<void> {
     const { streamId, isRemote } = payload;
+    const evictPrevious = this.options.evictOnStreamSwitch !== false;
     if (!streamId) {
-      this.state.switchActiveStream('');
+      this.state.switchActiveStream('', { evictPrevious });
       this.renderer.onActiveStreamChanged('');
       return;
     }
@@ -341,7 +353,7 @@ export class SessionFactApplier {
       // The switch also releases the previously-active stream if it reached a
       // terminal status while visible — setStreamStatus skips release for the
       // active stream, so this is our only chance.
-      this.state.switchActiveStream(streamId);
+      this.state.switchActiveStream(streamId, { evictPrevious });
     }
 
     if (!this.renderer.isAvailable()) return;

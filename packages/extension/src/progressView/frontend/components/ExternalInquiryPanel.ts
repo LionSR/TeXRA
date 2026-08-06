@@ -501,6 +501,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           text: 'Submit answer',
           title: 'Submit the answer from the external model',
           action: INQUIRY_SUBMIT_ACTION,
+          kind: 'primary',
           disabled: !this.hasAnswer,
           onClick: this.handleSubmit,
         })}

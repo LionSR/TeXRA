@@ -368,6 +368,12 @@ async function assertProgressComposerLayout(window, view) {
   return window.webContents.executeJavaScript(
     `
       (async () => {
+        // Resting height of the composer, in lines. It sits at two and grows
+        // with content up to --textarea-max-height; the six-line resting box
+        // it replaced reserved that room for an empty draft. Keep in step
+        // with --textarea-min-height in FollowUpInput.ts.
+        const COMPOSER_RESTING_ROWS = 2;
+
         function findDeep(selector, root = document) {
           const direct = root.querySelector?.(selector);
           if (direct) return direct;
@@ -408,7 +414,7 @@ async function assertProgressComposerLayout(window, view) {
           Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
         const minHeight = Number.parseFloat(style.minHeight);
         const maxHeight = Number.parseFloat(style.maxHeight);
-        const expectedMinHeight = 6 * lineHeight + paddingBlock;
+        const expectedMinHeight = COMPOSER_RESTING_ROWS * lineHeight + paddingBlock;
         const expectedMaxHeight = Math.max(
           minHeight,
           Math.min(window.innerHeight * 0.32, 240),
@@ -416,9 +422,12 @@ async function assertProgressComposerLayout(window, view) {
         const initialTextareaRect = textarea.getBoundingClientRect();
         const initialWrapperRect = wrapper.getBoundingClientRect();
 
-        if (webAwesomeTextarea.rows !== 6 || textarea.rows !== 6) {
+        if (
+          webAwesomeTextarea.rows !== COMPOSER_RESTING_ROWS ||
+          textarea.rows !== COMPOSER_RESTING_ROWS
+        ) {
           throw new Error(
-            \`${view.name} composer rows did not propagate: host=\${webAwesomeTextarea.rows} native=\${textarea.rows}\`,
+            \`${view.name} composer rows did not propagate: host=\${webAwesomeTextarea.rows} native=\${textarea.rows} expected=\${COMPOSER_RESTING_ROWS}\`,
           );
         }
         if (webAwesomeTextarea.resize !== 'vertical' || style.resize !== 'vertical') {
@@ -428,7 +437,7 @@ async function assertProgressComposerLayout(window, view) {
         }
         if (Math.abs(minHeight - expectedMinHeight) > 3) {
           throw new Error(
-            \`${view.name} composer minimum is not six lines: min=\${minHeight.toFixed(1)}px expected=\${expectedMinHeight.toFixed(1)}px\`,
+            \`${view.name} composer minimum is not \${COMPOSER_RESTING_ROWS} lines: min=\${minHeight.toFixed(1)}px expected=\${expectedMinHeight.toFixed(1)}px\`,
           );
         }
         if (initialTextareaRect.height < minHeight - 1) {

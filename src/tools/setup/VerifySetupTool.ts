@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
@@ -99,15 +100,14 @@ export class VerifySetupTool extends defineTool({
         : `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
     );
     // A usable model credential can be a direct provider key, ChatGPT
-    // subscription, or Researcher Access with Included Access on. A bare
+    // subscription, or a signed-in account with included access on. A bare
     // auth.authenticated without usable server-side keys is NOT a working
     // credential, so we don't let it count toward "ready".
     let credSummary: string;
     if (hasUsableCredential) {
       credSummary = 'usable model credential available';
     } else if (auth.authenticated) {
-      credSummary =
-        'signed in but Included Access is OFF — need an API key or re-enable it';
+      credSummary = `signed in but ${INCLUDED_ACCESS.inline} is off. Turn it back on or add an API key`;
     } else {
       credSummary = 'NONE — need an API key or sign-in';
     }

@@ -42,7 +42,19 @@ import {
 import './QueuedFollowUps';
 
 // Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+
+/** True when any shadow host or light ancestor has `data-desktop-view`. */
+function hostHasDesktopViewAttribute(start: Element): boolean {
+  let el: Element | null = start;
+  while (el) {
+    if (el.hasAttribute('data-desktop-view')) return true;
+    const root = el.getRootNode();
+    el = root instanceof ShadowRoot ? root.host : el.parentElement;
+  }
+  return false;
+}
 
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
@@ -59,8 +71,9 @@ export class FollowUpInput extends LitElement {
         max-width: 100%;
       }
 
-      :host([hidden]) {
-        display: none;
+      /* VS Code only (see useCollapsibleShell): match Todos / Plan chrome. */
+      wa-details.panel-collapsible {
+        min-width: 0;
       }
 
       .follow-up-container {
@@ -106,9 +119,13 @@ export class FollowUpInput extends LitElement {
             color-mix(in srgb, var(--wa-color-surface-shadow) 16%, transparent);
       }
 
-      /* Give substantial instructions six lines by default. Web Awesome's
-         vertical mode puts the resize affordance on the native textarea and
-         mirrors its bounded height onto the wrapper. */
+      /* The composer rests at two lines and grows with what you type, up to
+         the max below, so a substantial instruction still gets room without
+         an empty draft reserving it. field-sizing does the growing; the drag
+         affordance stays for anyone who wants a taller box than their text.
+         Not Web Awesome's resize="auto": that copies the scroll height into an
+         invisible grid item which, inside a constrained composer, keeps an
+         oversized row for an empty draft. */
       #followUpInput {
         display: block;
         min-width: 0;
@@ -117,7 +134,7 @@ export class FollowUpInput extends LitElement {
         line-height: var(--line-height-relaxed);
         height: auto;
         --textarea-min-height: calc(
-          6lh + var(--wa-space-xs) + var(--wa-space-3xs)
+          2lh + var(--wa-space-xs) + var(--wa-space-3xs)
         );
         --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
       }
@@ -134,7 +151,9 @@ export class FollowUpInput extends LitElement {
       /* The one place a textarea renders sans rather than mono: this is prose a
          user writes to an agent, not code. */
       #followUpInput::part(textarea) {
+        field-sizing: content;
         width: 100%;
+        height: auto;
         min-height: var(--textarea-min-height);
         max-height: var(--textarea-max-height);
         padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
@@ -237,6 +256,9 @@ export class FollowUpInput extends LitElement {
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
+
+  @query('wa-details')
+  declare private detailsEl: (HTMLElement & { open: boolean }) | null;
 
   private recordingController = new RecordingButtonController(this, {
     startCommand: PROGRESS_VIEW_COMMANDS.START_RECORDING,
@@ -385,14 +407,35 @@ export class FollowUpInput extends LitElement {
     this.updateValue(insertText, streamId, 'append', eventSink);
   }
 
+  /**
+   * Desktop mounts `<stream-conversation data-desktop-view="progress">` and
+   * keeps the composer always open. VS Code Progress Board uses the collapsible
+   * shell so the six-line Message box does not permanently own the footer.
+   * Walk shadow hosts because FollowUpInput sits under nested shadow roots.
+   */
+  private get useCollapsibleShell(): boolean {
+    return !hostHasDesktopViewAttribute(this);
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (this.archived) return nothing;
+    const body = this.renderComposerBody();
+    // VS Code only: restore the pre-desktop-modernize wa-details chrome.
+    // Desktop already has a roomy conversation pane — leave the composer open,
+    // but keep a region landmark so the follow-up area stays named for AT.
+    if (!this.useCollapsibleShell) {
+      return html` <section aria-label="Follow-up message">${body}</section> `;
+    }
     return html`
-      <section
-        id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
-        class="follow-up-container"
-        aria-label="Follow-up message"
-      >
+      <wa-details class="panel-collapsible" summary="Followup">
+        ${body}
+      </wa-details>
+    `;
+  }
+
+  private renderComposerBody(): TemplateResult {
+    return html`
+      <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
         ${
           this.queuedMessages.length > 0
             ? html`<queued-follow-ups
@@ -406,7 +449,7 @@ export class FollowUpInput extends LitElement {
             id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
             aria-label="Follow-up message"
             placeholder="Message TeXRA…"
-            rows="6"
+            rows="2"
             resize="vertical"
             .value=${live(this.value)}
             @input=${this.handleInput}
@@ -459,7 +502,7 @@ export class FollowUpInput extends LitElement {
             })}
           </div>
         </div>
-      </section>
+      </div>
     `;
   }
 
@@ -472,7 +515,12 @@ export class FollowUpInput extends LitElement {
     // Don't focus if not visible
     if (!this.visible) return;
 
-    // Wait for Lit to finish rendering (replaces setTimeout debounce)
+    // VS Code collapsible shell: expand so the composer is visible.
+    if (this.detailsEl && !this.detailsEl.open) {
+      this.detailsEl.open = true;
+    }
+
+    // Wait for Lit / wa-details to finish laying out
     await this.updateComplete;
 
     if (!this.textAreaEl || !this.visible) return;

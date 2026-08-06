@@ -415,7 +415,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   }
 
   const extractFlags: string[] = [];
-  if (input.extractFigures) extractFlags.push('Extract Figures');
+  if (input.extractFigures) extractFlags.push('Extract figures');
   if (input.extractTikz) extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore

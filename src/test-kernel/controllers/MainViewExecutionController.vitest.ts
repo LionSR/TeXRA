@@ -13,8 +13,7 @@ describe('MainViewExecutionController', () => {
     );
     expect(prepareMainViewExecutionRequest({ agent: 'direct-agent' })).toEqual({
       valid: false,
-      message:
-        'Agent, model, and run type selection required. Please select all before running.',
+      message: 'Choose an agent, a model, and a run type first.',
     });
     expect(
       prepareMainViewExecutionRequest({
@@ -33,7 +32,7 @@ describe('MainViewExecutionController', () => {
       }),
     ).toEqual({
       valid: false,
-      message: 'Please select an input file.',
+      message: 'Choose an input file first.',
       docsCommand: 'file-management',
     });
   });

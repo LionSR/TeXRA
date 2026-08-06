@@ -30,7 +30,7 @@ export async function handleImagePaste(
       const base64 = await readFileAsBase64(file);
       if (!base64) {
         postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-          text: `Failed to process pasted image: ${fileName}`,
+          text: `Could not attach the pasted image ${fileName}. Try adding it as a media file.`,
         });
         return '';
       }

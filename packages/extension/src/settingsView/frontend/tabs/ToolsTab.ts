@@ -59,7 +59,7 @@ interface CategoryMeta {
  */
 const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
   file: {
-    label: 'File & Shell',
+    label: 'File & shell',
     description: 'Read, edit, search, and run commands in the workspace.',
     icon: 'copy',
   },
@@ -69,7 +69,7 @@ const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
     icon: 'file-code',
   },
   academic: {
-    label: 'Academic Research',
+    label: 'Academic research',
     description: 'Search papers and manage academic references.',
     icon: 'graduation-cap',
   },
@@ -89,12 +89,12 @@ const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
     icon: 'flask',
   },
   workflow: {
-    label: 'Memory & Workflow',
+    label: 'Memory & workflow',
     description: 'Remember context and track work across sessions.',
     icon: 'diagram-project',
   },
   system: {
-    label: 'System Dependencies',
+    label: 'System dependencies',
     description: 'External runtimes that other tools depend on.',
     icon: 'gear',
   },

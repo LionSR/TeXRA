@@ -188,7 +188,7 @@ type ConfigFormMode =
     };
 
 const LIST_CHROME_ROWS = 5;
-const ENUM_CHROME_ROWS = 4;
+const ENUM_CHROME_ROWS = 5;
 
 /** Inline text editor for a string/number setting (its own input buffer). */
 function ConfigTextEditor(props: {
