@@ -30,28 +30,18 @@ const TODO_STATUS_DISPLAY: Partial<
   [TODO_STATUS.IN_PROGRESS]: { marker: TODO_ACTIVE, color: COLOR_HINT },
 };
 
-function TodoRow({
-  compact = false,
-  todo,
-}: {
-  readonly compact?: boolean;
-  readonly todo: TodoItem;
-}): React.JSX.Element {
+function TodoRow({ todo }: { readonly todo: TodoItem }): React.JSX.Element {
   const label =
     todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
   const display = TODO_STATUS_DISPLAY[todo.status];
   return (
-    <Box
-      height={compact ? 1 : undefined}
-      minWidth={0}
-      overflowY={compact ? 'hidden' : undefined}
-    >
+    <Box height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
         <Text color={display?.color}>{display?.marker ?? TODO_PENDING} </Text>
       </Box>
       <Text
         dimColor={todo.status === TODO_STATUS.COMPLETED}
-        wrap={compact ? 'truncate-end' : undefined}
+        wrap="truncate-end"
       >
         {label}
       </Text>
@@ -152,7 +142,7 @@ export function todosPlanPanelRowCount(
 function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   switch (row.kind) {
     case 'todo':
-      return <TodoRow compact todo={row.todo} />;
+      return <TodoRow todo={row.todo} />;
     case 'planSummary':
       return (
         <Box height={1} minWidth={0} overflowY="hidden">
@@ -165,11 +155,11 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
 }
 
 export interface TodosPlanPanelProps {
-  readonly maxRows?: number;
+  readonly maxRows: number;
 }
 
 export function TodosPlanPanel(
-  props: TodosPlanPanelProps = {},
+  props: TodosPlanPanelProps,
 ): React.JSX.Element | null {
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
@@ -180,63 +170,33 @@ export function TodosPlanPanel(
   // Like the child list above it, the panel owns one blank separator row so
   // the todo checklist never sits flush against its neighbor. If the gap and
   // one content row do not both fit, render nothing.
-  const rowBudget =
-    props.maxRows === undefined
-      ? undefined
-      : Math.max(0, Math.floor(props.maxRows)) - 1;
-  if (rowBudget !== undefined && rowBudget <= 0) return null;
+  const rowBudget = Math.max(0, Math.floor(props.maxRows)) - 1;
+  if (rowBudget <= 0) return null;
 
-  if (rowBudget !== undefined) {
-    const { hiddenCount, rows } = compactTodosPlanRows({
-      maxRows: rowBudget,
-      plan,
-      todos,
-    });
-    return (
-      <Box
-        flexDirection="column"
-        height={rowBudget}
-        marginTop={1}
-        overflowY="hidden"
-        paddingX={1}
-      >
-        {rows.map((row) => (
-          <CompactRow key={`${row.kind}:${row.sourceIndex}`} row={row} />
-        ))}
-        {hiddenCount > 0 && rows.length < rowBudget ? (
-          <Box height={1} minWidth={0} overflowY="hidden">
-            <Text dimColor wrap="truncate-end">
-              {hiddenRowsText(
-                hiddenCount,
-                pluralize(hiddenCount, 'todo/plan item', 'todo/plan items'),
-              )}
-            </Text>
-          </Box>
-        ) : null}
-      </Box>
-    );
-  }
-
-  // Reached only when maxRows is undefined (the compact branch above owns every
-  // bounded case), so the panel renders uncapped with a trailing margin.
+  const { hiddenCount, rows } = compactTodosPlanRows({
+    maxRows: rowBudget,
+    plan,
+    todos,
+  });
   return (
-    <Box flexDirection="column" paddingX={1} marginBottom={1}>
-      {todos.length > 0 ? (
-        <Box flexDirection="column">
-          <Text bold dimColor>
-            Todos
+    <Box
+      flexDirection="column"
+      height={rowBudget}
+      marginTop={1}
+      overflowY="hidden"
+      paddingX={1}
+    >
+      {rows.map((row) => (
+        <CompactRow key={`${row.kind}:${row.sourceIndex}`} row={row} />
+      ))}
+      {hiddenCount > 0 && rows.length < rowBudget ? (
+        <Box height={1} minWidth={0} overflowY="hidden">
+          <Text dimColor wrap="truncate-end">
+            {hiddenRowsText(
+              hiddenCount,
+              pluralize(hiddenCount, 'todo/plan item', 'todo/plan items'),
+            )}
           </Text>
-          {todos.map((todo, i) => (
-            <TodoRow key={i} todo={todo} />
-          ))}
-        </Box>
-      ) : null}
-      {plan ? (
-        <Box flexDirection="column" marginTop={todos.length > 0 ? 1 : 0}>
-          <Text bold dimColor>
-            Plan
-          </Text>
-          <Text dimColor>{planSummaryLine(plan.objective)}</Text>
         </Box>
       ) : null}
     </Box>
