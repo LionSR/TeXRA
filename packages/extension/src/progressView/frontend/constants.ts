@@ -8,6 +8,12 @@ export interface ProgressToolbarButton {
   command: string;
   title: string;
   titleActive?: string;
+  /**
+   * Constant short accessible name for icon-only toggles, whose state is
+   * carried by `aria-pressed` — the name must not swap with state. Falls
+   * back to `title` when omitted.
+   */
+  label?: string;
   className?: string;
   disabled?: boolean;
   isToggle?: boolean;
@@ -137,6 +143,7 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.YOLO_TOGGLE_BTN,
   icon: 'shield',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+  label: 'Auto-approve edits and commands',
   title: 'Auto-approve both file edits and shell commands in this run',
   titleActive:
     'File edits and shell commands are being auto-approved. Click to resume approval prompts for both.',
@@ -148,6 +155,7 @@ const DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   icon: 'rocket',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+  label: 'Auto-approve agent work',
   title: DELEGATION_APPROVAL_COPY.progressViewToggle,
   titleActive:
     'Agent tasks, file edits, and shell commands are being auto-approved — click to resume prompts',

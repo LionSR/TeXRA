@@ -6,17 +6,22 @@
  * (y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss)
  * by delegating to the panel matching the newest permission in the queue.
  * Single-character shortcuts fire only while focus is inside this component
- * (WCAG 2.1.4); see handleGlobalKeydown for the rationale.
+ * (WCAG 2.1.4); see handleGlobalKeydown for the rationale. So those
+ * shortcuts are actually reachable, a newly appeared request moves keyboard
+ * focus to its primary action unless the user is typing elsewhere
+ * (`updated` → `focusPanel`).
  */
 
 // Third-party imports
 import {
   LitElement,
+  css,
   html,
   nothing,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
+import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -34,6 +39,9 @@ import {
   requestPanelSharedStyles,
 } from '@shared/styles';
 
+// Local imports - shared schemas
+import type { StreamTabId } from '@shared/schemas';
+
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
@@ -46,7 +54,16 @@ import {
   selectExternalInquiryKey,
 } from './RequestPanelsState';
 
+// Local imports - progress view contexts
+import {
+  EMPTY_STREAM_BY_ID,
+  permissionsContext,
+  streamByIdContext,
+  type StreamByIdMap,
+} from '../streamContexts';
+
 // Local imports - progress view component types
+import type { ApproveSplitButton } from './ApproveSplitButton';
 import type { BaseRequestPanel } from './BaseRequestPanel';
 import type { PermissionState } from '../permissionState';
 
@@ -176,6 +193,15 @@ export class RequestPanels extends LitElement {
     designTokens,
     commonViewStyles,
     requestPanelSharedStyles,
+    css`
+      /* Run caption above each request, only rendered when approvals span
+         more than one run (see renderRequest). */
+      .request-run-group__label {
+        margin-block-end: var(--wa-space-3xs);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+      }
+    `,
   ];
 
   @property({ attribute: false }) permissions: PermissionState[] = [];
@@ -183,24 +209,57 @@ export class RequestPanels extends LitElement {
   /** Canonical selection for the external-inquiry carousel. */
   @state() private selectedExternalInquiryKey: string | null = null;
 
+  /** Run metadata for captioning requests when several runs wait at once. */
+  @consume({ context: streamByIdContext, subscribe: true })
+  @state()
+  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
+
+  /**
+   * All pending permissions across streams. `permissions` is already scoped to
+   * the active stream, so multi-run captions must read this unfiltered list —
+   * otherwise `runIds.size > 1` can never become true.
+   */
+  @consume({ context: permissionsContext, subscribe: true })
+  @state()
+  private allPermissions: PermissionState[] = [];
+
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionsByKind: ReadonlyMap<
     PermissionState['kind'],
     PermissionState[]
   > = new Map();
 
-  protected override willUpdate(changedProperties: PropertyValues<this>): void {
-    if (!changedProperties.has('permissions')) return;
+  /** True when pending requests belong to more than one identified run. */
+  private multiRunPending = false;
 
-    const previousKeys = externalInquiryKeys(
-      changedProperties.get('permissions') ?? [],
-    );
-    this.permissionsByKind = groupByKind(this.permissions);
-    this.selectedExternalInquiryKey = selectExternalInquiryKey(
-      this.selectedExternalInquiryKey,
-      previousKeys,
-      externalInquiryKeys(this.permissions),
-    );
+  /** Pending keys seen after the previous update — drives first-appearance focus. */
+  private seenPermissionKeys = new Set<string>();
+
+  protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('permissions')) {
+      const previousKeys = externalInquiryKeys(
+        (changedProperties.get('permissions') as
+          PermissionState[] | undefined) ?? [],
+      );
+      this.permissionsByKind = groupByKind(this.permissions);
+      this.selectedExternalInquiryKey = selectExternalInquiryKey(
+        this.selectedExternalInquiryKey,
+        previousKeys,
+        externalInquiryKeys(this.permissions),
+      );
+    }
+
+    if (
+      changedProperties.has('permissions') ||
+      changedProperties.has('allPermissions')
+    ) {
+      // Captions key off every pending run, not the stream-filtered prop.
+      const runIds = new Set<StreamTabId>();
+      for (const permission of this.allPermissions) {
+        if (permission.data.streamId) runIds.add(permission.data.streamId);
+      }
+      this.multiRunPending = runIds.size > 1;
+    }
   }
 
   override connectedCallback(): void {
@@ -290,10 +349,35 @@ export class RequestPanels extends LitElement {
           ${repeat(
             permissions,
             (p) => getPermissionKey(p),
-            (p) => renderPanel(config, p, getPermissionKey(p) === armedKey),
+            (p) =>
+              this.renderRequest(config, p, getPermissionKey(p) === armedKey),
           )}
         </div>
       </section>
+    `;
+  }
+
+  /**
+   * One request panel, captioned with its originating run's label when
+   * approvals from more than one run are pending: sections group by kind,
+   * not by run, so the kind title alone cannot say which run is asking.
+   * A single pending run keeps the clean chrome.
+   */
+  private renderRequest(
+    config: SectionConfig,
+    permission: PermissionState,
+    armed: boolean,
+  ): TemplateResult {
+    const panel = renderPanel(config, permission, armed);
+    if (!this.multiRunPending) return panel;
+    const streamId = permission.data.streamId;
+    if (!streamId) return panel;
+    const label = this.streamById.get(streamId)?.label || streamId;
+    return html`
+      <div class="request-run-group">
+        <div class="request-run-group__label">${label}</div>
+        ${panel}
+      </div>
     `;
   }
 
@@ -352,7 +436,7 @@ export class RequestPanels extends LitElement {
         <div class="${config.cssClass}__list">
           ${keyed(
             getPermissionKey(current),
-            renderPanel(
+            this.renderRequest(
               config,
               current,
               getPermissionKey(current) === this.armedPermissionKey(),
@@ -457,22 +541,104 @@ export class RequestPanels extends LitElement {
    *
    * For external inquiry carousel: targets the currently visible panel.
    * For other permission kinds: targets the newest (first in the queue).
-   *
-   * We match by reference rather than querying DOM order, which follows
-   * fixed section ordering (approval → bash → retry → proposal) and
-   * would target the wrong panel when mixed kinds are pending.
    */
   private getActivePanel(): BaseRequestPanel | null {
     const target = this.armedPermission;
-    if (!target) return null;
+    return target ? this.findPanelFor(target) : null;
+  }
 
+  /**
+   * Rendered panel node for a permission. We match by reference rather than
+   * querying DOM order, which follows fixed section ordering
+   * (approval → bash → retry → proposal) and would target the wrong panel
+   * when mixed kinds are pending.
+   */
+  private findPanelFor(permission: PermissionState): BaseRequestPanel | null {
     const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(
       PANEL_MARKER_SELECTOR,
     );
     for (const panel of panels) {
-      if (panel.permission === target) return panel;
+      if (panel.permission === permission) return panel;
     }
     return null;
+  }
+
+  // ===========================================================================
+  // Focus management
+  // ===========================================================================
+
+  /**
+   * Move keyboard focus to a newly appeared request's primary action, once
+   * per pending key. The WCAG 2.1.4 gate in handleGlobalKeydown makes
+   * single-char shortcuts fire only while focus is inside this component, so
+   * without this the y/n accelerators are unreachable until the user happens
+   * to Tab here. Two focus-stealing guards: never while the user is typing
+   * in a text control elsewhere, and never when focus is already inside this
+   * component (e.g. mid-decision on an earlier request — a second arrival
+   * must not yank focus away).
+   */
+  protected override updated(): void {
+    const previousKeys = this.seenPermissionKeys;
+    this.seenPermissionKeys = new Set(this.permissions.map(getPermissionKey));
+    // Queue order is newest-first, so this is the newest request that just
+    // appeared.
+    const firstNew = this.permissions.find(
+      (permission) => !previousKeys.has(getPermissionKey(permission)),
+    );
+    if (!firstNew) return;
+    if (isTextInput(document.activeElement)) return;
+    if (this.matches(':focus-within')) return;
+
+    const panel = this.findPanelFor(firstNew);
+    if (!panel) return;
+    // The panel (and nested <approve-split-button>) was just connected in this
+    // render pass — its first Lit update is a microtask that cannot run until
+    // this `updated()` returns. Wait like LogList does for TaskGroupList.
+    void panel.updateComplete.then(() => {
+      if (isTextInput(document.activeElement)) return;
+      if (this.matches(':focus-within')) return;
+      void this.focusPanel(panel);
+    });
+  }
+
+  /**
+   * Focus a panel's primary action: the Approve button where one exists
+   * (it lives one shadow level down inside <approve-split-button>), else the
+   * panel's first control, else the panel container itself as a focusable
+   * landmark.
+   */
+  private async focusPanel(panel: BaseRequestPanel): Promise<void> {
+    await panel.updateComplete;
+    const root = panel.shadowRoot;
+    if (!root) {
+      panel.tabIndex = -1;
+      panel.focus();
+      return;
+    }
+
+    const split = root.querySelector<ApproveSplitButton>(
+      'approve-split-button',
+    );
+    if (split) {
+      await split.updateComplete;
+      const approveButton =
+        split.shadowRoot?.querySelector<HTMLElement>('wa-button');
+      if (approveButton) {
+        approveButton.focus();
+        return;
+      }
+    }
+
+    const control = root.querySelector<HTMLElement>(
+      'wa-button, wa-radio-group, wa-checkbox, wa-textarea, wa-input, button, input, textarea, select',
+    );
+    if (control) {
+      control.focus();
+      return;
+    }
+
+    panel.tabIndex = -1;
+    panel.focus();
   }
 }
 
