@@ -340,6 +340,7 @@ async function withOpenTurnUpdate<T>(
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return null;
 
+    // Safe: the length check above guarantees at least one turn.
     const lastTurn = existing.turns.at(-1)!;
     if (lastTurn.kind !== 'open') return null;
 
