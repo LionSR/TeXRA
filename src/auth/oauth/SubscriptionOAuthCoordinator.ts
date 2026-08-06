@@ -15,6 +15,10 @@ import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { generateOAuthState, generatePkcePair } from './pkce';
+import {
+  rethrowAsProviderAuthError,
+  type ProviderAuthErrorCtor,
+} from './providerAuthBridge';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
 import type { z } from 'zod';
 
@@ -102,6 +106,13 @@ export interface SubscriptionOAuthCoordinatorInit<
   policy: SubscriptionOAuthPolicy<S>;
   client: SubscriptionOAuthClient;
   now?: () => number;
+  /**
+   * Provider error type. When set, the public mutating/refreshing methods
+   * (signOut, completeLoginWithCode, storeTokens, getFreshSession) rethrow
+   * {@link SubscriptionOAuthError} as this type so callers see the provider's
+   * own error vocabulary.
+   */
+  errorType?: ProviderAuthErrorCtor;
 }
 
 export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
@@ -109,6 +120,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly client: SubscriptionOAuthClient;
   private readonly now: () => number;
+  private readonly errorType?: ProviderAuthErrorCtor;
   private refreshInFlight: Promise<S> | null = null;
   private readonly sessionMutations = new PQueue({ concurrency: 1 });
   private sessionGeneration = 0;
@@ -118,6 +130,18 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this.policy = init.policy;
     this.client = init.client;
     this.now = init.now ?? (() => Date.now());
+    this.errorType = init.errorType;
+  }
+
+  /** Map shared-machine errors into the provider error type, when configured. */
+  private async mapErrors<T>(op: () => Promise<T>): Promise<T> {
+    const ErrorType = this.errorType;
+    if (!ErrorType) return op();
+    try {
+      return await op();
+    } catch (error) {
+      rethrowAsProviderAuthError(error, ErrorType);
+    }
   }
 
   async loadSession(): Promise<S | null> {
@@ -203,8 +227,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   async signOut(): Promise<void> {
-    this.supersedeInFlightRefresh();
-    await this.mutateSession(() => this.storage.delete());
+    await this.mapErrors(async () => {
+      this.supersedeInFlightRefresh();
+      await this.mutateSession(() => this.storage.delete());
+    });
   }
 
   async getStatus(): Promise<SubscriptionSessionStatus> {
@@ -228,19 +254,23 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     verifier: string;
     redirectUri: string;
   }): Promise<S> {
-    const tokens = await this.client.exchangeAuthorizationCode(params);
-    const session = this.policy.buildSession(tokens, this.now());
-    this.supersedeInFlightRefresh();
-    await this.mutateSession(() => this.storeSession(session));
-    return session;
+    return this.mapErrors(async () => {
+      const tokens = await this.client.exchangeAuthorizationCode(params);
+      const session = this.policy.buildSession(tokens, this.now());
+      this.supersedeInFlightRefresh();
+      await this.mutateSession(() => this.storeSession(session));
+      return session;
+    });
   }
 
   /** Persist tokens from a successful device-code (or other) grant. */
   async storeTokens(tokens: SubscriptionTokenResponse): Promise<S> {
-    const session = this.policy.buildSession(tokens, this.now());
-    this.supersedeInFlightRefresh();
-    await this.mutateSession(() => this.storeSession(session));
-    return session;
+    return this.mapErrors(async () => {
+      const session = this.policy.buildSession(tokens, this.now());
+      this.supersedeInFlightRefresh();
+      await this.mutateSession(() => this.storeSession(session));
+      return session;
+    });
   }
 
   isExpiringSoon(session: S): boolean {
@@ -256,15 +286,17 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   async getFreshSession(forceRefresh = false): Promise<S> {
-    const { generation, session } = await this.loadStableSession();
-    if (!session) {
-      throw new SubscriptionOAuthError(
-        this.policy.notSignedInMessage,
-        'expired',
-      );
-    }
-    if (!forceRefresh && !this.isExpiringSoon(session)) return session;
-    return this.refresh(session, generation);
+    return this.mapErrors(async () => {
+      const { generation, session } = await this.loadStableSession();
+      if (!session) {
+        throw new SubscriptionOAuthError(
+          this.policy.notSignedInMessage,
+          'expired',
+        );
+      }
+      if (!forceRefresh && !this.isExpiringSoon(session)) return session;
+      return this.refresh(session, generation);
+    });
   }
 
   private async refresh(previous: S, generation: number): Promise<S> {

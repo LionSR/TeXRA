@@ -1,16 +1,17 @@
 /**
  * Shared timeout and HTTP-error helpers for tool implementations.
  *
- * Each tool defines its own timeout constant locally. This module only
- * provides the predicates that enforce a consistent error-classification
- * policy across tools (built around the `ky` HTTP client).
+ * Each tool defines its own timeout constant locally. This module provides
+ * the retry scaffolding and error-classification helpers that enforce a
+ * consistent failure policy across tools (built around the `ky` HTTP client).
  */
 
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
 
-import { ensureError } from '@utils/errors/errorMessage';
+import { ToolError } from '@shared/schemas/toolResult';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Unwrap a p-retry {@link AbortError} to the original error it carried.
@@ -137,4 +138,36 @@ export async function retryTransientFetch<T>(
       onFailedAttempt: options.onFailedAttempt,
     },
   );
+}
+
+/** Tool-facing message for each failure class of a retried fetch. */
+interface FetchToolErrorMessages {
+  readonly timeout: string;
+  readonly http: (status: number) => string;
+  readonly network: (message: string) => string;
+  readonly fallback: (message: string) => string;
+}
+
+/**
+ * Classify the error from a failed {@link retryTransientFetch} call into a
+ * {@link ToolError}: timeout, HTTP status, network failure, or fallback.
+ */
+export function toFetchToolError(
+  error: unknown,
+  messages: FetchToolErrorMessages,
+): ToolError {
+  // Defensive: ensure the specific type checks below see the real error
+  // even if a p-retry AbortError wrapper reaches here (p-retry v8 already
+  // unwraps it to .originalError, so this is normally a no-op).
+  const err = unwrapAbortError(error);
+  if (isTimeoutError(err)) {
+    return new ToolError(messages.timeout);
+  }
+  if (err instanceof HTTPError) {
+    return new ToolError(messages.http(err.response.status));
+  }
+  if (err instanceof TypeError) {
+    return new ToolError(messages.network(err.message));
+  }
+  return new ToolError(messages.fallback(toErrorMessage(err)));
 }

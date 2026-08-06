@@ -2,6 +2,7 @@
  * Shared CLI helpers for subscription OAuth logins (ChatGPT, Grok, …).
  */
 import type { ConfigTarget } from '@platform/interfaces';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';
 import { isLikelyRemoteSession } from './remoteSession';
@@ -38,7 +39,7 @@ export function shouldUseSubscriptionDeviceCode(
  * not hide the only manual route behind that wait. Print the URL once — later
  * status lines must not re-emit it (progress sinks append, not replace).
  */
-export async function writeCliLoopbackSignInProgress(options: {
+async function writeCliLoopbackSignInProgress(options: {
   readonly writeProgress: (message: string) => void;
   readonly displayName: string;
   readonly url: string;
@@ -68,6 +69,88 @@ export type CliSubscriptionSignOutResult =
       readonly preferenceUpdate?: undefined;
       readonly preferenceError: string;
     };
+
+/**
+ * The device-code prompt every subscription provider renders. Codex never
+ * sets `verificationUrlComplete` (its prompt type has no such field), so the
+ * `?? verificationUrl` fallback is a no-op for it and a prefill-URL win for
+ * providers that supply one (xAI).
+ */
+interface CliSubscriptionDevicePrompt {
+  readonly userCode: string;
+  readonly verificationUrl: string;
+  readonly verificationUrlComplete?: string;
+}
+
+/**
+ * One subscription sign-in flow for every OAuth provider: device-code when
+ * requested, loopback+browser otherwise. The transports stay provider-owned
+ * (injected by the caller from `@auth/<provider>`) so host mocks of those
+ * modules keep intercepting them.
+ */
+export async function signInCliSubscription<Coordinator, Session>(options: {
+  readonly coordinator: Coordinator;
+  readonly displayName: string;
+  readonly init: CliSubscriptionLoginTransportInit;
+  readonly writeProgress: (message: string) => void;
+  readonly signal?: AbortSignal;
+  readonly loginWithDeviceCode: (transport: {
+    readonly coordinator: Coordinator;
+    readonly onPrompt: (prompt: CliSubscriptionDevicePrompt) => void;
+    readonly signal?: AbortSignal;
+  }) => Promise<Session>;
+  readonly loginWithLoopback: (transport: {
+    readonly coordinator: Coordinator;
+    readonly openBrowser: (url: string) => void | Promise<void>;
+    readonly signal?: AbortSignal;
+  }) => Promise<Session>;
+}): Promise<Session> {
+  const { coordinator, displayName, init, writeProgress, signal } = options;
+
+  if (init.device) {
+    return options.loginWithDeviceCode({
+      coordinator,
+      onPrompt: ({ userCode, verificationUrl, verificationUrlComplete }) => {
+        const openUrl = verificationUrlComplete ?? verificationUrl;
+        writeProgress(
+          `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
+        );
+      },
+      signal,
+    });
+  }
+
+  return options.loginWithLoopback({
+    coordinator,
+    openBrowser: (url) =>
+      writeCliLoopbackSignInProgress({
+        writeProgress,
+        displayName,
+        url,
+        noBrowser: init.noBrowser,
+      }),
+    signal,
+  });
+}
+
+/**
+ * Sign out of a subscription provider and disable its preference, converting
+ * a preference-write failure into a reported (not thrown) `preferenceError`.
+ */
+export async function signOutCliSubscription(options: {
+  readonly coordinator: { readonly signOut: () => Promise<void> };
+  readonly disablePreference: () => Promise<{
+    readonly effective: boolean;
+    readonly target: ConfigTarget;
+  }>;
+}): Promise<CliSubscriptionSignOutResult> {
+  await options.coordinator.signOut();
+  try {
+    return { preferenceUpdate: await options.disablePreference() };
+  } catch (error: unknown) {
+    return { preferenceError: toErrorMessage(error) };
+  }
+}
 
 export function subscriptionSignOutPreferenceMessage(options: {
   readonly displayName: string;

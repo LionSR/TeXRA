@@ -26,7 +26,7 @@ import {
 import {
   continueExternalInquiryAction,
   persistExternalInquiryAction,
-} from '@tools/inquiry';
+} from '@tools/inquiry/ExternalInquiryTool';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';

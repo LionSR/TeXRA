@@ -3,12 +3,9 @@
  *
  * Thin policy over {@link SubscriptionOAuthCoordinator}: ChatGPT-specific
  * authorize URL, claims, and device-login redirect live here; single-flight
- * refresh and storage races live in the shared machine.
+ * refresh, storage races, and error mapping live in the shared machine.
  */
-import {
-  rethrowAsProviderAuthError,
-  wrapProviderOAuthClient,
-} from '../oauth/providerAuthBridge';
+import { wrapProviderOAuthClient } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionAuthorizeRequest,
@@ -16,7 +13,6 @@ import {
   type SubscriptionOAuthPolicy,
   type SubscriptionSessionStatus,
   type SubscriptionSessionStorage,
-  type SubscriptionTokenResponse,
 } from '../oauth/SubscriptionOAuthCoordinator';
 import {
   CODEX_AUTHORIZE_URL,
@@ -36,7 +32,6 @@ import {
   CodexAuthError,
   CodexSessionSchema,
   type CodexSession,
-  type CodexTokenResponse,
 } from './codexSessionTypes';
 
 export type CodexSessionStorage = SubscriptionSessionStorage;
@@ -48,10 +43,6 @@ export interface CodexSessionCoordinatorInit {
   storage: CodexSessionStorage;
   client?: CodexOAuthClient;
   now?: () => number;
-}
-
-function toCodexError(error: unknown): never {
-  rethrowAsProviderAuthError(error, CodexAuthError);
 }
 
 const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
@@ -102,57 +93,19 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   },
 };
 
-/** Map Codex client errors into SubscriptionOAuthError for the shared machine. */
-function wrapClient(client: CodexOAuthClient): SubscriptionOAuthClient {
-  return wrapProviderOAuthClient(client, CodexAuthError);
-}
-
-export class CodexSessionCoordinator {
-  private readonly inner: SubscriptionOAuthCoordinator<CodexSession>;
-
+export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexSession> {
   constructor(init: CodexSessionCoordinatorInit) {
     const client = init.client ?? {
       exchangeAuthorizationCode: defaultExchange,
       refreshTokens: defaultRefresh,
     };
-    this.inner = new SubscriptionOAuthCoordinator({
+    super({
       storage: init.storage,
       policy: CODEX_POLICY,
-      client: wrapClient(client),
+      client: wrapProviderOAuthClient(client, CodexAuthError),
       now: init.now,
+      errorType: CodexAuthError,
     });
-  }
-
-  loadSession(): Promise<CodexSession | null> {
-    return this.inner.loadSession();
-  }
-
-  async signOut(): Promise<void> {
-    try {
-      await this.inner.signOut();
-    } catch (error) {
-      toCodexError(error);
-    }
-  }
-
-  getStatus(): Promise<CodexSessionStatus> {
-    return this.inner.getStatus();
-  }
-
-  buildAuthorizeRequest(port: number): CodexAuthorizeRequest {
-    return this.inner.buildAuthorizeRequest(port);
-  }
-
-  async completeLoginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Promise<CodexSession> {
-    try {
-      return await this.inner.completeLoginWithCode(params);
-    } catch (error) {
-      toCodexError(error);
-    }
   }
 
   async completeDeviceLogin(params: {
@@ -166,27 +119,7 @@ export class CodexSessionCoordinator {
     });
   }
 
-  isExpiringSoon(session: CodexSession): boolean {
-    return this.inner.isExpiringSoon(session);
-  }
-
-  async getFreshAccessToken(forceRefresh = false): Promise<string> {
-    try {
-      return await this.inner.getFreshAccessToken(forceRefresh);
-    } catch (error) {
-      toCodexError(error);
-    }
-  }
-
   async getAccountId(): Promise<string | undefined> {
     return (await this.loadSession())?.accountId;
-  }
-
-  async getFreshSession(forceRefresh = false): Promise<CodexSession> {
-    try {
-      return await this.inner.getFreshSession(forceRefresh);
-    } catch (error) {
-      toCodexError(error);
-    }
   }
 }

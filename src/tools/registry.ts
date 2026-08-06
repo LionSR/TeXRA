@@ -57,9 +57,9 @@ import {
 import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
-import { ExternalInquiryTool } from './inquiry';
+import { ExternalInquiryTool } from './inquiry/ExternalInquiryTool';
 import { AskUserQuestionTool } from './userQuestion/UserQuestionTool';
-import { GitHubSubscriptionTool } from './github';
+import { GitHubSubscriptionTool } from './github/githubSubscriptionTool';
 import {
   ProbeEnvironmentTool,
   VerifySetupTool,

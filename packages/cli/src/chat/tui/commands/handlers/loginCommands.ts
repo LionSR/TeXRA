@@ -1,7 +1,7 @@
 import { xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import {
-  refreshCodexPreferenceViews,
+  refreshSubscriptionPreferenceViews,
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
 import { setCliXaiSubscription } from '@cli/chat/tui/state/xaiSubscription';
@@ -236,7 +236,7 @@ export async function logoutFromChat(
   ): Promise<void> {
     try {
       const update = await signOut();
-      refreshCodexPreferenceViews();
+      refreshSubscriptionPreferenceViews();
       lines.push(`Signed out of ${label}.`);
       lines.push(preferenceMessage(update));
     } catch (error: unknown) {

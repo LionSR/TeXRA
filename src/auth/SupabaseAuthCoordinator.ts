@@ -6,24 +6,21 @@ import {
   SUPABASE_SESSION_KEY,
   TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
+import {
+  secretBackedSessionStorage,
+  type SessionSecretStore,
+} from './oauth/sessionAccess';
 import { SupabaseClient } from './SupabaseClient';
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   SupabaseSessionCoordinator,
   type SupabaseSessionLog,
-  type SupabaseSessionStorage,
 } from './SupabaseSession';
 
 const DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS = 30000;
 
-interface SupabaseSecretStore {
-  get(key: string): Promise<string | undefined>;
-  set(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
-}
-
 export interface HostAuthCoordinatorInit {
-  readonly secrets: SupabaseSecretStore;
+  readonly secrets: SessionSecretStore;
   readonly log?: SupabaseSessionLog;
   /**
    * Gate the coordinator awaits before processing OAuth callbacks. The VS
@@ -42,11 +39,10 @@ export function createHostAuthCoordinator(
       `Supabase authentication is not configured: ${toErrorMessage(error)}`,
     );
   }
-  const storage: SupabaseSessionStorage = {
-    get: () => init.secrets.get(SUPABASE_SESSION_KEY),
-    store: (sessionData) => init.secrets.set(SUPABASE_SESSION_KEY, sessionData),
-    delete: () => init.secrets.delete(SUPABASE_SESSION_KEY),
-  };
+  const storage = secretBackedSessionStorage(
+    init.secrets,
+    SUPABASE_SESSION_KEY,
+  );
   const coordinator = new SupabaseSessionCoordinator({
     storage,
     getClient: () => SupabaseClient.getClient(),

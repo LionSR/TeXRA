@@ -1,15 +1,15 @@
 // Local imports - GitHub subscriptions
+import { SharedIssuePollingSource } from '@tools/github/IssuePollingSource';
+import { SharedPRPollingSource } from '@tools/github/PRPollingSource';
+import { SharedRepoPollingSource } from '@tools/github/RepoPollingSource';
 import {
   listIssueSubscriptionBindings,
   listPRSubscriptionBindings,
   listRepoSubscriptionBindings,
-  SharedIssuePollingSource,
-  SharedPRPollingSource,
-  SharedRepoPollingSource,
   unbindAllForIssue,
   unbindAllForPR,
   unbindAllForRepo,
-} from '@tools/github';
+} from '@tools/github/subscriptionBindings';
 
 /**
  * GitHub "new personal access token" page, pre-filled with the description and
