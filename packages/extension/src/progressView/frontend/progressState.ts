@@ -177,7 +177,7 @@ const PERMISSION_ANNOUNCEMENT_NOUN: Record<PermissionState['kind'], string> = {
 };
 
 /** One announcement diff pass: the text plus the memos for the next pass. */
-export interface StatusAnnouncement {
+interface StatusAnnouncement {
   readonly text: string;
   readonly permissionKeys: ReadonlySet<string>;
   readonly streamStatuses: ReadonlyMap<StreamTabId, StreamLifecycleStatus>;
