@@ -105,6 +105,15 @@ export class FileSelectGroup extends LitElement {
     );
   }
 
+  /** Single row click entry point. A lit template keeps only one binding per
+   *  event name on an element (duplicate attribute names are dropped when the
+   *  template HTML is parsed), so remove and move route through here; each
+   *  handler no-ops unless the click landed on its own control. */
+  private handleRowClick(event: MouseEvent): void {
+    this.handleRemoveClick(event);
+    this.handleMoveClick(event);
+  }
+
   private handleRemoveClick(event: MouseEvent): void {
     const button = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-remove-file]',
@@ -265,11 +274,7 @@ export class FileSelectGroup extends LitElement {
     }
 
     const movable = this.currentFiles.length > 1;
-    return html`<div
-      role="list"
-      @click=${this.handleRemoveClick}
-      @click=${this.handleMoveClick}
-    >
+    return html`<div role="list" @click=${this.handleRowClick}>
       ${repeat(
         this.currentFiles,
         (file) => file,
