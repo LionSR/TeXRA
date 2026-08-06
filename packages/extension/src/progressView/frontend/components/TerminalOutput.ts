@@ -12,24 +12,24 @@ const DEFAULT_THEME = {
   fontFamily: 'monospace',
 } as const;
 
-/** VS Code terminal ANSI color CSS variables mapped to xterm.js theme keys. */
+/** Web Awesome terminal ANSI color tokens mapped to xterm.js theme keys. */
 const ANSI_COLOR_MAP = [
-  ['black', '--texra-terminal-ansiBlack'],
-  ['red', '--texra-terminal-ansiRed'],
-  ['green', '--texra-terminal-ansiGreen'],
-  ['yellow', '--texra-terminal-ansiYellow'],
-  ['blue', '--texra-terminal-ansiBlue'],
-  ['magenta', '--texra-terminal-ansiMagenta'],
-  ['cyan', '--texra-terminal-ansiCyan'],
-  ['white', '--texra-terminal-ansiWhite'],
-  ['brightBlack', '--texra-terminal-ansiBrightBlack'],
-  ['brightRed', '--texra-terminal-ansiBrightRed'],
-  ['brightGreen', '--texra-terminal-ansiBrightGreen'],
-  ['brightYellow', '--texra-terminal-ansiBrightYellow'],
-  ['brightBlue', '--texra-terminal-ansiBrightBlue'],
-  ['brightMagenta', '--texra-terminal-ansiBrightMagenta'],
-  ['brightCyan', '--texra-terminal-ansiBrightCyan'],
-  ['brightWhite', '--texra-terminal-ansiBrightWhite'],
+  ['black', '--wa-color-terminal-ansi-black'],
+  ['red', '--wa-color-terminal-ansi-red'],
+  ['green', '--wa-color-terminal-ansi-green'],
+  ['yellow', '--wa-color-terminal-ansi-yellow'],
+  ['blue', '--wa-color-terminal-ansi-blue'],
+  ['magenta', '--wa-color-terminal-ansi-magenta'],
+  ['cyan', '--wa-color-terminal-ansi-cyan'],
+  ['white', '--wa-color-terminal-ansi-white'],
+  ['brightBlack', '--wa-color-terminal-ansi-bright-black'],
+  ['brightRed', '--wa-color-terminal-ansi-bright-red'],
+  ['brightGreen', '--wa-color-terminal-ansi-bright-green'],
+  ['brightYellow', '--wa-color-terminal-ansi-bright-yellow'],
+  ['brightBlue', '--wa-color-terminal-ansi-bright-blue'],
+  ['brightMagenta', '--wa-color-terminal-ansi-bright-magenta'],
+  ['brightCyan', '--wa-color-terminal-ansi-bright-cyan'],
+  ['brightWhite', '--wa-color-terminal-ansi-bright-white'],
 ] as const;
 
 const MIN_SCROLLBACK = 4_000;
@@ -292,7 +292,7 @@ export class TerminalOutput extends LitElement {
     });
   }
 
-  /** Resolve theme colors and font family from VS Code CSS variables in a single getComputedStyle call. */
+  /** Resolve theme colors and font family from `--wa-*` tokens in a single getComputedStyle call. */
   private resolveTerminalOptions(): {
     theme: Record<string, string>;
     fontFamily: string;
@@ -313,18 +313,16 @@ export class TerminalOutput extends LitElement {
       if (value) theme[key] = value;
     }
 
-    const cursor = styles
-      .getPropertyValue('--texra-terminalCursor-foreground')
-      .trim();
+    const cursor = styles.getPropertyValue('--wa-color-terminal-cursor').trim();
     if (cursor) theme['cursor'] = cursor;
 
     const selectionBg = styles
-      .getPropertyValue('--texra-terminal-selectionBackground')
+      .getPropertyValue('--wa-color-terminal-selection-bg')
       .trim();
     if (selectionBg) theme['selectionBackground'] = selectionBg;
 
     const fontFamily =
-      styles.getPropertyValue('--texra-editor-font-family').trim() ||
+      styles.getPropertyValue('--wa-font-family-mono').trim() ||
       DEFAULT_THEME.fontFamily;
 
     return { theme, fontFamily };

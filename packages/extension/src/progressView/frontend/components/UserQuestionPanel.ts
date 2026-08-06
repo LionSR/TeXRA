@@ -81,7 +81,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         ${this.renderFeedbackSection(
           'user-question-request__feedback',
           'user-question-request__feedback-input',
-          'Why are you not answering?',
+          'What should the agent do instead?',
         )}
       </div>
     `;

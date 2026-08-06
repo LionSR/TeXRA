@@ -17,11 +17,16 @@ import {
 } from '@progressView/frontend/eventHandlers';
 
 import type { TraceDocument } from '@transcript';
-import { replayTrace } from './replayTrace';
+import { recordName, replayTrace } from './replayTrace';
 import { parseTraceData } from './traceDataSchema';
 
-const root = document.querySelector<HTMLElement>('#app');
-if (root == null) throw new Error('Trace viewer root (#app) not found.');
+const rootElement = document.querySelector<HTMLElement>('#app');
+if (rootElement == null) {
+  throw new Error('Trace viewer root (#app) not found.');
+}
+// Non-nullable alias for the hoisted function declarations below — TS drops
+// the pre-guard narrowing at closure boundaries.
+const root: HTMLElement = rootElement;
 
 const conversationView = document.createElement(
   'stream-conversation',
@@ -75,8 +80,38 @@ async function loadTrace(): Promise<TraceDocument> {
   return parseTraceData(await res.json());
 }
 
+/**
+ * Last-resort error surface for a trace that fails to load or parse. A static
+ * export opened from file:// has no devtools audience, so the console.error
+ * alone would leave a permanently blank page with no recovery hint — render
+ * the underlying schema/fetch message into #app instead.
+ */
+function renderLoadError(err: unknown): void {
+  const errorRegion = document.createElement('div');
+  errorRegion.className = 'trace-viewer-error';
+  errorRegion.setAttribute('role', 'alert');
+
+  const heading = document.createElement('h1');
+  heading.textContent = 'Unable to load trace';
+  const detail = document.createElement('p');
+  detail.textContent = err instanceof Error ? err.message : String(err);
+
+  errorRegion.append(heading, detail);
+  // Replace (not append) — the empty <stream-conversation> mounted above has
+  // nothing to show without a successful replay.
+  root.replaceChildren(errorRegion);
+}
+
 loadTrace()
-  .then(replayTrace)
-  .catch((err) => {
+  .then((trace) => {
+    replayTrace(trace);
+    // Landmark + title carry the run's identity once known, so AT users and
+    // browser tabs can tell exported traces apart.
+    const label = `Trace: ${recordName(trace.config)}`;
+    root.setAttribute('aria-label', label);
+    document.title = label;
+  })
+  .catch((err: unknown) => {
     console.error('[trace-viewer] failed to load/replay trace', err);
+    renderLoadError(err);
   });

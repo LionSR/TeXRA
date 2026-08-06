@@ -50,16 +50,20 @@ export function renderBannerFrame(options: {
 /**
  * Warning-variant banner with the shared triangle-exclamation icon and a
  * `.banner-row` body wrapper, used by the agent-config/api-key/dependency
- * banners.
+ * banners. `role` forwards to the callout: the banners stay mounted and are
+ * shown/hidden via CSS, so a live-region role is what makes a newly visible
+ * banner announce.
  */
 export function renderWarningBanner(options: {
   readonly id: string;
+  readonly role?: 'alert' | 'status';
   readonly body: TemplateResult;
 }): TemplateResult {
   return renderBannerFrame({
     id: options.id,
     variant: 'warning',
     icon: 'triangle-exclamation',
+    role: options.role,
     body: html`<div class="banner-row">${options.body}</div>`,
   });
 }

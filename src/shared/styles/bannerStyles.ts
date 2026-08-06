@@ -39,7 +39,9 @@ const bannerFrameStyles: CSSResult = css`
   .banner-row .hint {
     width: 100%;
     font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
+    /* Full-sentence reading text, so it takes the ≥4.5:1 token rather than
+       the 3:1 non-text --color-text-muted. */
+    color: var(--wa-color-text-quiet);
     line-height: var(--line-height-relaxed, 1.5);
   }
 

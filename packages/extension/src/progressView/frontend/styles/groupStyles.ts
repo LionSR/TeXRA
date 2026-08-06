@@ -17,24 +17,24 @@ export const groupStyles = css`
       var(--wa-color-neutral-fill-quiet) 58%,
       transparent
     );
-    border-left: 2px solid var(--color-border);
+    border-inline-start: 2px solid var(--color-border);
 
     &.is-running {
-      border-left-color: var(--wa-color-status-warning-bg);
+      border-inline-start-color: var(--wa-color-status-warning-bg);
     }
 
     &.is-failed {
-      border-left-color: var(--wa-color-danger-on-quiet);
+      border-inline-start-color: var(--wa-color-danger-on-quiet);
     }
 
     &.is-completed {
-      border-left-color: var(--wa-color-success-fill-loud);
+      border-inline-start-color: var(--wa-color-success-fill-loud);
     }
 
     /* A user stop is neither success nor error, so the rail reads neutral,
        matching the shared status dot and the CLI row marker. */
     &.is-cancelled {
-      border-left-color: var(--border-control);
+      border-inline-start-color: var(--border-control);
     }
   }
 
@@ -109,7 +109,7 @@ export const groupStyles = css`
   }
 
   :is(.log-line, .banner-details)[data-group-id] {
-    border-left: var(--border-medium) solid transparent;
+    border-inline-start: var(--border-medium) solid transparent;
   }
 
   /* Align custom-element panels with native banner-details indent. */
@@ -126,7 +126,7 @@ export const groupStyles = css`
   }
 
   .log-group-content .log-group-header {
-    border-left-width: var(--border-thin);
+    border-inline-start-width: var(--border-thin);
   }
 
   .log-group-content

@@ -66,12 +66,6 @@ export const selectStyles: CSSResult = css`
     gap: var(--wa-space-3xs);
   }
 
-  .select-group > wa-icon {
-    margin-right: var(--wa-space-2xs);
-    color: var(--text-color, var(--wa-color-text-normal));
-    vertical-align: text-bottom;
-  }
-
   .select-group wa-select {
     flex: 1;
     min-width: 6rem;
@@ -117,7 +111,7 @@ export const selectStyles: CSSResult = css`
     color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);
     font-style: normal;
-    margin-left: var(--wa-space-3xs);
+    margin-inline-start: var(--wa-space-3xs);
   }
 
   /* Quiet trailing marker on picker options (e.g. the team picker's "Custom"
@@ -125,6 +119,6 @@ export const selectStyles: CSSResult = css`
   .option-suffix {
     color: var(--wa-color-text-quiet);
     font-style: normal;
-    margin-left: var(--wa-space-3xs);
+    margin-inline-start: var(--wa-space-3xs);
   }
 `;

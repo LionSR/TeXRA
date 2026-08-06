@@ -28,6 +28,11 @@ export const modelSelectionListStyles: CSSResult = css`
     white-space: nowrap;
   }
 
+  .helper-model-help {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
   .helper-model-select {
     max-width: 300px;
   }

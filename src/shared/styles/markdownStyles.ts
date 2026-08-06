@@ -41,25 +41,39 @@ export const markdownStyles: CSSResult = css`
     }
   }
 
+  /* Heading sizes descend with level (agent markdown leans on ##/### heavily,
+     so a flat scale flattens transcript structure). Headings take the normal
+     text color: link hue is reserved for actual links, which now underline. */
   .markdown-content :is(h1, h2, h3, h4) {
-    color: var(--color-text-link);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+    color: var(--wa-color-text-normal);
     line-height: var(--line-height-heading);
     margin: 1em 0 0.5em;
   }
 
   .markdown-content h1 {
+    font-size: var(--font-size-h1);
+    font-weight: var(--font-weight-semibold);
     border-bottom: var(--border-thin) solid var(--color-border);
     padding-bottom: var(--wa-space-2xs);
   }
 
   .markdown-content h2 {
+    font-size: var(--font-size-h2);
+    font-weight: var(--font-weight-semibold);
     margin-top: var(--wa-space-s);
     margin-bottom: var(--wa-space-2xs);
     border-bottom: var(--border-thin) solid var(--color-border);
     padding-bottom: var(--wa-space-3xs);
-    color: var(--color-text-link);
+  }
+
+  .markdown-content h3 {
+    font-size: var(--font-size-h3);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .markdown-content h4 {
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-medium);
   }
 
   .markdown-content p {
@@ -77,7 +91,8 @@ export const markdownStyles: CSSResult = css`
 
   .markdown-content li {
     margin: 0 0 0.2em 0;
-    line-height: var(--line-height-heading);
+    /* Items wrap, so they get the prose line-height, not the heading one. */
+    line-height: var(--line-height-normal);
 
     & + li {
       margin-top: 0.1em;
@@ -88,8 +103,10 @@ export const markdownStyles: CSSResult = css`
     background-color: var(--wa-color-surface-lowered);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
-    font-family: var(--font-family);
-    font-size: var(--font-size-sm);
+    /* Mono so paths/flags/identifiers stay distinct from prose; 0.9em
+       compensates for mono's larger x-height against body text. */
+    font-family: var(--wa-font-family-mono);
+    font-size: 0.9em;
   }
 
   .markdown-content pre {
@@ -117,19 +134,18 @@ export const markdownStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 
+  /* Links in prose underline at rest — link hue alone is not a reliable
+     3:1 separation from surrounding text across host themes. */
   .markdown-content a {
     color: var(--color-text-link);
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
-    }
+    text-decoration: underline;
   }
 
   .markdown-content blockquote {
-    border-left: var(--border-medium) solid var(--wa-color-activity-badge-bg);
+    border-inline-start: var(--border-medium) solid
+      var(--wa-color-activity-badge-bg);
     margin: var(--wa-space-xs) 0;
-    padding-left: var(--wa-space-l);
+    padding-inline-start: var(--wa-space-l);
     color: var(--color-text-secondary);
     font-style: italic;
   }
@@ -146,7 +162,7 @@ export const markdownStyles: CSSResult = css`
 
     th {
       background-color: var(--wa-color-editor-line-highlight);
-      text-align: left;
+      text-align: start;
     }
   }
 

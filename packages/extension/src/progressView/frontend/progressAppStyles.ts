@@ -2,7 +2,7 @@
 import { css } from 'lit';
 
 // Shared styles
-import { headerActionStyles } from '@shared/styles';
+import { headerActionStyles, visuallyHiddenStyles } from '@shared/styles';
 
 /** Layout and empty-state styles for the <progress-app> root component. */
 export const progressAppStyles = css`
@@ -50,6 +50,8 @@ export const progressAppStyles = css`
   }
 
   ${headerActionStyles}
+
+  ${visuallyHiddenStyles}
 
   .split-container {
     display: flex;
@@ -179,7 +181,7 @@ export const progressAppStyles = css`
   .desktop-empty-progress h1 {
     margin: var(--wa-space-2xs) 0 0;
     color: var(--wa-color-text-normal);
-    font-size: 24px;
+    font-size: var(--font-size-h1);
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0;
   }
