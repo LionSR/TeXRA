@@ -187,8 +187,9 @@ type ConfigFormMode =
       readonly category: string;
     };
 
-const LIST_CHROME_ROWS = 5;
-const ENUM_CHROME_ROWS = 4;
+/* Every /config layout wraps one Select in the same chrome: two FormFrame
+	   border rows, the title, the KeyHints margin, and the hints row. */
+const SELECT_CHROME_ROWS = 5;
 
 /** Inline text editor for a string/number setting (its own input buffer). */
 function ConfigTextEditor(props: {
@@ -327,7 +328,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     const window = computeSelectWindowSize({
       availableRows: props.availableRows,
       itemCount: items.length,
-      chromeRows: ENUM_CHROME_ROWS,
+      chromeRows: SELECT_CHROME_ROWS,
     });
     return (
       <FormFrame
@@ -410,7 +411,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     const window = computeSelectWindowSize({
       availableRows: props.availableRows,
       itemCount: categories.length,
-      chromeRows: LIST_CHROME_ROWS,
+      chromeRows: SELECT_CHROME_ROWS,
     });
     return (
       <FormFrame title="/config" showCloseHint={false}>
@@ -453,7 +454,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const window = computeSelectWindowSize({
     availableRows: props.availableRows,
     itemCount: items.length,
-    chromeRows: LIST_CHROME_ROWS,
+    chromeRows: SELECT_CHROME_ROWS,
   });
 
   const handleSelect = (key: string): void => {

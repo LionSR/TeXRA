@@ -29,6 +29,28 @@ export const headerActionStyles: CSSResult = buttonStyles;
 export const compactIconActionButtonStyles: CSSResult = buttonStyles;
 
 /**
+ * Available to the accessibility tree, absent from the layout. The canonical
+ * copy across every view surface (InstructionPanel and WorktreeChip both
+ * used to carry their own). Exported on its own — interpolated into
+ * `commonViewStyles` below — for roots that compose a narrower sheet and so
+ * cannot take the full common one (ProgressApp's `.view-header` rules would
+ * clash with this sheet's).
+ */
+export const visuallyHiddenStyles: CSSResult = css`
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+`;
+
+/**
  * Busy state for an icon action button: a spinner overlays the button while
  * it works, instead of taking its own slot. The button stays in the flow
  * (so the toolbar never shifts when the busy flag toggles) and its glyph is
@@ -284,20 +306,7 @@ export const commonViewStyles: CSSResult = css`
   ${formControlStyles}
   ${focusRingStyles}
 
-  /* Available to the accessibility tree, absent from the layout. The canonical
-     copy across every view surface (InstructionPanel and WorktreeChip both
-     used to carry their own). */
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
+  ${visuallyHiddenStyles}
   ${settingsRowStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
@@ -325,13 +334,14 @@ export const commonViewStyles: CSSResult = css`
        around a text link. */
     border-radius: var(--border-radius);
     color: var(--color-text-link);
-    text-decoration: none;
+    /* Inline-in-prose link: underline at rest, since hue alone is not a
+       reliable 3:1 cue against surrounding text across host themes. */
+    text-decoration: underline;
     transition: color var(--transition-fast);
   }
 
   .clickable-link:hover {
     color: var(--color-text-link-active);
-    text-decoration: underline;
   }
 
   .detail-list {

@@ -28,7 +28,7 @@ export const codeBlockStyles = css`
   .code-block-language {
     color: var(--wa-color-text-quiet, #888);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--letter-spacing-caps);
     font-weight: var(--font-weight-medium);
   }
 
@@ -93,11 +93,6 @@ export const codeBlockStyles = css`
   }
 
   /* Syntax highlighted code blocks */
-  pre.hljs {
-    padding: var(--wa-space-2xs);
-    overflow-x: auto;
-  }
-
   pre.hljs code {
     background: transparent;
     padding: 0;

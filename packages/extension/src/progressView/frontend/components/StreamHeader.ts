@@ -145,10 +145,6 @@ export class StreamHeader extends LitElement {
         container-type: inline-size;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .log-header {
         padding: var(--wa-space-2xs)
           max(
@@ -416,6 +412,10 @@ export class StreamHeader extends LitElement {
         className,
         size: 'm',
         disabled,
+        // Toggle state gates auto-approval of edits/shell — expose it as
+        // aria-pressed (toggles only; plain actions must not read as
+        // toggle buttons).
+        pressed: btn.isToggle ? isActive : undefined,
         ariaHidden: hidden,
         onClick: () => {
           if (disabled) return;

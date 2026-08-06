@@ -31,6 +31,7 @@ import {
   pendingApprovalIds$,
   placement,
   resetProgressState,
+  statusAnnouncement$,
   streamStates$,
   topLevelStreams$,
 } from './progressState';
@@ -173,6 +174,17 @@ export class ProgressApp extends ProgressAppBase {
               `
             : this.renderEmptyState()
         }
+        ${
+          /*
+          One stable, visually-hidden polite region for the whole shell:
+          new approval requests and terminal run outcomes land here (see
+          statusAnnouncement$). Stability matters — a region that is always
+          mounted re-announces reliably on every text change, unlike a
+          dynamically inserted alert. */
+          html`<div class="visually-hidden" role="status">
+            ${statusAnnouncement$.get()}
+          </div>`
+        }
       </div>
     `;
   }
@@ -188,14 +200,14 @@ export class ProgressApp extends ProgressAppBase {
             body: 'Start an agent from the New tab or Commands. Runs, streamed logs, approvals, and follow-up controls will appear here.',
             actions: [
               {
-                label: 'Open New',
+                label: 'Open the New tab',
                 icon: 'play',
                 appearance: 'filled',
                 variant: 'brand',
                 onClick: this.onOpenLauncher,
               },
               {
-                label: 'Open Dashboard',
+                label: 'Open dashboard',
                 icon: 'gear',
                 appearance: 'outlined',
                 variant: 'neutral',

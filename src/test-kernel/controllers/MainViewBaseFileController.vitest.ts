@@ -77,7 +77,7 @@ describe('MainViewBaseFileController', () => {
         shouldRequestBaseFile: false,
       });
       expect(plan.notification).toBeDefined();
-      expect(plan.notification!.message).toContain('select a base file');
+      expect(plan.notification!.message).toContain('Choose a base file');
     });
 
     it('rejects when the current file does not match the base file naming pattern', () => {

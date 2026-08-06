@@ -254,7 +254,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           ${this.renderFeedbackSection(
             'external-inquiry-request__feedback',
             'external-inquiry-request__feedback-input',
-            'Why are you rejecting this external inquiry?',
+            'What should the agent do instead?',
           )}
         </div>
         ${this.renderActions()}
@@ -501,6 +501,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           text: 'Submit answer',
           title: 'Submit the answer from the external model',
           action: INQUIRY_SUBMIT_ACTION,
+          kind: 'primary',
           disabled: !this.hasAnswer,
           onClick: this.handleSubmit,
         })}

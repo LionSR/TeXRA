@@ -41,8 +41,12 @@ export function renderViewHeader({
 }: ViewHeaderOptions): TemplateResult {
   return html`
     <div class="view-header">
+      <!-- activation="manual": these tabs navigate (the host swaps the whole
+           webview document on wa-tab-show), so arrow keys must only move
+           focus; Enter/Space or click commits the switch. -->
       <wa-tab-group
         class="view-tabs"
+        activation="manual"
         .active=${active}
         without-scroll-controls
         @wa-tab-show=${onTabShow}

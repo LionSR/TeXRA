@@ -105,16 +105,47 @@ export class FileSelectGroup extends LitElement {
     );
   }
 
-  private handleRemoveClick(event: MouseEvent): void {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-remove-file]',
-    );
-    if (!button) return;
+  private handleRemoveClick(button: HTMLElement): void {
     const file = button.dataset.removeFile;
     if (file) {
       this.dispatchEvent(
         MainViewEvents.removeFile({ listId: this.listId, file }),
       );
+    }
+  }
+
+  /** Keyboard/touch counterpart to Sortable drag reordering (order is
+   * semantic: the first input file is the primary input). Dispatches the
+   * same filesReordered event as a drag. */
+  private handleMoveClick(button: HTMLElement): void {
+    const index = Number(button.dataset.moveIndex);
+    const direction = Number(button.dataset.moveDirection);
+    const files = this.currentFiles;
+    const target = index + direction;
+    if (!Number.isInteger(index) || target < 0 || target >= files.length) {
+      return;
+    }
+    const reordered = [...files];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
+    this.dispatchEvent(
+      MainViewEvents.filesReordered({ listId: this.listId, files: reordered }),
+    );
+  }
+
+  /** Single delegate for the file-list row: lit-html rejects two `@click`
+   * bindings on the same element, so remove and move share one dispatch,
+   * each matching its own `data-*` marker on a distinct button. */
+  private handleFileListClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const removeButton = target.closest<HTMLElement>('[data-remove-file]');
+    if (removeButton) {
+      this.handleRemoveClick(removeButton);
+      return;
+    }
+    const moveButton = target.closest<HTMLElement>('[data-move-index]');
+    if (moveButton) {
+      this.handleMoveClick(moveButton);
     }
   }
 
@@ -241,7 +272,8 @@ export class FileSelectGroup extends LitElement {
       return html`<div class="file-list-placeholder">No files selected.</div>`;
     }
 
-    return html`<div @click=${this.handleRemoveClick}>
+    const movable = this.currentFiles.length > 1;
+    return html`<div role="list" @click=${this.handleFileListClick}>
       ${repeat(
         this.currentFiles,
         (file) => file,
@@ -250,9 +282,16 @@ export class FileSelectGroup extends LitElement {
           // Per-row id so the sibling <wa-tooltip> anchors to the right row
           // (this list renders in a single shadow root). The repeat index is
           // unique and collision-proof, unlike a sanitized path.
+          const moveUpButtonId = `file-select-move-up-${index}`;
+          const moveDownButtonId = `file-select-move-down-${index}`;
           const removeButtonId = `file-select-remove-${index}`;
           return html`
-            <div class="file-item" data-path=${file} title=${file}>
+            <div
+              class="file-item"
+              role="listitem"
+              data-path=${file}
+              title=${file}
+            >
               <span class="file-name">
                 <span class="file-name-main">${display.name}</span>
                 ${
@@ -263,6 +302,46 @@ export class FileSelectGroup extends LitElement {
                     : nothing
                 }
               </span>
+              ${
+                movable
+                  ? html`
+                      <wa-button
+                        id=${moveUpButtonId}
+                        class="action-icon-button move-button"
+                        appearance="plain"
+                        variant="neutral"
+                        size="s"
+                        type="button"
+                        aria-label=${`Move ${display.name} up`}
+                        data-move-index=${index}
+                        data-move-direction="-1"
+                        ?disabled=${index === 0}
+                      >
+                        ${waIcon('arrow-up')}
+                      </wa-button>
+                      <wa-tooltip for=${moveUpButtonId}
+                        >Move up: ${file}</wa-tooltip
+                      >
+                      <wa-button
+                        id=${moveDownButtonId}
+                        class="action-icon-button move-button"
+                        appearance="plain"
+                        variant="neutral"
+                        size="s"
+                        type="button"
+                        aria-label=${`Move ${display.name} down`}
+                        data-move-index=${index}
+                        data-move-direction="1"
+                        ?disabled=${index === this.currentFiles.length - 1}
+                      >
+                        ${waIcon('arrow-down')}
+                      </wa-button>
+                      <wa-tooltip for=${moveDownButtonId}
+                        >Move down: ${file}</wa-tooltip
+                      >
+                    `
+                  : nothing
+              }
               <wa-button
                 id=${removeButtonId}
                 class="action-icon-button remove-button"
@@ -270,12 +349,12 @@ export class FileSelectGroup extends LitElement {
                 variant="neutral"
                 size="s"
                 type="button"
-                aria-label="Remove file"
+                aria-label=${`Remove ${display.name}`}
                 data-remove-file=${file}
               >
                 ${waIcon('trash')}
               </wa-button>
-              <wa-tooltip for=${removeButtonId}>Remove file</wa-tooltip>
+              <wa-tooltip for=${removeButtonId}>Remove: ${file}</wa-tooltip>
             </div>
           `;
         },
@@ -316,7 +395,7 @@ export class FileSelectGroup extends LitElement {
             <span class="file-select-icon" aria-hidden="true">
               ${waIcon(config.icon)}
             </span>
-            <label>${config.label}</label>
+            <span class="file-select-label">${config.label}</span>
             ${
               this.currentFiles.length > 1
                 ? html`<span class="file-select-count">

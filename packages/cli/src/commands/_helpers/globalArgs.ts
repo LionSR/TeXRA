@@ -83,7 +83,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   'api-mode': {
     type: 'string',
     description:
-      'Model access: included (your TeXRA account) or personal (your own API keys); also accepts relay/byok',
+      'How model calls are paid for: included (covered by your TeXRA plan) or personal (your own API keys)',
   },
   'output-format': {
     type: 'enum',

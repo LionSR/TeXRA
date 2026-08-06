@@ -27,6 +27,7 @@ resources/poster
 resources/poster-app
 
 supabase/.temp
+supabase/migrations/
 
 slides/
 .texpadtmp
@@ -62,3 +63,5 @@ out/
 
 
 errorLogs/
+# Playwright MCP debug artifacts
+.playwright-mcp/

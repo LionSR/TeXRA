@@ -23,12 +23,17 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+
+import { desktopCommandPaletteShortcut } from './desktopShortcutRegistry';
+import { getRendererPlatform } from './rendererPlatform';
 
 interface StartupPanelController {
   isVisible(): boolean;
@@ -65,7 +70,7 @@ const WORK_TYPES: ReadonlyArray<{
   },
   {
     presetId: 'mathematician',
-    question: 'Proving mathematics',
+    question: 'Doing mathematics',
     detail: 'Open problems, proofs, Lean formalization, LaTeX correction.',
     icon: 'hashtag',
   },
@@ -110,6 +115,14 @@ export function createStartupTeamPanel({
   openMultiAgent,
 }: DesktopStartupTeamPanelOptions): StartupPanelController {
   const titleId = nextPanelTitleId();
+  // The walkthrough names the Commands shortcut, so format it for the user's
+  // platform rather than hardcoding the macOS glyph.
+  const platform = getRendererPlatform(document.defaultView);
+  const commandsAccelerator = formatDesktopAccelerator(
+    desktopCommandPaletteShortcut(platform).accelerator,
+    platform,
+  );
+  const commandsHint = commandsAccelerator ? ` (${commandsAccelerator})` : '';
   let visible = false;
   let hideAtStartup = false;
   let step: TourStep = 'work';
@@ -286,8 +299,8 @@ export function createStartupTeamPanel({
           <div>
             <strong>Model access</strong>
             <span>
-              Sign in for included access, or add your own provider keys in
-              Settings.
+              Sign in for ${INCLUDED_ACCESS.inline}, or add
+              ${OWN_API_KEYS.inline} in Settings.
             </span>
           </div>
         </li>
@@ -296,8 +309,10 @@ export function createStartupTeamPanel({
           <div>
             <strong>Tabs</strong>
             <span>
-              Open an editor, terminal, browser, or Settings from the + button.
-              They stay open beside a running agent.
+              Open a terminal, browser, or Settings from the buttons at the
+              bottom of the sidebar - or from Commands${commandsHint}. Open
+              files from the project list; everything stays open beside a
+              running agent.
             </span>
           </div>
         </li>
@@ -306,7 +321,8 @@ export function createStartupTeamPanel({
           <div>
             <strong>Commands</strong>
             <span>
-              Press the Commands button for every action and shortcut.
+              Open Commands${commandsHint} from the header for every action and
+              shortcut.
             </span>
           </div>
         </li>

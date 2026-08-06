@@ -2,9 +2,11 @@
  * Lightweight container for permission request panels.
  *
  * Groups permissions by kind and renders section headers with
- * individual panel components. Manages global keyboard shortcuts
+ * individual panel components. Manages keyboard shortcuts
  * (y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss)
  * by delegating to the panel matching the newest permission in the queue.
+ * Single-character shortcuts fire only while focus is inside this component
+ * (WCAG 2.1.4); see handleGlobalKeydown for the rationale.
  */
 
 // Third-party imports
@@ -128,9 +130,16 @@ const PANEL_MARKER_SELECTOR = '[data-request-panel]';
 function renderPanel(
   section: SectionConfig,
   permission: PermissionState,
+  armed = false,
 ): TemplateResult {
+  // `armed` marks the panel the y/n accelerators will act on. Sections render
+  // in a fixed kind order while the accelerators target the newest request,
+  // so with mixed kinds pending the top panel on screen is not the one a
+  // keypress hits. Without a visible mark that divergence is invisible, and
+  // the action it triggers can be executing a shell command.
   return staticHtml`<${section.tag}
     data-request-panel
+    ?data-armed=${armed}
     .permission=${permission}
   ></${section.tag}>`;
 }
@@ -204,6 +213,31 @@ export class RequestPanels extends LitElement {
     super.disconnectedCallback();
   }
 
+  /**
+   * The request the y/n accelerators will act on.
+   *
+   * Single source of truth: `getActivePanel` resolves the DOM node from this,
+   * and the renderers mark that same permission `data-armed`. Deriving the
+   * two separately let them disagree — the newest permission is not the
+   * target while the external-inquiry carousel is active, so an indicator
+   * keyed off `permissions[0]` would ring a panel the carousel does not even
+   * render, while the keypress landed on the visible one.
+   */
+  private get armedPermission(): PermissionState | null {
+    const newest = this.permissions[0];
+    if (!newest) return null;
+    return (
+      (this.externalInquiryCarouselActive
+        ? this.externalInquiries[this.externalInquiryIndex]
+        : newest) ?? null
+    );
+  }
+
+  private armedPermissionKey(): string | null {
+    const armed = this.armedPermission;
+    return armed ? getPermissionKey(armed) : null;
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
 
@@ -229,10 +263,14 @@ export class RequestPanels extends LitElement {
     config: SectionConfig,
     extra: TemplateResult | typeof nothing = nothing,
   ): TemplateResult {
+    // A heading element rather than a styled span, because that is what a
+    // section title is. Visual weight is unchanged — the shared header rule
+    // already sets font-weight and colour, and the h2 reset in
+    // requestPanelSharedStyles strips the UA margin and size.
     return html`
       <div class="${config.cssClass}__header">
         ${waIcon(config.icon)}
-        <span>${config.title}</span>
+        <h2>${config.title}</h2>
         ${extra}
       </div>
     `;
@@ -244,6 +282,7 @@ export class RequestPanels extends LitElement {
   ): TemplateResult | typeof nothing {
     if (permissions.length === 0) return nothing;
 
+    const armedKey = this.armedPermissionKey();
     return html`
       <section class=${config.cssClass}>
         ${this.renderSectionHeader(config)}
@@ -251,7 +290,7 @@ export class RequestPanels extends LitElement {
           ${repeat(
             permissions,
             (p) => getPermissionKey(p),
-            (p) => renderPanel(config, p),
+            (p) => renderPanel(config, p, getPermissionKey(p) === armedKey),
           )}
         </div>
       </section>
@@ -311,7 +350,14 @@ export class RequestPanels extends LitElement {
       <section class=${config.cssClass}>
         ${this.renderSectionHeader(config, nav)}
         <div class="${config.cssClass}__list">
-          ${keyed(getPermissionKey(current), renderPanel(config, current))}
+          ${keyed(
+            getPermissionKey(current),
+            renderPanel(
+              config,
+              current,
+              getPermissionKey(current) === this.armedPermissionKey(),
+            ),
+          )}
         </div>
       </section>
     `;
@@ -359,12 +405,21 @@ export class RequestPanels extends LitElement {
   // ===========================================================================
 
   /**
-   * Handle global keyboard shortcuts for permission actions.
+   * Handle keyboard shortcuts for permission actions.
    * Only active when permissions are visible and no text input is focused.
    * Delegates to the panel matching the newest permission (permissions[0]),
    * or the currently visible carousel panel for external inquiries.
    *
    * Left/right arrow keys navigate the external inquiry carousel.
+   *
+   * WCAG 2.1.4 (Character Key Shortcuts): single-character shortcuts (y, n,
+   * d, r, s, k…) additionally require focus inside this component — the
+   * compliant mechanism chosen here is "active only on focus" (a settings
+   * opt-out would cross into settingsView/shared lanes; remapping is
+   * already impossible for hardwired keys). Without the gate, one stray
+   * keystroke anywhere in the view could approve or reject a run.
+   * Non-character keys (Escape, arrows) are outside 2.1.4's scope and stay
+   * global.
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
     if (isTextInput(document.activeElement)) return;
@@ -387,6 +442,8 @@ export class RequestPanels extends LitElement {
       }
     }
 
+    if (key.length === 1 && !event.composedPath().includes(this)) return;
+
     const panel = this.getActivePanel();
     if (!panel) return;
 
@@ -406,12 +463,7 @@ export class RequestPanels extends LitElement {
    * would target the wrong panel when mixed kinds are pending.
    */
   private getActivePanel(): BaseRequestPanel | null {
-    const newest = this.permissions[0];
-    if (!newest) return null;
-
-    const target = this.externalInquiryCarouselActive
-      ? this.externalInquiries[this.externalInquiryIndex]
-      : newest;
+    const target = this.armedPermission;
     if (!target) return null;
 
     const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(

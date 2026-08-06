@@ -70,10 +70,6 @@ export class BackgroundTasksPanel extends LitElement {
         display: block;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .task-list {
         display: flex;
         flex-direction: column;
@@ -424,8 +420,8 @@ export class BackgroundTasksPanel extends LitElement {
             'task-name': true,
             'task-name--clickable': isClickable,
           })}
-          role=${isClickable ? 'link' : 'text'}
-          tabindex=${isClickable ? '0' : '-1'}
+          role=${isClickable ? 'link' : nothing}
+          tabindex=${isClickable ? '0' : nothing}
           @click=${
             childStreamId !== undefined
               ? () => this.navigateToStream(childStreamId)
@@ -568,10 +564,18 @@ function taskStatusBadge(child: ActiveChildInfo): {
         text: WORKFLOW_TASK_STATUS_LABEL.cancelled,
         variant: 'neutral',
       };
-    default:
+    case STREAM_PHASE.COMPLETED:
       return {
         text: WORKFLOW_TASK_STATUS_LABEL.completed,
         variant: 'success',
+      };
+    default:
+      // Left the roster without a terminal status ever arriving. It did
+      // finish, but claiming success would render a failed command green;
+      // say only what is known.
+      return {
+        text: WORKFLOW_TASK_STATUS_LABEL.completed,
+        variant: 'neutral',
       };
   }
 }

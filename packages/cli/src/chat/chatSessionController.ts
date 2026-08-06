@@ -692,7 +692,7 @@ export function createChatSessionController(
               },
               reportNoResumableSession: () => {
                 appendLocalAssistantTranscript(
-                  'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
+                  'Message queued, but that session could not be continued automatically. Resume it with /resume, or start a new task.',
                   streamId,
                 );
               },

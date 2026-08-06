@@ -300,7 +300,7 @@ export class ToolCard extends LitElement {
     return html`
       <wa-details
         class="collapsible-quiet tool-guide-details"
-        summary="Installation Guide"
+        summary="Setup guide"
         ?open=${this.guideExpanded}
         @wa-show=${this.handleGuideShow}
         @wa-hide=${this.handleGuideHide}
@@ -390,7 +390,9 @@ export class ToolCard extends LitElement {
   private renderToggle(): TemplateResult | typeof nothing {
     if (!this.item.toggleable) return nothing;
     const enabled = this.item.enabled !== false;
-    const toggleLabel = `${enabled ? 'Disable' : 'Enable'} ${this.item.name} for agent runs`;
+    // Constant name containing the visible "Use in runs" text (WCAG 2.5.3
+    // Label in Name) — the on/off state is already carried by `checked`.
+    const toggleLabel = `Use ${this.item.name} in runs`;
     return html`
       <wa-switch
         class="tool-toggle"

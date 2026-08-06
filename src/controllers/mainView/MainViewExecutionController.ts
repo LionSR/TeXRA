@@ -30,8 +30,7 @@ export function prepareMainViewExecutionRequest(
   if (!message.agent || !message.model || !message.agentCategory) {
     return {
       valid: false,
-      message:
-        'Agent, model, and run type selection required. Please select all before running.',
+      message: 'Choose an agent, a model, and a run type first.',
     };
   }
 
@@ -53,8 +52,7 @@ export function prepareMainViewTeamExecutionRequest(
   if (!message.model) {
     return {
       valid: false,
-      message:
-        'Model selection required. Please select a model before running.',
+      message: 'Choose a model first.',
     };
   }
 
@@ -82,7 +80,7 @@ function buildMainViewExecutionRequest(
   if (!isToolUse && (files.inputFiles?.length ?? 0) === 0) {
     return {
       valid: false,
-      message: 'Please select an input file.',
+      message: 'Choose an input file first.',
       docsCommand: 'file-management',
     };
   }

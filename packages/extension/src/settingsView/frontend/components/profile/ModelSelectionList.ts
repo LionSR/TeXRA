@@ -39,6 +39,7 @@ import {
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import { readSelectValue } from '@shared/utils/selectTemplates';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -161,7 +162,7 @@ export class ModelSelectionList extends LitElement {
       ? `Default (${REASONING_LEVEL_LABELS[model.defaultReasoningLevel]})`
       : 'Default';
     const title = includedAccessCap
-      ? `Reasoning level. Included Access uses the TeXRA relay and caps this model's default Extra high reasoning to ${REASONING_LEVEL_LABELS[includedAccessCap]}. Use your own provider API key for uncapped provider-side access.`
+      ? `Reasoning level. ${INCLUDED_ACCESS.label} caps this model's default Extra high reasoning to ${REASONING_LEVEL_LABELS[includedAccessCap]}. Switch to ${OWN_API_KEYS.inline} for the full range.`
       : 'Reasoning level';
 
     return html`
@@ -183,6 +184,9 @@ export class ModelSelectionList extends LitElement {
         includedAccessCap
           ? waIcon('triangle-exclamation', {
               className: 'model-row-icon model-row-icon--warning',
+              // `label` as well as `title`: a titled but aria-hidden icon
+              // never reaches assistive technology.
+              label: title,
               title,
             })
           : nothing
@@ -200,14 +204,14 @@ export class ModelSelectionList extends LitElement {
     const { availabilityLabel } = model;
     const title =
       model.requiresKey && availabilityLabel
-        ? `${availabilityLabel} — configure it in API Configuration`
+        ? `${availabilityLabel} — add a key in API configuration`
         : availabilityLabel;
     const iconName = model.requiresKey ? 'key' : 'triangle-exclamation';
     const className = model.requiresKey
       ? 'model-row-icon'
       : 'model-row-icon model-row-icon--warning';
 
-    return waIcon(iconName, { className, title });
+    return waIcon(iconName, { className, label: title, title });
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
@@ -238,6 +242,7 @@ export class ModelSelectionList extends LitElement {
             isExpensiveModel(model.provider, model.name)
               ? waIcon('triangle-exclamation', {
                   className: 'model-row-icon model-row-icon--warning',
+                  label: EXPENSIVE_MODEL_HINT,
                   title: EXPENSIVE_MODEL_HINT,
                 })
               : nothing
@@ -327,6 +332,7 @@ export class ModelSelectionList extends LitElement {
         class="deprecated-toggle"
         appearance="plain"
         size="s"
+        aria-expanded=${String(isOpen)}
         @click=${() => this.toggleDeprecated(group.provider)}
       >
         ${waIcon('chevron-right', {
@@ -351,8 +357,9 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="helper-model-row">
-        <label>Helper model:</label>
+        <label for="helper-model-select">Model for quick fixes</label>
         <wa-select
+          id="helper-model-select"
           class="helper-model-select form-control-fill"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
@@ -365,6 +372,9 @@ export class ModelSelectionList extends LitElement {
             `,
           )}
         </wa-select>
+        <span class="helper-model-help">
+          Used for quick background jobs (e.g. intelligent merge).
+        </span>
       </div>
     `;
   }
@@ -377,7 +387,7 @@ export class ModelSelectionList extends LitElement {
         ${renderSettingsSectionHeading({
           title: 'Model selection',
           description:
-            'Choose the models exposed to agents and the default helper model used for lightweight tasks.',
+            'Choose the models exposed to agents, plus the cheaper model used for quick background tasks.',
           icon: 'server',
         })}
         ${this.renderHelperModelDropdown()}

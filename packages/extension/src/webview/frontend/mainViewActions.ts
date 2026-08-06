@@ -395,7 +395,12 @@ export function executeAgent(): void {
 
 function polishInstruction(): void {
   const instructionText = instruction$.get();
-  if (!instructionText.trim()) return;
+  if (!instructionText.trim()) {
+    // The button stays enabled, so mirror the pack/clean actions and tell the
+    // user why nothing happened.
+    showInformation('Enter an instruction to polish first.');
+    return;
+  }
 
   const executionMessage = buildExecuteMessage();
   const files = executionMessage.files ?? {};
@@ -438,9 +443,7 @@ export function runPanelAction(action: ActionDetail['action']): void {
       const inputFile = primaryInputFile();
       const selectedModel = model$.get();
       if (!inputFile || !selectedModel) {
-        showInformation(
-          'Please select all required fields (input file and model)',
-        );
+        showInformation('Choose an input file and a model first.');
         break;
       }
 
@@ -526,7 +529,7 @@ export function runLatexDiffsAction(
     case 'merge': {
       const inputFile = primaryInputFile();
       if (!inputFile || !sf.editedFile) {
-        showInformation('Please select both input and edited files to merge');
+        showInformation('Choose both the input and edited files to merge.');
         break;
       }
       postMessage(MAIN_VIEW_COMMANDS.MERGE, {
@@ -539,7 +542,7 @@ export function runLatexDiffsAction(
     case 'compare':
     case 'accept': {
       if (!sf.baseFile || !sf.editedFile) {
-        showInformation('Please select both base and edited files to compare');
+        showInformation('Choose both the base and edited files to compare.');
         break;
       }
       const command =

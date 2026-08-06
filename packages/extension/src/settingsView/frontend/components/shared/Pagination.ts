@@ -136,7 +136,7 @@ export class Pagination extends LitElement {
 
     return html`
       <div class="pagination-bar">
-        <span class="pagination-status">
+        <span class="pagination-status" role="status" aria-atomic="true">
           ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems}
         </span>
         <div class="pagination-controls">

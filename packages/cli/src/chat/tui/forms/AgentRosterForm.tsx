@@ -156,7 +156,7 @@ export function AgentRosterForm(
       loading: error === undefined,
       error,
       title: '/config · Agents',
-      loadingLabel: 'Loading agent roster...',
+      loadingLabel: 'Loading agents...',
     });
   }
 
@@ -238,7 +238,7 @@ export function AgentRosterForm(
       {
         value: 'all',
         label: 'All agents',
-        description: 'Show the complete catalog in this workspace',
+        description: 'Show every agent in this workspace',
       },
       ...data.presets.map((preset) => ({
         value: `team:${preset.id}`,

@@ -174,9 +174,15 @@ export class LitSessionRenderer implements SessionRendererPort {
   }
 
   onBadgesChanged(streamId: StreamTabId, badges: StreamBadgeSnapshot): void {
-    this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateStreamBadges(streamId, badges),
-    );
+    // Badges are the child roster (`StreamBadgeSnapshot` = `subagents`), read
+    // from the parent's viewport in Background Tasks — so, like a phase and
+    // unlike round progress, they cannot be pushed only for the active
+    // stream. Gating them dropped the roster update that retires a finished
+    // child, leaving its row live ("Running") until the parent happened to be
+    // reactivated. The message is stream-addressed and stored per stream, and
+    // a child's lifecycle emits a handful of them, so sending always is cheap.
+    if (!this.webviewUpdater.isAvailable()) return;
+    this.webviewUpdater.updateStreamBadges(streamId, badges);
   }
 
   onFilesChanged(streamId: StreamTabId): void {

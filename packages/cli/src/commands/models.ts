@@ -232,7 +232,7 @@ const modelsEnabledCommand = defineCliCommand({
 const modelsEnableCommand = defineCliCommand({
   meta: {
     name: 'enable',
-    description: 'Add a model to the picker catalog',
+    description: 'Add a model to the picker',
   },
   args: {
     ...GLOBAL_ARGS,
@@ -248,7 +248,7 @@ const modelsEnableCommand = defineCliCommand({
 const modelsDisableCommand = defineCliCommand({
   meta: {
     name: 'disable',
-    description: 'Remove a model from the picker catalog',
+    description: 'Remove a model from the picker',
   },
   args: {
     ...GLOBAL_ARGS,

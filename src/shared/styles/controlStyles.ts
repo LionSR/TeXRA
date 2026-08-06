@@ -335,19 +335,17 @@ export const buttonStyles: CSSResult = css`
     padding: 0;
     background: transparent;
     color: var(--color-text-link);
+    /* Used inline in prose sentences, so underline at rest like a real link
+       (hue alone is not a reliable 3:1 cue across host themes). */
     text-decoration: underline;
-    text-decoration-color: transparent;
     text-underline-offset: 2px;
-    transition:
-      color var(--transition-fast),
-      text-decoration-color var(--transition-fast);
+    transition: color var(--transition-fast);
   }
 
   .btn-ghost.is-link::part(base):hover,
   .action-button.is-link::part(base):hover {
     background: transparent;
     color: var(--color-text-link-active);
-    text-decoration-color: currentColor;
   }
 
   :is(.btn-ghost.is-link, .action-button.is-link):is(:hover, :active) {

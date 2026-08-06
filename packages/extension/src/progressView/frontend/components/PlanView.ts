@@ -34,10 +34,6 @@ export class PlanView extends LitElement {
         display: block;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .plan-body {
         max-height: var(--height-xlarge);
         overflow-y: auto;

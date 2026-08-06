@@ -62,9 +62,13 @@ export function formatTokenEnvLine(token: string): string {
   return `${RELAY_TOKEN_ENV_VAR}=${token}`;
 }
 
+function mintedTokenHeadline(minted: MintedRelayToken): string {
+  return `Created CI token "${minted.name}" (${minted.token_hint}, expires ${minted.expires_at.slice(0, 10)}).`;
+}
+
 export function formatMintedTokenText(minted: MintedRelayToken): string {
   return [
-    `Minted CI relay token "${minted.name}" (${minted.token_hint}, expires ${minted.expires_at.slice(0, 10)}).`,
+    mintedTokenHeadline(minted),
     'Store it as a CI secret now — it is shown only once.',
     '',
     formatTokenEnvLine(minted.token),
@@ -82,7 +86,7 @@ function relayTokenStateLabel(token: RelayTokenInfo): string {
 
 export function formatTokenListText(tokens: readonly RelayTokenInfo[]): string {
   if (tokens.length === 0) {
-    return 'No CI relay tokens. Mint one with `texra setup-token`.';
+    return 'No CI tokens. Create one with `texra setup-token`.';
   }
   return tokens
     .map((token) => {
@@ -154,7 +158,7 @@ async function withRelayTokenSession<T>(
 export const setupTokenCommand = defineCliCommand({
   meta: {
     name: 'setup-token',
-    description: 'Mint a long-lived relay token for CI pipelines',
+    description: 'Create a long-lived token for CI pipelines',
   },
   args: {
     ...GLOBAL_ARGS,
@@ -192,9 +196,7 @@ export const setupTokenCommand = defineCliCommand({
       // Keep stdout to exactly the env line so `>> "$GITHUB_ENV"` and
       // command substitution work; the human guidance goes to stderr.
       writeTextStdout(formatTokenEnvLine(minted.token));
-      writeTextStderr(
-        `Minted CI relay token "${minted.name}" (${minted.token_hint}, expires ${minted.expires_at.slice(0, 10)}). Shown only once.`,
-      );
+      writeTextStderr(`${mintedTokenHeadline(minted)} Shown only once.`);
       return CliExitCode.Success;
     }
 
@@ -218,7 +220,7 @@ export const setupTokenCommand = defineCliCommand({
 });
 
 const authTokenListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List your CI relay tokens' },
+  meta: { name: 'list', description: 'List your CI tokens' },
   args: {
     ...GLOBAL_ARGS,
   },
@@ -239,7 +241,7 @@ const authTokenListCommand = defineCliCommand({
 });
 
 const authTokenRevokeCommand = defineCliCommand({
-  meta: { name: 'revoke', description: 'Revoke a CI relay token by id' },
+  meta: { name: 'revoke', description: 'Revoke a CI token by id' },
   args: {
     ...GLOBAL_ARGS,
     id: {
@@ -266,7 +268,7 @@ const authTokenRevokeCommand = defineCliCommand({
     emitCliResult(context, {
       json: { revoked },
       ndjson: { kind: 'relay-token-revoked', ...revoked },
-      text: `Revoked CI relay token "${revoked.name}". Pipelines using it will stop authenticating immediately.`,
+      text: `Revoked CI token "${revoked.name}". Pipelines using it will stop authenticating immediately.`,
     });
     return CliExitCode.Success;
   },
@@ -276,7 +278,7 @@ export const authTokenCommand = defineCommand({
   meta: {
     name: 'token',
     description:
-      'List and revoke CI relay tokens (mint with `texra setup-token`)',
+      'List and revoke CI tokens (create one with `texra setup-token`)',
   },
   args: {
     ...GLOBAL_ARGS,

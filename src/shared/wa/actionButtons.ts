@@ -140,6 +140,10 @@ function renderActionButtonParts({
   const tooltipTemplate = useWebAwesomeTooltip
     ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
     : nothing;
+  // `aria-label` (below) already names the button unconditionally, so `title`
+  // is only needed as a fallback hint when there's no `wa-tooltip` sibling to
+  // show one — setting both here would double up the hover hint (native
+  // tooltip + wa-tooltip) for every id+tooltip icon button.
   const nativeTitle = tooltip && !id ? tooltip : (title ?? ariaLabel);
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {

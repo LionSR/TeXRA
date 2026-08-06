@@ -28,10 +28,13 @@ export function renderSetStatusIcon<Status extends string>({
 }: SetStatusIconOptions<Status>): TemplateResult {
   const fallback = fallbacks[status];
   if (!fallback) {
+    // `label` exposes the check's meaning to assistive technology; `title`
+    // alone is a hover-only tooltip on an otherwise aria-hidden icon.
     return html`<wa-icon
       library="texra"
       name="check"
       class="status-check-icon"
+      label=${title ?? 'Set'}
       title=${title ?? 'Set'}
     ></wa-icon>`;
   }

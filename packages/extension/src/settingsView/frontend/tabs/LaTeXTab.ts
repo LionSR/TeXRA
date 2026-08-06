@@ -38,6 +38,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
+import { CoreSettingsShape } from '@shared/schemas/coreSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexConfigValues,
@@ -404,7 +405,7 @@ export class LaTeXTab extends LitElement {
             ? html`
                 <wa-details
                   class="collapsible-quiet dependency-guide-details"
-                  summary="Installation Guide"
+                  summary="Setup guide"
                 >
                   <div class="dependency-guide">${guideText}</div>
                 </wa-details>
@@ -731,12 +732,16 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const value = opts.currentValue ?? {};
     const error = this.replacementJsonErrors[opts.field];
+    const controlId = `latex-setting-${opts.field}`;
     return html`
       <div class="settings-row replacement-map-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
+          <label class="settings-row-label" for=${controlId}
+            >${opts.label}</label
+          >
           <span class="settings-row-help">${opts.description}</span>
           <wa-textarea
+            id=${controlId}
             rows="4"
             resize="auto"
             spellcheck="false"
@@ -771,19 +776,17 @@ export class LaTeXTab extends LitElement {
   ): void {
     try {
       const parsed: unknown = JSON.parse(source);
-      if (
-        !parsed ||
-        Array.isArray(parsed) ||
-        typeof parsed !== 'object' ||
-        Object.values(parsed).some((value) => typeof value !== 'string')
-      ) {
+      const result = CoreSettingsShape.latex
+        .unwrap()
+        .shape[field].safeParse(parsed);
+      if (!result.success) {
         throw new Error('Enter a JSON object with string values.');
       }
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
         [field]: undefined,
       };
-      this.dispatchSetConfigValue(field, parsed as Record<string, string>);
+      this.dispatchSetConfigValue(field, result.data);
     } catch (error) {
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
@@ -894,6 +897,11 @@ export class LaTeXTab extends LitElement {
   private renderConfigRow(opts: {
     label: string;
     description: string;
+    /** Control id the row's `<label for>` points at; the control template
+     *  must carry the same id. A real `<label for>` is used because a host
+     *  aria-label on WA form-associated elements names the custom element,
+     *  not the inner control (see settingsSection.ts). */
+    controlId: string;
     statusIcon?: TemplateResult | typeof nothing;
     control: TemplateResult;
     reset: TemplateResult | typeof nothing;
@@ -901,7 +909,9 @@ export class LaTeXTab extends LitElement {
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
+          <label class="settings-row-label" for=${opts.controlId}
+            >${opts.label}</label
+          >
           <span class="settings-row-help">${opts.description}</span>
         </div>
         <div class="settings-row-control">
@@ -928,12 +938,14 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     // No status icon: the switch already carries the on/off state, matching
     // the toggle rows in the other settings tabs.
+    const controlId = `latex-setting-${opts.field}`;
     return this.renderConfigRow({
       label: opts.label,
       description: opts.description,
+      controlId,
       control: html`
         <wa-switch
-          aria-label=${opts.label}
+          id=${controlId}
           ?checked=${effective}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
@@ -954,8 +966,11 @@ export class LaTeXTab extends LitElement {
    * status icon.
    */
   private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
+    // `label` (not just `title`) so the state reaches assistive technology —
+    // a titled but aria-hidden icon is visual-only.
     return waIcon(isCustom ? 'pencil' : 'gear', {
       className: `setting-status-icon ${isCustom ? 'is-set' : 'is-default'}`,
+      label: isCustom ? 'Customized' : 'Using default',
       title: isCustom ? 'Customized' : 'Using default',
     });
   }
@@ -987,12 +1002,15 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
+    const controlId = `latex-setting-${opts.field}`;
     return this.renderConfigRow({
       label: opts.label,
       description: opts.description,
       statusIcon: this.renderSettingStatusIcon(isCustom),
+      controlId,
       control: html`
         <wa-input
+          id=${controlId}
           type="number"
           min=${opts.min}
           max=${opts.max ?? nothing}
@@ -1031,12 +1049,15 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
+    const controlId = `latex-setting-${opts.field}`;
     return this.renderConfigRow({
       label: opts.label,
       description: opts.description,
       statusIcon: this.renderSettingStatusIcon(isCustom),
+      controlId,
       control: html`
         <wa-select
+          id=${controlId}
           .value=${String(effective)}
           @change=${(e: Event) => {
             const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;

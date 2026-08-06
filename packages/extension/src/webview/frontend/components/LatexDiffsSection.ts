@@ -124,7 +124,6 @@ export class LatexDiffsSection extends LitElement {
       }
 
       .latexdiffs-details {
-        margin-top: auto;
         margin-bottom: var(--wa-space-s);
       }
 

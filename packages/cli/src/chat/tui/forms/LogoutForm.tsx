@@ -20,12 +20,12 @@ const LOGOUT_FORM_ITEMS = [
   {
     value: 'texra',
     label: 'Researcher Access',
-    description: 'Sign out of included TeXRA access',
+    description: 'Sign out of your TeXRA account',
   },
   {
     value: 'all',
     label: 'All accounts',
-    description: 'Sign out of both account sessions',
+    description: 'Sign out of both accounts',
   },
 ] as const satisfies ReadonlyArray<SelectItem<CliLogoutTarget>>;
 

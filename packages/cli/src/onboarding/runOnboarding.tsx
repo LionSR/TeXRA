@@ -47,6 +47,7 @@ import {
   ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -353,7 +354,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
       finish({
         configured: true,
         declined: false,
-        summary: `Signed in as ${label}. Included TeXRA access is active.`,
+        summary: `Signed in as ${label}. ${INCLUDED_ACCESS.label} is active.`,
       });
     const onError = (message: string): void => {
       setError(message);
@@ -452,15 +453,11 @@ function OnboardingFrame(props: {
   readonly hints: readonly KeyHint[];
 }): React.JSX.Element {
   return (
-    <Box
-      borderStyle="round"
-      borderColor={COLOR_HINT}
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color={COLOR_HINT}
+      title={props.title}
+      footer={<KeyHints hints={props.hints} confirmCancel={false} />}
     >
-      <Text bold color={COLOR_HINT}>
-        {props.title}
-      </Text>
       {props.subtitle ? <Text dimColor>{props.subtitle}</Text> : null}
       {props.error ? (
         <Text color={COLOR_ERROR}>{`${CROSS} ${props.error}`}</Text>
@@ -468,10 +465,7 @@ function OnboardingFrame(props: {
       <Box marginTop={1} flexDirection="column">
         {props.children}
       </Box>
-      <Box marginTop={1}>
-        <KeyHints hints={props.hints} confirmCancel={false} />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
 
@@ -503,7 +497,7 @@ const SETUP_PATH_PICKER_ITEMS: Record<
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
   value: 'skip',
   label: ONBOARDING_CHOICE_SKIP_LABEL,
-  description: 'set up later: texra setup (ChatGPT, Researcher, key)',
+  description: 'Set up later with `texra setup`',
 };
 
 interface OnboardingPicker {
@@ -528,20 +522,21 @@ function onboardingPicker(props: {
   });
 
   if (!props.firstRun) {
-    return picker(
-      'Choose how to power model calls — use ChatGPT, sign in, or add a provider API key:',
-      ['chatgpt', 'relay', 'key'],
-    );
+    return picker('Choose how to power model calls:', [
+      'chatgpt',
+      'relay',
+      'key',
+    ]);
   }
   if (props.apiMode === 'included') {
     return picker(
-      'Subscription or included access needs sign-in for this run:',
+      `Sign in to use a subscription or ${INCLUDED_ACCESS.inline} for this run:`,
       ['chatgpt', 'relay'],
     );
   }
   if (props.apiMode === 'personal') {
     return picker(
-      'Personal mode needs ChatGPT sign-in or a provider key for this run:',
+      `To use ${OWN_API_KEYS.inline} for this run, sign in to ChatGPT or add a provider key:`,
       ['chatgpt', 'key'],
     );
   }
@@ -813,7 +808,7 @@ function ChatGptProgressStep(
 
   return (
     <RelayProgressFrame
-      title="Use ChatGPT subscription"
+      title={ONBOARDING_CHOICE_CHATGPT.label}
       spinnerLabel="Waiting for ChatGPT sign-in… (Ctrl-C cancels)"
     >
       {message.split('\n').map((line, index) => (
@@ -830,7 +825,7 @@ function KeyProviderStep(props: {
 }): React.JSX.Element {
   return (
     <OnboardingFrame
-      title="Use my own provider API key"
+      title={ONBOARDING_CHOICE_API_KEY.label}
       subtitle="Choose your provider:"
       hints={[
         { key: '↑/↓', action: 'navigate' },
