@@ -184,7 +184,7 @@ describe('background-tasks-panel', () => {
     element.remove();
   });
 
-  it('does not paint a retained process green when no terminal status arrived', async () => {
+  it('does not render finished process children — they are ephemeral', async () => {
     const element = createPanel();
     element.subagents = [
       {
@@ -192,30 +192,14 @@ describe('background-tasks-panel', () => {
         childStreamId: 'child-bash',
         agentName: 'bash',
         identity: { kind: 'process' as const, tool: 'bash' },
-        // A process has no child status source, so its retained row can keep
-        // the last in-flight phase. Claiming success here would render a
-        // failed command green.
-        status: 'running',
+        status: 'completed',
         finishedAt: 1_000,
       },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
-
-    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
-    expect(badge?.getAttribute('variant')).toBe('neutral');
-
-    element.remove();
-  });
-
-  it('paints a retained process green only on an explicit completed status', async () => {
-    const element = createPanel();
-    element.subagents = [
       {
-        executionId: 'bash-2',
-        childStreamId: 'child-bash-2',
-        agentName: 'bash',
-        identity: { kind: 'process' as const, tool: 'bash' },
+        executionId: 'agent-1',
+        childStreamId: 'child-agent',
+        agentName: 'reviewer',
+        identity: { kind: 'agent' as const, agent: 'reviewer' },
         status: 'completed',
         finishedAt: 1_000,
       },
@@ -223,31 +207,37 @@ describe('background-tasks-panel', () => {
     document.body.append(element);
     await element.updateComplete;
 
-    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
-    expect(badge?.textContent).toBe('Finished');
-    expect(badge?.getAttribute('variant')).toBe('success');
+    const names = [
+      ...(element.shadowRoot?.querySelectorAll('.task-name') ?? []),
+    ].map((node) => node.textContent?.trim());
+    expect(names).toEqual(['reviewer']);
+    expect(
+      element.shadowRoot?.querySelector('wa-badge.task-status'),
+    ).toBeTruthy();
 
     element.remove();
   });
 
-  it('shows a failed retained process as failed', async () => {
+  it('still lists a live process child', async () => {
     const element = createPanel();
     element.subagents = [
       {
-        executionId: 'bash-3',
-        childStreamId: 'child-bash-3',
+        executionId: 'bash-live',
+        childStreamId: 'child-bash-live',
         agentName: 'bash',
         identity: { kind: 'process' as const, tool: 'bash' },
-        status: 'failed',
-        finishedAt: 1_000,
+        status: 'running',
       },
     ];
     document.body.append(element);
     await element.updateComplete;
 
-    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
-    expect(badge?.textContent).toBe('Failed');
-    expect(badge?.getAttribute('variant')).toBe('danger');
+    expect(
+      element.shadowRoot?.querySelector('.task-name')?.textContent?.trim(),
+    ).toBe('bash');
+    expect(
+      element.shadowRoot?.querySelector('wa-badge.task-status')?.textContent,
+    ).toBe('Running');
 
     element.remove();
   });

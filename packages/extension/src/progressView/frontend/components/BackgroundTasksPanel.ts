@@ -9,7 +9,8 @@
  * don't have their own tab so they are not clickable.
  *
  * Rows are live children followed by the finished children the backend retains
- * (`ActiveChildInfo.finishedAt`); this panel never counts what it cannot list.
+ * (`ActiveChildInfo.finishedAt`); finished process (background bash) rows are
+ * ephemeral and filtered out here. This panel never counts what it cannot list.
  */
 
 // Third-party imports
@@ -36,9 +37,11 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
+  runIdentityName,
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
+import { getCleanAgentName } from '@shared/schemas/agent';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -263,7 +266,18 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const visibleSubagents = this.scope === 'all' ? this.subagents : [];
+    // Finished process children (background bash) are ephemeral — hide them
+    // even if a retained roster row still arrives from an older snapshot.
+    const visibleSubagents =
+      this.scope === 'all'
+        ? this.subagents.filter(
+            (child) =>
+              !(
+                child.identity?.kind === 'process' &&
+                child.finishedAt !== undefined
+              ),
+          )
+        : [];
     if (visibleSubagents.length + this.inquiries.length === 0) {
       return nothing;
     }
@@ -405,9 +419,11 @@ export class BackgroundTasksPanel extends LitElement {
       : undefined;
     const badge = taskStatusBadge(child);
     const idPrefix = `background-subagent-${index}`;
-    const nameTooltip = isClickable
-      ? `Go to ${child.agentName}`
+    // RunIdentity is the declared authority; agentName is only a fallback.
+    const displayName = child.identity
+      ? getCleanAgentName(runIdentityName(child.identity))
       : child.agentName;
+    const nameTooltip = isClickable ? `Go to ${displayName}` : displayName;
 
     return html`
       <div class="task-header">
@@ -437,7 +453,7 @@ export class BackgroundTasksPanel extends LitElement {
                 }
               : nothing
           }
-          >${child.agentName}</span
+          >${displayName}</span
         >
         <wa-tooltip for="${idPrefix}-name">${nameTooltip}</wa-tooltip>
         ${

@@ -443,12 +443,13 @@ export class SessionFactApplier {
   }
 
   /**
-   * Replace a parent stream's live child roster, retaining every child that
-   * just left it instead of folding it into a counter — a finished subagent
-   * keeps its executionId, agentName, status, startedAt, elapsed and toolName
-   * so hosts can list it. A retained row is only ever created from an entry
-   * that was already in OUR roster and is absent from `next`, so a first
-   * roster can never mark anything finished.
+   * Replace a parent stream's live child roster, retaining every non-process
+   * child that just left it instead of folding it into a counter — a finished
+   * subagent keeps its executionId, agentName, status, startedAt, elapsed and
+   * toolName so hosts can list it. Process children (background bash) are
+   * ephemeral and are never retained. A retained row is only ever created from
+   * an entry that was already in OUR roster and is absent from `next`, so a
+   * first roster can never mark anything finished.
    *
    * `next` decides roster membership and identity only. A row we already track
    * keeps the phase `recordChildPhase` wrote, so the status-machine fact stays
@@ -489,13 +490,21 @@ export class SessionFactApplier {
       // order), then the newly-vanished ones — so the list stays chronological
       // by construction and the cap evicts the oldest without a sort. A child
       // that reappears in `next` is live again, so drop its retained copy.
+      // Process children (background bash) are ephemeral: autoClose removes
+      // their stream tab, and retaining them only clutters Background Tasks.
+      const retainable = (child: (typeof previous)[number]): boolean =>
+        child.identity?.kind !== 'process';
       const retained = [
         ...previous.filter(
           (child) =>
-            child.finishedAt !== undefined && !nextIds.has(child.executionId),
+            child.finishedAt !== undefined &&
+            !nextIds.has(child.executionId) &&
+            retainable(child),
         ),
         ...previous
-          .filter((child) => vanishedIds.has(child.executionId))
+          .filter(
+            (child) => vanishedIds.has(child.executionId) && retainable(child),
+          )
           .map((child) => ({ ...child, finishedAt })),
       ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
       return { ...prev, subagents: [...live, ...retained] };

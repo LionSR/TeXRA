@@ -16,11 +16,14 @@ import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  runIdentityName,
   type StreamSubstate,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { getCleanAgentName } from '@shared/schemas/agent';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   formatStreamStatusLabel,
   streamStatusDisplayKey,
@@ -88,8 +91,12 @@ function buildTooltip(
   const worktreeDisplay = info.worktree
     ? `Worktree: ${info.worktree.branch}${info.worktree.pr ? ` (#${info.worktree.pr.number})` : ''}`
     : undefined;
+  // Prefer the declared RunIdentity over the derived tab label.
+  const identityDisplay = info.identity
+    ? getCleanAgentName(runIdentityName(info.identity))
+    : undefined;
   const mainLine = [
-    info.label || info.name,
+    identityDisplay || info.label || info.name,
     `Status: ${statusLabel}`,
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -192,6 +199,12 @@ export class StreamTab extends LitElement {
     const childToggleLabel = this.expanded
       ? 'Collapse background tasks'
       : childCountLabel;
+    // RunIdentity is the declared authority for what owns the stream. When the
+    // title is the AI one-liner, keep that explicit identity on metadata hover.
+    const metaAgentName =
+      stream.identity?.kind === 'agent'
+        ? getCleanAgentName(stream.identity.agent)
+        : undefined;
 
     return html`
       <div
@@ -257,7 +270,7 @@ export class StreamTab extends LitElement {
             this.compact
               ? nothing
               : html`
-                  <div class="tab-meta">
+                  <div id="stream-tab-meta" class="tab-meta">
                     ${
                       stream.worktree
                         ? html`<worktree-chip
@@ -303,7 +316,13 @@ export class StreamTab extends LitElement {
         ${
           this.compact
             ? nothing
-            : html`<wa-tooltip for="stream-tab-kind"
+            : html`${
+                  metaAgentName
+                    ? html`<wa-tooltip for="stream-tab-meta"
+                        >Agent: ${metaAgentName}</wa-tooltip
+                      >`
+                    : nothing
+                }<wa-tooltip for="stream-tab-kind"
                   >${
                     // Only agent runs have an execution-mode category; other
                     // stream kinds (and pending streams) show their label bare.
@@ -436,7 +455,22 @@ export class StreamTabs extends LitElement {
     nextVisited.add(stream.name);
 
     const children = (this.childStreamsByParent.get(stream.name) ?? []).filter(
-      (child) => !nextVisited.has(child.name),
+      (child) => {
+        if (nextVisited.has(child.name)) return false;
+        // Background bash/process tabs are ephemeral: once terminal, drop
+        // them from the Sessions tree even if autoClose has not removed the
+        // stream record yet.
+        if (child.identity?.kind === 'process') {
+          const childStatus = this.streamStates.get(child.name)?.status;
+          const phase =
+            childStatus === undefined ||
+            childStatus === DEFAULT_STREAM_METADATA_STATUS
+              ? undefined
+              : childStatus;
+          if (isTerminalOutcomePhase(phase)) return false;
+        }
+        return true;
+      },
     );
     const childCount = children.length;
     const expanded =

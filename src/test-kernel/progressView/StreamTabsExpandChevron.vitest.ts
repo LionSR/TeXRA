@@ -166,5 +166,98 @@ describe('stream-tab expand chevron', () => {
         ?.querySelector('wa-tooltip[for="stream-tab-kind"]')
         ?.textContent?.trim(),
     ).toBe('Multi-Agent Workflow');
+    expect(
+      tab?.shadowRoot?.querySelector('wa-tooltip[for="stream-tab-meta"]'),
+    ).toBeNull();
+  });
+
+  it('surfaces the agent name on the metadata hover when the title is a summary', async () => {
+    const tabs = await mountTabs({
+      streams: [
+        {
+          ...makeStream('engineer'),
+          agentCategory: AgentCategory.ToolUse,
+          description: 'Removing Supabase migrations from remote...',
+          model: 'grok45',
+          modelLabel: 'Grok 4.5',
+        },
+      ],
+    });
+
+    const shadow = tabs.shadowRoot?.querySelector('stream-tab')?.shadowRoot;
+    expect(shadow?.querySelector('#stream-tab-title')?.textContent).toContain(
+      'Removing Supabase migrations from remote...',
+    );
+    expect(shadow?.querySelector('.model')?.textContent?.trim()).toBe(
+      'Grok 4.5',
+    );
+    expect(
+      shadow
+        ?.querySelector('wa-tooltip[for="stream-tab-meta"]')
+        ?.textContent?.trim(),
+    ).toBe('Agent: engineer');
+  });
+
+  it('reads the agent tooltip from RunIdentity, not the derived tab label', async () => {
+    const tabs = await mountTabs({
+      streams: [
+        {
+          identity: { kind: 'agent', agent: 'custom:engineer' },
+          name: 'custom:engineer#abc',
+          // Deliberately stale/wrong derived label — identity is authoritative.
+          label: 'stale-label',
+          agentCategory: AgentCategory.ToolUse,
+          description: 'Removing Supabase migrations from remote...',
+          creationTimestamp: 1,
+        },
+      ],
+    });
+
+    expect(
+      tabs.shadowRoot
+        ?.querySelector('stream-tab')
+        ?.shadowRoot?.querySelector('wa-tooltip[for="stream-tab-meta"]')
+        ?.textContent?.trim(),
+    ).toBe('Agent: engineer');
+  });
+
+  it('hides finished process children from the Sessions tree', async () => {
+    const parent = {
+      ...makeStream('engineer'),
+      agentCategory: AgentCategory.ToolUse,
+    };
+    const liveBash: StreamTabInfo = {
+      identity: { kind: 'process', tool: 'bash' },
+      name: 'bash@tool#live',
+      label: 'bash',
+      parentStreamId: 'engineer',
+      creationTimestamp: 2,
+    };
+    const doneBash: StreamTabInfo = {
+      identity: { kind: 'process', tool: 'bash' },
+      name: 'bash@tool#done',
+      label: 'bash',
+      parentStreamId: 'engineer',
+      creationTimestamp: 3,
+    };
+    const tabs = await mountTabs({
+      streams: [parent],
+      childStreamsByParent: new Map([['engineer', [liveBash, doneBash]]]),
+      streamStates: new Map([
+        ['engineer', { status: 'running', lastTimestamp: 1 } as never],
+        ['bash@tool#live', { status: 'running', lastTimestamp: 2 } as never],
+        ['bash@tool#done', { status: 'completed', lastTimestamp: 3 } as never],
+      ]),
+    });
+
+    const childTabs = [
+      ...(tabs.shadowRoot?.querySelectorAll('.child-streams stream-tab') ?? []),
+    ];
+    expect(childTabs).toHaveLength(1);
+    expect(
+      childTabs[0]?.shadowRoot
+        ?.querySelector('#stream-tab-title')
+        ?.textContent?.trim(),
+    ).toBe('bash');
   });
 });
