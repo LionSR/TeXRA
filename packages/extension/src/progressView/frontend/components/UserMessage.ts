@@ -93,7 +93,7 @@ export class UserMessage extends LitElement {
       .user-message-header {
         position: absolute;
         top: calc(100% + var(--wa-space-3xs));
-        right: var(--wa-space-2xs);
+        inset-inline-end: var(--wa-space-2xs);
         display: flex;
         align-items: center;
         gap: var(--wa-space-3xs);

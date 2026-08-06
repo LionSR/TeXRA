@@ -47,10 +47,6 @@ export class AccountTab extends LitElement {
       .account-page {
         display: block;
       }
-
-      .account-tier {
-        text-transform: capitalize;
-      }
     `,
   ];
 
@@ -89,6 +85,9 @@ export class AccountTab extends LitElement {
       variant: 'neutral',
       appearance: 'outlined',
       size: 's',
+      // Session/spend-check notices appear after initial render; the live
+      // region makes them announce rather than materialize silently.
+      role: 'status',
       body: html`${body}`,
     });
   }
@@ -149,7 +148,10 @@ export class AccountTab extends LitElement {
       description =
         'The authentication service is temporarily unavailable. Your stored session has not been removed.';
     } else if (this.authenticated) {
-      description = html`<span class="account-tier">${this.tier}</span> plan`;
+      // Cased in the source string, not via CSS text-transform, so tiers
+      // like "pro+" or multi-word names keep their intended casing.
+      const tierLabel = this.tier.charAt(0).toUpperCase() + this.tier.slice(1);
+      description = html`${tierLabel} plan`;
     }
     // An expired session offers explicit recovery and cleanup. A transient
     // outage offers neither action, because the stored credential is retained.

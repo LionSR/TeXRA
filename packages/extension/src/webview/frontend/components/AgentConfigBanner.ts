@@ -29,11 +29,12 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
   override render(): TemplateResult {
     return renderWarningBanner({
       id: 'agentConfigBanner',
+      role: 'status',
       body: html`
         <span>
           ${
             this.state.agentName
-              ? `Agent file for "${this.state.agentName}" is missing.`
+              ? `Agent file for “${this.state.agentName}” is missing.`
               : 'Agent configuration is missing.'
           }
         </span>

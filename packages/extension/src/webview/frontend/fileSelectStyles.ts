@@ -36,7 +36,8 @@ export const fileSelectLayoutStyles = css`
     flex-shrink: 0;
   }
 
-  .file-select label {
+  .file-select label,
+  .file-select-label {
     display: block;
     margin-bottom: var(--wa-space-3xs);
     font-size: var(--font-size);
@@ -168,8 +169,10 @@ const multiFilesStyles = css`
     margin-inline-end: var(--wa-space-3xs);
   }
 
-  /* .remove-button is a wa-button.action-icon-button now; sizing comes from
-     compactIconActionButtonStyles. Only the per-row layout shrink survives here. */
+  /* .move-button / .remove-button are wa-button.action-icon-button now; sizing
+     comes from compactIconActionButtonStyles. Only the per-row layout shrink
+     survives here. */
+  .move-button,
   .remove-button {
     flex-shrink: 0;
   }

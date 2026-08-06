@@ -395,7 +395,12 @@ export function executeAgent(): void {
 
 function polishInstruction(): void {
   const instructionText = instruction$.get();
-  if (!instructionText.trim()) return;
+  if (!instructionText.trim()) {
+    // The button stays enabled, so mirror the pack/clean actions and tell the
+    // user why nothing happened.
+    showInformation('Enter an instruction to polish first.');
+    return;
+  }
 
   const executionMessage = buildExecuteMessage();
   const files = executionMessage.files ?? {};

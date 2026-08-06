@@ -62,6 +62,16 @@ export interface DesktopCommandPaletteOptions {
 
 const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX = 'texra.desktop.switchStream:';
 
+// Combobox wiring lives on the wa-input HOST, not its shadow input: ARIA
+// IDREFs (aria-controls/aria-activedescendant) cannot cross the shadow
+// boundary out to the light-DOM listbox, and wa-input delegates focus from
+// the host, so the host is where the combobox semantics resolve.
+const COMMAND_PALETTE_LIST_ID = 'desktop-command-palette-list';
+
+function commandPaletteOptionId(entryId: string): string {
+  return `desktop-command-palette-option-${entryId}`;
+}
+
 // Pure helpers exported for unit testing (filter/index/dispatch) — the
 // test-kernel suite exercises the same source of truth the palette runs.
 
@@ -213,6 +223,8 @@ export function createDesktopCommandPalette({
 
   const renderTemplate = (): void => {
     const groups = groupCommandPaletteEntries(visibleEntries);
+    const activeEntry =
+      activeIndex >= 0 ? visibleEntries[activeIndex] : undefined;
     render(
       html`
         <div class="desktop-command-palette-search">
@@ -226,13 +238,25 @@ export function createDesktopCommandPalette({
             spellcheck="false"
             placeholder="Search commands"
             aria-label="Search commands"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
+            aria-controls=${COMMAND_PALETTE_LIST_ID}
+            aria-activedescendant=${
+              activeEntry ? commandPaletteOptionId(activeEntry.id) : nothing
+            }
             .value=${query}
             @input=${handleFilterInput}
             @keydown=${handleFilterKeydown}
           ></wa-input>
           <kbd class="desktop-command-palette-key">Esc</kbd>
         </div>
-        <div class="desktop-command-palette-list" role="listbox">
+        <div
+          class="desktop-command-palette-list"
+          id=${COMMAND_PALETTE_LIST_ID}
+          role="listbox"
+          aria-label="Commands"
+        >
           ${
             visibleEntries.length === 0
               ? html`<div class="desktop-command-palette-empty" role="status">
@@ -260,6 +284,7 @@ export function createDesktopCommandPalette({
                     return html`
                       <wa-button
                         class="desktop-command-palette-item"
+                        id=${commandPaletteOptionId(entry.id)}
                         type="button"
                         appearance="plain"
                         size="s"
@@ -268,6 +293,7 @@ export function createDesktopCommandPalette({
                         aria-selected=${
                           index === activeIndex ? 'true' : 'false'
                         }
+                        tabindex="-1"
                         @mouseenter=${handleItemMouseEnter(index)}
                         @click=${handleItemClick(entry)}
                       >

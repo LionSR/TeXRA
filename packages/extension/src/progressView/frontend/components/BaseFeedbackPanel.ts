@@ -88,7 +88,7 @@ export abstract class BaseFeedbackPanel<
   protected renderFeedbackSection(
     containerClass: string,
     inputClass: string,
-    placeholder = 'Why are you rejecting?',
+    placeholder = 'What should the agent change?',
   ): TemplateResult | typeof nothing {
     if (!this.showFeedback) return nothing;
 

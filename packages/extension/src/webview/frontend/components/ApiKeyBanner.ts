@@ -29,6 +29,7 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
 
     return renderWarningBanner({
       id: 'apiKeyBanner',
+      role: 'alert',
       body: html`
         <span>
           ${
@@ -57,9 +58,8 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
           </wa-button>
         </div>
         <span class="hint">
-          Except for Codex models through ChatGPT subscription, chat
-          subscriptions do not include API access. Use a provider developer key
-          for other models.
+          Chat subscriptions don't include API access - except Codex models
+          through ChatGPT. For other models, use a provider developer key.
         </span>
       `,
     });

@@ -63,3 +63,5 @@ out/
 
 
 errorLogs/
+# Playwright MCP debug artifacts
+.playwright-mcp/

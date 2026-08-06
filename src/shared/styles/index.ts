@@ -3,6 +3,7 @@ export {
   commonViewStyles,
   compactIconActionButtonStyles,
   headerActionStyles,
+  visuallyHiddenStyles,
 } from './commonViewStyles';
 export { designTokens } from './litStyles';
 

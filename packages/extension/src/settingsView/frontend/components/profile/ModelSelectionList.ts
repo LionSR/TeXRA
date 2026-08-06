@@ -184,6 +184,9 @@ export class ModelSelectionList extends LitElement {
         includedAccessCap
           ? waIcon('triangle-exclamation', {
               className: 'model-row-icon model-row-icon--warning',
+              // `label` as well as `title`: a titled but aria-hidden icon
+              // never reaches assistive technology.
+              label: title,
               title,
             })
           : nothing
@@ -208,7 +211,7 @@ export class ModelSelectionList extends LitElement {
       ? 'model-row-icon'
       : 'model-row-icon model-row-icon--warning';
 
-    return waIcon(iconName, { className, title });
+    return waIcon(iconName, { className, label: title, title });
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
@@ -239,6 +242,7 @@ export class ModelSelectionList extends LitElement {
             isExpensiveModel(model.provider, model.name)
               ? waIcon('triangle-exclamation', {
                   className: 'model-row-icon model-row-icon--warning',
+                  label: EXPENSIVE_MODEL_HINT,
                   title: EXPENSIVE_MODEL_HINT,
                 })
               : nothing
@@ -328,6 +332,7 @@ export class ModelSelectionList extends LitElement {
         class="deprecated-toggle"
         appearance="plain"
         size="s"
+        aria-expanded=${String(isOpen)}
         @click=${() => this.toggleDeprecated(group.provider)}
       >
         ${waIcon('chevron-right', {
@@ -352,8 +357,9 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="helper-model-row">
-        <label>Helper model:</label>
+        <label for="helper-model-select">Model for quick fixes</label>
         <wa-select
+          id="helper-model-select"
           class="helper-model-select form-control-fill"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
@@ -366,6 +372,9 @@ export class ModelSelectionList extends LitElement {
             `,
           )}
         </wa-select>
+        <span class="helper-model-help">
+          Used for quick background jobs (e.g. intelligent merge).
+        </span>
       </div>
     `;
   }
@@ -378,7 +387,7 @@ export class ModelSelectionList extends LitElement {
         ${renderSettingsSectionHeading({
           title: 'Model selection',
           description:
-            'Choose the models exposed to agents and the default helper model used for lightweight tasks.',
+            'Choose the models exposed to agents, plus the cheaper model used for quick background tasks.',
           icon: 'server',
         })}
         ${this.renderHelperModelDropdown()}

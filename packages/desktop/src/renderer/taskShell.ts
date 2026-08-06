@@ -30,6 +30,8 @@ export interface TaskSidebarModel {
   readonly streamCount: number;
   readonly workspaceName: string;
   readonly workspacePath?: string;
+  /** Canonical name of the command palette action, from the command catalog. */
+  readonly commandsLabel: string;
 }
 
 export interface TaskSidebarCallbacks {
@@ -92,7 +94,8 @@ export function taskSidebarTemplate(
           class="task-sidebar-brand-menu icon-button is-size-s"
           appearance="plain"
           size="s"
-          aria-label="Open commands"
+          aria-label=${model.commandsLabel}
+          title=${model.commandsLabel}
           @click=${callbacks.onSearch}
         >
           ${waIcon('chevron-down')}
@@ -203,6 +206,77 @@ export interface WorkbenchTabsCallbacks {
   onMove(tabId: string, placement: WorkbenchPlacement): void;
 }
 
+/** DOM id of one tab's activate button; the tabpanel references it via aria-labelledby. */
+export function workbenchTabDomId(tabId: string): string {
+  return `task-workbench-tab-${tabId}`;
+}
+
+/** DOM id of the single pane a placement's tab strip switches. */
+export function workbenchPanelDomId(placement: WorkbenchPlacement): string {
+  return `task-workbench-panel-${placement}`;
+}
+
+/** Moves focus to a tab's activate button within its tab strip. */
+function focusTabButton(tablist: HTMLElement, tabId: string): void {
+  for (const tab of tablist.querySelectorAll('.task-workbench-tab')) {
+    if ((tab as HTMLElement).dataset.tabId === tabId) {
+      tab.querySelector<HTMLElement>('.task-workbench-tab-activate')?.focus();
+      return;
+    }
+  }
+}
+
+/**
+ * APG tab-strip keyboard support: ArrowLeft/ArrowRight move between tabs
+ * (wrapping), Home/End jump to the ends. Activation is automatic — the pane
+ * surfaces stay mounted, so switching is instant and focus stays on the tab.
+ * Only keys from a tab itself are handled; the close button and context menu
+ * keep their own key behavior.
+ */
+function handleTablistKeydown(
+  event: KeyboardEvent,
+  tabs: readonly WorkbenchTab[],
+  activeTabId: string | undefined,
+  callbacks: WorkbenchTabsCallbacks,
+): void {
+  if (
+    (event.target as HTMLElement | null)?.closest(
+      '.task-workbench-tab-activate',
+    ) == null
+  ) {
+    return;
+  }
+  if (tabs.length === 0) return;
+  const currentIndex = Math.max(
+    0,
+    tabs.findIndex((tab) => tab.id === activeTabId),
+  );
+  let nextIndex: number;
+  switch (event.key) {
+    case 'ArrowRight':
+      nextIndex = (currentIndex + 1) % tabs.length;
+      break;
+    case 'ArrowLeft':
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    case 'End':
+      nextIndex = tabs.length - 1;
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+  const next = tabs[nextIndex];
+  if (!next) return;
+  callbacks.onActivate(next.id);
+  // onActivate re-renders synchronously, so the strip is already patched when
+  // focus moves to the now-active tab.
+  focusTabButton(event.currentTarget as HTMLElement, next.id);
+}
+
 interface ContextMenuDropdown extends HTMLElement {
   open: boolean;
 }
@@ -253,6 +327,8 @@ export function workbenchTabsTemplate(
       class="task-workbench-tabs"
       role="tablist"
       aria-label=${`${placement} workbench tabs`}
+      @keydown=${(event: KeyboardEvent) =>
+        handleTablistKeydown(event, tabs, activeTabId, callbacks)}
     >
       <div class="task-workbench-tabs-scroll">
         ${tabs.map((tab) => {
@@ -271,7 +347,10 @@ export function workbenchTabsTemplate(
                 appearance="plain"
                 size="s"
                 role="tab"
+                id=${workbenchTabDomId(tab.id)}
                 aria-selected=${active ? 'true' : 'false'}
+                aria-controls=${workbenchPanelDomId(placement)}
+                tabindex=${active ? '0' : '-1'}
                 title=${tab.target ?? tab.title}
                 @click=${() => callbacks.onActivate(tab.id)}
               >
@@ -285,6 +364,7 @@ export function workbenchTabsTemplate(
                     ? html`<span
                         class="task-workbench-tab-dirty"
                         slot="end"
+                        role="img"
                         aria-label="Unsaved changes"
                       ></span>`
                     : nothing

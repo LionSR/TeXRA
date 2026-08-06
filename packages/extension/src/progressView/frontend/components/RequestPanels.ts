@@ -2,9 +2,11 @@
  * Lightweight container for permission request panels.
  *
  * Groups permissions by kind and renders section headers with
- * individual panel components. Manages global keyboard shortcuts
+ * individual panel components. Manages keyboard shortcuts
  * (y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss)
  * by delegating to the panel matching the newest permission in the queue.
+ * Single-character shortcuts fire only while focus is inside this component
+ * (WCAG 2.1.4); see handleGlobalKeydown for the rationale.
  */
 
 // Third-party imports
@@ -403,12 +405,21 @@ export class RequestPanels extends LitElement {
   // ===========================================================================
 
   /**
-   * Handle global keyboard shortcuts for permission actions.
+   * Handle keyboard shortcuts for permission actions.
    * Only active when permissions are visible and no text input is focused.
    * Delegates to the panel matching the newest permission (permissions[0]),
    * or the currently visible carousel panel for external inquiries.
    *
    * Left/right arrow keys navigate the external inquiry carousel.
+   *
+   * WCAG 2.1.4 (Character Key Shortcuts): single-character shortcuts (y, n,
+   * d, r, s, k…) additionally require focus inside this component — the
+   * compliant mechanism chosen here is "active only on focus" (a settings
+   * opt-out would cross into settingsView/shared lanes; remapping is
+   * already impossible for hardwired keys). Without the gate, one stray
+   * keystroke anywhere in the view could approve or reject a run.
+   * Non-character keys (Escape, arrows) are outside 2.1.4's scope and stay
+   * global.
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
     if (isTextInput(document.activeElement)) return;
@@ -430,6 +441,8 @@ export class RequestPanels extends LitElement {
         return;
       }
     }
+
+    if (key.length === 1 && !event.composedPath().includes(this)) return;
 
     const panel = this.getActivePanel();
     if (!panel) return;
