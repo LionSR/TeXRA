@@ -670,7 +670,6 @@
     ],
     "@shared/schemas/settingsViewMessages": [
       "packages/desktop/src/main/desktopSettingsIpc.ts",
-      "packages/desktop/src/main/desktopSettingsIpcHelpers.ts (type-only)",
       "packages/desktop/src/main/desktopShellIpc.ts",
       "packages/desktop/src/main/desktopToolingSettingsController.ts (type-only)",
       "packages/desktop/src/renderer/main.ts",

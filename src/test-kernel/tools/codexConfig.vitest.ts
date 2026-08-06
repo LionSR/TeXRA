@@ -7,6 +7,12 @@ import { describe, it } from 'vitest';
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  CODEX_FILE_CHANGE_TOOL,
+  CODEX_THREAD_TOOL,
+  CODEX_TODO_TOOL,
+  CODEX_TURN_TOOL,
+} from '@shared/schemas/codex';
+import {
   buildCodexConfig,
   toCodexCliReasoningEffort,
 } from '@tools/codexConfig';
@@ -16,14 +22,10 @@ import {
   buildCodexMcpToolLog,
   buildCodexThreadToolLog,
   buildCodexTodoToolLog,
-  CODEX_FILE_CHANGE_TOOL,
   CODEX_AGENT_NAME,
   CODEX_DISPLAY_MODEL,
-  CODEX_THREAD_TOOL,
-  CODEX_TODO_TOOL,
   buildCodexTurnToolLog,
   buildCodexUsageStats,
-  CODEX_TURN_TOOL,
 } from '@tools/codexShared';
 
 describe('buildCodexConfig', () => {
