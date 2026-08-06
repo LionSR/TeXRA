@@ -6,6 +6,7 @@
 // its own row.
 
 import { metaChordLabel } from '@cli/runtime/shortcutLabels';
+import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 import { textInputEditingHelp } from '../input/textInputBindings';
 
@@ -73,7 +74,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     `- ${textInputEditingHelp()}`,
     '- `Esc` stops the focused agent · `Ctrl-C` exits idle chats; stops active responses',
     "- `Ctrl-T` prints the focused stream's full output once into terminal scrollback",
-    "- `Tab` selects child sessions · `v` prints the selected stream's full output",
+    `- \`Tab\` ${SESSION_LIST.openHelp} · \`v\` prints the selected stream's full output`,
     `- \`${focusChord}\` focuses a stream directly`,
   ].join('\n');
 }

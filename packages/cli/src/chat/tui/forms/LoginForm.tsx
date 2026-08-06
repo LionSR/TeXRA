@@ -1,7 +1,12 @@
 import { Text } from 'ink';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import {
+  CHATGPT_AUTH,
+  DEVICE_CODE_DESCRIPTION,
+  RESEARCHER_ACCESS_AUTH,
+} from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 
 export type LoginFormValue =
@@ -16,23 +21,23 @@ export interface LoginFormProps {
 export const LOGIN_FORM_ITEMS = [
   {
     value: 'chatgpt',
-    label: 'ChatGPT subscription',
-    description: 'Codex via ChatGPT Plus/Pro/Team',
+    label: CHATGPT_AUTH.subscriptionLabel,
+    description: CHATGPT_AUTH.subscriptionDescription,
   },
   {
     value: 'texra',
-    label: 'Researcher Access',
-    description: `${INCLUDED_ACCESS.label} and remote agents`,
+    label: RESEARCHER_ACCESS.label,
+    description: RESEARCHER_ACCESS_AUTH.loginDescription,
   },
   {
     value: 'chatgpt --device',
-    label: 'ChatGPT device code',
-    description: 'Sign in from SSH or another browser',
+    label: CHATGPT_AUTH.deviceCodeLabel,
+    description: DEVICE_CODE_DESCRIPTION,
   },
   {
     value: 'texra --device',
-    label: 'Researcher device code',
-    description: 'Sign in from SSH or another browser',
+    label: RESEARCHER_ACCESS_AUTH.deviceCodeLabel,
+    description: DEVICE_CODE_DESCRIPTION,
   },
 ] as const satisfies ReadonlyArray<SelectItem<LoginFormValue>>;
 
