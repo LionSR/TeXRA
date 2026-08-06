@@ -24,6 +24,7 @@ import type { WorkflowCallProgress } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
+import { textDisplayWidth } from '../render/terminalText';
 import { isInquiryContinuationText } from './transcriptEntries';
 import { loadedImageDisplayLines } from './loadedImageDisplay';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
@@ -135,14 +136,11 @@ export function transcriptColumns(
   width: number | undefined,
   inset = 0,
 ): number {
-  return Math.max(
-    1,
-    Math.floor(
-      width == null || !Number.isFinite(width)
-        ? DEFAULT_TRANSCRIPT_COLUMNS
-        : width,
-    ) - inset,
-  );
+  const raw =
+    width != null && Number.isFinite(width)
+      ? width
+      : DEFAULT_TRANSCRIPT_COLUMNS;
+  return Math.max(1, Math.floor(raw) - inset);
 }
 
 function wrapWithPrefix(
@@ -151,7 +149,14 @@ function wrapWithPrefix(
   firstPrefix: string,
   continuationPrefix: string,
 ): readonly string[] {
-  const width = Math.max(1, columns - firstPrefix.length);
+  // Budget against the wider gutter: roles like `phase` indent continuations
+  // further than the first line, so wrapping to the first prefix alone would
+  // push every wrapped row past `columns` and let the terminal re-wrap it.
+  const gutter = Math.max(
+    textDisplayWidth(firstPrefix),
+    textDisplayWidth(continuationPrefix),
+  );
+  const width = Math.max(1, columns - gutter);
   return wrapAnsiToWidth(body, width)
     .split('\n')
     .map(
@@ -215,8 +220,10 @@ function entryLines(
   executionLabels: ExecutionLabels | undefined,
 ): readonly string[] {
   switch (entry.role) {
-    case 'assistant':
-      if (mode === 'live' || (mode === 'bounded' && !entry.finalized)) {
+    case 'assistant': {
+      const renderLiveTail =
+        mode === 'live' || (mode === 'bounded' && !entry.finalized);
+      if (renderLiveTail) {
         return liveAssistantDisplayLines({
           rows:
             mode === 'bounded' && maxRows !== undefined
@@ -232,40 +239,37 @@ function entryLines(
         width: columns,
         colorEnabled,
       }).split('\n');
+    }
     case 'tool': {
-      const richProjection =
+      const useRichDisplay =
         mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
       const lines = toolUseDisplayLines(entry.toolUse, {
         elide: mode !== 'scrollback-budget',
         executionLabels,
-        ...(richProjection ? { width: columns } : {}),
+        ...(useRichDisplay ? { width: columns } : {}),
       });
       // Rich rows and their bounded fallback keep each display line on one
       // terminal row. Other modes paint the wrapped text projection directly.
-      return richProjection ? lines : wrapDisplayLines(lines, columns);
+      return useRichDisplay ? lines : wrapDisplayLines(lines, columns);
     }
     case 'media':
       return loadedImageDisplayLines(entry.images, columns);
-    case 'phase': {
-      const geometry = ROLE_GEOMETRY.phase;
+    case 'phase':
       return wrapWithPrefix(
         `${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(entry)}`,
         columns,
-        geometry.firstPrefix,
-        geometry.continuationPrefix,
+        ROLE_GEOMETRY.phase.firstPrefix,
+        ROLE_GEOMETRY.phase.continuationPrefix,
       );
-    }
-    case 'workflowTask': {
+    case 'workflowTask':
       // The status marker belongs to the layout, not the Ink row: the print-once
       // scrollback snapshot is built from these lines.
-      const geometry = ROLE_GEOMETRY.workflowTask;
       return wrapWithPrefix(
         entry.text,
         columns,
-        `${geometry.firstPrefix}${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
-        geometry.continuationPrefix,
+        `${ROLE_GEOMETRY.workflowTask.firstPrefix}${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
+        ROLE_GEOMETRY.workflowTask.continuationPrefix,
       );
-    }
     default: {
       const geometry = ROLE_GEOMETRY[entry.role];
       return wrapWithPrefix(
@@ -369,16 +373,17 @@ export function boundedTranscriptEntryLayout(
   const rows = Math.max(1, maxRows);
   // Existing bounded tool rows omit their unbounded separators; user
   // bands retain margins whenever one content row still fits.
-  const marginRows =
-    layout.role === 'user' ? layout.marginTopRows + layout.marginBottomRows : 0;
+  const isUserRole = layout.role === 'user';
+  const marginRows = isUserRole
+    ? layout.marginTopRows + layout.marginBottomRows
+    : 0;
   const includeMargins = rows > marginRows;
   const contentRows = Math.max(1, rows - (includeMargins ? marginRows : 0));
   return {
     ...layout,
     lines: layout.lines.slice(-contentRows),
     marginBottomRows:
-      layout.role === 'user' && includeMargins ? layout.marginBottomRows : 0,
-    marginTopRows:
-      layout.role === 'user' && includeMargins ? layout.marginTopRows : 0,
+      isUserRole && includeMargins ? layout.marginBottomRows : 0,
+    marginTopRows: isUserRole && includeMargins ? layout.marginTopRows : 0,
   };
 }

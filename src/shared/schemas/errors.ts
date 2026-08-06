@@ -36,7 +36,9 @@ export const ExhaustionReasonSchema = z.enum([
   'upstream-credit',
   /** A ChatGPT-subscription (Codex) request was rejected because the plan's
    *  usage quota is exhausted; accepting the switch disables the "prefer
-   *  ChatGPT subscription" preference rather than disabling relay. */
+   *  ChatGPT subscription" preference rather than disabling relay.
+   *  Remark: permanently flipping prefer-off is not always ideal — when the
+   *  quota later resets, the user may forget to turn the preference back on. */
   'chatgpt-subscription',
   /** A GitHub Copilot request was rejected because the subscription quota is
    *  exhausted. */
@@ -67,30 +69,32 @@ export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return value;
   }
-  let data = value as Record<string, unknown>;
+  let record = value as Record<string, unknown>;
 
-  if (!('userRetryable' in data) && typeof data.retryable === 'boolean') {
-    // Drop the legacy key rather than merely adding `userRetryable` alongside
-    // it: callers that use this migration directly (not just as a
-    // z.preprocess step ahead of an object schema that would otherwise strip
-    // it) must not see a stale `retryable` field on the result.
-    const { retryable, ...rest } = data;
-    data = { ...rest, userRetryable: retryable };
+  if (!('userRetryable' in record) && typeof record.retryable === 'boolean') {
+    const { retryable, ...rest } = record;
+    record = { ...rest, userRetryable: retryable };
+  }
+
+  if ('exhaustionReason' in record) {
+    return record;
   }
 
   const hasLegacyExhaustionFlags =
-    'isCredentialExhausted' in data ||
-    'isUpstreamCreditDepleted' in data ||
-    'isChatGptSubscriptionLimited' in data;
-  if ('exhaustionReason' in data || !hasLegacyExhaustionFlags) {
-    return data;
+    'isCredentialExhausted' in record ||
+    'isUpstreamCreditDepleted' in record ||
+    'isChatGptSubscriptionLimited' in record;
+  if (!hasLegacyExhaustionFlags) {
+    return record;
   }
+
   const {
     isCredentialExhausted,
     isUpstreamCreditDepleted,
     isChatGptSubscriptionLimited,
     ...rest
-  } = data;
+  } = record;
+
   let exhaustionReason: ExhaustionReason | undefined;
   if (isChatGptSubscriptionLimited === true) {
     exhaustionReason = 'chatgpt-subscription';
@@ -163,7 +167,9 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 /** Complete error log data - combines provider error with context */
 export const ErrorLogDataSchema = z.preprocess(
   normalizeLegacyProviderErrorFields,
-  ProviderErrorObjectSchema.extend(ErrorContextSchema.shape).extend({
+  ProviderErrorObjectSchema.extend({
+    operation: z.string().optional(),
+    model: z.string().optional(),
     rawMessage: z.string().optional(),
   }),
 );
@@ -181,7 +187,9 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
  *  policy) branch on this to switch the retry from the relay/personal-key path
  *  to disabling the subscription preference. Accepts any error shape carrying
  *  the field (full `ProviderError`, `ProviderErrorPartial`, or `RetryErrorInfo`)
- *  so the predicate stays the one place that owns the verdict. */
+ *  so the predicate stays the one place that owns the verdict.
+ *  Remark: that disable-prefer design is a known tradeoff — after the quota
+ *  resets, users may forget the preference was turned off. */
 export function isChatGptSubscriptionLimitError(
   errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
 ): boolean {

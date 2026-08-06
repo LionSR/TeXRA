@@ -19,6 +19,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import { AgentCategory, RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -282,14 +283,27 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       }
     };
 
-    const { meta, defaultAgent } = await runPhase(() => {
+    const { meta, defaultAgent, defaultAgentCategory } = await runPhase(() => {
       const { meta } = parseWorkflowScript(script);
-      const defaultAgent = requireVisibleAgent(
+      const scope = runScope.delegationAgentScope ?? undefined;
+      // Search both categories — the tool description promises agentName
+      // accepts workflow and tool-use agents.
+      let firstError: unknown;
+      for (const category of [
         AgentCategory.Workflow,
-        input.agent,
-        runScope.delegationAgentScope ?? undefined,
-      );
-      return { meta, defaultAgent };
+        AgentCategory.ToolUse,
+      ] as const) {
+        try {
+          return {
+            meta,
+            defaultAgent: requireVisibleAgent(category, input.agent, scope),
+            defaultAgentCategory: category,
+          };
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+      throw firstError;
     });
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model
     // rewrites its script, so any key derived from call identity or source
