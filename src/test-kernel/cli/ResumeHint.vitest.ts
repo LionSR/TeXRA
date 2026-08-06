@@ -78,11 +78,13 @@ describe('collectResumeTargets', () => {
         child({
           executionId: 'rev',
           agentName: 'reviewer',
+          identity: { kind: 'agent', agent: 'reviewer' },
           childStreamId: 'reviewer@m#rev' as StreamTabId,
         }),
         child({
           executionId: 'flow',
           agentName: 'builder',
+          identity: { kind: 'agent', agent: 'builder' },
           childStreamId: 'builder@m#flow' as StreamTabId,
         }),
       ],

@@ -458,4 +458,24 @@ describe('retained finished children', () => {
 
     expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([live]);
   });
+
+  it('does not retain vanished process children — they are ephemeral', () => {
+    const { backend } = createRecordingBackend();
+    seedParent(backend);
+    const agent = subagent('reviewer', {
+      identity: { kind: 'agent', agent: 'reviewer' },
+    });
+    const bash = subagent('bash', {
+      agentName: 'bash',
+      identity: { kind: 'process', tool: 'bash' },
+    });
+
+    applyRoster(backend, PARENT, [agent, bash]);
+    applyRoster(backend, PARENT, []);
+
+    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toHaveLength(1);
+    expect(roster[0]?.executionId).toBe('reviewer');
+    expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+  });
 });
