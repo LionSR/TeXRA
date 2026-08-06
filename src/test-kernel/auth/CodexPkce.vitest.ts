@@ -13,7 +13,7 @@ import {
   generateCodeVerifier,
   generateOAuthState,
   generatePkcePair,
-} from '@auth/codex';
+} from '@auth/oauth/pkce';
 import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */

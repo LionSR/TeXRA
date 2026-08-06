@@ -11,9 +11,9 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { CODEX_THREAD_TOOL, CODEX_TURN_TOOL } from '@shared/schemas/codex';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
-import { CODEX_THREAD_TOOL, CODEX_TURN_TOOL } from '@tools/codexShared';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
