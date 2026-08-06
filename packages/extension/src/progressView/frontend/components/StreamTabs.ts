@@ -21,8 +21,8 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas/agent';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { getCleanAgentName } from '@shared/schemas/agent';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   formatStreamStatusLabel,

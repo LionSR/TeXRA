@@ -41,8 +41,8 @@ import {
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas/agent';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { getCleanAgentName } from '@shared/schemas/agent';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
