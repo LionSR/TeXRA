@@ -78,7 +78,7 @@ describe('CLI confirm-card key handling', () => {
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
-      { key: 'n', action: 'reject with note' },
+      { key: 'n', action: 'reject & note' },
       { key: 'a', action: 'approve commands for session' },
       { key: 'Esc', action: 'reject' },
     ]);
@@ -96,7 +96,7 @@ describe('CLI confirm-card key handling', () => {
       .map((hint) => `${hint.key} ${hint.action}`)
       .join(' · ');
     expect(compactRendered).toContain('a approve commands for session');
-    expect(compactRendered).toContain('n reject with note');
+    expect(compactRendered).toContain('n reject & note');
     expect(compactRendered.length).toBeLessThanOrEqual(80);
   });
 

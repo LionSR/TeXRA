@@ -119,23 +119,14 @@ export function submitSlashCommandWhenReady({
 }
 
 /** Cap on visible draft rows: a huge paste windows instead of consuming the
- *  transcript. Mirrors the modal free-text inputs' bounded-rows approach.
- *  Must match `maxDisplayRows` on BaseTextInput so the caret-aware window
- *  and the Box height stay one budget (see textInputCappedRowCount). */
+ *  transcript. Must match `maxDisplayRows` so Box height and the caret-aware
+ *  window share one budget (see textInputCappedRowCount). */
 const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 /** Round border (2) + paddingX (2) + pointer prompt `› ` (2). Must match
  *  the rendered chrome exactly: telling the window a wider width than Ink
  *  actually gives the inner Text makes Ink re-wrap the windowed row and the
  *  overflow row gets clipped by the height-capped Box. */
 const INPUT_BAR_DECORATION_COLUMNS = 6;
-
-function draftDisplayRows(value: string, width: number): number {
-  // Do not clamp soft-wrap content alone and then forget the caret: the
-  // capped helper keeps height and maxDisplayRows on the same budget, and
-  // textInputDisplayWindow reserves a row for the end-of-value caret when
-  // content would otherwise fill every row of that budget.
-  return textInputCappedRowCount(value, width, INPUT_BAR_MAX_CONTENT_ROWS);
-}
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
@@ -414,7 +405,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const inputDisplayWidth = Math.max(1, columns - INPUT_BAR_DECORATION_COLUMNS);
   const draftContentRows = disabled
     ? 1
-    : draftDisplayRows(value, inputDisplayWidth);
+    : textInputCappedRowCount(
+        value,
+        inputDisplayWidth,
+        INPUT_BAR_MAX_CONTENT_ROWS,
+      );
   useEffect(() => {
     inputBarContentRows.set(draftContentRows);
   }, [draftContentRows]);

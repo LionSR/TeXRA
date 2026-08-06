@@ -152,9 +152,7 @@ export function ConfirmCard({
     key: action.key,
     action: action.label,
   }));
-  // Esc performs the reject action, so its hint names the rejection: with
-  // immediate rejection Esc and `n` are the same decision (same label), and
-  // with feedback rejection Esc is the note-free variant ("reject").
+  // Immediate: Esc and `n` share rejectLabel; feedback: Esc is note-free "reject".
   const escapeLabel = rejectionMode === 'immediate' ? rejectLabel : 'reject';
   const compactHintLayout =
     compact && !feedbackMode

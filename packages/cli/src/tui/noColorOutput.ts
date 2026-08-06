@@ -93,13 +93,9 @@ export function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(
   }) as T;
 }
 
-// Whether the current Ink mount renders SGR at all. Recorded here because
-// this function IS the session's one color decision point (both the chat TUI
-// and one-shot prompts route their stdout through it), and components whose
-// only styling is SGR — the text-input caret's reverse-video — need a glyph
-// fallback when everything SGR is stripped. One Ink instance renders at a
-// time, so a single slot is enough. Use a signal (not a bare `let`) so tests
-// can reset it the same way other CLI TUI publish-once state does.
+// Session color mode, set by tuiOutputStreamForColor (sole decision point).
+// Inverse caret falls back to a glyph when SGR is stripped; signal (not bare
+// let) matches other CLI TUI publish-once state.
 const tuiColorEnabled = signal(true);
 
 export function isTuiColorEnabled(): boolean {
