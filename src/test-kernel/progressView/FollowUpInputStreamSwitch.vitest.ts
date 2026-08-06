@@ -101,7 +101,11 @@ function image(fileName: string): ExtractedClipboardImage {
 }
 
 describe('follow-up-input layout', () => {
-  it('renders six rows with Web Awesome vertical resizing', async () => {
+  // The composer sizes from its own content rather than reserving a fixed
+  // block for an empty draft, and keeps the manual drag affordance. Not Web
+  // Awesome's "auto" mode: it holds an oversized row for an empty draft inside
+  // a constrained composer, which is the failure the two-line floor avoids.
+  it('rests at two rows and stays vertically resizable', async () => {
     const element = createFollowUpInput('stream-layout');
     await element.updateComplete;
 
@@ -115,9 +119,9 @@ describe('follow-up-input layout', () => {
       | null;
     await textarea?.updateComplete;
 
-    expect(textarea?.rows).toBe(6);
+    expect(textarea?.rows).toBe(2);
     expect(textarea?.resize).toBe('vertical');
-    expect(textarea?.input.rows).toBe(6);
+    expect(textarea?.input.rows).toBe(2);
   });
 });
 

@@ -63,10 +63,10 @@ describe('saved key summary', () => {
     expect(
       formatSavedKeySummary('anthropic', {
         apiMode: 'personal',
-        message: 'Model access: Personal API keys.',
+        message: 'Model access: Your own API keys.',
       }),
     ).toBe(
-      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). Model access: Personal API keys.',
+      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). Model access: Your own API keys.',
     );
   });
 });
@@ -85,7 +85,7 @@ describe('maskDisplayValue', () => {
 describe('formatPersonalApiKeysLine', () => {
   it('formats the configured provider inventory without access claims', () => {
     expect(formatPersonalApiKeysLine(['deepseek'])).toBe(
-      'personal API keys: DeepSeek',
+      'your own API keys: DeepSeek',
     );
     expect(formatPersonalApiKeysLine([])).toBeUndefined();
   });

@@ -11,8 +11,8 @@ import { AgentReviewService } from '@frontend/review/AgentReviewService';
 
 /**
  * The shared progress-view host port plus the capabilities only the VS Code
- * host can serve: workspace diagnostics, inline criticism, native
- * notifications, the PDF viewer, and the agent-review panel.
+ * host can serve: workspace diagnostics, inline criticism, the PDF viewer,
+ * and the agent-review panel.
  */
 export function createExtensionHostInteractions(
   options: ProgressHostInteractionsOptions,
@@ -23,20 +23,6 @@ export function createExtensionHostInteractions(
     addCriticism: (payload) => {
       const accepted = pushManualCriticism(payload);
       return { accepted, resolvedPath: payload.absolutePath };
-    },
-    notifyUnavailableTools: (message, actionCommand, actionLabel) => {
-      if (!actionCommand) {
-        void vscode.window.showInformationMessage(message);
-        return;
-      }
-      const label = actionLabel ?? 'Open Tools Dashboard';
-      void vscode.window
-        .showInformationMessage(message, label)
-        .then((choice) => {
-          if (choice === label) {
-            void vscode.commands.executeCommand(actionCommand);
-          }
-        });
     },
     openPdf: async ({ location, preserveFocus }) => {
       await vscode.commands.executeCommand(

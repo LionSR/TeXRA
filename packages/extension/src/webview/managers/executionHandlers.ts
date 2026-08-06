@@ -96,7 +96,7 @@ export async function handleExecute(
       preparation.message,
     );
     if (preparation.docsCommand) {
-      const openDocs = 'File Management Guide';
+      const openDocs = 'Open file management guide';
       const choice = await vscode.window.showErrorMessage(
         preparation.message,
         openDocs,

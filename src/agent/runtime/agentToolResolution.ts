@@ -18,8 +18,8 @@
  *
  * Routine filtering outcomes (disabled, unavailable, not in registry) are
  * intentionally silent — YAML typos are surfaced once at load time by
- * `resolveToolDefinitions`; missing external dependencies are surfaced via
- * `notifyUnavailableTools` below, not repeated on every cycle.
+ * `resolveToolDefinitions`; tools with missing external dependencies are
+ * skipped quietly and stay inactive until set up (no toast on each cycle).
  */
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -39,7 +39,6 @@ import {
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
   DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
 } from '@tools/diagnosticsRuntimeCapabilities';
-import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import {
   availableModelNamesFromOptions,
   withDelegationModelAvailability,
@@ -140,7 +139,6 @@ export async function resolveAgentTools({
   const diagnosticsAddUnavailable =
     !diagnosticsReadUnavailable &&
     runtimeUnavailable.has(DIAGNOSTICS_ADD_RUNTIME_CAPABILITY);
-  const missingDependency: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
@@ -159,10 +157,7 @@ export async function resolveAgentTools({
     const def = typeof config === 'string' ? { name: config } : config;
     if (!passesRuntimeGates(def.name)) continue;
     if (disabled.has(def.name)) continue;
-    if (unavailable.has(def.name)) {
-      missingDependency.push(def.name);
-      continue;
-    }
+    if (unavailable.has(def.name)) continue;
     if (!effectiveRegistry.has(def.name)) continue;
     resolved.push(runtimeNarrowToolDefinition(def, diagnosticsAddUnavailable));
     resolvedNames.add(def.name);
@@ -180,10 +175,6 @@ export async function resolveAgentTools({
     } else {
       logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
     }
-  }
-
-  if (missingDependency.length) {
-    notifyUnavailableTools(missingDependency);
   }
 
   const availableModelNames =

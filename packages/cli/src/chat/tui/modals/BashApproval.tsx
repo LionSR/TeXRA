@@ -60,7 +60,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       rejectionMode="feedback"
-      alwaysAllow={{ kind: 'bash', label: 'approve all' }}
+      alwaysAllow={{ kind: 'bash', label: 'approve commands for session' }}
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >

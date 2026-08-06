@@ -252,7 +252,7 @@ describe('CLI orchestration items', () => {
 
   it('preserves the longest fitting status prefix before hiding all status lines', () => {
     const statusLines = [
-      'mode: included TeXRA access',
+      'mode: included access',
       'auth: signed out',
       'actions: `texra login` unlocks included models',
     ];
@@ -269,7 +269,7 @@ describe('CLI orchestration items', () => {
 
   it('keeps compact signed-in auth after the API mode on short launchers', () => {
     const statusLines = [
-      'api: included TeXRA access',
+      'api: included access',
       'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
     ];
 
@@ -277,7 +277,7 @@ describe('CLI orchestration items', () => {
 
     expect(layout).toEqual({
       statusLines: [
-        'api: included TeXRA access',
+        'api: included access',
         'auth: signed in as researcher@example.com',
       ],
       footerHints: [],
@@ -288,7 +288,7 @@ describe('CLI orchestration items', () => {
 
   it('keeps footer hints when compact auth creates enough room', () => {
     const statusLines = [
-      'api: included TeXRA access',
+      'api: included access',
       'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
     ];
     const footerHints = ['Team settings are available from the launcher.'];
@@ -296,7 +296,7 @@ describe('CLI orchestration items', () => {
     const layout = launcherLayout({ rows: 16, statusLines, footerHints });
 
     expect(layout.statusLines).toEqual([
-      'api: included TeXRA access',
+      'api: included access',
       'auth: signed in as researcher@example.com',
     ]);
     expect(layout.footerHints).toEqual(footerHints);
@@ -305,14 +305,14 @@ describe('CLI orchestration items', () => {
 
   it('uses the compact auth fallback when the launcher is narrow', () => {
     const statusLines = [
-      'api: personal API keys',
+      'api: your own API keys',
       'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
     ];
 
     const layout = launcherLayout({ rows: 16, columns: 40, statusLines });
 
     expect(layout.statusLines).toEqual([
-      'api: personal API keys',
+      'api: your own API keys',
       'auth: signed in as researcher@example.com',
     ]);
     expect(layout.maxVisibleItems).toBe(4);
@@ -355,7 +355,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi Off · fallback: included TeXRA access',
+        'ChatGPT Off · Grok Off · Kimi Off · otherwise: included access',
       value: { kind: 'configure-model-access' },
     });
     expect(
@@ -390,12 +390,12 @@ describe('CLI orchestration items', () => {
       },
       {
         value: { kind: 'api-fallback', apiMode: 'included' },
-        label: 'Included TeXRA access',
-        description: 'Use your TeXRA account',
+        label: 'Included access',
+        description: 'Covered by your TeXRA plan',
       },
       {
         value: { kind: 'api-fallback', apiMode: 'personal' },
-        label: 'Personal API keys',
+        label: 'Your own API keys',
         description: 'Use keys configured on this computer',
       },
     ]);
@@ -453,7 +453,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi On · fallback: personal API keys',
+        'ChatGPT Off · Grok Off · Kimi On · otherwise: your own API keys',
       value: { kind: 'configure-model-access' },
     });
   });
@@ -579,7 +579,7 @@ describe('CLI orchestration items', () => {
           item.value.kind === 'api-fallback' &&
           item.value.apiMode === 'included',
       )?.description,
-    ).toBe('Sign in through Account to use included models');
+    ).toBe('Sign in from Account first');
   });
 
   it('does not offer to sign out an environment-managed relay token', () => {
@@ -632,7 +632,7 @@ describe('CLI orchestration items', () => {
       'Settings',
       'Help',
     ]);
-    expect(items[2]?.description).toBe('2 resumable sessions');
+    expect(items[2]?.description).toBe('2 sessions');
     expect(buildCliResumeItems(history).map((item) => item.label)).toEqual([
       'aaaaaaaaaaaa',
       'bbbbbbbbbbbb',
@@ -878,7 +878,7 @@ describe('CLI orchestration items', () => {
     ).not.toHaveProperty('disabled');
     expect(view.items.at(-1)).toMatchObject({ label: 'Help' });
     expect(view.items[0]?.description).toBe(
-      'No personal API-key models are runnable',
+      'No models are available with your own API keys',
     );
     expect(view.modelItems).toEqual([]);
   });
@@ -938,7 +938,7 @@ describe('CLI orchestration items', () => {
       'sonnet46T',
     ]);
     expect(relayView.modelItems.map((item) => item.description)).toEqual([
-      'included: available',
+      'included access: available',
     ]);
     expect(personalView.modelItems.map((item) => item.value)).toEqual([
       'deepseekT',
@@ -1004,7 +1004,7 @@ describe('CLI orchestration items', () => {
 
     expect(view.items[0]).toMatchObject({
       disabled: true,
-      description: 'Sign in with texra login for included TeXRA models',
+      description: 'Sign in to use included access',
     });
   });
 });

@@ -58,12 +58,6 @@ export type AddCriticismSink = (input: ManualCriticismEntry) => {
   readonly resolvedPath: string;
 };
 
-export type ToolNotificationHandler = (
-  message: string,
-  actionCommand?: string,
-  actionLabel?: string,
-) => void;
-
 export interface OpenPdfRequest {
   readonly location: FileLocation;
   readonly preserveFocus: boolean;
@@ -288,8 +282,6 @@ export interface HostInteractions {
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
   readonly addCriticism?: AddCriticismSink;
-  /** Surface unavailable tool groups through the active host UI. */
-  readonly notifyUnavailableTools?: ToolNotificationHandler;
   /** Open a PDF in the active host's viewer. */
   readonly openPdf?: OpenPdfOpener;
   /** Report one agent-review finding to the active host's review session. */
@@ -418,10 +410,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   get addCriticism(): AddCriticismSink | undefined {
     return this.activeAttachment?.interactions.addCriticism;
-  }
-
-  get notifyUnavailableTools(): ToolNotificationHandler | undefined {
-    return this.activeAttachment?.interactions.notifyUnavailableTools;
   }
 
   get openPdf(): OpenPdfOpener | undefined {

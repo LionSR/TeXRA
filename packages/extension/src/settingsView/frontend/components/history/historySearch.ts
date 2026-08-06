@@ -85,7 +85,10 @@ export function getHistorySearchText(item: HistoryItem): string {
   addSearchValue(parts, presentation.description);
 
   parts.push('Category', presentation.decorator.label);
-  parts.push('Status', presentation.status.label);
+  // Index the status enum value alongside the badge text. The badge is the only
+  // status a row renders, so indexing just its label would silently break every
+  // saved search the moment that wording is edited.
+  parts.push('Status', presentation.status.label, item.status);
   parts.push('Agent');
   addSearchValue(parts, presentation.agent);
   parts.push('Model');

@@ -69,8 +69,4 @@ export const userQuestionPanelStyles: CSSResult = css`
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-xs);
   }
-
-  .user-question-request__free-text {
-    width: 100%;
-  }
 `;

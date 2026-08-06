@@ -198,14 +198,14 @@ export class ProgressApp extends ProgressAppBase {
             body: 'Start an agent from the New tab or Commands. Runs, streamed logs, approvals, and follow-up controls will appear here.',
             actions: [
               {
-                label: 'Open New',
+                label: 'Open the New tab',
                 icon: 'play',
                 appearance: 'filled',
                 variant: 'brand',
                 onClick: this.onOpenLauncher,
               },
               {
-                label: 'Open Dashboard',
+                label: 'Open dashboard',
                 icon: 'gear',
                 appearance: 'outlined',
                 variant: 'neutral',

@@ -67,7 +67,7 @@ export function htmlExportErrorMessage(
     case 'config_missing':
       return HISTORY_ITEM_NOT_FOUND_MESSAGE;
     case 'streamLogs_missing':
-      return 'No replayable execution-root transcript is available — it may predate transcript persistence or have only child transcripts.';
+      return 'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.';
   }
 }
 

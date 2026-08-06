@@ -26,7 +26,7 @@ export interface CliAgentListResult {
 export type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
 
 const AGENT_LOOKUP_HINT =
-  'Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.';
+  'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.';
 const MULTI_AGENT_PRESET_LOOKUP_HINT =
   'Use `texra multi-agent list` for available team presets, then run `texra multi-agent show <preset>` to check a team before launch.';
 
@@ -235,7 +235,7 @@ export function formatCliAgentList(
     const { categoryArg, catalog, qualifier } = cliAgentCatalogHint(
       options.category,
     );
-    return `No visible ${qualifier}agents are enabled for this workspace. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
+    return `No visible ${qualifier}agents are enabled for this workspace. Use \`texra agents list${categoryArg} --all\` to show ${catalog}.`;
   }
 
   return agents
@@ -280,7 +280,7 @@ export function formatCliHiddenAgentsNotice(
 ): string | undefined {
   if (hiddenCount <= 0) return undefined;
   const { categoryArg, catalog } = cliAgentCatalogHint(category);
-  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
+  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list${categoryArg} --all\` to show ${catalog}.`;
 }
 
 function cliAgentCatalogHint(category?: AgentCategory): {
@@ -292,7 +292,7 @@ function cliAgentCatalogHint(category?: AgentCategory): {
     category === AgentCategory.ToolUse ? 'tool-use' : category;
   return {
     categoryArg: category ? ` --category ${category}` : '',
-    catalog: categoryLabel ? `${categoryLabel} catalog` : 'full catalog',
+    catalog: categoryLabel ? `all ${categoryLabel} agents` : 'all agents',
     qualifier: categoryLabel ? `${categoryLabel} ` : '',
   };
 }

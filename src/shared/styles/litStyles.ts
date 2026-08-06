@@ -93,9 +93,7 @@ export const designTokens: CSSResult = css`
     --height-xlarge: 400px;
 
     /* Widths */
-    --width-icon: 16px;
     --width-button-min: 80px;
-    --width-content-max: 1000px;
 
     /* Borders */
     --border-thin: 1px;
@@ -137,7 +135,6 @@ export const designTokens: CSSResult = css`
        rows, code blocks, inputs); large regions separate by a background step
        instead. */
     --border-hairline: light-dark(rgb(0 0 0 / 10%), rgb(255 255 255 / 10%));
-    --border-hairline-soft: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
     --border-hairline-strong: light-dark(
       rgb(0 0 0 / 15%),
       rgb(255 255 255 / 20%)
@@ -167,22 +164,17 @@ export const designTokens: CSSResult = css`
     --focus-ring-offset: 2px;
     --textarea-h-s: 2.75rem;
     --textarea-h-m: 6rem;
-    --textarea-h-l: 6.625rem;
 
     /* Opacity levels */
     --opacity-separator: 0.3;
-    --opacity-faint: 0.35;
     --opacity-disabled: 0.5;
-    --opacity-muted: 0.6;
     --opacity-subtle: 0.7;
-    --opacity-hover: 0.8;
     --opacity-normal: 0.85;
     --opacity-full: 1;
 
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.2s ease;
-    --transition-slow: 0.3s ease;
 
     /* Letter spacing. Caps for uppercase labels/badges, tight for display type
        (em scales with font-size). */

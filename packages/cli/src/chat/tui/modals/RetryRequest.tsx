@@ -30,9 +30,6 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const switchDecision: ApprovalDecision = isChatGptSubscription
     ? { accepted: true, disableChatGptSubscription: true, apiMode: 'personal' }
     : { accepted: true, apiMode: 'personal' };
-  const switchHint = isChatGptSubscription
-    ? 'Press k to switch from your ChatGPT subscription to your OpenAI API key before retrying.'
-    : 'Press k to switch to personal API keys before retrying.';
   let keyGuidance: React.JSX.Element | null = null;
   if (
     isCliApiSwitchableRetry(props.payload) &&
@@ -50,7 +47,11 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       </Text>
     );
   } else if (canSwitchToPersonalKey) {
-    keyGuidance = <Text color={COLOR_HINT}>{switchHint}</Text>;
+    keyGuidance = (
+      <Text color={COLOR_HINT}>
+        Press k to use your own API key for this retry.
+      </Text>
+    );
   }
   return (
     <ConfirmCard
@@ -58,14 +59,14 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       color={COLOR_WARNING}
       title="Retry the failed call?"
       approveLabel="retry"
-      rejectLabel="give up"
+      rejectLabel="dismiss"
       rejectionMode="immediate"
       extraActions={
         canSwitchToPersonalKey
           ? [
               {
                 key: 'k',
-                label: 'use API key and retry',
+                label: 'retry with your own API key',
                 decision: switchDecision,
               },
             ]

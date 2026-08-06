@@ -143,7 +143,7 @@ describe('CLI agents command', () => {
       { paged: true },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show the full catalog.',
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show all agents.',
     );
   });
 
@@ -166,7 +166,7 @@ describe('CLI agents command', () => {
       { paged: true },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show the workflow catalog.',
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
 
@@ -184,12 +184,12 @@ describe('CLI agents command', () => {
       {
         json: [],
         ndjson: [],
-        text: 'No visible workflow agents are enabled for this workspace. Use `texra agents list --category workflow --all` to show the workflow catalog.',
+        text: 'No visible workflow agents are enabled for this workspace. Use `texra agents list --category workflow --all` to show all workflow agents.',
       },
       { paged: true },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show the workflow catalog.',
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
 
@@ -273,7 +273,7 @@ describe('CLI agents command', () => {
       { paged: true },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category toolUse --all` to show the tool-use catalog.',
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category toolUse --all` to show all tool-use agents.',
     );
   });
 
@@ -301,7 +301,7 @@ describe('CLI agents command', () => {
       { paged: true },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show the workflow catalog.',
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
 
@@ -431,7 +431,7 @@ describe('CLI agents command', () => {
 
     expect(exitCode).toBe(2);
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
+      'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
     );
     expect(mocks.emitCliResult).not.toHaveBeenCalled();
   });
