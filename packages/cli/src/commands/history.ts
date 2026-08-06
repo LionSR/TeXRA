@@ -64,7 +64,7 @@ async function runHistoryList(
       ndjson: cliHistoryNdjsonRecords(visibleEntries),
       text: visibleEntries.length
         ? formatCliHistoryText(visibleEntries)
-        : 'No execution history found.',
+        : 'No history yet. Runs appear here after you start an agent.',
     },
     { paged: true },
   );

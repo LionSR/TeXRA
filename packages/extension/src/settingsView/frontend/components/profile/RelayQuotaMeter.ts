@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { designTokens } from '@shared/styles';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
@@ -20,6 +21,8 @@ const USD_FORMATTER = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
+const METER_LABEL = 'Used this month';
+
 function quotaNote(
   state: SpendingQuotaState,
   autoSwitched: boolean,
@@ -27,11 +30,11 @@ function quotaNote(
 ): string | null {
   if (state === 'exhausted') {
     return autoSwitched
-      ? "Monthly relay quota reached — switched you to your own API keys. Select 'Included Access' under Model access to retry the relay."
-      : 'Monthly relay quota reached. Switch to your own API keys to keep going.';
+      ? `${INCLUDED_ACCESS.usedUp.statement} We switched you to ${OWN_API_KEYS.inline}. Choose "${INCLUDED_ACCESS.option.label}" under Model access to switch back.`
+      : `${INCLUDED_ACCESS.usedUp.statement} ${INCLUDED_ACCESS.usedUp.nextStep}`;
   }
   if (state === 'warning') {
-    return `${remainingPercent}% of your monthly relay quota left.`;
+    return `${remainingPercent}% of this month's ${INCLUDED_ACCESS.inline} left.`;
   }
   return null;
 }
@@ -119,7 +122,7 @@ export class RelayQuotaMeter extends LitElement {
     return html`
       <div class="quota-meter" data-state=${state}>
         <div class="quota-row">
-          <span class="quota-label">Relay usage this month</span>
+          <span class="quota-label">${METER_LABEL}</span>
           <span class="quota-amount">
             ${USD_FORMATTER.format(s.currentSpend)} of
             ${USD_FORMATTER.format(s.limit)}
@@ -128,7 +131,7 @@ export class RelayQuotaMeter extends LitElement {
         <wa-progress-bar
           class="quota-bar"
           value=${Math.round(percent)}
-          label="Relay usage this month"
+          label=${METER_LABEL}
         ></wa-progress-bar>
         <div class="quota-note">${formatPercent(percent)} used</div>
         ${note ? html`<div class="quota-note">${note}</div>` : nothing}

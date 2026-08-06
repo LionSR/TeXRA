@@ -249,7 +249,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     data: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const flags: string[] = [];
-    if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
+    if (data.toolConfig.autoExtractFigure) flags.push('Extract figures');
     if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__extract-flags">

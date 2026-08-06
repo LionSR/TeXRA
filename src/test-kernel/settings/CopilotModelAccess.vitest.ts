@@ -98,7 +98,7 @@ describe('Copilot model access settings', () => {
     ]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
-    expect(section?.textContent).toContain('Copilot route selected.');
+    expect(section?.textContent).toContain('Using Copilot for this model.');
     const button = section?.querySelector<HTMLElement>('wa-button');
     expect(button?.textContent).toContain('Stop using Copilot');
 
@@ -151,7 +151,7 @@ describe('Copilot model access settings', () => {
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain(
-      'Selected Copilot route is waiting for VS Code consent.',
+      'Selected. Waiting for your approval in VS Code.',
     );
     const buttons = [
       ...(section?.querySelectorAll<HTMLElement>('wa-button') ?? []),
@@ -176,7 +176,7 @@ describe('Copilot model access settings', () => {
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain(
-      '1 selected Copilot route needs attention.',
+      '1 selected Copilot model needs attention.',
     );
     expect(section?.querySelector('wa-button')?.textContent).toContain(
       'Stop using Copilot',

@@ -133,9 +133,8 @@ export class SubscriptionsTab extends LitElement {
                 >3. Optional: prefer Kimi Code</span
               >
               <span class="settings-row-help">
-                Enable "Prefer Kimi Code" on the same row to route K3 through
-                the membership endpoint; the kimi-for-coding models always use
-                it.
+                Enable "Prefer Kimi Code" on the same row so K3 also uses your
+                Kimi Code subscription; the kimi-for-coding models always do.
               </span>
             </div>
           </div>
@@ -162,29 +161,28 @@ export class SubscriptionsTab extends LitElement {
     ).length;
     let status: string;
     if (blockedPreferredCount > 0) {
-      status = `${blockedPreferredCount} selected ${pluralize(blockedPreferredCount, 'Copilot route needs', 'Copilot routes need')} attention.`;
+      status = `${blockedPreferredCount} selected ${pluralize(blockedPreferredCount, 'Copilot model needs', 'Copilot models need')} attention.`;
     } else if (consentCount > 0) {
-      status = 'VS Code is ready to ask for your consent.';
+      status = 'VS Code is ready to ask for your approval.';
     } else if (readyCount > 0) {
       status = `${readyCount} ${pluralize(readyCount, 'Copilot model is', 'Copilot models are')} ready.`;
     } else {
       status = `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
     }
 
-    // Each route gets its own responsive settings row. Short action labels
+    // Each model gets its own responsive settings row. Short action labels
     // keep controls usable in narrow panels while the adjacent text names the
-    // model and route state.
+    // model and its state.
     const actionRows = models.flatMap((model) => {
       let routeStatus: string;
       let action: TemplateResult;
       if (model.preferred) {
         if (model.access === 'allowed') {
-          routeStatus = 'Copilot route selected.';
+          routeStatus = 'Using Copilot for this model.';
         } else if (model.access === 'consent-required') {
-          routeStatus =
-            'Selected Copilot route is waiting for VS Code consent.';
+          routeStatus = 'Selected. Waiting for your approval in VS Code.';
         } else {
-          routeStatus = 'Selected Copilot route is currently unavailable.';
+          routeStatus = 'Selected, but currently unavailable.';
         }
         const stopAction = renderLabeledActionButton({
           icon: 'xmark',
@@ -210,7 +208,7 @@ export class SubscriptionsTab extends LitElement {
               })}${stopAction}`
             : stopAction;
       } else if (model.access === 'consent-required') {
-        routeStatus = 'VS Code consent is required.';
+        routeStatus = 'Needs your approval in VS Code.';
         action = renderLabeledActionButton({
           icon: 'shield',
           text: 'Grant access',
@@ -249,9 +247,9 @@ export class SubscriptionsTab extends LitElement {
       ];
     });
 
-    // Keep the per-model route controls collapsed behind the status summary
-    // unless something needs a decision: pending consent, a blocked route, or
-    // an active route whose "Stop using Copilot" control must stay visible.
+    // Keep the per-model controls collapsed behind the status summary unless
+    // something needs a decision: a pending approval, a blocked model, or an
+    // active model whose "Stop using Copilot" control must stay visible.
     const showRoutes =
       blockedPreferredCount > 0 ||
       consentCount > 0 ||
@@ -282,7 +280,7 @@ export class SubscriptionsTab extends LitElement {
             actionRows.length > 0
               ? html`<wa-details
                   class="panel-collapsible"
-                  summary="Manage Copilot routes"
+                  summary="Manage Copilot models"
                   ?open=${showRoutes}
                 >
                   ${actionRows}

@@ -306,7 +306,7 @@ async function runInstallGithubAction(
       writeTextStderr(
         diagnostic
           ? `gh pr create --web failed: ${diagnostic}`
-          : 'gh pr create --web failed; trying the compare URL fallback.',
+          : 'gh pr create --web failed; opening the compare URL instead.',
       );
       opened = await tryOpenBrowser(prPageUrl);
     }

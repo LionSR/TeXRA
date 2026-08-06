@@ -68,7 +68,7 @@ describe('ModelAccessForm status', () => {
       expect(stdout.output).toContain('model access unavailable');
       expect(stdout.output).toContain('Current preference unavailable');
       expect(stdout.output).not.toContain('Off ·');
-      expect(stdout.output).toContain('✓ 4. Included TeXRA access');
+      expect(stdout.output).toContain('✓ 4. Included access');
 
       stdin.write('2');
       await Promise.resolve();

@@ -1,4 +1,4 @@
-/** Radio buttons to choose between included API access and personal keys. */
+/** Radio buttons to choose between included access and your own API keys. */
 
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -17,6 +17,7 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - profile view styles
@@ -47,8 +48,7 @@ export class ApiAccessSection extends LitElement {
       <div class="api-access-section">
         ${renderSettingsSectionHeading({
           title: 'Model access',
-          description:
-            'Choose whether TeXRA uses included access or credentials from your provider accounts.',
+          description: `Choose whether TeXRA uses ${INCLUDED_ACCESS.inline} or ${OWN_API_KEYS.inline}.`,
           icon: 'circle-user',
         })}
         <wa-radio-group
