@@ -25,6 +25,12 @@ export const streamTabStyles = css`
     overflow: hidden;
   }
 
+  /*
+   * Status-rail colours. Finished / idle states (stopped, completed,
+   * cancelled, ready) keep the transparent default — the rail only lights
+   * up while something is running, needs attention, or has a pending
+   * approval waiting.
+   */
   .tab-container.status-running {
     border-inline-start-color: var(--color-success);
   }
@@ -39,18 +45,38 @@ export const streamTabStyles = css`
     border-inline-start-color: var(--wa-color-text-link);
   }
 
-  /* Finished states (stopped/completed/cancelled/ready) keep the
-     transparent default: the rail only lights up while something is
-     happening or needs attention. */
-
   .tab-container.status-initializing,
   .tab-container.status-starting {
     border-inline-start-color: var(--color-warning);
   }
 
-  /* Pending approval — solid orange start rail. */
   .tab-container.has-pending-approval {
     border-inline-start-color: var(--wa-color-chart-orange, #d18616);
+  }
+
+  .tab-container:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 30%,
+      transparent
+    );
+  }
+
+  /* Selected row: branded fill with list-active foreground. The descendant
+   * wildcard forces nested spans (.last-active, .model), codicon glyphs,
+   * and every descendant to inherit the selection colour even when
+   * intermediate elements define their own. */
+  .tab-container.is-active {
+    background-color: color-mix(
+      in srgb,
+      var(--wa-color-brand-fill-quiet) 85%,
+      transparent
+    );
+    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
+  }
+
+  .tab-container.is-active * {
+    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
   }
 
   .tab {
@@ -85,10 +111,11 @@ export const streamTabStyles = css`
     text-overflow: ellipsis;
   }
 
-  /* Shape half of the status cue — border-left carries the hue. Renders in
-     the row's own foreground so it stays legible on the selection background
-     and adds no new color pair to verify. No opacity fade: this is the only
-     non-color signal the status has, so it is information, not decoration. */
+  /*
+   * Shape half of the status cue — border-inline-start on the container
+   * carries the hue. Renders in the row's own foreground so it stays
+   * legible on the selection background without adding a new colour pair.
+   */
   .tab-status-icon {
     flex-shrink: 0;
     font-size: var(--font-size-xs);
@@ -105,8 +132,10 @@ export const streamTabStyles = css`
     overflow: hidden;
   }
 
-  /* Reveal the metadata line on hover, focus, or selection. The agent name
-     rides a tooltip on this line when the title is the AI session one-liner. */
+  /*
+   * Reveal the metadata line on hover, focus, or selection. The agent name
+   * rides a tooltip on this line when the title is the AI session one-liner.
+   */
   .tab-container:hover .tab-meta,
   .tab-container:focus-within .tab-meta,
   .tab-container.is-active .tab-meta {
@@ -118,13 +147,19 @@ export const streamTabStyles = css`
     margin-inline-start: var(--wa-space-2xs);
   }
 
-  /* 24px literal, not --control-size-s: that step is bridged to 20px in the
-     extension (common.css) for editor-chrome density, which is under WCAG
-     2.5.8's floor. The row's own select target sits flush against this one, so
-     the spacing exception does not apply and it has to meet 24x24 outright —
-     and growing the hit area with a pseudo-element instead would overlap the
-     select target, making near-misses delete a session. 24px is also exactly
-     --wa-row-height, so the row does not get taller. */
+  .tab-meta worktree-chip {
+    flex-shrink: 1;
+  }
+
+  /*
+   * Delete button. 24 px literal (not --control-size-s): the extension
+   * bridges --control-size-s to 20 px for editor-chrome density, which
+   * falls below WCAG 2.5.8's 24×24 minimum. The row's own select target
+   * sits flush against this one — growing the hit area with a
+   * pseudo-element would overlap it, making near-misses delete a session.
+   * 24 px is also exactly --wa-row-height, so the row stays the same
+   * height.
+   */
   .tab-delete {
     flex-shrink: 0;
     display: flex;
@@ -141,8 +176,7 @@ export const streamTabStyles = css`
     z-index: 10;
   }
 
-  /* Reveal the delete affordance only when the row is hovered,
-   * focused, or selected — keeps the tabs clean at rest. */
+  /* Reveal on hover, selection, or focus — hidden at rest. */
   .tab-container:hover .tab-delete,
   .tab-container.is-active .tab-delete,
   .tab-delete:focus-visible,
@@ -150,42 +184,20 @@ export const streamTabStyles = css`
     opacity: 1;
   }
 
-  .tab-container:hover {
+  .tab-delete::part(base) {
+    padding: 0;
+    border-radius: var(--border-radius-small);
     background-color: color-mix(
       in srgb,
-      var(--wa-color-neutral-fill-quiet) 30%,
+      var(--wa-color-text-quiet, var(--wa-color-text-normal)) 10%,
       transparent
     );
   }
 
   /*
-   * The descendant wildcard rule below forces nested spans
-   * (.last-active, .model) and codicon glyphs to inherit the selection
-   * color even when intermediate elements define their own.
-   */
-  .tab-container.is-active {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-brand-fill-quiet) 85%,
-      transparent
-    );
-    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
-  }
-
-  /*
-   * Single descendant rule covers .tab, .tab-title, .tab-meta,
-   * .tab-delete, .tab-expand, and any nested spans
-   * (.last-active, .model) and codicon glyphs.
-   */
-  .tab-container.is-active * {
-    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
-  }
-
-  /*
-   * Destructive-action cue on hover: a color flip only, no hover box — the
-   * row's own hover background already carries the affordance. The descendant
-   * selector reaches the slotted icon past the is-active wildcard above; the
-   * ::part rules strip the shared action-icon-button hover/active fill.
+   * Destructive colour on hover / focus — no hover box needed since the
+   * row background already carries the affordance. The descendant selector
+   * reaches the slotted icon past the is-active wildcard.
    */
   .tab-delete:hover,
   .tab-delete:hover *,
@@ -200,45 +212,11 @@ export const streamTabStyles = css`
     background: transparent;
   }
 
-  .tab-container.is-compact .tab {
-    padding: var(--wa-space-3xs) var(--wa-space-3xs);
-  }
-
-  /* No compact override for .tab-delete: the narrow rail is 48px wide, which
-     still fits the 24px target, and shrinking it there would put the same
-     sub-minimum hit area back on the layout that most needs a reliable one. */
-
-  .tab-container.is-compact .tab-header {
-    gap: var(--wa-space-3xs);
-  }
-
-  .compact-subagent-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-  }
-
-  .nested-stream-icon {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-    margin-inline-end: var(--wa-space-3xs);
-  }
-
-  .tab-delete::part(base) {
-    padding: 0;
-    border-radius: var(--border-radius-small);
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-text-quiet, var(--wa-color-text-normal)) 10%,
-      transparent
-    );
-  }
-
-  /* Expand/collapse chevron for parent tabs with children. This
-   * component's shadow root doesn't load the shared commonViewStyles
-   * sheet, so (like .tab-delete above) the reset lives locally rather
-   * than through .action-icon-button's cross-component rules. */
+  /*
+   * Expand / collapse chevron for parent tabs with children. This
+   * component's shadow root does not load the shared commonViewStyles
+   * sheet, so the reset lives locally.
+   */
   .tab-expand {
     display: flex;
     align-items: center;
@@ -263,9 +241,31 @@ export const streamTabStyles = css`
     transform: rotate(90deg);
   }
 
-  /* The chip shares the meta row with the timestamp and model — keep it
-     truncating instead of wrapping. */
-  .tab-meta worktree-chip {
-    flex-shrink: 1;
+  /* Compact-variant overrides. */
+  .tab-container.is-compact .tab {
+    padding: var(--wa-space-3xs) var(--wa-space-3xs);
+  }
+
+  /*
+   * No compact override for .tab-delete: the narrow rail (48 px)
+   * accommodates the 24 px target, and shrinking it would re-introduce a
+   * sub-minimum hit area on the layout that most needs a reliable one.
+   */
+
+  .tab-container.is-compact .tab-header {
+    gap: var(--wa-space-3xs);
+  }
+
+  .compact-subagent-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  .nested-stream-icon {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    margin-inline-end: var(--wa-space-3xs);
   }
 `;

@@ -19,6 +19,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import { AgentCategory, RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -57,9 +58,7 @@ const WorkflowScriptToolInputSchema = z
     agent: z
       .string()
       .min(1)
-      .describe(
-        'Default workflow or tool-use agent used when agent() omits agentName.',
-      ),
+      .describe('Default workflow agent used when agent() omits agentName.'),
     args: z
       .unknown()
       .nullish()
@@ -284,13 +283,17 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       }
     };
 
-    const { meta, defaultAgent } = await runPhase(() => {
+    const { meta, defaultAgent, defaultAgentCategory } = await runPhase(() => {
       const { meta } = parseWorkflowScript(script);
-      const defaultAgent = requireWorkflowOrToolUseAgent(
+      const resolved = requireWorkflowOrToolUseAgent(
         input.agent,
         runScope.delegationAgentScope ?? undefined,
       );
-      return { meta, defaultAgent };
+      return {
+        meta,
+        defaultAgent: resolved.agent,
+        defaultAgentCategory: resolved.category,
+      };
     });
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model
     // rewrites its script, so any key derived from call identity or source
