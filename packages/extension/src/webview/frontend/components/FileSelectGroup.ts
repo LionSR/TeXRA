@@ -105,6 +105,16 @@ export class FileSelectGroup extends LitElement {
     );
   }
 
+  // One listener for the whole list: lit rejects duplicate attribute bindings,
+  // so the remove and move handlers cannot each bind @click on the container.
+  // Both are delegation guards keyed to mutually exclusive selectors and no-op
+  // when their selector does not match, so dispatching to both is equivalent to
+  // two independent listeners.
+  private handleFileListClick(event: MouseEvent): void {
+    this.handleRemoveClick(event);
+    this.handleMoveClick(event);
+  }
+
   private handleRemoveClick(event: MouseEvent): void {
     const button = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-remove-file]',
@@ -265,11 +275,7 @@ export class FileSelectGroup extends LitElement {
     }
 
     const movable = this.currentFiles.length > 1;
-    return html`<div
-      role="list"
-      @click=${this.handleRemoveClick}
-      @click=${this.handleMoveClick}
-    >
+    return html`<div role="list" @click=${this.handleFileListClick}>
       ${repeat(
         this.currentFiles,
         (file) => file,
