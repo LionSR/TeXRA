@@ -482,11 +482,10 @@ export class ExternalInquiryTool extends defineTool({
       'If your next step depends on this answer, end your turn now; ' +
       'otherwise proceed with independent work.';
 
-    return {
-      status: 'executed',
-      summary: `Inquiry dispatched (${persisted.threadId})`,
-      output: `status: dispatched\nthread_id: ${persisted.threadId}\n\n${message}`,
-    };
+    return executed(
+      `status: dispatched\nthread_id: ${persisted.threadId}\n\n${message}`,
+      `Inquiry dispatched (${persisted.threadId})`,
+    );
   }
 
   private async executeRead(args: {

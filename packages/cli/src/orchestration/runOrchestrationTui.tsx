@@ -65,12 +65,21 @@ export function orchestrationPreviousStep(
   return { kind: 'launcher' };
 }
 
-export function orchestrationKeyHints(): readonly KeyHint[] {
+/** Every picker in the launcher shares one hint row; only the verb for the
+ *  select key and the destination of Escape change between steps. */
+function orchestrationStepKeyHints(
+  selectAction: string,
+  escapeAction: string,
+): readonly KeyHint[] {
   return [
     { key: '↑/↓', action: 'navigate' },
-    { key: '1-9/a-z/Enter', action: 'open' },
-    { key: 'Esc', action: 'exit' },
+    { key: '1-9/a-z/Enter', action: selectAction },
+    { key: 'Esc', action: escapeAction },
   ];
+}
+
+export function orchestrationKeyHints(): readonly KeyHint[] {
+  return orchestrationStepKeyHints('open', 'exit');
 }
 
 export function orchestrationFooterHints(
@@ -237,20 +246,51 @@ export function orchestrationLauncherLayout(
   };
 }
 
-function modelPickKeyHints(): readonly KeyHint[] {
-  return [
-    { key: '↑/↓', action: 'navigate' },
-    { key: '1-9/a-z/Enter', action: 'select' },
-    { key: 'Esc', action: 'back' },
-  ];
-}
-
-function resumeKeyHints(): readonly KeyHint[] {
-  return [
-    { key: '↑/↓', action: 'navigate' },
-    { key: '1-9/a-z/Enter', action: 'resume' },
-    { key: 'Esc', action: 'back' },
-  ];
+/** One picker step: the shared header/list/hints scaffold every non-launcher
+ *  step renders. The launcher overrides only the header with its branded row. */
+function StepShell({
+  children,
+  footerHints,
+  keyHints,
+  statusLines,
+  subtitle,
+  title,
+}: {
+  readonly children: React.ReactNode;
+  readonly footerHints: readonly string[];
+  readonly keyHints: readonly KeyHint[];
+  readonly statusLines: readonly string[];
+  readonly subtitle: string;
+  readonly title: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      {title}
+      <Text dimColor>{subtitle}</Text>
+      {statusLines.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          {statusLines.map((line, index) => (
+            <Text key={`${index}:${line}`} dimColor wrap="wrap">
+              {line}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
+      <Box marginTop={1}>{children}</Box>
+      {footerHints.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          {footerHints.map((hint) => (
+            <Text key={hint} dimColor wrap="wrap">
+              {hint}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
+      <Box marginTop={1}>
+        <KeyHints hints={keyHints} confirmCancel={false} />
+      </Box>
+    </Box>
+  );
 }
 
 export function OrchestrationApp(
@@ -398,165 +438,110 @@ export function OrchestrationApp(
     goBack();
   });
 
-  if (step.kind === 'model-access') {
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold color={COLOR_HINT}>
-          {title}
-        </Text>
-        <Text dimColor>{subtitle}</Text>
-        <Box marginTop={1}>
-          <Select
-            key="orchestration-model-access-picker"
-            items={modelAccessItems}
-            activeValue={cliApiFallbackSelection(props.apiMode)}
-            maxVisibleItems={layout.maxVisibleItems}
-            showOverflow={layout.showOverflow}
-            onSelect={(access) => finish({ kind: 'set-model-access', access })}
-            onCancel={goBack}
-          />
-        </Box>
-        <Box marginTop={1}>
-          <KeyHints hints={modelPickKeyHints()} confirmCancel={false} />
-        </Box>
-      </Box>
-    );
-  }
+  const selectProps = {
+    maxVisibleItems: layout.maxVisibleItems,
+    showOverflow: layout.showOverflow,
+    onCancel: goBack,
+  } as const;
 
-  if (step.kind === 'resume') {
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold color={COLOR_HINT}>
-          {title}
-        </Text>
-        <Text dimColor>{subtitle}</Text>
-        <Box marginTop={1}>
-          <Select
-            key="orchestration-resume-picker"
-            items={props.resumeItems ?? []}
-            maxVisibleItems={layout.maxVisibleItems}
-            showOverflow={layout.showOverflow}
-            onSelect={finish}
-            onCancel={goBack}
-          />
-        </Box>
-        <Box marginTop={1}>
-          <KeyHints hints={resumeKeyHints()} confirmCancel={false} />
-        </Box>
-      </Box>
-    );
-  }
-
-  if (
-    step.kind === 'agent' ||
-    step.kind === 'team' ||
-    step.kind === 'account'
-  ) {
-    let pickerItems: readonly CliOrchestrationItem[];
-    if (step.kind === 'agent') {
-      pickerItems = agentItems;
-    } else if (step.kind === 'team') {
-      pickerItems = teamItems;
-    } else {
-      pickerItems = props.accountItems ?? [];
+  // One picker per step. Everything around it — header, status lines, footer
+  // hints, key hints — is the shared `StepShell` below, so a new step only
+  // declares the list it shows and how Enter reads.
+  let stepSelect: React.JSX.Element;
+  let stepKeyHints: readonly KeyHint[];
+  switch (step.kind) {
+    case 'model-access':
+      stepSelect = (
+        <Select
+          key="orchestration-model-access-picker"
+          items={modelAccessItems}
+          activeValue={cliApiFallbackSelection(props.apiMode)}
+          onSelect={(access) => finish({ kind: 'set-model-access', access })}
+          {...selectProps}
+        />
+      );
+      stepKeyHints = orchestrationStepKeyHints('select', 'back');
+      break;
+    case 'resume':
+      stepSelect = (
+        <Select
+          key="orchestration-resume-picker"
+          items={props.resumeItems ?? []}
+          onSelect={finish}
+          {...selectProps}
+        />
+      );
+      stepKeyHints = orchestrationStepKeyHints('resume', 'back');
+      break;
+    case 'agent':
+    case 'team':
+    case 'account': {
+      let pickerItems: readonly CliOrchestrationItem[];
+      if (step.kind === 'agent') {
+        pickerItems = agentItems;
+      } else if (step.kind === 'team') {
+        pickerItems = teamItems;
+      } else {
+        pickerItems = props.accountItems ?? [];
+      }
+      stepSelect = (
+        <Select
+          key={`orchestration-${step.kind}-picker`}
+          items={pickerItems}
+          onSelect={onItemSelect}
+          {...selectProps}
+        />
+      );
+      stepKeyHints = orchestrationStepKeyHints('select', 'back');
+      break;
     }
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold color={COLOR_HINT}>
-          {title}
-        </Text>
-        <Text dimColor>{subtitle}</Text>
-        <Box marginTop={1}>
-          <Select
-            key={`orchestration-${step.kind}-picker`}
-            items={pickerItems}
-            maxVisibleItems={layout.maxVisibleItems}
-            showOverflow={layout.showOverflow}
-            onSelect={onItemSelect}
-            onCancel={goBack}
-          />
-        </Box>
-        {layout.footerHints.length > 0 ? (
-          <Box marginTop={1} flexDirection="column">
-            {layout.footerHints.map((hint) => (
-              <Text key={hint} dimColor wrap="wrap">
-                {hint}
-              </Text>
-            ))}
-          </Box>
-        ) : null}
-        <Box marginTop={1}>
-          <KeyHints hints={modelPickKeyHints()} confirmCancel={false} />
-        </Box>
-      </Box>
-    );
-  }
-
-  if (pending) {
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold color={COLOR_HINT}>
-          {title}
-        </Text>
-        <Text dimColor>{subtitle}</Text>
-        <Box marginTop={1}>
-          <Select
-            key="orchestration-model-picker"
-            items={modelItems}
-            maxVisibleItems={layout.maxVisibleItems}
-            showOverflow={layout.showOverflow}
-            onSelect={(model) => finish({ ...pending, model })}
-            onCancel={goBack}
-          />
-        </Box>
-        <Box marginTop={1}>
-          <KeyHints hints={modelPickKeyHints()} confirmCancel={false} />
-        </Box>
-      </Box>
-    );
-  }
-
-  return (
-    <Box flexDirection="column" paddingX={1}>
-      <Box gap={1}>
-        <Text bold color={COLOR_HINT}>
-          {'{ T } TeXRA'}
-        </Text>
-        <Text dimColor>v{props.version}</Text>
-      </Box>
-      <Text dimColor>{subtitle}</Text>
-      {layout.statusLines.length > 0 ? (
-        <Box marginTop={1} flexDirection="column">
-          {layout.statusLines.map((line, index) => (
-            <Text key={`${index}:${line}`} dimColor wrap="wrap">
-              {line}
-            </Text>
-          ))}
-        </Box>
-      ) : null}
-      <Box marginTop={1}>
+    case 'model':
+      stepSelect = (
+        <Select
+          key="orchestration-model-picker"
+          items={modelItems}
+          onSelect={(model) => finish({ ...step.action, model })}
+          {...selectProps}
+        />
+      );
+      stepKeyHints = orchestrationStepKeyHints('select', 'back');
+      break;
+    case 'launcher':
+      stepSelect = (
         <Select
           key="orchestration-launcher"
           items={items}
-          maxVisibleItems={layout.maxVisibleItems}
-          showOverflow={layout.showOverflow}
           onSelect={onItemSelect}
-          onCancel={goBack}
+          {...selectProps}
         />
-      </Box>
-      {layout.footerHints.length > 0 ? (
-        <Box marginTop={1} flexDirection="column">
-          {layout.footerHints.map((hint) => (
-            <Text key={hint} dimColor wrap="wrap">
-              {hint}
+      );
+      stepKeyHints = orchestrationKeyHints();
+      break;
+  }
+
+  return (
+    <StepShell
+      title={
+        step.kind === 'launcher' ? (
+          <Box gap={1}>
+            <Text bold color={COLOR_HINT}>
+              {'{ T } TeXRA'}
             </Text>
-          ))}
-        </Box>
-      ) : null}
-      <Box marginTop={1}>
-        <KeyHints hints={orchestrationKeyHints()} confirmCancel={false} />
-      </Box>
-    </Box>
+            <Text dimColor>v{props.version}</Text>
+          </Box>
+        ) : (
+          <Text bold color={COLOR_HINT}>
+            {title}
+          </Text>
+        )
+      }
+      subtitle={subtitle}
+      statusLines={layout.statusLines}
+      footerHints={layout.footerHints}
+      keyHints={stepKeyHints}
+    >
+      {stepSelect}
+    </StepShell>
   );
 }
 

@@ -6,6 +6,7 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { getTeXCount } from '@latex/texcount';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -55,13 +56,11 @@ export class TexcountTool extends defineTool({
       );
     }
 
-    return {
-      status: 'executed',
-      summary: `Analyzed: ${formatResultCount(files.length, 'file')}`,
-      output:
-        input.format === 'stats'
-          ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
-          : output,
-    };
+    return executed(
+      input.format === 'stats'
+        ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
+        : output,
+      `Analyzed: ${formatResultCount(files.length, 'file')}`,
+    );
   }
 }

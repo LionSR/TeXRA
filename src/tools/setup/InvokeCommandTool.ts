@@ -7,6 +7,7 @@ import type { CommandId } from '@shared/commands/catalog';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
+import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
 
@@ -78,10 +79,9 @@ export class InvokeCommandTool extends defineTool({
     }
     await platform.commands.invoke(commandId);
 
-    return {
-      status: 'executed',
-      summary: `Invoked ${commandId}`,
-      output: `Invoked VS Code command "${commandId}". If this opens a UI prompt, wait for the user's response before continuing.`,
-    };
+    return executed(
+      `Invoked VS Code command "${commandId}". If this opens a UI prompt, wait for the user's response before continuing.`,
+      `Invoked ${commandId}`,
+    );
   }
 }

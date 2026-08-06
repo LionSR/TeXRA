@@ -19,7 +19,7 @@ updated: 2026-08-04
 
 xAI’s preferred text API is **`POST /v1/responses`**, not Chat Completions. The main product win for TeXRA is **`previous_response_id`**: multi-turn and tool-use rounds send only new input while the server retains prior turns (default store **30 days**).
 
-Today TeXRA’s xAI path is **`ModelHandlerXAI` → Chat Completions** only: full history every turn, no response-id chain. OpenAI already has a mature Responses handler with `ResponseChainState`, invalid-id recovery, store/encrypted-reasoning modes, and a **Codex capability profile** that proves the handler is multi-backend — not OpenAI-company-locked in its core.
+Today TeXRA’s xAI path is **`ModelHandlerXAI` → Chat Completions** only: full history every turn, no response-id chain. OpenAI already has a mature Responses handler with `ServerChainState`, invalid-id recovery, store/encrypted-reasoning modes, and a **Codex capability profile** that proves the handler is multi-backend — not OpenAI-company-locked in its core.
 
 This PRD sequences a **setting-gated** migration for direct `api.x.ai` Grok models onto that Responses stack for **client-side TeXRA tools + chaining only**. It explicitly defers xAI server tools, SuperGrok-specific Responses work (orthogonal to OAuth), catalog/pricing cleanups, and Imagine/Voice.
 
@@ -58,13 +58,13 @@ This PRD sequences a **setting-gated** migration for direct `api.x.ai` Grok mode
 | Handler                 | `ModelHandlerXAI` extends chat-completions `ModelHandlerOpenAI` |
 | Factory                 | `ModelProvider.XAI` → `ModelHandlerXAI` only                    |
 | `shouldUseResponsesAPI` | **OpenAI only**                                                 |
-| Chain                   | None for xAI; OpenAI uses `ResponseChainState`                  |
+| Chain                   | None for xAI; OpenAI uses `ServerChainState`                    |
 | Auth                    | API key / server key / OpenRouter; SuperGrok OAuth on #9709     |
 | Catalog                 | `grok-4.5`, `grok-4.3`, retired older; no build/4.20            |
 
 OpenAI Responses already provides:
 
-- `previous_response_id` via `ResponseChainState`
+- `previous_response_id` via `ServerChainState`
 - `store` / `storesResponsesServerSide` capability
 - Invalid previous-response recovery
 - Function tools + tool follow-up message builders
@@ -122,7 +122,7 @@ Use the existing `openAIResponses` profile knobs (name is historical):
 ### 5.3 Request shape (MVP)
 
 - `model`, `input` (delta when chained), `instructions` when needed
-- `previous_response_id` when `ResponseChainState` has an anchor
+- `previous_response_id` when `ServerChainState` has an anchor
 - `store: true`
 - `tools` / `tool_choice` for TeXRA client functions only
 - `max_output_tokens` (not legacy `max_tokens`)
@@ -242,7 +242,7 @@ Items 1–3 help Completions **and** make Responses land cleaner; none require w
 ## 13. References (code)
 
 - `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts` — Responses handler
-- `src/agent/modelHandlers/openai/ResponseChainState.ts` — chain anchor
+- `src/agent/modelHandlers/support/ServerChainState.ts` — chain anchor
 - `src/agent/modelHandlers/openai/modelHandlerXAI.ts` — current Completions + (on #9709) subscription Bearer
 - `src/agent/runtime/ModelFactory.ts` — `shouldUseResponsesAPI`
 - `src/model/providerCapabilities.ts` — `OpenAIResponseProviderCapabilities` / Codex profile

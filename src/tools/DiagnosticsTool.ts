@@ -10,6 +10,7 @@ import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import {
   countBySeverity,
   formatCounts,
@@ -189,16 +190,14 @@ export class DiagnosticsTool extends defineTool({
         confidence,
       });
       if (!result.accepted) {
-        return {
-          status: 'executed',
-          summary: 'Criticism not accepted',
-          output:
-            'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
-        };
+        return executed(
+          'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
+          'Criticism not accepted',
+        );
       }
       const where = result.resolvedPath || absolutePath;
       const summary = `Added criticism for ${where}:${line} (S${severity}/C${confidence})`;
-      return { status: 'executed', summary, output: summary };
+      return executed(summary, summary);
     } catch (error) {
       const detail = toErrorMessage(error);
       logger.error(CHANNEL, `Failed to add criticism: ${detail}`);

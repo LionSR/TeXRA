@@ -13,6 +13,7 @@ import {
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
@@ -187,17 +188,14 @@ export class WebSearchTool extends defineTool({
     }
 
     if (results.length === 0) {
-      return {
-        status: 'executed',
-        summary: `Searched: "${query}" (no results)`,
-        output:
-          'No results found. Note: This search uses DuckDuckGo Instant Answers API which works best for factual/entity queries. For general web searches, try rephrasing the query or use more specific terms.',
-      };
+      return executed(
+        'No results found. Note: This search uses DuckDuckGo Instant Answers API which works best for factual/entity queries. For general web searches, try rephrasing the query or use more specific terms.',
+        `Searched: "${query}" (no results)`,
+      );
     }
-    return {
-      status: 'executed',
-      summary: `Searched: "${query}"`,
-      output: results.slice(0, max_results).join('\n\n'),
-    };
+    return executed(
+      results.slice(0, max_results).join('\n\n'),
+      `Searched: "${query}"`,
+    );
   }
 }

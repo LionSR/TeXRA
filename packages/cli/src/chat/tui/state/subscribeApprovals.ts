@@ -73,6 +73,7 @@ import {
   setBashApprovalSessionBypass,
 } from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { filterNotNullish } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
@@ -518,6 +519,42 @@ function cliOpenRouterEnabled(): boolean {
   );
 }
 
+/** Undo one access-settings write that a failed retry had already applied.
+ *
+ *  Returns the contextualized failure instead of throwing, so a partially
+ *  applied switch can report every setting it could not put back rather than
+ *  losing all but the first. `restoredInMemory` separates "the value is back
+ *  but the write may not have persisted" from "the value is still the one the
+ *  user never asked for", because only the latter needs re-doing by hand.
+ *
+ *  Callers keep their own "did this write happen" guard rather than passing it
+ *  in, so a skipped attempt costs no await — see the call site. */
+async function attemptRollback({
+  restore,
+  restoredInMemory,
+  memoryRestoredContext,
+  restoreFailedContext,
+}: {
+  /** Restore the previous value and verify it took effect. */
+  readonly restore: () => Promise<void>;
+  readonly restoredInMemory: () => boolean;
+  readonly memoryRestoredContext: string;
+  readonly restoreFailedContext: string;
+}): Promise<Error | undefined> {
+  try {
+    await restore();
+    return undefined;
+  } catch (rollbackError) {
+    const persistenceContext = restoredInMemory()
+      ? memoryRestoredContext
+      : restoreFailedContext;
+    return new Error(
+      `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+      { cause: rollbackError },
+    );
+  }
+}
+
 async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
   request: TuiRetryRequest,
@@ -591,83 +628,74 @@ async function switchRetryToPersonalCredentials(
           if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
           return;
         } catch (error) {
-          const rollbackFailures: Error[] = [];
-          if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
-            try {
-              const update = await setCliCodexSubscription(
-                previousSubscriptionPreference,
-              );
-              if (update.effective !== previousSubscriptionPreference) {
-                throw new Error(
-                  `ChatGPT subscription preference remained ${String(update.effective)}.`,
-                );
-              }
-            } catch (rollbackError) {
-              const persistenceContext =
-                isPreferCodexSubscription() === previousSubscriptionPreference
-                  ? 'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed'
-                  : 'Could not restore the ChatGPT subscription preference';
-              rollbackFailures.push(
-                new Error(
-                  `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-                  {
-                    cause: rollbackError,
+          // Each guard is evaluated after the previous restore resolved, so a
+          // rollback sees the state its predecessor left behind. Skipped
+          // attempts must not await: this runs while the commit queue still
+          // holds its slot, and the extra turns let a newer queued switch
+          // commit ahead of the restores below.
+          const subscriptionFailure =
+            subscriptionWriteStarted && !isPreferCodexSubscription()
+              ? await attemptRollback({
+                  restore: async () => {
+                    const update = await setCliCodexSubscription(
+                      previousSubscriptionPreference,
+                    );
+                    if (update.effective !== previousSubscriptionPreference) {
+                      throw new Error(
+                        `ChatGPT subscription preference remained ${String(update.effective)}.`,
+                      );
+                    }
                   },
-                ),
-              );
-            }
-          }
-          if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
-            try {
-              await setCliApiMode(previousApiMode);
-              if (getCliApiMode() !== previousApiMode) {
-                throw new Error(`API mode remained ${getCliApiMode()}.`);
-              }
-            } catch (rollbackError) {
-              const persistenceContext =
-                getCliApiMode() === previousApiMode
-                  ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
-                  : 'Could not restore API mode';
-              rollbackFailures.push(
-                new Error(
-                  `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-                  {
-                    cause: rollbackError,
+                  restoredInMemory: () =>
+                    isPreferCodexSubscription() ===
+                    previousSubscriptionPreference,
+                  memoryRestoredContext:
+                    'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
+                  restoreFailedContext:
+                    'Could not restore the ChatGPT subscription preference',
+                })
+              : undefined;
+          const apiModeFailure =
+            apiModeWriteStarted && getCliApiMode() === decision.apiMode
+              ? await attemptRollback({
+                  restore: async () => {
+                    await setCliApiMode(previousApiMode);
+                    if (getCliApiMode() !== previousApiMode) {
+                      throw new Error(`API mode remained ${getCliApiMode()}.`);
+                    }
                   },
-                ),
-              );
-            }
-          }
+                  restoredInMemory: () => getCliApiMode() === previousApiMode,
+                  memoryRestoredContext:
+                    'The previous API mode appears restored in memory, but persistence could not be confirmed',
+                  restoreFailedContext: 'Could not restore API mode',
+                })
+              : undefined;
           // After the mode, because restoring included access clears the OpenRouter
           // toggle: a switch the user never got would otherwise leave their routing
           // preference silently off.
-          if (
-            apiModeWriteStarted &&
-            previousOpenRouter &&
-            !cliOpenRouterEnabled()
-          ) {
-            try {
-              await platform().globalState.update(
-                GlobalStateKey.USE_OPENROUTER,
-                true,
-              );
-              if (!cliOpenRouterEnabled()) {
-                throw new Error('OpenRouter routing remained disabled.');
-              }
-            } catch (rollbackError) {
-              const persistenceContext = cliOpenRouterEnabled()
-                ? 'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed'
-                : 'Could not restore OpenRouter routing';
-              rollbackFailures.push(
-                new Error(
-                  `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-                  {
-                    cause: rollbackError,
+          const openRouterFailure =
+            apiModeWriteStarted && previousOpenRouter && !cliOpenRouterEnabled()
+              ? await attemptRollback({
+                  restore: async () => {
+                    await platform().globalState.update(
+                      GlobalStateKey.USE_OPENROUTER,
+                      true,
+                    );
+                    if (!cliOpenRouterEnabled()) {
+                      throw new Error('OpenRouter routing remained disabled.');
+                    }
                   },
-                ),
-              );
-            }
-          }
+                  restoredInMemory: () => cliOpenRouterEnabled(),
+                  memoryRestoredContext:
+                    'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed',
+                  restoreFailedContext: 'Could not restore OpenRouter routing',
+                })
+              : undefined;
+          const rollbackFailures = [
+            subscriptionFailure,
+            apiModeFailure,
+            openRouterFailure,
+          ].filter(filterNotNullish);
           if (rollbackFailures.length > 0) {
             throw new AggregateError(
               [error, ...rollbackFailures],
