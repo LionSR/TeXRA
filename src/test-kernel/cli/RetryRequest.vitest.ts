@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
-import { ConfirmCard } from '@cli/chat/tui/modals/ConfirmCard';
 import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
 import {
   clearApprovals,
@@ -19,23 +18,57 @@ import {
 describe('CLI retry request', () => {
   afterEach(() => clearApprovals());
 
-  it('uses immediate rejection with a plain give-up action', () => {
-    const card = RetryRequest({
+  it('dismisses immediately instead of asking for rejection feedback', async () => {
+    const { ink, React } = await loadInk();
+    const decision = enqueueApproval({
+      kind: 'retry',
       payload: {
         requestId: 'retry-request',
         streamId: 'retry-stream' as StreamTabId,
         operation: 'Model invocation',
         errorMessage: 'Connection error',
       },
-      onDecide: vi.fn(),
     });
+    const { instance, stdin } = renderInteractive(
+      ink,
+      React.createElement(ApprovalModal, { pending: currentApproval.get() }),
+      { columns: 100 },
+    );
 
-    expect(card.type).toBe(ConfirmCard);
-    expect(card.props).toMatchObject({
-      approveLabel: 'retry',
-      rejectLabel: 'dismiss',
-      rejectionMode: 'immediate',
-    });
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('n');
+      await expect(decision).resolves.toMatchObject({ accepted: false });
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('scrolls a tall error instead of pushing the actions off a short terminal', async () => {
+    const { ink, React } = await loadInk();
+    const output = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(RetryRequest, {
+        availableRows: 12,
+        payload: {
+          requestId: 'tall-error',
+          streamId: 'retry-stream' as StreamTabId,
+          operation: 'Model invocation',
+          errorMessage: Array.from(
+            { length: 40 },
+            (_, index) => `stack frame ${index + 1}`,
+          ).join('\n'),
+        },
+        onDecide: vi.fn(),
+      }),
+      100,
+      { until: (frame) => frame.includes('y retry') },
+    );
+
+    expect(output).toContain('y retry');
+    expect(output).toContain('n dismiss');
+    expect(output).toContain('more rows');
+    expect(output.split('\n').length).toBeLessThanOrEqual(12);
   });
 
   it('settles the approval queue from a real terminal k input', async () => {

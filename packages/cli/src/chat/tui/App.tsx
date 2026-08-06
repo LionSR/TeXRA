@@ -220,7 +220,7 @@ export function App(props: AppProps): React.JSX.Element {
   const appInputDisabled =
     props.inputDisabled === true || foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
-    ? 'Session selection active.'
+    ? 'Choosing a session; press Esc to return to the prompt.'
     : childInputDisabledMessage;
   const inputDisabled = appInputDisabled || inputDisabledMessage !== undefined;
   const escapeInterruptState: EscapeInterruptState = {
@@ -514,13 +514,14 @@ export function App(props: AppProps): React.JSX.Element {
         syncStreamLog(streamId, { forceFull: true });
         const currentActiveStreamId = activeStreamIdSignal.get();
         const currentStreams = streamsSignal.get();
+        nextTranscriptPrintId.current += 1;
         const request = createTranscriptPrintRequest({
           afterEntryId: lastStaticEntryId(
             currentActiveStreamId
               ? currentStreams.get(currentActiveStreamId)
               : undefined,
           ),
-          id: `printed-transcript:${nextTranscriptPrintId.current + 1}`,
+          id: `printed-transcript:${nextTranscriptPrintId.current}`,
           ownerKey: transcriptOwnerKey,
           slice: currentStreams.get(streamId),
           title: streamDisplayLabel({
@@ -530,7 +531,6 @@ export function App(props: AppProps): React.JSX.Element {
             streams: currentStreams,
           }),
         });
-        nextTranscriptPrintId.current += 1;
         setTranscriptPrints((current) => [...current, request]);
         if (currentActiveStreamId !== streamId) syncStreamLog(streamId);
       })
@@ -663,22 +663,22 @@ export function App(props: AppProps): React.JSX.Element {
     if (key.ctrl && input === 'c') {
       if (formBusy) {
         formProgress?.cancel();
-        return;
+      } else {
+        triggerAppCtrlC({
+          discardDraft: () =>
+            activeDraftRegistry.discard() ||
+            (appDraftDiscardActive({
+              inputDisabled,
+              reverseSearchOpen,
+              childListFocused,
+            }) &&
+              (inputBarRef.current?.discardDraft() ?? false)),
+          canStopActiveRun,
+          onInterruptActive: props.onInterruptActive,
+          onExit: exit,
+          onCtrlC: props.onCtrlC,
+        });
       }
-      triggerAppCtrlC({
-        discardDraft: () =>
-          activeDraftRegistry.discard() ||
-          (appDraftDiscardActive({
-            inputDisabled,
-            reverseSearchOpen,
-            childListFocused,
-          }) &&
-            (inputBarRef.current?.discardDraft() ?? false)),
-        canStopActiveRun,
-        onInterruptActive: props.onInterruptActive,
-        onExit: exit,
-        onCtrlC: props.onCtrlC,
-      });
       return;
     }
 
@@ -719,8 +719,11 @@ export function App(props: AppProps): React.JSX.Element {
 
     // Bare Escape walks to the immediate parent before falling back to the
     // root run's existing interruption behavior.
-    if (isEscapeInput(input, key) && activeStreamId !== undefined) {
-      if (!bareEscapeActive(activeStreamId)) return;
+    if (
+      isEscapeInput(input, key) &&
+      activeStreamId !== undefined &&
+      bareEscapeActive(activeStreamId)
+    ) {
       if (
         shouldDeferEscapeInterruptForMetaChord({
           shortcutModifierLabel: defaultShortcutModifierLabel(),
@@ -728,9 +731,9 @@ export function App(props: AppProps): React.JSX.Element {
         })
       ) {
         scheduleBareEscape(activeStreamId);
-        return;
+      } else {
+        handleBareEscape(activeStreamId);
       }
-      handleBareEscape(activeStreamId);
     }
   });
 

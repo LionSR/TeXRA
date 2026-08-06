@@ -146,6 +146,25 @@ async function loginToTexraIncludedAccess(
   );
 }
 
+/**
+ * Resolve whether a subscription login should use device-code auth based on
+ * the CLI context. Only applies to chatgpt and grok targets; texra passes
+ * through unchanged.
+ */
+function resolveLoginDevicePreference(
+  args: CliLoginSlashArgs,
+  context: CliContext | undefined,
+): CliLoginSlashArgs {
+  if (!context) return args;
+  if (args.target === 'chatgpt') {
+    return { ...args, device: shouldUseChatGptDeviceCode(context, args) };
+  }
+  if (args.target === 'grok') {
+    return { ...args, device: shouldUseGrokDeviceCode(context, args) };
+  }
+  return args;
+}
+
 export function loginFromChat(
   input: string,
   context?: CliContext,
@@ -165,20 +184,7 @@ export function loginFromChat(
       return;
     }
 
-    let loginArgs = args;
-    if (context) {
-      if (args.target === 'chatgpt') {
-        loginArgs = {
-          ...args,
-          device: shouldUseChatGptDeviceCode(context, args),
-        };
-      } else if (args.target === 'grok') {
-        loginArgs = {
-          ...args,
-          device: shouldUseGrokDeviceCode(context, args),
-        };
-      }
-    }
+    const loginArgs = resolveLoginDevicePreference(args, context);
     output.writeProgress(loginStartMessage(loginArgs));
 
     if (loginArgs.target === 'chatgpt') {
@@ -216,26 +222,35 @@ export async function logoutFromChat(
     }
   }
 
-  if (target === 'chatgpt' || target === 'all') {
+  async function signOutSubscription<T>(
+    label: string,
+    signOut: () => Promise<T>,
+    preferenceMessage: (update: T) => string,
+  ): Promise<void> {
     try {
-      const chatGptUpdate = await signOutCliChatGpt();
+      const update = await signOut();
       refreshCodexPreferenceViews();
-      lines.push('Signed out of ChatGPT.');
-      lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
+      lines.push(`Signed out of ${label}.`);
+      lines.push(preferenceMessage(update));
     } catch (error: unknown) {
-      lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
+      lines.push(`${label} sign-out failed: ${toErrorMessage(error)}`);
     }
   }
 
+  if (target === 'chatgpt' || target === 'all') {
+    await signOutSubscription(
+      'ChatGPT',
+      signOutCliChatGpt,
+      chatGptSignOutPreferenceMessage,
+    );
+  }
+
   if (target === 'grok' || target === 'all') {
-    try {
-      const grokUpdate = await signOutCliGrok();
-      refreshCodexPreferenceViews();
-      lines.push('Signed out of Grok.');
-      lines.push(grokSignOutPreferenceMessage(grokUpdate));
-    } catch (error: unknown) {
-      lines.push(`Grok sign-out failed: ${toErrorMessage(error)}`);
-    }
+    await signOutSubscription(
+      'Grok',
+      signOutCliGrok,
+      grokSignOutPreferenceMessage,
+    );
   }
 
   if (texraSignedOut) {

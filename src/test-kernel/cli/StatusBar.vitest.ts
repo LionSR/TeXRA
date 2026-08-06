@@ -1291,7 +1291,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
     expect(display.bindings).toBe(
-      'Use foreground panel shortcuts · Esc close · Ctrl-C stop',
+      'Keys go to the panel above · Esc close · Ctrl-C stop',
     );
   });
 

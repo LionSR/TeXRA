@@ -729,7 +729,7 @@ const SCENARIOS = [
       '/resume',
       'Nothing to resume yet.',
       'Esc close',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['/resume is registered but has no harness action.'],
   },
@@ -1525,7 +1525,7 @@ const SCENARIOS = [
       'y approve',
       'n reject',
       'approval',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
   },
@@ -1693,7 +1693,7 @@ const SCENARIOS = [
       'Directory:',
       'y approve',
       'a approve commands for session',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
     maxOccurrences: [{ text: '{ T } TeXRA', max: 1 }],
@@ -1762,7 +1762,7 @@ const SCENARIOS = [
       'more rows',
       'scroll command',
       'y approve',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['╚═    print', 'Option-p tasks'],
   },
@@ -1783,7 +1783,7 @@ const SCENARIOS = [
       'more rows',
       'scroll command',
       'y approve',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['╚═    print', 'Option-p tasks'],
   },
@@ -2774,7 +2774,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t'],
     expect: ['+3 sessions'],
-    expectCollapsed: ['Session selection active.'],
+    expectCollapsed: ['Choosing a session'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2894,7 +2894,7 @@ const SCENARIOS = [
       'Run command?',
       '$ npm run compile:safe',
       'y approve',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: [
       'subagent: strategy · parent: main · model: harness-model',
@@ -3007,7 +3007,7 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, 'v'],
     expect: [
       '›   ● strategy running',
-      'Session selection active.',
+      'Choosing a session',
       'v full output',
       'Esc input',
     ],
@@ -3225,7 +3225,7 @@ const SCENARIOS = [
       '◆ stopped own API keys',
       'latest stopped prompt',
     ],
-    unexpect: ['older stopped prompt', 'Session selection active.'],
+    unexpect: ['older stopped prompt', 'Choosing a session'],
   },
   {
     name: 'escape-stops-focused-main-only',
@@ -3244,7 +3244,7 @@ const SCENARIOS = [
       'leanSolver waiting for you',
       'reviewer running',
       '3 sub',
-      'Session selection active.',
+      'Choosing a session',
     ],
     unexpect: ['Harness interrupt requested.'],
   },
@@ -3272,7 +3272,7 @@ const SCENARIOS = [
       'leanSolver waiting for you',
       'reviewer running',
       '3 subagents',
-      'Session selection active.',
+      'Choosing a session',
     ],
     unexpect: ['Harness interrupt requested.', '› ✓ ● main stopped'],
   },
@@ -3722,12 +3722,13 @@ function exactFrameDifference(actualFrame, expectedFrame, oracleName) {
 
 function expectedFrameTextVisible(scenario, frame) {
   const collapsedFrame = collapseFrameText(frame);
+  const expectTexts = scenario.expect ?? [];
+  const expectPatterns = scenario.expectPatterns ?? [];
+  const expectCollapsed = scenario.expectCollapsed ?? [];
   return (
-    (scenario.expect ?? []).every((text) => frame.includes(text)) &&
-    (scenario.expectPatterns ?? []).every((pattern) => pattern.test(frame)) &&
-    (scenario.expectCollapsed ?? []).every((text) =>
-      collapsedFrame.includes(text),
-    )
+    expectTexts.every((text) => frame.includes(text)) &&
+    expectPatterns.every((pattern) => pattern.test(frame)) &&
+    expectCollapsed.every((text) => collapsedFrame.includes(text))
   );
 }
 
@@ -4033,32 +4034,32 @@ function writeSnapshotReport(results) {
   );
 }
 
+function createSkipResult(scenario, reason) {
+  return {
+    name: scenario.name,
+    ok: true,
+    skipped: true,
+    skipReason: reason,
+    failures: [],
+    frame: reason,
+    rows: scenarioRows(scenario),
+  };
+}
+
 async function runScenario(scenario, index) {
   if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
-    const skipReason = `scenario is only supported on ${scenario.platforms.join(', ')}`;
-    return {
-      name: scenario.name,
-      ok: true,
-      skipped: true,
-      skipReason,
-      failures: [],
-      frame: skipReason,
-      rows: scenarioRows(scenario),
-    };
+    return createSkipResult(
+      scenario,
+      `scenario is only supported on ${scenario.platforms.join(', ')}`,
+    );
   }
 
   const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
   if (scenario.fakeClipboard && !fakeClipboard) {
-    const skipReason = `fake clipboard is not supported on ${process.platform}`;
-    return {
-      name: scenario.name,
-      ok: true,
-      skipped: true,
-      skipReason,
-      failures: [],
-      frame: skipReason,
-      rows: scenarioRows(scenario),
-    };
+    return createSkipResult(
+      scenario,
+      `fake clipboard is not supported on ${process.platform}`,
+    );
   }
   try {
     return await runScenarioWithResources(scenario, fakeClipboard, index);
@@ -4086,6 +4087,113 @@ function scenarioChildEnv(scenario, cols, rows) {
     COLUMNS: String(cols),
     LINES: String(rows),
   };
+}
+
+function gatherAssertionFailures({
+  scenario,
+  frame,
+  rawOutput,
+  fakeClipboard,
+  checkpointFailures,
+  booted,
+  exited,
+  exitedCleanly,
+}) {
+  const collapsedFrame = collapseFrameText(frame);
+  const missing = (scenario.expect ?? []).filter((t) => !frame.includes(t));
+  const missingCollapsed = (scenario.expectCollapsed ?? []).filter(
+    (t) => !collapsedFrame.includes(t),
+  );
+  const missingPatterns = (scenario.expectPatterns ?? []).filter(
+    (pattern) => !pattern.test(frame),
+  );
+  const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
+  const presentPatterns = (scenario.unexpectPatterns ?? []).filter((pattern) =>
+    pattern.test(frame),
+  );
+  const failures = [...checkpointFailures];
+
+  if (!booted) failures.push('input prompt never rendered (boot timeout)');
+  for (const t of missing)
+    failures.push(`expected text missing: ${JSON.stringify(t)}`);
+  for (const t of missingCollapsed)
+    failures.push(`expected collapsed text missing: ${JSON.stringify(t)}`);
+  for (const pattern of missingPatterns)
+    failures.push(`expected pattern missing: ${pattern.toString()}`);
+  for (const t of present)
+    failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  for (const pattern of presentPatterns)
+    failures.push(`unexpected pattern present: ${pattern.toString()}`);
+  for (const check of scenario.maxOccurrences ?? []) {
+    const actual = countOccurrences(frame, check.text);
+    if (actual > check.max) {
+      failures.push(
+        `text appears too many times: ${JSON.stringify(check.text)} (${actual} > ${check.max})`,
+      );
+    }
+  }
+  for (const check of scenario.ordered ?? []) {
+    const failure = orderedTextFailure(frame, check);
+    if (failure) failures.push(failure);
+  }
+  for (const check of scenario.maxBlankLinesBetween ?? []) {
+    const actual = blankLinesBetween(frame, check.from, check.to);
+    if (actual === undefined) {
+      failures.push(
+        `could not find compactness markers: ${JSON.stringify(check.from)} → ${JSON.stringify(check.to)}`,
+      );
+    } else if (actual > check.max) {
+      failures.push(
+        `too many blank lines between ${JSON.stringify(check.from)} and ${JSON.stringify(check.to)}: ${actual} > ${check.max}`,
+      );
+    }
+  }
+  if (scenario.maxLineColumns != null) {
+    const maxColumns = Number(scenario.maxLineColumns);
+    const tooWide = frame
+      .split('\n')
+      .map((line, index) => ({
+        index: index + 1,
+        columns: lineColumns(line),
+        line,
+      }))
+      .filter((line) => line.columns > maxColumns);
+    if (tooWide.length > 0) {
+      const first = tooWide[0];
+      failures.push(
+        `line ${first.index} exceeds ${maxColumns} columns: ${first.columns} (${JSON.stringify(first.line)})`,
+      );
+    }
+  }
+  if (scenario.expectExit && !exitedCleanly) {
+    const exitDetails = exited
+      ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
+      : '';
+    failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
+  }
+  if (scenario.rawUnexpectSgr) {
+    const sgrSequences = [...new Set(rawOutput.match(ANSI_SGR_PATTERN) ?? [])];
+    if (sgrSequences.length > 0) {
+      failures.push(
+        `raw output contains SGR escapes: ${sgrSequences
+          .slice(0, 5)
+          .map((sequence) => JSON.stringify(sequence))
+          .join(', ')}`,
+      );
+    }
+  }
+  if (fakeClipboard) {
+    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
+    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
+      if (!copiedText.includes(text)) {
+        failures.push(
+          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+  }
+
+  return failures;
 }
 
 async function runScenarioWithResources(scenario, fakeClipboard, index) {
@@ -4273,98 +4381,16 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     } catch {}
   }
 
-  const collapsedFrame = collapseFrameText(frame);
-  const missing = (scenario.expect ?? []).filter((t) => !frame.includes(t));
-  const missingCollapsed = (scenario.expectCollapsed ?? []).filter(
-    (t) => !collapsedFrame.includes(t),
-  );
-  const missingPatterns = (scenario.expectPatterns ?? []).filter(
-    (pattern) => !pattern.test(frame),
-  );
-  const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
-  const presentPatterns = (scenario.unexpectPatterns ?? []).filter((pattern) =>
-    pattern.test(frame),
-  );
-  const failures = [...checkpointFailures];
-  if (!booted) failures.push('input prompt never rendered (boot timeout)');
-  for (const t of missing)
-    failures.push(`expected text missing: ${JSON.stringify(t)}`);
-  for (const t of missingCollapsed)
-    failures.push(`expected collapsed text missing: ${JSON.stringify(t)}`);
-  for (const pattern of missingPatterns)
-    failures.push(`expected pattern missing: ${pattern.toString()}`);
-  for (const t of present)
-    failures.push(`unexpected text present: ${JSON.stringify(t)}`);
-  for (const pattern of presentPatterns)
-    failures.push(`unexpected pattern present: ${pattern.toString()}`);
-  for (const check of scenario.maxOccurrences ?? []) {
-    const actual = countOccurrences(frame, check.text);
-    if (actual > check.max) {
-      failures.push(
-        `text appears too many times: ${JSON.stringify(check.text)} (${actual} > ${check.max})`,
-      );
-    }
-  }
-  for (const check of scenario.ordered ?? []) {
-    const failure = orderedTextFailure(frame, check);
-    if (failure) failures.push(failure);
-  }
-  for (const check of scenario.maxBlankLinesBetween ?? []) {
-    const actual = blankLinesBetween(frame, check.from, check.to);
-    if (actual === undefined) {
-      failures.push(
-        `could not find compactness markers: ${JSON.stringify(check.from)} → ${JSON.stringify(check.to)}`,
-      );
-    } else if (actual > check.max) {
-      failures.push(
-        `too many blank lines between ${JSON.stringify(check.from)} and ${JSON.stringify(check.to)}: ${actual} > ${check.max}`,
-      );
-    }
-  }
-  if (scenario.maxLineColumns != null) {
-    const maxColumns = Number(scenario.maxLineColumns);
-    const tooWide = frame
-      .split('\n')
-      .map((line, index) => ({
-        index: index + 1,
-        columns: lineColumns(line),
-        line,
-      }))
-      .filter((line) => line.columns > maxColumns);
-    if (tooWide.length > 0) {
-      const first = tooWide[0];
-      failures.push(
-        `line ${first.index} exceeds ${maxColumns} columns: ${first.columns} (${JSON.stringify(first.line)})`,
-      );
-    }
-  }
-  if (scenario.expectExit && !exitedCleanly) {
-    const exitDetails = exited
-      ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
-      : '';
-    failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
-  }
-  if (scenario.rawUnexpectSgr) {
-    const sgrSequences = [...new Set(rawOutput.match(ANSI_SGR_PATTERN) ?? [])];
-    if (sgrSequences.length > 0) {
-      failures.push(
-        `raw output contains SGR escapes: ${sgrSequences
-          .slice(0, 5)
-          .map((sequence) => JSON.stringify(sequence))
-          .join(', ')}`,
-      );
-    }
-  }
-  if (fakeClipboard) {
-    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
-    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
-      if (!copiedText.includes(text)) {
-        failures.push(
-          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
-        );
-      }
-    }
-  }
+  const failures = gatherAssertionFailures({
+    scenario,
+    frame,
+    rawOutput,
+    fakeClipboard,
+    checkpointFailures,
+    booted,
+    exited,
+    exitedCleanly,
+  });
 
   return {
     name: scenario.name,
