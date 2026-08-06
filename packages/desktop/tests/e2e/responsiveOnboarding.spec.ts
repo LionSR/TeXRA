@@ -15,9 +15,33 @@ import { cleanupDirectory } from './workspaceStorageFixture.js';
 let launched: LaunchedApp;
 let userDataPath = '';
 
+// The welcome card only renders while the onboarding funnel is in its
+// no-credential state. The app treats provider keys exported in the dev
+// shell as usable credentials (lookupApiKey reads the environment), and the
+// e2e harness inherits them, so scrub every provider key var for this spec.
+// Names mirror apiKeyEnvName() over API_KEY_PROVIDER_IDS
+// (src/model/apiProviders.ts).
+const PROVIDER_KEY_ENV_NAMES = [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'OPENROUTER_API_KEY',
+  'GOOGLE_API_KEY',
+  'XAI_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'MOONSHOT_API_KEY',
+  'KIMI_CODE_API_KEY',
+  'DASHSCOPE_API_KEY',
+  'MINIMAX_API_KEY',
+  'GLM_API_KEY',
+  'META_API_KEY',
+] as const;
+
 test.beforeAll(async () => {
   userDataPath = mkdtempSync(join(tmpdir(), 'texra-onboarding-profile-'));
-  launched = await launchTexraApp({ userDataPath });
+  launched = await launchTexraApp({
+    userDataPath,
+    env: Object.fromEntries(PROVIDER_KEY_ENV_NAMES.map((name) => [name, ''])),
+  });
 });
 
 test.afterAll(async () => {

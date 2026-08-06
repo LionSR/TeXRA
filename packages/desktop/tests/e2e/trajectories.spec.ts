@@ -79,7 +79,7 @@ test('first launch shows a usable launcher chrome', async () => {
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
   await expect(
-    launched.page.locator('.task-header-button[aria-label="Open commands"]'),
+    launched.page.locator('.task-header-button[aria-label="Show Commands"]'),
   ).toBeVisible();
   // The main view itself either renders <main-app> or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which

@@ -564,11 +564,12 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
 
 test('keeps settings banners consistent in a narrow side panel', async () => {
   const { page } = launched;
+  // Only Account and Shortcuts still render a shared settings banner; the
+  // Memory/Models/Teams/Goals pages dropped theirs in the native-settings
+  // consolidation, so they are no longer part of this consistency check.
   const bannerTabs = [
-    { index: 0, tag: 'memory-tab' },
-    { index: 2, tag: 'models-tab' },
-    { index: 4, tag: 'multi-agent-tab' },
-    { index: 9, tag: 'goal-tab' },
+    { index: 10, tag: 'account-tab' },
+    { index: 11, tag: 'shortcuts-tab' },
   ] as const;
   const bannerMetrics: Array<{
     readonly borderRadius: string;
