@@ -13,10 +13,7 @@ import {
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -35,8 +32,13 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
 } from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+
+// Local imports - catalog-driven settings rows
+import {
+  postStateSetting,
+  renderStateSettingToggleRow,
+} from '../components/shared/stateSettingRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('git-tab')
 export class GitTab extends LitElement {
@@ -183,22 +185,11 @@ export class GitTab extends LitElement {
   @property({ attribute: false })
   unsupportedCommands: ReadonlySet<string> | null = null;
 
-  private handleMarkCommitsToggle(event: Event): void {
-    const target = event.target as WaSwitch | null;
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key: WorkspaceStateKey.GIT_MARK_COMMITS,
-      value: Boolean(target?.checked),
-    });
-  }
-
   private handleAuthorNameChange(event: Event): void {
     const target = event.target as WaInput | null;
     const name = target?.value?.trim();
     if (name) {
-      postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-        key: WorkspaceStateKey.GIT_AUTHOR_NAME,
-        value: name,
-      });
+      postStateSetting(WorkspaceStateKey.GIT_AUTHOR_NAME, name);
     }
   }
 
@@ -206,10 +197,7 @@ export class GitTab extends LitElement {
     const target = event.target as WaInput | null;
     const email = target?.value?.trim();
     if (email) {
-      postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-        key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-        value: email,
-      });
+      postStateSetting(WorkspaceStateKey.GIT_AUTHOR_EMAIL, email);
     }
   }
 
@@ -408,13 +396,13 @@ export class GitTab extends LitElement {
               'Keep agent-authored commits distinguishable from your personal Git identity.',
             icon: 'circle-dot',
           })}
-          ${renderSettingsToggleRow({
+          ${renderStateSettingToggleRow({
+            key: WorkspaceStateKey.GIT_MARK_COMMITS,
             label: 'Mark TeXRA commits',
             description:
               'Use the TeXRA author identity for commits created by agents.',
             checked: this.markCommits,
             disabled: this.toggleDisabled,
-            onChange: this.handleMarkCommitsToggle,
           })}
           ${
             this.markCommits
