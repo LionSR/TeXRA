@@ -16,10 +16,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -27,7 +24,9 @@ import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
+
+// Local imports - catalog-driven settings rows
+import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -186,14 +185,6 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) orchestratorAgents: string[] = [];
   @state() private activePresetId: string | null = null;
 
-  private postStateToggle(key: WorkspaceStateKey, event: Event): void {
-    const target = event.target as WaSwitch | null;
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key,
-      value: Boolean(target?.checked),
-    });
-  }
-
   private handlePresetClick(preset: AgentModePreset): void {
     this.activePresetId = preset.id;
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
@@ -337,38 +328,26 @@ export class MultiAgentTab extends LitElement {
         })}
 
         <div class="settings-section">
-          ${renderSettingsToggleRow({
+          ${renderStateSettingToggleRow({
+            key: WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
             label: 'Let orchestrator stop agents early',
             description:
               'The orchestrator can cancel agents that are stuck or no longer needed. Turn this off if you want every agent to finish.',
             checked: this.allowOrchestratorKill,
-            onChange: (e) =>
-              this.postStateToggle(
-                WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-                e,
-              ),
           })}
-          ${renderSettingsToggleRow({
+          ${renderStateSettingToggleRow({
+            key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
             label: 'Keep agents running after you stop the orchestrator',
             description:
               'Let agents that are already mid-task finish independently.',
             checked: this.detachSubagentsOnStop,
-            onChange: (e) =>
-              this.postStateToggle(
-                WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-                e,
-              ),
           })}
-          ${renderSettingsToggleRow({
+          ${renderStateSettingToggleRow({
+            key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
             label: 'Allow agents to work in git worktrees',
             description:
               'Delegated agents can use isolated worktrees, with every tool call rooted in that worktree.',
             checked: this.worktreeSupport,
-            onChange: (e) =>
-              postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-                key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-                value: Boolean((e.target as WaSwitch | null)?.checked),
-              }),
           })}
         </div>
       </div>

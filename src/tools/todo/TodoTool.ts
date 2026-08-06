@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 
 const logger = createChannelTrace('TodoWriteTool');
 
@@ -71,11 +72,10 @@ Keep the list current as you work; one task in_progress at a time.`,
     const { completed, inProgress, pending } = countByStatus(input.todos);
 
     // Return minimal output - the UI already shows the input, no need to repeat the list
-    return {
-      status: 'executed',
-      summary: `Todo list updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`,
-      output: 'OK',
-    };
+    return executed(
+      'OK',
+      `Todo list updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`,
+    );
   }
 
   /**

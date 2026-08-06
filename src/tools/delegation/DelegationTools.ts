@@ -35,6 +35,7 @@ import {
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deliverChildRunFollowUp } from './childRunDelivery';
 import {
@@ -335,23 +336,21 @@ Git worktree support: resolved from the active workspace at runtime.`,
 
     switch (result.status) {
       case 'sent':
-        return {
-          status: 'executed',
-          summary: `Follow-up sent to '${handle.agentName}'`,
-          output: [
+        return executed(
+          [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
             `Execution ID: ${executionId}`,
           ].join('\n'),
-        };
+          `Follow-up sent to '${handle.agentName}'`,
+        );
       case 'queued':
-        return {
-          status: 'executed',
-          summary: `Follow-up queued for '${handle.agentName}'`,
-          output: [
+        return executed(
+          [
             `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
             `Execution ID: ${executionId}`,
           ].join('\n'),
-        };
+          `Follow-up queued for '${handle.agentName}'`,
+        );
       case 'no_session':
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
@@ -364,14 +363,13 @@ Git worktree support: resolved from the active workspace at runtime.`,
         // resumeAgent instructions carry no delivery id, so the admission
         // boundary never flags them; reachable only if a future caller adds
         // one — in which case the instruction was already admitted once.
-        return {
-          status: 'executed',
-          summary: `Follow-up already delivered to '${handle.agentName}'`,
-          output: [
+        return executed(
+          [
             `The identical follow-up was already delivered to '${handle.agentName}'.`,
             `Execution ID: ${executionId}`,
           ].join('\n'),
-        };
+          `Follow-up already delivered to '${handle.agentName}'`,
+        );
     }
   }
 }

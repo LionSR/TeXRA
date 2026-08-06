@@ -11,6 +11,7 @@ import { z } from 'zod';
 // Local imports - core
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - zotero
@@ -169,11 +170,10 @@ export class ZoteroSearchTool extends defineTool({
     const label = describeSearch({ query, title, author, year });
 
     if (result.length === 0) {
-      return {
-        status: 'executed',
-        summary: `No results found for ${label}`,
-        output: 'No matching items in Zotero library.',
-      };
+      return executed(
+        'No matching items in Zotero library.',
+        `No results found for ${label}`,
+      );
     }
 
     const collectionMap = include_collections
@@ -197,10 +197,9 @@ export class ZoteroSearchTool extends defineTool({
       return `${base}\n  Filed in: ${paths.join(', ')}`;
     });
 
-    return {
-      status: 'executed',
-      summary: `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
-      output: items.join('\n'),
-    };
+    return executed(
+      items.join('\n'),
+      `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
+    );
   }
 }

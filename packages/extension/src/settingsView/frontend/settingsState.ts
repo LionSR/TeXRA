@@ -46,6 +46,9 @@ import {
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
+  type CodexApprovalPolicy,
+  type CodexReasoningEffort,
+  type CodexSandboxMode,
   type LatexConfigValues,
   type NumberSetting,
   type Goal,
@@ -199,13 +202,13 @@ export const agentSkillsEnabled = trackedSignal(
   () => AGENT_SKILLS_ENABLED_DEFAULT,
 );
 export const telemetryEnabled = trackedSignal(() => true);
-export const codexSandboxMode = trackedSignal<string>(
+export const codexSandboxMode = trackedSignal<CodexSandboxMode>(
   () => CODEX_SANDBOX_MODE_DEFAULT,
 );
-export const codexReasoningEffort = trackedSignal<string>(
+export const codexReasoningEffort = trackedSignal<CodexReasoningEffort>(
   () => CODEX_REASONING_EFFORT_DEFAULT,
 );
-export const codexApprovalPolicy = trackedSignal<string>(
+export const codexApprovalPolicy = trackedSignal<CodexApprovalPolicy>(
   () => CODEX_APPROVAL_POLICY_DEFAULT,
 );
 export const claudeAgentModel = trackedSignal<ClaudeAgentModel>(

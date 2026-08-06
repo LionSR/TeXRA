@@ -8,6 +8,7 @@ import { z } from 'zod';
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { type ToolResult } from '@shared/schemas/toolResult';
+import { executed } from '@tools/core/result';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
@@ -142,15 +143,13 @@ export class ProbeEnvironmentTool extends defineTool({
 
     const headline = buildHeadline(summary);
 
-    return {
-      status: 'executed',
-      summary: headline,
-      output:
-        headline +
+    return executed(
+      headline +
         '\n\n<probe-json>\n' +
         JSON.stringify(summary, null, 2) +
         '\n</probe-json>',
-    };
+      headline,
+    );
   }
 }
 

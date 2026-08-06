@@ -48,15 +48,21 @@ import {
   childListStreamId,
   childPhaseListValue,
   childStreamListValue,
-  workflowPhaseListValue,
   workflowTaskListValue,
   type ChildListValue,
 } from '../state/childListSelection';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import {
+  uniqueWorkflowChildStreamId,
+  workflowDashboardModel,
+  workflowDashboardSelection,
+  type WorkflowDashboardModel,
+  type WorkflowPhaseGroup,
+  type WorkflowTaskEntry,
+} from '../state/workflowDashboardModel';
+import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
-  WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS,
   childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
@@ -235,100 +241,19 @@ function SessionRow({
   );
 }
 
-type WorkflowTaskEntry = Extract<
-  StreamSlice['entries'][number],
-  { readonly role: 'workflowTask' }
->;
-type WorkflowPhaseEntry = Extract<
-  StreamSlice['entries'][number],
-  { readonly role: 'phase' }
->;
-
-interface WorkflowPhaseGroup {
-  readonly value: ChildListValue;
-  readonly label: string;
-  heading?: WorkflowPhaseEntry;
-  readonly tasks: WorkflowTaskEntry[];
-}
-
-function workflowPhaseGroups(root: StreamSlice): WorkflowPhaseGroup[] {
-  const groups: WorkflowPhaseGroup[] = [];
-  const byPhase = new Map<string | undefined, WorkflowPhaseGroup>();
-  for (const entry of root.entries) {
-    if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
-    const phase = entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
-    let group = byPhase.get(phase);
-    if (!group) {
-      group = {
-        value: workflowPhaseListValue(entry.id),
-        label: phase ?? 'Unphased',
-        ...(entry.role === 'phase' ? { heading: entry } : {}),
-        tasks: [],
-      };
-      byPhase.set(phase, group);
-      groups.push(group);
-    } else if (entry.role === 'phase' && group.heading === undefined) {
-      group.heading = entry;
-    }
-    if (entry.role === 'workflowTask') group.tasks.push(entry);
-  }
-  return groups;
-}
-
 /** Number of content rows the dashboard can display at the current width. */
 export function workflowDashboardPanelItemCount(
   root: StreamSlice,
   selectedValue: ChildListValue | undefined,
   columns: number,
 ): number {
-  const groups = workflowPhaseGroups(root);
-  const taskCount = groups.reduce(
-    (total, group) => total + group.tasks.length,
-    0,
-  );
-  if (taskCount === 0) return 0;
-  if (columns < WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS) {
-    return 1 + groups.length + taskCount;
+  const model = workflowDashboardModel(root, columns);
+  if (model.tasks.length === 0) return 0;
+  if (!model.wide) {
+    return 1 + model.groups.length + model.tasks.length;
   }
-  const activeGroup =
-    groups.find(
-      (group) =>
-        group.value === selectedValue ||
-        group.tasks.some(
-          (task) => workflowTaskListValue(task.id) === selectedValue,
-        ),
-    ) ?? groups[0];
-  return 1 + Math.max(groups.length, activeGroup?.tasks.length ?? 0);
-}
-
-type WorkflowChildTaskIndex = ReadonlyMap<
-  StreamTabId,
-  WorkflowTaskEntry | null
->;
-
-function workflowChildTaskIndex(
-  tasks: readonly WorkflowTaskEntry[],
-): WorkflowChildTaskIndex {
-  const index = new Map<StreamTabId, WorkflowTaskEntry | null>();
-  for (const entry of tasks) {
-    const childStreamId = entry.task.childStreamId;
-    if (childStreamId === undefined) continue;
-    index.set(childStreamId, index.has(childStreamId) ? null : entry);
-  }
-  return index;
-}
-
-function uniqueWorkflowChildStreamId(
-  entry: WorkflowTaskEntry,
-  childTaskIndex: WorkflowChildTaskIndex,
-  streams: ReadonlyMap<StreamTabId, StreamSlice>,
-): StreamTabId | undefined {
-  const childStreamId = entry.task.childStreamId;
-  return childStreamId !== undefined &&
-    childTaskIndex.get(childStreamId) === entry &&
-    streams.has(childStreamId)
-    ? childStreamId
-    : undefined;
+  const { activeGroup } = workflowDashboardSelection(model, selectedValue);
+  return 1 + Math.max(model.groups.length, activeGroup?.tasks.length ?? 0);
 }
 
 function workflowTaskMetadata(
@@ -403,43 +328,28 @@ function WorkflowDashboard({
   columns,
   keyboardActive,
   maxRows,
+  model,
   onCancel,
   onFocusStream,
   onSelectionChange,
-  root,
   selectedValue,
   streams,
-  uniqueChildTaskIndex,
 }: {
   readonly columns: number;
   readonly keyboardActive: boolean;
   readonly maxRows: number | undefined;
+  readonly model: WorkflowDashboardModel;
   readonly onCancel: () => void;
   readonly onFocusStream: ((streamId: StreamTabId) => void) | undefined;
   readonly onSelectionChange: ((value: ChildListValue) => void) | undefined;
-  readonly root: StreamSlice;
   readonly selectedValue: ChildListValue | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly uniqueChildTaskIndex: WorkflowChildTaskIndex;
 }): React.JSX.Element | null {
-  const groups = workflowPhaseGroups(root);
-  const tasks = groups.flatMap((group) => group.tasks);
-  const taskByValue = new Map(
-    tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
-  );
-  const groupByValue = new Map(groups.map((group) => [group.value, group]));
-  const selectedGroup = selectedValue
-    ? groupByValue.get(selectedValue)
-    : undefined;
-  const selectedTask = selectedValue
-    ? taskByValue.get(selectedValue)
-    : undefined;
-  const selectedTaskGroup = selectedTask
-    ? groups.find((group) => group.tasks.includes(selectedTask))
-    : undefined;
-  const activeGroup = selectedGroup ?? selectedTaskGroup ?? groups[0];
+  const { groups, tasks, taskByValue, groupByValue, wide } = model;
+  const { selectedGroup, selectedTask, selectedTaskGroup, activeGroup } =
+    workflowDashboardSelection(model, selectedValue);
   const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
-    uniqueWorkflowChildStreamId(entry, uniqueChildTaskIndex, streams);
+    uniqueWorkflowChildStreamId(entry, model.childTaskIndex, streams);
   const liveElapsedKey = tasks
     .map((entry) => {
       const childStreamId = uniqueChildId(entry);
@@ -450,7 +360,6 @@ function WorkflowDashboard({
     .filter((startedAt): startedAt is number => startedAt !== undefined)
     .join(':');
   const nowMs = useLiveNowMs(liveElapsedKey.length > 0, liveElapsedKey);
-  const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
   const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
     label: group.label,
     value: group.value,
@@ -500,7 +409,7 @@ function WorkflowDashboard({
   if (tasks.length === 0 || (contentRows !== undefined && contentRows <= 0)) {
     return null;
   }
-  const heading = `${root.agent ?? 'Workflow'} · ${done}/${total} done`;
+  const heading = `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
   const renderTask = (
     item: SelectItem<ChildListValue>,
     state: { readonly focused: boolean },
@@ -731,22 +640,12 @@ export function SubagentList(
     props.listRootSlice?.identity?.kind === 'multiAgentWorkflow'
       ? props.listRootSlice
       : undefined;
-  const workflowTasks = useMemo(
+  // Same derivation `App` reads for selection and focus — see
+  // `state/workflowDashboardModel`.
+  const dashboard = useMemo(
     () =>
-      workflowRoot?.entries.filter((entry) => entry.role === 'workflowTask') ??
-      [],
-    [workflowRoot],
-  );
-  const workflowTasksByValue = useMemo(
-    () =>
-      new Map(
-        workflowTasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
-      ),
-    [workflowTasks],
-  );
-  const uniqueChildTaskIndex = useMemo(
-    () => workflowChildTaskIndex(workflowTasks),
-    [workflowTasks],
+      workflowRoot ? workflowDashboardModel(workflowRoot, columns) : undefined,
+    [columns, workflowRoot],
   );
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
@@ -773,16 +672,18 @@ export function SubagentList(
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta) return;
-      const selectedWorkflowTask = props.selectedValue
-        ? workflowTasksByValue.get(props.selectedValue)
-        : undefined;
-      const workflowChildStreamId = selectedWorkflowTask
-        ? uniqueWorkflowChildStreamId(
-            selectedWorkflowTask,
-            uniqueChildTaskIndex,
-            props.streams ?? new Map(),
-          )
-        : undefined;
+      const selectedWorkflowTask =
+        props.selectedValue && dashboard
+          ? dashboard.taskByValue.get(props.selectedValue)
+          : undefined;
+      const workflowChildStreamId =
+        selectedWorkflowTask && dashboard
+          ? uniqueWorkflowChildStreamId(
+              selectedWorkflowTask,
+              dashboard.childTaskIndex,
+              props.streams ?? new Map(),
+            )
+          : undefined;
       const streamId =
         childListStreamId(props.selectedValue) ?? workflowChildStreamId;
       if (!streamId) return;
@@ -805,19 +706,18 @@ export function SubagentList(
     { isActive: props.keyboardActive ?? false },
   );
 
-  if (workflowRoot) {
+  if (dashboard) {
     return (
       <WorkflowDashboard
         columns={columns}
         keyboardActive={props.keyboardActive ?? false}
         maxRows={props.maxRows}
+        model={dashboard}
         onCancel={props.onCancel ?? (() => undefined)}
         onFocusStream={props.onFocusStream}
         onSelectionChange={props.onSelectionChange}
-        root={workflowRoot}
         selectedValue={props.selectedValue}
         streams={props.streams ?? new Map()}
-        uniqueChildTaskIndex={uniqueChildTaskIndex}
       />
     );
   }

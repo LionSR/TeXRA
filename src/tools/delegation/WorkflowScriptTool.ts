@@ -29,7 +29,7 @@ import {
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
-import { errorResult } from '@tools/core/result';
+import { errorResult, executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -396,15 +396,14 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       // live run instead of erroring.
       if (error instanceof ExecutionLeaseActiveError) {
         return withScriptReference(
-          {
-            status: 'executed',
-            summary: `Workflow script '${meta.name}' is already running`,
-            output: [
+          executed(
+            [
               `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run — wait for it, then resume with the same meta.name if it did not complete.`,
               `Execution ID: ${runExecutionId}`,
               `To check progress or collect the result: executions tool with path=/executions/${runExecutionId} and action=wait (returns immediately if it already finished).`,
             ].join('\n'),
-          },
+            `Workflow script '${meta.name}' is already running`,
+          ),
           scriptPath,
         );
       }
@@ -520,25 +519,20 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             summary: `Workflow script '${meta.name}' failed`,
           });
         }
-        return {
-          status: 'executed',
-          summary: `Completed workflow script '${meta.name}'`,
-          output: report,
-        } satisfies ToolResult;
+        return executed(report, `Completed workflow script '${meta.name}'`);
       }
 
       return withScriptReference(
-        {
-          status: 'executed',
-          summary: `Launched workflow script '${meta.name}' (async)`,
-          output: [
+        executed(
+          [
             `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
             `Execution ID: ${runExecutionId}`,
             `Stream tab: ${runChildStreamId}`,
             `The result arrives automatically — continue other work meanwhile. To check progress: executions tool with path=/executions/${runExecutionId}; use action=wait only when you cannot proceed without it.`,
             `To resume after a timeout or interruption: call this tool again with the same meta.name.`,
           ].join('\n'),
-        },
+          `Launched workflow script '${meta.name}' (async)`,
+        ),
         scriptPath,
       );
     });

@@ -17,6 +17,7 @@ import {
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
@@ -218,10 +219,6 @@ export class WebFetchTool extends defineTool({
       sections.push('No readable content was extracted from the provided URL.');
     }
 
-    return {
-      status: 'executed',
-      summary: `Fetched: ${url}`,
-      output: sections.join('\n\n'),
-    };
+    return executed(sections.join('\n\n'), `Fetched: ${url}`);
   }
 }
