@@ -48,7 +48,7 @@ import {
 } from './workflowScriptStrategy';
 import { rejectOversizedBibAttachments } from './inputFields';
 import {
-  requireVisibleAgent,
+  requireWorkflowOrToolUseAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
@@ -285,25 +285,15 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
 
     const { meta, defaultAgent, defaultAgentCategory } = await runPhase(() => {
       const { meta } = parseWorkflowScript(script);
-      const scope = runScope.delegationAgentScope ?? undefined;
-      // Search both categories — the tool description promises agentName
-      // accepts workflow and tool-use agents.
-      let firstError: unknown;
-      for (const category of [
-        AgentCategory.Workflow,
-        AgentCategory.ToolUse,
-      ] as const) {
-        try {
-          return {
-            meta,
-            defaultAgent: requireVisibleAgent(category, input.agent, scope),
-            defaultAgentCategory: category,
-          };
-        } catch (error) {
-          firstError ??= error;
-        }
-      }
-      throw firstError;
+      const resolved = requireWorkflowOrToolUseAgent(
+        input.agent,
+        runScope.delegationAgentScope ?? undefined,
+      );
+      return {
+        meta,
+        defaultAgent: resolved.agent,
+        defaultAgentCategory: resolved.category,
+      };
     });
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model
     // rewrites its script, so any key derived from call identity or source
