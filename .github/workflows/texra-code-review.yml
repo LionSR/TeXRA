@@ -112,7 +112,7 @@ jobs:
         uses: texra-ai/texra-action/review@7800c7098bcb4d4bf956aa5dc72437eb5d0af6ac
         with:
           prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
-          approval-policy: always
+          approval-policy: yolo
           require-write-access: 'true'
           allow-bots: dependabot[bot],github-actions[bot]
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
