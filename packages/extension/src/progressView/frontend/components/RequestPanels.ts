@@ -331,7 +331,8 @@ export class RequestPanels extends LitElement {
           ${repeat(
             permissions,
             (p) => getPermissionKey(p),
-            (p) => this.renderRequest(config, p, getPermissionKey(p) === armedKey),
+            (p) =>
+              this.renderRequest(config, p, getPermissionKey(p) === armedKey),
           )}
         </div>
       </section>
