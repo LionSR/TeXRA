@@ -453,15 +453,11 @@ function OnboardingFrame(props: {
   readonly hints: readonly KeyHint[];
 }): React.JSX.Element {
   return (
-    <Box
-      borderStyle="round"
-      borderColor={COLOR_HINT}
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color={COLOR_HINT}
+      title={props.title}
+      footer={<KeyHints hints={props.hints} confirmCancel={false} />}
     >
-      <Text bold color={COLOR_HINT}>
-        {props.title}
-      </Text>
       {props.subtitle ? <Text dimColor>{props.subtitle}</Text> : null}
       {props.error ? (
         <Text color={COLOR_ERROR}>{`${CROSS} ${props.error}`}</Text>
@@ -469,10 +465,7 @@ function OnboardingFrame(props: {
       <Box marginTop={1} flexDirection="column">
         {props.children}
       </Box>
-      <Box marginTop={1}>
-        <KeyHints hints={props.hints} confirmCancel={false} />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
 
