@@ -132,11 +132,11 @@ export function ConversationRegion({
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
-  // Input-bar height follows the windowed draft (borders + reported content
-  // rows) so a multi-line draft shrinks the transcript instead of pushing
-  // the pinned chrome off-screen.
-  const inputRows =
-    PINNED_CHROME_ROWS.input - 1 + useSignal(inputBarContentRows);
+  // Round-border chrome is the default input height minus its single content
+  // row; InputBar publishes the live content height so multi-line drafts shrink
+  // the transcript instead of pushing pinned chrome off-screen.
+  const inputBorderRows = PINNED_CHROME_ROWS.input - 1;
+  const inputRows = inputBorderRows + useSignal(inputBarContentRows);
   const footerRows =
     PINNED_CHROME_ROWS.status + (inputBarVisible ? inputRows : 0);
   const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted

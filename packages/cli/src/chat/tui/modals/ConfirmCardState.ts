@@ -29,9 +29,7 @@ export interface ConfirmCardKeyOptions {
 export interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
-  /** What Esc actually does. Esc maps to the `reject` action
-   *  (`confirmCardKeyAction`), never a consequence-free dismiss, so the
-   *  hint must name the rejection — "cancel" here was a mislabel. */
+  /** Esc maps to `reject` (`confirmCardKeyAction`), not a dismiss — label the consequence. */
   readonly escapeLabel?: string;
   readonly alwaysAllowLabel?: string;
   readonly extraActions?: readonly KeyHint[];
@@ -83,7 +81,7 @@ export function confirmCardKeyAction(
 
 export function confirmCardKeyHints({
   approveLabel = 'approve',
-  rejectLabel = 'reject with note',
+  rejectLabel = 'reject & note',
   escapeLabel = 'reject',
   alwaysAllowLabel,
   extraActions = [],
@@ -121,7 +119,7 @@ function hintsFit(
 
 function compactHintAction(action: string): string {
   switch (action) {
-    case 'reject with note':
+    case 'reject & note':
       return 'reject';
     case 'approve commands for session':
       return 'all commands';

@@ -256,24 +256,33 @@ function leadingEllipsisDisplay(
   };
 }
 
-/** Rows the input will occupy at `width`, using the SAME soft-break
- *  algorithm the component windows with — a caller-side estimate from plain
- *  character math disagrees at exactly-full rows (word-boundary wrapping)
- *  and would clip the caret row. When the last row is exactly full, the
- *  end-of-value caret occupies one cell past it and wraps to its own row. */
+/** True when the soft-break last row already fills `columns`, so an
+ *  end-of-value caret wraps onto its own visual line. Shared by the height
+ *  estimator and the display window so the two cannot disagree. */
+function lastDisplayRowIsFull(
+  value: string,
+  rows: readonly TextInputDisplayRow[],
+  columns: number,
+): boolean {
+  const last = rows.at(-1);
+  return (
+    last !== undefined &&
+    textDisplayWidth(textInputDisplayRowValue(value, last)) >= columns
+  );
+}
+
+/** Rows the input will occupy at `width`, using the same soft-break algorithm
+ *  as {@link textInputDisplayWindow}. When the last row is exactly full, the
+ *  end-of-value caret wraps to its own row. */
 export function textInputDisplayRowCount(value: string, width: number): number {
   const columns = Math.max(1, width);
   const rows = textInputDisplayRows(value, columns);
-  const last = rows.at(-1);
-  const lastRowFull =
-    last !== undefined &&
-    textDisplayWidth(textInputDisplayRowValue(value, last)) >= columns;
-  return rows.length + (lastRowFull ? 1 : 0);
+  return rows.length + (lastDisplayRowIsFull(value, rows, columns) ? 1 : 0);
 }
 
 /**
- * Height to allocate for a height-capped text input (InputBar, modal free
- * text). Includes the end-of-value caret wrap when it fits under `maxRows`.
+ * Height to allocate for a height-capped text input (e.g. InputBar). Includes
+ * the end-of-value caret wrap when it fits under `maxRows`.
  *
  * When the uncapped need exceeds `maxRows`, returns `maxRows` — callers must
  * pass the **same** value as `maxDisplayRows` so {@link textInputDisplayWindow}
@@ -285,8 +294,7 @@ export function textInputCappedRowCount(
   width: number,
   maxRows: number,
 ): number {
-  const cap = Math.max(1, maxRows);
-  return Math.min(cap, Math.max(1, textInputDisplayRowCount(value, width)));
+  return Math.min(Math.max(1, maxRows), textInputDisplayRowCount(value, width));
 }
 
 export function textInputDisplayWindow({
@@ -309,14 +317,10 @@ export function textInputDisplayWindow({
   const sourceCursor = clampCursor(cursor, value.length);
   const rows = textInputDisplayRows(value, columnCount);
   const cursorRowIndex = cursorDisplayRowIndex(rows, sourceCursor);
-  // End-of-value caret on a full last row wraps to its own visual line. When
-  // the caller clamps height (e.g. InputBar's 5-row ceiling), reserve one of
-  // those rows for the caret so the wrap is not clipped by overflowY=hidden.
-  const last = rows.at(-1);
+  // Height-capped callers must leave room for the EOF caret wrap on a full last row.
   const caretNeedsExtraRow =
     sourceCursor >= value.length &&
-    last !== undefined &&
-    textDisplayWidth(textInputDisplayRowValue(value, last)) >= columnCount;
+    lastDisplayRowIsFull(value, rows, columnCount);
   const contentRowBudget =
     caretNeedsExtraRow && rows.length >= rowCount
       ? Math.max(1, rowCount - 1)
@@ -659,12 +663,12 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     { isActive: focus },
   );
 
-  // The caret is reverse-video, which is SGR — under NO_COLOR / --no-color /
-  // TERM=dumb the output stream strips every SGR sequence and the cursor
-  // would be invisible. Fall back to a literal caret glyph that replaces the
-  // character under the cursor in place (same column budget as inverse),
-  // rather than inserting beside it and overflowing the wrap math.
+  // Reverse-video is SGR; under NO_COLOR/--no-color/TERM=dumb the stream strips
+  // it and the cursor vanishes. Glyph caret replaces the under-cursor cell in
+  // place (same column budget as inverse) so near-full lines do not rewrap.
   const glyphCaret = !isTuiColorEnabled();
+  const caretCell = (cell = ' ') =>
+    glyphCaret ? <Text>▏</Text> : <Text inverse>{cell}</Text>;
 
   if (value.length === 0) {
     if (!focus) {
@@ -672,7 +676,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     }
     return (
       <Text>
-        {glyphCaret ? <Text>▏</Text> : <Text inverse> </Text>}
+        {caretCell()}
         {placeholder ? <Text dimColor>{placeholder}</Text> : null}
       </Text>
     );
@@ -701,19 +705,16 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     return (
       <Text>
         {before}
-        {glyphCaret ? <Text>▏</Text> : <Text inverse> </Text>}
+        {caretCell()}
         {'\n'}
         {after}
       </Text>
     );
   }
-  // Glyph caret replaces the under-cursor cell (or occupies the EOF cell)
-  // instead of prepending beside it — otherwise near-full lines wrap and the
-  // height-capped input box clips the overflow.
   return (
     <Text>
       {before}
-      {glyphCaret ? <Text>▏</Text> : <Text inverse>{ch ?? ' '}</Text>}
+      {caretCell(ch ?? ' ')}
       {after}
     </Text>
   );
