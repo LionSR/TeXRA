@@ -176,59 +176,72 @@ const PERMISSION_ANNOUNCEMENT_NOUN: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.USER_QUESTION]: 'user question',
 };
 
-let _announcedPermissionKeys: ReadonlySet<string> = new Set();
-let _announcedStreamStatuses: ReadonlyMap<StreamTabId, StreamLifecycleStatus> =
-  new Map();
+/** One announcement diff pass: the text plus the memos for the next pass. */
+export interface StatusAnnouncement {
+  readonly text: string;
+  readonly permissionKeys: ReadonlySet<string>;
+  readonly streamStatuses: ReadonlyMap<StreamTabId, StreamLifecycleStatus>;
+}
 
 /**
  * Latest event worth announcing in ProgressApp's stable, visually-hidden
  * `role="status"` region: a newly appeared approval request, else a run that
- * just reached a terminal outcome. Detection diffs against the previous
- * evaluation — the same memo pattern `pendingApprovalIds$` above uses.
+ * just reached a terminal outcome. Pure over explicit previous-pass memos —
+ * the caller (ProgressApp's `Signal.subtle.Watcher` effect) owns the memos
+ * and the subscription, so this never hides state inside a lazy computed.
  * Approvals are keyed so re-rendering the same pending request never
- * re-announces it; terminal outcomes fire only on an observed transition,
- * never for a stream first seen already-finished (history hydrate and trace
- * replay arrive terminal and would otherwise announce every old run at
- * once). A pending approval wins over a completion in the same tick — it is
- * the one demanding action. Returning '' when nothing new happened gives the
- * live region the text-change edge that repeated identical announcements
- * need.
+ * re-announces it, and carry the originating run's label because the queue
+ * spans every stream, not just the visible one; terminal outcomes fire only
+ * on an observed transition, never for a stream first seen already-finished
+ * (history hydrate and trace replay arrive terminal and would otherwise
+ * announce every old run at once). A pending approval wins over a completion
+ * in the same pass — it is the one demanding action. '' when nothing new
+ * happened gives the live region the text-change edge that repeated
+ * identical announcements need.
  */
-export const statusAnnouncement$ = new Signal.Computed((): string => {
-  let announcement = '';
+export function diffStatusAnnouncement(
+  previousKeys: ReadonlySet<string>,
+  previousStatuses: ReadonlyMap<StreamTabId, StreamLifecycleStatus>,
+  permissions: readonly PermissionState[],
+  streamStates: ReadonlyMap<StreamTabId, StreamState>,
+  streamById: ReadonlyMap<StreamTabId, StreamTabInfo>,
+): StatusAnnouncement {
+  let text = '';
 
-  const permissions = permissions$.get();
-  const currentKeys = new Set<string>();
+  const permissionKeys = new Set<string>();
   for (const permission of permissions) {
     const key = `${permission.kind}:${permissionId(permission)}`;
-    currentKeys.add(key);
-    if (!_announcedPermissionKeys.has(key)) {
-      announcement = `Approval requested: ${PERMISSION_ANNOUNCEMENT_NOUN[permission.kind]}`;
-    }
+    permissionKeys.add(key);
+    if (previousKeys.has(key)) continue;
+    const noun = PERMISSION_ANNOUNCEMENT_NOUN[permission.kind];
+    const streamId = permission.data.streamId;
+    const label = streamId
+      ? streamById.get(streamId)?.label || streamId
+      : undefined;
+    text = label
+      ? `Approval requested: ${noun} — ${label}`
+      : `Approval requested: ${noun}`;
   }
-  _announcedPermissionKeys = currentKeys;
 
-  const streamStates = streamStates$.get();
-  const currentStatuses = new Map<StreamTabId, StreamLifecycleStatus>();
+  const streamStatuses = new Map<StreamTabId, StreamLifecycleStatus>();
   for (const [streamId, state] of streamStates) {
     const status = state.status;
-    currentStatuses.set(streamId, status);
-    const previous = _announcedStreamStatuses.get(streamId);
+    streamStatuses.set(streamId, status);
+    const previous = previousStatuses.get(streamId);
     if (
-      announcement === '' &&
+      text === '' &&
       previous !== undefined &&
       previous !== status &&
       status !== STREAM_STATUS.READY &&
       isTerminalOutcomePhase(status)
     ) {
-      const label = streamById$.get().get(streamId)?.label || streamId;
-      announcement = `Run ${status}: ${label}`;
+      const label = streamById.get(streamId)?.label || streamId;
+      text = `Run ${status}: ${label}`;
     }
   }
-  _announcedStreamStatuses = currentStatuses;
 
-  return announcement;
-});
+  return { text, permissionKeys, streamStatuses };
+}
 
 /**
  * Reset every writable signal to its initial value. Called from
@@ -241,13 +254,12 @@ export const statusAnnouncement$ = new Signal.Computed((): string => {
  * recomputation, which reads `_prevApprovalIds` for the stable-Set memo —
  * if we clear the cache after, the next read sees a stale prior Set and
  * returns it instead of the empty post-reset value. `_prevPhaseStages` is
- * the same memo over `appState`, so it is cleared before that setter too,
- * and the `statusAnnouncement$` diff memos follow the same rule.
+ * the same memo over `appState`, so it is cleared before that setter too.
+ * The announcement diff memos need no reset: they live on the ProgressApp
+ * instance driving `diffStatusAnnouncement`, so a remount starts fresh.
  */
 export function resetProgressState(): void {
   _prevApprovalIds = new Set();
-  _announcedPermissionKeys = new Set();
-  _announcedStreamStatuses = new Map();
   _prevPhaseStages = EMPTY_PHASE_STAGE_MAP;
   clearFollowUpInputTransientStateStore();
   appState.set(createInitialState());

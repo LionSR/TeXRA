@@ -1,6 +1,6 @@
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
@@ -12,8 +12,12 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
-import type { ProgressViewOutboundMessage } from '@shared/schemas';
-import { SignalWatcher } from '@shared/signals';
+import type {
+  ProgressViewOutboundMessage,
+  StreamLifecycleStatus,
+  StreamTabId,
+} from '@shared/schemas';
+import { Signal, SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
@@ -26,12 +30,14 @@ import { progressAppStyles } from './progressAppStyles';
 import {
   activeStreamId$,
   childStreamsByParent$,
+  diffStatusAnnouncement,
   hasAnyStreams$,
   narrowLayout,
   pendingApprovalIds$,
+  permissions$,
   placement,
   resetProgressState,
-  statusAnnouncement$,
+  streamById$,
   streamStates$,
   topLevelStreams$,
 } from './progressState';
@@ -79,6 +85,31 @@ export class ProgressApp extends ProgressAppBase {
   private hasHandledInitialProgressTabShow = false;
   private suppressNextResetProgressTabShow = false;
 
+  // --- Status announcements (shell role="status" region) ---
+  // The diff is event detection, not a pure projection, so it runs in an
+  // explicit watcher effect with the memos here on the instance — never
+  // inside a Signal.Computed, whose lazy, consumer-count-dependent
+  // evaluation would make "what was already announced" ill-defined.
+  @state() private statusAnnouncement = '';
+  private announcedPermissionKeys: ReadonlySet<string> = new Set();
+  private announcedStreamStatuses: ReadonlyMap<
+    StreamTabId,
+    StreamLifecycleStatus
+  > = new Map();
+
+  /**
+   * Watcher callback runs during signal invalidation, where reading a signal
+   * is not allowed — so the diff runs on a microtask, which also coalesces a
+   * burst of `.set()` calls from one handler into one announcement pass.
+   * Same pattern as webview/frontend/persistence.ts.
+   */
+  private readonly announcementWatcher = new Signal.subtle.Watcher(() => {
+    queueMicrotask(() => {
+      this.announcementWatcher.watch();
+      this.updateStatusAnnouncement();
+    });
+  });
+
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width ?? this.clientWidth;
     narrowLayout.set(width < 500);
@@ -92,9 +123,15 @@ export class ProgressApp extends ProgressAppBase {
   override connectedCallback(): void {
     super.connectedCallback();
     this.resizeObserver.observe(this);
+    this.announcementWatcher.watch(permissions$, streamStates$, streamById$);
+    // Baseline pass: announce anything already pending at mount (the old
+    // computed did so on first read) and seed the status memos so
+    // already-finished runs never announce.
+    this.updateStatusAnnouncement();
   }
 
   override disconnectedCallback(): void {
+    this.announcementWatcher.unwatch(permissions$, streamStates$, streamById$);
     this.resizeObserver.disconnect();
     super.disconnectedCallback();
   }
@@ -177,14 +214,29 @@ export class ProgressApp extends ProgressAppBase {
         ${/*
           One stable, visually-hidden polite region for the whole shell:
           new approval requests and terminal run outcomes land here (see
-          statusAnnouncement$). Stability matters — a region that is always
-          mounted re-announces reliably on every text change, unlike a
-          dynamically inserted alert. */
+          updateStatusAnnouncement). Stability matters — a region that is
+          always mounted re-announces reliably on every text change, unlike
+          a dynamically inserted alert. */
         html`<div class="visually-hidden" role="status">
-          ${statusAnnouncement$.get()}
+          ${this.statusAnnouncement}
         </div>`}
       </div>
     `;
+  }
+
+  private updateStatusAnnouncement(): void {
+    const next = diffStatusAnnouncement(
+      this.announcedPermissionKeys,
+      this.announcedStreamStatuses,
+      permissions$.get(),
+      streamStates$.get(),
+      streamById$.get(),
+    );
+    this.announcedPermissionKeys = next.permissionKeys;
+    this.announcedStreamStatuses = next.streamStatuses;
+    if (next.text !== this.statusAnnouncement) {
+      this.statusAnnouncement = next.text;
+    }
   }
 
   private renderEmptyState(): TemplateResult {
