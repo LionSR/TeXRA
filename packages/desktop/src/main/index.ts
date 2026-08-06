@@ -747,27 +747,23 @@ function createWindow(options: {
       },
       dashboard: {
         buildItems: async (cachedResults) => {
-          const { buildToolDashboardItems } = await import(
-            '@controllers/settingsView/ToolDashboardData'
-          );
+          const { buildToolDashboardItems } =
+            await import('@controllers/settingsView/ToolDashboardData');
           return buildToolDashboardItems(cachedResults);
         },
         getCachedCheckResults: async () => {
-          const { getLastCheckResults } = await import(
-            '@tools/toolAvailability'
-          );
+          const { getLastCheckResults } =
+            await import('@tools/toolAvailability');
           return getLastCheckResults() ?? undefined;
         },
         refreshAvailability: async () => {
-          const { refreshToolAvailability } = await import(
-            '@tools/toolAvailability'
-          );
+          const { refreshToolAvailability } =
+            await import('@tools/toolAvailability');
           await refreshToolAvailability();
         },
         planTerminalAction: async (toolId, kind) => {
-          const { planToolTerminalAction } = await import(
-            '@controllers/settingsView/ToolDashboardData'
-          );
+          const { planToolTerminalAction } =
+            await import('@controllers/settingsView/ToolDashboardData');
           return planToolTerminalAction({ toolId, commandKind: kind });
         },
       },
