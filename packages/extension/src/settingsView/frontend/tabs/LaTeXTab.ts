@@ -772,7 +772,9 @@ export class LaTeXTab extends LitElement {
   ): void {
     try {
       const parsed: unknown = JSON.parse(source);
-      const result = CoreSettingsShape.latex.unwrap().shape[field].safeParse(parsed);
+      const result = CoreSettingsShape.latex
+        .unwrap()
+        .shape[field].safeParse(parsed);
       if (!result.success) {
         throw new Error('Enter a JSON object with string values.');
       }
