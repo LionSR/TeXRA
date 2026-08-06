@@ -1,4 +1,5 @@
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 import { activeStreamScope } from './streamViews';
@@ -47,7 +48,7 @@ export function focusedChildInputDisabledMessage(init: {
   ) {
     return undefined;
   }
-  return 'This background task is no longer accepting follow-ups; press Tab to select a session.';
+  return FOCUSED_BACKGROUND_TASK.noLongerAccepting;
 }
 
 export function stoppedFocusedChildFollowUpMessage(init: {
@@ -60,6 +61,6 @@ export function stoppedFocusedChildFollowUpMessage(init: {
       activeStreamId: init.streamId,
       parentStream: init.parentStream,
       status: init.streams.get(init.streamId)?.status,
-    }) ?? 'The selected background task is no longer accepting follow-ups.'
+    }) ?? FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting
   );
 }

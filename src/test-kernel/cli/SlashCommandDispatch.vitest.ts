@@ -50,6 +50,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 
@@ -538,7 +539,7 @@ describe('handleTuiSlashCommand', () => {
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).toHaveBeenCalledOnce();
     const entry = lastEntryText();
-    expect(entry).toContain('Signed out of TeXRA.');
+    expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
     expect(entry).not.toContain('\n');
@@ -588,7 +589,7 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
-    expect(entry).toContain('Signed out of TeXRA.');
+    expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
   });
 
@@ -604,7 +605,7 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
-    expect(entry).toContain('Signed out of TeXRA.');
+    expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain(
       'ChatGPT subscription preference could not be disabled: Config write failed',

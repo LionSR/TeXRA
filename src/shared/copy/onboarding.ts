@@ -24,9 +24,18 @@ export const ONBOARDING_CHOICE_CHATGPT = {
     'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
 } as const;
 
+/**
+ * The free academic program you sign in to. Distinct from included access
+ * (how model calls are paid for once signed in) — see `modelAccess.ts`.
+ */
+export const RESEARCHER_ACCESS = {
+  label: 'Researcher Access',
+  inline: 'Researcher Access',
+} as const;
+
 /** State 0 choice 2. */
 export const ONBOARDING_CHOICE_SIGN_IN = {
-  label: 'Sign in with Researcher Access',
+  label: `Sign in with ${RESEARCHER_ACCESS.label}`,
   description: 'Free for academics; no API key needed',
 } as const;
 

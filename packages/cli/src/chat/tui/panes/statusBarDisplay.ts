@@ -27,6 +27,11 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import {
+  FOREGROUND_OWNERSHIP,
+  SESSION_LIST,
+  SUBAGENT,
+} from '@shared/copy/nestedRuns';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import {
@@ -338,8 +343,8 @@ function queuedFollowUpsCountSegment(
 function subagentsSegment(subagents: number): StatusBarSegment | undefined {
   return subagents > 0
     ? {
-        text: formatResultCount(subagents, 'subagent'),
-        compactText: `${subagents} sub`,
+        text: formatResultCount(subagents, SUBAGENT.countNoun),
+        compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
       }
@@ -382,6 +387,28 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
     : Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
 }
 
+// Shrink `segment` (always the untruncated original, so repeated fits never
+// compound) into whatever room the rest of the row leaves at `index`.
+function truncateSegmentIntoRemainingWidth(
+  fitted: readonly StatusBarSegment[],
+  index: number,
+  segment: StatusBarSegment,
+  innerWidth: number,
+): StatusBarSegment {
+  const fixedWidth = fitted.reduce(
+    (total, other, otherIndex) =>
+      otherIndex === index ? total : total + statusBarSegmentWidth(other),
+    fitted.length - 1,
+  );
+  return {
+    ...segment,
+    text: truncateSummaryToWidth(
+      segment.text,
+      Math.max(0, innerWidth - fixedWidth),
+    ),
+  };
+}
+
 function fitTransientNoticeStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   noticeIndex: number,
@@ -409,6 +436,7 @@ function fitTransientNoticeStatusBarLeftSegments(
     fitted[index] = liveness;
   }
 
+  // Remove trailing segments after the notice (excluding the discard warning).
   while (statusBarSegmentsWidth(fitted) > innerWidth) {
     const removableIndex = fitted.findLastIndex(
       (segment, index) => index > noticeIndex && segment !== discardWarning,
@@ -417,38 +445,24 @@ function fitTransientNoticeStatusBarLeftSegments(
     fitted.splice(removableIndex, 1);
   }
 
+  // Remove segments before the notice (except liveness).
   if (statusBarSegmentsWidth(fitted) > innerWidth) {
     for (let index = noticeIndex - 1; index > 0; index -= 1) {
       if (fitted[index] !== liveness) fitted.splice(index, 1);
     }
   }
 
-  // Shrink `segment` (always the untruncated original, so repeated fits never
-  // compound) into whatever room the rest of the row leaves at `index`.
-  const truncatedIntoRemainingWidth = (
-    index: number,
-    segment: StatusBarSegment,
-  ): StatusBarSegment => {
-    const fixedWidth = fitted.reduce(
-      (total, other, otherIndex) =>
-        otherIndex === index ? total : total + statusBarSegmentWidth(other),
-      fitted.length - 1,
-    );
-    return {
-      ...segment,
-      text: truncateSummaryToWidth(
-        segment.text,
-        Math.max(0, innerWidth - fixedWidth),
-      ),
-    };
-  };
-
   const fitNotice = (): void => {
     const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
     if (fittedNoticeIndex < 0 || statusBarSegmentsWidth(fitted) <= innerWidth) {
       return;
     }
-    fittedNotice = truncatedIntoRemainingWidth(fittedNoticeIndex, notice);
+    fittedNotice = truncateSegmentIntoRemainingWidth(
+      fitted,
+      fittedNoticeIndex,
+      notice,
+      innerWidth,
+    );
     fitted[fittedNoticeIndex] = fittedNotice;
   };
 
@@ -473,9 +487,11 @@ function fitTransientNoticeStatusBarLeftSegments(
     const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
     if (fittedNoticeIndex >= 0) fitted.splice(fittedNoticeIndex, 1);
     const fittedWarningIndex = fitted.indexOf(discardWarning);
-    fitted[fittedWarningIndex] = truncatedIntoRemainingWidth(
+    fitted[fittedWarningIndex] = truncateSegmentIntoRemainingWidth(
+      fitted,
       fittedWarningIndex,
       discardWarning,
+      innerWidth,
     );
   }
 
@@ -598,7 +614,7 @@ function statusBarBindingsText(
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
   const childList = childNavigationAvailable
-    ? keyHintText({ key: 'Tab', action: 'children' })
+    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
     : undefined;
   const parentBack = parentNavigationAvailable
     ? keyHintText({ key: 'Esc', action: 'back' })
@@ -685,7 +701,7 @@ function foregroundBindingsText(
   return firstRowThatFits(
     [
       statusBarBindingRow([
-        'Use foreground panel shortcuts',
+        FOREGROUND_OWNERSHIP.keysGoAbove,
         escBinding,
         ctrlCBinding,
       ]),
@@ -928,22 +944,11 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   return statusBarBindingsText(input.shortcuts, ctrlCAction, maxColumns);
 }
 
-export function buildStatusBarDisplay(
-  input: StatusBarDisplayInput,
-): StatusBarDisplay {
-  const left: StatusBarSegment[] = [
-    { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
-  ];
-  if (input.transcriptMode === 'ephemeral') {
-    left.push({
-      text: 'EPHEMERAL TRANSCRIPT',
-      compactText: 'EPHEMERAL',
-      badge: true,
-      badgeColor: COLOR_WARNING,
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.ephemeralBadge,
-    });
-  }
-
+function buildStatusSegments(input: StatusBarDisplayInput): {
+  segments: StatusBarSegment[];
+  transientLivenessIndex?: number;
+} {
+  const segments: StatusBarSegment[] = [];
   const statusLabel = formatCliStatusLabel(
     input.status,
     input.substate,
@@ -963,8 +968,8 @@ export function buildStatusBarDisplay(
         input.elapsedMs === undefined
           ? ''
           : ` ${formatCompactDuration(input.elapsedMs)}`;
-      transientLivenessIndex = left.length;
-      left.push({
+      transientLivenessIndex = segments.length;
+      segments.push({
         text: `${spinPrefix}${statusLabel}${elapsed}`,
         compactText:
           input.elapsedMs === undefined
@@ -974,12 +979,12 @@ export function buildStatusBarDisplay(
       });
     }
   } else {
-    left.push({
+    segments.push({
       text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
     });
     if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
-      left.push({
+      segments.push({
         text: formatCompactDuration(input.elapsedMs),
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
@@ -990,18 +995,44 @@ export function buildStatusBarDisplay(
   // painting them yellow trains the eye to ignore the color that also
   // announces auto-approval bypasses and quota exhaustion.
   if (input.compactingActive === true && isActivePhase(input.status)) {
-    left.push({
+    segments.push({
       text: 'compacting...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
   } else if (input.thinkingActive === true && isActivePhase(input.status)) {
-    left.push({
+    segments.push({
       text: 'thinking...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
     });
   }
+  return { segments, transientLivenessIndex };
+}
+
+export function buildStatusBarDisplay(
+  input: StatusBarDisplayInput,
+): StatusBarDisplay {
+  const left: StatusBarSegment[] = [
+    { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
+  ];
+  if (input.transcriptMode === 'ephemeral') {
+    left.push({
+      text: 'EPHEMERAL TRANSCRIPT',
+      compactText: 'EPHEMERAL',
+      badge: true,
+      badgeColor: COLOR_WARNING,
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.ephemeralBadge,
+    });
+  }
+
+  const { segments: statusSegs, transientLivenessIndex: statusLivenessIndex } =
+    buildStatusSegments(input);
+  const transientLivenessIndex =
+    statusLivenessIndex === undefined
+      ? undefined
+      : left.length + statusLivenessIndex;
+  left.push(...statusSegs);
 
   let transientNoticeIndex: number | undefined;
   let discardWarningIndex: number | undefined;
