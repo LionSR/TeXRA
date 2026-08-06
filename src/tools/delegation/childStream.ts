@@ -286,44 +286,62 @@ async function finalizeChildStream(
   args: FinalizeChildStreamArgs,
 ): Promise<void> {
   const { handle, session, logger, disposeTrace, options } = args;
-  const outcomeOption = options?.outcome ?? { kind: 'completed' as const };
-  const errorMessage =
-    outcomeOption.kind === 'failed'
-      ? (outcomeOption.errorMessage ??
-        (outcomeOption.error != null
-          ? toErrorMessage(outcomeOption.error)
-          : undefined))
-      : undefined;
 
-  if (errorMessage) {
-    logger.error(errorMessage);
-  }
-  if (options?.wallTimeMs != null) {
-    logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
-  }
-  if (options?.usage) {
-    logger.info('Tokens', {
-      data: {
-        input: options.usage.input_tokens,
-        output: options.usage.output_tokens,
-      },
+  // The failure prologue (error formatting, logging, classification) is
+  // fallible. It must never prevent `finalizeRunTerminal` below from running:
+  // a throw here, past `claimTerminalFinalize`'s exactly-once guard, would
+  // otherwise strand the handle in the registry forever with no untrack.
+  let outcome: ReturnType<typeof deriveRunOutcome>;
+  let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
+  try {
+    const outcomeOption = options?.outcome ?? { kind: 'completed' as const };
+    const errorMessage =
+      outcomeOption.kind === 'failed'
+        ? (outcomeOption.errorMessage ??
+          (outcomeOption.error != null
+            ? toErrorMessage(outcomeOption.error)
+            : undefined))
+        : undefined;
+
+    if (errorMessage) {
+      logger.error(errorMessage);
+    }
+    if (options?.wallTimeMs != null) {
+      logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
+    }
+    if (options?.usage) {
+      logger.info('Tokens', {
+        data: {
+          input: options.usage.input_tokens,
+          output: options.usage.output_tokens,
+        },
+      });
+    }
+
+    // What the child saw, projected into the shared vocabulary. The stream
+    // phase decides which of this and an already-landed stop is the run's
+    // terminal fact; that resolution lives in `finalizeRunTerminal`.
+    outcome = deriveRunOutcome({
+      failed: outcomeOption.kind === 'failed',
+      cancelled: outcomeOption.kind === 'cancelled',
     });
+    error =
+      outcomeOption.kind === 'failed'
+        ? {
+            kind: classifyAgentError(outcomeOption.error),
+            message: errorMessage ?? 'Child stream failed',
+          }
+        : undefined;
+  } catch (prologueError) {
+    logger.error('Child stream finalize prologue failed', {
+      data: { error: prologueError },
+    });
+    outcome = 'failed';
+    error = {
+      kind: 'unexpected',
+      message: 'Child stream finalize prologue failed',
+    };
   }
-
-  // What the child saw, projected into the shared vocabulary. The stream phase
-  // decides which of this and an already-landed stop is the run's terminal
-  // fact; that resolution lives in `finalizeRunTerminal`.
-  const outcome = deriveRunOutcome({
-    failed: outcomeOption.kind === 'failed',
-    cancelled: outcomeOption.kind === 'cancelled',
-  });
-  const error =
-    outcomeOption.kind === 'failed'
-      ? {
-          kind: classifyAgentError(outcomeOption.error),
-          message: errorMessage ?? 'Child stream failed',
-        }
-      : undefined;
 
   await finalizeRunTerminal({
     handle,
