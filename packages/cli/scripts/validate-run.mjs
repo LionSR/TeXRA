@@ -337,7 +337,7 @@ function validateMultiAgentListAvailability() {
     );
     const leanProjectAvailability = leanProjectJson?.availability;
     assert(
-      leanProjectAvailability?.toolUse?.label != null,
+      leanProjectAvailability?.agents?.toolUse?.label != null,
       `multi-agent list JSON should include planned availability\nstdout:\n${json.stdout}`,
     );
     assert(
@@ -346,7 +346,7 @@ function validateMultiAgentListAvailability() {
       `lean-project JSON should report degraded or unavailable status\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
     );
     assert(
-      leanProjectAvailability?.toolUse?.label !== '7',
+      leanProjectAvailability?.agents?.toolUse?.label !== '7',
       `lean-project JSON should not claim full tool-use availability\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
     );
 
@@ -357,7 +357,7 @@ function validateMultiAgentListAvailability() {
       'multi-agent list NDJSON',
     ).find((record) => record.preset?.id === 'lean-project');
     assert(
-      leanProjectNdjson?.preset?.availability?.toolUse?.label != null,
+      leanProjectNdjson?.preset?.availability?.agents?.toolUse?.label != null,
       `multi-agent list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
@@ -764,7 +764,7 @@ async function validateOrchestrateOnboardingPickers() {
     expected: [
       'Use ChatGPT subscription',
       'Sign in with Researcher Access',
-      'Use your own provider API key',
+      'Use your own API keys',
       'Skip for now',
     ],
     forbidden: truncatedOnboardingLabels,
@@ -779,7 +779,7 @@ async function validateOrchestrateOnboardingPickers() {
       'Skip for now',
     ],
     forbidden: [
-      'Use your own provider API key',
+      'Use your own API keys',
       'Anthropic, OpenAI, Google, and more',
       ...truncatedOnboardingLabels,
     ],
@@ -790,7 +790,7 @@ async function validateOrchestrateOnboardingPickers() {
     env: {},
     expected: [
       'Use ChatGPT subscription',
-      'Use your own provider API key',
+      'Use your own API keys',
       'Skip for now',
     ],
     forbidden: ['Sign in with Researcher Access', ...truncatedOnboardingLabels],
