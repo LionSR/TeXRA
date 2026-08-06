@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Local imports
+import { getCleanAgentName } from './agent';
+
 /**
  * What kind of thing owns a stream, declared once at the launch site and
  * persisted once by `registerExecution` (`ExecutionMeta.identity`). The struct
@@ -38,4 +41,9 @@ export function runIdentityName(id: RunIdentity): string {
     case 'multiAgentWorkflow':
       return id.workflowName;
   }
+}
+
+/** UI label for a run identity — strips a known source prefix from agent ids. */
+export function runIdentityDisplayName(id: RunIdentity): string {
+  return getCleanAgentName(runIdentityName(id));
 }

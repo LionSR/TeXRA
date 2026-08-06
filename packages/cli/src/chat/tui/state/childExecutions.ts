@@ -10,10 +10,11 @@
 // transition/selector semantics this module implements.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type {
-  ActiveChildInfo,
-  RunIdentity,
-  StreamTabId,
+import {
+  runIdentityDisplayName,
+  type ActiveChildInfo,
+  type RunIdentity,
+  type StreamTabId,
 } from '@shared/schemas';
 
 import type { StreamSlice } from './cliState';
@@ -575,9 +576,12 @@ export function childExecutionKey(child: ActiveChildInfo): string {
 }
 
 export function childExecutionLabel(
-  child: Pick<ActiveChildInfo, 'agentName' | 'executionId'>,
+  child: Pick<ActiveChildInfo, 'identity' | 'agentName' | 'executionId'>,
 ): string {
-  // The agent name is always set by the runtime, so it's the label;
-  // executionId is just a defensive fallback for a malformed entry.
+  // RunIdentity is the declared authority for the row label; agentName and
+  // executionId are only fallbacks for a malformed roster entry.
+  if (child.identity) {
+    return runIdentityDisplayName(child.identity);
+  }
   return child.agentName || child.executionId;
 }
