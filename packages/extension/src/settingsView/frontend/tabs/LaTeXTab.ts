@@ -38,6 +38,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
+import { CoreSettingsShape } from '@shared/schemas/coreSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexConfigValues,
@@ -775,19 +776,17 @@ export class LaTeXTab extends LitElement {
   ): void {
     try {
       const parsed: unknown = JSON.parse(source);
-      if (
-        !parsed ||
-        Array.isArray(parsed) ||
-        typeof parsed !== 'object' ||
-        Object.values(parsed).some((value) => typeof value !== 'string')
-      ) {
+      const result = CoreSettingsShape.latex
+        .unwrap()
+        .shape[field].safeParse(parsed);
+      if (!result.success) {
         throw new Error('Enter a JSON object with string values.');
       }
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
         [field]: undefined,
       };
-      this.dispatchSetConfigValue(field, parsed as Record<string, string>);
+      this.dispatchSetConfigValue(field, result.data);
     } catch (error) {
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
