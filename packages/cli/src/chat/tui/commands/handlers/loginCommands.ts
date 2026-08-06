@@ -41,6 +41,7 @@ import {
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
 } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -156,25 +157,6 @@ async function loginToTexraIncludedAccess(
   output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 }
 
-/**
- * Resolve whether a subscription login should use device-code auth based on
- * the CLI context. Only applies to chatgpt and grok targets; texra passes
- * through unchanged.
- */
-function resolveLoginDevicePreference(
-  args: CliLoginSlashArgs,
-  context: CliContext | undefined,
-): CliLoginSlashArgs {
-  if (!context) return args;
-  if (args.target === 'chatgpt') {
-    return { ...args, device: shouldUseChatGptDeviceCode(context, args) };
-  }
-  if (args.target === 'grok') {
-    return { ...args, device: shouldUseGrokDeviceCode(context, args) };
-  }
-  return args;
-}
-
 export function loginFromChat(
   input: string,
   context?: CliContext,
@@ -194,7 +176,20 @@ export function loginFromChat(
       return;
     }
 
-    const loginArgs = resolveLoginDevicePreference(args, context);
+    let loginArgs = args;
+    if (context) {
+      if (args.target === 'chatgpt') {
+        loginArgs = {
+          ...args,
+          device: shouldUseChatGptDeviceCode(context, args),
+        };
+      } else if (args.target === 'grok') {
+        loginArgs = {
+          ...args,
+          device: shouldUseGrokDeviceCode(context, args),
+        };
+      }
+    }
     output.writeProgress(loginStartMessage(loginArgs));
 
     if (loginArgs.target === 'chatgpt') {
@@ -226,9 +221,11 @@ export async function logoutFromChat(
     try {
       await signOutCliSupabase();
       texraSignedOut = true;
-      lines.push('Signed out of TeXRA.');
+      lines.push(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     } catch (error: unknown) {
-      lines.push(`TeXRA sign-out failed: ${toErrorMessage(error)}`);
+      lines.push(
+        `${RESEARCHER_ACCESS.label} sign-out failed: ${toErrorMessage(error)}`,
+      );
     }
   }
 
@@ -249,7 +246,7 @@ export async function logoutFromChat(
 
   if (target === 'chatgpt' || target === 'all') {
     await signOutSubscription(
-      'ChatGPT',
+      CHATGPT_AUTH.label,
       signOutCliChatGpt,
       chatGptSignOutPreferenceMessage,
     );
@@ -257,7 +254,7 @@ export async function logoutFromChat(
 
   if (target === 'grok' || target === 'all') {
     await signOutSubscription(
-      'Grok',
+      GROK_AUTH.label,
       signOutCliGrok,
       grokSignOutPreferenceMessage,
     );
