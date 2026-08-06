@@ -13,7 +13,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
-import { STREAM_PHASE } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
@@ -336,7 +336,7 @@ async function finalizeChildStream(
     logger.error('Child stream finalize prologue failed', {
       data: { error: prologueError },
     });
-    outcome = 'failed';
+    outcome = RUN_OUTCOME.FAILED;
     error = {
       kind: 'unexpected',
       message: 'Child stream finalize prologue failed',

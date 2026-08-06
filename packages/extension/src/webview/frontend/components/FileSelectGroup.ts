@@ -270,10 +270,7 @@ export class FileSelectGroup extends LitElement {
     }
 
     const movable = this.currentFiles.length > 1;
-    return html`<div
-      role="list"
-      @click=${this.handleFileListClick}
-    >
+    return html`<div role="list" @click=${this.handleFileListClick}>
       ${repeat(
         this.currentFiles,
         (file) => file,

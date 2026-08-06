@@ -308,7 +308,10 @@ export class SettingsApp extends SettingsAppBase {
              contract (no arrow keys/roving tabindex), and role="tab" on a
              wa-button nests a native button role. aria-pressed matches the
              actual behavior — same pattern as the category nav above. -->
-        <div class="settings-page-nav" aria-label=${`${activeGroup.label} pages`}>
+        <div
+          class="settings-page-nav"
+          aria-label=${`${activeGroup.label} pages`}
+        >
           ${activeEntries.map((entry) => {
             const active = entry.panel === activePanel;
             return html`
