@@ -10,6 +10,7 @@ import {
   type ByCategory,
 } from '@shared/schemas/agent';
 import {
+  AgentDelegationScopeLegacySchema,
   AgentRosterSelectionSchema,
   INHERITED_AGENT_ROSTER,
   type AgentRosterCategorySelection,
@@ -82,10 +83,11 @@ function allPresets(
 }
 
 /**
- * Read the canonical workspace selection. A value that does not parse —
- * including the retired pair-shaped pre-record value — falls back loudly to
- * the inherited roster; the stored value is left for the next write to
- * replace.
+ * Read the canonical workspace selection. A value that does not parse is
+ * tried against the legacy pair-shaped format (`{workflowAgentKeys,
+ * toolUseAgentKeys}`) via the existing AgentDelegationScopeLegacySchema.
+ * On a match the stored value is immediately repaired so the warning is a
+ * one-time event per workspace.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
@@ -96,14 +98,28 @@ function readAgentRosterSelection(
   if (raw === undefined) return INHERITED_AGENT_ROSTER;
   const parsed = AgentRosterSelectionSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
-  // Deliberate `console`: this parse boundary runs before any agent trace or
-  // logger channel exists (settings-layer convention, matching
-  // agentPresets.ts).
+  const repaired = repairLegacySelection(raw);
+  if (repaired) {
+    void workspaceState.update(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      repaired,
+    );
+    return repaired;
+  }
   console.warn(
     `[agentRoster] Ignoring malformed roster selection; falling back to ` +
       `the inherited roster: ${parsed.error.message}`,
   );
   return INHERITED_AGENT_ROSTER;
+}
+
+function repairLegacySelection(raw: unknown): AgentRosterSelection | undefined {
+  const legacy = AgentDelegationScopeLegacySchema.safeParse(raw);
+  if (!legacy.success) return undefined;
+  return {
+    kind: 'custom',
+    agentKeys: legacy.data,
+  };
 }
 
 function selectedIdentifiers(
