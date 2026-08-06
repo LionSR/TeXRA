@@ -223,7 +223,7 @@ function extractModelFromPath(apiPath: string): string | null {
  * Shared by the public tier-config status check and the provider-proxy
  * enforcement path so the selected column list can't drift between them.
  */
-function fetchRelayProfile(profileClient: SupabaseClient<any>, userId: string) {
+function fetchRelayProfile(profileClient: SupabaseClient, userId: string) {
   return profileClient
     .from('profiles')
     .select('tier, access_expires_at, banned_until')
