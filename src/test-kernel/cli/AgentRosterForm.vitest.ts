@@ -46,13 +46,13 @@ describe('AgentRosterForm', () => {
       await vi.advanceTimersByTimeAsync(100);
       const loadingLines = stripAnsi(stdout.output)
         .split('\n')
-        .filter((line) => line.includes('Loading agent roster...'));
+        .filter((line) => line.includes('Loading agents...'));
       const loadingCopy = loadingLines[0]
         ?.replace(/^│\s*/, '')
         .replace(/\s*│$/, '');
 
       expect(loadingLines).toHaveLength(1);
-      expect(loadingCopy).toMatch(/^[|/\\-] Loading agent roster\.\.\.$/);
+      expect(loadingCopy).toMatch(/^[|/\\-] Loading agents\.\.\.$/);
     } finally {
       instance.unmount();
       vi.useRealTimers();

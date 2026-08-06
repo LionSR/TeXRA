@@ -76,7 +76,7 @@ export function tryResumeFromResumeData(
       reportNoResumableSession: async (id) => {
         logger.warn(`No resumable session state for stream: ${id}`);
         await session.interactions.showInfoMessage(
-          'This run has no resumable session state. Start a new run instead.',
+          'This run cannot be resumed. Start a new run instead.',
           { replayWhenAttached: true },
         );
       },

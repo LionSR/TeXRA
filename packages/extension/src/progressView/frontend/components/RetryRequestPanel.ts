@@ -22,6 +22,7 @@ import {
   isCredentialExhausted,
   type ProviderErrorPartial,
 } from '@shared/schemas';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
@@ -71,7 +72,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts: MetaPart[] = [
       ...(data.model ? [`Model: ${data.model}`] : []),
-      ...(isRelay ? ['Source: Relay'] : []),
+      ...(isRelay ? [`Source: ${INCLUDED_ACCESS.label}`] : []),
       `Can retry: ${userRetryable ? 'Yes' : 'No'}`,
     ];
 
@@ -87,7 +88,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
       >
         <div class="retry-request__details">
           <div class="retry-request__operation">
-            ${isRelay ? '[Relay] ' : ''}
             ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
           </div>
           <div class="retry-request__meta">${renderDotMeta(metaParts)}</div>
@@ -118,11 +118,11 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             renderLabeledActionButton({
               icon: 'key',
               text: copilotQuotaExhausted
-                ? 'Start with own API key'
-                : 'Use your own API key',
+                ? 'Start with your own API key'
+                : 'Retry with your own API key',
               title: copilotQuotaExhausted
                 ? 'Start a new run with your own API key (k)'
-                : 'Use your own API key (k)',
+                : 'Retry with your own API key (k)',
               action: 'useOwnApiKey',
               disabled,
               onClick: () => this.emitAction({ action: 'useOwnApiKey' }),

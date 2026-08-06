@@ -299,7 +299,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         }
         if (preflight.status === 'unavailable') {
           writeTextStderr(
-            `Team ${action.preset} is still unavailable after refreshing the TeXRA agent catalog: ${preflight.unavailableNames.join(', ')}.`,
+            `Team ${action.preset} is still unavailable after refreshing agents: ${preflight.unavailableNames.join(', ')}.`,
           );
           continue launcher;
         }

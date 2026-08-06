@@ -67,7 +67,7 @@ describe('tryResumeFromResumeData ports', () => {
     await ports.reportNoResumableSession?.(STREAM);
 
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'This run has no resumable session state. Start a new run instead.',
+      'This run cannot be resumed. Start a new run instead.',
       { replayWhenAttached: true },
     );
     showInfoMessage.mockRestore();

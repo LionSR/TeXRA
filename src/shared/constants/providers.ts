@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ModelProvider } from 'llm-zoo';
 
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 
 // ============================================================================
 // Provider Registry — single source of truth for all provider metadata
@@ -282,9 +283,8 @@ export type ProviderSettingDef = z.infer<typeof ProviderSettingDefSchema>;
 
 export const USE_OPENROUTER_PROVIDER_SETTING = {
   key: GlobalStateKey.USE_OPENROUTER,
-  label: 'Use OpenRouter for All Models',
-  description:
-    'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. Note: OpenRouter bypasses Included Access — your OpenRouter key is always used directly.',
+  label: 'Use OpenRouter for all models',
+  description: `Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. OpenRouter does not use ${INCLUDED_ACCESS.inline}: your OpenRouter key is always used directly.`,
   globalStateKey: GlobalStateKey.USE_OPENROUTER,
 } satisfies ProviderSettingDef;
 
@@ -294,7 +294,7 @@ export const USE_OPENROUTER_PROVIDER_SETTING = {
 // named export here is a config-backed setting.
 export const DASHSCOPE_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.DASHSCOPE_USE_CHINA,
-  label: 'Qwen China Region (Bailian)',
+  label: 'Qwen China region (Bailian)',
   description:
     'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
   globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
@@ -302,7 +302,7 @@ export const DASHSCOPE_USE_CHINA_PROVIDER_SETTING = {
 
 export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.MINIMAX_USE_CHINA,
-  label: 'MiniMax China Region',
+  label: 'MiniMax China region',
   description:
     'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
   warning:
@@ -314,7 +314,7 @@ export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
 
 export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.MOONSHOT_USE_CHINA,
-  label: 'Kimi/Moonshot China Region',
+  label: 'Kimi/Moonshot China region',
   description:
     'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
   defaultValue: true,
@@ -327,7 +327,7 @@ export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
 
 export const GLM_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.GLM_USE_CHINA,
-  label: 'GLM China Region',
+  label: 'GLM China region',
   description:
     'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
   defaultValue: true,
@@ -360,7 +360,7 @@ export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
   openai: [
     {
       key: 'texra.model.gpt5ReasoningSummary',
-      label: 'GPT-5 Reasoning Summary',
+      label: 'GPT-5 reasoning summary',
       description:
         'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
       warning:
@@ -371,28 +371,28 @@ export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
     },
     {
       key: 'texra.model.useOpenAIResponsesAPI',
-      label: 'Use Responses API',
+      label: 'Use the Responses API',
       description:
         'Use the OpenAI Responses API instead of Chat Completions when available.',
       defaultValue: true,
     },
     {
       key: 'texra.model.useBackgroundResponses',
-      label: 'Background Responses',
+      label: 'Background responses',
       description:
         'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
       defaultValue: true,
     },
     {
       key: 'texra.model.openaiParallelToolCalls',
-      label: 'Parallel Tool Calls',
+      label: 'Parallel tool calls',
       description:
         'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
       defaultValue: true,
     },
     {
       key: GlobalStateKey.WEBSOCKET_OPENAI,
-      label: 'WebSocket Transport',
+      label: 'WebSocket transport',
       description:
         'Use a persistent WebSocket connection for lower-latency tool-use loops. Requires direct OpenAI API (not compatible with custom endpoints).',
       globalStateKey: GlobalStateKey.WEBSOCKET_OPENAI,
@@ -409,7 +409,7 @@ export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
     },
     {
       key: 'texra.model.useBackgroundResponses',
-      label: 'Background Responses',
+      label: 'Background responses',
       description:
         'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Requires server-side conversation state; models that do not support it fall back automatically.',
       defaultValue: true,

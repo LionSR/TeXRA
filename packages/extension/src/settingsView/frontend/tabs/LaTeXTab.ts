@@ -404,7 +404,7 @@ export class LaTeXTab extends LitElement {
             ? html`
                 <wa-details
                   class="collapsible-quiet dependency-guide-details"
-                  summary="Installation Guide"
+                  summary="Setup guide"
                 >
                   <div class="dependency-guide">${guideText}</div>
                 </wa-details>

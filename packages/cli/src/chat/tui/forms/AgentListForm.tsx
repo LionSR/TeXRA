@@ -147,7 +147,7 @@ export function agentSelectWindow({
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<AgentGroups, string>({
     title: '/agent',
-    loadingLabel: 'Loading agent registry...',
+    loadingLabel: 'Loading agents...',
     load: async () => {
       const options = await computeAgentOptionsData();
       return { toolUse: options.toolUse, workflow: options.workflow };

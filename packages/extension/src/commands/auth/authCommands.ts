@@ -113,14 +113,11 @@ export async function signIn(): Promise<boolean> {
       return false;
     }
 
+    // Each option names its own provider, so a second "sign in to…" line
+    // would only repeat the title.
     const selected = await vscode.window.showQuickPick<SignInOption>(
       [...SIGN_IN_OPTIONS],
-      {
-        title: 'TeXRA Sign In',
-        placeHolder: 'Choose a sign-in method',
-        prompt:
-          'Sign in to access AI models, remote agents, and TeXRA Researcher features',
-      },
+      { title: 'Sign in to TeXRA', placeHolder: 'Choose a sign-in method' },
     );
     if (!selected) return false;
 
@@ -156,22 +153,23 @@ export async function signOut(): Promise<void> {
 
     const confirmed = await confirmModal(
       'Are you sure you want to sign out?',
-      'Sign Out',
+      'Sign out',
     );
     if (!confirmed) return;
 
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
       const removed = await authProvider.removeStoredSession();
-      const outcome = removed
-        ? 'Signed out successfully'
-        : 'No stored session found';
+      const outcome = removed ? 'Signed out' : 'You were already signed out';
       const relayNotice = relayTokenSignOutNotice();
       void vscode.window.showInformationMessage(
         relayNotice ? `${outcome}. ${relayNotice}` : outcome,
       );
     } else {
-      void showLoggedMessage(CHANNEL, 'Authentication provider not available');
+      void showLoggedMessage(
+        CHANNEL,
+        'Sign-out is unavailable right now. Reload the window, then try again.',
+      );
     }
   } catch (error) {
     void showLoggedErrorMessage(CHANNEL, 'Sign out failed', error);

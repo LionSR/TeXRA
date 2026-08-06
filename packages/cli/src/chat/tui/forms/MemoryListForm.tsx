@@ -37,7 +37,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       description={
         <Text dimColor>Choose a memory to preview. Press Esc to close.</Text>
       }
-      emptyMessage="No memory files found."
+      emptyMessage="No memories yet. Ask TeXRA to remember something and it will appear here."
       selectMarginTop={1}
       action="preview"
       onSelect={props.onSelect}

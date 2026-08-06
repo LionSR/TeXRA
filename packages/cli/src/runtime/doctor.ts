@@ -225,7 +225,7 @@ async function checkAuth(
     return warn(
       'auth',
       'Included access',
-      'Not signed in for included model access.',
+      'Not signed in.',
       'Run `texra login` for included access, or add a provider API key with `texra setup` before using `--api-mode personal`.',
     );
   } catch (error) {
@@ -348,6 +348,9 @@ async function checkConfig(context: CliContext): Promise<DoctorCheck> {
  * wording states the two facts that decide whether someone cares: what is in a
  * record, and what stays on after opting out.
  */
+const USAGE_STILL_RECORDED_NOTE =
+  'Rounds that used included access or a subscription are still recorded, because they meter your plan.';
+
 function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
   let optOut: UsageLoggingOptOut;
   try {
@@ -366,7 +369,7 @@ function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
       'telemetry',
       'Usage logging',
       `Off (${optOut.envVar} is set).`,
-      'Rounds that used included hosted access or a subscription are still recorded, because they meter your plan.',
+      USAGE_STILL_RECORDED_NOTE,
     );
   }
   if (optOut?.source === 'setting') {
@@ -374,7 +377,7 @@ function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
       'telemetry',
       'Usage logging',
       `Off (${TELEMETRY_ENABLED_KEY}).`,
-      'Rounds that used included hosted access or a subscription are still recorded, because they meter your plan.',
+      USAGE_STILL_RECORDED_NOTE,
     );
   }
   return check(

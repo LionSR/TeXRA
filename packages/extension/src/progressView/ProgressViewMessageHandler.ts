@@ -676,9 +676,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     if (!this.interactions.isRetryPending(data.stream, data.requestId)) return;
 
+    const chooseAnotherModel =
+      'Choose another model and start the agent again.';
+    const modelsChanged =
+      'The available models changed while TeXRA was preparing the API key. Try again.';
+
     if (!data.model) {
       await this.host.info(
-        'This retry was created before TeXRA recorded the Copilot model. Choose a direct model and start the agent again.',
+        `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
       );
       return;
     }
@@ -689,7 +694,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
     if (!fallback) {
       await this.host.info(
-        'No direct API model matches this Copilot model. Choose another model and start the agent again.',
+        `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
       );
       return;
     }
@@ -711,9 +716,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       getUseOpenRouter(),
     );
     if (!currentFallback) {
-      await this.host.info(
-        'Model availability changed while TeXRA was preparing the API key. Try the action again.',
-      );
+      await this.host.info(modelsChanged);
       return;
     }
     if (currentFallback.provider !== fallback.provider) {
@@ -732,9 +735,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         getUseOpenRouter(),
       );
       if (!finalFallback || finalFallback.provider !== fallback.provider) {
-        await this.host.info(
-          'Model routing changed while TeXRA was preparing the API key. Try the action again.',
-        );
+        await this.host.info(modelsChanged);
         return;
       }
     }
@@ -742,7 +743,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const config = this.getRunConfig(data.stream);
     if (!config) {
       await this.host.info(
-        'The original run configuration is no longer available. Choose the direct model and start the agent again.',
+        `The settings for this run are no longer available. ${chooseAnotherModel}`,
       );
       return;
     }
@@ -783,7 +784,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       text: null,
       error: errorMsg,
     });
-    void this.host.error(`Error polishing follow-up: ${errorMsg}`);
+    void this.host.error(`Could not polish the follow-up: ${errorMsg}`);
     this.logger.error(this.channel, `Error polishing follow-up: ${errorMsg}`, {
       data: error instanceof Error ? error : undefined,
     });

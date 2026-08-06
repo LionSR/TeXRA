@@ -14,6 +14,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -564,8 +565,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description:
-      'Choose ChatGPT, Grok, Kimi Code, included TeXRA, or personal model access',
+    description: `Choose ChatGPT, Grok, Kimi Code, ${INCLUDED_ACCESS.inline}, or ${OWN_API_KEYS.inline}`,
     category: 'configuration',
     echo: 'ifPersists',
     handler: applyCliModelAccessInput,

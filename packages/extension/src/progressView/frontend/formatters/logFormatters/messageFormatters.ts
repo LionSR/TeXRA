@@ -28,6 +28,7 @@ import {
   type ErrorLogData,
   type LogMessageData,
 } from '@shared/schemas';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -112,7 +113,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // Build summary text (used for display and duplicate detection)
   const originalSummaryText = (text ?? '').trim() || 'Error occurred';
   const summaryText = isRelayError
-    ? `[Relay] ${originalSummaryText}`
+    ? `${INCLUDED_ACCESS.label}: ${originalSummaryText}`
     : originalSummaryText;
 
   // Build error details from parsed data, skipping null/undefined values and a

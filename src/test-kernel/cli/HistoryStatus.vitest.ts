@@ -114,7 +114,7 @@ describe('CLI history status formatting', () => {
     });
 
     expect(text).toContain('Status: resumable');
-    expect(text).toContain('Resumable flow record: present');
+    expect(text).toContain('Flow record: present');
     expect(text).not.toContain(`Status: ${EXECUTION_STATUS.COMPLETED}`);
   });
 
@@ -140,7 +140,7 @@ describe('CLI history status formatting', () => {
     // 'unknown', never invented as completed (crash-masking guard).
     expect(details?.status).toBe('unknown');
     expect(formatCliHistoryDetailsText(details!)).not.toContain(
-      'Resumable flow record: present',
+      'Flow record: present',
     );
   });
 
@@ -168,7 +168,7 @@ describe('CLI history status formatting', () => {
     expect(details?.hasFlowRecord).toBe(false);
     expect(details?.status).toBe('unknown');
     expect(formatCliHistoryDetailsText(details!)).not.toContain(
-      'Resumable flow record: present',
+      'Flow record: present',
     );
   });
 });

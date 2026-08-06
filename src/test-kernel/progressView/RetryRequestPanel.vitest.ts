@@ -90,7 +90,7 @@ describe('retry-request-panel', () => {
       '.retry-request__actions',
     );
     expect(actions?.textContent?.replaceAll(/\s+/g, ' ')).toContain(
-      'Start with own API key',
+      'Start with your own API key',
     );
     expect(actions?.textContent).toContain('Retry Copilot');
   });
