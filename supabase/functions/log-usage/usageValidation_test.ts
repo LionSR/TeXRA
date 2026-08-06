@@ -53,6 +53,17 @@ Deno.test(
   },
 );
 
+Deno.test('classifies Grok usage under the xai subscription source', () => {
+  const parsed = UsageLogEntrySchema.parse({
+    ...usageEntry(),
+    model: 'grok-5',
+    provider: 'xai',
+    usageRoute: 'xai-subscription',
+  });
+
+  equal(subscriptionSourceForUsage(parsed), 'xai');
+});
+
 Deno.test('keeps paid usage outside subscription sources', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),
