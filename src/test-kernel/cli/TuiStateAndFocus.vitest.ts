@@ -1294,7 +1294,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session.',
+      'This background task is no longer accepting follow-ups; press Tab to select a session.',
     );
   });
 
