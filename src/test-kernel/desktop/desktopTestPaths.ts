@@ -1,10 +1,11 @@
 // Node imports
 import { resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
-const DESKTOP_TEST_DIR = fileURLToPath(new URL('.', import.meta.url));
+// Local imports - test support
+import { REPO_ROOT } from '@test/support/repoScan';
 
-export const REPO_ROOT = resolve(DESKTOP_TEST_DIR, '../../..');
+export { REPO_ROOT };
 export const DESKTOP_SRC_DIR = repoPath('packages', 'desktop', 'src');
 
 export function repoPath(...segments: string[]): string {

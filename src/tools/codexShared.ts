@@ -27,14 +27,6 @@ import type {
 
 export const CODEX_AGENT_NAME = 'codex';
 export const CODEX_DISPLAY_MODEL = 'gpt55';
-// Re-exported from the shared schema module (where the webview formatters also
-// read them) so backend callers can keep importing tool names from here.
-export {
-  CODEX_FILE_CHANGE_TOOL,
-  CODEX_THREAD_TOOL,
-  CODEX_TODO_TOOL,
-  CODEX_TURN_TOOL,
-};
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
