@@ -58,7 +58,7 @@ const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
-  'Subagent is no longer accepting follow-ups; press Tab to select a session';
+  'This background task is no longer accepting follow-ups; press Tab to select a session';
 const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START}.`;
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
@@ -3148,7 +3148,7 @@ const SCENARIOS = [
     expect: ['◆ stopped', 'root active', STOPPED_SUBAGENT_INPUT_MESSAGE_START],
     expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
     unexpect: [
-      'The selected subagent is no longer accepting follow-ups.',
+      'The selected background task is no longer accepting follow-ups.',
       'Harness received: can you still receive this?',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],

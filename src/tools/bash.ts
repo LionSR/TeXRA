@@ -244,7 +244,7 @@ const BashInputSchema = z.strictObject({
     .boolean()
     .prefault(false)
     .describe(
-      'Run command in background. Returns immediately with execution ID and child stream tab. Result delivered as follow-up when complete.',
+      'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
     ),
 });
 
