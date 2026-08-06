@@ -286,13 +286,23 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const col0 = column - 1;
     const location = `${file}:${line}:${column}`;
 
-    switch (type) {
-      case 'goal':
-        return this.executeGoal(file, line0, col0, location);
-      case 'term_goal':
-        return this.executeTermGoal(file, line0, col0, location);
-      case 'hover':
-        return this.executeHover(file, line0, col0, location);
+    try {
+      switch (type) {
+        // Each dispatch is awaited inside the try so a rejected language-server
+        // request lands in the catch below and carries a summary, matching the
+        // sibling Lean tools.
+        case 'goal':
+          return await this.executeGoal(file, line0, col0, location);
+        case 'term_goal':
+          return await this.executeTermGoal(file, line0, col0, location);
+        case 'hover':
+          return await this.executeHover(file, line0, col0, location);
+      }
+    } catch (error) {
+      throw new ToolError(`Error: ${toErrorMessage(error)}`, {
+        cause: error,
+        summary: `Failed to get ${type}`,
+      });
     }
   }
 
