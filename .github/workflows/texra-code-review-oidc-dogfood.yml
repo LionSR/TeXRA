@@ -1,0 +1,114 @@
+# Temporary dogfood for TeXRA GitHub App OIDC auth.
+# Production review stays in texra-code-review.yml until this path is proven.
+# Trigger: add the `texra-oidc-dogfood` label on a PR (removed after consume).
+# Requires the workflow file to already be on the default branch (OIDC trust gate).
+name: TeXRA Code Review (OIDC dogfood)
+
+on:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: texra-oidc-dogfood-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: |
+      vars.TEXRA_REVIEW_ENABLED != 'false' &&
+      github.event.label.name == 'texra-oidc-dogfood'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Remove texra-oidc-dogfood label
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'texra-oidc-dogfood',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Check provider key
+        id: keys
+        env:
+          KEYS: "${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.OPENROUTER_API_KEY }}${{ secrets.XAI_API_KEY }}"
+        run: |
+          if [ -n "$KEYS" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA OIDC dogfood: no model provider key is configured."
+          fi
+
+      - name: Check pull request merge ref
+        if: steps.keys.outputs.present == 'true'
+        id: merge-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          ref="pull/${PR_NUMBER}/merge"
+          if ! matches="$(gh api "repos/${REPOSITORY}/git/matching-refs/${ref}" --jq 'length')"; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA OIDC dogfood: could not confirm that refs/${ref} is available."
+            exit 0
+          fi
+
+          if [ "$matches" != "0" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA OIDC dogfood: refs/${ref} is not available."
+          fi
+
+      - name: Checkout pull request
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout trusted review prompt
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted-review-prompt
+          sparse-checkout: .github/prompts/texra-code-review-prompt.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: TeXRA review (GitHub App OIDC)
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
+        # Pin: texra-ai/texra-action feat/github-app-oidc @71a6b1d
+        uses: texra-ai/texra-action/review@71a6b1dca9ef23d66c1f1d10afd65b6ba866dd9a
+        with:
+          prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
+          approval-policy: yolo
+          require-write-access: 'true'
+          allow-bots: dependabot[bot],github-actions[bot]
+          model: ${{ vars.TEXRA_REVIEW_MODEL }}
+          model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
+          texra-version: ${{ vars.TEXRA_CLI_VERSION }}
+          review-marker: '<!-- texra-oidc-dogfood -->'
+          resolve-threads: 'true'
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          xai-api-key: ${{ secrets.XAI_API_KEY }}
