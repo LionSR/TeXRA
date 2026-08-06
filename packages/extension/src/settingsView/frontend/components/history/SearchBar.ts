@@ -65,6 +65,15 @@ export class SearchBar extends LitElement {
     }
   }
 
+  /** Screen-reader wording for the match count: the visible text is the
+   *  compact "3/17", which announces as a bare number with no unit. */
+  private get matchCountLabel(): string {
+    const parts = /^(\d+)\/(\d+)$/.exec(this.matchCount.trim());
+    if (!parts) return this.matchCount;
+    const [, current, total] = parts;
+    return `${current} of ${total} ${total === '1' ? 'match' : 'matches'}`;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="search-container">
@@ -95,9 +104,10 @@ export class SearchBar extends LitElement {
             tooltip: 'Next match',
             onClick: this.handleNext,
           })}
-          <span class="match-count" role="status" aria-atomic="true"
-            >${this.matchCount}</span
-          >
+          <span class="match-count" role="status" aria-atomic="true">
+            <span aria-hidden="true">${this.matchCount}</span>
+            <span class="visually-hidden">${this.matchCountLabel}</span>
+          </span>
           ${
             this.canClearHistory
               ? renderIconActionButton({

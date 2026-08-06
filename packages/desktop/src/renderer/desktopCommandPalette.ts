@@ -242,9 +242,9 @@ export function createDesktopCommandPalette({
             aria-expanded="true"
             aria-autocomplete="list"
             aria-controls=${COMMAND_PALETTE_LIST_ID}
-            aria-activedescendant=${activeEntry
-              ? commandPaletteOptionId(activeEntry.id)
-              : nothing}
+            aria-activedescendant=${
+              activeEntry ? commandPaletteOptionId(activeEntry.id) : nothing
+            }
             .value=${query}
             @input=${handleFilterInput}
             @keydown=${handleFilterKeydown}
