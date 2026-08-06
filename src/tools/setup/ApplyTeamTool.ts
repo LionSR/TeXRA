@@ -177,7 +177,7 @@ ${describeTeams()}`,
 
     const signInNote =
       pendingRemoteLeads.length > 0
-        ? `The ${pendingRemoteLeads.join(' and ')} lead is relay-served — it joins the roster automatically after sign-in.`
+        ? `The ${pendingRemoteLeads.join(' and ')} lead is TeXRA-hosted. It joins the roster automatically after sign-in.`
         : undefined;
 
     const lines = [

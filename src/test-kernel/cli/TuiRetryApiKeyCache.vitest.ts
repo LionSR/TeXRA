@@ -130,7 +130,7 @@ describe('TUI retry API-key cache boundary', () => {
     await expect(result).resolves.toEqual({
       action: 'deny',
       reason:
-        'No OpenAI API key is configured. Press n to give up, then use `/key` to add one.',
+        'No OpenAI API key is configured. Press n to dismiss, then use `/key` to add one.',
     });
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(prepareRetry).not.toHaveBeenCalled();

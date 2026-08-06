@@ -52,9 +52,7 @@ export class InstallVscodeExtensionTool extends defineTool({
     }
 
     if (!platform.extensions) {
-      throw new ToolError(
-        'VS Code extension installation is unavailable in this host.',
-      );
+      throw new ToolError('This host cannot install VS Code extensions.');
     }
     if (platform.extensions.isInstalled(id)) {
       return {

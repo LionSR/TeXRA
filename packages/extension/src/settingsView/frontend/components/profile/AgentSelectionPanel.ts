@@ -384,7 +384,7 @@ export class AgentSelectionPanel extends LitElement {
           this.supportsCommand(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
         button: {
           icon: 'file-lines',
-          text: 'View Prompt',
+          text: 'View prompt',
           label: "View the remote agent's prompt definition",
           title: "View the remote agent's prompt definition (read-only)",
           className: 'agent-action-btn',
@@ -396,7 +396,7 @@ export class AgentSelectionPanel extends LitElement {
         when: agent.hasPath,
         button: {
           icon: 'folder-open',
-          text: 'Reveal in File Explorer',
+          text: 'Reveal in file explorer',
           title: 'Show this file in your system file explorer',
           className: 'agent-action-btn',
           kind: 'ghost',

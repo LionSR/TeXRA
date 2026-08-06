@@ -103,10 +103,6 @@ export const selectStyles: CSSResult = css`
     max-height: var(--height-large, 300px);
   }
 
-  /* Compact form controls — stricter IDE-density inputs/selects.
-   * Border uses subtle surface-border, not heavier panel border. */
-  ${compactFormControlStyles}
-
   .model-option-status {
     color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);

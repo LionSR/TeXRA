@@ -10,7 +10,6 @@ import {
   getCliModelAccessList,
   modelSelectItemsForCliMode,
   type CliModelAccess,
-  type CliNoRunnableModelsMessageOptions,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
@@ -28,13 +27,7 @@ import {
   PickerKeyHints,
 } from './_shared/FormFrame';
 import { useAsyncPickerForm } from './_shared/ListForm';
-
-const TUI_MODEL_EMPTY_RECOVERY = {
-  includedModeAction: 'switch with /api included',
-  loginAction: 'run /login',
-  personalModeAction: 'switch with /api personal',
-  configureKeyAction: 'configure a provider API key',
-} satisfies CliNoRunnableModelsMessageOptions;
+import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext';
 
 export interface ModelListFormProps {
   readonly currentModel: string;
@@ -77,7 +70,7 @@ function EmptyModelListState(props: {
       {emptyModelListMessageForCliMode(
         props.models,
         props.apiMode,
-        TUI_MODEL_EMPTY_RECOVERY,
+        CHAT_API_MODE_MODEL_RECOVERY,
       )}
     </Text>
   );
@@ -86,7 +79,7 @@ function EmptyModelListState(props: {
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
-    loadingLabel: 'Loading model registry...',
+    loadingLabel: 'Loading models...',
     load: () =>
       getCliModelAccessList({
         apiMode: props.apiMode,

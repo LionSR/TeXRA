@@ -73,7 +73,7 @@ describe('CLI API status text', () => {
     expect(
       formatCliApiStatusActionHint('included', { authenticated: false }),
     ).toBe(
-      'actions: choose Model access below; `texra login` signs in to Researcher Access',
+      'actions: choose Model access below; `texra login` signs in with Researcher Access',
     );
     expect(
       formatCliApiStatusActionHint(
@@ -82,7 +82,7 @@ describe('CLI API status text', () => {
         { hasPersonalKey: true },
       ),
     ).toBe(
-      'actions: choose Model access below; `texra login` signs in to Researcher Access',
+      'actions: choose Model access below; `texra login` signs in with Researcher Access',
     );
     expect(
       formatCliApiStatusActionHint('included', { authenticated: true }),

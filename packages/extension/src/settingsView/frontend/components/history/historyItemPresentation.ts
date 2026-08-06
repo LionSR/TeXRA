@@ -45,7 +45,7 @@ export function getHistoryItemPresentation(item: HistoryItem) {
   if (config.agentCategory === AgentCategory.Workflow) {
     sections.push(
       { label: 'Context', entries: [['ContextFiles', config.contextFiles]] },
-      { label: 'Output Files', entries: [['Files', config.outputFiles]] },
+      { label: 'Output files', entries: [['Files', config.outputFiles]] },
     );
     if (config.toolConfig) {
       sections.push({
@@ -56,7 +56,7 @@ export function getHistoryItemPresentation(item: HistoryItem) {
     }
   } else {
     sections.push({
-      label: 'Edited Files',
+      label: 'Edited files',
       entries: [['Files', config.editedFiles]],
     });
   }

@@ -7,7 +7,13 @@
  * choice order can never drift between surfaces.
  * Surface-specific hints (e.g. "run `texra login`" vs. a settings link) stay
  * in the surface that owns them.
+ *
+ * Where a choice names one of the two ways model calls are paid for, the name
+ * comes from `modelAccess.ts` so the first-run picker and the model-access
+ * setting cannot call the same choice two different things.
  */
+
+import { OWN_API_KEYS } from './modelAccess';
 
 export const ONBOARDING_CARD_TITLE = 'Welcome to TeXRA';
 
@@ -24,9 +30,13 @@ export const ONBOARDING_CHOICE_SIGN_IN = {
   description: 'Free for academics; no API key needed',
 } as const;
 
-/** State 0 choice 3. */
+/**
+ * State 0 choice 3. Same name as the model-access setting's option, so the
+ * first-run picker and the settings radio group cannot drift apart; the
+ * description stays short here because the picker shows one line per choice.
+ */
 export const ONBOARDING_CHOICE_API_KEY = {
-  label: 'Use your own provider API key',
+  label: OWN_API_KEYS.option.label,
   description: 'Anthropic, OpenAI, Google, and more',
 } as const;
 

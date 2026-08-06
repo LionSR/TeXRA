@@ -171,7 +171,9 @@ async function fetchRelayUsageRows(input: {
       },
     });
     if (!response.ok) {
-      throw new Error(`Relay usage query failed: HTTP ${response.status}`);
+      throw new Error(
+        `Could not read your usage right now, try again in a moment (HTTP ${response.status}).`,
+      );
     }
 
     const data = parseRelayUsageRows(await response.json());

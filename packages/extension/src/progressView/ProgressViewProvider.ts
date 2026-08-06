@@ -338,7 +338,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
               { data: error },
             );
             void vscode.window.showErrorMessage(
-              'TeXRA could not read this persisted transcript.',
+              'TeXRA could not read this transcript. Select the run again to retry.',
             );
           });
       } else {

@@ -83,7 +83,7 @@ export function confirmCardKeyAction(
 
 export function confirmCardKeyHints({
   approveLabel = 'approve',
-  rejectLabel = 'reject & note',
+  rejectLabel = 'reject with note',
   escapeLabel = 'reject',
   alwaysAllowLabel,
   extraActions = [],
@@ -121,12 +121,12 @@ function hintsFit(
 
 function compactHintAction(action: string): string {
   switch (action) {
-    case 'reject & note':
+    case 'reject with note':
       return 'reject';
-    case 'approve all':
-      return 'all';
+    case 'approve commands for session':
+      return 'all commands';
     case 'approve edits for session':
-      return 'edit session';
+      return 'all edits';
     case DELEGATION_APPROVAL_COPY.cliAction:
       return DELEGATION_APPROVAL_COPY.cliCompactAction;
     default:

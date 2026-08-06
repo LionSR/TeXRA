@@ -12,6 +12,7 @@ import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -129,7 +130,7 @@ const AVAILABILITY_STATUS_FIELDS = {
   },
   'provider-key': { label: 'API key set', available: true, requiresKey: false },
   'included-access': {
-    label: 'Included access',
+    label: INCLUDED_ACCESS.label,
     available: true,
     requiresKey: false,
   },
@@ -144,7 +145,7 @@ const AVAILABILITY_STATUS_FIELDS = {
     requiresKey: false,
   },
   'included-login-required': {
-    label: 'Login required',
+    label: 'Sign in required',
     available: false,
     requiresKey: false,
   },
@@ -159,7 +160,7 @@ const AVAILABILITY_STATUS_FIELDS = {
     requiresKey: false,
   },
   'copilot-consent-required': {
-    label: 'Copilot consent required',
+    label: 'Copilot approval required',
     available: false,
     requiresKey: false,
   },
@@ -174,7 +175,7 @@ const AVAILABILITY_STATUS_FIELDS = {
     requiresKey: false,
   },
   'relay-quota-exhausted': {
-    label: 'Relay quota exhausted',
+    label: 'Usage limit reached',
     available: false,
     requiresKey: false,
   },
@@ -245,18 +246,18 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
       return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
     }
     const nextStep = allowsModelRelay(config)
-      ? 'Provide it, or enable included access.'
+      ? `Provide it, or enable ${INCLUDED_ACCESS.inline}.`
       : 'Provide it to continue.';
     return `Model "${model}" requires your ${providerName} API key. ${nextStep}`;
   },
   'not-included': ({ model }) =>
     `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`,
   'included-login-required': ({ model }) =>
-    `Model "${model}" is served by included TeXRA model access, which needs an account. Sign in, or provide a provider API key and switch to personal API keys.`,
+    `Model "${model}" is served by ${INCLUDED_ACCESS.inline}, which needs an account. Sign in, or provide a provider API key and switch to ${OWN_API_KEYS.inline}.`,
   'relay-quota-exhausted': ({ model }) =>
-    `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`,
+    `Model "${model}" is unavailable. ${INCLUDED_ACCESS.usedUp.statement} ${INCLUDED_ACCESS.usedUp.nextStep}`,
   'copilot-consent-required': ({ model }) =>
-    `Model "${model}" needs your consent before TeXRA can use it through Copilot in VS Code.`,
+    `Model "${model}" needs your approval before TeXRA can use it through Copilot in VS Code.`,
   'copilot-unavailable': ({ model }) =>
     `Model "${model}" is currently unavailable through Copilot in VS Code.`,
   // Unreachable from `getModelUnavailableReason` today (it returns its own

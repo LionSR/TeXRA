@@ -12,13 +12,21 @@ export const retryRequestPanelStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
   }
 
+  /* No local clip. A max-height of 4em with overflow hidden cut the message
+     with no way to read the rest: the adjacent "Error details" disclosure
+     holds errorDetails, a different value, not the truncated remainder. The
+     text-overflow: ellipsis beside it never applied either — that needs
+     white-space: nowrap or a line clamp, so the text was hard-cut without
+     even an ellipsis to show it. Length is already handled one level up,
+     where retry-request__details scrolls at min(34vh, 26rem).
+
+     Sized with its sibling __operation rather than a step below it: this is
+     the text explaining why the call failed, and it was the smallest text in
+     the panel at 10.4px. */
   .retry-request__error {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--color-error);
     word-break: break-word;
-    max-height: 4em;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .retry-request__error-details {

@@ -12,6 +12,8 @@
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+
 import {
   FREE_TIER,
   RELAY_TIER_CONFIG_URL,
@@ -60,7 +62,7 @@ export function relayTokenSignOutNotice(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   if (!getConfiguredRelayToken(env)) return undefined;
-  return `The ${RELAY_TOKEN_ENV_VAR} environment variable still authenticates relay access; remove it from the environment TeXRA was launched with to fully sign out.`;
+  return `The ${RELAY_TOKEN_ENV_VAR} environment variable still keeps ${INCLUDED_ACCESS.inline} active; remove it from the environment TeXRA was launched with to fully sign out.`;
 }
 
 const TierConfigUserStatusSchema = z.object({

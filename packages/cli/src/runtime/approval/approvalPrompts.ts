@@ -35,10 +35,10 @@ export interface CliDecisionApprovalPayloads {
 export type CliDecisionApprovalEvent = keyof CliDecisionApprovalPayloads;
 
 export const CLI_PERSONAL_API_RETRY_HINT =
-  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
+  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to your own API keys.';
 
 export const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
-  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your ChatGPT subscription to personal API keys.';
+  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your ChatGPT subscription to your own API keys.';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;

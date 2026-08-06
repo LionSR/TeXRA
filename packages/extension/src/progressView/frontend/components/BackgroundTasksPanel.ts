@@ -70,10 +70,6 @@ export class BackgroundTasksPanel extends LitElement {
         display: block;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       .task-list {
         display: flex;
         flex-direction: column;
@@ -568,10 +564,18 @@ function taskStatusBadge(child: ActiveChildInfo): {
         text: WORKFLOW_TASK_STATUS_LABEL.cancelled,
         variant: 'neutral',
       };
-    default:
+    case STREAM_PHASE.COMPLETED:
       return {
         text: WORKFLOW_TASK_STATUS_LABEL.completed,
         variant: 'success',
+      };
+    default:
+      // Left the roster without a terminal status ever arriving. It did
+      // finish, but claiming success would render a failed command green;
+      // say only what is known.
+      return {
+        text: WORKFLOW_TASK_STATUS_LABEL.completed,
+        variant: 'neutral',
       };
   }
 }

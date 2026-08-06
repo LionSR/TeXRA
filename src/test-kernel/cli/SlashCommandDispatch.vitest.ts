@@ -72,7 +72,7 @@ function mockModelAccessOverview(): void {
       chatGptSignedIn: false,
       grokSignedIn: false,
     },
-    lines: ['model access: Personal API keys'],
+    lines: ['model access: Your own API keys'],
   });
 }
 
@@ -420,7 +420,7 @@ describe('handleTuiSlashCommand', () => {
       .mockResolvedValue([
         'ChatGPT: preferred · signed in as chatgpt@example.com',
         'Kimi Code: not preferred · key not configured',
-        'Fallback: Included TeXRA access · signed in as texra@example.com · Researcher · included usage this month: 25% used, 75% remaining',
+        'Otherwise: Included access · signed in as texra@example.com · Researcher · included usage this month: 25% used, 75% remaining',
         'Other personal keys: DeepSeek',
       ]);
     const context = createContext();
@@ -429,7 +429,7 @@ describe('handleTuiSlashCommand', () => {
     const authStatusText = lastEntryText();
     expect(authStatusText).toContain('ChatGPT: preferred');
     expect(authStatusText).toContain('Kimi Code: not preferred');
-    expect(authStatusText).toContain('Fallback: Included TeXRA access');
+    expect(authStatusText).toContain('Otherwise: Included access');
     expect(authStatusText).toContain('Researcher');
     expect(authStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
@@ -439,7 +439,7 @@ describe('handleTuiSlashCommand', () => {
     const apiStatusText = lastEntryText();
     expect(apiStatusText).toContain('ChatGPT: preferred');
     expect(apiStatusText).toContain('Kimi Code: not preferred');
-    expect(apiStatusText).toContain('Fallback: Included TeXRA access');
+    expect(apiStatusText).toContain('Otherwise: Included access');
     expect(apiStatusText).toContain('Researcher');
     expect(apiStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
@@ -681,7 +681,7 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/status', createContext(session));
 
     const statusText = lastEntryText(streamId);
-    expect(statusText).toContain('model access: Included TeXRA access');
+    expect(statusText).toContain('model access: Included access');
     expect(statusText).not.toContain('model access: ChatGPT subscription');
     expect(overview).not.toHaveBeenCalled();
   });

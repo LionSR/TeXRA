@@ -39,6 +39,7 @@ import {
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import { readSelectValue } from '@shared/utils/selectTemplates';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -161,7 +162,7 @@ export class ModelSelectionList extends LitElement {
       ? `Default (${REASONING_LEVEL_LABELS[model.defaultReasoningLevel]})`
       : 'Default';
     const title = includedAccessCap
-      ? `Reasoning level. Included Access uses the TeXRA relay and caps this model's default Extra high reasoning to ${REASONING_LEVEL_LABELS[includedAccessCap]}. Use your own provider API key for uncapped provider-side access.`
+      ? `Reasoning level. ${INCLUDED_ACCESS.label} caps this model's default Extra high reasoning to ${REASONING_LEVEL_LABELS[includedAccessCap]}. Switch to ${OWN_API_KEYS.inline} for the full range.`
       : 'Reasoning level';
 
     return html`
@@ -203,7 +204,7 @@ export class ModelSelectionList extends LitElement {
     const { availabilityLabel } = model;
     const title =
       model.requiresKey && availabilityLabel
-        ? `${availabilityLabel} — configure it in API Configuration`
+        ? `${availabilityLabel} — add a key in API configuration`
         : availabilityLabel;
     const iconName = model.requiresKey ? 'key' : 'triangle-exclamation';
     const className = model.requiresKey

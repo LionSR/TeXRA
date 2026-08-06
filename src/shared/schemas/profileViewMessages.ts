@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderSettingDefSchema } from '@shared/constants/providers';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
 import {
@@ -45,18 +46,8 @@ export const API_ACCESS_MODE_OPTIONS: readonly {
   readonly label: string;
   readonly description: string;
 }[] = [
-  {
-    value: 'included',
-    label: 'Use Included Access',
-    description:
-      'Works automatically. No setup needed. Does not apply to OpenRouter — those models always use your OpenRouter key. Bring your own provider API keys to use more of your own quota and avoid relay caps.',
-  },
-  {
-    value: 'personal',
-    label: 'Use My Own Keys',
-    description:
-      'Provide your own API keys from OpenAI, Anthropic, etc. This uses your provider account directly for higher limits and models outside Included Access.',
-  },
+  { value: 'included', ...INCLUDED_ACCESS.option },
+  { value: 'personal', ...OWN_API_KEYS.option },
 ] as const;
 
 const TierConstantsSchema = z.object({
