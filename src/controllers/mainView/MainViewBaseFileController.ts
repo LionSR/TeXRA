@@ -98,7 +98,7 @@ export function planCurrentFileAsEdited(
       shouldPostSetCurrentFile: false,
       shouldRequestBaseFile: false,
       notification: {
-        message: 'Please select a base file first.',
+        message: 'Choose a base file first.',
       },
     };
   }

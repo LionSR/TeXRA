@@ -591,7 +591,7 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini36f',
         availability: 'copilot-consent-required',
-        availabilityLabel: 'Copilot consent required',
+        availabilityLabel: 'Copilot approval required',
         disabled: true,
       }),
     );

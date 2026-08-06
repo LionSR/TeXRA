@@ -72,8 +72,7 @@ export class GrokSubscriptionSection extends LitElement {
         <div class="settings-section">
           ${renderSettingsToggleRow({
             label: 'Prefer Grok subscription',
-            description:
-              'Route xAI models through your signed-in Grok account.',
+            description: 'Use the subscription instead of an xAI API key.',
             checked: preferSubscription,
             onChange: this.handlePreferSubscriptionChange,
           })}

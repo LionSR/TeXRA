@@ -464,17 +464,17 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Model access',
-      'Toggle subscription preferences or choose the API fallback.',
+      'Set subscription preferences and how the rest is paid for.',
       'Prefer ChatGPT subscrip',
       'On · harness@example.edu',
       'Prefer Grok subscriptio',
       'Off · sign in required to enable',
       'Prefer Kimi Code subscr',
       'On · key configured',
-      'Included TeXRA access',
-      'Personal API keys',
+      'Included access',
+      'Your own API keys',
       // ChatGPT + Grok + Kimi + Included + Personal → Personal is item 5.
-      '✓ 5. Personal API keys',
+      '✓ 5. Your own API keys',
       'Esc back',
     ],
     unexpect: [
@@ -490,7 +490,7 @@ const SCENARIOS = [
       HARNESS_ORCHESTRATION: '1',
       HARNESS_ORCHESTRATION_HISTORY: '1',
     },
-    bootExpect: 'Resume — 1 resumable session',
+    bootExpect: 'Resume — 1 session',
     keys: ['2'],
     exitKeys: [ESC, ESC],
     expectExit: true,
@@ -509,7 +509,7 @@ const SCENARIOS = [
       HARNESS_ORCHESTRATION: '1',
       HARNESS_ORCHESTRATION_HISTORY: '1',
     },
-    bootExpect: 'Resume — 1 resumable session',
+    bootExpect: 'Resume — 1 session',
     keys: ['3'],
     exitKeys: [ESC, ESC],
     expectExit: true,
@@ -565,11 +565,11 @@ const SCENARIOS = [
     expect: [
       'Model',
       'Model for the first message.',
-      'Sonnet 4.6 (Thinking) — included: available',
-      'GPT-5.4 — included: available',
+      'Sonnet 4.6 (Thinking) — included access: available',
+      'GPT-5.4 — included access: available',
       'Esc back',
     ],
-    unexpect: ['DeepSeek V4 Flash', 'api: api key set', 'personal API keys'],
+    unexpect: ['DeepSeek V4 Flash', 'api: api key set', 'your own API keys'],
   },
   {
     name: 'orchestrate-personal-model-pick',
@@ -616,7 +616,7 @@ const SCENARIOS = [
       'Esc back',
     ],
     unexpect: [
-      'Model · Personal API keys',
+      'Model · Your own API keys',
       'Model · Kimi Code subscription',
       'Kimi K3 — api: api key set',
     ],
@@ -655,14 +655,14 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Start a session or configure model access.',
-      'api: personal API keys',
+      'api: your own API keys',
       'auth: signed out',
       'New chat',
-      'No personal API-key models are runnable',
+      'No models are available with your own API keys',
       'Help',
       'Esc exit',
     ],
-    unexpect: ['Model · Personal API keys', 'DeepSeek V4 Flash'],
+    unexpect: ['Model · Your own API keys', 'DeepSeek V4 Flash'],
   },
   {
     name: 'slash-palette',
@@ -727,7 +727,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/resume',
-      'No resumable sessions found.',
+      'Nothing to resume yet.',
       'Esc close',
       'Use foreground panel shortcuts',
     ],
@@ -745,7 +745,7 @@ const SCENARIOS = [
     expect: [
       'agent: chat',
       'model: harness-model',
-      'model access: Personal API keys',
+      'model access: Your own API keys',
       'status: not started',
       'queued follow-ups: 0',
     ],
@@ -820,7 +820,7 @@ const SCENARIOS = [
     },
     keys: ['/', `${NAK}/model\r`],
     frame: 'viewport',
-    expect: ['/model · Personal API keys', 'Available models'],
+    expect: ['/model · Your own API keys', 'Available models'],
     unexpect: ['/\u0015/model', '/model - error'],
   },
   {
@@ -968,7 +968,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Personal API keys',
+      '/model · Your own API keys',
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
@@ -989,7 +989,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Personal API keys',
+      '/model · Your own API keys',
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
@@ -1007,7 +1007,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Personal API keys',
+      '/model · Your own API keys',
       'Choose the model for future turns.',
       '1-9/a-z',
       'select',
@@ -1033,7 +1033,7 @@ const SCENARIOS = [
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
-      '/model · Personal API keys',
+      '/model · Your own API keys',
       'Choose the model for future turns.',
       'Sonnet 4.6',
       'different conversation format',
@@ -1091,11 +1091,11 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Included TeXRA access',
+      '/model · Included access',
       'No model choices in this API mode.',
-      'No included TeXRA models are runnable.',
-      'Switch with /api personal or try',
-      'again later.',
+      'No models are available with included access.',
+      'Switch to your own API keys',
+      'with `/api personal` or try again later.',
       'Enter close',
     ],
     unexpect: [
@@ -1114,10 +1114,10 @@ const SCENARIOS = [
       '/api',
       'ChatGPT preference:',
       'Kimi Code preference:',
-      'API fallback:',
+      'Otherwise:',
       'TeXRA:',
-      'Personal API keys',
-      'Included TeXRA access',
+      'Your own API keys',
+      'Included access',
     ],
     unexpect: ['loading API status...', 'ServerSideKeyService not initialized'],
   },
@@ -1192,7 +1192,7 @@ const SCENARIOS = [
     keys: ['/approval never', '\r', '/status', '\r'],
     expect: [
       'Approval mode: Deny Bash commands and tool edits.',
-      'personal',
+      'own API keys',
       'never',
       '/status details',
     ],
@@ -1335,7 +1335,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Personal API keys',
+      '/model · Your own API keys',
       'Available models',
       '+1 more',
       '↑/↓ navigate',
@@ -1353,8 +1353,8 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '/api',
-      'Personal API keys',
-      'Included TeXRA access',
+      'Your own API keys',
+      'Included access',
       '↑/↓ navigate',
       '1-5/Enter select',
       'Esc close',
@@ -1392,7 +1392,7 @@ const SCENARIOS = [
     keys: ['/api', '\r', '3'],
     frame: 'viewport',
     expect: ['Prefer Kimi Code subscription enabled'],
-    expectCollapsed: ['API fallback remains Personal API keys'],
+    expectCollapsed: ['other models still use your own API keys'],
     unexpect: [
       'No Kimi Code API key configured',
       'ServerSideKeyService not initialized',
@@ -1692,7 +1692,7 @@ const SCENARIOS = [
       '$ npm run compile:safe',
       'Directory:',
       'y approve',
-      'a approve all',
+      'a approve commands for session',
       'Use foreground panel shortcuts',
     ],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
@@ -2306,10 +2306,10 @@ const SCENARIOS = [
     expect: [
       'Retry the failed call?',
       'HTTP 429 Too Many Requests',
-      'Press k to switch to personal API keys before retrying.',
+      'Press k to use your own API key for this retry.',
       'retry',
-      'give up',
-      'use API key and retry',
+      'dismiss',
+      'use your own API key',
       '1 approval',
     ],
     unexpect: ['Feedback to send with rejection', 'send note', '/model models'],
@@ -2327,10 +2327,10 @@ const SCENARIOS = [
     expect: [
       'Retry the failed call?',
       'ChatGPT subscription usage limit reached. Resets in 2h.',
-      'Press k to switch from your ChatGPT subscription to your OpenAI API key before retrying.',
+      'Press k to use your own API key for this retry.',
       'retry',
-      'give up',
-      'use API key and retry',
+      'dismiss',
+      'use your own API key',
       '1 approval',
     ],
     unexpect: ['Feedback to send with rejection', 'send note', '/model models'],
@@ -2340,7 +2340,7 @@ const SCENARIOS = [
     frame: 'viewport',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
-    bootExpect: 'give up',
+    bootExpect: 'dismiss',
     keys: ['n'],
     expect: ['RETRY-REJECTED', '/status details', '/model models'],
     unexpect: [
@@ -2395,7 +2395,7 @@ const SCENARIOS = [
   },
   // PTY ordering tests (issue #7972): the harness drives one child stream's
   // attachment/roster/edge/status/removal facts through the real
-  // `attachTuiRunFactSubscription`/`subscribeStreamStatus` subscription path,
+  // `attachSessionSignalsAdapter`/`subscribeStreamStatus` subscription path,
   // not the CHILD_STREAMS map mutators directly. After each fact, the harness
   // awaits the Ink render flush and emits an out-of-band marker. The validator
   // snapshots xterm at that exact byte-stream boundary, so a transiently-wrong
@@ -2649,7 +2649,7 @@ const SCENARIOS = [
     // nothing under the removed parent is reachable from root. Opening and
     // confirming the root row must leave the frame and exit path intact.
     keys: ['\t', DOWN, '\r'],
-    expect: ['◆ — personal'],
+    expect: ['◆ — own API keys'],
     unexpect: ['1 sub', 'orderChecker'],
     expectExit: true,
   },
@@ -2704,7 +2704,7 @@ const SCENARIOS = [
     // the removed child is unreachable, so confirming the root row must leave
     // the frame and exit path intact.
     keys: ['\t', DOWN, '\r'],
-    expect: ['◆ — personal'],
+    expect: ['◆ — own API keys'],
     unexpect: ['orderChecker', '1 sub'],
     expectExit: true,
   },
@@ -3063,9 +3063,9 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     frame: 'viewport',
-    expect: ['personal'],
+    expect: ['API keys'],
     expectPatterns: [/◆ [-|\/\\] running 1m/],
-    unexpect: ['◆running', 'personal3'],
+    unexpect: ['◆running', 'API keys3'],
   },
   {
     name: 'stopped-subagent-list',
@@ -3222,7 +3222,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
-      '◆ stopped personal',
+      '◆ stopped own API keys',
       'latest stopped prompt',
     ],
     unexpect: ['older stopped prompt', 'Session selection active.'],
@@ -3358,7 +3358,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
-      '◆ stopped personal',
+      '◆ stopped own API keys',
       '3 subagents',
       'Tab children',
       'Ctrl-C exit',

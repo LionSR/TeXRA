@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -175,7 +176,7 @@ export const loginCommand = withUsageSections(
   defineCliCommand({
     meta: {
       name: 'login',
-      description: 'Sign in with Researcher Access for included TeXRA models',
+      description: 'Sign in with Researcher Access',
     },
     args: {
       ...GLOBAL_ARGS,
@@ -322,7 +323,7 @@ const authStatusCommand = defineCliCommand({
 });
 
 const usageCommand = defineCliCommand({
-  meta: { name: 'usage', description: 'Show included usage for this account' },
+  meta: { name: 'usage', description: 'Show your included access usage' },
   args: {
     ...GLOBAL_ARGS,
     month: {
@@ -355,7 +356,7 @@ const usageCommand = defineCliCommand({
       if (!sessionToken) {
         writeTextStderr(
           profile.credentialSource === 'relayToken'
-            ? '`texra auth usage` requires an interactive TeXRA session (a CI relay token cannot read usage). Run `texra login`, or inspect included usage from the account dashboard.'
+            ? 'Run `texra login` to see your usage, or open the account dashboard. TEXRA_RELAY_TOKEN on its own cannot read usage.'
             : 'Not signed in. Run `texra login` first.',
         );
         return CliExitCode.ModelOrNetworkError;
@@ -372,7 +373,7 @@ const usageCommand = defineCliCommand({
       json: summary,
       ndjson: { kind: 'relay-usage', ...summary },
       text: [
-        `Relay usage for ${periodMonth} (${summary.tier})`,
+        `${INCLUDED_ACCESS.label} usage for ${periodMonth} (${summary.tier})`,
         `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
         `Remaining: $${summary.remainingUsd.toFixed(2)}`,
         `Streams: ${summary.streamCount}`,

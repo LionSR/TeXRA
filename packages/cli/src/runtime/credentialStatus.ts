@@ -38,7 +38,7 @@ async function probeCredential(
 }
 
 function hasIncludedRelaySignIn(): Promise<boolean> {
-  return probeCredential('Relay sign-in', async () => {
+  return probeCredential('Included access sign-in', async () => {
     const profile = await getCliAuthProfile();
     return profile.authenticated;
   });

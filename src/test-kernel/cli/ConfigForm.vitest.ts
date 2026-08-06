@@ -314,7 +314,7 @@ describe('ConfigForm helpers', () => {
         loading: false,
         error: false,
       }),
-    ).toBe('No personal provider keys set');
+    ).toBe('No provider keys set');
     expect(formatProviderApiKeySummary({ loading: false, error: true })).toBe(
       'Status unavailable',
     );
@@ -364,15 +364,15 @@ describe('ConfigForm helpers', () => {
   it('makes provider routing setting labels self-identifying', () => {
     expect(
       settingDisplayName(entryByKey(GlobalStateKey.DASHSCOPE_USE_CHINA)),
-    ).toBe('Qwen China Region (Bailian)');
+    ).toBe('Qwen China region (Bailian)');
     expect(
       settingDisplayName(entryByKey(GlobalStateKey.MINIMAX_USE_CHINA)),
-    ).toBe('MiniMax China Region');
+    ).toBe('MiniMax China region');
     expect(
       settingDisplayName(entryByKey(GlobalStateKey.MOONSHOT_USE_CHINA)),
-    ).toBe('Kimi/Moonshot China Region');
+    ).toBe('Kimi/Moonshot China region');
     expect(settingDisplayName(entryByKey(GlobalStateKey.GLM_USE_CHINA))).toBe(
-      'GLM China Region',
+      'GLM China region',
     );
     expect(settingDisplayName(entryByKey(GlobalStateKey.GLM_CODING_PLAN))).toBe(
       'GLM Coding Plan',
@@ -539,7 +539,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
 
     try {
       await waitFor(() =>
-        rendered.stdout.output.includes('No personal provider keys set'),
+        rendered.stdout.output.includes('No provider keys set'),
       );
       rendered.stdout.output = '';
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
@@ -568,7 +568,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
 
     try {
       await waitFor(() =>
-        rendered.stdout.output.includes('No personal provider keys set'),
+        rendered.stdout.output.includes('No provider keys set'),
       );
       rendered.stdout.output = '';
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);

@@ -187,7 +187,7 @@ describe('CLI agent resolution', () => {
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(
-      'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
+      'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
     );
   });
 

@@ -88,7 +88,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
           {skillIssueSummaryDetail(result)}
         </>
       )}
-      emptyMessage="No discoverable skills found."
+      emptyMessage="No skills yet. Add one under .texra/skills in this workspace or in your home directory, then reopen /skills."
       emptyShowCloseHint={false}
       action="activate"
       showTransientCloseHint={false}

@@ -13,6 +13,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -26,8 +27,6 @@ import type { ContextStateData } from '../store';
 
 type UsageRouteBadge = {
   label: string;
-  /** Tooltip text — omitted when the label already says everything. */
-  title?: string;
   subscription: boolean;
 };
 
@@ -74,14 +73,12 @@ function usageRouteBadge(
       };
     case 'relay':
       return {
-        label: 'relay',
-        title: 'Routed through the TeXRA relay',
+        label: INCLUDED_ACCESS.inline,
         subscription: false,
       };
     case 'api-key':
       return {
-        label: 'your key',
-        title: 'Billed through your configured API key',
+        label: OWN_API_KEYS.inline,
         subscription: false,
       };
     default:
@@ -105,10 +102,6 @@ export class UsagePanel extends LitElement {
     css`
       :host {
         display: block;
-      }
-
-      :host([hidden]) {
-        display: none;
       }
 
       .usage-summary-footer {
@@ -309,26 +302,16 @@ export class UsagePanel extends LitElement {
 
     if (badge.subscription && cost === 0) {
       return html`<span
-          id="usage-route-badge"
-          class="run-summary__route run-summary__route--free"
-          >Free · ${badge.label}</span
-        >${this.renderRouteTooltip(badge)}`;
+        id="usage-route-badge"
+        class="run-summary__route run-summary__route--free"
+        >Free · ${badge.label}</span
+      >`;
     }
 
     return html`${formatCostUsd(cost)} ·
       <span id="usage-route-badge" class="run-summary__route">
         ${badge.label}
-      </span>
-      ${this.renderRouteTooltip(badge)}`;
-  }
-
-  private renderRouteTooltip(
-    badge: UsageRouteBadge,
-  ): TemplateResult | typeof nothing {
-    if (!badge.title) return nothing;
-    return html`<wa-tooltip for="usage-route-badge"
-      >${badge.title}</wa-tooltip
-    >`;
+      </span>`;
   }
 
   private renderContext(): TemplateResult | typeof nothing {

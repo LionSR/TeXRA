@@ -27,6 +27,7 @@ import {
   renderSettingsToggleRow,
 } from '@shared/wa/settingsSection';
 import { createEvent } from '@shared/utils/events';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - settings view components
@@ -108,19 +109,19 @@ export class AccountTab extends LitElement {
     if (this.spendingStatusError != null) {
       return this.renderUsageNotice(
         'account-usage-spend-check-failed',
-        'Usage check failed on the server. Included access is temporarily unavailable; switch to your own provider API keys or try again later.',
+        `TeXRA could not check your usage right now. ${INCLUDED_ACCESS.label} is temporarily unavailable. Switch to ${OWN_API_KEYS.inline} or try again later.`,
       );
     }
     if (!this.authenticated) {
       return this.renderUsageNotice(
         'account-usage-sign-in',
-        'Sign in to monitor your included TeXRA usage and monthly relay quota.',
+        'Sign in to see your usage.',
       );
     }
     if (this.spendingStatus == null) {
       return this.renderUsageNotice(
         'account-usage-unavailable',
-        'Usage data is not available for this account.',
+        'Usage data is not available for this account. Sign out and sign in again to refresh it.',
       );
     }
     return html`
@@ -140,10 +141,9 @@ export class AccountTab extends LitElement {
         ? this.userEmail || 'TeXRA account'
         : 'TeXRA account';
     let description: TemplateResult | string =
-      'Sign in to use included access and monitor usage.';
+      `Sign in to use ${INCLUDED_ACCESS.inline} and track your usage.`;
     if (expired) {
-      description =
-        'Your session has expired. Sign in again to restore included access and usage data.';
+      description = `Your session has expired. Sign in again to restore ${INCLUDED_ACCESS.inline} and usage data.`;
     } else if (unavailable) {
       description =
         'The authentication service is temporarily unavailable. Your stored session has not been removed.';
@@ -212,9 +212,7 @@ export class AccountTab extends LitElement {
 
         <section>
           ${renderSettingsSectionHeading({
-            title: 'Included access usage',
-            description:
-              'Monthly usage for models provided through your TeXRA plan.',
+            title: `${INCLUDED_ACCESS.label} usage`,
             icon: 'chart-line',
           })}
           ${this.renderUsage()}
@@ -251,15 +249,13 @@ export class AccountTab extends LitElement {
         <section>
           ${renderSettingsSectionHeading({
             title: 'Privacy',
-            description:
-              'Choose whether TeXRA records anonymous usage metadata.',
+            description: 'Choose what TeXRA records about your model usage.',
             icon: 'shield',
           })}
           <div class="settings-section">
             ${renderSettingsToggleRow({
               label: 'Share usage telemetry',
-              description:
-                'Sends model, token, cost, timing, route, and host metadata. Prompt text, document content, and file names are never sent.',
+              description: `Sends model, token, cost, timing, and host metadata. Prompt text, document content, and file names are never sent. Turning this off stops reporting for rounds billed to ${OWN_API_KEYS.inline}; rounds covered by ${INCLUDED_ACCESS.inline} or a subscription are still recorded, because they meter your usage against your plan.`,
               checked: this.telemetryEnabled,
               onChange: this.handleTelemetryChange,
             })}

@@ -27,7 +27,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly CliHistoryEntry[], ExecutionId>
       title="/resume"
-      loadingLabel="Loading execution history..."
+      loadingLabel="Loading history..."
       load={async () =>
         resumableCliHistoryEntries(await listCliHistoryEntries()).slice(0, 50)
       }
@@ -40,7 +40,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       }
       availableRows={props.availableRows}
       description={<Text dimColor>Choose a previous session to continue.</Text>}
-      emptyMessage="No resumable sessions found."
+      emptyMessage="Nothing to resume yet. Sessions appear here once you run an agent."
       selectMarginTop={1}
       action="resume"
       onSelect={props.onSelect}

@@ -184,6 +184,74 @@ describe('background-tasks-panel', () => {
     element.remove();
   });
 
+  it('does not paint a retained process green when no terminal status arrived', async () => {
+    const element = createPanel();
+    element.subagents = [
+      {
+        executionId: 'bash-1',
+        childStreamId: 'child-bash',
+        agentName: 'bash',
+        identity: { kind: 'process' as const, tool: 'bash' },
+        // A process has no child status source, so its retained row can keep
+        // the last in-flight phase. Claiming success here would render a
+        // failed command green.
+        status: 'running',
+        finishedAt: 1_000,
+      },
+    ];
+    document.body.append(element);
+    await element.updateComplete;
+
+    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
+    expect(badge?.getAttribute('variant')).toBe('neutral');
+
+    element.remove();
+  });
+
+  it('paints a retained process green only on an explicit completed status', async () => {
+    const element = createPanel();
+    element.subagents = [
+      {
+        executionId: 'bash-2',
+        childStreamId: 'child-bash-2',
+        agentName: 'bash',
+        identity: { kind: 'process' as const, tool: 'bash' },
+        status: 'completed',
+        finishedAt: 1_000,
+      },
+    ];
+    document.body.append(element);
+    await element.updateComplete;
+
+    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
+    expect(badge?.textContent).toBe('Finished');
+    expect(badge?.getAttribute('variant')).toBe('success');
+
+    element.remove();
+  });
+
+  it('shows a failed retained process as failed', async () => {
+    const element = createPanel();
+    element.subagents = [
+      {
+        executionId: 'bash-3',
+        childStreamId: 'child-bash-3',
+        agentName: 'bash',
+        identity: { kind: 'process' as const, tool: 'bash' },
+        status: 'failed',
+        finishedAt: 1_000,
+      },
+    ];
+    document.body.append(element);
+    await element.updateComplete;
+
+    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
+    expect(badge?.textContent).toBe('Failed');
+    expect(badge?.getAttribute('variant')).toBe('danger');
+
+    element.remove();
+  });
+
   it('shows inquiries without workflow subagents in inquiry scope', async () => {
     const element = createPanel();
     element.scope = 'inquiries';
