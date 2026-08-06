@@ -276,12 +276,17 @@ export function createWorkflowScriptAgentRunner(
                     invocation.options.agentName,
                     runScope.delegationAgentScope ?? undefined,
                   );
+            // The run's default agent may come from either roster, so the
+            // launch category is the resolved entry's own — hardcoding
+            // Workflow here launches a tool-use default as a workflow agent
+            // and trips the category guard at launch instead.
+            const agentCategory = agent.category;
             // Model resolves before any file I/O so an unavailable/invalid
             // declared model fails the call without touching the filesystem.
             const model = await workflowScriptModelSelection(
               invocation,
               parent,
-              AgentCategory.Workflow,
+              agentCategory,
             );
             const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
               resolveInvocationFileList(
@@ -312,6 +317,7 @@ export function createWorkflowScriptAgentRunner(
             // this agent() to null inside parallel(), silently
             // filtering away the very misuse this guard exists to surface.
             if (
+              agentCategory === AgentCategory.Workflow &&
               inputFiles.length === 0 &&
               (agent.defaultOutputFiles ?? []).length === 0
             ) {
@@ -330,7 +336,7 @@ export function createWorkflowScriptAgentRunner(
               inputFiles,
               contextFiles,
               mediaFiles,
-              agentCategory: AgentCategory.Workflow,
+              agentCategory,
             };
           }
 

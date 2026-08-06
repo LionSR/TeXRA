@@ -94,6 +94,14 @@ const defaultAgent = {
   category: 'workflow',
   path: '/agents/correct.yml',
 } as AgentEntry;
+// A run whose outer `agent` field named a tool-use agent rather than a
+// workflow one.
+const toolUseDefaultAgent = {
+  name: 'codeSimplifier',
+  source: 'builtInToolUse',
+  category: 'toolUse',
+  path: '/agents/codeSimplifier.yml',
+} as AgentEntry;
 const result: AgentFinalResult = {
   category: 'workflow',
   outcome: 'completed',
@@ -873,6 +881,38 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
+      }),
+    );
+  });
+
+  it("launches a tool-use default agent under the run's resolved category", async () => {
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      inBandRunReturning(structuredResult),
+    );
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      toolUseDefaultAgent,
+      'tool-call-7',
+      run,
+    );
+
+    // The tool's outer `agent` field accepts either roster, so a call that
+    // omits agentName inherits the default agent's own category — launching a
+    // tool-use default as a workflow agent trips the launch category guard.
+    await expect(runner(invocation({}))).resolves.toBe(structuredResult);
+
+    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+      parentModel: 'parent-model',
+      agentCategory: 'toolUse',
+    });
+    expect(mocks.preparedOptions[0]).toEqual(
+      expect.objectContaining({
+        agentName: 'codeSimplifier',
+        configPayload: expect.objectContaining({
+          agent: 'codeSimplifier',
+          agentSource: 'builtInToolUse',
+          agentCategory: 'toolUse',
+        }),
       }),
     );
   });

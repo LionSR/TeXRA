@@ -57,6 +57,29 @@ export async function selectAvailableDelegationModel(input: {
   });
 }
 
+function visibleAgent(
+  category: AgentCategory,
+  name: string,
+  scope?: AgentDelegationScope,
+): AgentEntry | undefined {
+  return scope
+    ? getDelegationAgentForScope(category, name, scope)
+    : getDelegationAgent(category, name);
+}
+
+function visibleAgentNames(
+  category: AgentCategory,
+  scope?: AgentDelegationScope,
+): string {
+  return (
+    scope
+      ? getDelegationAgentsForScope(category, scope)
+      : getDelegationAgents(category)
+  )
+    .map((a) => a.name)
+    .join(', ');
+}
+
 /**
  * Return the visible agent entry, or throw with the current visible list. The
  * caller carries the resolved `source` onto the proposal so launch pins the
@@ -67,43 +90,33 @@ export function requireVisibleAgent(
   name: string,
   scope?: AgentDelegationScope,
 ): AgentEntry {
-  const agent = scope
-    ? getDelegationAgentForScope(category, name, scope)
-    : getDelegationAgent(category, name);
+  const agent = visibleAgent(category, name, scope);
   if (agent) return agent;
-  const available = (
-    scope
-      ? getDelegationAgentsForScope(category, scope)
-      : getDelegationAgents(category)
-  )
-    .map((a) => a.name)
-    .join(', ');
   throw new Error(
-    `Unknown ${category} agent '${name}'. Available: ${available}`,
+    `Unknown ${category} agent '${name}'. Available: ${visibleAgentNames(category, scope)}`,
   );
 }
 
 /**
- * Resolve an agent across both Workflow and ToolUse rosters, returning the
- * first match and its category. Used by delegate_multi_agents where the outer
- * `agent` parameter accepts both kinds.
+ * Resolve an agent across both delegation rosters, workflow first. Used where
+ * the caller accepts either kind; the returned entry carries the `category` it
+ * resolved under, which callers must honour instead of assuming Workflow.
  */
 export function requireWorkflowOrToolUseAgent(
   name: string,
   scope?: AgentDelegationScope,
-): { agent: AgentEntry; category: AgentCategory } {
-  let firstError: unknown;
-  for (const category of [
-    AgentCategory.Workflow,
-    AgentCategory.ToolUse,
-  ] as const) {
-    try {
-      return { agent: requireVisibleAgent(category, name, scope), category };
-    } catch (error) {
-      firstError ??= error;
-    }
+): AgentEntry {
+  const categories = [AgentCategory.Workflow, AgentCategory.ToolUse] as const;
+  for (const category of categories) {
+    const agent = visibleAgent(category, name, scope);
+    if (agent) return agent;
   }
-  throw firstError;
+  // Name both rosters: reporting only the workflow list sends the model
+  // hunting for a tool-use agent in the catalog that cannot contain it.
+  const available = categories
+    .map((category) => `${category}: ${visibleAgentNames(category, scope)}`)
+    .join('; ');
+  throw new Error(`Unknown agent '${name}'. Available: ${available}`);
 }
 
 /** Build a concise summary of proposal parameters for rejection echo. */
