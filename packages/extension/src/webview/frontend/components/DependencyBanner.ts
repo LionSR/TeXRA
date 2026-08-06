@@ -68,6 +68,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
 
     return renderWarningBanner({
       id: 'dependencyBanner',
+      role: 'status',
       body: html`
         <div class="missing-tools">
           ${when(

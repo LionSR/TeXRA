@@ -69,6 +69,11 @@ export class GitTab extends LitElement {
 
       .identity-fields {
         margin-top: var(--wa-space-xs);
+        /* Rail-group the dependent fields under the controlling toggle so
+           the enablement relationship reads as one region. */
+        margin-inline-start: var(--wa-space-2xs);
+        padding-inline-start: var(--wa-space-s);
+        border-inline-start: var(--border-medium) solid var(--color-border);
       }
 
       .token-row {

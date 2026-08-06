@@ -303,11 +303,12 @@ export class SettingsApp extends SettingsAppBase {
             `;
           })}
         </div>
-        <div
-          class="settings-page-nav"
-          role="tablist"
-          aria-label=${`${activeGroup.label} pages`}
-        >
+        <!-- Plain toggle-button strip, not tablist/tab: these buttons switch
+             the whole page but implement none of the APG tabs keyboard
+             contract (no arrow keys/roving tabindex), and role="tab" on a
+             wa-button nests a native button role. aria-pressed matches the
+             actual behavior — same pattern as the category nav above. -->
+        <div class="settings-page-nav" aria-label=${`${activeGroup.label} pages`}>
           ${activeEntries.map((entry) => {
             const active = entry.panel === activePanel;
             return html`
@@ -315,9 +316,8 @@ export class SettingsApp extends SettingsAppBase {
                 class="settings-page-button"
                 appearance="plain"
                 size="s"
-                role="tab"
                 aria-label=${`${activeGroup.label}: ${entry.label}`}
-                aria-selected=${String(active)}
+                aria-pressed=${String(active)}
                 data-active=${String(active)}
                 data-panel=${entry.panel}
                 title=${entry.label}
@@ -509,7 +509,6 @@ export class SettingsApp extends SettingsAppBase {
         )}
         <section
           class="settings-panel"
-          role="tabpanel"
           aria-label=${activeEntry?.label ?? 'Settings'}
         >
           ${

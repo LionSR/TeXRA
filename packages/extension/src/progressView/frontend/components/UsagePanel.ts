@@ -236,6 +236,7 @@ export class UsagePanel extends LitElement {
         <span
           id=${ELEMENT_IDS.RUN_SUMMARY}
           class="run-summary"
+          role=${this.usage ? 'group' : nothing}
           aria-label=${this.buildUsageLabel()}
         >
           ${this.renderUsage()}

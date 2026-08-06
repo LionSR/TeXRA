@@ -88,7 +88,7 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
             onClick: () => this.emitAction({ action: 'approve_and_goal' }),
           })
         : nothing,
-      feedbackPlaceholder: 'Why are you rejecting this plan?',
+      feedbackPlaceholder: 'What should the agent change?',
     });
   }
 

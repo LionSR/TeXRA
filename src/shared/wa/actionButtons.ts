@@ -140,6 +140,10 @@ function renderActionButtonParts({
   const tooltipTemplate = useWebAwesomeTooltip
     ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
     : nothing;
+  // `title` is the one attribute wa-button forwards into its shadow <button>,
+  // so it doubles as the accessible name of an icon-only button. Set it even
+  // when a wa-tooltip carries the visible hint — suppressing it here left
+  // every id+tooltip icon button unnamed.
   const nativeTitle = tooltip && !id ? tooltip : (title ?? ariaLabel);
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {
@@ -160,7 +164,7 @@ function renderActionButtonParts({
       aria-pressed=${ifDefined(
         pressed === undefined ? undefined : String(pressed),
       )}
-      title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
+      title=${ifDefined(nativeTitle)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
       ?hidden=${hidden}

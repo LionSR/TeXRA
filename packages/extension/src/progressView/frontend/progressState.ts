@@ -15,13 +15,17 @@ import { create } from 'mutative';
 import { Signal, signal, select } from '@shared/signals';
 import {
   createStreamState,
+  STREAM_STATUS,
   type ProgressViewPlacement,
   type InquiryThreadUpdatedEvent,
   type PhaseStage,
+  type StreamLifecycleStatus,
   type StreamTabId,
   type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toNewestFirstByTimestamp } from '@utils/core';
 
@@ -42,7 +46,7 @@ import {
   type StreamContextValue,
   type StreamLogContextValue,
 } from './streamContexts';
-import type { PermissionState } from './permissionState';
+import { permissionId, type PermissionState } from './permissionState';
 
 // ---------------------------------------------------------------------------
 // Stable empty references — avoid allocating new arrays/maps per read.
@@ -153,6 +157,79 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
   return ids;
 });
 
+// ---------------------------------------------------------------------------
+// Polite status announcements for the shell's role="status" region
+// ---------------------------------------------------------------------------
+
+/**
+ * Announcement noun per permission kind. Mirrors the RequestPanels section
+ * titles but lives here because that component module registers custom
+ * elements on import — a state leaf module cannot touch it.
+ */
+const PERMISSION_ANNOUNCEMENT_NOUN: Record<PermissionState['kind'], string> = {
+  [PERMISSION_KIND.TOOL_EDIT]: 'file edit',
+  [PERMISSION_KIND.BASH]: 'shell command',
+  [PERMISSION_KIND.RETRY]: 'retry',
+  [PERMISSION_KIND.PROPOSAL]: 'agent proposal',
+  [PERMISSION_KIND.PLAN_APPROVAL]: 'plan approval',
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'external inquiry',
+  [PERMISSION_KIND.USER_QUESTION]: 'user question',
+};
+
+let _announcedPermissionKeys: ReadonlySet<string> = new Set();
+let _announcedStreamStatuses: ReadonlyMap<StreamTabId, StreamLifecycleStatus> =
+  new Map();
+
+/**
+ * Latest event worth announcing in ProgressApp's stable, visually-hidden
+ * `role="status"` region: a newly appeared approval request, else a run that
+ * just reached a terminal outcome. Detection diffs against the previous
+ * evaluation — the same memo pattern `pendingApprovalIds$` above uses.
+ * Approvals are keyed so re-rendering the same pending request never
+ * re-announces it; terminal outcomes fire only on an observed transition,
+ * never for a stream first seen already-finished (history hydrate and trace
+ * replay arrive terminal and would otherwise announce every old run at
+ * once). A pending approval wins over a completion in the same tick — it is
+ * the one demanding action. Returning '' when nothing new happened gives the
+ * live region the text-change edge that repeated identical announcements
+ * need.
+ */
+export const statusAnnouncement$ = new Signal.Computed((): string => {
+  let announcement = '';
+
+  const permissions = permissions$.get();
+  const currentKeys = new Set<string>();
+  for (const permission of permissions) {
+    const key = `${permission.kind}:${permissionId(permission)}`;
+    currentKeys.add(key);
+    if (!_announcedPermissionKeys.has(key)) {
+      announcement = `Approval requested: ${PERMISSION_ANNOUNCEMENT_NOUN[permission.kind]}`;
+    }
+  }
+  _announcedPermissionKeys = currentKeys;
+
+  const streamStates = streamStates$.get();
+  const currentStatuses = new Map<StreamTabId, StreamLifecycleStatus>();
+  for (const [streamId, state] of streamStates) {
+    const status = state.status;
+    currentStatuses.set(streamId, status);
+    const previous = _announcedStreamStatuses.get(streamId);
+    if (
+      announcement === '' &&
+      previous !== undefined &&
+      previous !== status &&
+      status !== STREAM_STATUS.READY &&
+      isTerminalOutcomePhase(status)
+    ) {
+      const label = streamById$.get().get(streamId)?.label || streamId;
+      announcement = `Run ${status}: ${label}`;
+    }
+  }
+  _announcedStreamStatuses = currentStatuses;
+
+  return announcement;
+});
+
 /**
  * Reset every writable signal to its initial value. Called from
  * `ProgressApp`'s constructor on remount in the same JS context (tests,
@@ -164,10 +241,13 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
  * recomputation, which reads `_prevApprovalIds` for the stable-Set memo —
  * if we clear the cache after, the next read sees a stale prior Set and
  * returns it instead of the empty post-reset value. `_prevPhaseStages` is
- * the same memo over `appState`, so it is cleared before that setter too.
+ * the same memo over `appState`, so it is cleared before that setter too,
+ * and the `statusAnnouncement$` diff memos follow the same rule.
  */
 export function resetProgressState(): void {
   _prevApprovalIds = new Set();
+  _announcedPermissionKeys = new Set();
+  _announcedStreamStatuses = new Map();
   _prevPhaseStages = EMPTY_PHASE_STAGE_MAP;
   clearFollowUpInputTransientStateStore();
   appState.set(createInitialState());

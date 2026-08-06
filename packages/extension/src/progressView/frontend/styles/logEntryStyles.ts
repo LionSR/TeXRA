@@ -28,7 +28,7 @@ export const logEntryStyles = css`
   }
 
   .log-line {
-    line-height: 1.5;
+    line-height: var(--line-height-relaxed);
     margin: 0;
     padding: var(--wa-space-3xs) 0;
     display: block;
@@ -62,7 +62,7 @@ export const logEntryStyles = css`
     margin: var(--wa-space-2xs) 0;
     padding: var(--wa-space-xs);
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-left: 2px solid var(--border-control);
+    border-inline-start: 2px solid var(--border-control);
     border-radius: var(--wa-border-radius-m, var(--border-radius));
     background: color-mix(
       in srgb,
@@ -74,7 +74,7 @@ export const logEntryStyles = css`
   }
 
   .workflow-task--running {
-    border-left-color: var(--wa-color-focus);
+    border-inline-start-color: var(--wa-color-focus);
     background: var(--wa-color-neutral-fill-quiet);
   }
 
@@ -91,11 +91,11 @@ export const logEntryStyles = css`
 
   .workflow-task--completed,
   .workflow-task--cached {
-    border-left-color: var(--color-success);
+    border-inline-start-color: var(--color-success);
   }
 
   .workflow-task--failed {
-    border-left-color: var(--color-error);
+    border-inline-start-color: var(--color-error);
     background: var(--wa-color-danger-fill-quiet);
   }
 
