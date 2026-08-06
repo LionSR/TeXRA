@@ -70,10 +70,11 @@ export function createReviewPane(): ReviewPaneController {
           <wa-details
             class="desktop-review-directory"
             style=${`--review-tree-depth: ${depth}`}
+            icon-placement="start"
             open
           >
             <span slot="summary">
-              ${waIcon('chevron-down')} ${waIcon('folder')}
+              ${waIcon('folder')}
               <span>${node.name}</span>
             </span>
             ${renderTree(node.children, depth + 1)}
@@ -96,7 +97,6 @@ export function createReviewPane(): ReviewPaneController {
         >
           ${waIcon('file-code', { slot: 'start' })}
           <span>${node.name}</span>
-          <span class="desktop-review-file-state" slot="end"></span>
         </wa-button>
       `;
     });
@@ -160,6 +160,7 @@ export function createReviewPane(): ReviewPaneController {
                         appearance="plain"
                         size="s"
                         aria-label="Clear file filter"
+                        title="Clear file filter"
                         @click=${() => {
                           filter = '';
                           rerender();

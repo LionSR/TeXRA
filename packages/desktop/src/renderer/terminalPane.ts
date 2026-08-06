@@ -25,8 +25,12 @@ export interface TerminalPaneCallbacks {
 
 export interface TerminalPane {
   readonly element: HTMLElement;
-  /** Shows `sessionId`, creating its terminal and pty on first use. */
-  activate(sessionId: string): void;
+  /**
+   * Shows `sessionId`, creating its terminal and pty on first use. `focus`
+   * (default `true`) moves keyboard focus into the terminal; pass `false`
+   * from layout passes, which must re-fit without stealing focus.
+   */
+  activate(sessionId: string, options?: { focus?: boolean }): void;
   /** Feeds pty output into the matching terminal. */
   write(sessionId: string, data: string): void;
   /** Reports process exit in-band so the pane doesn't look merely idle. */
@@ -74,7 +78,7 @@ function themeFromTokens(): Record<string, string> {
     background: token('--wa-color-surface-default', '#1e1e1e'),
     foreground: token('--wa-color-text-normal', '#d4d4d4'),
     cursor: token('--wa-color-text-normal', '#d4d4d4'),
-    selectionBackground: token('--wa-color-terminal-selection', '#264f78'),
+    selectionBackground: token('--wa-color-terminal-selection-bg', '#264f78'),
   };
 }
 
@@ -106,6 +110,9 @@ export function createTerminalPane(
       // Build logs and test output are long; a shallow buffer would discard the
       // beginning of exactly the runs users need to read.
       scrollback: 10_000,
+      // Pty output is canvas-only without this; screen reader mode exposes the
+      // buffer (including the in-band exit/error lines) as text.
+      screenReaderMode: true,
       theme: themeFromTokens(),
     });
     const fitAddon = new FitAddon();
@@ -150,7 +157,7 @@ export function createTerminalPane(
   return {
     element,
 
-    activate(sessionId) {
+    activate(sessionId, { focus = true }: { focus?: boolean } = {}) {
       const session = sessions.get(sessionId) ?? createSession(sessionId);
       activeSessionId = sessionId;
       for (const [id, entry] of sessions) {
@@ -164,7 +171,7 @@ export function createTerminalPane(
         const { cols, rows } = session.terminal;
         callbacks.start(sessionId, Math.max(cols, 20), Math.max(rows, 5));
       }
-      session.terminal.focus();
+      if (focus) session.terminal.focus();
     },
 
     write(sessionId, data) {
