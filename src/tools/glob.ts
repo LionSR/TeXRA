@@ -17,6 +17,7 @@ import {
   currentToolRoot,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -127,10 +128,9 @@ export class GlobTool extends defineTool({
       .map((item) => toPosixPath(item.relativePath));
     const count = lines.length;
     const header = `Found ${count} ${pluralize(count, 'file')} matching "${input.pattern}" under ${display}`;
-    return {
-      status: 'executed',
-      summary: `Found ${count} ${pluralize(count, 'file')} for "${input.pattern}" in ${display}`,
-      output: formatToolOutput(header, lines, '(no matches)'),
-    };
+    return executed(
+      formatToolOutput(header, lines, '(no matches)'),
+      `Found ${count} ${pluralize(count, 'file')} for "${input.pattern}" in ${display}`,
+    );
   }
 }

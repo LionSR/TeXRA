@@ -14,6 +14,7 @@ import {
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
 
 const logger = createChannelTrace('UserQuestionTool');
@@ -65,26 +66,21 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const result = await session.interactions.askUserQuestion(permission);
 
     if (result.action !== 'submit') {
-      return {
-        status: 'executed',
-        output: result.feedback
+      return executed(
+        result.feedback
           ? `The user declined to answer: ${result.feedback}`
           : 'The user declined to answer.',
-      };
+      );
     }
 
     const answers = UserQuestionAnswersSchema.parse(result.answers);
     if (Object.keys(answers).length === 0) {
-      return {
-        status: 'executed',
-        output: 'The user submitted no answers.',
-      };
+      return executed('The user submitted no answers.');
     }
 
-    return {
-      status: 'executed',
-      output: JSON.stringify({ answers }, null, 2),
-      summary: `Answered ${Object.keys(answers).length} user question(s).`,
-    };
+    return executed(
+      JSON.stringify({ answers }, null, 2),
+      `Answered ${Object.keys(answers).length} user question(s).`,
+    );
   }
 }

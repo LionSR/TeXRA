@@ -22,6 +22,7 @@ import {
   createArxivClient,
   extractBasePaperMetadata,
 } from '@tools/latex/arxivShared';
+import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
 type Category = Parameters<typeof catQuery>[0];
@@ -160,10 +161,9 @@ export class ArxivSearchTool extends defineTool({
     };
 
     const fieldLabel = input.field !== 'all' ? ` (${input.field})` : '';
-    return {
-      status: 'executed',
-      summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"${fieldLabel}`,
-      output: JSON.stringify(payload, null, 2),
-    };
+    return executed(
+      JSON.stringify(payload, null, 2),
+      `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"${fieldLabel}`,
+    );
   }
 }

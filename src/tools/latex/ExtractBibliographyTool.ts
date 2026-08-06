@@ -11,6 +11,7 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
@@ -137,10 +138,6 @@ export class ExtractBibliographyTool extends defineTool({
     const notes =
       instructions.length > 0 ? `\n\nNote: ${instructions.join(' ')}` : '';
 
-    return {
-      status: 'executed',
-      summary,
-      output: `${output}${notes}`,
-    };
+    return executed(`${output}${notes}`, summary);
   }
 }

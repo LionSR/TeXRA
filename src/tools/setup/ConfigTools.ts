@@ -13,6 +13,7 @@ import { z } from 'zod';
 
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
+import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { texraScopedConfig } from './platform';
 
@@ -108,11 +109,7 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
     const value = texraScopedConfig.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
-    return {
-      status: 'executed',
-      summary: `Read ${input.key}`,
-      output: `${input.key}:\n${json}`,
-    };
+    return executed(`${input.key}:\n${json}`, `Read ${input.key}`);
   }
 }
 
@@ -164,10 +161,9 @@ Anything outside this list must be changed through the host's regular configurat
 
     const before = JSON.stringify(previous);
     const after = JSON.stringify(parsed.data);
-    return {
-      status: 'executed',
-      summary: `Updated ${input.key} (${input.target})`,
-      output: `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
-    };
+    return executed(
+      `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
+      `Updated ${input.key} (${input.target})`,
+    );
   }
 }

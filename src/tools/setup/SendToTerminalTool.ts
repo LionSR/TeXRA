@@ -7,6 +7,7 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
+import { executed } from '@tools/core/result';
 import { tailWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -85,6 +86,6 @@ export class SendToTerminalTool extends defineTool({
       ? '\n\n' + tailWithEllipsis(output, OUTPUT_PREVIEW_MAX)
       : '';
 
-    return { status: 'executed', summary, output: summary + tail };
+    return executed(summary + tail, summary);
   }
 }

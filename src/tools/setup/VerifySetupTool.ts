@@ -7,6 +7,7 @@ import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
+import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { getSetupAuthStatus, getSetupPlatform, setupSecrets } from './platform';
 import { locateTool, missingCoreTools, PROBED_CORE_TOOLS } from './toolProbing';
@@ -45,13 +46,12 @@ export class VerifySetupTool extends defineTool({
           locateTool('magick'),
         ]);
         const ok = gm.installed || magick.installed;
-        return {
-          status: 'executed',
-          summary: `Verify gm/magick: ${ok ? 'ok' : 'missing'}`,
-          output: ok
+        return executed(
+          ok
             ? `Verified: ${gm.installed ? '"gm"' : '"magick"'} is installed and on PATH.`
             : `Not found: neither "gm" nor "magick" is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
-        };
+          `Verify gm/magick: ${ok ? 'ok' : 'missing'}`,
+        );
       }
       // First char must be alphanumeric — rejects punctuation-only
       // tokens like `"."` or `".."`, which would otherwise path-join
@@ -63,13 +63,12 @@ export class VerifySetupTool extends defineTool({
         );
       }
       const { installed: ok } = await locateTool(name);
-      return {
-        status: 'executed',
-        summary: `Verify ${name}: ${ok ? 'ok' : 'missing'}`,
-        output: ok
+      return executed(
+        ok
           ? `Verified: "${name}" is installed and on PATH.`
           : `Not found: "${name}" is still missing. The install may not have completed, or the shell PATH needs to be refreshed.`,
-      };
+        `Verify ${name}: ${ok ? 'ok' : 'missing'}`,
+      );
     }
 
     // Authentication verifies a configured relay token and primes the shared
@@ -127,10 +126,6 @@ export class VerifySetupTool extends defineTool({
       verificationSummary = 'Setup verification: gaps remain';
     }
 
-    return {
-      status: 'executed',
-      summary: verificationSummary,
-      output: lines.join('\n'),
-    };
+    return executed(lines.join('\n'), verificationSummary);
   }
 }

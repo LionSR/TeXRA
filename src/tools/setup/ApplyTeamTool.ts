@@ -35,6 +35,7 @@ import {
 } from '@shared/schemas/agentPresets';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
+import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { getSetupAuthStatus, getSetupPlatform } from './platform';
 
@@ -134,19 +135,17 @@ ${describeTeams()}`,
 
     if (result.status === 'choice-required') {
       const names = result.unavailableNames.join(', ');
-      return {
-        status: 'executed',
-        summary: `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
-        output: `The ${result.preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
-      };
+      return executed(
+        `The ${result.preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
+        `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
+      );
     }
 
     if (result.status === 'cancelled') {
-      return {
-        status: 'executed',
-        summary: `Cancelled ${result.preset.name} team application.`,
-        output: 'Cancelled. No roster or default-team state was written.',
-      };
+      return executed(
+        'Cancelled. No roster or default-team state was written.',
+        `Cancelled ${result.preset.name} team application.`,
+      );
     }
     if (result.status === 'unavailable') {
       throw new ToolError(
@@ -202,6 +201,6 @@ ${describeTeams()}`,
       ...(signInNote ? [signInNote] : []),
     ].join(' ');
 
-    return { status: 'executed', summary, output: lines.join('\n') };
+    return executed(lines.join('\n'), summary);
   }
 }

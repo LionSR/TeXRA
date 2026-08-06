@@ -176,15 +176,14 @@ async function execSubscribe(
   if (target.kind === 'repo') {
     const created = bindRepoSubscription(streamId, target);
     const slug = slugOf(target);
-    return {
-      status: 'executed',
-      summary: created
-        ? `Subscribed to repo ${slug}`
-        : `Already subscribed to repo ${slug}`,
-      output: created
+    return executed(
+      created
         ? `Subscribed to repo ${slug}. PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, and newly-detected merge conflicts on open PRs arrive as <github-webhook-activity> follow-ups. Each event uses GitHub's URL form (${slug}/pulls/N or ${slug}/issues/N) — pass that path back to command="subscribe" to delegate a worker.`
         : `Already subscribed to repo ${slug}. Activity continues until command="unsubscribe".`,
-    };
+      created
+        ? `Subscribed to repo ${slug}`
+        : `Already subscribed to repo ${slug}`,
+    );
   }
   if (target.kind === 'pr') {
     const created = bindPRSubscription(streamId, {
@@ -192,15 +191,12 @@ async function execSubscribe(
       minAnnotationLevel,
     });
     const slug = prRef(slugOf(target), target.pullNumber);
-    return {
-      status: 'executed',
-      summary: created
-        ? `Subscribed to ${slug}`
-        : `Already subscribed to ${slug}`,
-      output: created
+    return executed(
+      created
         ? `Subscribed to ${slug}. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on PR close/merge.`
         : `Already subscribed to ${slug}. Inline check annotation filter is now ${annotationLevelDescription}. Activity continues until command="unsubscribe" or the PR closes.`,
-    };
+      created ? `Subscribed to ${slug}` : `Already subscribed to ${slug}`,
+    );
   }
   // The path "owner/repo/issues/N" is ambiguous: the /issues/comments
   // endpoint surfaces both PR conversation comments and plain issue
@@ -236,24 +232,22 @@ async function execSubscribe(
     } else {
       summary = `Subscribed to ${prSlug}`;
     }
-    return {
-      status: 'executed',
-      summary,
-      output: created
+    return executed(
+      created
         ? `${prSlug} is a PR. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${prSlug}. Inline check annotation filter is now ${annotationLevelDescription}.`,
-    };
+      summary,
+    );
   }
   const created = bindIssueSubscription(streamId, target);
-  return {
-    status: 'executed',
-    summary: created
-      ? `Subscribed to ${issueSlug}`
-      : `Already subscribed to ${issueSlug}`,
-    output: created
+  return executed(
+    created
       ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught — call command="unsubscribe" to release the slot.`
       : `Already subscribed to ${issueSlug}. Activity continues until command="unsubscribe".`,
-  };
+    created
+      ? `Subscribed to ${issueSlug}`
+      : `Already subscribed to ${issueSlug}`,
+  );
 }
 
 /**
@@ -491,11 +485,10 @@ async function execFindCurrent(
     );
   }
   const path = prRef(slugOf(remote), pr.number);
-  return {
-    status: 'executed',
-    summary: path,
-    output: `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
-  };
+  return executed(
+    `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
+    path,
+  );
 }
 
 export class GitHubSubscriptionTool extends defineTool({

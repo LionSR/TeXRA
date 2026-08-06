@@ -775,11 +775,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         `Cannot subscribe to your own execution (${executionId}).`,
       );
     }
-    try {
-      currentSession().subscriptions.bind(streamId, executionId);
-    } catch (err) {
-      throw new ToolError(toErrorMessage(err));
-    }
+    // A bind failure propagates as-is: `BaseTool.call` already formats the
+    // message with `toErrorMessage`, so re-wrapping it added nothing.
+    currentSession().subscriptions.bind(streamId, executionId);
     return executed(
       `Subscribed to ${executionId}. Status and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
       `Subscribed to ${executionId}`,

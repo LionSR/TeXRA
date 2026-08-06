@@ -46,6 +46,7 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
+import { executed } from '@tools/core/result';
 import { formatDuration, generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
@@ -382,11 +383,10 @@ export class BashTool extends defineTool({
 
     if (result.success) {
       const preview = truncateWithEllipsis(command, 60);
-      return {
-        status: 'executed',
-        summary: `Executed: ${preview} (exit 0, ${duration})`,
-        output: retainedStdout ?? '',
-      };
+      return executed(
+        retainedStdout ?? '',
+        `Executed: ${preview} (exit 0, ${duration})`,
+      );
     }
     // Many CLI tools (including latexmk) write errors to stdout, not stderr
     const errorOutput =
@@ -645,10 +645,8 @@ export class BashTool extends defineTool({
       }
     });
 
-    return {
-      status: 'executed',
-      summary: `Launched background: ${preview}`,
-      output: [
+    return executed(
+      [
         `Command launched in background.`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
@@ -656,6 +654,7 @@ export class BashTool extends defineTool({
         `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
         `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
       ].join('\n'),
-    };
+      `Launched background: ${preview}`,
+    );
   }
 }

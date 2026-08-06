@@ -211,28 +211,24 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   ): Promise<ToolResult> {
     const goal = GoalStore.getForStream(streamId);
     if (!goal) {
-      return {
-        status: 'executed',
-        summary: 'Plan-only work complete — summarize the result.',
-        output:
-          'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
+      return executed(
+        'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
           'The plan work is otherwise finished; return the final answer to the user and do not call plan(command="complete") again.',
-      };
+        'Plan-only work complete — summarize the result.',
+      );
     }
     // Completing forgets the record — a goal is a live pursuit, not an
     // archived one. The autonomous loop stops because no `active` record
     // remains for the next wait-node continuation check.
     await GoalStore.forget(streamId);
     await this.setBashAutoApproval(streamId, false);
-    return {
-      status: 'executed',
-      summary: 'Goal complete.',
-      output:
-        `Goal ${goal.goalId} marked complete.\n\n` +
+    return executed(
+      `Goal ${goal.goalId} marked complete.\n\n` +
         `Reason: ${reason}\n\n` +
         `The autonomous continuation loop has stopped. ` +
         `Returning control to the user.`,
-    };
+      'Goal complete.',
+    );
   }
 
   /**
@@ -367,11 +363,8 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     try {
       const goal = await GoalStore.start(streamId, objective);
       await this.setBashAutoApproval(streamId, true);
-      return {
-        status: 'executed',
-        summary: `Plan approved — goal ${goal.goalId} started`,
-        output:
-          `The user approved this plan and started an autonomous goal ` +
+      return executed(
+        `The user approved this plan and started an autonomous goal ` +
           `(${goal.goalId}) toward its stopping condition.\n\n` +
           `Discipline:\n` +
           `- Track concrete steps with the todo tool as you work.\n` +
@@ -379,32 +372,28 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           `- If you genuinely need user input, call plan(command="pause") with a reason describing what you need.\n` +
           `- Otherwise, keep working until the objective is done.\n\n` +
           `Objective:\n${objective}`,
-      };
+        `Plan approved — goal ${goal.goalId} started`,
+      );
     } catch (err) {
       const reason = toErrorMessage(err);
       logger.warn(
         'Failed to start goal for approved plan; falling back to plain approval.',
         { data: err },
       );
-      return {
-        status: 'executed',
-        summary:
-          'Plan approved — goal could not be started, proceeding without it',
-        output:
-          `The user approved this plan and requested autonomous execution, but ` +
+      return executed(
+        `The user approved this plan and requested autonomous execution, but ` +
           `the goal could not be started: ${reason}\n\n` +
           `Work toward the objective as a normal turn-by-turn workflow, ` +
           `tracking concrete steps with the todo tool.`,
-      };
+        'Plan approved — goal could not be started, proceeding without it',
+      );
     }
   }
 
   private buildApprovedResult(): ToolResult {
-    return {
-      status: 'executed',
-      summary: 'Plan approved — proceed with implementation',
-      output:
-        'Plan approved by the user. Work toward the objective, tracking concrete steps with the todo tool.',
-    };
+    return executed(
+      'Plan approved by the user. Work toward the objective, tracking concrete steps with the todo tool.',
+      'Plan approved — proceed with implementation',
+    );
   }
 }

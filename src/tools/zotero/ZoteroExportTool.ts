@@ -11,6 +11,7 @@ import { z } from 'zod';
 // Local imports - core
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - zotero
@@ -73,10 +74,9 @@ export class ZoteroExportTool extends defineTool({
       );
     }
 
-    return {
-      status: 'executed',
-      summary: `Exported ${citekeys.length} ${pluralize(citekeys.length, 'entry')} as ${translator}`,
-      output: exported,
-    };
+    return executed(
+      exported,
+      `Exported ${citekeys.length} ${pluralize(citekeys.length, 'entry')} as ${translator}`,
+    );
   }
 }

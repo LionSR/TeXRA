@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
+import { executed } from '@tools/core/result';
 import { delay } from '@utils/core';
 
 // Local file imports
@@ -55,11 +56,10 @@ export class InstallVscodeExtensionTool extends defineTool({
       throw new ToolError('This host cannot install VS Code extensions.');
     }
     if (platform.extensions.isInstalled(id)) {
-      return {
-        status: 'executed',
-        summary: `Extension ${id} already installed`,
-        output: `The "${id}" extension is already installed. No action taken.`,
-      };
+      return executed(
+        `The "${id}" extension is already installed. No action taken.`,
+        `Extension ${id} already installed`,
+      );
     }
 
     await platform.extensions.install(id);
@@ -68,14 +68,13 @@ export class InstallVscodeExtensionTool extends defineTool({
     await delay(250);
     const installed = platform.extensions.isInstalled(id);
 
-    return {
-      status: 'executed',
-      summary: installed
-        ? `Installed extension ${id}`
-        : `Install issued for ${id} (verify manually)`,
-      output: installed
+    return executed(
+      installed
         ? `Successfully installed "${id}". It is now available in VS Code.`
         : `Requested install of "${id}". VS Code has not yet confirmed the extension is active — you may need to reload the window.`,
-    };
+      installed
+        ? `Installed extension ${id}`
+        : `Install issued for ${id} (verify manually)`,
+    );
   }
 }

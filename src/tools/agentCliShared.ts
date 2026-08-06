@@ -35,6 +35,7 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
+import { executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -123,14 +124,13 @@ async function queueAgentCliFollowUp(
   }
 
   const preview = truncateWithEllipsis(prompt, 60);
-  return {
-    status: 'executed',
-    summary: `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
-    output: [
+  return executed(
+    [
       `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
       `Execution ID: ${stored.executionId}`,
     ].join('\n'),
-  };
+    `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
+  );
 }
 
 /**
@@ -252,16 +252,15 @@ export async function launchAgentCliSession(
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
     }
 
-    return {
-      status: 'executed',
-      summary: params.summary,
-      output: [
+    return executed(
+      [
         params.launchedLine,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStream.childStreamId}`,
         params.followUpLine,
       ].join('\n'),
-    };
+      params.summary,
+    );
   });
 }
 

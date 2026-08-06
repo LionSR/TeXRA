@@ -27,6 +27,7 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -363,10 +364,6 @@ export class ZoteroAddTool extends defineTool({
         ? `Successfully added ${successCount} ${pluralize(successCount, 'item')} to Zotero.`
         : `Added ${successCount} ${pluralize(successCount, 'item')}, failed to add ${errorCount} ${pluralize(errorCount, 'item')} to Zotero.`;
 
-    return {
-      status: 'executed',
-      summary,
-      output,
-    };
+    return executed(output, summary);
   }
 }

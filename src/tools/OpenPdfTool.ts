@@ -13,6 +13,7 @@ import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import {
   AbsoluteFS,
   pathToLocation,
@@ -62,11 +63,7 @@ export class OpenPdfTool extends defineTool({
       preserveFocus: input.preserve_focus ?? false,
     });
 
-    return {
-      status: 'executed',
-      summary: `Opened PDF: ${displayPath}`,
-      output: `Opened PDF: ${displayPath}`,
-    };
+    return executed(`Opened PDF: ${displayPath}`, `Opened PDF: ${displayPath}`);
   }
 }
 
