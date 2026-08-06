@@ -61,17 +61,23 @@ export class ReliabilitySettingsSection extends LitElement {
   }
 
   private renderSetting(setting: NumberSetting): TemplateResult {
+    // Real `<label for>` + host id: an aria-label on the wa-input host names
+    // the custom element, not the inner number control (see
+    // settingsSection.ts). `setting.key` is unique within this section.
+    const controlId = `reliability-setting-${setting.key}`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${setting.label}</span>
+          <label class="settings-row-label" for=${controlId}
+            >${setting.label}</label
+          >
           <span class="settings-row-help">${setting.description}</span>
         </div>
         <div class="settings-row-control">
           <wa-input
+            id=${controlId}
             class="setting-input"
             type="number"
-            aria-label=${setting.label}
             .value=${String(setting.value)}
             min=${setting.min ?? nothing}
             max=${setting.max ?? nothing}

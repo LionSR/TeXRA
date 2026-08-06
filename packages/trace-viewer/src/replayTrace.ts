@@ -13,8 +13,8 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
-import { isObject } from '@utils/core';
 import type { TraceDocument } from '@transcript';
+import { isObject } from '@utils/core';
 
 type UpdateStreamsMessage = Extract<
   ProgressViewOutboundMessage,
@@ -139,7 +139,7 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
  * stamped identity.
  */
 /** The record's display name across both arms of the config union. */
-function recordName(config: TraceDocument['config']): string {
+export function recordName(config: TraceDocument['config']): string {
   return 'agentCategory' in config ? config.agent : config.name;
 }
 

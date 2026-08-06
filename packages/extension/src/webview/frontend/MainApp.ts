@@ -220,6 +220,12 @@ export class MainApp extends MainAppBase {
   protected override firstUpdated(): void {
     this.requestInitialData();
     refreshInstructionPlaceholder();
+    // The host swaps webview.html wholesale on a view switch, so keyboard
+    // focus is destroyed on every navigation; land it on the launcher tab
+    // (the view tabs use activation="manual", so arrows are safe from here).
+    this.renderRoot
+      .querySelector<HTMLElement>('.view-tabs wa-tab[panel="launcher"]')
+      ?.focus();
   }
 
   /**

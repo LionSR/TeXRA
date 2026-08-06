@@ -70,10 +70,7 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card.active {
         background-color: var(--wa-color-brand-fill-quiet);
-        color: var(
-          --texra-list-activeSelectionForeground,
-          var(--wa-color-text-normal)
-        );
+        color: var(--wa-color-list-active-fg);
         border-color: var(--wa-color-focus);
       }
 
@@ -285,6 +282,10 @@ export class MultiAgentTab extends LitElement {
                       <span class="preset-orchestrator-icon" aria-hidden="true"
                         >${waIcon('bullseye')}</span
                       >
+                      <!-- The bullseye is aria-hidden and the tag's title is
+                           hover-only, so carry the orchestrator identity as
+                           (visually hidden) text. -->
+                      <span class="visually-hidden">Orchestrator:</span>
                       ${name}
                     </wa-tag>
                   `,

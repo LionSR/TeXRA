@@ -55,12 +55,13 @@ export const apiAccessSectionStyles: CSSResult = css`
 
   .api-access-support a {
     color: var(--wa-color-text-link);
-    text-decoration: none;
+    /* Prose link: underline at rest — hue alone is not reliably 3:1 from
+       surrounding text across host themes. */
+    text-decoration: underline;
   }
 
   .api-access-support a:hover {
     color: var(--wa-color-text-link-active);
-    text-decoration: underline;
   }
 
   .option-content {

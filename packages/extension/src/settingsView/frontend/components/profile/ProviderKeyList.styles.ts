@@ -53,10 +53,7 @@ export const providerKeyListStyles: CSSResult = css`
   }
 
   .provider-setting-warning {
-    color: var(
-      --texra-inputValidation-warningForeground,
-      var(--wa-color-warning-on-quiet)
-    );
+    color: var(--wa-color-warning-on-quiet);
   }
 
   wa-button.provider-setting-link {

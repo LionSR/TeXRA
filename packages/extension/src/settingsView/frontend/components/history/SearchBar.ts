@@ -95,7 +95,9 @@ export class SearchBar extends LitElement {
             tooltip: 'Next match',
             onClick: this.handleNext,
           })}
-          <span class="match-count">${this.matchCount}</span>
+          <span class="match-count" role="status" aria-atomic="true"
+            >${this.matchCount}</span
+          >
           ${
             this.canClearHistory
               ? renderIconActionButton({

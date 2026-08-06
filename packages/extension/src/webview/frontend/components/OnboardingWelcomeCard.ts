@@ -253,8 +253,8 @@ export class OnboardingWelcomeCard extends LitElement {
               </p>
             </div>
           </div>
-          <div class="path" aria-label="Getting started path">
-            <div class="path-step">
+          <div class="path" role="list" aria-label="Getting started path">
+            <div class="path-step" role="listitem">
               <span class="path-step__label">
                 <span class="icon-surface is-size-s" aria-hidden="true">
                   ${waIcon('right-to-bracket')}
@@ -265,7 +265,7 @@ export class OnboardingWelcomeCard extends LitElement {
                 ChatGPT subscription, Researcher Access, or a provider API key.
               </p>
             </div>
-            <div class="path-step">
+            <div class="path-step" role="listitem">
               <span class="path-step__label">
                 <span class="icon-surface is-size-s" aria-hidden="true">
                   ${waIcon('rocket')}
@@ -276,7 +276,7 @@ export class OnboardingWelcomeCard extends LitElement {
                 The setup assistant checks LaTeX and applies a starter team.
               </p>
             </div>
-            <div class="path-step">
+            <div class="path-step" role="listitem">
               <span class="path-step__label">
                 <span class="icon-surface is-size-s" aria-hidden="true">
                   ${waIcon('code-compare')}

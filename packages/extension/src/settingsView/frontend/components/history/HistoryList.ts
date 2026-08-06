@@ -284,6 +284,7 @@ export class HistoryList extends LitElement {
       return renderEmptyState({
         icon: 'clock-rotate-left',
         title: 'No history items match your search.',
+        body: 'Try a different search term or clear the search.',
         headingTag: 'h3',
         className: 'empty-state',
       });
@@ -291,12 +292,13 @@ export class HistoryList extends LitElement {
 
     return html`
       ${this.renderPagination()}
-      <div class="history-container">
+      <div class="history-container" role="list">
         ${repeat(
           displayItems,
           (item) => item.id,
           (item) => html`
             <history-item
+              role="listitem"
               .item=${item}
               .unsupportedCommands=${this.unsupportedCommands}
               .open=${
