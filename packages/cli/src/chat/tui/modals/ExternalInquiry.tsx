@@ -105,11 +105,7 @@ export function externalInquiryKeyHintsForWidth({
     [...scrollHint('scroll'), ...compactTailHints],
     [...scrollHint('scroll', 'PgUp/Dn'), ...compactTailHints],
     compactTailHints,
-    [
-      { key: 'Ctrl-Y', action: 'copy' },
-      { key: 'Enter', action: 'submit' },
-      { key: 'Esc', action: 'skip' },
-    ],
+    compactTailHints.filter((h) => h.key !== 'Ctrl-R'),
   ];
   return (
     candidates.find((hints) => keyHintsFit(hints, maxColumns)) ?? [
@@ -159,11 +155,12 @@ export function boundedExternalInquiryQuestionLines({
 
   if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
     const visibleCount = Math.max(1, maxDisplayLines - 1);
-    const offset = clamp(
-      scrollOffset,
-      0,
-      Math.max(0, lines.length - visibleCount),
-    );
+    const maxOffset = compactAwareMaxScrollOffset({
+      compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
+      maxDisplayLines,
+      totalLines: lines.length,
+    });
+    const offset = clamp(scrollOffset, 0, maxOffset);
     const visible = lines.slice(offset, offset + visibleCount);
     const hiddenBefore = offset;
     const hiddenAfter = Math.max(0, lines.length - (offset + visible.length));
@@ -284,6 +281,8 @@ export function ExternalInquiry(
     }
   });
 
+  const copyStatusColor = copyStatus === 'failed' ? COLOR_ERROR : COLOR_SUCCESS;
+
   return (
     <BorderedPanel
       borderStyle="single"
@@ -293,10 +292,7 @@ export function ExternalInquiry(
         <>
           Agent asks:
           {copyStatus !== 'idle' ? (
-            <Text
-              color={copyStatus === 'failed' ? COLOR_ERROR : COLOR_SUCCESS}
-              dimColor={copyStatus === 'copying'}
-            >
+            <Text color={copyStatusColor} dimColor={copyStatus === 'copying'}>
               {copyStatusLabel(copyStatus)}
             </Text>
           ) : null}
@@ -321,11 +317,10 @@ export function ExternalInquiry(
             onChange={setAnswer}
             onSubmit={(value) => {
               const trimmed = value.trim();
-              if (trimmed.length === 0) {
-                props.onDecide({ accepted: false, userMessage: 'cancelled' });
-              } else {
-                props.onDecide({ accepted: true, userMessage: trimmed });
-              }
+              // The footer promises Enter submits an answer, so an empty Enter
+              // must not silently reject the inquiry — Esc is the one skip.
+              if (trimmed.length === 0) return;
+              props.onDecide({ accepted: true, userMessage: trimmed });
             }}
           />
         </Box>

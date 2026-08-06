@@ -40,9 +40,10 @@ export function formatCliAuthStatusLine(
     profile.authenticated,
     profile.accountLabel,
   );
-  return profile.authenticated && profile.tier
-    ? `${account} · tier: ${profile.tier}`
-    : account;
+  if (profile.authenticated && profile.tier) {
+    return `${account} · tier: ${profile.tier}`;
+  }
+  return account;
 }
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
@@ -193,11 +194,7 @@ export async function loadCliApiStatus(
   const personalKeysLine = formatPersonalApiKeysLine(
     configuredPersonalKeyProviders,
   );
-  const supplementalLines = [
-    ...(personalKeysLine ? [personalKeysLine] : []),
-    ...(profile.note ? [profile.note] : []),
-  ];
-  if (profile.authenticated && profile.tier) {
+  if (mode === 'included') {
     const usage = await loadIncludedUsageLine(profile);
     if (usage) {
       authLine = `${authLine} · ${usage}`;
@@ -207,11 +204,28 @@ export async function loadCliApiStatus(
   return {
     lines: [
       `api: ${formatCliModelAccessRouteInline(mode)}`,
+      ...(personalKeysLine ? [personalKeysLine] : []),
       authLine,
-      ...supplementalLines,
+      ...(profile.note ? [profile.note] : []),
       ...(actionHint ? [actionHint] : []),
     ],
   };
+}
+
+/**
+ * Build one model-preference status line, or undefined when there is nothing
+ * to show (neither preferred nor configured).
+ */
+function formatModelPreferenceLine(
+  label: string,
+  preferred: boolean,
+  configReady: boolean,
+  missingMessage: string,
+  configStatus: string,
+): string | undefined {
+  if (!preferred && !configReady) return undefined;
+  const status = preferred && !configReady ? missingMessage : configStatus;
+  return `${label}: ${preferred ? 'preferred' : 'not preferred'} · ${status}`;
 }
 
 /** Render each detailed account/access fact on its owning route. */
@@ -263,33 +277,34 @@ export async function loadCliDetailedAccountStatusLines(options: {
         : { kind: 'personal' as const },
   };
   const lines: string[] = [];
-  if (routes.chatGpt.preferred || access.chatGptSignedIn) {
-    const account =
-      routes.chatGpt.preferred && !access.chatGptSignedIn
-        ? 'sign in required'
-        : routes.chatGpt.account;
-    lines.push(
-      `ChatGPT: ${routes.chatGpt.preferred ? 'preferred' : 'not preferred'} · ${account}`,
-    );
-  }
-  if (routes.grok.preferred || access.grokSignedIn) {
-    const account =
-      routes.grok.preferred && !access.grokSignedIn
-        ? 'sign in required'
-        : routes.grok.account;
-    lines.push(
-      `Grok: ${routes.grok.preferred ? 'preferred' : 'not preferred'} · ${account}`,
-    );
-  }
-  if (routes.kimiCode.preferred || access.kimiCodeKeySet === true) {
-    const credential =
-      routes.kimiCode.preferred && access.kimiCodeKeySet !== true
-        ? 'key required'
-        : routes.kimiCode.credential;
-    lines.push(
-      `Kimi Code: ${routes.kimiCode.preferred ? 'preferred' : 'not preferred'} · ${credential}`,
-    );
-  }
+
+  const chatGptLine = formatModelPreferenceLine(
+    'ChatGPT',
+    routes.chatGpt.preferred,
+    access.chatGptSignedIn,
+    'sign in required',
+    routes.chatGpt.account,
+  );
+  if (chatGptLine) lines.push(chatGptLine);
+
+  const grokLine = formatModelPreferenceLine(
+    'Grok',
+    routes.grok.preferred,
+    access.grokSignedIn,
+    'sign in required',
+    routes.grok.account,
+  );
+  if (grokLine) lines.push(grokLine);
+
+  const kimiLine = formatModelPreferenceLine(
+    'Kimi Code',
+    routes.kimiCode.preferred,
+    access.kimiCodeKeySet === true,
+    'key required',
+    routes.kimiCode.credential,
+  );
+  if (kimiLine) lines.push(kimiLine);
+
   const fallbackLine = `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`;
   if (routes.fallback.kind === 'included') {
     lines.push(

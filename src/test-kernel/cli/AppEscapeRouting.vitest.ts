@@ -787,7 +787,7 @@ describe('App foreground Escape ownership', () => {
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('Session selection active.'));
+      await waitFor(() => stdout.output.includes('Choosing a session'));
       const beforeListCancel = stdout.output.length;
       stdin.write(ESC);
       await waitFor(() =>
@@ -800,9 +800,7 @@ describe('App foreground Escape ownership', () => {
       const beforeListFocus = stdout.output.length;
       stdin.write('\t');
       await waitFor(() =>
-        stdout.output
-          .slice(beforeListFocus)
-          .includes('Session selection active.'),
+        stdout.output.slice(beforeListFocus).includes('Choosing a session'),
       );
       const beforeTabReturn = stdout.output.length;
       stdin.write('\t');
@@ -831,7 +829,7 @@ describe('App foreground Escape ownership', () => {
       }
       await sleep(30);
 
-      expect(stdout.output).not.toContain('Session selection active.');
+      expect(stdout.output).not.toContain('Choosing a session');
       expect(activeStreamId.get()).toBe(ROOT);
     } finally {
       instance.unmount();
@@ -883,7 +881,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write('\u001b[B');
       await waitFor(() => stdout.output.includes('latest prompt'));
 
-      expect(stdout.output).not.toContain('Session selection active.');
+      expect(stdout.output).not.toContain('Choosing a session');
     } finally {
       instance.unmount();
     }
