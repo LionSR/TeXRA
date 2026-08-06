@@ -72,7 +72,9 @@
   --desktop-color-input-background: light-dark(#ffffff, #2f2f2f);
   --desktop-color-input-border: light-dark(#d9d9d9, rgb(255 255 255 / 16%));
   --desktop-color-input-foreground: light-dark(#0d0d0d, #ececec);
-  --desktop-color-placeholder: light-dark(#8f8f8f, #8e8e8e);
+  /* Placeholders sit at 4.5:1+ on the input surface: a placeholder is often a
+     control's only visible label, so it must meet normal-text contrast. */
+  --desktop-color-placeholder: light-dark(#767676, #9a9a9a);
 
   /* Primary actions are deliberately achromatic. Informational blue lives in
      --desktop-color-info below and is not reused as application chrome. */
@@ -336,7 +338,9 @@
      moved between light and shadow DOM keeps its meaning. */
   --color-success: var(--wa-color-success-on-quiet);
   --color-error: var(--wa-color-danger-on-quiet);
+  --color-warning: var(--wa-color-warning-on-quiet);
   --color-text-link: var(--wa-color-text-link);
+  --color-text-link-active: var(--wa-color-text-link-active);
 
   /* De-emphasis that survives a contrast check — mirror of the same two tokens
      in litStyles.ts. See that file for why the step is 55% and not 45%. */
@@ -509,7 +513,7 @@
   --wa-color-terminal-foreground: var(--desktop-color-input-foreground);
   --wa-color-terminal-selection-bg: var(--desktop-color-terminal-selection);
   --wa-color-terminal-cursor: var(--desktop-color-input-foreground);
-  --wa-color-terminal-ansi-black: light-dark(#24292f, #000000);
+  --wa-color-terminal-ansi-black: light-dark(#24292f, #6e7681);
   --wa-color-terminal-ansi-blue: var(--desktop-color-accent);
   --wa-color-terminal-ansi-cyan: light-dark(#1b7c83, #4ec9b0);
   --wa-color-terminal-ansi-green: var(--desktop-color-success);
@@ -523,7 +527,7 @@
   --wa-color-terminal-ansi-bright-green: var(--desktop-color-success);
   --wa-color-terminal-ansi-bright-magenta: light-dark(#8250df, #d670d6);
   --wa-color-terminal-ansi-bright-red: var(--desktop-color-error);
-  --wa-color-terminal-ansi-bright-white: light-dark(#ffffff, #ffffff);
+  --wa-color-terminal-ansi-bright-white: light-dark(#57606a, #ffffff);
   --wa-color-terminal-ansi-bright-yellow: var(--desktop-color-yellow);
 
   /* Web Awesome canonical space scale — kept in sync with WA default theme. */
@@ -597,8 +601,12 @@ body.texra-high-contrast {
   --desktop-shadow-md: none;
   --desktop-shadow-lg: none;
   --desktop-canvas-wash: none;
-  --desktop-color-error: Mark;
-  --desktop-color-warning: Mark;
+  /* Error/warning FOREGROUNDS stay CanvasText: Mark is a background keyword
+     paired with MarkText, so as text on Canvas its contrast is OS-defined and
+     can fail (yellow-on-white ≈1.6:1). Loud fills below re-pin the Mark chip
+     pairing explicitly; text roles differentiate by weight/icon instead. */
+  --desktop-color-error: CanvasText;
+  --desktop-color-warning: CanvasText;
   --desktop-color-info: Highlight;
   --desktop-color-success: Highlight;
   --wa-color-list-active-fg: HighlightText;
@@ -622,11 +630,18 @@ body.texra-high-contrast {
 
   --wa-color-warning-fill-quiet: Canvas;
   --wa-color-warning-border-quiet: Mark;
-  --wa-color-warning-on-quiet: Mark;
+  --wa-color-warning-on-quiet: CanvasText;
 
   --wa-color-danger-fill-quiet: Canvas;
   --wa-color-danger-border-quiet: Mark;
-  --wa-color-danger-on-quiet: Mark;
+  --wa-color-danger-on-quiet: CanvasText;
+
+  /* Loud fills keep the Mark chip: a Mark background with MarkText on it is
+     the OS-guaranteed pairing, unlike Mark as a foreground on Canvas. */
+  --wa-color-warning-fill-loud: Mark;
+  --wa-color-warning-on-loud: MarkText;
+  --wa-color-danger-fill-loud: Mark;
+  --wa-color-danger-on-loud: MarkText;
 
   --wa-color-success-fill-quiet: Canvas;
   --wa-color-success-border-quiet: Highlight;
@@ -639,8 +654,10 @@ body.texra-high-contrast {
      Re-declaring the aliases is what actually carries the system palette into
      the light-DOM consumers. */
   --color-success: Highlight;
-  --color-error: Mark;
+  --color-error: CanvasText;
+  --color-warning: CanvasText;
   --color-text-link: LinkText;
+  --color-text-link-active: LinkText;
   --color-text-muted: GrayText;
   --border-control: CanvasText;
 }

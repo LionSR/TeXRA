@@ -119,7 +119,12 @@ import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane } from './editorPane';
 import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
-import { taskSidebarTemplate, workbenchTabsTemplate } from './taskShell';
+import {
+  taskSidebarTemplate,
+  workbenchPanelDomId,
+  workbenchTabDomId,
+  workbenchTabsTemplate,
+} from './taskShell';
 import {
   activeWorkbenchTab,
   closeWorkbench,
@@ -194,26 +199,37 @@ const startupTeamPanel = createStartupTeamPanel({
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
+const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
 const shortcutAcceleratorsById = new Map<string, string | undefined>(
-  getDesktopCommandMenuEntries(rendererPlatform).map((entry) => [
-    entry.id,
-    entry.accelerator,
-  ]),
+  desktopMenuEntries.map((entry) => [entry.id, entry.accelerator]),
+);
+// One name per action: chrome labels and tooltips quote the command catalog
+// verbatim (the same source the palette and the Settings shortcut list read)
+// instead of paraphrasing it in sentence case.
+const commandLabelsById = new Map<string, string>(
+  desktopMenuEntries.map((entry) => [entry.id, entry.label]),
 );
 const commandPaletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
 shortcutAcceleratorsById.set(
   commandPaletteShortcut.id,
   commandPaletteShortcut.accelerator,
 );
+commandLabelsById.set(commandPaletteShortcut.id, commandPaletteShortcut.label);
+
+function commandLabel(
+  commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
+): string {
+  return commandLabelsById.get(commandId) ?? commandId;
+}
 
 function commandTitle(
   commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
-  label: string,
 ): string {
   const shortcut = formatDesktopAccelerator(
     shortcutAcceleratorsById.get(commandId),
     rendererPlatform,
   );
+  const label = commandLabel(commandId);
   return shortcut ? `${label} - ${shortcut}` : label;
 }
 
@@ -238,14 +254,18 @@ function updateShell(next: DesktopTaskShellState): void {
   shellState = next;
   rerenderShell();
   syncBrowserViewBounds();
-  if (
+  const activeTabChanged =
     previousActiveTabIds.right !== next.activeWorkbenchTabIds.right ||
-    previousActiveTabIds.bottom !== next.activeWorkbenchTabIds.bottom ||
+    previousActiveTabIds.bottom !== next.activeWorkbenchTabIds.bottom;
+  if (
+    activeTabChanged ||
     previousBottomPanelHeight !== next.bottomPanelHeight ||
     previousSidebarWidth !== next.sidebarWidth ||
     previousWorkbenchWidth !== next.workbenchWidth
   ) {
-    layoutVisibleSurfaces();
+    // A new active tab is explicit user activation, so its surface may take
+    // focus; a size-only change is a layout pass and must not move focus.
+    layoutVisibleSurfaces({ focus: activeTabChanged });
   }
 }
 
@@ -506,9 +526,13 @@ function syncBrowserViewBounds(): void {
 
 /**
  * Re-measures the active workbench surface. Monaco and xterm both render at
- * zero size if they measured while hidden.
+ * zero size if they measured while hidden. `focus` marks explicit user
+ * activation (a tab was switched or opened) versus a layout pass that should
+ * only re-fit surfaces.
  */
-function layoutVisibleSurfaces(): void {
+function layoutVisibleSurfaces({
+  focus = false,
+}: { focus?: boolean } = {}): void {
   for (const placement of WORKBENCH_PLACEMENTS) {
     const tab = activeWorkbenchTab(shellState, placement);
     if (!tab) continue;
@@ -517,7 +541,7 @@ function layoutVisibleSurfaces(): void {
       if (tab.target) void editorPane.open(tab.target);
     }
     // activate() creates the terminal on first use and re-fits an existing one.
-    if (tab.kind === 'terminal') terminalPane.activate(tab.id);
+    if (tab.kind === 'terminal') terminalPane.activate(tab.id, { focus });
     // The main process owns the WebContentsView, so hand it the URL once.
     if (
       tab.kind === 'browser' &&
@@ -675,7 +699,12 @@ function workbenchTemplate(
         },
       )}
       <div class="task-workbench-body">
-        <section class="task-workbench-pane">
+        <section
+          class="task-workbench-pane"
+          role="tabpanel"
+          id=${workbenchPanelDomId(placement)}
+          aria-labelledby=${workbenchTabDomId(tab.id)}
+        >
           ${workbenchContentTemplate(tab)}
         </section>
       </div>
@@ -844,8 +873,20 @@ function environmentSyncTemplate(
       </span>
     `;
   }
+  // role="img" gives the aria-label a host so screen readers announce words
+  // ("3 ahead, 2 behind") instead of the raw ↑/↓ glyphs.
+  const syncLabel = [
+    summary.ahead > 0 ? `${summary.ahead} ahead` : '',
+    summary.behind > 0 ? `${summary.behind} behind` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
   return html`
-    <span class="task-environment-trailing">
+    <span
+      class="task-environment-trailing"
+      role="img"
+      aria-label=${syncLabel}
+    >
       ${summary.ahead > 0 ? `↑${summary.ahead}` : nothing}
       ${summary.behind > 0 ? `↓${summary.behind}` : nothing}
     </span>
@@ -874,6 +915,10 @@ function taskConversationTemplate(): TemplateResult {
   const sidebarToggleLabel = shellState.sidebarCollapsed
     ? 'Show sidebar'
     : 'Hide sidebar';
+  // Names the button even when the ≤560px container query collapses it to the
+  // icon: the shadow button then has no visible text, so only `title` reaches
+  // its accessible name.
+  const environmentButtonLabel = `${workspaceName(window.texraDesktop?.workspacePath)} environment`;
   return html`
     <main class="task-conversation" aria-label="Task conversation">
       <header class="task-header">
@@ -901,6 +946,8 @@ function taskConversationTemplate(): TemplateResult {
                   class="task-environment-button btn-secondary"
                   appearance="outlined"
                   size="s"
+                  aria-label=${environmentButtonLabel}
+                  title=${environmentButtonLabel}
                   with-caret
                 >
                   ${waIcon('folder-open', { slot: 'start' })}
@@ -916,21 +963,22 @@ function taskConversationTemplate(): TemplateResult {
           class="task-header-button icon-button is-size-l"
           appearance="plain"
           size="s"
-          aria-label="Open commands"
-          title=${commandTitle(DESKTOP_COMMAND_PALETTE_ID, 'Commands')}
+          aria-label=${commandLabel(DESKTOP_COMMAND_PALETTE_ID)}
+          title=${commandTitle(DESKTOP_COMMAND_PALETTE_ID)}
           @click=${openCommandPalette}
         >
           ${waIcon('ellipsis')}
         </wa-button>
-        <div class="task-layout-controls" aria-label="Layout controls">
+        <div
+          class="task-layout-controls"
+          role="group"
+          aria-label="Layout controls"
+        >
           ${renderIconActionButton({
             id: 'taskToggleSummaryBar',
             icon: 'list-ul',
-            label: 'Toggle summary bar',
-            tooltip: commandTitle(
-              DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
-              'Toggle summary bar',
-            ),
+            label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
+            tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
             className: 'task-layout-toggle',
             size: 'l',
             pressed: shellState.summaryBarVisible,
@@ -939,11 +987,8 @@ function taskConversationTemplate(): TemplateResult {
           ${renderIconActionButton({
             id: 'taskToggleBottomBar',
             icon: 'window-maximize',
-            label: 'Toggle bottom bar',
-            tooltip: commandTitle(
-              DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
-              'Toggle bottom bar',
-            ),
+            label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
+            tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
             className: 'task-layout-toggle',
             size: 'l',
             pressed: activeWorkbenchTab(shellState, 'bottom') != null,
@@ -952,11 +997,8 @@ function taskConversationTemplate(): TemplateResult {
           ${renderIconActionButton({
             id: 'taskToggleSidePanel',
             icon: 'picture-in-picture',
-            label: 'Toggle side panel',
-            tooltip: commandTitle(
-              DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-              'Toggle side panel',
-            ),
+            label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
+            tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
             className: 'task-layout-toggle',
             size: 'l',
             pressed: activeWorkbenchTab(shellState, 'right') != null,
@@ -1131,6 +1173,7 @@ function shellTemplate(): TemplateResult {
             sessions: railTabs,
             streamCount: streams$.get().length,
             workspaceName: workspaceName(workspacePath),
+            commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
             ...(workspacePath ? { workspacePath } : {}),
           },
           {
@@ -1197,11 +1240,7 @@ function renderBootstrapFallback(error: unknown): void {
   const reload = () => window.location.reload();
   render(
     html`
-      <section
-        class="desktop-bootstrap-fallback"
-        role="alert"
-        aria-live="assertive"
-      >
+      <section class="desktop-bootstrap-fallback" role="alert">
         <div class="desktop-bootstrap-fallback-panel">
           <h1>TeXRA could not start</h1>
           <p>${message}</p>
