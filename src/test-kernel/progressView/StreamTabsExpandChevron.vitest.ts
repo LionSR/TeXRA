@@ -56,8 +56,8 @@ describe('stream-tab expand chevron', () => {
     expect(expandButton?.hasAttribute('aria-expanded')).toBe(true);
     const expectedLabel =
       expandButton?.getAttribute('aria-expanded') === 'true'
-        ? 'Collapse child streams'
-        : '1 child stream';
+        ? 'Collapse background tasks'
+        : '1 background task';
     expect(expandButton?.getAttribute('aria-label')).toBe(expectedLabel);
     expect(
       parentTab?.shadowRoot
