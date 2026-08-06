@@ -1162,7 +1162,7 @@
     "eslint": "^10.8.0",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-unicorn": "^72.0.0",
-    "globals": "^17.8.0",
+    "globals": "^17.9.0",
     "jsdom": "^30.0.1",
     "nunjucks": "^3.2.4",
     "prettier": "^3.9.6",
