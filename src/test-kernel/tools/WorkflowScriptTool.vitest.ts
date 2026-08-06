@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
   createRehydratedChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
-  requireVisibleAgent: vi.fn(),
+  requireWorkflowOrToolUseAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
   childLoggerError: vi.fn(),
 }));
@@ -72,7 +72,7 @@ vi.mock('@tools/approval', () => ({
 
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/delegation/proposalFlow')>()),
-  requireVisibleAgent: mocks.requireVisibleAgent,
+  requireWorkflowOrToolUseAgent: mocks.requireWorkflowOrToolUseAgent,
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
@@ -167,17 +167,20 @@ beforeEach(async () => {
   mocks.startChildRunLoop.mockReturnValue({
     completion: Promise.resolve(),
   });
-  mocks.requireVisibleAgent.mockImplementation((_category, name) => {
+  mocks.requireWorkflowOrToolUseAgent.mockImplementation((name) => {
     if (name === 'missing-agent') {
       throw new Error(
         "Unknown workflow agent 'missing-agent'. Available: correct",
       );
     }
     return {
-      name,
-      source: 'builtInWorkflow',
-      category: 'workflow',
-      path: `/agents/${name}.yaml`,
+      agent: {
+        name,
+        source: 'builtInWorkflow',
+        category: 'workflow',
+        path: `/agents/${name}.yaml`,
+      },
+      category: 'workflow' as const,
     };
   });
   mocks.createRehydratedChildStream.mockImplementation(
