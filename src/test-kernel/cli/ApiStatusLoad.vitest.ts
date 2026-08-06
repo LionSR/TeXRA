@@ -502,7 +502,7 @@ describe('loadCliApiStatusLines', () => {
         'Grok preference: Off · sign in required to enable',
         'Kimi Code preference: Off · key required to enable',
         'Otherwise: Your own API keys',
-        'TeXRA: signed in as texra@example.com',
+        'Researcher Access: signed in as texra@example.com',
       ],
     });
     expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();

@@ -24,17 +24,20 @@
  */
 
 /** Anything nested under a run. */
+const BACKGROUND_TASK_INLINE = 'background task';
+const BACKGROUND_TASK_INLINE_PLURAL = 'background tasks';
+
 export const BACKGROUND_TASK = {
   /** Standalone display name, e.g. a section heading. */
   label: 'Background task',
   /** Same name inside a sentence. */
-  inline: 'background task',
+  inline: BACKGROUND_TASK_INLINE,
   /** Plural inside a sentence. */
-  inlinePlural: 'background tasks',
+  inlinePlural: BACKGROUND_TASK_INLINE_PLURAL,
   /** Compact status-bar / aria count noun (singular; pair with a formatter). */
-  countNoun: 'background task',
+  countNoun: BACKGROUND_TASK_INLINE,
   /** Expand-toggle aria when the tree is open. */
-  collapseAction: 'Collapse background tasks',
+  collapseAction: `Collapse ${BACKGROUND_TASK_INLINE_PLURAL}`,
 } as const;
 
 /** A delegated TeXRA agent specifically — not a background command. */
@@ -78,7 +81,6 @@ export const FOREGROUND_OWNERSHIP = {
 
 /** Follow-up rejection copy when the focused nested run has already finished. */
 export const FOCUSED_BACKGROUND_TASK = {
-  noLongerAccepting: `This background task is no longer accepting follow-ups; ${SESSION_LIST.selectHint}.`,
-  selectedNoLongerAccepting:
-    'The selected background task is no longer accepting follow-ups.',
+  noLongerAccepting: `This ${BACKGROUND_TASK_INLINE} is no longer accepting follow-ups; ${SESSION_LIST.selectHint}.`,
+  selectedNoLongerAccepting: `The selected ${BACKGROUND_TASK_INLINE} is no longer accepting follow-ups.`,
 } as const;

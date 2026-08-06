@@ -2,6 +2,8 @@ import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
@@ -79,7 +81,7 @@ export async function loadCliModelAccessOverview(
     `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
     `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`,
     formatAccountStatusLine(
-      'TeXRA',
+      RESEARCHER_ACCESS.label,
       profile.authenticated,
       profile.accountLabel,
     ),
@@ -103,8 +105,7 @@ export function formatPersonalApiKeysLine(
   return `${label}: ${providers}`;
 }
 
-const SIGN_IN_ACTION_HINT =
-  'actions: choose Model access below; `texra login` signs in with Researcher Access';
+const SIGN_IN_ACTION_HINT = `actions: choose Model access below; ${RESEARCHER_ACCESS_AUTH.actionHintLogin}`;
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
   ApiAccessMode,
@@ -118,8 +119,7 @@ const CLI_API_STATUS_ACTION_HINTS: Record<
   },
   personal: {
     signedIn: 'actions: choose Model access below; `texra logout` signs out',
-    signedOut:
-      'actions: choose Model access below, add a provider key, or sign in with Researcher Access',
+    signedOut: `actions: ${RESEARCHER_ACCESS_AUTH.actionHintLoginOrKey}`,
     signedOutWithPersonalKey:
       'actions: choose Model access below; provider keys are configured',
   },
