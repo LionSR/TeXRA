@@ -1,6 +1,5 @@
 // Node imports
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import {
@@ -22,6 +21,7 @@ import type { AgentRosterSelection } from '@shared/schemas/agentRoster';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { REPO_ROOT } from '@test/support/repoScan';
 import {
   __resetSetupPlatformForTests,
   setSetupPlatform,
@@ -30,11 +30,6 @@ import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../../..',
-);
 
 function workspaceRoster(): AgentRosterSelection | undefined {
   return platform().workspaceState.get<AgentRosterSelection>(
