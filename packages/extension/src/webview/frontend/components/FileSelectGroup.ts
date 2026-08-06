@@ -114,11 +114,6 @@ export class FileSelectGroup extends LitElement {
     }
   }
 
-  private handleFileListClick(event: MouseEvent): void {
-    this.handleRemoveClick(event);
-    this.handleMoveClick(event);
-  }
-
   /** Keyboard/touch counterpart to Sortable drag reordering (order is
    * semantic: the first input file is the primary input). Dispatches the
    * same filesReordered event as a drag. */
