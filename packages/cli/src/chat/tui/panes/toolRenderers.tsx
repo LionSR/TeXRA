@@ -125,10 +125,6 @@ export interface DisplayLineOptions {
   /** When false, emit the full output instead of the head+tail slice.
    *  The ctrl+t print path sets this to include everything. */
   readonly elide?: boolean;
-  /** Include raw output for a caller with an explicit result surface. */
-  readonly showOutput?: boolean;
-  /** Render the status marker without active or terminal state color. */
-  readonly neutralStatus?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
@@ -378,8 +374,7 @@ function buildStyledLines(
   const elide = options.elide !== false;
   const patchGroups = toolUsePatchGroups(toolUse);
   const opts = toolRowOptions(toolUse, patchGroups !== undefined);
-  const color =
-    options.neutralStatus === true ? undefined : statusColor(toolUse);
+  const color = statusColor(toolUse);
   const preview = toolHeaderPreview(
     toolUse,
     options.width === undefined
@@ -389,7 +384,7 @@ function buildStyledLines(
     executionSummary,
   );
 
-  const showOutput = options.showOutput === true || opts.showOutput;
+  const showOutput = opts.showOutput;
   const output = showOutput ? outputRows(toolUse, elide) : [];
   const exitCode =
     opts.showExitCode && toolUse.isError ? extractExitCode(toolUse) : undefined;
@@ -472,7 +467,7 @@ export function toolUseStyledLines(
     toolUse.toolName === 'executions' && options.executionLabels
       ? executionsSubagentSummary(toolUse.input, options.executionLabels)
       : undefined;
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.showOutput === true ? 'o' : 'h'}|${options.neutralStatus === true ? 'n' : 's'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
   let cached = styledLinesCache.get(toolUse);
   const hit = cached?.get(key);
   if (hit) return hit;
