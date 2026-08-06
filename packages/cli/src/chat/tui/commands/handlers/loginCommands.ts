@@ -36,6 +36,8 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -142,7 +144,7 @@ async function loginToTexraIncludedAccess(
       });
   setCliSessionApiMode('included');
   output.appendOutcome(
-    `Signed in with TeXRA as ${session.account.label} (included models enabled).`,
+    `Signed in with ${RESEARCHER_ACCESS.label} as ${session.account.label}. Model calls now use ${INCLUDED_ACCESS.inline}.`,
   );
 }
 
