@@ -15,6 +15,7 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -600,7 +601,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'login',
-    description: 'Sign in to ChatGPT or Researcher Access',
+    description: RESEARCHER_ACCESS_AUTH.slashLoginDescription,
     category: 'account',
     echo: 'ifPersists',
     handler: (remainder, context) =>

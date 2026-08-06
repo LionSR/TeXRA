@@ -41,6 +41,7 @@ import { formatRelativeTime } from '@shared/utils/string';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
+import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
@@ -134,7 +135,7 @@ export class StreamTab extends LitElement {
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;
   @property({ type: Boolean }) hasPendingApproval = false;
-  /** Number of child streams (0 = no toggle shown). */
+  /** Number of nested background tasks (0 = no toggle shown). */
   @property({ type: Number }) childCount = 0;
   /** Whether the child list is expanded. */
   @property({ type: Boolean, reflect: true }) expanded = false;
@@ -193,10 +194,10 @@ export class StreamTab extends LitElement {
     // stream" is the internal stream-tree name and stays out of the UI.
     const childCountLabel = formatResultCount(
       this.childCount,
-      'background task',
+      BACKGROUND_TASK.countNoun,
     );
     const childToggleLabel = this.expanded
-      ? 'Collapse background tasks'
+      ? BACKGROUND_TASK.collapseAction
       : childCountLabel;
     // RunIdentity is the declared authority for what owns the stream. When the
     // title is the AI one-liner, keep that explicit identity on metadata hover.

@@ -24,11 +24,12 @@ export function ApprovalModal(
 ): React.JSX.Element | null {
   if (!props.pending) return null;
   const { payload, decide } = props.pending;
+  const availableRows = props.availableRows;
   switch (payload.kind) {
     case 'bash':
       return (
         <BashApproval
-          availableRows={props.availableRows}
+          availableRows={availableRows}
           payload={payload.payload}
           onDecide={decide}
         />
@@ -36,7 +37,7 @@ export function ApprovalModal(
     case 'toolEdit':
       return (
         <EditApproval
-          availableRows={props.availableRows}
+          availableRows={availableRows}
           request={payload.payload}
           onDecide={decide}
         />
@@ -44,7 +45,7 @@ export function ApprovalModal(
     case 'planApproval':
       return (
         <PlanApproval
-          availableRows={props.availableRows}
+          availableRows={availableRows}
           payload={payload.payload}
           onDecide={decide}
         />
@@ -52,17 +53,23 @@ export function ApprovalModal(
     case 'proposal':
       return (
         <AgentProposal
-          availableRows={props.availableRows}
+          availableRows={availableRows}
           payload={payload.payload}
           onDecide={decide}
         />
       );
     case 'retry':
-      return <RetryRequest payload={payload.payload} onDecide={decide} />;
+      return (
+        <RetryRequest
+          availableRows={availableRows}
+          payload={payload.payload}
+          onDecide={decide}
+        />
+      );
     case 'externalInquiry':
       return (
         <ExternalInquiry
-          availableRows={props.availableRows}
+          availableRows={availableRows}
           payload={payload.payload}
           onDecide={decide}
         />
@@ -70,7 +77,7 @@ export function ApprovalModal(
     case 'userQuestion':
       return (
         <UserQuestion
-          availableRows={props.availableRows}
+          availableRows={availableRows}
           payload={payload.payload}
           onDecide={decide}
         />

@@ -183,7 +183,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Alt-s');
     // Stream-navigation hints stay hidden in a single-stream chat.
     expect(display.bindings).not.toContain('Esc back');
-    expect(display.bindings).not.toContain('Tab children');
+    expect(display.bindings).not.toContain('Tab sessions');
     expect(display.bindings).not.toContain('Alt-1..9 focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
@@ -217,7 +217,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-T full output');
     expect(display.bindings).not.toContain('Alt-s subagents');
   });
@@ -280,7 +280,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc back · Tab children · Ctrl-T full output · /agent agents · Ctrl-C exit',
+      'Esc back · Tab sessions · Ctrl-T full output · /agent agents · Ctrl-C exit',
     );
   });
 
@@ -347,7 +347,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
     expect(display.bindings).not.toContain('Esc back');
-    expect(display.bindings).not.toContain('Tab children');
+    expect(display.bindings).not.toContain('Tab sessions');
   });
 
   it('shows foreground actions while a list-owned surface is open', () => {
@@ -402,7 +402,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('Tab children · Ctrl-C exit');
+    expect(display.bindings).toBe('Tab sessions · Ctrl-C exit');
   });
 
   it('advertises root agent selection while setup can still change it', () => {
@@ -458,7 +458,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).not.toContain('Alt-s subagents');
     expect(display.bindings).not.toContain('/model models');
     expect(display.bindings).not.toContain('/api api');
@@ -512,9 +512,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Option-1..9 focus');
-    expect(display.bindings.indexOf('Tab children')).toBeLessThan(
+    expect(display.bindings.indexOf('Tab sessions')).toBeLessThan(
       display.bindings.indexOf('/status details'),
     );
     expect(display.bindings.indexOf('Option-1..9 focus')).toBeLessThan(
@@ -540,7 +540,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).not.toContain('PgUp');
     expect(display.bindings).not.toContain('scroll');
-    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-C stop root');
     expect(display.left.map(statusBarSegmentText)).toContain('1 subagent');
   });
@@ -588,7 +588,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Alt-s subagents');
     expect(display.bindings).toContain('Ctrl-C stop');
     // Stream-navigation hints appear once more than one stream is live.
-    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
@@ -760,7 +760,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Tab children · Ctrl-T full output · Ctrl-C stop',
+      'Tab sessions · Ctrl-T full output · Ctrl-C stop',
     );
     expect(display.bindings).toContain('Ctrl-C stop');
   });
@@ -782,7 +782,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('Tab children · Ctrl-C stop');
+    expect(display.bindings).toBe('Tab sessions · Ctrl-C stop');
     expect(display.bindings).not.toContain('Option-s subagents');
   });
 
@@ -803,7 +803,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.left.map(statusBarSegmentText)).not.toContain('3 sub');
-    expect(display.bindings).toBe('Tab children');
+    expect(display.bindings).toBe('Tab sessions');
   });
 
   it('uses the Ctrl-C-only fallback when even compact child navigation cannot fit', () => {
@@ -1291,7 +1291,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
     expect(display.bindings).toBe(
-      'Use foreground panel shortcuts · Esc close · Ctrl-C stop',
+      'Keys go to the panel above · Esc close · Ctrl-C stop',
     );
   });
 

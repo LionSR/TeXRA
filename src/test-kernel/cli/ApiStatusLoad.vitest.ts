@@ -133,15 +133,15 @@ describe('loadCliApiStatusLines', () => {
     mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
     mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 100.3 });
 
-    await expect(loadCliApiStatus()).resolves.toEqual({
+    await expect(loadCliApiStatus({ apiMode: 'included' })).resolves.toEqual({
       lines: [
-        'api: your own API keys',
+        'api: included access',
         'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
       ],
     });
   });
 
-  it('preserves launcher profile notes and personal-key inventory', async () => {
+  it('groups personal keys with their route and omits unused included quota', async () => {
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'researcher@example.com',
@@ -156,11 +156,12 @@ describe('loadCliApiStatusLines', () => {
     await expect(loadCliApiStatus()).resolves.toEqual({
       lines: [
         'api: your own API keys',
-        'auth: signed in as researcher@example.com · tier: Researcher · included usage this month: 25.0% used, 75.0% remaining',
         'your own API keys: DeepSeek',
+        'auth: signed in as researcher@example.com · tier: Researcher',
         'Account metadata may be stale.',
       ],
     });
+    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
 
   it('does not couple compact launcher status to model-access reads', async () => {
@@ -501,7 +502,7 @@ describe('loadCliApiStatusLines', () => {
         'Grok preference: Off · sign in required to enable',
         'Kimi Code preference: Off · key required to enable',
         'Otherwise: Your own API keys',
-        'TeXRA: signed in as texra@example.com',
+        'Researcher Access: signed in as texra@example.com',
       ],
     });
     expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
@@ -516,8 +517,8 @@ describe('loadCliApiStatusLines', () => {
       loadCliApiStatusLines({ includeActionHint: true }),
     ).resolves.toEqual([
       'api: your own API keys',
-      'auth: signed out',
       'your own API keys: DeepSeek',
+      'auth: signed out',
       'actions: choose Model access below; provider keys are configured',
     ]);
   });

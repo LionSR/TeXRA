@@ -19,6 +19,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import { AgentCategory, RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -47,7 +48,7 @@ import {
 } from './workflowScriptStrategy';
 import { rejectOversizedBibAttachments } from './inputFields';
 import {
-  requireVisibleAgent,
+  requireWorkflowOrToolUseAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
@@ -282,14 +283,17 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       }
     };
 
-    const { meta, defaultAgent } = await runPhase(() => {
+    const { meta, defaultAgent, defaultAgentCategory } = await runPhase(() => {
       const { meta } = parseWorkflowScript(script);
-      const defaultAgent = requireVisibleAgent(
-        AgentCategory.Workflow,
+      const resolved = requireWorkflowOrToolUseAgent(
         input.agent,
         runScope.delegationAgentScope ?? undefined,
       );
-      return { meta, defaultAgent };
+      return {
+        meta,
+        defaultAgent: resolved.agent,
+        defaultAgentCategory: resolved.category,
+      };
     });
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model
     // rewrites its script, so any key derived from call identity or source
