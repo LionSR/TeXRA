@@ -38,6 +38,7 @@ import {
 } from '../_shared/edgeClients.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import { jsonResponse } from '../_shared/responses.ts';
+import { equivalentListCost } from './equivalentCost.ts';
 import {
   subscriptionSourceForUsage,
   UsageBatchSchema,
@@ -68,10 +69,21 @@ const usageDestinations = [
       batchId: string,
       entries: readonly UsageLogEntry[],
     ) =>
-      toDbRows(userId, batchId, entries).map((row, index) => ({
-        ...row,
-        source: subscriptionSourceForUsage(entries[index]) ?? 'chatgpt',
-      })),
+      toDbRows(userId, batchId, entries).map((row, index) => {
+        const entry = entries[index];
+        const source = subscriptionSourceForUsage(entry) ?? 'chatgpt';
+        // Subscription rounds arrive with cost 0 (the client prices them
+        // through zeroed subscription overrides); store the list-price
+        // equivalent instead. A client-supplied nonzero cost passes through.
+        if (row.cost > 0) return { ...row, source };
+        const equivalent = equivalentListCost(entry);
+        if (equivalent === undefined) {
+          console.warn(
+            `[LOG_USAGE] No llm-zoo list price for subscription model "${entry.model}"; equivalent cost left 0`,
+          );
+        }
+        return { ...row, source, cost: equivalent ?? 0 };
+      }),
   },
 ] as const;
 

@@ -13,6 +13,7 @@ const optionalBoolean = optional(z.boolean());
 const UsageRouteSchema = z.enum([
   'chatgpt-subscription',
   'kimi-code-subscription',
+  'xai-subscription',
   'relay',
   'api-key',
 ]);
@@ -69,6 +70,8 @@ export function subscriptionSourceForUsage(
       return entry.subscriptionSource ?? 'chatgpt';
     case 'kimi-code-subscription':
       return entry.subscriptionSource ?? 'kimi';
+    case 'xai-subscription':
+      return entry.subscriptionSource ?? 'xai';
     default:
       return undefined;
   }
