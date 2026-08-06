@@ -73,13 +73,13 @@ describe('usage-panel route badges', () => {
   it.each([
     {
       route: 'relay' as UsageRoute,
-      visibleLabel: 'relay',
-      ariaCost: '$0.123 via relay',
+      visibleLabel: 'included access',
+      ariaCost: '$0.123 via included access',
     },
     {
       route: 'api-key' as UsageRoute,
-      visibleLabel: 'your key',
-      ariaCost: '$0.123 via your key',
+      visibleLabel: 'your own API keys',
+      ariaCost: '$0.123 via your own API keys',
     },
   ])(
     'shows $visibleLabel beside the cost',

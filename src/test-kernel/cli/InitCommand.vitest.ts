@@ -64,7 +64,7 @@ function expectUnavailableDefaultRecovery(output: string): void {
     'Note: "deepseekproT" is not usable in the current access mode.',
   );
   expect(output).toContain(
-    'Next: Add a provider API key with `texra setup` for personal mode',
+    'Next: Add a provider API key with `texra setup`, or retry with `--api-mode included` and run `texra login`.',
   );
   expect(output).toContain('Run `texra models list --all` to inspect access.');
   expect(output).toContain(

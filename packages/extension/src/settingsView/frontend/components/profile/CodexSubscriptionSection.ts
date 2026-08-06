@@ -71,15 +71,14 @@ export class CodexSubscriptionSection extends LitElement {
         <p class="keyless-source__limit">
           ${waIcon('circle-info')}
           <span>
-            Subscription routing currently uses a 272,000-token Codex context
-            cap, not the full 1,000,000-token API context.
+            The subscription currently uses a 272,000-token Codex context cap,
+            not the full 1,000,000-token API context.
           </span>
         </p>
         <div class="settings-section">
           ${renderSettingsToggleRow({
             label: 'Prefer ChatGPT subscription',
-            description:
-              'Route eligible Codex models through your subscription.',
+            description: 'Use the subscription for eligible Codex models.',
             checked: preferSubscription,
             onChange: this.handlePreferSubscriptionChange,
           })}

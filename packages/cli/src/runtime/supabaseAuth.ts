@@ -22,6 +22,7 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { tryPlatform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 
 // Local file imports
 import { readCliEnv } from './cliContext';
@@ -233,7 +234,7 @@ export function relayTokenStillActiveNotice(
   env: Record<string, string | undefined> = readCliEnv(),
 ): string | undefined {
   if (!getConfiguredRelayToken(env)) return undefined;
-  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so included TeXRA access stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
+  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so ${INCLUDED_ACCESS.inline} stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
 }
 
 /**
@@ -276,15 +277,15 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
       // A rejected token behaves as if unset: fall through to the stored
       // session (which may still be valid), keeping a note that explains
       // why relay calls won't use the configured token.
-      rejectedTokenNote = `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Mint a new token with \`texra setup-token\`.`;
+      rejectedTokenNote = `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Create a new token with \`texra setup-token\`.`;
     } else {
       return {
         authenticated: true,
         credentialSource: 'relayToken',
-        accountLabel: `CI relay token (${RELAY_TOKEN_ENV_VAR})`,
+        accountLabel: `CI token (${RELAY_TOKEN_ENV_VAR})`,
         tier: status.state === 'valid' ? status.tier : 'free',
         ...(status.state === 'unknown' && {
-          note: 'Could not verify the CI relay token right now (network error).',
+          note: `Could not check ${RELAY_TOKEN_ENV_VAR} right now (network error).`,
         }),
       };
     }

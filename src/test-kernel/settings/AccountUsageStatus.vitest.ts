@@ -40,9 +40,9 @@ describe('account usage status', () => {
     await element.updateComplete;
 
     const text = element.shadowRoot?.textContent ?? '';
-    expect(text).toContain('Usage check failed on the server');
+    expect(text).toContain('TeXRA could not check your usage right now');
     expect(text).toContain('Included access is temporarily');
-    expect(text).toContain('switch to your own provider API keys');
+    expect(text).toContain('Switch to your own API keys');
     expect(text).not.toContain('Usage data is not available for this account.');
   });
 
@@ -61,7 +61,7 @@ describe('account usage status', () => {
     expect(text).toContain(
       "Usage data can't load because your session has expired.",
     );
-    expect(text).not.toContain('Usage check failed on the server');
+    expect(text).not.toContain('TeXRA could not check your usage right now');
   });
 
   it('does not call a transient refresh failure an expired session', async () => {

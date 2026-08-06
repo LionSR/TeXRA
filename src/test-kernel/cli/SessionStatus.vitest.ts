@@ -35,7 +35,7 @@ describe('CLI session status formatter', () => {
       [
         'agent: chat',
         'model: harness-model',
-        'model access: Personal API keys',
+        'model access: Your own API keys',
         'approval: ask',
         'status: running',
         'queued follow-ups: 2',
@@ -209,7 +209,7 @@ describe('CLI session status formatter', () => {
       modelAccess: 'included',
     });
 
-    expect(status).toContain('model access: Included TeXRA access');
+    expect(status).toContain('model access: Included access');
     expect(status).not.toContain('subscription:');
   });
 

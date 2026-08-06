@@ -96,7 +96,7 @@ describe('main-view direct actions', () => {
     runPanelAction('pack');
 
     expect(mocks.postMessage.mock.calls).toEqual([
-      information('Please select all required fields (input file and model)'),
+      information('Choose an input file and a model first.'),
     ]);
   });
 
@@ -178,7 +178,7 @@ describe('main-view direct actions', () => {
     runLatexDiffsAction('merge');
 
     expect(mocks.postMessage.mock.calls).toEqual([
-      information('Please select both input and edited files to merge'),
+      information('Choose both the input and edited files to merge.'),
     ]);
   });
 
@@ -204,7 +204,7 @@ describe('main-view direct actions', () => {
     runLatexDiffsAction('compare');
 
     expect(mocks.postMessage.mock.calls).toEqual([
-      information('Please select both base and edited files to compare'),
+      information('Choose both the base and edited files to compare.'),
     ]);
   });
 });

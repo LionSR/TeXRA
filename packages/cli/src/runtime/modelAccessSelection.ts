@@ -12,6 +12,7 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
@@ -27,7 +28,7 @@ import {
   setCliApiMode,
 } from './apiAccessMode';
 import {
-  formatCliModelAccessRoute,
+  formatCliModelAccessRouteInline,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -87,11 +88,11 @@ export async function updateCliModelAccess(
   if (selection.kind === 'api-fallback') {
     const update = await setCliApiMode(selection.apiMode);
     const openRouterNotice = update.openRouterDisabled
-      ? ' OpenRouter has been turned off (not compatible with Included Access).'
+      ? ` OpenRouter has been turned off (not compatible with ${INCLUDED_ACCESS.inline}).`
       : '';
     return {
       apiMode: selection.apiMode,
-      message: `API fallback: ${formatCliModelAccessRoute(selection.apiMode)}.${openRouterNotice}`,
+      message: `Now using ${formatCliModelAccessRouteInline(selection.apiMode)}.${openRouterNotice}`,
     };
   }
 
@@ -121,7 +122,7 @@ export async function updateCliModelAccess(
     invalidateModelOptionsCache();
     return {
       apiMode,
-      message: `Prefer Kimi Code subscription enabled for Kimi models · API fallback remains ${formatCliModelAccessRoute(apiMode)}.`,
+      message: `Prefer Kimi Code subscription enabled for Kimi models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
     };
   }
 

@@ -53,7 +53,7 @@ function configuredProviderApiKeySummary(
   }).map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider);
   return configured.length > 0
     ? `Configured: ${configured.join(', ')}`
-    : 'No personal provider keys set';
+    : 'No provider keys set';
 }
 
 export function formatProviderApiKeySummary(

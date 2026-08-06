@@ -84,7 +84,7 @@ export function copilotRouteUnavailableReason(
   const access = copilotRouteForModel(model)?.access;
   switch (access) {
     case 'consent-required':
-      return `Copilot access to "${model}" needs your consent in VS Code. Grant it from Settings → Models, or clear the Copilot route preference.`;
+      return `Copilot access to "${model}" needs your approval in VS Code. Grant it from Settings → Models, or stop using Copilot for this model.`;
     case 'unavailable':
       return `Copilot access to "${model}" is temporarily unavailable in VS Code.`;
     // No discovered route, or a route reported allowed that something else

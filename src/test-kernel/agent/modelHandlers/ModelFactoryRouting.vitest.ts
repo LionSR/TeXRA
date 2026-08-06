@@ -234,10 +234,10 @@ describe('Copilot route preference on a canonical base model', () => {
     // must surface as a named failure, never a silent direct-key dispatch.
     expect(() =>
       modelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false),
-    ).toThrowError(/consent/);
+    ).toThrowError(/needs your approval/);
     await expect(
       createModelHandler(MODEL_CONFIGS.gemini36f),
-    ).rejects.toThrowError(/consent/);
+    ).rejects.toThrowError(/needs your approval/);
   });
 
   it('reports an undiscovered preferred route as unavailable', async () => {

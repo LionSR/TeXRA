@@ -1,6 +1,7 @@
 import { Text } from 'ink';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { ListForm } from './_shared/ListForm';
 
 export type LoginFormValue =
@@ -21,17 +22,17 @@ export const LOGIN_FORM_ITEMS = [
   {
     value: 'texra',
     label: 'Researcher Access',
-    description: 'Included models and remote agents',
+    description: `${INCLUDED_ACCESS.label} and remote agents`,
   },
   {
     value: 'chatgpt --device',
     label: 'ChatGPT device code',
-    description: 'sign in from SSH or another browser',
+    description: 'Sign in from SSH or another browser',
   },
   {
     value: 'texra --device',
     label: 'Researcher device code',
-    description: 'sign in from SSH or another browser',
+    description: 'Sign in from SSH or another browser',
   },
 ] as const satisfies ReadonlyArray<SelectItem<LoginFormValue>>;
 

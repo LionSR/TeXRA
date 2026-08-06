@@ -87,7 +87,7 @@ export class LoginBanner extends LitElement {
               size="s"
               @click=${this.handleSignIn}
             >
-              Sign In
+              Sign in
             </wa-button>
             <wa-button
               id="loginBannerDismissButton"
