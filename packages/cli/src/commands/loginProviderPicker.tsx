@@ -3,6 +3,7 @@ import { Box, Text, useApp } from 'ink';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
@@ -32,15 +33,23 @@ function LoginProviderPicker(props: {
   };
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor={COLOR_HINT}
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color={COLOR_HINT}
+      title="TeXRA login"
+      footer={
+        <KeyHints
+          hints={[
+            { key: '↑/↓', action: 'navigate' },
+            {
+              key: `1-${LOGIN_PICKER_ITEMS.length}/Enter`,
+              action: 'select',
+            },
+            { key: 'Esc', action: 'cancel' },
+          ]}
+          confirmCancel={false}
+        />
+      }
     >
-      <Text bold color={COLOR_HINT}>
-        TeXRA login
-      </Text>
       <Text dimColor>Choose how to sign in:</Text>
       {remoteSession ? (
         <Text dimColor>
@@ -56,20 +65,7 @@ function LoginProviderPicker(props: {
           onCancel={() => finish(undefined)}
         />
       </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            {
-              key: `1-${LOGIN_PICKER_ITEMS.length}/Enter`,
-              action: 'select',
-            },
-            { key: 'Esc', action: 'cancel' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
 
