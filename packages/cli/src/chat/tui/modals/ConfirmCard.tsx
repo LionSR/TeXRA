@@ -58,7 +58,7 @@ export function ConfirmCard({
   color,
   title,
   approveLabel = 'approve',
-  rejectLabel = 'reject & note',
+  rejectLabel = 'reject with note',
   rejectionMode,
   alwaysAllow,
   extraActions = [],

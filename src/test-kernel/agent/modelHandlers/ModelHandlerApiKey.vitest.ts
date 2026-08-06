@@ -120,7 +120,7 @@ describe('ModelHandler.getApiKey resolution', () => {
 
     await assert.rejects(
       handler.exposeGetApiKey(),
-      /monthly relay quota is exhausted/,
+      /used all of this month's included access/,
     );
     assert.equal(relayToken.mock.calls.length, 0);
   });

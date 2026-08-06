@@ -183,7 +183,7 @@ const configAgentsCommand = defineCliCommand({
       type: 'boolean',
       description: 'Use the user default team, or all agents when none is set',
     },
-    all: { type: 'boolean', description: 'Show the complete agent catalog' },
+    all: { type: 'boolean', description: 'Show every agent' },
     team: { type: 'string', description: 'Use a built-in or saved team id' },
     workflow: {
       type: 'string',

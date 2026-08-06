@@ -1,10 +1,13 @@
 import type { UsageRoute } from '@shared/schemas';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
 import { parseCliApiMode } from './apiAccessMode';
 
+// Kept to one rendered row: the /api form and the orchestration header both
+// budget a single line for this description.
 export const CLI_MODEL_ACCESS_DESCRIPTION =
-  'Toggle subscription preferences or choose the API fallback.';
+  'Set subscription preferences and how the rest is paid for.';
 
 export type CliModelAccessRoute =
   'chatgpt' | 'grok' | 'kimi-code' | 'included' | 'personal';
@@ -158,9 +161,24 @@ export function resolveCliModelAccessRoute({
   return apiMode;
 }
 
+/** Status-bar form of the access route. Width-critical, so every arm is a
+ *  short display phrase; the enum value itself never reaches the screen. */
 export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
-  if (route === 'chatgpt') return 'subscription';
-  return route;
+  switch (route) {
+    case 'chatgpt':
+    case 'grok':
+    case 'kimi-code':
+      // The bar names how the call is paid for, not which provider; the /api
+      // form and /status name the subscription itself.
+      return 'subscription';
+    case 'included':
+      return INCLUDED_ACCESS.inline;
+    case 'personal':
+      // Trimmed from OWN_API_KEYS.inline to hold the bar's width budget.
+      return 'own API keys';
+    default:
+      return route satisfies never;
+  }
 }
 
 export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
@@ -172,9 +190,9 @@ export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
     case 'kimi-code':
       return 'Kimi Code subscription';
     case 'included':
-      return 'Included TeXRA access';
+      return INCLUDED_ACCESS.label;
     case 'personal':
-      return 'Personal API keys';
+      return OWN_API_KEYS.label;
     default:
       return route satisfies never;
   }
@@ -293,8 +311,8 @@ export function buildCliModelAccessItems(
       label: formatCliModelAccessRoute('included'),
       description:
         status?.texraSignedIn === false
-          ? 'Sign in through Account to use included models'
-          : 'Use your TeXRA account',
+          ? 'Sign in from Account first'
+          : 'Covered by your TeXRA plan',
     },
     {
       value: cliApiFallbackSelection('personal'),
@@ -311,5 +329,5 @@ export function formatCliModelAccessSummary(
   const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
   const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
   const kimiCode = status.preferences.kimiCode === 'on' ? 'On' : 'Off';
-  return `ChatGPT ${chatGpt} · Grok ${grok} · Kimi ${kimiCode} · fallback: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
+  return `ChatGPT ${chatGpt} · Grok ${grok} · Kimi ${kimiCode} · otherwise: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
 }

@@ -126,7 +126,7 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
     name: 'Web Search & Fetch',
     category: 'web',
     description:
-      'Search the web and fetch/extract content from URLs. Uses native provider tools when available, with DuckDuckGo Instant Answers as fallback.',
+      'Search the web and fetch or extract content from URLs. Uses native provider tools when available, and DuckDuckGo Instant Answers otherwise.',
     toolNames: ['web_search', 'web_fetch'],
     requiresSetup: false,
   },

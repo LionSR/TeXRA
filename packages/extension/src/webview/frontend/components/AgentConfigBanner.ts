@@ -44,7 +44,7 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
             size="s"
             @click=${() => this.handleAction('edit')}
           >
-            ${waIcon('pencil', { slot: 'start' })} Edit Agents
+            ${waIcon('pencil', { slot: 'start' })} Edit agents
           </wa-button>
           <wa-button
             id="agentConfigDirButton"
@@ -53,7 +53,7 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
             @click=${() => this.handleAction('dir')}
           >
             ${waIcon('folder', { slot: 'start' })}
-            ${this.state.customDirSet ? 'Open Directory' : 'Set Directory'}
+            ${this.state.customDirSet ? 'Open directory' : 'Set directory'}
           </wa-button>
           <wa-button
             id="agentConfigDocButton"

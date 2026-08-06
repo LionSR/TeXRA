@@ -496,7 +496,7 @@ export function formatCliHistoryDetailsText(
         )
       : ['(none)']),
   );
-  if (details.hasFlowRecord) lines.push('', 'Resumable flow record: present');
+  if (details.hasFlowRecord) lines.push('', 'Flow record: present');
   return lines.join('\n');
 }
 

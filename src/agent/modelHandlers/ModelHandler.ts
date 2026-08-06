@@ -85,6 +85,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 import { AbsoluteFS } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
@@ -517,8 +518,8 @@ export abstract class ModelHandler<
 
     if (canRouteThroughRelay && includedAccess?.wasQuotaAutoSwitched()) {
       throw new Error(
-        `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
-          'Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.',
+        `Model "${this.config.name}" is unavailable. ${INCLUDED_ACCESS.usedUp.statement} ` +
+          INCLUDED_ACCESS.usedUp.nextStep,
       );
     }
 
@@ -532,7 +533,7 @@ export abstract class ModelHandler<
       const apiKey = await includedAccess?.getAccessToken();
       if (!apiKey) {
         throw new Error(
-          'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
+          `Unable to authenticate with server. Sign out and sign back in, or switch to ${OWN_API_KEYS.inline}.`,
         );
       }
       this.logger.debug(
@@ -548,7 +549,7 @@ export abstract class ModelHandler<
     if (useIncludedAccess && hasServerAccess) {
       throw new Error(
         `Model "${this.config.name}" is not available with your current subscription tier. ` +
-          'Switch to personal API keys, or select a model included in your tier.',
+          `Switch to ${OWN_API_KEYS.inline}, or select a model included in your tier.`,
       );
     }
 

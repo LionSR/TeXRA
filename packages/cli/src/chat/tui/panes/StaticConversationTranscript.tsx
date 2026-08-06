@@ -9,7 +9,7 @@ import path from 'node:path';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
-import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
@@ -134,7 +134,7 @@ function SessionHeaderBlock({
             {'{ T } TeXRA'}
           </Text>{' '}
           <Text dimColor>v{meta.version}</Text>{' '}
-          <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>{' '}
+          <Text dimColor>{shortCliModelAccessRoute(meta.apiMode)}</Text>{' '}
           <Text>{identityLine}</Text>
         </Text>
       </Box>
@@ -159,7 +159,7 @@ function SessionHeaderBlock({
             {'{ T } TeXRA'}
           </Text>
           <Text dimColor>v{meta.version}</Text>
-          <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>
+          <Text dimColor>{shortCliModelAccessRoute(meta.apiMode)}</Text>
         </Box>
         <Box>
           <Text wrap="truncate-end">{identityLine}</Text>

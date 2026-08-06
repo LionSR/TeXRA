@@ -86,7 +86,7 @@ describe('loadCliApiStatusLines', () => {
     {
       name: 'without a profile note',
       profile: { authenticated: false },
-      lines: ['api: personal API keys', 'auth: signed out'],
+      lines: ['api: your own API keys', 'auth: signed out'],
     },
     {
       name: 'with a profile note',
@@ -95,7 +95,7 @@ describe('loadCliApiStatusLines', () => {
         note: 'The configured relay token was rejected.',
       },
       lines: [
-        'api: personal API keys',
+        'api: your own API keys',
         'auth: signed out',
         'The configured relay token was rejected.',
       ],
@@ -116,9 +116,9 @@ describe('loadCliApiStatusLines', () => {
         includeActionHint: true,
       }),
     ).resolves.toEqual([
-      'api: included TeXRA access',
+      'api: included access',
       'auth: signed out',
-      'actions: choose Model access below; `texra login` signs in to Researcher Access',
+      'actions: choose Model access below; `texra login` signs in with Researcher Access',
     ]);
     expect(mocks.getCliApiMode).not.toHaveBeenCalled();
   });
@@ -135,7 +135,7 @@ describe('loadCliApiStatusLines', () => {
 
     await expect(loadCliApiStatus()).resolves.toEqual({
       lines: [
-        'api: personal API keys',
+        'api: your own API keys',
         'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
       ],
     });
@@ -155,9 +155,9 @@ describe('loadCliApiStatusLines', () => {
 
     await expect(loadCliApiStatus()).resolves.toEqual({
       lines: [
-        'api: personal API keys',
+        'api: your own API keys',
         'auth: signed in as researcher@example.com · tier: Researcher · included usage this month: 25.0% used, 75.0% remaining',
-        'personal API keys: DeepSeek',
+        'your own API keys: DeepSeek',
         'Account metadata may be stale.',
       ],
     });
@@ -169,7 +169,7 @@ describe('loadCliApiStatusLines', () => {
     );
 
     await expect(loadCliApiStatus()).resolves.toEqual({
-      lines: ['api: personal API keys', 'auth: signed out'],
+      lines: ['api: your own API keys', 'auth: signed out'],
     });
     expect(mocks.readCliModelAccessStatus).not.toHaveBeenCalled();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
@@ -206,12 +206,10 @@ describe('loadCliApiStatusLines', () => {
     expect(lineFor(lines, 'Kimi Code')).toBe(
       'Kimi Code: preferred · key configured',
     );
-    expect(lineFor(lines, 'Fallback')).toBe(
-      'Fallback: Included TeXRA access · signed in as texra@example.com · Ultra · included usage this month: 24.5% used, 75.5% remaining',
+    expect(lineFor(lines, 'Otherwise')).toBe(
+      'Otherwise: Included access · signed in as texra@example.com · Ultra · included usage this month: 24.5% used, 75.5% remaining',
     );
-    expect(lineFor(lines, 'Other personal keys')).toBe(
-      'Other personal keys: DeepSeek',
-    );
+    expect(lineFor(lines, 'Other API keys')).toBe('Other API keys: DeepSeek');
     expect(lines.join('\n').match(/Kimi Code/g)).toHaveLength(1);
     expect(lines.join('\n').match(/chatgpt@example\.com/g)).toHaveLength(1);
     expect(lines.join('\n').match(/texra@example\.com/g)).toHaveLength(1);
@@ -225,7 +223,7 @@ describe('loadCliApiStatusLines', () => {
       name: 'off and signed out',
       preference: 'off',
       signedIn: false,
-      expected: ['Fallback: Personal API keys'],
+      expected: ['Otherwise: Your own API keys'],
     },
     {
       name: 'off and signed in',
@@ -233,7 +231,7 @@ describe('loadCliApiStatusLines', () => {
       signedIn: true,
       expected: [
         'ChatGPT: not preferred · signed in as chatgpt@example.com',
-        'Fallback: Personal API keys',
+        'Otherwise: Your own API keys',
       ],
     },
     {
@@ -242,7 +240,7 @@ describe('loadCliApiStatusLines', () => {
       signedIn: false,
       expected: [
         'ChatGPT: preferred · sign in required',
-        'Fallback: Personal API keys',
+        'Otherwise: Your own API keys',
       ],
     },
     {
@@ -251,7 +249,7 @@ describe('loadCliApiStatusLines', () => {
       signedIn: true,
       expected: [
         'ChatGPT: preferred · signed in as chatgpt@example.com',
-        'Fallback: Personal API keys',
+        'Otherwise: Your own API keys',
       ],
     },
   ] as const)(
@@ -279,7 +277,7 @@ describe('loadCliApiStatusLines', () => {
       name: 'off without a key',
       preference: 'off',
       keySet: false,
-      expected: ['Fallback: Personal API keys'],
+      expected: ['Otherwise: Your own API keys'],
     },
     {
       name: 'off with a key',
@@ -287,7 +285,7 @@ describe('loadCliApiStatusLines', () => {
       keySet: true,
       expected: [
         'Kimi Code: not preferred · key configured',
-        'Fallback: Personal API keys',
+        'Otherwise: Your own API keys',
       ],
     },
     {
@@ -296,7 +294,7 @@ describe('loadCliApiStatusLines', () => {
       keySet: false,
       expected: [
         'Kimi Code: preferred · key required',
-        'Fallback: Personal API keys',
+        'Otherwise: Your own API keys',
       ],
     },
     {
@@ -305,7 +303,7 @@ describe('loadCliApiStatusLines', () => {
       keySet: true,
       expected: [
         'Kimi Code: preferred · key configured',
-        'Fallback: Personal API keys',
+        'Otherwise: Your own API keys',
       ],
     },
   ] as const)(
@@ -337,8 +335,8 @@ describe('loadCliApiStatusLines', () => {
     });
 
     expect(lines).toEqual([
-      'Fallback: Personal API keys',
-      'Other personal keys: DeepSeek',
+      'Otherwise: Your own API keys',
+      'Other API keys: DeepSeek',
     ]);
     expect(lines.join('\n')).not.toContain('TeXRA');
   });
@@ -357,7 +355,7 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lines).toEqual(['Fallback: Included TeXRA access · signed out']);
+    expect(lines).toEqual(['Otherwise: Included access · signed out']);
     expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
 
@@ -384,11 +382,11 @@ describe('loadCliApiStatusLines', () => {
     });
 
     expect(lines).toEqual([
-      'Fallback: Included TeXRA access · signed in as included@example.com · Researcher · included usage this month: 10.0% used, 90.0% remaining',
+      'Otherwise: Included access · signed in as included@example.com · Researcher · included usage this month: 10.0% used, 90.0% remaining',
     ]);
   });
 
-  it('owns the CI relay-token limitation on the included fallback', async () => {
+  it('owns the CI-token limitation on the included fallback', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
       preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
@@ -398,7 +396,7 @@ describe('loadCliApiStatusLines', () => {
     });
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
-      accountLabel: 'CI relay token (TEXRA_RELAY_TOKEN)',
+      accountLabel: 'CI token (TEXRA_RELAY_TOKEN)',
       tier: 'Researcher',
       credentialSource: 'relayToken',
     });
@@ -408,14 +406,12 @@ describe('loadCliApiStatusLines', () => {
       apiMode: 'included',
       includeApiDetails: true,
     });
-    const fallback = lineFor(lines, 'Fallback');
+    const fallback = lineFor(lines, 'Otherwise');
 
-    expect(fallback).toContain('CI relay token (TEXRA_RELAY_TOKEN)');
+    expect(fallback).toContain('CI token (TEXRA_RELAY_TOKEN)');
     expect(fallback).toContain('Researcher');
-    expect(fallback).toContain('not available with a CI relay token');
-    expect(
-      lines.filter((line) => line.includes('CI relay token')),
-    ).toHaveLength(1);
+    expect(fallback).toContain('TEXRA_RELAY_TOKEN on its own cannot read it');
+    expect(lines.filter((line) => line.includes('CI token'))).toHaveLength(1);
     expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
 
@@ -441,8 +437,8 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lineFor(lines, 'Fallback')).toContain(
-      'Ultra · included usage: unavailable (quota offline)',
+    expect(lineFor(lines, 'Otherwise')).toContain(
+      'Ultra · included usage: quota offline',
     );
     expect(lines.filter((line) => line.includes('quota offline'))).toHaveLength(
       1,
@@ -455,7 +451,7 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lines).toEqual(['Fallback: Personal API keys']);
+    expect(lines).toEqual(['Otherwise: Your own API keys']);
   });
 
   it('preserves a profile note exactly once', async () => {
@@ -504,7 +500,7 @@ describe('loadCliApiStatusLines', () => {
         'ChatGPT preference: On · chatgpt@example.com',
         'Grok preference: Off · sign in required to enable',
         'Kimi Code preference: Off · key required to enable',
-        'API fallback: Personal API keys',
+        'Otherwise: Your own API keys',
         'TeXRA: signed in as texra@example.com',
       ],
     });
@@ -519,9 +515,9 @@ describe('loadCliApiStatusLines', () => {
     await expect(
       loadCliApiStatusLines({ includeActionHint: true }),
     ).resolves.toEqual([
-      'api: personal API keys',
+      'api: your own API keys',
       'auth: signed out',
-      'personal API keys: DeepSeek',
+      'your own API keys: DeepSeek',
       'actions: choose Model access below; provider keys are configured',
     ]);
   });

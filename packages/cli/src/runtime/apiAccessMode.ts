@@ -39,10 +39,6 @@ export function effectiveCliApiMode(source: {
   return source.apiMode ?? getCliApiMode();
 }
 
-export function shortCliApiMode(mode: ApiAccessMode): string {
-  return mode;
-}
-
 export function parseCliApiMode(input: string): ApiAccessMode | undefined {
   const normalized = input.trim().toLowerCase();
   return Object.hasOwn(CLI_API_MODE_BY_INPUT, normalized)

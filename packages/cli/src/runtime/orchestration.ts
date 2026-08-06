@@ -173,7 +173,7 @@ export function buildCliOrchestrationItems(
     items.push({
       value: { kind: 'browse-resumes' },
       label: 'Resume',
-      description: formatResultCount(resumeItems.length, 'resumable session'),
+      description: formatResultCount(resumeItems.length, 'session'),
     });
   }
   if (implicitDefaultToolUseAgents(input.toolUseAgents).length > 0) {
@@ -209,7 +209,7 @@ export function buildCliOrchestrationItems(
 function accountSummary(status: CliAccountStatus): string {
   const signed: string[] = [];
   if (status.texraCredentialSource === 'relayToken') {
-    signed.push('TeXRA relay token');
+    signed.push('TEXRA_RELAY_TOKEN');
   } else if (status.texraSignedIn) {
     signed.push('TeXRA');
   }
@@ -218,7 +218,7 @@ function accountSummary(status: CliAccountStatus): string {
   if (signed.length === 0) return 'Sign in or manage accounts';
   if (signed.length === 1) {
     if (status.texraCredentialSource === 'relayToken') {
-      return 'TeXRA relay token configured';
+      return 'TEXRA_RELAY_TOKEN configured';
     }
     if (status.chatGptSignedIn) {
       return `ChatGPT · ${status.chatGptAccountLabel ?? 'signed in'}`;

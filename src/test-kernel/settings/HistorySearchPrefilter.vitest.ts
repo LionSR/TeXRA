@@ -69,8 +69,11 @@ describe('history search prefilter', () => {
     expect(matches(workflowHistoryItem, 'absent')).toBe(false);
   });
 
-  it('matches the rendered run-status badge text', () => {
+  it('matches a run status by its stored value and by its badge text', () => {
+    // The search body carries both, so rewording a badge cannot silently drop
+    // the status people already type.
     expect(matches(workflowHistoryItem, 'resumable')).toBe(true);
+    expect(matches(workflowHistoryItem, 'Resumable')).toBe(true);
     expect(matches(toolUseHistoryItem, 'failed')).toBe(true);
     expect(matches(minimalWorkflowHistoryItem, 'unknown')).toBe(true);
     expect(matches(toolUseHistoryItem, 'resumable')).toBe(false);

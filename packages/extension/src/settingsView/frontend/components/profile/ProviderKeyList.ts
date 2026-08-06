@@ -29,6 +29,7 @@ import type {
   ProviderSetting,
 } from '@shared/schemas/settingsViewMessages';
 import { createEvent } from '@shared/utils/events';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
@@ -244,8 +245,8 @@ export class ProviderKeyList extends LitElement {
 
     const description =
       this.apiAccessMode === 'included'
-        ? 'You are using included access. Personal keys below are optional overrides.'
-        : 'Except for Codex models through the ChatGPT subscription section above, chat subscriptions do not include API access - use a key from the provider developer platform.';
+        ? `You are using ${INCLUDED_ACCESS.inline}. The keys below are optional overrides.`
+        : "Except for Codex models through the ChatGPT subscription section above, chat subscriptions do not include API access. Use a key from the provider's developer console.";
 
     return html`
       <div class="provider-keys-section">

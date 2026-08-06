@@ -54,11 +54,11 @@ const STEPS: readonly Step[] = [
 ];
 
 const STEP_TITLES: Record<Step, string> = {
-  agent: 'default agent for texra chat',
-  model: 'default model',
-  approval: 'approval policy',
-  output: 'default output format',
-  gitignore: 'add .texra/ to .gitignore?',
+  agent: 'Default agent for texra chat',
+  model: 'Default model',
+  approval: 'Approval policy',
+  output: 'Default output format',
+  gitignore: 'Add .texra/ to .gitignore?',
 };
 
 interface Draft {
