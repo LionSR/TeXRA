@@ -291,7 +291,7 @@ describe('App foreground Escape ownership', () => {
       expect(stdout.output).toContain('Esc input');
 
       stdin.write(ESC);
-      await waitFor(() => stdout.output.includes('Tab children'));
+      await waitFor(() => stdout.output.includes('Tab sessions'));
       expect(activeStreamId.get()).toBe(ROOT);
 
       focusStream(GRANDCHILD);

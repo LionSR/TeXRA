@@ -16,6 +16,7 @@ import {
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { type StreamTabId } from '@shared/schemas';
+import { SESSION_LIST } from '@shared/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
@@ -220,7 +221,7 @@ export function App(props: AppProps): React.JSX.Element {
   const appInputDisabled =
     props.inputDisabled === true || foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
-    ? 'Choosing a session; press Esc to return to the prompt.'
+    ? SESSION_LIST.choosing
     : childInputDisabledMessage;
   const inputDisabled = appInputDisabled || inputDisabledMessage !== undefined;
   const escapeInterruptState: EscapeInterruptState = {
