@@ -259,15 +259,15 @@ wa-button:is(
     .icon-button,
     .action-icon-button
   ):not([disabled]) {
-  transition:
-    filter var(--transition-normal),
-    transform var(--transition-normal);
+  transition: transform var(--transition-normal);
 }
 
+/* The hover lift is for standalone buttons only: .btn-ghost rows (sidebar
+   actions, project row, review file rows) are full-width list rows, where a
+   1px lift reads as a layout jitter. */
 wa-button:is(
     .btn-primary,
     .btn-secondary,
-    .btn-ghost,
     .action-button,
     .icon-button,
     .action-icon-button
@@ -442,15 +442,6 @@ wa-input.input-plain::part(base) {
 wa-input.input-plain::part(input) {
   padding-inline: var(--wa-space-m);
   font-size: var(--font-size-lg);
-}
-
-/* The narrow-window stack: the tree costs too much width to keep beside the
-   editor, so it goes above instead. */
-@media (max-width: 760px) {
-  .desktop-editor-tree {
-    border-right: 0;
-    border-bottom: 1px solid var(--border-hairline);
-  }
 }
 
 /* Every imperative dialog receives this shared close control from
@@ -853,7 +844,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-command-palette-help kbd {
-  padding: 2px 4px;
+  padding: var(--wa-space-3xs) var(--wa-space-2xs);
 }
 
 .desktop-command-palette-customize::part(base) {
@@ -1274,7 +1265,7 @@ wa-card.desktop-onboarding::part(footer) {
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
   font-weight: var(--wa-font-weight-semibold);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .desktop-onboarding p {

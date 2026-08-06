@@ -177,7 +177,7 @@ export function createLogsPane(
 
   let state: LogViewerState = {
     entries: [],
-    emptyMessage: 'Open Logs to load recent entries.',
+    emptyMessage: 'Loading recent entries…',
     meta: 'Recent redacted log entries appear here.',
   };
   let active = false;
@@ -230,7 +230,7 @@ export function createLogsPane(
       <section class="desktop-log-viewer">
         <header class="desktop-log-viewer-header">
           <div>
-            <h2>Desktop Logs</h2>
+            <h2>Desktop logs</h2>
             <p>${state.meta}</p>
           </div>
           <div class="desktop-log-viewer-actions">
@@ -292,7 +292,7 @@ export function createLogsPane(
   }
 
   function applySnapshot(message: DesktopSetLogMessage): void {
-    const path = message.log.path ?? 'desktop log file';
+    const path = message.log.path ?? 'the desktop log file';
     const entries = parseDesktopLogEntries(message.log.text);
     state = {
       entries,
