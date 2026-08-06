@@ -167,8 +167,8 @@ export async function releaseWhenStreamCloses(
   body: ReadableStream<Uint8Array> | null,
   release: () => Promise<void>,
   refresh?: () => Promise<void>,
-  refreshIntervalMs = RELAY_SLOT_REFRESH_INTERVAL_MS,
   onUpstreamBodyError?: () => void,
+  refreshIntervalMs = RELAY_SLOT_REFRESH_INTERVAL_MS,
 ): Promise<ReadableStream<Uint8Array> | null> {
   if (body === null) {
     await releaseRelaySlotSafely(release);
