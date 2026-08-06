@@ -262,10 +262,12 @@ describe('tuiInputModeRestoreSequence', () => {
 });
 
 describe('supportsTerminalJobControl', () => {
-  it('disables Ctrl-Z suspend on Windows where SIGSTOP is unsupported', () => {
-    expect(supportsTerminalJobControl('win32')).toBe(false);
-    expect(supportsTerminalJobControl('darwin')).toBe(true);
-    expect(supportsTerminalJobControl('linux')).toBe(true);
+  it.each([
+    { platform: 'win32', expected: false },
+    { platform: 'darwin', expected: true },
+    { platform: 'linux', expected: true },
+  ] as const)('returns $expected on $platform', ({ platform, expected }) => {
+    expect(supportsTerminalJobControl(platform)).toBe(expected);
   });
 });
 

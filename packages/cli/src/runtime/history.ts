@@ -462,9 +462,7 @@ export function formatCliHistoryDetailsText(
     `Model: ${model ?? 'unknown'}`,
   ];
 
-  if (teamPreset) {
-    lines.push(`Team: ${teamPreset}`);
-  }
+  if (teamPreset) lines.push(`Team: ${teamPreset}`);
   if (
     details.currentModel &&
     config?.model &&
@@ -531,6 +529,6 @@ function teamPresetId(config: AgentConfig | null): string | undefined {
 }
 
 function firstInputBasename(config: AgentConfig): string {
-  const first = config.inputFiles.at(0) ?? '';
+  const first = config.inputFiles.at(0);
   return first ? path.basename(first) : '-';
 }

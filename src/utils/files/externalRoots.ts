@@ -86,8 +86,7 @@ function canonicalise(p: string): string {
     }
     const parent = path.dirname(resolved);
     if (parent === resolved) return resolved; // reached the filesystem root
-    const base = path.basename(resolved);
-    return path.join(canonicalise(parent), base);
+    return path.join(canonicalise(parent), path.basename(resolved));
   }
 }
 

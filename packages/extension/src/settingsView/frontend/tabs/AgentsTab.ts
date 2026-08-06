@@ -161,7 +161,7 @@ export class AgentsTab extends LitElement {
         `
       : nothing;
     return html`
-      <section id=${`${category}-agents-section`} class="agent-category">
+      <section id="${category}-agents-section" class="agent-category">
         ${renderSettingsSectionHeading({
           title: `${title} (${agents.length})`,
           description,

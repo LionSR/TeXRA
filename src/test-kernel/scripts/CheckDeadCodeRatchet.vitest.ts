@@ -164,20 +164,17 @@ describe('check-dead-code-ratchet parseKnipIssues', () => {
     );
   });
 
-  it('throws instead of silently defaulting to zero issues when `issues` is missing', () => {
-    expect(() => parseKnipIssues(JSON.stringify({}), '')).toThrow(
-      /knip JSON output has no `issues` array/,
-    );
-  });
-
-  it('throws when `issues` is present but not an array', () => {
-    expect(() =>
-      parseKnipIssues(JSON.stringify({ issues: { oops: true } }), ''),
-    ).toThrow(/knip JSON output has no `issues` array/);
-  });
-
-  it('throws the contextual error, not a raw TypeError, when stdout parses to null', () => {
-    expect(() => parseKnipIssues('null', '')).toThrow(
+  // Each of these must throw the contextual error (never a raw TypeError or a
+  // silent default of zero issues) when the `issues` array is unusable.
+  it.each([
+    { label: '`issues` is missing', stdout: JSON.stringify({}) },
+    {
+      label: '`issues` is present but not an array',
+      stdout: JSON.stringify({ issues: { oops: true } }),
+    },
+    { label: 'stdout parses to null', stdout: 'null' },
+  ])('throws when $label', ({ stdout }) => {
+    expect(() => parseKnipIssues(stdout, '')).toThrow(
       /knip JSON output has no `issues` array/,
     );
   });

@@ -9,7 +9,6 @@ import { JsonRpcConnection } from '@tools/lean/direct/jsonRpc';
 
 function makePair(): {
   connection: JsonRpcConnection;
-  serverIn: PassThrough;
   serverOut: PassThrough;
   serverSends: (json: unknown) => void;
   collectClientFrames: () => Promise<Record<string, unknown>[]>;
@@ -62,7 +61,6 @@ function makePair(): {
 
   return {
     connection,
-    serverIn,
     serverOut,
     serverSends,
     collectClientFrames,
@@ -180,12 +178,8 @@ describe('JsonRpcConnection', () => {
   });
 
   it('replies to server-to-client requests via the registered handler', async () => {
-    const { connection, serverSends, collectClientFrames, serverIn } =
-      makePair();
+    const { connection, serverSends, collectClientFrames } = makePair();
     connection.onServerRequest('client/echo', async (params) => params);
-
-    // Drain whatever the constructor wrote (nothing, but be defensive).
-    serverIn.read();
 
     serverSends({
       jsonrpc: '2.0',

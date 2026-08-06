@@ -69,7 +69,6 @@ export class ArxivMetadataTool extends defineTool({
       targetEntry,
       input.maxAuthors ?? undefined,
     );
-    const { includeAbstract } = input;
 
     const metadata: ArxivPaperMetadata = {
       ...base,
@@ -77,7 +76,7 @@ export class ArxivMetadataTool extends defineTool({
       journalReference: targetEntry.journalRef ?? null,
       comment: targetEntry.comment ?? null,
       links: targetEntry.links ?? null,
-      ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
+      ...(input.includeAbstract && { abstract: targetEntry.summary ?? null }),
     };
 
     return executed(

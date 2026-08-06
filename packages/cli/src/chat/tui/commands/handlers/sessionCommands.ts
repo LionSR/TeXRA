@@ -52,21 +52,17 @@ export async function showCliSessionStatus(
     model: meta.model || context.initialModel,
     category: meta.category,
   });
+  const hasCategory = accessTarget.category !== undefined;
   const subscriptionActive =
-    accessTarget.category === undefined
-      ? false
-      : await isCodexSubscriptionActive(
-          accessTarget.model,
-          accessTarget.category,
-        );
+    hasCategory &&
+    (await isCodexSubscriptionActive(
+      accessTarget.model,
+      accessTarget.category,
+    ));
   const grokSubscriptionActive =
-    accessTarget.category === undefined
-      ? false
-      : await isXaiSubscriptionActive(accessTarget.model);
+    hasCategory && (await isXaiSubscriptionActive(accessTarget.model));
   const kimiCodeActive =
-    accessTarget.category === undefined
-      ? false
-      : await isKimiCodeSubscriptionActive(accessTarget.model);
+    hasCategory && (await isKimiCodeSubscriptionActive(accessTarget.model));
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent || context.initialAgent,

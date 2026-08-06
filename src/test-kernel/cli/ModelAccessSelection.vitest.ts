@@ -98,11 +98,25 @@ vi.mock('@cli/runtime/grokLogin', () => ({
 
 const context = createTestCliContext({ apiMode: 'personal' });
 
+type AccessRoute = Parameters<typeof formatCliModelAccessRoute>[0];
+
 function subscriptionPreference(
   provider: 'chatgpt' | 'grok' | 'kimi-code',
   state: 'on' | 'off',
 ) {
   return { kind: 'subscription-preference', provider, state } as const;
+}
+
+function expectedAccessStatus(overrides: Record<string, unknown>) {
+  return {
+    preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+    chatGptSignedIn: false,
+    chatGptAccountLabel: undefined,
+    grokSignedIn: false,
+    grokAccountLabel: undefined,
+    kimiCodeKeySet: false,
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
@@ -131,41 +145,21 @@ beforeEach(() => {
 });
 
 describe('CLI model access routes', () => {
-  it('parses the routes and the compatibility spellings', () => {
-    expect(parseCliModelAccessSelection('chatgpt')).toEqual(
-      subscriptionPreference('chatgpt', 'on'),
-    );
-    expect(parseCliModelAccessSelection('subscription')).toEqual(
-      subscriptionPreference('chatgpt', 'on'),
-    );
-    expect(parseCliModelAccessSelection('grok')).toEqual(
-      subscriptionPreference('grok', 'on'),
-    );
-    expect(parseCliModelAccessSelection('xai')).toEqual(
-      subscriptionPreference('grok', 'on'),
-    );
-    expect(parseCliModelAccessSelection('kimi')).toEqual(
-      subscriptionPreference('kimi-code', 'on'),
-    );
-    expect(parseCliModelAccessSelection('kimicode')).toEqual(
-      subscriptionPreference('kimi-code', 'on'),
-    );
-    expect(parseCliModelAccessSelection('kimi-code')).toEqual(
-      subscriptionPreference('kimi-code', 'on'),
-    );
-    expect(parseCliModelAccessSelection('included')).toEqual(
-      cliApiFallbackSelection('included'),
-    );
-    expect(parseCliModelAccessSelection('relay')).toEqual(
-      cliApiFallbackSelection('included'),
-    );
-    expect(parseCliModelAccessSelection('personal')).toEqual(
-      cliApiFallbackSelection('personal'),
-    );
-    expect(parseCliModelAccessSelection('byok')).toEqual(
-      cliApiFallbackSelection('personal'),
-    );
-    expect(parseCliModelAccessSelection('direct')).toBeUndefined();
+  it.each([
+    ['chatgpt', subscriptionPreference('chatgpt', 'on')],
+    ['subscription', subscriptionPreference('chatgpt', 'on')],
+    ['grok', subscriptionPreference('grok', 'on')],
+    ['xai', subscriptionPreference('grok', 'on')],
+    ['kimi', subscriptionPreference('kimi-code', 'on')],
+    ['kimicode', subscriptionPreference('kimi-code', 'on')],
+    ['kimi-code', subscriptionPreference('kimi-code', 'on')],
+    ['included', cliApiFallbackSelection('included')],
+    ['relay', cliApiFallbackSelection('included')],
+    ['personal', cliApiFallbackSelection('personal')],
+    ['byok', cliApiFallbackSelection('personal')],
+    ['direct', undefined],
+  ])('parses the route or compatibility spelling %s', (input, expected) => {
+    expect(parseCliModelAccessSelection(input)).toEqual(expected);
   });
 
   it('keeps canonical API fallback selections stable and immutable', () => {
@@ -242,28 +236,36 @@ describe('CLI model access routes', () => {
   });
 
   it('formats the shared access routes for detailed and compact surfaces', () => {
-    expect(formatCliModelAccessRoute('chatgpt')).toBe('ChatGPT subscription');
-    expect(formatCliModelAccessRoute('kimi-code')).toBe(
-      'Kimi Code subscription',
-    );
-    expect(formatCliModelAccessRoute('included')).toBe('Included access');
-    expect(formatCliModelAccessRoute('personal')).toBe('Your own API keys');
-    expect(formatCliModelAccessRouteInline('chatgpt')).toBe(
-      'ChatGPT subscription',
-    );
-    expect(formatCliModelAccessRouteInline('kimi-code')).toBe(
-      'Kimi Code subscription',
-    );
-    expect(formatCliModelAccessRouteInline('included')).toBe('included access');
-    expect(formatCliModelAccessRouteInline('personal')).toBe(
-      'your own API keys',
-    );
+    const detailed: Array<[AccessRoute, string]> = [
+      ['chatgpt', 'ChatGPT subscription'],
+      ['kimi-code', 'Kimi Code subscription'],
+      ['included', 'Included access'],
+      ['personal', 'Your own API keys'],
+    ];
+    const inline: Array<[AccessRoute, string]> = [
+      ['chatgpt', 'ChatGPT subscription'],
+      ['kimi-code', 'Kimi Code subscription'],
+      ['included', 'included access'],
+      ['personal', 'your own API keys'],
+    ];
     // Every arm is display text; the enum value never reaches the status bar.
-    expect(shortCliModelAccessRoute('chatgpt')).toBe('subscription');
-    expect(shortCliModelAccessRoute('grok')).toBe('subscription');
-    expect(shortCliModelAccessRoute('kimi-code')).toBe('subscription');
-    expect(shortCliModelAccessRoute('included')).toBe('included access');
-    expect(shortCliModelAccessRoute('personal')).toBe('own API keys');
+    const short: Array<[AccessRoute, string]> = [
+      ['chatgpt', 'subscription'],
+      ['grok', 'subscription'],
+      ['kimi-code', 'subscription'],
+      ['included', 'included access'],
+      ['personal', 'own API keys'],
+    ];
+
+    for (const [route, text] of detailed) {
+      expect(formatCliModelAccessRoute(route)).toBe(text);
+    }
+    for (const [route, text] of inline) {
+      expect(formatCliModelAccessRouteInline(route)).toBe(text);
+    }
+    for (const [route, text] of short) {
+      expect(shortCliModelAccessRoute(route)).toBe(text);
+    }
   });
 
   it('applies a launcher access choice to the launched session', () => {
@@ -285,41 +287,35 @@ describe('CLI model access routes', () => {
     });
     mocks.isPreferCodexSubscription.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus('included')).resolves.toEqual({
-      apiFallback: 'included',
-      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
-      chatGptSignedIn: true,
-      chatGptAccountLabel: 'user@example.com',
-      grokSignedIn: false,
-      grokAccountLabel: undefined,
-      kimiCodeKeySet: false,
-    });
+    await expect(readCliModelAccessStatus('included')).resolves.toEqual(
+      expectedAccessStatus({
+        apiFallback: 'included',
+        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
+        chatGptSignedIn: true,
+        chatGptAccountLabel: 'user@example.com',
+      }),
+    );
 
     mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
-    await expect(readCliModelAccessStatus('included')).resolves.toEqual({
-      apiFallback: 'included',
-      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
-      chatGptSignedIn: false,
-      chatGptAccountLabel: undefined,
-      grokSignedIn: false,
-      grokAccountLabel: undefined,
-      kimiCodeKeySet: false,
-    });
+    await expect(readCliModelAccessStatus('included')).resolves.toEqual(
+      expectedAccessStatus({
+        apiFallback: 'included',
+        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
+      }),
+    );
   });
 
   it('reports the Kimi preference independently of key and fallback', async () => {
     mocks.apiKeyExists.mockResolvedValue(true);
     mocks.getPreferKimiCode.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus('personal')).resolves.toEqual({
-      apiFallback: 'personal',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
-      chatGptSignedIn: false,
-      chatGptAccountLabel: undefined,
-      grokSignedIn: false,
-      grokAccountLabel: undefined,
-      kimiCodeKeySet: true,
-    });
+    await expect(readCliModelAccessStatus('personal')).resolves.toEqual(
+      expectedAccessStatus({
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
+        kimiCodeKeySet: true,
+      }),
+    );
 
     await expect(readCliModelAccessStatus('included')).resolves.toMatchObject({
       apiFallback: 'included',

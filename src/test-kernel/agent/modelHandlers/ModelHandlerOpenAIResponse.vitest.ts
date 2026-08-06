@@ -43,13 +43,11 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { pathToLocation } from '@utils/files';
-
-// Third-party imports
-import type OpenAI from 'openai';
 import type {
   ResponseInputItem,
   ResponseUsage,
 } from 'openai/resources/responses/responses';
+import type OpenAI from 'openai';
 
 // pathToLocation and AbsoluteFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
@@ -144,6 +142,58 @@ function createCapturingClient(responseId: string) {
         },
       },
     } as unknown as OpenAI,
+  };
+}
+
+/**
+ * A client that records every `responses.create` request and answers the n-th
+ * (1-based) call with `respond(n)`.
+ */
+function createSequentialClient(respond: (call: number) => unknown) {
+  const requests: any[] = [];
+  const client = {
+    responses: {
+      create: async (params: any) => {
+        requests.push(params);
+        return respond(requests.length);
+      },
+    },
+  };
+  return { client, requests };
+}
+
+type StreamScript = {
+  /** Events the stream yields, in order. */
+  events?: unknown[];
+  /** Error the stream throws after yielding every event. */
+  error?: unknown;
+  /** Defaults to a guard that throws when finalResponse is called. */
+  finalResponse?: () => Promise<unknown>;
+  /** Defaults to a guard that throws when retrieve is called. */
+  retrieve?: (...args: any[]) => unknown;
+};
+
+/** A client whose stream replays `events` and then throws `error` if set. */
+function createStreamClient(script: StreamScript) {
+  return {
+    responses: {
+      stream: () => ({
+        async *[Symbol.asyncIterator]() {
+          for (const event of script.events ?? []) yield event;
+          if (script.error) throw script.error;
+        },
+        finalResponse:
+          script.finalResponse ??
+          (async () => {
+            throw new Error('unexpected finalResponse call');
+          }),
+      }),
+      retrieve:
+        script.retrieve ??
+        (async () => {
+          throw new Error('unexpected retrieve call');
+        }),
+    },
   };
 }
 
@@ -553,17 +603,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 
   it('sends full history after a completed response without usage disables chaining', async () => {
     const handler = createHandler();
-    const requests: any[] = [];
-    const client = {
-      responses: {
-        create: async (params: any) => {
-          requests.push(params);
-          return requests.length === 1
-            ? createResponse('resp-missing-usage')
-            : createResponse('resp-2', { input_tokens: 20 });
-        },
-      },
-    };
+    const { client, requests } = createSequentialClient((call) =>
+      call === 1
+        ? createResponse('resp-missing-usage')
+        : createResponse('resp-2', { input_tokens: 20 }),
+    );
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
@@ -586,17 +630,9 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 
   it('sends full history when response chaining is unsupported', async () => {
     const handler = createNonChainingHandler();
-    const requests: any[] = [];
-    const client = {
-      responses: {
-        create: async (params: any) => {
-          requests.push(params);
-          return createResponse(`resp-${requests.length}`, {
-            input_tokens: 20,
-          });
-        },
-      },
-    };
+    const { client, requests } = createSequentialClient((call) =>
+      createResponse(`resp-${call}`, { input_tokens: 20 }),
+    );
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
@@ -720,27 +756,20 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const finalResponse = createResponse('resp-stream-ok', {
       input_tokens: 12,
     });
-    const client = {
-      responses: {
-        stream: () => ({
-          async *[Symbol.asyncIterator]() {
-            yield {
-              type: 'response.created',
-              response: { id: 'resp-stream-ok' },
-            };
-            yield { type: 'response.output_text.delta', delta: 'ok' };
-          },
-          finalResponse: async () => {
-            finalResponseCalls += 1;
-            return finalResponse;
-          },
-        }),
-        retrieve: async () => {
-          retrieveCalls += 1;
-          throw new Error('healthy stream should not retrieve by id');
-        },
+    const client = createStreamClient({
+      events: [
+        { type: 'response.created', response: { id: 'resp-stream-ok' } },
+        { type: 'response.output_text.delta', delta: 'ok' },
+      ],
+      finalResponse: async () => {
+        finalResponseCalls += 1;
+        return finalResponse;
       },
-    };
+      retrieve: async () => {
+        retrieveCalls += 1;
+        throw new Error('healthy stream should not retrieve by id');
+      },
+    });
 
     const result = await handler.createResponse({
       client: client as any,
@@ -761,27 +790,20 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const recoveredResponse = createResponse('resp-final-fallback', {
       input_tokens: 12,
     });
-    const client = {
-      responses: {
-        stream: () => ({
-          async *[Symbol.asyncIterator]() {
-            yield {
-              type: 'response.created',
-              response: { id: 'resp-final-fallback' },
-            };
-          },
-          finalResponse: async () => {
-            throw new OpenAIError(
-              'Unhandled response stream event: response.keepalive',
-            );
-          },
-        }),
-        retrieve: async (id: string) => {
-          retrieveCalls.push(id);
-          return recoveredResponse;
-        },
+    const client = createStreamClient({
+      events: [
+        { type: 'response.created', response: { id: 'resp-final-fallback' } },
+      ],
+      finalResponse: async () => {
+        throw new OpenAIError(
+          'Unhandled response stream event: response.keepalive',
+        );
       },
-    };
+      retrieve: async (id: string) => {
+        retrieveCalls.push(id);
+        return recoveredResponse;
+      },
+    });
 
     const result = await handler.createResponse({
       client: client as any,
@@ -798,28 +820,15 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     handler.getStreamingConfig = () => true;
 
     let retrieveCalls = 0;
-    const client = {
-      responses: {
-        stream: () => ({
-          [Symbol.asyncIterator]() {
-            return {
-              async next() {
-                throw new OpenAIError(
-                  'Unhandled response stream event: response.keepalive',
-                );
-              },
-            };
-          },
-          finalResponse: async () => {
-            throw new Error('stream failure should not call finalResponse');
-          },
-        }),
-        retrieve: async () => {
-          retrieveCalls += 1;
-          throw new Error('stream without response id should not retrieve');
-        },
+    const client = createStreamClient({
+      error: new OpenAIError(
+        'Unhandled response stream event: response.keepalive',
+      ),
+      retrieve: async () => {
+        retrieveCalls += 1;
+        throw new Error('stream without response id should not retrieve');
       },
-    };
+    });
 
     await assert.rejects(
       handler.createResponse({
@@ -837,26 +846,16 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     handler.getStreamingConfig = () => true;
 
     let retrieveCalls = 0;
-    const client = {
-      responses: {
-        stream: () => ({
-          async *[Symbol.asyncIterator]() {
-            yield {
-              type: 'response.created',
-              response: { id: 'resp-network-error' },
-            };
-            throw new TypeError('network unavailable');
-          },
-          finalResponse: async () => {
-            throw new Error('stream failure should not call finalResponse');
-          },
-        }),
-        retrieve: async () => {
-          retrieveCalls += 1;
-          throw new Error('non-OpenAI stream error should not retrieve');
-        },
+    const client = createStreamClient({
+      events: [
+        { type: 'response.created', response: { id: 'resp-network-error' } },
+      ],
+      error: new TypeError('network unavailable'),
+      retrieve: async () => {
+        retrieveCalls += 1;
+        throw new Error('non-OpenAI stream error should not retrieve');
       },
-    };
+    });
 
     await assert.rejects(
       handler.createResponse({
@@ -874,28 +873,21 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     handler.getStreamingConfig = () => true;
 
     let retrieveCalls = 0;
-    const client = {
-      responses: {
-        stream: () => ({
-          async *[Symbol.asyncIterator]() {
-            yield {
-              type: 'response.created',
-              response: { id: 'resp-stateless-fallback' },
-            };
-            throw new OpenAIError(
-              'Unhandled response stream event: response.keepalive',
-            );
-          },
-          finalResponse: async () => {
-            throw new Error('stateless stream should not call finalResponse');
-          },
-        }),
-        retrieve: async () => {
-          retrieveCalls += 1;
-          throw new Error('stateless stream should not retrieve by id');
+    const client = createStreamClient({
+      events: [
+        {
+          type: 'response.created',
+          response: { id: 'resp-stateless-fallback' },
         },
+      ],
+      error: new OpenAIError(
+        'Unhandled response stream event: response.keepalive',
+      ),
+      retrieve: async () => {
+        retrieveCalls += 1;
+        throw new Error('stateless stream should not retrieve by id');
       },
-    };
+    });
 
     await assert.rejects(
       handler.createResponse({

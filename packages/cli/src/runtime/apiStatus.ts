@@ -130,11 +130,11 @@ export function formatCliApiStatusActionHint(
   profile: Pick<CliAuthProfile, 'authenticated'>,
   options: { readonly hasPersonalKey?: boolean } = {},
 ): string {
-  const signedOutState =
-    options.hasPersonalKey === true ? 'signedOutWithPersonalKey' : 'signedOut';
-  return CLI_API_STATUS_ACTION_HINTS[mode][
-    profile.authenticated ? 'signedIn' : signedOutState
-  ];
+  const hints = CLI_API_STATUS_ACTION_HINTS[mode];
+  if (profile.authenticated) return hints.signedIn;
+  return options.hasPersonalKey === true
+    ? hints.signedOutWithPersonalKey
+    : hints.signedOut;
 }
 
 async function personalKeyProviders(): Promise<string[]> {

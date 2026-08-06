@@ -46,12 +46,11 @@ function addLabelledValue(
   parts: string[],
   label: string,
   value: unknown,
-): boolean {
-  if (!hasHistoryConfigValue(value)) return false;
+): void {
+  if (!hasHistoryConfigValue(value)) return;
 
   parts.push(label);
   addSearchValue(parts, value);
-  return true;
 }
 
 function addConfigSection(

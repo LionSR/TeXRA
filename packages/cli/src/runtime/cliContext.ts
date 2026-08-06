@@ -178,15 +178,16 @@ export function readCliEntrypointPath(): string {
   return process.argv[1] ?? '';
 }
 
+const CLI_ENTRYPOINT_NAMES: ReadonlySet<string> = new Set([
+  'texra',
+  'texra-local',
+  'texra.js',
+  'texra.mjs',
+  'texra.ts',
+]);
+
 export function isTexraCliEntrypointPath(entrypointPath: string): boolean {
-  const name = path.basename(entrypointPath).toLowerCase();
-  return (
-    name === 'texra' ||
-    name === 'texra-local' ||
-    name === 'texra.js' ||
-    name === 'texra.mjs' ||
-    name === 'texra.ts'
-  );
+  return CLI_ENTRYPOINT_NAMES.has(path.basename(entrypointPath).toLowerCase());
 }
 
 export function resolveCliCommandName(entrypointPath: string): string {
@@ -403,8 +404,8 @@ export async function buildCliContext(
   // per-stream gates rather than recomputing them, so `NO_COLOR`/`FORCE_COLOR`/
   // TTY precedence stays in one place (`resolveStreamColor`).
   const noColor = init.globalArgs.noColor === true;
-  const stdoutColorEnabled = noColor ? false : ambient.stdoutColorEnabled;
-  const stderrColorEnabled = noColor ? false : ambient.stderrColorEnabled;
+  const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
+  const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
   const noInput = init.globalArgs.noInput === true;
   const approvalPolicyFallback = noInput
     ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT

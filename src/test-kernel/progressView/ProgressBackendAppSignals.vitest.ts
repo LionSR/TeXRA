@@ -73,11 +73,18 @@ function setStatus(
 }
 
 describe('attachProgressBackendAppSignals', () => {
-  it('marks running progress tasks cancelled on extension deactivation', () => {
+  function setup() {
     const { backend } = createRecordingBackend();
     const signals = new MemoryAppSignals();
     backend.setupEventListeners();
-    track(attachProgressBackendAppSignals(backend, signals));
+    const subscription = track(
+      attachProgressBackendAppSignals(backend, signals),
+    );
+    return { backend, signals, subscription };
+  }
+
+  it('marks running progress tasks cancelled on extension deactivation', () => {
+    const { backend, signals } = setup();
     const running = 'appsignals:running' as StreamTabId;
     const complete = 'appsignals:complete' as StreamTabId;
 
@@ -95,16 +102,11 @@ describe('attachProgressBackendAppSignals', () => {
   });
 
   it('detaches the app-signal listener cleanly', () => {
-    const { backend } = createRecordingBackend();
-    const signals = new MemoryAppSignals();
-    backend.setupEventListeners();
-    const appSignalSubscription = track(
-      attachProgressBackendAppSignals(backend, signals),
-    );
+    const { backend, signals, subscription } = setup();
     const running = 'appsignals:disposed' as StreamTabId;
 
     setStatus(backend, running, STREAM_PHASE.RUNNING);
-    appSignalSubscription.dispose();
+    subscription.dispose();
 
     signals.emit('extensionDeactivating', undefined);
 

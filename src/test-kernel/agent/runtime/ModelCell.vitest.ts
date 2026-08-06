@@ -18,6 +18,12 @@ function clientHandlerCell<C>(handler: object): ModelCell<C> {
   );
 }
 
+/** A cell whose handler builds the given client, plus the construction spy. */
+function clientCell<C>(client: C) {
+  const getClient = vi.fn(async () => client);
+  return { cell: clientHandlerCell<C>({ getClient }), getClient };
+}
+
 describe('ModelCell', () => {
   it('moves handler and model id together', () => {
     const first = stubHandler();
@@ -78,8 +84,7 @@ describe('ModelCell', () => {
 
   it('builds the provider client once and reuses it', async () => {
     const client = { id: 'client' };
-    const getClient = vi.fn(async () => client);
-    const cell = clientHandlerCell({ getClient });
+    const { cell, getClient } = clientCell(client);
 
     await expect(cell.getClient()).resolves.toBe(client);
     await expect(cell.getClient()).resolves.toBe(client);
@@ -89,8 +94,7 @@ describe('ModelCell', () => {
 
   it('shares one construction between concurrent readers', async () => {
     const client = { id: 'client' };
-    const getClient = vi.fn(async () => client);
-    const cell = clientHandlerCell({ getClient });
+    const { cell, getClient } = clientCell(client);
 
     await expect(
       Promise.all([cell.getClient(), cell.getClient()]),
@@ -100,11 +104,10 @@ describe('ModelCell', () => {
 
   it('rebuilds after a construction failure instead of caching the rejection', async () => {
     const client = { id: 'client' };
-    const getClient = vi
-      .fn<() => Promise<typeof client>>()
+    const { cell, getClient } = clientCell(client);
+    getClient
       .mockRejectedValueOnce(new Error('no credential'))
       .mockResolvedValueOnce(client);
-    const cell = clientHandlerCell({ getClient });
 
     await expect(cell.getClient()).rejects.toThrow('no credential');
     await expect(cell.getClient()).resolves.toBe(client);

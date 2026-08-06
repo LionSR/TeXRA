@@ -258,9 +258,7 @@ export class DesktopProgressBridge {
       stateOwnership: 'session',
       storage: platform().workspaceState,
       stores: options.sessionStores,
-      sendMessage: (message) => {
-        return this.postToRenderer(message) !== false;
-      },
+      sendMessage: (message) => this.postToRenderer(message) !== false,
       hasTarget: () => true,
       getStreamControls: (stream) =>
         getProgressStreamControls(stream, this.session),
@@ -913,12 +911,8 @@ export class DesktopProgressBridge {
           await this.options.host.showErrorMessage('Failed to restore state');
         }
       },
-      applyFollowUpPlan: async (plan) => {
-        await this.applyFollowUpPlan(plan);
-      },
-      applyPolishResult: async (result) => {
-        await this.applyFollowUpPolishResult(result);
-      },
+      applyFollowUpPlan: (plan) => this.applyFollowUpPlan(plan),
+      applyPolishResult: (result) => this.applyFollowUpPolishResult(result),
       onPolishError: async (stream, error) => {
         const message = toErrorMessage(error);
         this.postToRenderer({
@@ -947,9 +941,7 @@ export class DesktopProgressBridge {
           modelOptionsData,
         };
       },
-      postToRenderer: (message) => {
-        this.postToRenderer(message);
-      },
+      postToRenderer: (message) => this.postToRenderer(message),
       restoreProposalConfig: async (proposal) => {
         await this.agentProposalController.restoreProposalConfig(proposal);
       },
@@ -1227,7 +1219,7 @@ export class DesktopProgressBridge {
       agent,
       model,
       inputFile,
-      ...(outputFiles && outputFiles.length > 0 ? { outputFiles } : {}),
+      ...(outputFiles?.length ? { outputFiles } : {}),
     };
   }
 

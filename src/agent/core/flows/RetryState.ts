@@ -247,9 +247,9 @@ export abstract class RetryableInvocationNode<
     const services = this.services;
     const signal = services.runScope.signal;
     const lifecycle = this._retryLifecycle;
-    if (lifecycle) lifecycle.attemptOrdinal += 1;
     const attemptSource = lifecycle?.nextAttemptSource ?? 'automatic';
     if (lifecycle) {
+      lifecycle.attemptOrdinal += 1;
       lifecycle.lastAttemptSource = attemptSource;
       lifecycle.nextAttemptSource = 'automatic';
     }

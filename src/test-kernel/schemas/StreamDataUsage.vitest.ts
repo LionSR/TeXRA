@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import {
   emptyUsageStats,
@@ -6,6 +6,14 @@ import {
   sumUsageStats,
   UsageProviderSchema,
 } from '@shared/schemas';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function mockWarn(): MockInstance<typeof console.warn> {
+  return vi.spyOn(console, 'warn').mockImplementation(() => {});
+}
 
 describe('stream data usage parsing', () => {
   it('preserves the exact usage-provider wire vocabulary', () => {
@@ -62,7 +70,7 @@ describe('stream data usage parsing', () => {
     // all-zero value that then vanished from the map entirely, permanently
     // erasing this run's real cost data on the next `writeUsage()`. It must
     // now be logged and handed back raw instead.
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
     const { usage, unparsedRuns } = parseUsageData({
       run: {
         inputTokens: 'not-a-number',
@@ -78,7 +86,6 @@ describe('stream data usage parsing', () => {
       cost: Number.NaN,
     });
     expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 
   it('parses numeric usage fields from the canonical usage schema shape', () => {
@@ -125,7 +132,7 @@ describe('stream data usage parsing', () => {
     ['subscription marker', { viaChatGptSubscription: 'yes' }],
     ['usage route', { usageRoute: 'unknown-route' }],
   ])('preserves a run with a malformed %s', (_field, malformedField) => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
     const rawRun = {
       inputTokens: 10,
       outputTokens: 2,
@@ -138,7 +145,6 @@ describe('stream data usage parsing', () => {
     expect(usage.has('run')).toBe(false);
     expect(unparsedRuns.get('run')).toEqual(rawRun);
     expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 
   it('preserves an unparseable run entry instead of silently zeroing it', () => {
@@ -146,7 +152,7 @@ describe('stream data usage parsing', () => {
     // (e.g. corrupted to a bare string) must not be replaced by zeroed
     // usage and dropped — it must be logged and handed back raw so a save
     // never permanently deletes it.
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
     const { usage, unparsedRuns } = parseUsageData({
       good: { inputTokens: 10, outputTokens: 2, cost: 0.1 },
       corrupted: 'not-a-usage-object',
@@ -156,64 +162,71 @@ describe('stream data usage parsing', () => {
     expect(usage.get('good')).toMatchObject({ inputTokens: 10 });
     expect(unparsedRuns.get('corrupted')).toBe('not-a-usage-object');
     expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 
   it('logs and yields no data for a top-level usage payload that is not an object', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
     const { usage, unparsedRuns } = parseUsageData(['not', 'a', 'record']);
 
     expect(usage.size).toBe(0);
     expect(unparsedRuns.size).toBe(0);
     expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 
-  it('keeps route badges only for unambiguous accumulated usage', () => {
-    expect(
-      sumUsageStats([
+  it.each<{
+    name: string;
+    entries: Parameters<typeof sumUsageStats>[0];
+    expectedRoute: string | undefined;
+  }>([
+    {
+      name: 'kept when every active entry shares the route',
+      entries: [
         emptyUsageStats(),
-        {
-          inputTokens: 10,
-          outputTokens: 2,
-          cost: 0,
-          usageRoute: 'relay',
-        },
+        { inputTokens: 10, outputTokens: 2, cost: 0, usageRoute: 'relay' },
         {
           inputTokens: 1,
           outputTokens: 1,
           cost: 0.001,
           usageRoute: 'relay',
         },
-      ]).usageRoute,
-    ).toBe('relay');
-
-    expect(
-      sumUsageStats([
-        {
-          inputTokens: 10,
-          outputTokens: 2,
-          cost: 0,
-          usageRoute: 'relay',
-        },
+      ],
+      expectedRoute: 'relay',
+    },
+    {
+      name: 'dropped when accumulated entries mix routes',
+      entries: [
+        { inputTokens: 10, outputTokens: 2, cost: 0, usageRoute: 'relay' },
         {
           inputTokens: 1,
           outputTokens: 1,
           cost: 0.001,
           usageRoute: 'api-key',
         },
-      ]),
-    ).not.toHaveProperty('usageRoute');
-
-    expect(
-      sumUsageStats([
+      ],
+      expectedRoute: undefined,
+    },
+    {
+      name: 'kept for a single subscription-routed entry',
+      entries: [
         {
           inputTokens: 10,
           outputTokens: 2,
           cost: 0,
           usageRoute: 'chatgpt-subscription',
         },
-      ]).usageRoute,
-    ).toBe('chatgpt-subscription');
-  });
+      ],
+      expectedRoute: 'chatgpt-subscription',
+    },
+  ])(
+    'keeps route badges only for unambiguous accumulated usage: $name',
+    ({ entries, expectedRoute }) => {
+      const summed = sumUsageStats(entries);
+
+      if (expectedRoute === undefined) {
+        expect(summed).not.toHaveProperty('usageRoute');
+      } else {
+        expect(summed.usageRoute).toBe(expectedRoute);
+      }
+    },
+  );
 });

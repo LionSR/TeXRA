@@ -209,14 +209,13 @@ export class BackgroundRunLifecycle {
           data: { responseId: pendingId, status: pendingResponse.status },
         },
       );
-      const response = await this.waitForCompletion(
+      // Note: clearPending() called by the handler's finalizeResponse() in caller
+      return this.waitForCompletion(
         client,
         pendingResponse,
         signal,
         retrieveParams,
       );
-      // Note: clearPending() called by the handler's finalizeResponse() in caller
-      return response;
     }
 
     if (pendingResponse.status === 'completed') {

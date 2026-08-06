@@ -109,12 +109,22 @@ function createHandlers(): AgentHandlers {
   );
 }
 
+const DELETE_MY_AGENT = {
+  command: 'deleteCustomAgent',
+  agentName: 'my-agent',
+} as const;
+
+const CUSTOMIZE_MY_AGENT = {
+  command: 'customizeAgent',
+  agentSource: 'builtInWorkflow',
+  agentName: 'my-agent',
+} as const;
+
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
+    // Call history only: the hoisted defaults above already supply the
+    // baseline implementations, and tests layer mockReturnValueOnce overrides.
     vi.clearAllMocks();
-    mocks.getAgent.mockReturnValue({ path: '/custom/my-agent.yaml' });
-    mocks.getSourceDirectory.mockResolvedValue(undefined);
-    mocks.fileExists.mockResolvedValue(false);
   });
 
   it('coalesces repeated requests while the host confirmation is pending', async () => {
@@ -124,34 +134,27 @@ describe('AgentHandlers custom-agent file actions', () => {
     });
     mocks.showWarningMessage.mockReturnValueOnce(pendingConfirmation);
     const handlers = createHandlers();
-    const request = {
-      command: 'deleteCustomAgent',
-      agentName: 'my-agent',
-    } as const;
 
-    const first = handlers.handleDeleteCustomAgent(request);
+    const first = handlers.handleDeleteCustomAgent(DELETE_MY_AGENT);
     await vi.waitFor(() =>
       expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1),
     );
 
-    await handlers.handleDeleteCustomAgent(request);
+    await handlers.handleDeleteCustomAgent(DELETE_MY_AGENT);
     expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1);
 
     resolveConfirmation(undefined);
     await first;
 
     mocks.showWarningMessage.mockResolvedValueOnce(undefined);
-    await handlers.handleDeleteCustomAgent(request);
+    await handlers.handleDeleteCustomAgent(DELETE_MY_AGENT);
     expect(mocks.showWarningMessage).toHaveBeenCalledTimes(2);
   });
 
   it('rejects deletion outside the configured custom directory', async () => {
     mocks.getAgent.mockReturnValueOnce({ path: '/bundled/my-agent.yaml' });
 
-    await createHandlers().handleDeleteCustomAgent({
-      command: 'deleteCustomAgent',
-      agentName: 'my-agent',
-    });
+    await createHandlers().handleDeleteCustomAgent(DELETE_MY_AGENT);
 
     expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
       'test',
@@ -167,11 +170,7 @@ describe('AgentHandlers custom-agent file actions', () => {
     });
     mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
 
-    await createHandlers().handleCustomizeAgent({
-      command: 'customizeAgent',
-      agentSource: 'builtInWorkflow',
-      agentName: 'my-agent',
-    });
+    await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.copyFile).toHaveBeenCalledWith(
       '/bundled/writing/my-agent.yaml',
@@ -185,11 +184,7 @@ describe('AgentHandlers custom-agent file actions', () => {
     mocks.getAgent.mockReturnValueOnce({ path: '/outside/my-agent.yaml' });
     mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
 
-    await createHandlers().handleCustomizeAgent({
-      command: 'customizeAgent',
-      agentSource: 'builtInWorkflow',
-      agentName: 'my-agent',
-    });
+    await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
       'test',

@@ -310,17 +310,15 @@ export class StreamLog {
   }
 
   clearDirtyUpdates(maxSeqInclusive: number = this.seqCounter): void {
-    for (const id of this.dirtyUpdates) {
-      const index = this.indexById.get(id);
-      if (index === undefined || this.entries[index].seqNo <= maxSeqInclusive) {
-        this.dirtyUpdates.delete(id);
-      }
-    }
-
-    for (const id of this.dirtyTextDeltas.keys()) {
-      const index = this.indexById.get(id);
-      if (index === undefined || this.entries[index].seqNo <= maxSeqInclusive) {
-        this.dirtyTextDeltas.delete(id);
+    for (const dirty of [this.dirtyUpdates, this.dirtyTextDeltas] as const) {
+      for (const id of dirty.keys()) {
+        const index = this.indexById.get(id);
+        if (
+          index === undefined ||
+          this.entries[index].seqNo <= maxSeqInclusive
+        ) {
+          dirty.delete(id);
+        }
       }
     }
   }

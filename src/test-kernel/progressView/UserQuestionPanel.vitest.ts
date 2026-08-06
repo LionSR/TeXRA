@@ -66,6 +66,20 @@ function collectActions(
   return actions;
 }
 
+function submitButton(
+  element: UserQuestionPanel,
+): HTMLElement & { disabled?: boolean } {
+  const button = element.shadowRoot?.querySelector(
+    'wa-button[data-action="submit"]',
+  );
+  if (!button) throw new Error('submit button not rendered');
+  return button as HTMLElement & { disabled?: boolean };
+}
+
+function dispatchChange(element: HTMLElement): void {
+  element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+}
+
 describe('user-question-panel', () => {
   it('does not emit inherited approve action while rejection feedback is open', async () => {
     const element = await mountPanel();
@@ -82,10 +96,7 @@ describe('user-question-panel', () => {
     const element = await mountPanel();
     const actions = collectActions(element);
 
-    const button = element.shadowRoot?.querySelector(
-      'wa-button[data-action="submit"]',
-    ) as HTMLElement & { disabled?: boolean };
-    expect(button?.disabled).toBe(true);
+    expect(submitButton(element).disabled).toBe(true);
     expect(element.handleKeyboardShortcut('y')).toBe(true);
     expect(actions).toEqual([]);
   });
@@ -111,15 +122,12 @@ describe('user-question-panel', () => {
       checked?: boolean;
     })[];
     red.checked = true;
-    red.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    dispatchChange(red);
     blue.checked = true;
-    blue.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    dispatchChange(blue);
     await element.updateComplete;
 
-    const button = element.shadowRoot?.querySelector(
-      'wa-button[data-action="submit"]',
-    ) as HTMLElement & { disabled?: boolean };
-    expect(button?.disabled).toBe(false);
+    expect(submitButton(element).disabled).toBe(false);
 
     const actions = collectActions(element);
     element.handleKeyboardShortcut('y');
@@ -147,9 +155,7 @@ describe('user-question-panel', () => {
       'wa-radio-group',
     ) as HTMLElement & { value?: string };
     radioGroup.value = 'No';
-    radioGroup.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
+    dispatchChange(radioGroup);
     await element.updateComplete;
 
     const actions = collectActions(element);

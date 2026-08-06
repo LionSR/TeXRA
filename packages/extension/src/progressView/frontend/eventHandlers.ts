@@ -263,21 +263,14 @@ export function handlePermissionAction(
         ? approvalBypassMessage(data.streamId, PERMISSION_KIND.TOOL_EDIT)
         : undefined;
       const action = isYolo ? 'approve' : decision.action;
-      postWithOptionalBypass(
-        bypassMessage,
-        decision.action === 'reject'
-          ? {
-              command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-              requestId: data.requestId,
-              action,
-              ...(decision.feedback ? { feedback: decision.feedback } : {}),
-            }
-          : {
-              command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-              requestId: data.requestId,
-              action,
-            },
-      );
+      postWithOptionalBypass(bypassMessage, {
+        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        requestId: data.requestId,
+        action,
+        ...(decision.action === 'reject' && decision.feedback
+          ? { feedback: decision.feedback }
+          : {}),
+      });
       // Only remove for terminal actions (approve/reject/approveSession).
       // Non-terminal actions like openDiff, previewProposed, showLatexdiff
       // just open editors without settling the approval.
@@ -293,21 +286,14 @@ export function handlePermissionAction(
       const bypassMessage = isYolo
         ? approvalBypassMessage(data.streamId, PERMISSION_KIND.BASH)
         : undefined;
-      postWithOptionalBypass(
-        bypassMessage,
-        decision.action === 'reject'
-          ? {
-              command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
-              requestId: data.requestId,
-              action: decision.action,
-              ...(decision.feedback ? { feedback: decision.feedback } : {}),
-            }
-          : {
-              command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
-              requestId: data.requestId,
-              action: 'approve',
-            },
-      );
+      postWithOptionalBypass(bypassMessage, {
+        command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+        requestId: data.requestId,
+        action: decision.action === 'reject' ? decision.action : 'approve',
+        ...(decision.action === 'reject' && decision.feedback
+          ? { feedback: decision.feedback }
+          : {}),
+      });
       removePrompt(detail.kind, data.requestId);
       break;
     }
@@ -329,7 +315,7 @@ export function handlePermissionAction(
             exhaustionReason === 'chatgpt-subscription'
               ? 'openai'
               : data.errorDetails?.provider,
-          viaRelay: data.errorDetails?.isRelayError === true ? true : undefined,
+          viaRelay: data.errorDetails?.isRelayError === true || undefined,
         });
         break;
       }
@@ -401,20 +387,14 @@ export function handlePermissionAction(
     }
     case PERMISSION_KIND.PLAN_APPROVAL: {
       const { data, decision } = detail;
-      postPermissionMessage(
-        decision.action === 'reject'
-          ? {
-              command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-              approvalId: data.approvalId,
-              action: decision.action,
-              ...(decision.feedback ? { feedback: decision.feedback } : {}),
-            }
-          : {
-              command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-              approvalId: data.approvalId,
-              action: decision.action,
-            },
-      );
+      postPermissionMessage({
+        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+        approvalId: data.approvalId,
+        action: decision.action,
+        ...(decision.action === 'reject' && decision.feedback
+          ? { feedback: decision.feedback }
+          : {}),
+      });
       removePrompt(PERMISSION_KIND.PLAN_APPROVAL, data.approvalId);
       break;
     }

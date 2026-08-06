@@ -1,11 +1,8 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Node imports
-import * as assert from 'node:assert';
-
 // Third-party imports
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -47,30 +44,38 @@ describe('Concurrent session tool edit approval handlers', () => {
   });
 
   it('routes each in-flight request through its owning session', async () => {
+    function recordingHandler(
+      seen: ToolEditApprovalRequest[],
+      appliedContent: string,
+    ) {
+      return async (
+        request: ToolEditApprovalRequest,
+      ): Promise<ToolEditApprovalResult> => {
+        seen.push(request);
+        return { accepted: true, appliedContent };
+      };
+    }
+
+    function makeRequest(tag: string): ToolEditApprovalRequest {
+      return {
+        path: `${tag}.tex`,
+        originalContent: `old-${tag}`,
+        proposedContent: `new-${tag}`,
+        sourceTool: 'write_file',
+      };
+    }
+
     const seenByA: ToolEditApprovalRequest[] = [];
     const seenByB: ToolEditApprovalRequest[] = [];
-
-    const handlerA = async (
-      request: ToolEditApprovalRequest,
-    ): Promise<ToolEditApprovalResult> => {
-      seenByA.push(request);
-      return { accepted: true, appliedContent: 'from-a' };
-    };
-    const handlerB = async (
-      request: ToolEditApprovalRequest,
-    ): Promise<ToolEditApprovalResult> => {
-      seenByB.push(request);
-      return { accepted: true, appliedContent: 'from-b' };
-    };
 
     const sessionA = createTestSession();
     const sessionB = createTestSession();
     sessionA.useHostInteractions({
-      requestToolEditApproval: handlerA,
+      requestToolEditApproval: recordingHandler(seenByA, 'from-a'),
       cancel: () => undefined,
     });
     sessionB.useHostInteractions({
-      requestToolEditApproval: handlerB,
+      requestToolEditApproval: recordingHandler(seenByB, 'from-b'),
       cancel: () => undefined,
     });
 
@@ -83,27 +88,14 @@ describe('Concurrent session tool edit approval handlers', () => {
       session: sessionB,
     });
 
-    const requestA: ToolEditApprovalRequest = {
-      path: 'a.tex',
-      originalContent: 'old-a',
-      proposedContent: 'new-a',
-      sourceTool: 'write_file',
-    };
-    const requestB: ToolEditApprovalRequest = {
-      path: 'b.tex',
-      originalContent: 'old-b',
-      proposedContent: 'new-b',
-      sourceTool: 'write_file',
-    };
-
     // Fire both without awaiting between them — each call must still
     // resolve through the handler captured from its own RunContext, not
     // whichever ran last.
     const resultAPromise = withRunContext(contextA, () =>
-      requestToolEditApproval(requestA),
+      requestToolEditApproval(makeRequest('a')),
     );
     const resultBPromise = withRunContext(contextB, () =>
-      requestToolEditApproval(requestB),
+      requestToolEditApproval(makeRequest('b')),
     );
 
     const [resultA, resultB] = await Promise.all([
@@ -111,14 +103,10 @@ describe('Concurrent session tool edit approval handlers', () => {
       resultBPromise,
     ]);
 
-    assert.strictEqual(seenByA.length, 1);
-    assert.strictEqual(seenByA[0]?.path, 'a.tex');
-    assert.strictEqual(seenByB.length, 1);
-    assert.strictEqual(seenByB[0]?.path, 'b.tex');
+    expect(seenByA.map((request) => request.path)).toEqual(['a.tex']);
+    expect(seenByB.map((request) => request.path)).toEqual(['b.tex']);
 
-    assert.ok(resultA.accepted);
-    assert.ok(resultB.accepted);
-    assert.strictEqual(resultA.appliedContent, 'from-a');
-    assert.strictEqual(resultB.appliedContent, 'from-b');
+    expect(resultA).toMatchObject({ accepted: true, appliedContent: 'from-a' });
+    expect(resultB).toMatchObject({ accepted: true, appliedContent: 'from-b' });
   });
 });

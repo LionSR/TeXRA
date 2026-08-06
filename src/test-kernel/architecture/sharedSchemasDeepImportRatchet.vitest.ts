@@ -675,77 +675,40 @@ describe('@shared/schemas deep-import ratchet', () => {
       `,
     );
 
+    const specifier = '@shared/schemas/agent';
+    const named = (
+      requestedSpace: 'ordinary' | 'type',
+    ): DeepImportReference => ({
+      bindings: [{ name: 'AgentCategory', requestedSpace }],
+      specifier,
+      typeOnly: requestedSpace === 'type',
+    });
+    // Forms that take the module wholesale report no bindings.
+    const wholesale = (typeOnly: boolean): DeepImportReference => ({
+      bindings: undefined,
+      specifier,
+      typeOnly,
+    });
+
     expect(deepImportReferences(source)).toEqual([
-      {
-        bindings: [{ name: 'AgentCategory', requestedSpace: 'ordinary' }],
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: [{ name: 'AgentCategory', requestedSpace: 'ordinary' }],
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
+      named('ordinary'), // import { AgentCategory }
+      named('ordinary'), // export { AgentCategory }
       {
         bindings: [{ name: 'default', requestedSpace: 'ordinary' }],
-        specifier: '@shared/schemas/agent',
+        specifier,
         typeOnly: false,
       },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: true,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: true,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: true,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: [{ name: 'AgentCategory', requestedSpace: 'type' }],
-        specifier: '@shared/schemas/agent',
-        typeOnly: true,
-      },
+      wholesale(false), // import * as agentNamespace
+      wholesale(true), // import type * as agentTypes
+      wholesale(true), // export type *
+      wholesale(true), // export type * as agentExportTypes
+      wholesale(false), // import agent = require(…)
+      wholesale(false), // import(…)
+      wholesale(false), // require(…)
+      wholesale(false), // module.require(…)
+      wholesale(false), // require.resolve(…)
+      wholesale(false), // import.meta.resolve(…)
+      named('type'), // import('…').AgentCategory
     ]);
   });
 

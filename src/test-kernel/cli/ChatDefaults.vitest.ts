@@ -18,6 +18,9 @@ import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
+/** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
+const NO_WORKSPACE = '/tmp/no-such-texra-workspace';
+
 /** A missing user config, shaped like a genuine `fs` ENOENT rejection. */
 function enoentError(): NodeJS.ErrnoException {
   const error = new Error(
@@ -94,35 +97,44 @@ async function workspaceWithConfig(config: unknown): Promise<string> {
   return workspace;
 }
 
+function expectChatDefaults(
+  options: Parameters<typeof resolveChatDefaults>[0],
+  expected: Record<string, unknown>,
+): Promise<void> {
+  return expect(resolveChatDefaults(options)).resolves.toMatchObject(expected);
+}
+
 describe('CLI chat defaults', () => {
   it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
     expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
     expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekproT');
     expect(MODEL_CONFIGS[BUILTIN_DEFAULT_CHAT_MODEL]).toBeDefined();
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekproT',
-      source: 'builtin',
-      agentSource: 'builtin-default',
-      modelSource: 'builtin-default',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+        agentSource: 'builtin-default',
+        modelSource: 'builtin-default',
+      },
+    );
   });
 
   it('uses the first visible tool-use agent when assistant is hidden by a roster', async () => {
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
+    await expectChatDefaults(
+      {
+        cwd: NO_WORKSPACE,
         visibleToolUseAgents: [{ name: 'research' }, { name: 'review' }],
-      }),
-    ).resolves.toMatchObject({
-      agent: 'research',
-      model: 'deepseekproT',
-      source: 'builtin',
-      agentSource: 'builtin-default',
-    });
+      },
+      {
+        agent: 'research',
+        model: 'deepseekproT',
+        source: 'builtin',
+        agentSource: 'builtin-default',
+      },
+    );
   });
 
   it('ignores non-llm-zoo model ids in workspace defaults', async () => {
@@ -131,15 +143,16 @@ describe('CLI chat defaults', () => {
       'texra.model': 'claude-opus-4-7',
     });
 
-    await expect(
-      resolveChatDefaults({ cwd: workspace }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekproT',
-      source: 'mixed',
-      agentSource: 'workspace-config',
-      modelSource: 'builtin-default',
-    });
+    await expectChatDefaults(
+      { cwd: workspace },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'mixed',
+        agentSource: 'workspace-config',
+        modelSource: 'builtin-default',
+      },
+    );
   });
 
   it('uses command-specific workspace defaults below environment overrides', async () => {
@@ -149,31 +162,33 @@ describe('CLI chat defaults', () => {
       'texra.chat': { agent: 'assistant', model: 'deepseekT' },
     });
 
-    await expect(
-      resolveChatDefaults({ cwd: workspace, envModel: 'sonnet46T' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      source: 'mixed',
-      agentSource: 'workspace-config',
-      modelSource: 'environment',
-    });
+    await expectChatDefaults(
+      { cwd: workspace, envModel: 'sonnet46T' },
+      {
+        agent: 'assistant',
+        model: 'sonnet46T',
+        source: 'mixed',
+        agentSource: 'workspace-config',
+        modelSource: 'environment',
+      },
+    );
   });
 
   it('inherits only the model from recent single-agent tool-use history', async () => {
     mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      // History contributes the model only; the agent stays on the built-in
-      // default rather than the history row's agent.
-      agent: 'assistant',
-      model: 'sonnet46T',
-      source: 'mixed',
-      agentSource: 'builtin-default',
-      modelSource: 'history',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        // History contributes the model only; the agent stays on the built-in
+        // default rather than the history row's agent.
+        agent: 'assistant',
+        model: 'sonnet46T',
+        source: 'mixed',
+        agentSource: 'builtin-default',
+        modelSource: 'history',
+      },
+    );
   });
 
   it('ignores a history model that the CLI cannot run', async () => {
@@ -181,14 +196,15 @@ describe('CLI chat defaults', () => {
       historyEntry('research', { model: 'Copilot GPT-4o' }),
     ]);
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekproT',
-      source: 'builtin',
-      modelSource: 'builtin-default',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+        modelSource: 'builtin-default',
+      },
+    );
   });
 
   it('does not inherit the model from a multi-agent team run', async () => {
@@ -201,33 +217,39 @@ describe('CLI chat defaults', () => {
       }),
     ]);
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekproT',
-      source: 'builtin',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+      },
+    );
   });
 
-  it('does not inherit stale history agent names', async () => {
-    // A stale `bash` row used to win the agent tier and crash on first submit
-    // with "Could not find agent: bash" — see #4397. History is now model-only,
-    // so the single-chat agent stays on the built-in `assistant` default.
-    mockedListExecutions.mockResolvedValueOnce([
-      historyEntry('bash', {}, '2026-05-21T08:02:00.000Z'),
-      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
-    ]);
+  // A stale `bash` row used to win the agent tier and crash on first submit
+  // with "Could not find agent: bash" — see #4397. History is now model-only,
+  // so the single-chat agent stays on the built-in `assistant` default; the
+  // same holds for `simplifier`, which is never a default chat agent.
+  it.each(['bash', 'simplifier'])(
+    'does not inherit %s as the default single-chat agent',
+    async (agent) => {
+      mockedListExecutions.mockResolvedValueOnce([
+        historyEntry(agent, {}, '2026-05-21T08:02:00.000Z'),
+        historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
+      ]);
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      agentSource: 'builtin-default',
-      modelSource: 'history',
-    });
-  });
+      await expectChatDefaults(
+        { cwd: NO_WORKSPACE },
+        {
+          agent: 'assistant',
+          model: 'sonnet46T',
+          agentSource: 'builtin-default',
+          modelSource: 'history',
+        },
+      );
+    },
+  );
 
   it('skips a team run to reach an earlier single-agent model', async () => {
     mockedListExecutions.mockResolvedValueOnce([
@@ -241,30 +263,15 @@ describe('CLI chat defaults', () => {
       historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
     ]);
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      agentSource: 'builtin-default',
-      modelSource: 'history',
-    });
-  });
-
-  it('does not inherit simplifier as the default single-chat agent', async () => {
-    mockedListExecutions.mockResolvedValueOnce([
-      historyEntry('simplifier', {}, '2026-05-21T08:02:00.000Z'),
-      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
-    ]);
-
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      agentSource: 'builtin-default',
-      modelSource: 'history',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'sonnet46T',
+        agentSource: 'builtin-default',
+        modelSource: 'history',
+      },
+    );
   });
 
   it('ignores simplifier from configured chat default tiers', async () => {
@@ -272,54 +279,53 @@ describe('CLI chat defaults', () => {
       'texra.chat': { agent: 'simplifier', model: 'sonnet46T' },
     });
 
-    await expect(
-      resolveChatDefaults({ cwd: workspace }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      agentSource: 'builtin-default',
-      modelSource: 'workspace-config',
-    });
+    await expectChatDefaults(
+      { cwd: workspace },
+      {
+        agent: 'assistant',
+        model: 'sonnet46T',
+        agentSource: 'builtin-default',
+        modelSource: 'workspace-config',
+      },
+    );
 
     mockedReadJson.mockResolvedValueOnce({
       'texra.agent': 'simplifier',
       'texra.model': 'sonnet46T',
     });
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      agentSource: 'builtin-default',
-      modelSource: 'user-config',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'sonnet46T',
+        agentSource: 'builtin-default',
+        modelSource: 'user-config',
+      },
+    );
   });
 
   it('does not honor TEXRA_AGENT=simplifier as a default agent', async () => {
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
-        envAgent: 'simplifier',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      agentSource: 'builtin-default',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE, envAgent: 'simplifier' },
+      {
+        agent: 'assistant',
+        agentSource: 'builtin-default',
+      },
+    );
   });
 
   it('still honors an explicit simplifier agent override', async () => {
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
+    await expectChatDefaults(
+      {
+        cwd: NO_WORKSPACE,
         agentOverride: 'simplifier',
         modelOverride: 'deepseekT',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'simplifier',
-      agentSource: 'explicit-override',
-    });
+      },
+      {
+        agent: 'simplifier',
+        agentSource: 'explicit-override',
+      },
+    );
   });
 
   it('skips workspace, user, and history I/O when explicit overrides resolve agent and model', async () => {
@@ -327,19 +333,20 @@ describe('CLI chat defaults', () => {
       'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
     });
 
-    await expect(
-      resolveChatDefaults({
+    await expectChatDefaults(
+      {
         cwd: workspace,
         agentOverride: 'simplifier',
         modelOverride: 'deepseekT',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'simplifier',
-      model: 'deepseekT',
-      source: 'mixed',
-      agentSource: 'explicit-override',
-      modelSource: 'explicit-override',
-    });
+      },
+      {
+        agent: 'simplifier',
+        model: 'deepseekT',
+        source: 'mixed',
+        agentSource: 'explicit-override',
+        modelSource: 'explicit-override',
+      },
+    );
     expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
     expect(mockedReadJson).not.toHaveBeenCalled();
     expect(mockedListExecutions).not.toHaveBeenCalled();
@@ -350,31 +357,29 @@ describe('CLI chat defaults', () => {
       'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
     });
 
-    await expect(
-      resolveChatDefaults({ cwd: workspace, modelOverride: 'deepseekT' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekT',
-      agentSource: 'workspace-config',
-      modelSource: 'explicit-override',
-    });
+    await expectChatDefaults(
+      { cwd: workspace, modelOverride: 'deepseekT' },
+      {
+        agent: 'assistant',
+        model: 'deepseekT',
+        agentSource: 'workspace-config',
+        modelSource: 'explicit-override',
+      },
+    );
     expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
   });
 
   it('skips user and history I/O when environment resolves agent and model', async () => {
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
-        envAgent: 'assistant',
-        envModel: 'sonnet46T',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'sonnet46T',
-      source: 'mixed',
-      agentSource: 'environment',
-      modelSource: 'environment',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE, envAgent: 'assistant', envModel: 'sonnet46T' },
+      {
+        agent: 'assistant',
+        model: 'sonnet46T',
+        source: 'mixed',
+        agentSource: 'environment',
+        modelSource: 'environment',
+      },
+    );
     expect(mockedReadJson).not.toHaveBeenCalled();
     expect(mockedListExecutions).not.toHaveBeenCalled();
   });
@@ -382,17 +387,15 @@ describe('CLI chat defaults', () => {
   it('still loads history when only the agent is directly resolved', async () => {
     mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
 
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
-        agentOverride: 'simplifier',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'simplifier',
-      model: 'sonnet46T',
-      agentSource: 'explicit-override',
-      modelSource: 'history',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE, agentOverride: 'simplifier' },
+      {
+        agent: 'simplifier',
+        model: 'sonnet46T',
+        agentSource: 'explicit-override',
+        modelSource: 'history',
+      },
+    );
     expect(mockedListExecutions).toHaveBeenCalledOnce();
   });
 
@@ -403,13 +406,14 @@ describe('CLI chat defaults', () => {
       'texra.chat': { agent: 'assistant', model: 'deepseekT' },
     });
 
-    await expect(
-      resolveChatDefaults({ cwd: workspace }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekT',
-      source: 'workspace',
-    });
+    await expectChatDefaults(
+      { cwd: workspace },
+      {
+        agent: 'assistant',
+        model: 'deepseekT',
+        source: 'workspace',
+      },
+    );
   });
 
   it('uses the shared config parser for prefixed user chat defaults', async () => {
@@ -419,17 +423,16 @@ describe('CLI chat defaults', () => {
       'texra.chat': { agent: 'assistant', model: 'deepseekT' },
     });
 
-    await expect(
-      resolveChatDefaults({
-        cwd: '/tmp/no-such-texra-workspace',
-      }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekT',
-      source: 'user',
-      agentSource: 'user-config',
-      modelSource: 'user-config',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekT',
+        source: 'user',
+        agentSource: 'user-config',
+        modelSource: 'user-config',
+      },
+    );
   });
 
   it('warns instead of silently dropping defaults when the user config is corrupt', async () => {
@@ -442,13 +445,14 @@ describe('CLI chat defaults', () => {
       .spyOn(logSinks, 'writeTextStderr')
       .mockImplementation(() => {});
 
-    await expect(
-      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({
-      agent: 'assistant',
-      model: 'deepseekproT',
-      source: 'builtin',
-    });
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+      },
+    );
 
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('config.json'),

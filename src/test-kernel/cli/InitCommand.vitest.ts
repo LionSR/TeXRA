@@ -166,9 +166,10 @@ describe('CLI init command', () => {
     ).toBe(0);
   });
 
-  it('disables init model rows unavailable in the active API mode', () => {
-    expect(
-      initWizardModelSelectItems([
+  it.each([
+    {
+      name: 'disables init model rows unavailable in the active API mode',
+      models: [
         modelAccess('sonnet46T', {
           model: { value: 'sonnet46T', label: 'Sonnet' },
           available: true,
@@ -179,26 +180,25 @@ describe('CLI init command', () => {
           available: false,
           status: 'api key set',
         }),
-      ]),
-    ).toEqual([
-      {
-        value: 'sonnet46T',
-        label: 'Sonnet',
-        description: 'included access',
-        disabled: false,
-      },
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        description: 'api key set (unavailable now)',
-        disabled: true,
-      },
-    ]);
-  });
-
-  it('keeps all-unavailable init model rows selectable as a fallback', () => {
-    expect(
-      initWizardModelSelectItems([
+      ],
+      expected: [
+        {
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          description: 'included access',
+          disabled: false,
+        },
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          description: 'api key set (unavailable now)',
+          disabled: true,
+        },
+      ],
+    },
+    {
+      name: 'keeps all-unavailable init model rows selectable as a fallback',
+      models: [
         modelAccess('sonnet46T', {
           model: { value: 'sonnet46T', label: 'Sonnet' },
           available: false,
@@ -209,38 +209,47 @@ describe('CLI init command', () => {
           available: false,
           status: 'missing key',
         }),
-      ]),
-    ).toEqual([
-      {
-        value: 'sonnet46T',
-        label: 'Sonnet',
-        description: 'login required (unavailable now)',
-        disabled: false,
-      },
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        description: 'missing key (unavailable now)',
-        disabled: false,
-      },
-    ]);
+      ],
+      expected: [
+        {
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          description: 'login required (unavailable now)',
+          disabled: false,
+        },
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          description: 'missing key (unavailable now)',
+          disabled: false,
+        },
+      ],
+    },
+  ])('$name', ({ models, expected }) => {
+    expect(initWizardModelSelectItems(models)).toEqual(expected);
   });
 
-  it('emits valid NDJSON for non-interactive init', async () => {
-    const root = await makeTempDir('texra-init-test-', tempDirs);
-    const workspaceRoot = await fs.realpath(root);
-    const result = await runCli([
+  function runInitPrint(
+    root: string,
+    extraArgs: string[] = [],
+  ): ReturnType<typeof runCli> {
+    return runCli([
       '--cwd',
       root,
       'init',
       '--print',
       '--api-mode',
       'personal',
-      '--output-format',
-      'ndjson',
+      ...extraArgs,
       '--gitignore',
       '--no-color',
     ]);
+  }
+
+  it('emits valid NDJSON for non-interactive init', async () => {
+    const root = await makeTempDir('texra-init-test-', tempDirs);
+    const workspaceRoot = await fs.realpath(root);
+    const result = await runInitPrint(root, ['--output-format', 'ndjson']);
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
@@ -287,16 +296,7 @@ describe('CLI init command', () => {
   it('keeps the legacy text init summary for human output', async () => {
     const root = await makeTempDir('texra-init-test-', tempDirs);
     const workspaceRoot = await fs.realpath(root);
-    const result = await runCli([
-      '--cwd',
-      root,
-      'init',
-      '--print',
-      '--api-mode',
-      'personal',
-      '--gitignore',
-      '--no-color',
-    ]);
+    const result = await runInitPrint(root);
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
@@ -342,16 +342,7 @@ describe('CLI init command', () => {
   ])('$name', async ({ accessList }) => {
     mocks.getCliModelAccessList.mockResolvedValue(accessList);
     const root = await makeTempDir('texra-init-test-', tempDirs);
-    const result = await runCli([
-      '--cwd',
-      root,
-      'init',
-      '--print',
-      '--api-mode',
-      'personal',
-      '--gitignore',
-      '--no-color',
-    ]);
+    const result = await runInitPrint(root);
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');

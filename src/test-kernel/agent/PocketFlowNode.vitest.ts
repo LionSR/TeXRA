@@ -54,6 +54,11 @@ describe('BaseNode.getNextNode', () => {
 type ScriptedOutcome =
   Error | string | (() => Promise<string>) | { thrown: unknown };
 
+/** `[failure 1, …, failure n]` for scripted exec outcomes. */
+function failureSequence(count: number): Error[] {
+  return Array.from({ length: count }, (_, i) => new Error(`failure ${i + 1}`));
+}
+
 class ScriptedRetryNode extends Node {
   calls = 0;
   prompts = 0;
@@ -110,11 +115,7 @@ class ScriptedRetryNode extends Node {
 
 describe('Node manual retry', () => {
   it('grants one attempt after an exhausted automatic retry batch', async () => {
-    const node = new ScriptedRetryNode(
-      3,
-      [1, 2, 3, 4].map((attempt) => new Error(`failure ${attempt}`)),
-      [true, false],
-    );
+    const node = new ScriptedRetryNode(3, failureSequence(4), [true, false]);
 
     await expect(node._exec(undefined)).resolves.toBe('fallback');
     expect(node.calls).toBe(4);
@@ -131,11 +132,11 @@ describe('Node manual retry', () => {
   });
 
   it('grants one attempt for each repeated approval', async () => {
-    const node = new ScriptedRetryNode(
-      2,
-      [1, 2, 3, 4].map((attempt) => new Error(`failure ${attempt}`)),
-      [true, true, false],
-    );
+    const node = new ScriptedRetryNode(2, failureSequence(4), [
+      true,
+      true,
+      false,
+    ]);
 
     await expect(node._exec(undefined)).resolves.toBe('fallback');
     expect(node.calls).toBe(4);

@@ -12,21 +12,14 @@ const controller = new SettingsAgentFileController();
 const CUSTOM_DIR = path.join(path.sep, 'repo', 'custom-agents');
 
 describe('SettingsAgentFileController', () => {
-  it('validates template agent names', () => {
-    assert.equal(controller.validateTemplateName(''), 'Name cannot be empty');
-    assert.equal(
-      controller.validateTemplateName('dir/agent'),
-      'Name cannot contain path separators',
-    );
-    assert.equal(
-      controller.validateTemplateName('bad name'),
-      'Use underscores instead of spaces',
-    );
-    assert.equal(
-      controller.validateTemplateName('bad:name'),
-      'Name cannot contain YAML-special characters',
-    );
-    assert.equal(controller.validateTemplateName('good_name'), null);
+  it.each([
+    ['', 'Name cannot be empty'],
+    ['dir/agent', 'Name cannot contain path separators'],
+    ['bad name', 'Use underscores instead of spaces'],
+    ['bad:name', 'Name cannot contain YAML-special characters'],
+    ['good_name', null],
+  ])('validates template agent name %j', (name, expected) => {
+    assert.equal(controller.validateTemplateName(name), expected);
   });
 
   it('plans template agent files and render metadata', () => {

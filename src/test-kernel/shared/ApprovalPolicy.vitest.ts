@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { warn } from '@logger/logUtils';
 import {
@@ -26,6 +26,10 @@ vi.mock('@logger/logUtils', () => ({
 }));
 
 describe('TeXRA approval policy', () => {
+  beforeEach(() => {
+    vi.mocked(warn).mockClear();
+  });
+
   it.each([
     ['never', true, true, true, 'deny-policy'],
     ['never', false, false, true, 'deny-policy'],
@@ -65,7 +69,6 @@ describe('TeXRA approval policy', () => {
   });
 
   it('reads a valid persisted policy without warning', () => {
-    vi.mocked(warn).mockClear();
     expect(
       readPersistedTexraApprovalPolicy((key, fallback) => {
         expect(key).toBe(TEXRA_APPROVAL_POLICY_CONFIG_KEY);
@@ -75,27 +78,24 @@ describe('TeXRA approval policy', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('warns and falls back when the persisted policy value is invalid', () => {
-    vi.mocked(warn).mockClear();
-    expect(readPersistedTexraApprovalPolicy(() => 'auto' as never)).toBe(
-      TEXRA_APPROVAL_POLICY_DEFAULT,
-    );
-    expect(warn).toHaveBeenCalledWith(
-      'approval-policy',
+  it.each([
+    [
+      'auto',
       `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "auto"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
-    );
-  });
-
-  it('warns and falls back when the persisted policy value is not a string', () => {
-    vi.mocked(warn).mockClear();
-    expect(readPersistedTexraApprovalPolicy(() => 42 as never)).toBe(
-      TEXRA_APPROVAL_POLICY_DEFAULT,
-    );
-    expect(warn).toHaveBeenCalledWith(
-      'approval-policy',
+    ],
+    [
+      42,
       `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value 42; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
-    );
-  });
+    ],
+  ] as const)(
+    'warns and falls back when the persisted policy value is invalid: %j',
+    (stored, expectedWarning) => {
+      expect(readPersistedTexraApprovalPolicy(() => stored as never)).toBe(
+        TEXRA_APPROVAL_POLICY_DEFAULT,
+      );
+      expect(warn).toHaveBeenCalledWith('approval-policy', expectedWarning);
+    },
+  );
 
   it('maps deny reasons to distinct user-facing messages', () => {
     expect(texraApprovalDenialMessage('deny-policy')).toBe(

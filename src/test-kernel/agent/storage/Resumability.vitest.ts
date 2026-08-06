@@ -56,29 +56,27 @@ describe('deriveResumability', () => {
     });
   }
 
-  it('does not let a stale flow record make completed executions resumable', async () => {
-    const executionId = 'completed-with-flow' as ExecutionId;
-    await writeMeta(executionId, {
+  it.each([
+    {
+      name: 'does not let a stale flow record make completed executions resumable',
+      executionId: 'completed-with-flow' as ExecutionId,
       outcome: RUN_OUTCOME.COMPLETED,
-    });
-    await writeFlow(executionId);
-
-    await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
       cause: RESUMABILITY_CAUSE.TERMINAL_COMPLETED,
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-  });
-
-  it('does not let a stale flow record make failed executions resumable', async () => {
-    const executionId = 'failed-with-flow' as ExecutionId;
-    await writeMeta(executionId, { outcome: RUN_OUTCOME.FAILED });
+    },
+    {
+      name: 'does not let a stale flow record make failed executions resumable',
+      executionId: 'failed-with-flow' as ExecutionId,
+      outcome: RUN_OUTCOME.FAILED,
+      cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
+    },
+  ])('$name', async ({ executionId, outcome, cause }) => {
+    await writeMeta(executionId, { outcome });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
       resumable: false,
-      cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
-      outcome: RUN_OUTCOME.FAILED,
+      cause,
+      outcome,
     });
   });
 
@@ -203,35 +201,25 @@ describe('deriveResumability', () => {
     });
   });
 
-  it('reports invalid flow records as not resumable', async () => {
+  it.each([
+    {
+      name: 'reports invalid flow records as not resumable',
+      record: { ...BASE_FLOW_RECORD, shared: null },
+    },
+    {
+      name: 'does not conflate a stored null flow envelope with an absent key',
+      record: null,
+    },
+    {
+      name: 'rejects flow records from a future envelope schema version',
+      record: {
+        ...BASE_FLOW_RECORD,
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
+      },
+    },
+  ])('$name', async ({ record }) => {
     const executionId = 'invalid-flow' as ExecutionId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      ...BASE_FLOW_RECORD,
-      shared: null,
-    });
-
-    await expect(deriveResumability(executionId)).resolves.toEqual({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
-    });
-  });
-
-  it('does not conflate a stored null flow envelope with an absent key', async () => {
-    const executionId = 'null-flow-envelope' as ExecutionId;
-    await getExecutionStore(executionId).write(flowKey(executionId), null);
-
-    await expect(deriveResumability(executionId)).resolves.toEqual({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
-    });
-  });
-
-  it('rejects flow records from a future envelope schema version', async () => {
-    const executionId = 'future-flow-envelope' as ExecutionId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      ...BASE_FLOW_RECORD,
-      schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
-    });
+    await getExecutionStore(executionId).write(flowKey(executionId), record);
 
     await expect(deriveResumability(executionId)).resolves.toEqual({
       resumable: false,

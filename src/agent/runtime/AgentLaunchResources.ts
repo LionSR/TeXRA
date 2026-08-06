@@ -1,4 +1,3 @@
-// Local imports - launch resources
 import type { StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';

@@ -249,10 +249,9 @@ async function runReflectionAgent(
   setting: AgentWorkflowSetting,
 ): Promise<AgentFlowResult> {
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
-  const onRoundFinalized = createUsageRecordingCallback(ctx);
   const result = await runReflectionFlow({
     ...ctx,
-    onRoundFinalized,
+    onRoundFinalized: createUsageRecordingCallback(ctx),
     setting,
   });
   return {

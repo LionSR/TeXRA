@@ -42,6 +42,8 @@ vi.mock('@utils/system/execUtils', async (importOriginal) => ({
 
 const { runCli } = await import('@cli/commands/root');
 
+const PROJECT_ID = '0123456789abcdef01234567';
+
 async function withProcessCwd<T>(
   cwd: string,
   run: () => Promise<T>,
@@ -71,16 +73,17 @@ describe('CLI Overleaf clone command', () => {
     stderrSpy = spyOnStreamWrite(process.stderr, (text) => {
       stderr += text;
     });
-    mocks.deleteSecret.mockReset().mockResolvedValue(undefined);
-    mocks.execa.mockReset().mockResolvedValue({});
-    mocks.executeCommandSync.mockReset().mockReturnValue({
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.deleteSecret.mockResolvedValue(undefined);
+    mocks.execa.mockResolvedValue({});
+    mocks.executeCommandSync.mockReturnValue({
       success: true,
       exitCode: 0,
       stdout: 'git version 2.50.0',
       stderr: '',
     });
-    mocks.getSecret.mockReset().mockResolvedValue('olp_secret');
-    mocks.readCliAmbientState.mockReset().mockReturnValue({
+    mocks.getSecret.mockResolvedValue('olp_secret');
+    mocks.readCliAmbientState.mockReturnValue({
       isCi: false,
       stdinIsTty: true,
       stdoutIsTty: true,
@@ -89,7 +92,7 @@ describe('CLI Overleaf clone command', () => {
       stdoutColorEnabled: false,
       stderrColorEnabled: false,
     });
-    mocks.setSecret.mockReset().mockResolvedValue(undefined);
+    mocks.setSecret.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -102,7 +105,7 @@ describe('CLI Overleaf clone command', () => {
     const canonicalWorkspacePath = await realpath(workspacePath);
     const result = await runCli([
       'clone',
-      '0123456789abcdef01234567',
+      PROJECT_ID,
       '--cwd',
       workspacePath,
       '--output-format',
@@ -170,12 +173,7 @@ describe('CLI Overleaf clone command', () => {
     mocks.getSecret.mockResolvedValue(undefined);
     const destination = path.join(workspacePath, 'missing-token');
     const result = await withProcessCwd(workspacePath, () =>
-      runCli([
-        'clone',
-        '0123456789abcdef01234567',
-        'missing-token',
-        '--no-input',
-      ]),
+      runCli(['clone', PROJECT_ID, 'missing-token', '--no-input']),
     );
 
     expect(result.exitCode).toBe(CliExitCode.Usage);
@@ -192,12 +190,7 @@ describe('CLI Overleaf clone command', () => {
     });
     const destination = path.join(workspacePath, 'missing-git');
     const result = await withProcessCwd(workspacePath, () =>
-      runCli([
-        'clone',
-        '0123456789abcdef01234567',
-        'missing-git',
-        '--no-input',
-      ]),
+      runCli(['clone', PROJECT_ID, 'missing-git', '--no-input']),
     );
 
     expect(result.exitCode).toBe(CliExitCode.AgentError);
@@ -209,7 +202,7 @@ describe('CLI Overleaf clone command', () => {
   it('rejects ambiguous positional and --cwd destinations', async () => {
     const result = await runCli([
       'clone',
-      '0123456789abcdef01234567',
+      PROJECT_ID,
       path.join(workspacePath, 'positional'),
       '--cwd',
       workspacePath,
@@ -224,42 +217,29 @@ describe('CLI Overleaf clone command', () => {
     expect(mocks.execa).not.toHaveBeenCalled();
   });
 
-  it('does not prompt for a missing token in headless mode', async () => {
-    mocks.getSecret.mockResolvedValue(undefined);
+  it.each([
+    { mode: 'headless', extraArgs: ['--no-input'] },
+    { mode: 'machine-readable', extraArgs: ['--output-format', 'json'] },
+  ])(
+    'does not prompt for a missing token in $mode mode',
+    async ({ extraArgs }) => {
+      mocks.getSecret.mockResolvedValue(undefined);
 
-    const result = await runCli([
-      'clone',
-      '0123456789abcdef01234567',
-      '--cwd',
-      workspacePath,
-      '--no-input',
-    ]);
+      const result = await runCli([
+        'clone',
+        PROJECT_ID,
+        '--cwd',
+        workspacePath,
+        ...extraArgs,
+      ]);
 
-    expect(result.exitCode).toBe(CliExitCode.Usage);
-    expect(stderr).toContain('No saved Overleaf Git Token is available.');
-    expect(stderr).toContain('https://www.overleaf.com/user/settings');
-    expect(stderr).toContain('git-integration-authentication-tokens');
-    expect(mocks.execa).not.toHaveBeenCalled();
-  });
-
-  it('does not prompt for a missing token in machine-readable mode', async () => {
-    mocks.getSecret.mockResolvedValue(undefined);
-
-    const result = await runCli([
-      'clone',
-      '0123456789abcdef01234567',
-      '--cwd',
-      workspacePath,
-      '--output-format',
-      'json',
-    ]);
-
-    expect(result.exitCode).toBe(CliExitCode.Usage);
-    expect(stderr).toContain('No saved Overleaf Git Token is available.');
-    expect(stderr).toContain('https://www.overleaf.com/user/settings');
-    expect(stderr).toContain('git-integration-authentication-tokens');
-    expect(mocks.execa).not.toHaveBeenCalled();
-  });
+      expect(result.exitCode).toBe(CliExitCode.Usage);
+      expect(stderr).toContain('No saved Overleaf Git Token is available.');
+      expect(stderr).toContain('https://www.overleaf.com/user/settings');
+      expect(stderr).toContain('git-integration-authentication-tokens');
+      expect(mocks.execa).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects invalid project identifiers before reading credentials', async () => {
     const result = await runCli([
@@ -281,7 +261,7 @@ describe('CLI Overleaf clone command', () => {
 
     const result = await runCli([
       'clone',
-      '0123456789abcdef01234567',
+      PROJECT_ID,
       '--cwd',
       workspacePath,
       '--no-input',
@@ -302,7 +282,7 @@ describe('CLI Overleaf clone command', () => {
 
     const result = await runCli([
       'clone',
-      '0123456789abcdef01234567',
+      PROJECT_ID,
       '--cwd',
       workspacePath,
       '--no-input',

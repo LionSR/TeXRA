@@ -7,7 +7,7 @@ import type {
   inquiryThreadsContext as InquiryThreadsContext,
   phaseStagesContext as PhaseStagesContext,
 } from '@progressView/frontend/streamContexts';
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
@@ -30,6 +30,40 @@ function createPanel(): BackgroundTasksPanel {
   return document.createElement(
     'background-tasks-panel',
   ) as BackgroundTasksPanel;
+}
+
+/** A roster row; defaults to a running `reviewer` agent child. */
+function subagentRow(overrides: {
+  executionId: string;
+  childStreamId?: string;
+  agentName?: string;
+  status?: ActiveChildInfo['status'];
+  elapsed?: string;
+  finishedAt?: number;
+  processTool?: string;
+}): ActiveChildInfo {
+  const agentName = overrides.agentName ?? 'reviewer';
+  return {
+    executionId: overrides.executionId,
+    childStreamId: overrides.childStreamId ?? `child-${overrides.executionId}`,
+    agentName,
+    identity: overrides.processTool
+      ? { kind: 'process', tool: overrides.processTool }
+      : { kind: 'agent', agent: agentName },
+    status: overrides.status ?? 'running',
+    elapsed: overrides.elapsed,
+    finishedAt: overrides.finishedAt,
+  };
+}
+
+async function mountPanel(
+  subagents: ActiveChildInfo[],
+): Promise<BackgroundTasksPanel> {
+  const element = createPanel();
+  element.subagents = subagents;
+  document.body.append(element);
+  await element.updateComplete;
+  return element;
 }
 
 describe('background-tasks-panel', () => {
@@ -68,28 +102,16 @@ describe('background-tasks-panel', () => {
   });
 
   it('lists a retained finished subagent as a named row, not a count', async () => {
-    const element = createPanel();
-    element.subagents = [
-      {
-        executionId: 'exec-1',
-        childStreamId: 'child-1',
-        agentName: 'reviewer',
-        identity: { kind: 'agent' as const, agent: 'reviewer' },
-        status: 'running',
-        elapsed: '12s',
-      },
-      {
+    const element = await mountPanel([
+      subagentRow({ executionId: 'exec-1', elapsed: '12s' }),
+      subagentRow({
         executionId: 'exec-2',
-        childStreamId: 'child-2',
         agentName: 'polisher',
-        identity: { kind: 'agent' as const, agent: 'polisher' },
         status: 'completed',
         elapsed: '1m 4s',
         finishedAt: 1_000,
-      },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
+      }),
+    ]);
 
     const shadow = element.shadowRoot!;
     const names = [...shadow.querySelectorAll('.task-name')].map(
@@ -119,20 +141,12 @@ describe('background-tasks-panel', () => {
   it('labels a running workflow-script row with its current phase', async () => {
     const element = createPanel();
     element.subagents = [
-      {
+      subagentRow({
         executionId: 'exec-run',
         childStreamId: 'workflow-run',
         agentName: 'workflow-script',
-        identity: { kind: 'agent' as const, agent: 'workflow-script' },
-        status: 'running',
-      },
-      {
-        executionId: 'exec-plain',
-        childStreamId: 'plain-child',
-        agentName: 'reviewer',
-        identity: { kind: 'agent' as const, agent: 'reviewer' },
-        status: 'running',
-      },
+      }),
+      subagentRow({ executionId: 'exec-plain', childStreamId: 'plain-child' }),
     ];
     const container = document.createElement('div');
     document.body.append(container);
@@ -163,19 +177,13 @@ describe('background-tasks-panel', () => {
   });
 
   it('does not show success while a retained subagent status still lags', async () => {
-    const element = createPanel();
-    element.subagents = [
-      {
+    const element = await mountPanel([
+      subagentRow({
         executionId: 'subagent-1',
         childStreamId: 'child-1',
-        agentName: 'reviewer',
-        identity: { kind: 'agent' as const, agent: 'reviewer' },
-        status: 'running',
         finishedAt: 1_000,
-      },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
+      }),
+    ]);
 
     const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
     expect(badge?.textContent).toBe('Running');
@@ -185,27 +193,22 @@ describe('background-tasks-panel', () => {
   });
 
   it('does not render finished process children — they are ephemeral', async () => {
-    const element = createPanel();
-    element.subagents = [
-      {
+    const element = await mountPanel([
+      subagentRow({
         executionId: 'bash-1',
         childStreamId: 'child-bash',
         agentName: 'bash',
-        identity: { kind: 'process' as const, tool: 'bash' },
+        processTool: 'bash',
         status: 'completed',
         finishedAt: 1_000,
-      },
-      {
+      }),
+      subagentRow({
         executionId: 'agent-1',
         childStreamId: 'child-agent',
-        agentName: 'reviewer',
-        identity: { kind: 'agent' as const, agent: 'reviewer' },
         status: 'completed',
         finishedAt: 1_000,
-      },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
+      }),
+    ]);
 
     const names = [
       ...(element.shadowRoot?.querySelectorAll('.task-name') ?? []),
@@ -219,18 +222,14 @@ describe('background-tasks-panel', () => {
   });
 
   it('still lists a live process child', async () => {
-    const element = createPanel();
-    element.subagents = [
-      {
+    const element = await mountPanel([
+      subagentRow({
         executionId: 'bash-live',
         childStreamId: 'child-bash-live',
         agentName: 'bash',
-        identity: { kind: 'process' as const, tool: 'bash' },
-        status: 'running',
-      },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
+        processTool: 'bash',
+      }),
+    ]);
 
     expect(
       element.shadowRoot?.querySelector('.task-name')?.textContent?.trim(),
@@ -246,13 +245,7 @@ describe('background-tasks-panel', () => {
     const element = createPanel();
     element.scope = 'inquiries';
     element.subagents = [
-      {
-        executionId: 'exec-1',
-        childStreamId: 'child-1',
-        agentName: 'reviewer',
-        identity: { kind: 'agent' as const, agent: 'reviewer' },
-        status: 'running',
-      },
+      subagentRow({ executionId: 'exec-1', childStreamId: 'child-1' }),
     ];
     const container = document.createElement('div');
     document.body.append(container);

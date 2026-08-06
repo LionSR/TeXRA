@@ -46,15 +46,18 @@ describe('form token endpoint (declarative)', () => {
     vi.restoreAllMocks();
   });
 
-  it('exchanges an authorization code via form body', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () =>
-      Response.json({
-        access_token: 'access',
-        refresh_token: 'refresh',
-        expires_in: 3600,
-      }),
-    );
+  function stubFetchJson(payload: unknown) {
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json(payload));
     vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('exchanges an authorization code via form body', async () => {
+    const fetchMock = stubFetchJson({
+      access_token: 'access',
+      refresh_token: 'refresh',
+      expires_in: 3600,
+    });
 
     const tokens = await exchangeAuthorizationCode(ENDPOINT, {
       code: 'code-1',
@@ -76,13 +79,10 @@ describe('form token endpoint (declarative)', () => {
   });
 
   it('refreshes with the refresh_token grant', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () =>
-      Response.json({
-        access_token: 'new-access',
-        expires_in: 1800,
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubFetchJson({
+      access_token: 'new-access',
+      expires_in: 1800,
+    });
 
     const tokens = await refreshOAuthTokens(ENDPOINT, 'old-refresh');
     expect(tokens.access_token).toBe('new-access');
@@ -106,12 +106,14 @@ describe('form token endpoint (declarative)', () => {
 });
 
 describe('oauthTokenErrorKind', () => {
-  it('treats 400/401/403 as fatal and other statuses as transient', () => {
-    expect(oauthTokenErrorKind(400)).toBe('fatal');
-    expect(oauthTokenErrorKind(401)).toBe('fatal');
-    expect(oauthTokenErrorKind(403)).toBe('fatal');
-    expect(oauthTokenErrorKind(429)).toBe('transient');
-    expect(oauthTokenErrorKind(500)).toBe('transient');
+  it.each([
+    [400, 'fatal'],
+    [401, 'fatal'],
+    [403, 'fatal'],
+    [429, 'transient'],
+    [500, 'transient'],
+  ] as const)('treats status %i as %s', (status, kind) => {
+    expect(oauthTokenErrorKind(status)).toBe(kind);
   });
 });
 

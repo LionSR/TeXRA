@@ -2,6 +2,8 @@
 import * as assert from 'node:assert';
 import { describe, it, vi } from 'vitest';
 
+import type { RunOutcome } from '@shared/schemas';
+
 const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
 }));
@@ -14,23 +16,19 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 import { getExecutionStatusInfo } from '@tools/executionFormatters';
 
 describe('getExecutionStatusInfo', () => {
-  it('reports unknown when the live handle is gone and terminalStatus is absent', () => {
-    mocks.currentSession.mockReturnValue({
-      executions: { getHandle: () => undefined },
-    });
+  it.each<{ outcome?: RunOutcome; expected: string }>([
+    { outcome: undefined, expected: 'unknown' },
+    { outcome: 'cancelled', expected: 'cancelled' },
+  ])(
+    'reports $expected when the live handle is gone',
+    ({ outcome, expected }) => {
+      mocks.currentSession.mockReturnValue({
+        executions: { getHandle: () => undefined },
+      });
 
-    const info = getExecutionStatusInfo('exec-1', undefined);
+      const info = getExecutionStatusInfo('exec-1', outcome);
 
-    assert.strictEqual(info.status, 'unknown');
-  });
-
-  it('serves the persisted outcome when the live handle is gone', () => {
-    mocks.currentSession.mockReturnValue({
-      executions: { getHandle: () => undefined },
-    });
-
-    const info = getExecutionStatusInfo('exec-2', 'cancelled');
-
-    assert.strictEqual(info.status, 'cancelled');
-  });
+      assert.strictEqual(info.status, expected);
+    },
+  );
 });

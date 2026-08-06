@@ -64,6 +64,20 @@ import { executeSubagent } from '@tools/delegation/subagentExecution';
 describe('executeSubagent childStreamId derivation', () => {
   const orchestratorStreamId = 'orchestrator-stream' as StreamTabId;
 
+  const defaultPayload = {
+    agent: 'proof-checker',
+    model: 'gpt5',
+    agentCategory: 'toolUse',
+  } as never;
+
+  function runDefaultSubagent(): ReturnType<typeof executeSubagent> {
+    return executeSubagent(
+      defaultPayload,
+      'proof-checker',
+      orchestratorStreamId,
+    );
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.startChildRunLoop.mockReturnValue({
@@ -88,17 +102,7 @@ describe('executeSubagent childStreamId derivation', () => {
       stopAfterCycle: false,
     });
 
-    await expect(
-      executeSubagent(
-        {
-          agent: 'proof-checker',
-          model: 'gpt5',
-          agentCategory: 'toolUse',
-        } as never,
-        'proof-checker',
-        orchestratorStreamId,
-      ),
-    ).resolves.toMatchObject({
+    await expect(runDefaultSubagent()).resolves.toMatchObject({
       status: 'error',
       summary: 'Delegation session unavailable',
       diagnostics: { type: 'missing_session' },
@@ -160,17 +164,9 @@ describe('executeSubagent childStreamId derivation', () => {
       completion: Promise.reject(lateFailure),
     });
 
-    await expect(
-      executeSubagent(
-        {
-          agent: 'proof-checker',
-          model: 'gpt5',
-          agentCategory: 'toolUse',
-        } as never,
-        'proof-checker',
-        orchestratorStreamId,
-      ),
-    ).resolves.toMatchObject({ status: 'executed' });
+    await expect(runDefaultSubagent()).resolves.toMatchObject({
+      status: 'executed',
+    });
     await vi.waitFor(() => {
       expect(mocks.childLoopError).toHaveBeenCalledWith(
         "Subagent 'proof-checker' run loop failed after launch",

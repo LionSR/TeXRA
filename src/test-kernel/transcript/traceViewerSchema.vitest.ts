@@ -56,6 +56,10 @@ function trace(
   };
 }
 
+function expectTraceRejected(payload: unknown): void {
+  expect(TraceDataSchema.safeParse(payload).success).toBe(false);
+}
+
 describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
@@ -102,14 +106,8 @@ describe('trace-viewer TraceDataSchema', () => {
   });
 
   it('rejects a trace missing required top-level fields', () => {
-    const malformed = {
-      executionId: 'abcdef',
-      streamId: 'stream-1',
-      // config, meta, entries, snapshot, terminalStatus all missing.
-    };
-
-    const result = TraceDataSchema.safeParse(malformed);
-    expect(result.success).toBe(false);
+    // config, meta, entries, snapshot, terminalStatus all missing.
+    expectTraceRejected({ executionId: 'abcdef', streamId: 'stream-1' });
   });
 
   it('applies source config defaults to legacy traces', () => {
@@ -164,24 +162,20 @@ describe('trace-viewer TraceDataSchema', () => {
       },
     });
 
-    const result = TraceDataSchema.safeParse(incompatible);
-    expect(result.success).toBe(false);
+    expectTraceRejected(incompatible);
     expect(() => parseTraceData(incompatible)).toThrowError(
       /incompatible TeXRA version/,
     );
   });
 
   it('rejects a trace whose entries are not an array of StreamLogEntry', () => {
-    const result = TraceDataSchema.safeParse(
-      trace({ entries: [{ notAStreamLogEntry: true }] }),
-    );
-    expect(result.success).toBe(false);
+    expectTraceRejected(trace({ entries: [{ notAStreamLogEntry: true }] }));
   });
 
   it('rejects a null/undefined/primitive trace payload', () => {
-    expect(TraceDataSchema.safeParse(null).success).toBe(false);
-    expect(TraceDataSchema.safeParse(undefined).success).toBe(false);
-    expect(TraceDataSchema.safeParse('trace').success).toBe(false);
+    expectTraceRejected(null);
+    expectTraceRejected(undefined);
+    expectTraceRejected('trace');
   });
 
   it('parses a legacy trace carrying the retired child-activity keys', () => {

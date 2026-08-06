@@ -107,6 +107,23 @@ function descriptionPaths(testCase: ToolDescriptionCase): DescriptionPath[] {
   ];
 }
 
+type GooglePropertiesSchema = {
+  properties: Record<string, Record<string, unknown>>;
+};
+
+/** Converts one definition through both Google surfaces: Interactions and generateContent. */
+function googleSchemasFor(definition: ToolDefinition): {
+  interaction: GooglePropertiesSchema;
+  generateContent: GooglePropertiesSchema;
+} {
+  const interaction = convertGoogleToolSchema(
+    definition,
+  ) as GooglePropertiesSchema;
+  const generateContent = (toGoogleTools([definition])[0] as GeminiTool)
+    .functionDeclarations?.[0].parameters as GooglePropertiesSchema;
+  return { interaction, generateContent };
+}
+
 describe('OpenAI tool conversion', () => {
   it('flattens discriminated object unions into a single object schema', () => {
     // OpenAI's function-calling API rejects schemas whose root is
@@ -686,36 +703,21 @@ describe('toGoogleTools', () => {
         count: z.number().positive().nullish(),
       }),
     };
-    const interactionParams = convertGoogleToolSchema(definition) as {
-      properties: Record<string, Record<string, unknown>>;
-    };
-    expect(interactionParams.properties.query).toStrictEqual({
-      nullable: true,
-      type: 'string',
-    });
-    expect(interactionParams.properties.count).toStrictEqual({
-      nullable: true,
-      type: 'number',
-      minimum: 0,
-    });
-    expect(JSON.stringify(interactionParams)).not.toContain('anyOf');
+    const { interaction, generateContent } = googleSchemasFor(definition);
 
-    const tools = toGoogleTools([definition]);
-    const params = (tools[0] as GeminiTool).functionDeclarations?.[0]
-      .parameters as {
-      properties: Record<string, Record<string, unknown>>;
-    };
-
-    expect(params.properties.query).toStrictEqual({
-      nullable: true,
-      type: 'string',
-    });
-    expect(params.properties.count).toStrictEqual({
-      nullable: true,
-      type: 'number',
-      minimum: 0,
-    });
-    expect(params).not.toHaveProperty('additionalProperties');
+    for (const params of [interaction, generateContent]) {
+      expect(params.properties.query).toStrictEqual({
+        nullable: true,
+        type: 'string',
+      });
+      expect(params.properties.count).toStrictEqual({
+        nullable: true,
+        type: 'number',
+        minimum: 0,
+      });
+    }
+    expect(JSON.stringify(interaction)).not.toContain('anyOf');
+    expect(generateContent).not.toHaveProperty('additionalProperties');
   });
 
   it('preserves exclusive integer bounds on both Google surfaces', () => {
@@ -728,15 +730,9 @@ describe('toGoogleTools', () => {
         number: z.number().positive().lt(10),
       }),
     };
-    const interactionParams = convertGoogleToolSchema(definition) as {
-      properties: Record<string, Record<string, unknown>>;
-    };
-    const generateContentParams = (toGoogleTools([definition])[0] as GeminiTool)
-      .functionDeclarations?.[0].parameters as {
-      properties: Record<string, Record<string, unknown>>;
-    };
+    const { interaction, generateContent } = googleSchemasFor(definition);
 
-    for (const parameters of [interactionParams, generateContentParams]) {
+    for (const parameters of [interaction, generateContent]) {
       expect(parameters.properties.integer).toStrictEqual({
         type: 'integer',
         minimum: 1,
@@ -785,20 +781,13 @@ describe('toGoogleTools', () => {
 
     expect(reviewTools).toHaveLength(17);
     for (const definition of reviewTools) {
-      const interactionSchema = convertGoogleToolSchema(definition);
-      const generateContentSchema = (
-        toGoogleTools([definition])[0] as GeminiTool
-      ).functionDeclarations?.[0].parameters;
-      for (const schema of [interactionSchema, generateContentSchema]) {
+      for (const schema of Object.values(googleSchemasFor(definition))) {
         const serialized = JSON.stringify(schema);
         expect(serialized, definition.name).not.toContain('"type":"null"');
         expect(serialized, definition.name).not.toContain('$ref');
         expect(serialized, definition.name).not.toContain('$defs');
         if (definition.name === 'arxiv_search') {
-          const parameters = schema as {
-            properties: Record<string, Record<string, unknown>>;
-          };
-          expect(parameters.properties.maxResults.minimum).toBe(1);
+          expect(schema.properties.maxResults.minimum).toBe(1);
         }
       }
     }
@@ -806,15 +795,8 @@ describe('toGoogleTools', () => {
 
   it('converts the registered workflow script JSON args for both Google APIs', () => {
     const [definition] = resolveToolDefinitions(['delegate_multi_agents']);
-    const interactionSchema = convertGoogleToolSchema(definition) as {
-      properties: Record<string, Record<string, unknown>>;
-    };
-    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
-      .functionDeclarations?.[0].parameters as {
-      properties: Record<string, Record<string, unknown>>;
-    };
 
-    for (const schema of [interactionSchema, generateContentSchema]) {
+    for (const schema of Object.values(googleSchemasFor(definition))) {
       expect(schema.properties.args.description).toEqual(expect.any(String));
       expect(schema.properties.args.type).toBeUndefined();
       expect(JSON.stringify(schema)).not.toContain('$ref');
@@ -942,22 +924,15 @@ describe('toGoogleTools', () => {
         },
       },
     };
-    const interactionSchema = convertGoogleToolSchema(definition) as {
-      properties: Record<string, Record<string, unknown>>;
-    };
-    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
-      .functionDeclarations?.[0].parameters as {
-      properties: Record<string, Record<string, unknown>>;
-    };
+    const { interaction, generateContent } = googleSchemasFor(definition);
 
-    for (const schema of [interactionSchema, generateContentSchema]) {
+    for (const schema of [interaction, generateContent]) {
       expect(schema.properties.lowerInclusiveStricter.minimum).toBe(7);
       expect(schema.properties.lowerExclusiveStricter.minimum).toBe(8);
       expect(schema.properties.upperInclusiveStricter.maximum).toBe(4);
       expect(schema.properties.upperExclusiveStricter.maximum).toBe(3);
     }
   });
-
   it('rejects Google literal constraints that cannot be represented', () => {
     expect(() =>
       convertGoogleToolSchema({
@@ -984,15 +959,9 @@ describe('toGoogleTools', () => {
         },
       },
     };
-    const interactionSchema = convertGoogleToolSchema(definition) as {
-      properties: Record<string, Record<string, unknown>>;
-    };
-    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
-      .functionDeclarations?.[0].parameters as {
-      properties: Record<string, Record<string, unknown>>;
-    };
+    const { interaction, generateContent } = googleSchemasFor(definition);
 
-    for (const schema of [interactionSchema, generateContentSchema]) {
+    for (const schema of [interaction, generateContent]) {
       expect(schema.properties.value.enum).toStrictEqual(['review']);
     }
   });
@@ -1089,32 +1058,31 @@ describe('toGoogleTools', () => {
     },
   );
 
-  it('rejects referenced external Google schemas instead of flattening them', () => {
-    expect(() =>
-      convertGoogleToolSchema({
+  it.each([
+    {
+      label: 'referenced external schemas',
+      definition: {
         name: 'referenced_input',
         parameters: {
           type: 'object',
           properties: { mode: { $ref: '#/$defs/mode' } },
           $defs: { mode: { type: 'string' } },
         },
-      }),
-    ).toThrow(
-      'Google tool "referenced_input" must use a finite parameter schema without references.',
-    );
-  });
-
-  it('rejects dangling caller-supplied Google references', () => {
-    expect(() =>
-      convertGoogleToolSchema({
+      },
+    },
+    {
+      label: 'dangling caller-supplied references',
+      definition: {
         name: 'dangling_reference',
         parameters: {
           type: 'object',
           properties: { mode: { $ref: '#/$defs/missing' } },
         },
-      }),
-    ).toThrow(
-      'Google tool "dangling_reference" must use a finite parameter schema without references.',
+      },
+    },
+  ])('rejects Google $label instead of flattening them', ({ definition }) => {
+    expect(() => convertGoogleToolSchema(definition)).toThrow(
+      `Google tool "${definition.name}" must use a finite parameter schema without references.`,
     );
   });
 });

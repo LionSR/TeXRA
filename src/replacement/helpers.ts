@@ -8,7 +8,7 @@ import { capitalize } from '@utils/text/stringUtils';
 // Core factory functions for pattern generation
 // ============================================================================
 
-type PatternDict = { [key: string]: string };
+type PatternDict = Record<string, string>;
 type PatternMapper<T> = (item: T) => [string, string][];
 
 /**

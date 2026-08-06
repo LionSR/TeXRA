@@ -38,6 +38,10 @@ async function loadJsonStore(): Promise<
   return JsonStore;
 }
 
+async function readStoredJson(filePath: string): Promise<unknown> {
+  return JSON.parse(await readFile(filePath, 'utf8'));
+}
+
 describe('shared JsonStore', () => {
   let tempDir: string | undefined;
 
@@ -93,7 +97,7 @@ describe('shared JsonStore', () => {
 
     await store.set('drop', undefined);
 
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
+    expect(await readStoredJson(filePath)).toEqual({
       keep: 1,
       foreign: 2,
     });
@@ -119,7 +123,7 @@ describe('shared JsonStore', () => {
     await rm(filePath);
     await store.set('added', 2);
 
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
+    expect(await readStoredJson(filePath)).toEqual({
       keep: 1,
       added: 2,
     });
@@ -137,7 +141,7 @@ describe('shared JsonStore', () => {
     // read-modify-write serialization the later flush drops the other's key.
     await Promise.all([a.set('fromA', 'a'), b.set('fromB', 'b')]);
 
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
+    expect(await readStoredJson(filePath)).toEqual({
       fromA: 'a',
       fromB: 'b',
     });
@@ -167,7 +171,7 @@ describe('shared JsonStore', () => {
 
     await store.set('persisted', true);
 
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
+    expect(await readStoredJson(filePath)).toEqual({
       persisted: true,
     });
   });
@@ -244,7 +248,7 @@ describe('shared JsonStore', () => {
         ),
       )
       .toBe(true);
-    const whileLocked = JSON.parse(await readFile(filePath, 'utf8'));
+    const whileLocked = await readStoredJson(filePath);
 
     await writeFile(filePath, '{"initial": 1, "foreign": 2}\n');
     await rm(`${filePath}.lock`, { recursive: true });
@@ -252,7 +256,7 @@ describe('shared JsonStore', () => {
     if (exitCode !== 0) throw new Error(Buffer.concat(stderr).toString());
 
     expect(whileLocked).toEqual({ initial: 1 });
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
+    expect(await readStoredJson(filePath)).toEqual({
       initial: 1,
       foreign: 2,
       child: 2,

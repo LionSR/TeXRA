@@ -47,6 +47,12 @@ function readRelayLlmZooSpecifier(): string {
   return relaySpecifier!;
 }
 
+/** The exact llm-zoo version the relay's specifier pins (e.g. "1.12.0"). */
+function readRelayLlmZooVersion(): { specifier: string; version: string } {
+  const specifier = readRelayLlmZooSpecifier();
+  return { specifier, version: specifier.replace(/^npm:llm-zoo@/, '') };
+}
+
 describe('relay shared configuration parity', () => {
   it('keeps client and relay tier strings identical', () => {
     expect(RELAY_TIERS).toEqual(CLIENT_TIERS);
@@ -82,13 +88,12 @@ describe('relay shared configuration parity', () => {
     // catches.
     const workspaceVersion = workspaceRange!.replace(/^[\^~]/, '');
 
-    const relaySpecifier = readRelayLlmZooSpecifier();
-    const relayVersion = relaySpecifier.replace(/^npm:llm-zoo@/, '');
+    const relay = readRelayLlmZooVersion();
 
     expect(
-      relayVersion,
+      relay.version,
       `llm-zoo range floor skew: package.json pins ${workspaceRange} but ` +
-        `relay deno.json pins ${relaySpecifier}. Update ` +
+        `relay deno.json pins ${relay.specifier}. Update ` +
         'supabase/functions/relay/deno.json (and refresh deno.lock) or ' +
         'package.json so both point to the same version.',
     ).toBe(workspaceVersion);
@@ -148,13 +153,12 @@ describe('relay shared configuration parity', () => {
         'installed llm-zoo/package.json version',
     ).toBe(resolvedVersion);
 
-    const relaySpecifier = readRelayLlmZooSpecifier();
-    const relayVersion = relaySpecifier.replace(/^npm:llm-zoo@/, '');
+    const relay = readRelayLlmZooVersion();
 
     expect(
-      relayVersion,
+      relay.version,
       `llm-zoo version skew: pnpm-lock.yaml resolves llm-zoo@${resolvedVersion} ` +
-        `but relay deno.json pins ${relaySpecifier}. Update ` +
+        `but relay deno.json pins ${relay.specifier}. Update ` +
         'supabase/functions/relay/deno.json (and refresh deno.lock) and/or ' +
         'the workspace pnpm-lock.yaml so both point to the same version.',
     ).toBe(resolvedVersion);

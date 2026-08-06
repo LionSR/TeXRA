@@ -85,6 +85,10 @@ function session(overrides: Partial<CodexSession> = {}): CodexSession {
   };
 }
 
+function expiredSession(): CodexSession {
+  return session({ expiresAtMs: NOW - 1 });
+}
+
 function tokenResponse(
   overrides: Partial<CodexTokenResponse> = {},
 ): CodexTokenResponse {
@@ -163,7 +167,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('single-flights concurrent refreshes', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const coordinator = makeCoordinator(storage, { refreshTokens });
@@ -183,7 +187,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('does not restore a session when sign-out races with refresh', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const coordinator = makeCoordinator(storage, { refreshTokens });
@@ -203,7 +207,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('does not restore a session when sign-out races with refresh storage', async () => {
-    const storage = gatedStorage('store', session({ expiresAtMs: NOW - 1 }));
+    const storage = gatedStorage('store', expiredSession());
     const refreshTokens = vi.fn(async () => tokenResponse());
     const coordinator = makeCoordinator(storage, { refreshTokens });
 
@@ -221,7 +225,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('does not erase a newer login with a blocked fatal-refresh deletion', async () => {
-    const storage = gatedStorage('delete', session({ expiresAtMs: NOW - 1 }));
+    const storage = gatedStorage('delete', expiredSession());
     const refreshTokens = vi.fn(async () => {
       throw new CodexAuthError('revoked', 'fatal', 401);
     });
@@ -249,7 +253,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('does not start a stale refresh for a caller entering during sign-out', async () => {
-    const storage = gatedStorage('delete', session({ expiresAtMs: NOW - 1 }));
+    const storage = gatedStorage('delete', expiredSession());
     const refreshTokens = vi.fn(async () => tokenResponse());
     const coordinator = makeCoordinator(storage, { refreshTokens });
 
@@ -269,7 +273,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('does not overwrite a newer login for a caller entering during login', async () => {
-    const storage = gatedStorage('store', session({ expiresAtMs: NOW - 1 }));
+    const storage = gatedStorage('store', expiredSession());
     const refreshTokens = vi.fn(async () => tokenResponse());
     const exchangeAuthorizationCode = vi.fn(async () =>
       newLoginTokenResponse(),
@@ -310,7 +314,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('does not clear a newer login when a stale refresh is rejected', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const { promise: pending, reject } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const exchangeAuthorizationCode = vi.fn(async () =>
@@ -337,7 +341,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('returns the newer login when a successful refresh is superseded', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const exchangeAuthorizationCode = vi.fn(async () =>
@@ -365,7 +369,7 @@ describe('CodexSessionCoordinator', () => {
     // Generation bump that leaves the same expiring credentials (models a
     // concurrent store that failed after supersede, or rewrote the same
     // blob) must not hand back the stale token as if refresh completed.
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const exchangeAuthorizationCode = vi.fn(async () =>
@@ -396,7 +400,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('keeps the previous refresh token when the response omits a new one', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const refreshTokens = vi.fn(async () =>
       tokenResponse({ refresh_token: undefined }),
     );
@@ -406,7 +410,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('clears the session and surfaces re-auth on a fatal refresh', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const refreshTokens = vi.fn(async () => {
       throw new CodexAuthError('revoked', 'fatal', 401);
     });
@@ -420,7 +424,7 @@ describe('CodexSessionCoordinator', () => {
   });
 
   it('keeps the session on a transient refresh failure', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const storage = memoryStorage(expiredSession());
     const refreshTokens = vi.fn(async () => {
       throw new CodexAuthError('upstream 502', 'transient', 502);
     });

@@ -18,9 +18,13 @@ import {
   buildCliTeamItems,
   orchestrationModelAccessView,
   type BuildCliOrchestrationItemsInput,
+  type CliAccountStatus,
   type CliOrchestrationItem,
 } from '@cli/runtime/orchestration';
-import { buildCliModelAccessItems } from '@cli/runtime/modelAccessRoute';
+import {
+  buildCliModelAccessItems,
+  type CliModelAccessStatus,
+} from '@cli/runtime/modelAccessRoute';
 
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
@@ -130,6 +134,17 @@ function readyPresetPlan(
   );
 }
 
+function leanProjectPlan(): CliMultiAgentPresetRunPlan {
+  return presetPlan(
+    {
+      id: 'lean-project',
+      name: 'Lean Project',
+      agents: { workflow: [], toolUse: ['lean', 'leanSearch'] },
+    },
+    { toolUse: [toolUseAgent('lean')] },
+  );
+}
+
 function orchestrationItems(
   overrides: Partial<BuildCliOrchestrationItemsInput> = {},
 ): CliOrchestrationItem[] {
@@ -140,6 +155,25 @@ function orchestrationItems(
     ...overrides,
   });
 }
+
+function accountDescription(account: CliAccountStatus): string | undefined {
+  return orchestrationItems({ account }).find(
+    (item) => item.label === 'Account',
+  )?.description;
+}
+
+function kimiCodePreferenceItem(
+  access: CliModelAccessStatus,
+): ReturnType<typeof buildCliModelAccessItems>[number] | undefined {
+  return buildCliModelAccessItems({ kind: 'loaded', access }).find(
+    (item) =>
+      item.value.kind === 'subscription-preference' &&
+      item.value.provider === 'kimi-code',
+  );
+}
+
+const SIGNED_IN_AUTH_STATUS =
+  'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining';
 
 const ORCHESTRATION_TEST_HEADER_LINES = [
   'TeXRA v0.0.0-test',
@@ -186,14 +220,10 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps the exit hint out of the Select letter hotkey range', () => {
-    expect(orchestrationKeyHints()).toContainEqual({
-      key: 'Esc',
-      action: 'exit',
-    });
-    expect(orchestrationKeyHints()).not.toContainEqual({
-      key: 'q/Esc',
-      action: 'exit',
-    });
+    const hints = orchestrationKeyHints();
+
+    expect(hints).toContainEqual({ key: 'Esc', action: 'exit' });
+    expect(hints).not.toContainEqual({ key: 'q/Esc', action: 'exit' });
   });
 
   it('budgets wrapped launcher status rows instead of assuming one row per line', () => {
@@ -268,10 +298,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps compact signed-in auth after the API mode on short launchers', () => {
-    const statusLines = [
-      'api: included access',
-      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
-    ];
+    const statusLines = ['api: included access', SIGNED_IN_AUTH_STATUS];
 
     const layout = launcherLayout({ rows: 14, statusLines });
 
@@ -287,10 +314,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps footer hints when compact auth creates enough room', () => {
-    const statusLines = [
-      'api: included access',
-      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
-    ];
+    const statusLines = ['api: included access', SIGNED_IN_AUTH_STATUS];
     const footerHints = ['Team settings are available from the launcher.'];
 
     const layout = launcherLayout({ rows: 16, statusLines, footerHints });
@@ -304,10 +328,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('uses the compact auth fallback when the launcher is narrow', () => {
-    const statusLines = [
-      'api: your own API keys',
-      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
-    ];
+    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
 
     const layout = launcherLayout({ rows: 16, columns: 40, statusLines });
 
@@ -402,20 +423,13 @@ describe('CLI orchestration items', () => {
   });
 
   it('describes the Kimi Code route by key state and activity', () => {
-    const kimiOff = buildCliModelAccessItems({
-      kind: 'loaded',
-      access: {
-        apiFallback: 'personal',
-        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
-        kimiCodeKeySet: true,
-      },
-    }).find(
-      (item) =>
-        item.value.kind === 'subscription-preference' &&
-        item.value.provider === 'kimi-code',
-    );
+    const kimiOff = kimiCodePreferenceItem({
+      apiFallback: 'personal',
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+      chatGptSignedIn: false,
+      grokSignedIn: false,
+      kimiCodeKeySet: true,
+    });
     expect(kimiOff).toEqual({
       value: {
         kind: 'subscription-preference',
@@ -425,32 +439,19 @@ describe('CLI orchestration items', () => {
       label: 'Prefer Kimi Code subscription',
       description: 'Off · key configured',
     });
-    const kimiOn = buildCliModelAccessItems({
-      kind: 'loaded',
-      access: {
-        apiFallback: 'personal',
-        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
-        kimiCodeKeySet: true,
-      },
-    }).find(
-      (item) =>
-        item.value.kind === 'subscription-preference' &&
-        item.value.provider === 'kimi-code',
-    );
-    expect(kimiOn?.description).toBe('On · key configured');
 
-    const items = orchestrationItems({
-      modelAccess: {
-        apiFallback: 'personal',
-        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
-        kimiCodeKeySet: true,
-      },
-    });
-    expect(items[1]).toEqual({
+    const kimiOnAccess: CliModelAccessStatus = {
+      apiFallback: 'personal',
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
+      chatGptSignedIn: false,
+      grokSignedIn: false,
+      kimiCodeKeySet: true,
+    };
+    expect(kimiCodePreferenceItem(kimiOnAccess)?.description).toBe(
+      'On · key configured',
+    );
+
+    expect(orchestrationItems({ modelAccess: kimiOnAccess })[1]).toEqual({
       label: 'Model access',
       description:
         'ChatGPT Off · Grok Off · Kimi On · otherwise: your own API keys',
@@ -471,14 +472,11 @@ describe('CLI orchestration items', () => {
       },
     });
     const byProvider = Object.fromEntries(
-      items
-        .filter((item) => item.value.kind === 'subscription-preference')
-        .map((item) => {
-          if (item.value.kind !== 'subscription-preference') {
-            throw new Error('expected subscription preference');
-          }
-          return [item.value.provider, item.description];
-        }),
+      items.flatMap((item) =>
+        item.value.kind === 'subscription-preference'
+          ? [[item.value.provider, item.description]]
+          : [],
+      ),
     );
 
     expect(byProvider).toEqual({
@@ -524,23 +522,19 @@ describe('CLI orchestration items', () => {
   it('summarizes multiple signed-in accounts with natural list grammar', () => {
     // #9719: "A and B and C" is awkward once Grok is a third account.
     expect(
-      orchestrationItems({
-        account: {
-          texraSignedIn: true,
-          chatGptSignedIn: true,
-          grokSignedIn: false,
-        },
-      }).find((item) => item.label === 'Account')?.description,
+      accountDescription({
+        texraSignedIn: true,
+        chatGptSignedIn: true,
+        grokSignedIn: false,
+      }),
     ).toBe('TeXRA and ChatGPT signed in');
 
     expect(
-      orchestrationItems({
-        account: {
-          texraSignedIn: true,
-          chatGptSignedIn: true,
-          grokSignedIn: true,
-        },
-      }).find((item) => item.label === 'Account')?.description,
+      accountDescription({
+        texraSignedIn: true,
+        chatGptSignedIn: true,
+        grokSignedIn: true,
+      }),
     ).toBe('TeXRA, ChatGPT, and Grok signed in');
   });
 
@@ -770,24 +764,9 @@ describe('CLI orchestration items', () => {
   });
 
   it('does not promote built-in team members to fallback roots', () => {
-    const items = buildCliTeamItems(
-      [
-        presetPlan(
-          {
-            id: 'lean-project',
-            name: 'Lean Project',
-            agents: {
-              workflow: [],
-              toolUse: ['lean', 'leanSearch'],
-            },
-          },
-          {
-            toolUse: [toolUseAgent('lean')],
-          },
-        ),
-      ],
-      { includeLoginHint: true },
-    );
+    const items = buildCliTeamItems([leanProjectPlan()], {
+      includeLoginHint: true,
+    });
 
     expect(items.find((item) => item.label === 'Team lean-project')).toEqual(
       expect.objectContaining({
@@ -885,24 +864,7 @@ describe('CLI orchestration items', () => {
 
   it('preserves unavailable team descriptions when model access is also blocked', () => {
     const view = orchestrationModelAccessView(
-      buildCliTeamItems(
-        [
-          presetPlan(
-            {
-              id: 'lean-project',
-              name: 'Lean Project',
-              agents: {
-                workflow: [],
-                toolUse: ['lean', 'leanSearch'],
-              },
-            },
-            {
-              toolUse: [toolUseAgent('lean')],
-            },
-          ),
-        ],
-        {},
-      ),
+      buildCliTeamItems([leanProjectPlan()], {}),
       [modelAccess('deepseekT', 'provider-key', false)],
       'personal',
     );

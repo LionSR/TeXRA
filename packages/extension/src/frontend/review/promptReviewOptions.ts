@@ -107,7 +107,7 @@ export async function promptReviewOptions(
   if (!branchPick) return undefined;
 
   return {
-    userInstructions: userInstructions.trim() || undefined,
+    userInstructions: trimmedInstructions || undefined,
     baseBranch: branchPick.ref,
   };
 }

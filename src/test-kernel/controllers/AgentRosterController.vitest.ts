@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AgentRosterController,
@@ -48,8 +48,23 @@ function controller(
 }
 
 describe('AgentRosterController', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Silence console.warn and return the spy for warning assertions. */
+  function stubWarn(): ReturnType<typeof vi.spyOn> {
+    return vi.spyOn(console, 'warn').mockImplementation(() => {});
+  }
+
+  function expectMalformedWarning(warn: ReturnType<typeof vi.spyOn>): void {
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('malformed roster selection'),
+    );
+  }
+
   it('warns and falls back to the inherited roster on malformed state', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = stubWarn();
     const roster = controller(
       new FakeStateStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
@@ -57,17 +72,14 @@ describe('AgentRosterController', () => {
     );
 
     expect(roster.getSelection()).toEqual({ kind: 'inherit' });
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('malformed roster selection'),
-    );
-    warn.mockRestore();
+    expectMalformedWarning(warn);
   });
 
   it('treats the retired pair-shaped roster as malformed and overwrites it in place', async () => {
     // The pre-record `workflowAgentKeys`/`toolUseAgentKeys` pair is retired
     // vocabulary: it warns and reads as inherited, and the next write
     // replaces it at the same key.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = stubWarn();
     const pairShaped = {
       kind: 'custom',
       workflowAgentKeys: ['builtInWorkflow:write'],
@@ -79,9 +91,7 @@ describe('AgentRosterController', () => {
     const roster = controller(workspaceState);
 
     expect(roster.getSelection()).toEqual({ kind: 'inherit' });
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('malformed roster selection'),
-    );
+    expectMalformedWarning(warn);
 
     await roster.setTeam('test-team');
     expect(
@@ -91,7 +101,6 @@ describe('AgentRosterController', () => {
       kind: 'team',
       teamId: 'test-team',
     });
-    warn.mockRestore();
   });
 
   it('uses the user default only for inherited workspaces', () => {

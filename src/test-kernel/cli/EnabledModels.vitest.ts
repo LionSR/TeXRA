@@ -56,13 +56,12 @@ describe('CLI enabled models catalog', () => {
     expect(getCliEnabledModels()).toEqual(['deepseekproT']);
   });
 
-  it('lists catalog rows with enabled flags', async () => {
+  it('lists catalog rows with enabled flags', () => {
     state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT', 'grok45']);
     const catalog = listCliEnabledModelCatalog();
-    const grok = catalog.find((row) => row.id === 'grok45');
-    const deepseek = catalog.find((row) => row.id === 'deepseekproT');
-    expect(grok?.enabled).toBe(true);
-    expect(deepseek?.enabled).toBe(true);
-    expect(catalog.some((row) => row.id === 'deepseekproT')).toBe(true);
+    expect(catalog.find((row) => row.id === 'grok45')?.enabled).toBe(true);
+    expect(catalog.find((row) => row.id === 'deepseekproT')?.enabled).toBe(
+      true,
+    );
   });
 });

@@ -93,20 +93,18 @@ export async function applyCliProviderApiKey(
     cliApiFallbackSelection('personal'),
   );
   const message = await completeModelAccessSelection(access, context);
-  if (provider === 'kimiCode') {
-    // The coding-only models route through the subscription automatically;
-    // dual-backend K3 needs the opt-in switch, which is only discoverable if
-    // we name it here.
-    return collapseWhitespace(
-      [
-        message,
-        "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Prefer Kimi Code' in /config.",
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    );
-  }
-  return message;
+  if (provider !== 'kimiCode') return message;
+  // The coding-only models route through the subscription automatically;
+  // dual-backend K3 needs the opt-in switch, which is only discoverable if
+  // we name it here.
+  return collapseWhitespace(
+    [
+      message,
+      "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Prefer Kimi Code' in /config.",
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  );
 }
 
 /** Set the session API mode and refresh access-dependent TUI views. */

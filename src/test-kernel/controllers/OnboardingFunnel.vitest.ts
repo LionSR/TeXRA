@@ -133,18 +133,18 @@ describe('onboarding flags', () => {
     expect(getDefaultTeamId(state)).toBe('physicist');
   });
 
-  it('treats a non-string defaultTeamId as unset', () => {
-    expect(
-      getDefaultTeamId(
-        new FakeStateStore({ [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 7 }),
-      ),
-    ).toBeUndefined();
-    expect(
-      getDefaultTeamId(
-        new FakeStateStore({ [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: '' }),
-      ),
-    ).toBeUndefined();
-  });
+  it.each([7, ''])(
+    'treats a non-team-id defaultTeamId %j as unset',
+    (value) => {
+      expect(
+        getDefaultTeamId(
+          new FakeStateStore({
+            [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: value,
+          }),
+        ),
+      ).toBeUndefined();
+    },
+  );
 
   it('reads both funnel flags in one call', async () => {
     const state = new FakeStateStore();
@@ -162,32 +162,26 @@ describe('onboarding flags', () => {
 });
 
 describe('backfillFirstRunDone', () => {
-  it('marks prior installs with a credential as done', async () => {
+  it.each<[string, Parameters<typeof backfillFirstRunDone>[1], boolean]>([
+    [
+      'marks prior installs with a credential as done',
+      { hasCredential: true, hasPriorInstall: true, hasRunHistory: false },
+      true,
+    ],
+    [
+      'does not mark fresh credential-only installs as done',
+      { hasCredential: true, hasRunHistory: false },
+      false,
+    ],
+    [
+      'marks upgraders with run history as done',
+      { hasCredential: false, hasRunHistory: true },
+      true,
+    ],
+  ])('%s', async (_name, signals, expected) => {
     const state = new FakeStateStore();
-    await backfillFirstRunDone(state, {
-      hasCredential: true,
-      hasPriorInstall: true,
-      hasRunHistory: false,
-    });
-    expect(getFirstRunDone(state)).toBe(true);
-  });
-
-  it('does not mark fresh credential-only installs as done', async () => {
-    const state = new FakeStateStore();
-    await backfillFirstRunDone(state, {
-      hasCredential: true,
-      hasRunHistory: false,
-    });
-    expect(getFirstRunDone(state)).toBe(false);
-  });
-
-  it('marks upgraders with run history as done', async () => {
-    const state = new FakeStateStore();
-    await backfillFirstRunDone(state, {
-      hasCredential: false,
-      hasRunHistory: true,
-    });
-    expect(getFirstRunDone(state)).toBe(true);
+    await backfillFirstRunDone(state, signals);
+    expect(getFirstRunDone(state)).toBe(expected);
   });
 
   it('writes false for a fresh install so the backfill never re-evaluates', async () => {

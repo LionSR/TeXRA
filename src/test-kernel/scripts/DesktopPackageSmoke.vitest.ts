@@ -45,6 +45,13 @@ describe('packaged desktop smoke environment', () => {
 });
 
 describe('packaged desktop smoke process observation', () => {
+  function fakeChild() {
+    return Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+    });
+  }
+
   it('observes an exit that races with listener registration', async () => {
     const child = {
       exitCode: null as number | null,
@@ -63,10 +70,7 @@ describe('packaged desktop smoke process observation', () => {
   });
 
   it('reports a process error to callers that require launch success', async () => {
-    const child = Object.assign(new EventEmitter(), {
-      exitCode: null as number | null,
-      signalCode: null as NodeJS.Signals | null,
-    });
+    const child = fakeChild();
     const exit = waitForExit(child);
 
     child.emit('error', new Error('spawn failed'));
@@ -75,11 +79,7 @@ describe('packaged desktop smoke process observation', () => {
   });
 
   it('does not mistake a process error for an exit during forced teardown', async () => {
-    const child = Object.assign(new EventEmitter(), {
-      exitCode: null as number | null,
-      signalCode: null as NodeJS.Signals | null,
-      kill: vi.fn(),
-    });
+    const child = Object.assign(fakeChild(), { kill: vi.fn() });
     child.on('error', () => {});
     child.kill.mockImplementation((signal: NodeJS.Signals) => {
       if (signal === 'SIGTERM') {

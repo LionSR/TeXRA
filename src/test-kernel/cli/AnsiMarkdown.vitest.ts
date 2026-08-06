@@ -18,26 +18,35 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 const ESC = String.fromCharCode(27);
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, 'u');
 
+const WIDE_CODE_POINT_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x11ff],
+  [0x2e80, 0xa4cf],
+  [0xac00, 0xd7a3],
+  [0xf900, 0xfaff],
+  [0xfe10, 0xfe19],
+  [0xfe30, 0xfe6f],
+  [0xff00, 0xff60],
+  [0x1f300, 0x1faff],
+];
+
 function displayWidthForTest(line: string): number {
   let width = 0;
   for (const char of line) {
     const codePoint = char.codePointAt(0) ?? 0;
-    if (
-      (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
-      (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
-      (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-      (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-      (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-      (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-      (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-      (codePoint >= 0x1f300 && codePoint <= 0x1faff)
-    ) {
-      width += 2;
-    } else {
-      width += 1;
-    }
+    width += WIDE_CODE_POINT_RANGES.some(
+      ([low, high]) => codePoint >= low && codePoint <= high,
+    )
+      ? 2
+      : 1;
   }
   return width;
+}
+
+type RenderOptions = Parameters<typeof renderAnsiMarkdown>[1];
+
+/** Renders markdown and strips ANSI, for assertions on the visible text. */
+function renderPlain(markdown: string, options?: RenderOptions): string {
+  return stripAnsi(renderAnsiMarkdown(markdown, options));
 }
 
 /** Strips ANSI, asserts every line fits `width`, and returns the plain lines. */
@@ -68,7 +77,7 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders common HTML formatting without leaking tags', () => {
-    const out = renderAnsiMarkdown(
+    const plain = renderPlain(
       [
         '<blockquote><strong>Subagent <code>prover</code> finished execution abc:</strong>',
         '',
@@ -76,7 +85,6 @@ describe('renderAnsiMarkdown', () => {
       ].join('\n'),
       { colorEnabled: false, width: 80 },
     );
-    const plain = stripAnsi(out);
 
     expect(plain).toContain('│ Subagent `prover` finished execution abc:');
     expect(plain).toContain('│ Done.');
@@ -86,11 +94,10 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
-    const out = renderAnsiMarkdown(
+    const plain = renderPlain(
       '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
       { colorEnabled: false, width: 80 },
     );
-    const plain = stripAnsi(out);
 
     expect(plain).toContain('Verification Report');
     expect(plain).toContain('The proof is fully verified.');
@@ -101,11 +108,10 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps HTML headings inside HTML blockquotes quoted', () => {
-    const out = renderAnsiMarkdown(
+    const plain = renderPlain(
       '<blockquote><h3>Quoted Report</h3><p>The proof is <b>fully verified</b>.</p></blockquote>',
       { colorEnabled: false, width: 80 },
     );
-    const plain = stripAnsi(out);
 
     expect(plain).toContain('│ ### Quoted Report');
     expect(plain).toContain('│ The proof is fully verified.');
@@ -116,7 +122,7 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('summarizes embedded subagent result XML before HTML rendering', () => {
-    const out = renderAnsiMarkdown(
+    const plain = renderPlain(
       [
         '<blockquote>',
         '<subagent-result id="abc" agent="review" category="toolUse" status="completed">',
@@ -127,7 +133,6 @@ describe('renderAnsiMarkdown', () => {
       ].join('\n'),
       { colorEnabled: false, width: 80 },
     );
-    const plain = stripAnsi(out);
 
     expect(plain).toContain('│ ✓ review completed · 2m');
     expect(plain).toContain('│ All good <ok>');
@@ -152,23 +157,20 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('prefixes every rendered blockquote line', () => {
-    const out = renderAnsiMarkdown('> first\n> second\n>\n> third');
-    const plain = stripAnsi(out);
+    const plain = renderPlain('> first\n> second\n>\n> third');
     expect(plain).toContain('│ first\n│ second');
     expect(plain).toContain('│ third');
   });
 
   it('renders nested blockquote prefixes once per depth', () => {
-    const out = renderAnsiMarkdown('> outer\n> > inner');
-    const plain = stripAnsi(out);
+    const plain = renderPlain('> outer\n> > inner');
     expect(plain).toContain('│ outer');
     expect(plain).toContain('│ │ inner');
     expect(plain).not.toContain('│ │ │ inner');
   });
 
   it('keeps the blockquote gutter on tight lists inside the quote', () => {
-    const out = renderAnsiMarkdown('> - item 1\n> - item 2');
-    const plain = stripAnsi(out);
+    const plain = renderPlain('> - item 1\n> - item 2');
     // First bullet inherits the gutter from blockquote_open; the second
     // bullet must re-inject it so it doesn't render at column 0.
     expect(plain).toContain('│   • item 1');
@@ -178,10 +180,9 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps the blockquote gutter on quoted block nodes', () => {
-    const out = renderAnsiMarkdown(
+    const plain = renderPlain(
       '> # Heading\n>\n> ```ts\n> const x = 1;\n> const y = 2;\n> ```\n>\n> ---',
     );
-    const plain = stripAnsi(out);
     expect(plain).toContain('│ Heading');
     expect(plain).toContain('│ const x = 1;');
     expect(plain).toContain('│ const y = 2;');
@@ -189,16 +190,15 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves ordered-list delimiter markup', () => {
-    const out = renderAnsiMarkdown('1) one\n2) two');
-    expect(stripAnsi(out)).toContain('1) one');
-    expect(stripAnsi(out)).toContain('2) two');
+    const plain = renderPlain('1) one\n2) two');
+    expect(plain).toContain('1) one');
+    expect(plain).toContain('2) two');
   });
 
   it('renders headings without visible Markdown markers', () => {
-    const out = renderAnsiMarkdown(
+    const plain = renderPlain(
       '## What is a Tensor Network?\n\n### Core objects',
     );
-    const plain = stripAnsi(out);
     expect(plain).toContain('What is a Tensor Network?');
     expect(plain).toContain('Core objects');
     expect(plain).not.toContain('## What');
@@ -206,9 +206,7 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('re-emits heading markers only when color is disabled', () => {
-    expect(stripAnsi(renderAnsiMarkdown('## Section'))).not.toContain(
-      '## Section',
-    );
+    expect(renderPlain('## Section')).not.toContain('## Section');
     expect(renderAnsiMarkdown('## Section', { colorEnabled: false })).toContain(
       '## Section',
     );
@@ -226,15 +224,15 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('indents nested list items deeper than their parents', () => {
-    const out = stripAnsi(renderAnsiMarkdown('- parent\n  - child'));
-    expect(out).toContain('  • parent');
-    expect(out).toContain('    • child');
+    const plain = renderPlain('- parent\n  - child');
+    expect(plain).toContain('  • parent');
+    expect(plain).toContain('    • child');
   });
 
   it('keeps nested-list indent on wrapped continuation lines', () => {
-    const lines = stripAnsi(
-      renderAnsiMarkdown('- parent\n  - abcdef ghijkl mnopqr', { width: 12 }),
-    ).split('\n');
+    const lines = renderPlain('- parent\n  - abcdef ghijkl mnopqr', {
+      width: 12,
+    }).split('\n');
     const childIndex = lines.findIndex((line) => line.includes('• abcdef'));
     expect(childIndex).toBeGreaterThan(-1);
     expect(lines[childIndex]).toMatch(/^ {4}• /);
@@ -246,22 +244,18 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('appends link destinations that differ from the link text', () => {
-    const out = stripAnsi(
-      renderAnsiMarkdown('[docs](https://example.com/x)', {
-        colorEnabled: false,
-      }),
-    );
-    expect(out).toContain('[docs] (https://example.com/x)');
+    const plain = renderPlain('[docs](https://example.com/x)', {
+      colorEnabled: false,
+    });
+    expect(plain).toContain('[docs] (https://example.com/x)');
   });
 
   it('does not duplicate autolinked destinations', () => {
-    const out = stripAnsi(
-      renderAnsiMarkdown('Visit example.com and <https://a.io>', {
-        colorEnabled: false,
-      }),
-    );
-    expect(out).not.toContain('(http://example.com)');
-    expect(out).not.toContain('(https://a.io)');
+    const plain = renderPlain('Visit example.com and <https://a.io>', {
+      colorEnabled: false,
+    });
+    expect(plain).not.toContain('(http://example.com)');
+    expect(plain).not.toContain('(https://a.io)');
   });
 
   it('renders markdown without ANSI styles when color is disabled', () => {
@@ -276,8 +270,8 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('separates consecutive paragraphs visually', () => {
-    const out = renderAnsiMarkdown('First paragraph.\n\nSecond paragraph.');
-    expect(stripAnsi(out)).toContain('First paragraph.\n\nSecond paragraph.');
+    const plain = renderPlain('First paragraph.\n\nSecond paragraph.');
+    expect(plain).toContain('First paragraph.\n\nSecond paragraph.');
   });
 
   it('wraps rendered markdown at display-cell boundaries', () => {
@@ -342,8 +336,7 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('styles heading text across inline code boundaries', () => {
-    const out = renderAnsiMarkdown('## Use `git` correctly');
-    const plain = stripAnsi(out);
+    const plain = renderPlain('## Use `git` correctly');
     expect(plain).toContain('Use `git` correctly');
     expect(plain).not.toContain('## Use');
   });
@@ -371,8 +364,7 @@ describe('renderAnsiMarkdown', () => {
 
   it('renders GFM pipe tables as a box-drawing table, not raw HTML', () => {
     const md = '| Dimension | Workflow |\n|---|---|\n| Output | Rewrites |';
-    const out = renderAnsiMarkdown(md);
-    const plain = stripAnsi(out);
+    const plain = renderPlain(md);
     // The cells render…
     expect(plain).toContain('Dimension');
     expect(plain).toContain('Rewrites');
@@ -392,17 +384,15 @@ describe('renderAnsiMarkdown', () => {
 
   it('sizes a small table to its content instead of stretching to full width', () => {
     const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
-    const out = renderAnsiMarkdown(md, { width: 80 });
+    const plain = renderPlain(md, { width: 80 });
     const widest = Math.max(
-      ...stripAnsi(out)
-        .split('\n')
-        .map((line) => displayWidthForTest(line)),
+      ...plain.split('\n').map((line) => displayWidthForTest(line)),
     );
     // Content needs only a handful of columns — it must not balloon to 80.
     expect(widest).toBeLessThan(24);
     expect(widest).toBeGreaterThan(0);
-    expect(stripAnsi(out)).toContain('447');
-    expect(stripAnsi(out)).toContain('993.3');
+    expect(plain).toContain('447');
+    expect(plain).toContain('993.3');
   });
 
   it('does not leak protected LaTeX placeholders from wrapped table cells', () => {
@@ -411,8 +401,7 @@ describe('renderAnsiMarkdown', () => {
       '|---|---|---|---|',
       '| $3+\\sqrt{5}$ | \\((3,1)\\) | \\((47,21)\\) | $123 > 100$ (stop) |',
     ].join('\n');
-    const out = renderAnsiMarkdown(md, { width: 52 });
-    const plain = stripAnsi(out);
+    const plain = renderPlain(md, { width: 52 });
     expect(plain).not.toContain('@@LATEX');
     expect(plain).toContain('$3+\\sqrt{');
     expect(plain).toContain('\\((47,21)');
@@ -434,41 +423,35 @@ describe('renderAnsiMarkdown', () => {
   // emphasis rule eats `_{…}` subscripts. The CLI shows LaTeX source verbatim,
   // so whole spans must survive untouched.
   it('preserves \\(…\\) and \\[…\\] math delimiter spans verbatim', () => {
-    const out = stripAnsi(
-      renderAnsiMarkdown(
-        'Euler: \\(e^{i\\pi}+1=0\\) and \\[a \\; = \\; b\\] done',
-      ),
+    const plain = renderPlain(
+      'Euler: \\(e^{i\\pi}+1=0\\) and \\[a \\; = \\; b\\] done',
     );
-    expect(out).toContain('\\(e^{i\\pi}+1=0\\)');
-    expect(out).toContain('\\[a \\; = \\; b\\]');
+    expect(plain).toContain('\\(e^{i\\pi}+1=0\\)');
+    expect(plain).toContain('\\[a \\; = \\; b\\]');
   });
 
   it('preserves $…$ and $$…$$ spans incl. subscripts (no emphasis) and backslash-braces', () => {
-    const out = stripAnsi(
-      renderAnsiMarkdown(
-        'Pairs $a_{i}b_{j}$ and $$P_k = \\{2k-1,\\; 2k\\}$$ end',
-      ),
+    const plain = renderPlain(
+      'Pairs $a_{i}b_{j}$ and $$P_k = \\{2k-1,\\; 2k\\}$$ end',
     );
     // emphasis rule must NOT fire inside the math span
-    expect(out).toContain('$a_{i}b_{j}$');
-    expect(out).not.toContain('<em>');
+    expect(plain).toContain('$a_{i}b_{j}$');
+    expect(plain).not.toContain('<em>');
     // display span with backslash-braces and a thin-space survives whole
-    expect(out).toContain('$$P_k = \\{2k-1,\\; 2k\\}$$');
+    expect(plain).toContain('$$P_k = \\{2k-1,\\; 2k\\}$$');
   });
 
   it('nets stray spacing macros / literal braces outside any math span', () => {
-    const out = stripAnsi(
-      renderAnsiMarkdown('loose \\; macro and set \\{1,2\\}'),
-    );
-    expect(out).toContain('\\;');
-    expect(out).toContain('\\{1,2\\}');
+    const plain = renderPlain('loose \\; macro and set \\{1,2\\}');
+    expect(plain).toContain('\\;');
+    expect(plain).toContain('\\{1,2\\}');
   });
 
   it('still honours genuine markdown backslash-escapes outside the LaTeX set', () => {
-    const out = stripAnsi(renderAnsiMarkdown('a \\* b and \\$ c'));
+    const plain = renderPlain('a \\* b and \\$ c');
     // `\*` and `\$` carry real markdown-escape meaning — leave them stripped.
-    expect(out).toContain('a * b and $ c');
-    expect(out).not.toContain('\\*');
+    expect(plain).toContain('a * b and $ c');
+    expect(plain).not.toContain('\\*');
   });
 
   // Regression for the Cursor Bugbot finding: an escaped `\$` (a literal dollar
@@ -476,8 +459,8 @@ describe('renderAnsiMarkdown', () => {
   // the span and cascades into later `$`. With both delimiters guarded, the
   // fragment isn't protected — markdown handles `\$` → `$` instead.
   it('does not treat an escaped \\$ as a closing math delimiter', () => {
-    const out = stripAnsi(renderAnsiMarkdown('A price $a = \\$5$ here'));
-    expect(out).not.toContain('$a = \\$');
-    expect(out).toContain('here');
+    const plain = renderPlain('A price $a = \\$5$ here');
+    expect(plain).not.toContain('$a = \\$');
+    expect(plain).toContain('here');
   });
 });

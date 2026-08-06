@@ -8,8 +8,32 @@ import { describe, it } from 'vitest';
 import {
   MainViewStartupController,
   type MainViewStartupControllerDeps,
+  type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+
+const STARTUP_OPTIONS: MainViewStartupOptions = {
+  modelOptions: [{ value: 'gemini', label: 'Gemini' }],
+  modelOptionsByCategory: {
+    workflow: [{ value: 'gemini', label: 'Gemini' }],
+    toolUse: [{ value: 'gpt', label: 'GPT' }],
+  },
+  agentOptions: {
+    workflow: [{ value: 'correct', label: 'Correct' }],
+    toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
+  },
+  teamOptions: [
+    {
+      value: 'physicist',
+      label: 'Physicist',
+      icon: 'atom',
+      source: 'built-in',
+      description: 'A physics research team.',
+      unavailableMembers: [],
+      rootAgentName: 'orchestrator',
+    },
+  ],
+};
 
 function createController(
   overrides: Partial<MainViewStartupControllerDeps> = {},
@@ -43,59 +67,22 @@ describe('MainViewStartupController', () => {
 
   it('loads options and shows the login banner for signed-out users', async () => {
     const controller = createController({
-      loadOptions: async () => ({
-        modelOptions: [{ value: 'gemini', label: 'Gemini' }],
-        modelOptionsByCategory: {
-          workflow: [{ value: 'gemini', label: 'Gemini' }],
-          toolUse: [{ value: 'gpt', label: 'GPT' }],
-        },
-        agentOptions: {
-          workflow: [{ value: 'correct', label: 'Correct' }],
-          toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
-        },
-        teamOptions: [
-          {
-            value: 'physicist',
-            label: 'Physicist',
-            icon: 'atom',
-            source: 'built-in',
-            description: 'A physics research team.',
-            unavailableMembers: [],
-            rootAgentName: 'orchestrator',
-          },
-        ],
-      }),
+      loadOptions: async () => STARTUP_OPTIONS,
     });
 
     assert.deepEqual(await controller.getOptionsAndLoginMessages(), [
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: [{ value: 'gemini', label: 'Gemini' }],
-        optionsDataByCategory: {
-          workflow: [{ value: 'gemini', label: 'Gemini' }],
-          toolUse: [{ value: 'gpt', label: 'GPT' }],
-        },
+        optionsData: STARTUP_OPTIONS.modelOptions,
+        optionsDataByCategory: STARTUP_OPTIONS.modelOptionsByCategory,
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        optionsData: {
-          workflow: [{ value: 'correct', label: 'Correct' }],
-          toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
-        },
+        optionsData: STARTUP_OPTIONS.agentOptions,
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-        optionsData: [
-          {
-            value: 'physicist',
-            label: 'Physicist',
-            icon: 'atom',
-            source: 'built-in',
-            description: 'A physics research team.',
-            unavailableMembers: [],
-            rootAgentName: 'orchestrator',
-          },
-        ],
+        optionsData: STARTUP_OPTIONS.teamOptions,
       },
       { command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER },
     ]);

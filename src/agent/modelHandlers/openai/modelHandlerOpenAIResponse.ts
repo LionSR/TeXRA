@@ -1206,11 +1206,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       const mediaType = media.media_type ?? '';
       const classification = classifyMediaEntry(media);
 
-      if (
-        classification === 'image' &&
-        typeof mediaType === 'string' &&
-        mediaType.startsWith('image/')
-      ) {
+      if (classification === 'image' && mediaType.startsWith('image/')) {
         return [
           createInputText(`Image: ${media.file_name}`),
           {
@@ -1980,10 +1976,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
-   * WebSocket transport path: a persistent connection for lower-latency
-   * tool-use loops. Polls to completion if the response comes back pending.
-   */
-  /**
    * Poll a still-pending response through to completion.
    *
    * All three transport paths can land on a pending response — background mode
@@ -2009,6 +2001,10 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     );
   }
 
+  /**
+   * WebSocket transport path: a persistent connection for lower-latency
+   * tool-use loops. Polls to completion if the response comes back pending.
+   */
   private async executeWebSocketPath(
     params: ResponseCreateParamsBase,
     client: OpenAI,
@@ -2830,12 +2826,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       return true;
     }
 
-    let existingText = '';
-    if (Array.isArray(content)) {
-      existingText = content
-        .map((part) => extractTextContentPart(part) ?? '')
-        .join('');
-    }
+    const existingText = Array.isArray(content)
+      ? content.map((part) => extractTextContentPart(part) ?? '').join('')
+      : '';
 
     Object.assign(
       message,

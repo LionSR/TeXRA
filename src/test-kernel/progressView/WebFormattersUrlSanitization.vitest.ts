@@ -65,6 +65,12 @@ function webFetchMessage(url: string): LogMessageData {
   };
 }
 
+function renderTemplate(template: Parameters<typeof render>[0]): HTMLElement {
+  const container = document.createElement('div');
+  render(template, container);
+  return container;
+}
+
 const DANGEROUS_URLS = [
   'javascript:alert(1)',
   'data:text/html,<script>alert(1)</script>',
@@ -75,8 +81,9 @@ const DANGEROUS_URLS = [
 describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
   describe('web_search results', () => {
     it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
-      const container = document.createElement('div');
-      render(formatWebSearchTemplate(webSearchMessage(url)), container);
+      const container = renderTemplate(
+        formatWebSearchTemplate(webSearchMessage(url)),
+      );
 
       // The single result carries only a dangerous URL, so it must render
       // as inert text — no anchor at all, not merely an anchor with a
@@ -89,8 +96,9 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
     it('renders a legitimate https URL as a real clickable href', () => {
       const url = 'https://example.com/article?id=42';
 
-      const container = document.createElement('div');
-      render(formatWebSearchTemplate(webSearchMessage(url)), container);
+      const container = renderTemplate(
+        formatWebSearchTemplate(webSearchMessage(url)),
+      );
 
       const anchor = container.querySelector('a.web-search-link');
       expect(anchor).not.toBeNull();
@@ -109,8 +117,9 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
     it('renders a mailto URL as a real clickable href', () => {
       const url = 'mailto:someone@example.com';
 
-      const container = document.createElement('div');
-      render(formatWebSearchTemplate(webSearchMessage(url)), container);
+      const container = renderTemplate(
+        formatWebSearchTemplate(webSearchMessage(url)),
+      );
 
       const anchor = container.querySelector('a.web-search-link');
       expect(anchor?.getAttribute('href')).toBe(url);
@@ -119,8 +128,9 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
 
   describe('web_fetch payloads', () => {
     it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
-      const container = document.createElement('div');
-      render(formatWebFetchTemplate(webFetchMessage(url)), container);
+      const container = renderTemplate(
+        formatWebFetchTemplate(webFetchMessage(url)),
+      );
 
       // The "URL:" section is only rendered when a safe URL survives
       // sanitization, so a dangerous URL must produce no anchor at all.
@@ -130,8 +140,9 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
     it('renders a legitimate https URL as a real clickable href', () => {
       const url = 'https://example.com/doc.pdf';
 
-      const container = document.createElement('div');
-      render(formatWebFetchTemplate(webFetchMessage(url)), container);
+      const container = renderTemplate(
+        formatWebFetchTemplate(webFetchMessage(url)),
+      );
 
       const anchor = container.querySelector('a.web-search-link');
       expect(anchor).not.toBeNull();

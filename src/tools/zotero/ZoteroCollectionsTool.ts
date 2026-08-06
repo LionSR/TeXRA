@@ -69,7 +69,7 @@ function buildTree(collections: BbtCollection[]): CollectionNode[] {
   // lookup below can never miss.
   for (const c of collections) {
     const node = nodeMap.get(c.key)!;
-    if (c.parentCollection && typeof c.parentCollection === 'string') {
+    if (typeof c.parentCollection === 'string') {
       const parent = nodeMap.get(c.parentCollection);
       if (parent) {
         parent.children.push(node);

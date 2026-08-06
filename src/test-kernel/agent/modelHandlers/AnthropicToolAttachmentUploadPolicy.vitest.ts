@@ -1,5 +1,4 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
+// Third-party imports
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent
@@ -71,22 +70,19 @@ describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)
       100,
     );
 
-    assert.equal(
-      result.uploaded.length,
+    expect(result.uploaded.length, 'the second attachment should upload').toBe(
       1,
-      'the second attachment should upload',
     );
-    assert.equal(result.uploaded[0].attachment.path, 'good.png');
-    assert.equal(
+    expect(result.uploaded[0].attachment.path).toBe('good.png');
+    expect(
       result.unsupported.length,
-      1,
       'the failed upload degrades to unsupported',
-    );
-    assert.equal(result.unsupported[0].path, 'broken.png');
-    assert.ok(
+    ).toBe(1);
+    expect(result.unsupported[0].path).toBe('broken.png');
+    expect(
       warnMessages.some((m) => m.includes('broken.png')),
       'the failure should be reported through the shared policy owner',
-    );
+    ).toBe(true);
   });
 
   it('uploads an unreadable PDF without a page count and warns about the skipped budget check', async () => {

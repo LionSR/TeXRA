@@ -6,31 +6,37 @@ import { monacoLanguageForPath } from '@progressView/frontend/components/monacoL
 import { getLanguageFromPath } from '@progressView/frontend/formatters/constants';
 
 describe('monacoLanguageForPath', () => {
-  it('maps common source file extensions to Monaco language ids', () => {
-    expect(monacoLanguageForPath('/workspace/src/index.ts')).toBe('typescript');
-    expect(monacoLanguageForPath('src/component.tsx')).toBe('typescript');
-    expect(monacoLanguageForPath('scripts/check.mjs')).toBe('javascript');
-    expect(monacoLanguageForPath('config/settings.json')).toBe('json');
-    expect(monacoLanguageForPath('styles/main.scss')).toBe('scss');
-    expect(monacoLanguageForPath('README.md')).toBe('markdown');
-    expect(monacoLanguageForPath('Dockerfile')).toBe('dockerfile');
-    expect(monacoLanguageForPath('Makefile')).toBe('makefile');
+  it.each([
+    ['/workspace/src/index.ts', 'typescript'],
+    ['src/component.tsx', 'typescript'],
+    ['scripts/check.mjs', 'javascript'],
+    ['config/settings.json', 'json'],
+    ['styles/main.scss', 'scss'],
+    ['README.md', 'markdown'],
+    ['Dockerfile', 'dockerfile'],
+    ['Makefile', 'makefile'],
+  ])('maps %s to the Monaco language id %s', (path, language) => {
+    expect(monacoLanguageForPath(path)).toBe(language);
   });
 
-  it('falls back to plaintext for unregistered or unknown extensions', () => {
-    expect(monacoLanguageForPath('paper/main.tex')).toBe('plaintext');
-    expect(monacoLanguageForPath('paper/references.bib')).toBe('plaintext');
-    expect(monacoLanguageForPath('notes')).toBe('plaintext');
-    expect(monacoLanguageForPath('')).toBe('plaintext');
+  it.each([
+    ['paper/main.tex', 'plaintext'],
+    ['paper/references.bib', 'plaintext'],
+    ['notes', 'plaintext'],
+    ['', 'plaintext'],
+  ])('falls back to %s for %s', (path, language) => {
+    expect(monacoLanguageForPath(path)).toBe(language);
   });
 });
 
 describe('getLanguageFromPath', () => {
-  it('uses the shared path parsing and basename logic for highlight ids', () => {
-    expect(getLanguageFromPath('/workspace/Dockerfile')).toBe('dockerfile');
-    expect(getLanguageFromPath('build/Makefile')).toBe('makefile');
-    expect(getLanguageFromPath('paper/main.tex')).toBe('latex');
-    expect(getLanguageFromPath('src/component.unknownext')).toBe('unknownext');
-    expect(getLanguageFromPath('notes')).toBe('plaintext');
+  it.each([
+    ['/workspace/Dockerfile', 'dockerfile'],
+    ['build/Makefile', 'makefile'],
+    ['paper/main.tex', 'latex'],
+    ['src/component.unknownext', 'unknownext'],
+    ['notes', 'plaintext'],
+  ])('maps %s to the highlight id %s', (path, language) => {
+    expect(getLanguageFromPath(path)).toBe(language);
   });
 });

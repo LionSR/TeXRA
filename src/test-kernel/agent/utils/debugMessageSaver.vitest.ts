@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
+import type { AgentTrace } from '@agent/trace';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
@@ -73,7 +74,7 @@ describe('maybeSaveDebugObject', () => {
       error: (message: string) => {
         errorLogs.push(message);
       },
-    } as unknown as import('@agent/trace').AgentTrace;
+    } as unknown as AgentTrace;
 
     await maybeSaveDebugObject({
       object: { foo: 'bar' },

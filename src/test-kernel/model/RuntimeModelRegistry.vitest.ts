@@ -89,6 +89,19 @@ function failingDiscoveryPort(): LanguageModelPort {
   };
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+function resetModelCaches(): void {
+  invalidateRuntimeModelRegistry();
+  invalidateModelOptionsCache();
+}
+
 function modelOptionsAccess(
   overrides: Partial<ModelOptionsAccess> = {},
 ): ModelOptionsAccess {
@@ -110,14 +123,8 @@ function modelOptionsAccess(
 }
 
 describe('runtime model registry', () => {
-  beforeEach(() => {
-    invalidateRuntimeModelRegistry();
-    invalidateModelOptionsCache();
-  });
-  afterEach(() => {
-    invalidateRuntimeModelRegistry();
-    invalidateModelOptionsCache();
-  });
+  beforeEach(resetModelCaches);
+  afterEach(resetModelCaches);
 
   it('maps a discovered editor model to a route on its canonical base model', async () => {
     const port = await installModels(GEMINI_FLASH);
@@ -210,60 +217,57 @@ describe('runtime model registry', () => {
     expect(unavailablePort.sendRequest).not.toHaveBeenCalled();
   });
 
-  it('re-discovers stale allowed access before entering the native consent flow', async () => {
-    let models: readonly LanguageModelInfo[] = [GEMINI_FLASH];
-    const port = {
-      ...languageModelPort([]),
-      selectModels: vi.fn(async () => models),
-    };
-    await installPlatform({}, { languageModel: port });
-    await refreshRuntimeModelRegistry();
-    expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
+  it.each([
+    {
+      scenario: 'entering the native consent flow',
+      rediscoveredAccess: 'consent-required' as const,
+      outcome: 'requested',
+      sendsProbe: true,
+    },
+    {
+      scenario: 'reporting unavailable',
+      rediscoveredAccess: 'unavailable' as const,
+      outcome: 'unavailable',
+      sendsProbe: false,
+    },
+  ])(
+    're-discovers stale allowed access before $scenario',
+    async ({ rediscoveredAccess, outcome, sendsProbe }) => {
+      let models: readonly LanguageModelInfo[] = [GEMINI_FLASH];
+      const port = {
+        ...languageModelPort([]),
+        selectModels: vi.fn(async () => models),
+      };
+      await installPlatform({}, { languageModel: port });
+      await refreshRuntimeModelRegistry();
+      expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
 
-    models = [{ ...GEMINI_FLASH, access: 'consent-required' }];
+      models = [{ ...GEMINI_FLASH, access: rediscoveredAccess }];
 
-    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
-      'requested',
-    );
-    expect(port.selectModels).toHaveBeenCalledTimes(2);
-    expect(port.sendRequest).toHaveBeenCalledOnce();
-  });
-
-  it('re-discovers stale allowed access before reporting unavailable', async () => {
-    let models: readonly LanguageModelInfo[] = [GEMINI_FLASH];
-    const port = {
-      ...languageModelPort([]),
-      selectModels: vi.fn(async () => models),
-    };
-    await installPlatform({}, { languageModel: port });
-    await refreshRuntimeModelRegistry();
-    expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
-
-    models = [{ ...GEMINI_FLASH, access: 'unavailable' }];
-
-    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
-      'unavailable',
-    );
-    expect(port.selectModels).toHaveBeenCalledTimes(2);
-    expect(port.sendRequest).not.toHaveBeenCalled();
-  });
+      await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
+        outcome,
+      );
+      expect(port.selectModels).toHaveBeenCalledTimes(2);
+      if (sendsProbe) {
+        expect(port.sendRequest).toHaveBeenCalledOnce();
+      } else {
+        expect(port.sendRequest).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it('retries when access invalidation supersedes a forced allowed probe', async () => {
     const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
-    let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    const forced = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseForced = resolve;
-    });
+    const forced = deferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
-      .mockReturnValueOnce(forced)
+      .mockReturnValueOnce(forced.promise)
       .mockResolvedValueOnce([{ ...GEMINI_FLASH, access: 'unavailable' }]);
 
     const request = requestRuntimeModelAccess('gemini36f');
     invalidateRuntimeModelRegistry();
-    releaseForced([GEMINI_FLASH]);
+    forced.resolve([GEMINI_FLASH]);
 
     await expect(request).resolves.toBe('unavailable');
     expect(port.selectModels).toHaveBeenCalledTimes(3);
@@ -275,33 +279,22 @@ describe('runtime model registry', () => {
     const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
-    let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    let releaseRetry: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    let markRetryStarted: () => void = () => undefined;
-    const forced = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseForced = resolve;
-    });
-    const retry = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseRetry = resolve;
-    });
-    const retryStarted = new Promise<void>((resolve) => {
-      markRetryStarted = resolve;
-    });
+    const forced = deferred<readonly LanguageModelInfo[]>();
+    const retry = deferred<readonly LanguageModelInfo[]>();
+    const retryStarted = deferred<void>();
     vi.mocked(port.selectModels)
-      .mockReturnValueOnce(forced)
+      .mockReturnValueOnce(forced.promise)
       .mockImplementationOnce(() => {
-        markRetryStarted();
-        return retry;
+        retryStarted.resolve();
+        return retry.promise;
       });
 
     const request = requestRuntimeModelAccess('gemini36f');
     invalidateRuntimeModelRegistry();
-    releaseForced([GEMINI_FLASH]);
-    await retryStarted;
+    forced.resolve([GEMINI_FLASH]);
+    await retryStarted.promise;
     invalidateRuntimeModelRegistry();
-    releaseRetry([GEMINI_FLASH]);
+    retry.resolve([GEMINI_FLASH]);
 
     await expect(request).resolves.toBe('unavailable');
     expect(port.selectModels).toHaveBeenCalledTimes(3);
@@ -310,33 +303,25 @@ describe('runtime model registry', () => {
   });
 
   it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
-    let releaseOrdinary: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    const ordinary = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseOrdinary = resolve;
-    });
-    const forced = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseForced = resolve;
-    });
+    const ordinary = deferred<readonly LanguageModelInfo[]>();
+    const forced = deferred<readonly LanguageModelInfo[]>();
     const port = {
       ...languageModelPort([]),
       selectModels: vi
         .fn<() => Promise<readonly LanguageModelInfo[]>>()
-        .mockReturnValueOnce(ordinary)
-        .mockReturnValueOnce(forced),
+        .mockReturnValueOnce(ordinary.promise)
+        .mockReturnValueOnce(forced.promise),
     };
     await installPlatform({}, { languageModel: port });
 
     const staleOrdinaryRefresh = refreshRuntimeModelRegistry();
     const forcedRequest = requestRuntimeModelAccess('gemini36f');
-    releaseForced([{ ...GEMINI_FLASH, access: 'unavailable' }]);
+    forced.resolve([{ ...GEMINI_FLASH, access: 'unavailable' }]);
     await expect(forcedRequest).resolves.toBe('unavailable');
 
     // Resolve stale allowed data last: the superseded generation must not
     // overwrite the forced result that authorized the opt-in outcome.
-    releaseOrdinary([GEMINI_FLASH]);
+    ordinary.resolve([GEMINI_FLASH]);
     await staleOrdinaryRefresh;
 
     expect((await discoveredCopilotRoutes()).get('gemini36f')?.access).toBe(
@@ -350,16 +335,12 @@ describe('runtime model registry', () => {
     const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
-    let releaseDiscovery: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    const deferred = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseDiscovery = resolve;
-    });
-    vi.mocked(port.selectModels).mockReturnValueOnce(deferred);
+    const discovery = deferred<readonly LanguageModelInfo[]>();
+    vi.mocked(port.selectModels).mockReturnValueOnce(discovery.promise);
 
     const first = requestRuntimeModelAccess('gemini36f');
     const second = requestRuntimeModelAccess('gemini36f');
-    releaseDiscovery([{ ...GEMINI_FLASH, access: 'unavailable' }]);
+    discovery.resolve([{ ...GEMINI_FLASH, access: 'unavailable' }]);
 
     await expect(Promise.all([first, second])).resolves.toEqual([
       'unavailable',
@@ -461,24 +442,20 @@ describe('runtime model registry', () => {
   });
 
   it('discards a discovery that an invalidation superseded mid-flight', async () => {
-    let releaseDiscovery: (models: readonly LanguageModelInfo[]) => void = () =>
-      undefined;
-    const deferred = new Promise<readonly LanguageModelInfo[]>((resolve) => {
-      releaseDiscovery = resolve;
-    });
+    const discovery = deferred<readonly LanguageModelInfo[]>();
     await installPlatform(
       {},
       {
         languageModel: {
           ...languageModelPort([]),
-          selectModels: () => deferred,
+          selectModels: () => discovery.promise,
         },
       },
     );
 
     const inFlight = refreshRuntimeModelRegistry();
     invalidateRuntimeModelRegistry();
-    releaseDiscovery([GEMINI_FLASH]);
+    discovery.resolve([GEMINI_FLASH]);
     await inFlight;
 
     // The superseded result must not land, and the registry must still be
@@ -512,14 +489,8 @@ describe('runtime model registry', () => {
 });
 
 describe('Copilot route in model pickers', () => {
-  beforeEach(() => {
-    invalidateRuntimeModelRegistry();
-    invalidateModelOptionsCache();
-  });
-  afterEach(() => {
-    invalidateRuntimeModelRegistry();
-    invalidateModelOptionsCache();
-  });
+  beforeEach(resetModelCaches);
+  afterEach(resetModelCaches);
 
   it('shows a base model available both directly and through Copilot exactly once', async () => {
     const port = languageModelPort([GEMINI_FLASH]);

@@ -98,7 +98,7 @@ export class FollowUpQueue {
   }
 
   drain(): string[] {
-    return this.queued.splice(0).filter(isVisibleItem).map(displayTextForItem);
+    return this.drainItems().map(displayTextForItem);
   }
 
   /**

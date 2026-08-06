@@ -16,16 +16,13 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-// Type imports
-import type { Interactions } from '@google/genai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { ChatMessages } from '@openrouter/sdk/models';
 
 function createAgentSetting() {
   return AgentSettingSchema.parse({
@@ -47,6 +44,29 @@ async function withMissingOutput<T>(
   }
 }
 
+/** With no output file, the handler must pass the user messages through untouched. */
+async function expectPrefillPreserved<M extends ProviderMessage>(
+  handler: ModelHandler<M>,
+  messages: M[],
+  outputLocation: FileLocation,
+): Promise<void> {
+  handler.setLogger({ ...noopTrace });
+  const workspaceState = AgentWorkspaceState.create();
+
+  const [isComplete, updatedMessages] =
+    await handler.initializeOutputAndPrefill(
+      {} as AgentConfig,
+      createAgentSetting(),
+      messages,
+      workspaceState,
+      outputLocation,
+    );
+
+  assert.equal(isComplete, false);
+  assert.deepEqual(updatedMessages, messages);
+  assert.equal(workspaceState.assembly.accumulatedOutput, '');
+}
+
 describe('model handler output initialization with no output file', () => {
   it('OpenAI chat preserves user content when no output file exists', async () => {
     await withMissingOutput(async (outputLocation) => {
@@ -56,30 +76,17 @@ describe('model handler output initialization with no output file', () => {
           capabilities: { supportsReasoning: false, supportsVision: false },
         }),
       );
-      handler.setLogger({ ...noopTrace });
-      const messages: ChatCompletionMessageParam[] = [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ];
 
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          createAgentSetting(),
-          messages,
-          AgentWorkspaceState.create(),
-          outputLocation,
-        );
-
-      assert.equal(isComplete, false);
-      assert.deepEqual(updatedMessages, [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ]);
+      await expectPrefillPreserved(
+        handler,
+        [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'revise the document' }],
+          },
+        ],
+        outputLocation,
+      );
     });
   });
 
@@ -91,32 +98,17 @@ describe('model handler output initialization with no output file', () => {
           capabilities: { supportsReasoning: false, supportsVision: false },
         }),
       );
-      handler.setLogger({ ...noopTrace });
-      const messages: Interactions.Step[] = [
-        {
-          type: 'user_input',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ];
-      const workspaceState = AgentWorkspaceState.create();
 
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          createAgentSetting(),
-          messages,
-          workspaceState,
-          outputLocation,
-        );
-
-      assert.equal(isComplete, false);
-      assert.deepEqual(updatedMessages, [
-        {
-          type: 'user_input',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ]);
-      assert.equal(workspaceState.assembly.accumulatedOutput, '');
+      await expectPrefillPreserved(
+        handler,
+        [
+          {
+            type: 'user_input',
+            content: [{ type: 'text', text: 'revise the document' }],
+          },
+        ],
+        outputLocation,
+      );
     });
   });
 
@@ -129,30 +121,17 @@ describe('model handler output initialization with no output file', () => {
           openrouterFullName: 'openai/test-model',
         }),
       );
-      handler.setLogger({ ...noopTrace });
-      const messages: ChatMessages[] = [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ];
 
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          createAgentSetting(),
-          messages,
-          AgentWorkspaceState.create(),
-          outputLocation,
-        );
-
-      assert.equal(isComplete, false);
-      assert.deepEqual(updatedMessages, [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ]);
+      await expectPrefillPreserved(
+        handler,
+        [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'revise the document' }],
+          },
+        ],
+        outputLocation,
+      );
     });
   });
 });

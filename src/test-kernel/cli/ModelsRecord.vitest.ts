@@ -36,6 +36,21 @@ function access(
   };
 }
 
+/** A model excluded from the current access tier. */
+function unavailableAccess(value: string): CliModelAccess {
+  return access(value, {
+    available: false,
+    status: 'not included',
+    model: model({
+      value,
+      label: value,
+      availability: 'not-included',
+      availabilityLabel: 'Not included',
+      disabled: true,
+    }),
+  });
+}
+
 describe('CLI model JSON record', () => {
   it('exposes an `id` field aliased to `value` for cross-resource addressability', () => {
     const record = cliModelRecord(model());
@@ -83,17 +98,7 @@ describe('CLI model list filtering', () => {
   it('lists only currently runnable models by default', () => {
     const entries = [
       access('sonnet46T'),
-      access('opus48T', {
-        available: false,
-        status: 'not included',
-        model: model({
-          value: 'opus48T',
-          label: 'opus48T',
-          availability: 'not-included',
-          availabilityLabel: 'Not included',
-          disabled: true,
-        }),
-      }),
+      unavailableAccess('opus48T'),
       access('deepseekT'),
     ];
 
@@ -152,20 +157,7 @@ describe('CLI model list filtering', () => {
   });
 
   it('keeps unavailable models for the explicit diagnostic view', () => {
-    const entries = [
-      access('sonnet46T'),
-      access('opus48T', {
-        available: false,
-        status: 'not included',
-        model: model({
-          value: 'opus48T',
-          label: 'opus48T',
-          availability: 'not-included',
-          availabilityLabel: 'Not included',
-          disabled: true,
-        }),
-      }),
-    ];
+    const entries = [access('sonnet46T'), unavailableAccess('opus48T')];
 
     expect(
       listableModelAccessEntries(entries, { includeUnavailable: true }).map(

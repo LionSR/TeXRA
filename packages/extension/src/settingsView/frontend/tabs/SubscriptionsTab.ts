@@ -178,6 +178,18 @@ export class SubscriptionsTab extends LitElement {
     // Each model gets its own responsive settings row. Short action labels
     // keep controls usable in narrow panels while the adjacent text names the
     // model and its state.
+    const renderGrantAccess = (model: CopilotRouteInfo): TemplateResult =>
+      renderLabeledActionButton({
+        icon: 'shield',
+        text: 'Grant access',
+        kind: 'primary',
+        appearance: 'filled',
+        onClick: () =>
+          postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
+            modelName: model.name,
+          }),
+      });
+
     const actionRows = models.flatMap((model) => {
       let routeStatus: string;
       let action: TemplateResult;
@@ -201,29 +213,11 @@ export class SubscriptionsTab extends LitElement {
         });
         action =
           model.access === 'consent-required'
-            ? html`${renderLabeledActionButton({
-                icon: 'shield',
-                text: 'Grant access',
-                kind: 'primary',
-                appearance: 'filled',
-                onClick: () =>
-                  postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
-                    modelName: model.name,
-                  }),
-              })}${stopAction}`
+            ? html`${renderGrantAccess(model)}${stopAction}`
             : stopAction;
       } else if (model.access === 'consent-required') {
         routeStatus = 'Needs your approval in VS Code.';
-        action = renderLabeledActionButton({
-          icon: 'shield',
-          text: 'Grant access',
-          kind: 'primary',
-          appearance: 'filled',
-          onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
-              modelName: model.name,
-            }),
-        });
+        action = renderGrantAccess(model);
       } else if (model.access === 'allowed') {
         routeStatus = 'Ready to use through Copilot.';
         action = renderLabeledActionButton({

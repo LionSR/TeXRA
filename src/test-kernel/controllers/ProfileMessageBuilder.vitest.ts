@@ -48,6 +48,14 @@ function stubStoredSession(
   );
 }
 
+function stubAuthenticatedRelayUser(
+  tier: Awaited<ReturnType<typeof SupabaseClient.getUserTier>>,
+): void {
+  stubStoredSession('authenticated', true);
+  vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(tier);
+}
+
 describe('ProfileMessageBuilder session problems', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -114,9 +122,7 @@ describe('ProfileMessageBuilder included-access usage', () => {
   });
 
   it('reports usage in personal mode, where the access check never primes it', async () => {
-    stubStoredSession('authenticated', true);
-    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Ultra');
+    stubAuthenticatedRelayUser('Ultra');
     const spend = { currentSpend: 12, limit: 100, remaining: 88 };
     serverSideKeyService.getSpendingStatus.mockReturnValue(spend);
 
@@ -133,9 +139,7 @@ describe('ProfileMessageBuilder included-access usage', () => {
   });
 
   it('refreshes usage in included mode too', async () => {
-    stubStoredSession('authenticated', true);
-    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Ultra');
+    stubAuthenticatedRelayUser('Ultra');
     serverSideKeyService.getUseIncludedModelAccess.mockReturnValue(true);
 
     await buildProfileMessage({ getProviderKeyStatuses: async () => [] });

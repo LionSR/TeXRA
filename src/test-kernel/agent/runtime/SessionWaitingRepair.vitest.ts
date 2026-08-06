@@ -51,6 +51,8 @@ function createDeferredResumability(): DeferredResumability {
 describe('SessionHandle.repairWaitingIfResumable', () => {
   setupPlatform();
 
+  const { deriveResumability } = resumabilityMocks;
+
   let caseCounter = 0;
   let session: SessionHandle;
   let streamId: StreamTabId;
@@ -66,7 +68,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   beforeEach(() => {
     const n = caseCounter++;
-    resumabilityMocks.deriveResumability.mockReset();
+    deriveResumability.mockReset();
     session = createTestSession();
     streamId = `stream:waiting-repair-${n}` as StreamTabId;
     executionId = `b${n.toString(16).padStart(5, '0')}` as ExecutionId;
@@ -78,63 +80,60 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     session.status.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
   }
 
+  function repair(id: StreamTabId = streamId): Promise<boolean> {
+    return session.repairWaitingIfResumable(id);
+  }
+
+  function mockResumable(): void {
+    deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
+  }
+
+  function mockDeferredProbe(deferred: DeferredResumability): void {
+    deriveResumability.mockImplementation(() => deferred.promise);
+  }
+
   it('does not overwrite status created during an absent-generation probe', async () => {
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const repair = session.repairWaitingIfResumable(streamId);
+    const pending = repair();
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle');
     deferred.resolve();
 
-    await expect(repair).resolves.toBe(false);
+    await expect(pending).resolves.toBe(false);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
   });
 
   it('restores a terminal stream to WAITING when its execution is resumable', async () => {
     seedCancelled();
-    resumabilityMocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: 'interrupted-with-flow',
-    });
+    mockResumable();
 
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      true,
-    );
+    await expect(repair()).resolves.toBe(true);
 
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledWith(
-      executionId,
-    );
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 
   it('restores a persisted execution whose status entry is absent', async () => {
-    resumabilityMocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: 'interrupted-with-flow',
-    });
+    mockResumable();
 
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      true,
-    );
+    await expect(repair()).resolves.toBe(true);
 
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledWith(
-      executionId,
-    );
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 
   it('leaves the terminal phase alone when the execution is not resumable', async () => {
     seedCancelled();
-    resumabilityMocks.deriveResumability.mockResolvedValue({
+    deriveResumability.mockResolvedValue({
       resumable: false,
       cause: 'missing-flow',
     });
 
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      false,
-    );
+    await expect(repair()).resolves.toBe(false);
 
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
@@ -143,45 +142,37 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle');
     session.status.transition(streamId, STREAM_PHASE.WAITING, 'wait');
 
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      true,
-    );
+    await expect(repair()).resolves.toBe(true);
 
-    expect(resumabilityMocks.deriveResumability).not.toHaveBeenCalled();
+    expect(deriveResumability).not.toHaveBeenCalled();
   });
 
   it('never repairs a live run', async () => {
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle');
 
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      false,
-    );
+    await expect(repair()).resolves.toBe(false);
 
-    expect(resumabilityMocks.deriveResumability).not.toHaveBeenCalled();
+    expect(deriveResumability).not.toHaveBeenCalled();
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
   });
 
   it('skips the probe for a stream with no recorded execution', async () => {
     const unknownStream = `${streamId}:unknown` as StreamTabId;
 
-    await expect(session.repairWaitingIfResumable(unknownStream)).resolves.toBe(
-      false,
-    );
+    await expect(repair(unknownStream)).resolves.toBe(false);
 
-    expect(resumabilityMocks.deriveResumability).not.toHaveBeenCalled();
+    expect(deriveResumability).not.toHaveBeenCalled();
   });
 
   it('collapses concurrent probes for one stream onto the first', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const first = session.repairWaitingIfResumable(streamId);
-    const second = session.repairWaitingIfResumable(streamId);
+    const first = repair();
+    const second = repair();
 
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+    expect(deriveResumability).toHaveBeenCalledTimes(1);
 
     deferred.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
@@ -190,51 +181,42 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     // The slot is released with the probe, so a later submission probes again.
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     session.status.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
-    resumabilityMocks.deriveResumability.mockResolvedValue({
+    deriveResumability.mockResolvedValue({
       resumable: false,
       cause: 'missing-flow',
     });
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      false,
-    );
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+    await expect(repair()).resolves.toBe(false);
+    expect(deriveResumability).toHaveBeenCalledTimes(2);
   });
 
   it('shares rejection and releases the probe slot for retry', async () => {
     seedCancelled();
     const failure = new Error('resumability read failed');
-    resumabilityMocks.deriveResumability.mockRejectedValueOnce(failure);
+    deriveResumability.mockRejectedValueOnce(failure);
 
-    const first = session.repairWaitingIfResumable(streamId);
-    const second = session.repairWaitingIfResumable(streamId);
+    const first = repair();
+    const second = repair();
 
     await expect(first).rejects.toBe(failure);
     await expect(second).rejects.toBe(failure);
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+    expect(deriveResumability).toHaveBeenCalledTimes(1);
 
-    resumabilityMocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: 'interrupted-with-flow',
-    });
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      true,
-    );
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+    mockResumable();
+    await expect(repair()).resolves.toBe(true);
+    expect(deriveResumability).toHaveBeenCalledTimes(2);
   });
 
   it('does not join a stale probe after resume starts', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const first = session.repairWaitingIfResumable(streamId);
+    const first = repair();
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
-    const second = session.repairWaitingIfResumable(streamId);
+    const second = repair();
 
     await expect(second).resolves.toBe(false);
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+    expect(deriveResumability).toHaveBeenCalledTimes(1);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
     deferred.resolve();
@@ -244,60 +226,50 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
   it('does not recreate a stream cleared during the probe', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const repair = session.repairWaitingIfResumable(streamId);
+    const pending = repair();
     session.status.clearStream(streamId);
     // Public residency reset - the per-stream evict is store-internal.
     session.snapshots.evictAll();
     deferred.resolve();
 
-    await expect(repair).resolves.toBe(false);
+    await expect(pending).resolves.toBe(false);
     expect(session.status.get(streamId)).toBeUndefined();
   });
 
   it('does not repair a replacement execution', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const repair = session.repairWaitingIfResumable(streamId);
+    const pending = repair();
     const replacementExecutionId = `c${executionId.slice(1)}` as ExecutionId;
     ownStream(replacementExecutionId);
     deferred.resolve();
 
-    await expect(repair).resolves.toBe(false);
+    await expect(pending).resolves.toBe(false);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledWith(
-      executionId,
-    );
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
   });
 
   it('starts a distinct probe for a replacement execution', async () => {
     seedCancelled();
     const originalDeferred = createDeferredResumability();
     const replacementDeferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      (requestedId: string) =>
-        requestedId === executionId
-          ? originalDeferred.promise
-          : replacementDeferred.promise,
+    deriveResumability.mockImplementation((requestedId: string) =>
+      requestedId === executionId
+        ? originalDeferred.promise
+        : replacementDeferred.promise,
     );
 
-    const original = session.repairWaitingIfResumable(streamId);
+    const original = repair();
     const replacementExecutionId = `d${executionId.slice(1)}` as ExecutionId;
     ownStream(replacementExecutionId);
-    const replacement = session.repairWaitingIfResumable(streamId);
+    const replacement = repair();
 
-    expect(resumabilityMocks.deriveResumability).toHaveBeenNthCalledWith(
-      1,
-      executionId,
-    );
-    expect(resumabilityMocks.deriveResumability).toHaveBeenNthCalledWith(
+    expect(deriveResumability).toHaveBeenNthCalledWith(1, executionId);
+    expect(deriveResumability).toHaveBeenNthCalledWith(
       2,
       replacementExecutionId,
     );
@@ -312,16 +284,14 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
   it('does not repair a recreated terminal generation', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const repair = session.repairWaitingIfResumable(streamId);
+    const pending = repair();
     session.status.clearStream(streamId);
     seedCancelled();
     deferred.resolve();
 
-    await expect(repair).resolves.toBe(false);
+    await expect(pending).resolves.toBe(false);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
@@ -329,19 +299,15 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     seedCancelled();
     const failure = new Error('resumability read failed');
     const deferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability.mockImplementation(
-      () => deferred.promise,
-    );
+    mockDeferredProbe(deferred);
 
-    const first = session.repairWaitingIfResumable(streamId);
+    const first = repair();
     const firstRejection = expect(first).rejects.toBe(failure);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     session.status.transition(streamId, STREAM_PHASE.WAITING, 'wait');
 
-    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
-      true,
-    );
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+    await expect(repair()).resolves.toBe(true);
+    expect(deriveResumability).toHaveBeenCalledTimes(1);
 
     deferred.reject(failure);
     await firstRejection;
@@ -352,21 +318,21 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     seedCancelled();
     const firstDeferred = createDeferredResumability();
     const secondDeferred = createDeferredResumability();
-    resumabilityMocks.deriveResumability
+    deriveResumability
       .mockImplementationOnce(() => firstDeferred.promise)
       .mockImplementationOnce(() => secondDeferred.promise);
 
-    const first = session.repairWaitingIfResumable(streamId);
+    const first = repair();
     session.status.clearStream(streamId);
     seedCancelled();
-    const second = session.repairWaitingIfResumable(streamId);
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+    const second = repair();
+    expect(deriveResumability).toHaveBeenCalledTimes(2);
 
     firstDeferred.resolve();
     await expect(first).resolves.toBe(false);
 
-    const third = session.repairWaitingIfResumable(streamId);
-    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+    const third = repair();
+    expect(deriveResumability).toHaveBeenCalledTimes(2);
     secondDeferred.resolve();
 
     await expect(Promise.all([second, third])).resolves.toEqual([true, true]);

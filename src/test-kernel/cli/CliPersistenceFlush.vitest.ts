@@ -74,19 +74,18 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     const store = await StreamLogStore.open();
 
     const streamId = 'reviewer@opus#e1';
+    const logFile = storageFile(STREAM_LOGS_DIR, streamId);
     appendTranscriptEntry(store, streamId, entry('a', 'first'));
     appendTranscriptEntry(store, streamId, entry('b', 'second'));
 
     // The SAVE_DEBOUNCE_MS (300ms) timer has not fired in this synchronous
     // window, so nothing is on disk yet — this is exactly the tail the exit
     // path would lose without an explicit flush.
-    expect(storage.writes.has(storageFile(STREAM_LOGS_DIR, streamId))).toBe(
-      false,
-    );
+    expect(storage.writes.has(logFile)).toBe(false);
 
     await store.flush();
 
-    expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, streamId))).toEqual([
+    expect(storage.writes.get(logFile)).toEqual([
       expect.objectContaining({ id: 'a', text: 'first' }),
       expect.objectContaining({ id: 'b', text: 'second' }),
     ]);

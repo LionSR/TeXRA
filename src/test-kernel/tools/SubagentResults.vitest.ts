@@ -30,6 +30,24 @@ function toolUseResult(
   };
 }
 
+function workflowResult(
+  overrides: Partial<Extract<AgentFinalResult, { category: 'workflow' }>> = {},
+): Extract<AgentFinalResult, { category: 'workflow' }> {
+  return {
+    category: 'workflow',
+    outcome: RUN_OUTCOME.COMPLETED,
+    outputs: [],
+    compileFailures: [],
+    diffs: [],
+    cost: 0,
+    ...overrides,
+  };
+}
+
+function seconds(milliseconds: number): string {
+  return `${(milliseconds / 1000).toFixed(1)}s`;
+}
+
 // formatChildRunDelivery/formatChildRunError are the one result/error builder
 // family for every child-run delivery: the native subagent path
 // (formatSubagentDelivery/formatSubagentError) and the agent-CLI tools
@@ -48,7 +66,7 @@ describe('formatChildRunDelivery', () => {
         attributes: [{ name: 'thread-id', value: 'th-42' }],
       },
       {
-        wallTime: `${(1234 / 1000).toFixed(1)}s`,
+        wallTime: seconds(1234),
         response: 'all done',
         usage: { input: 100, output: 20 },
       },
@@ -73,7 +91,7 @@ describe('formatChildRunDelivery', () => {
         attributes: [{ name: 'session-id', value: 'sess-7' }],
       },
       {
-        wallTime: `${(9000 / 1000).toFixed(1)}s`,
+        wallTime: seconds(9000),
         response: 'summary',
         usage: { input: 5, output: 0 },
         lines: ['<cost-usd>0.1234</cost-usd>'],
@@ -99,7 +117,7 @@ describe('formatChildRunDelivery', () => {
         prompt: 'p',
         attributes: [{ name: 'thread-id', value: null }],
       },
-      { wallTime: `${(0 / 1000).toFixed(1)}s`, response: 'r', usage: null },
+      { wallTime: seconds(0), response: 'r', usage: null },
     );
     expect(xml).toBe(
       [
@@ -114,7 +132,7 @@ describe('formatChildRunDelivery', () => {
   it('falls back to "(no response)" for an empty response', () => {
     const xml = formatChildRunDelivery(
       { tag: 'codex-result', executionId: 'e', prompt: 'p' },
-      { wallTime: `${(500 / 1000).toFixed(1)}s`, response: '' },
+      { wallTime: seconds(500), response: '' },
     );
     expect(xml).toContain('<response>(no response)</response>');
   });
@@ -128,7 +146,7 @@ describe('formatChildRunDelivery', () => {
         prompt: `${longPrompt}<&"`,
         attributes: [{ name: 'thread-id', value: '<id&"' }],
       },
-      { wallTime: `${(100 / 1000).toFixed(1)}s`, response: 'a < b & c "q"' },
+      { wallTime: seconds(100), response: 'a < b & c "q"' },
     );
     // id/prompt/thread-id are attribute-escaped (&, ", < — not >); the prompt is
     // sliced to 200 chars BEFORE escaping, so the trailing <&" never appears.
@@ -247,9 +265,7 @@ describe('formatSubagentDelivery', () => {
   });
 
   it('flags failed diff computation so orchestrators read outputs directly', () => {
-    const result = {
-      category: 'workflow',
-      outcome: RUN_OUTCOME.COMPLETED,
+    const result = workflowResult({
       outputs: [
         {
           round: 0,
@@ -261,11 +277,8 @@ describe('formatSubagentDelivery', () => {
           removed: 1,
         },
       ],
-      compileFailures: [],
-      diffs: [],
-      cost: 0,
       diffsUnavailable: 'ENOSPC: no space left & disk full',
-    } satisfies AgentFinalResult;
+    });
 
     const delivery = formatSubagentDelivery('polish', result, {
       executionId: 'abc123',
@@ -283,17 +296,10 @@ describe('formatSubagentDelivery', () => {
   });
 
   it('omits the diffs-unavailable element on clean deliveries', () => {
-    const result = {
-      category: 'workflow',
-      outcome: RUN_OUTCOME.COMPLETED,
-      outputs: [],
-      compileFailures: [],
-      diffs: [],
-      cost: 0,
-    } satisfies AgentFinalResult;
-
     expect(
-      formatSubagentDelivery('polish', result, { executionId: 'abc123' }),
+      formatSubagentDelivery('polish', workflowResult(), {
+        executionId: 'abc123',
+      }),
     ).not.toContain('diffs-unavailable');
   });
 

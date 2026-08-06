@@ -69,12 +69,14 @@ describe('getToolFlags', () => {
   it('uses texra.debug.saveModelIO setting for PRINT_INPUT_PROMPT', async () => {
     try {
       fakeConfig.set('texra.debug.saveModelIO', true);
-      const enabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
-      expect(enabledFlags.PRINT_INPUT_PROMPT).toBe(true);
+      expect(
+        getToolFlags(baseConfig, baseSetting, basePrompt).PRINT_INPUT_PROMPT,
+      ).toBe(true);
 
       fakeConfig.set('texra.debug.saveModelIO', false);
-      const disabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
-      expect(disabledFlags.PRINT_INPUT_PROMPT).toBe(false);
+      expect(
+        getToolFlags(baseConfig, baseSetting, basePrompt).PRINT_INPUT_PROMPT,
+      ).toBe(false);
     } finally {
       await fakeConfig.update('texra.debug.saveModelIO', undefined);
     }

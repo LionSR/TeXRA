@@ -226,7 +226,7 @@ const modelsEnabledCommand = defineCliCommand({
       'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
   },
   args: { ...GLOBAL_ARGS },
-  run: (context) => listEnabledModels(context),
+  run: listEnabledModels,
 });
 
 const modelsEnableCommand = defineCliCommand({

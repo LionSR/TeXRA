@@ -195,17 +195,43 @@ function cliContext(
   };
 }
 
+function stubGlobalState(
+  get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
+) {
+  return { get: vi.fn(get), update: vi.fn() };
+}
+
+/**
+ * Each signal-ownership test must observe installation from a clean slate:
+ * `installCliShutdownSignalHandlers` guards on an idempotent, module-level
+ * `shutdownHandlersInstalled` flag, so the module needs a fresh import
+ * (`vi.resetModules()`), and the process-listener spies must be restored
+ * afterwards (never `vi.restoreAllMocks()` — see spyOnSignalRegistration).
+ */
+async function withFreshSignalCapture(
+  run: (context: {
+    registered: SignalRegistration[];
+    initPlatform: typeof import('@cli/runtime/initPlatform');
+  }) => Promise<void>,
+): Promise<void> {
+  vi.resetModules();
+  const { registered, restore } = spyOnSignalRegistration();
+  try {
+    await run({
+      registered,
+      initPlatform: await import('@cli/runtime/initPlatform'),
+    });
+  } finally {
+    restore();
+  }
+}
+
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.shutdownHandlers.length = 0;
     mocks.tryPlatform.mockReset();
-    mocks.tryPlatform.mockReturnValue({
-      globalState: {
-        get: vi.fn((_key: string, defaultValue: unknown) => defaultValue),
-        update: vi.fn(),
-      },
-    });
+    mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
@@ -234,11 +260,7 @@ describe('CLI platform init', () => {
 
   it('wires usage logging on first platform init', async () => {
     // tryPlatform() === undefined drives the once-per-process first-init block.
-    const globalState = {
-      get: vi.fn((_key: string, defaultValue: unknown) => defaultValue),
-      update: vi.fn(),
-    };
-    mocks.tryPlatform.mockReturnValue({ globalState });
+    mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.tryPlatform.mockReturnValueOnce(undefined);
 
     await initCliPlatform(
@@ -359,15 +381,13 @@ describe('CLI platform init', () => {
   });
 
   it('bootstraps bundled agents with the CLI version store', async () => {
-    const globalState = {
-      get: vi.fn((key: string, defaultValue: unknown) =>
+    mocks.tryPlatform.mockReturnValue({
+      globalState: stubGlobalState((key, defaultValue) =>
         key === GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION
           ? '1.2.2'
           : defaultValue,
       ),
-      update: vi.fn().mockResolvedValue(undefined),
-    };
-    mocks.tryPlatform.mockReturnValue({ globalState });
+    });
 
     await initCliPlatform(
       cliContext({
@@ -388,13 +408,11 @@ describe('CLI platform init', () => {
   });
 
   it('keeps included access off when OpenRouter routing is enabled', async () => {
-    const globalState = {
-      get: vi.fn((key: string, defaultValue: unknown) =>
+    mocks.tryPlatform.mockReturnValue({
+      globalState: stubGlobalState((key, defaultValue) =>
         key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
       ),
-      update: vi.fn(),
-    };
-    mocks.tryPlatform.mockReturnValue({ globalState });
+    });
 
     await initCliPlatform(cliContext());
 
@@ -405,12 +423,9 @@ describe('CLI platform init', () => {
   });
 
   it('clears OpenRouter when startup explicitly selects included access', async () => {
-    const globalState = {
-      get: vi.fn((key: string, defaultValue: unknown) =>
-        key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
-      ),
-      update: vi.fn().mockResolvedValue(undefined),
-    };
+    const globalState = stubGlobalState((key, defaultValue) =>
+      key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
+    );
     mocks.tryPlatform.mockReturnValue({ globalState });
 
     await initCliPlatform(cliContext({ apiMode: 'included' }));
@@ -495,11 +510,7 @@ describe('CLI platform init', () => {
 // front (a signal during onboarding/model-resolution/the orchestration
 // launcher still needs a graceful handler); instead
 // `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
-// installs its own pair, so the two sets are never simultaneously live. These
-// suites use `installCliShutdownSignalHandlers`'s idempotent, module-level
-// `shutdownHandlersInstalled` flag, so each test needs a freshly-imported
-// module (`vi.resetModules()` + dynamic import) to observe installation from
-// a clean slate.
+// installs its own pair, so the two sets are never simultaneously live.
 describe('CLI platform interactive signal ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -508,23 +519,19 @@ describe('CLI platform interactive signal ownership', () => {
     // an initialized platform.
     mocks.tryPlatform.mockReturnValueOnce(undefined);
     mocks.tryPlatform.mockReturnValue({
-      globalState: { get: vi.fn(), update: vi.fn() },
+      globalState: stubGlobalState(() => undefined),
     });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
   });
 
   it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {
-    vi.resetModules();
-    const { registered, restore } = spyOnSignalRegistration();
-    try {
-      const { initInteractiveCliPlatform, handOffCliShutdownSignalHandlers } =
-        await import('@cli/runtime/initPlatform');
+    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
       // The await-suspension point from the finding: runChat() awaits this
       // init call, then onboarding/model resolution, before Ink ever mounts
       // and installs its own handlers below. Unlike the pre-handoff-design
       // fix, the platform handler stays registered for that whole window —
       // a signal there still gets a graceful shutdown.
-      await initInteractiveCliPlatform(cliContext());
+      await initPlatform.initInteractiveCliPlatform(cliContext());
       expect(registered).toEqual([
         { event: 'SIGINT', kind: 'once' },
         { event: 'SIGTERM', kind: 'once' },
@@ -532,7 +539,7 @@ describe('CLI platform interactive signal ownership', () => {
 
       // The TUI is about to mount (runChatTui.tsx) — it hands off ownership
       // immediately before installing its own handlers.
-      handOffCliShutdownSignalHandlers();
+      initPlatform.handOffCliShutdownSignalHandlers();
       expect(registered).toEqual([
         { event: 'SIGINT', kind: 'once' },
         { event: 'SIGTERM', kind: 'once' },
@@ -547,37 +554,25 @@ describe('CLI platform interactive signal ownership', () => {
         { event: 'SIGINT', kind: 'on' },
         { event: 'SIGTERM', kind: 'on' },
       ]);
-    } finally {
-      restore();
-    }
+    });
   });
 
   it('a headless call site (plain initCliPlatform) keeps the platform handler installed', async () => {
-    vi.resetModules();
-    const { registered, restore } = spyOnSignalRegistration();
-    try {
-      const { initCliPlatform: freshInitCliPlatform } =
-        await import('@cli/runtime/initPlatform');
-      await freshInitCliPlatform(cliContext());
+    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
+      await initPlatform.initCliPlatform(cliContext());
 
       expect(registered).toEqual([
         { event: 'SIGINT', kind: 'once' },
         { event: 'SIGTERM', kind: 'once' },
       ]);
-    } finally {
-      restore();
-    }
+    });
   });
 
   it('documents the race a forgotten installSignalHandlers:false would reintroduce', async () => {
-    vi.resetModules();
-    const { registered, restore } = spyOnSignalRegistration();
-    try {
+    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
       // A call site that used plain initCliPlatform (pre-fix behavior at
       // every interactive entry point) installs the platform handler...
-      const { initCliPlatform: freshInitCliPlatform } =
-        await import('@cli/runtime/initPlatform');
-      await freshInitCliPlatform(cliContext());
+      await initPlatform.initCliPlatform(cliContext());
       // ...and once the TUI mounts and claims the signals too, BOTH owners
       // are registered for the same signal — the exact race from the
       // finding, reproduced against real production wiring.
@@ -586,8 +581,6 @@ describe('CLI platform interactive signal ownership', () => {
 
       expect(registered.filter((r) => r.event === 'SIGINT')).toHaveLength(2);
       expect(registered.filter((r) => r.event === 'SIGTERM')).toHaveLength(2);
-    } finally {
-      restore();
-    }
+    });
   });
 });

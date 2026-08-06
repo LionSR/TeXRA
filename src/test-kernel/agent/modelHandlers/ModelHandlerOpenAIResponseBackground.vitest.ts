@@ -26,6 +26,10 @@ class ProfileDisabledBackgroundHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
+type OpenAIResponseHandlerClass = new (
+  config: ModelConfig,
+) => ModelHandlerOpenAIResponse;
+
 async function captureBackgroundModeDebug(
   handler: ModelHandlerOpenAIResponse,
 ): Promise<string[]> {
@@ -70,6 +74,24 @@ function createOpenAIConfig(name: string): ModelConfig {
   });
 }
 
+function createHandler(
+  name: string,
+  category: AgentCategory,
+  HandlerClass: OpenAIResponseHandlerClass = ModelHandlerOpenAIResponse,
+): ModelHandlerOpenAIResponse {
+  const handler = new HandlerClass(createOpenAIConfig(name));
+  handler.setAgentCategory(category);
+  return handler;
+}
+
+function assertBackgroundMode(
+  handler: ModelHandlerOpenAIResponse,
+  active: boolean,
+): void {
+  assert.equal(handler.isBackgroundModeActive(), active);
+  assert.equal(handler.getStreamingConfig(), !active);
+}
+
 describe('ModelHandlerOpenAIResponse background mode', () => {
   const originalGetConfig = configModule.getConfig;
 
@@ -78,27 +100,15 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
   });
 
   it('enables background mode by default only for GPT workflow agents', () => {
-    const handler = new ModelHandlerOpenAIResponse(createOpenAIConfig('gpt-5'));
-    handler.setAgentCategory(AgentCategory.Workflow);
-
-    assert.equal(handler.isBackgroundModeActive(), true);
-    assert.equal(handler.getStreamingConfig(), false);
+    assertBackgroundMode(createHandler('gpt-5', AgentCategory.Workflow), true);
   });
 
   it('keeps GPT tool-use agents on streaming requests by default', () => {
-    const handler = new ModelHandlerOpenAIResponse(createOpenAIConfig('gpt-5'));
-    handler.setAgentCategory(AgentCategory.ToolUse);
-
-    assert.equal(handler.isBackgroundModeActive(), false);
-    assert.equal(handler.getStreamingConfig(), true);
+    assertBackgroundMode(createHandler('gpt-5', AgentCategory.ToolUse), false);
   });
 
   it('keeps non-GPT workflow agents on streaming requests by default', () => {
-    const handler = new ModelHandlerOpenAIResponse(createOpenAIConfig('o3'));
-    handler.setAgentCategory(AgentCategory.Workflow);
-
-    assert.equal(handler.isBackgroundModeActive(), false);
-    assert.equal(handler.getStreamingConfig(), true);
+    assertBackgroundMode(createHandler('o3', AgentCategory.Workflow), false);
   });
 
   it('respects the background-mode toggle for GPT workflow agents', () => {
@@ -111,21 +121,18 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
       },
     );
 
-    const handler = new ModelHandlerOpenAIResponse(createOpenAIConfig('gpt-5'));
-    handler.setAgentCategory(AgentCategory.Workflow);
-
-    assert.equal(handler.isBackgroundModeActive(), false);
-    assert.equal(handler.getStreamingConfig(), true);
+    assertBackgroundMode(createHandler('gpt-5', AgentCategory.Workflow), false);
   });
 
   it('keeps streaming enabled when an eligible handler cannot use background mode', () => {
-    const handler = new UnsupportedBackgroundHandler(
-      createOpenAIConfig('gpt-5'),
+    assertBackgroundMode(
+      createHandler(
+        'gpt-5',
+        AgentCategory.Workflow,
+        UnsupportedBackgroundHandler,
+      ),
+      false,
     );
-    handler.setAgentCategory(AgentCategory.Workflow);
-
-    assert.equal(handler.isBackgroundModeActive(), false);
-    assert.equal(handler.getStreamingConfig(), true);
   });
 
   it('identifies handler support as the reason background mode is inactive', async () => {
@@ -166,19 +173,17 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
     // path, where background mode follows the shared useBackgroundResponses
     // toggle (default on) + workflow/GPT eligibility. The subscription-ON veto
     // (Codex backend can't poll) is covered in CodexExperimentalTransports.
-    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
-    handler.setAgentCategory(AgentCategory.Workflow);
-
-    assert.equal(handler.isBackgroundModeActive(), true);
-    assert.equal(handler.getStreamingConfig(), false);
+    assertBackgroundMode(
+      createHandler('gpt-5', AgentCategory.Workflow, ModelHandlerCodex),
+      true,
+    );
   });
 
   it('keeps Codex tool-use agents on streaming requests by default', () => {
-    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
-    handler.setAgentCategory(AgentCategory.ToolUse);
-
-    assert.equal(handler.isBackgroundModeActive(), false);
-    assert.equal(handler.getStreamingConfig(), true);
+    assertBackgroundMode(
+      createHandler('gpt-5', AgentCategory.ToolUse, ModelHandlerCodex),
+      false,
+    );
   });
 
   it('reports Codex subscription usage without API-key spend', () => {

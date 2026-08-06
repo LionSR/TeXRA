@@ -13,6 +13,7 @@ type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
 type DiffHostOptions = Parameters<
   DesktopDiffHostModule['createDesktopDiffHost']
 >[0];
+type DiffHost = ReturnType<DesktopDiffHostModule['createDesktopDiffHost']>;
 
 let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
 
@@ -51,6 +52,25 @@ async function writeDiffPair(
   return { originalPath, proposedPath };
 }
 
+async function openDiffPair(
+  host: DiffHost,
+  title: string,
+  names: [string, string] = ['a.tex', 'b.tex'],
+  texts: [string, string] = ['a\n', 'b\n'],
+): Promise<void> {
+  const { originalPath, proposedPath } = await writeDiffPair(
+    names[0],
+    names[1],
+    texts[0],
+    texts[1],
+  );
+  await host.openDiff(
+    { filePath: originalPath },
+    { filePath: proposedPath },
+    title,
+  );
+}
+
 describe('createDesktopDiffHost', () => {
   beforeAll(async () => {
     ({ createDesktopDiffHost } = await loadSourceModule(
@@ -59,32 +79,22 @@ describe('createDesktopDiffHost', () => {
   });
 
   it('falls back to a generated patch file when no renderer is wired', async () => {
-    const { originalPath, proposedPath } = await writeDiffPair(
-      'original.txt',
-      'proposed.txt',
-      'hello\nold\n',
-      'hello\nnew\n',
-    );
     const { host, openedPaths } = createHost();
 
-    await host.openDiff(
-      { filePath: originalPath },
-      { filePath: proposedPath },
+    await openDiffPair(
+      host,
       'Compare',
+      ['original.txt', 'proposed.txt'],
+      ['hello\nold\n', 'hello\nnew\n'],
     );
 
     expectOpenedPatchFile(openedPaths);
-    await expect(readFile(openedPaths[0], 'utf8')).resolves.toContain('-old');
-    await expect(readFile(openedPaths[0], 'utf8')).resolves.toContain('+new');
+    const patch = await readFile(openedPaths[0], 'utf8');
+    expect(patch).toContain('-old');
+    expect(patch).toContain('+new');
   });
 
   it('posts desktop:showDiff to the renderer when wired', async () => {
-    const { originalPath, proposedPath } = await writeDiffPair(
-      'doc.tex',
-      'doc.proposed.tex',
-      'hello\nold\n',
-      'hello\nnew\n',
-    );
     const posted: unknown[] = [];
     // External fallback should not be invoked when postToRenderer is set.
     const { host, openPath } = createHost({
@@ -94,10 +104,11 @@ describe('createDesktopDiffHost', () => {
       },
     });
 
-    await host.openDiff(
-      { filePath: originalPath },
-      { filePath: proposedPath },
+    await openDiffPair(
+      host,
       'Compare doc.tex',
+      ['doc.tex', 'doc.proposed.tex'],
+      ['hello\nold\n', 'hello\nnew\n'],
     );
 
     expect(openPath).not.toHaveBeenCalled();
@@ -119,26 +130,14 @@ describe('createDesktopDiffHost', () => {
     // wired at startup or BrowserWindow already destroyed. Bot review
     // (#3815, Copilot + Cursor): the host previously silently dropped
     // the diff in this case.
-    const { originalPath, proposedPath } = await writeDiffPair(
-      'a.tex',
-      'b.tex',
-    );
     const { host, openedPaths } = createHost({ postToRenderer: () => false });
 
-    await host.openDiff(
-      { filePath: originalPath },
-      { filePath: proposedPath },
-      'Compare',
-    );
+    await openDiffPair(host, 'Compare');
 
     expectOpenedPatchFile(openedPaths);
   });
 
   it('falls back to the external editor when postToRenderer throws', async () => {
-    const { originalPath, proposedPath } = await writeDiffPair(
-      'a.tex',
-      'b.tex',
-    );
     // Suppress the deliberate console.error from the host so the test
     // output stays clean.
     const consoleSpy = vi
@@ -150,11 +149,7 @@ describe('createDesktopDiffHost', () => {
       },
     });
 
-    await host.openDiff(
-      { filePath: originalPath },
-      { filePath: proposedPath },
-      'Compare',
-    );
+    await openDiffPair(host, 'Compare');
 
     expectOpenedPatchFile(openedPaths);
     expect(consoleSpy).toHaveBeenCalled();
@@ -162,10 +157,6 @@ describe('createDesktopDiffHost', () => {
   });
 
   it('honors forceExternal even when postToRenderer is wired', async () => {
-    const { originalPath, proposedPath } = await writeDiffPair(
-      'a.txt',
-      'b.txt',
-    );
     const posted: unknown[] = [];
     const { host, openedPaths } = createHost({
       postToRenderer: (message) => {
@@ -175,11 +166,7 @@ describe('createDesktopDiffHost', () => {
       forceExternal: true,
     });
 
-    await host.openDiff(
-      { filePath: originalPath },
-      { filePath: proposedPath },
-      'Compare',
-    );
+    await openDiffPair(host, 'Compare', ['a.txt', 'b.txt']);
 
     expect(posted).toHaveLength(0);
     expectOpenedPatchFile(openedPaths);

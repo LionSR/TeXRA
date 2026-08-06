@@ -50,6 +50,11 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
+const CONVERSATION = [
+  { role: 'user', content: 'Polish the lemma.' },
+  { role: 'assistant', content: 'Done.' },
+];
+
 describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,10 +65,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
 
   it('assembles a ChatExportInput when config and a non-empty conversation are both present', async () => {
     mocks.readConfig.mockResolvedValue(config);
-    mocks.readConversation.mockResolvedValue([
-      { role: 'user', content: 'Polish the lemma.' },
-      { role: 'assistant', content: 'Done.' },
-    ]);
+    mocks.readConversation.mockResolvedValue(CONVERSATION);
     mocks.readMeta.mockResolvedValue({
       timestamp: '2026-05-18T08:00:00.000Z',
       description: 'Polish pass',
@@ -83,15 +85,9 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
         contextFiles: [],
         outputFiles: ['chapters/intro.tex'],
       },
-      messages: [
-        { role: 'user', content: 'Polish the lemma.' },
-        { role: 'assistant', content: 'Done.' },
-      ],
+      messages: CONVERSATION,
     });
-    expect(result.conversation).toEqual([
-      { role: 'user', content: 'Polish the lemma.' },
-      { role: 'assistant', content: 'Done.' },
-    ]);
+    expect(result.conversation).toEqual(CONVERSATION);
     expect(result.hasTranscriptEvidence).toBe(true);
   });
 

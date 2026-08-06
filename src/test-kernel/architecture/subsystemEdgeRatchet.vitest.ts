@@ -165,7 +165,7 @@ function importEqualsSpecifier(
   node: ts.ImportEqualsDeclaration,
 ): string | null {
   const ref = node.moduleReference;
-  return ts.isExternalModuleReference(ref) && ref.expression != null
+  return ts.isExternalModuleReference(ref)
     ? stringLiteralText(ref.expression)
     : null;
 }
@@ -229,7 +229,7 @@ function addEdge(
     return;
   }
 
-  const key = `${from}->${to}`;
+  const key = edgeKey({ from, to });
   const previous = edges.get(key);
   edges.set(
     key,

@@ -67,6 +67,14 @@ export type ExecutionListingEntry =
       kind: 'incomplete';
     });
 
+/** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
+ *  entry union for TypeScript, so this is the one spelled-out guard. */
+export function isAgentRunEntry(
+  entry: ExecutionListingEntry,
+): entry is AgentExecutionListingEntry {
+  return entry.kind === 'run' && entry.identity.kind === 'agent';
+}
+
 /**
  * True for executions a user should see in a history list, meaning the runs a
  * user started themselves. Excludes non-agent runs (background processes,
@@ -81,14 +89,6 @@ export type ExecutionListingEntry =
  * because tool-facing callers like `ExecutionsTool` need the raw listing to
  * manage background processes and child runs.
  */
-/** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
- *  entry union for TypeScript, so this is the one spelled-out guard. */
-export function isAgentRunEntry(
-  entry: ExecutionListingEntry,
-): entry is AgentExecutionListingEntry {
-  return entry.kind === 'run' && entry.identity.kind === 'agent';
-}
-
 export function isUserVisibleExecution(
   entry: ExecutionListingEntry,
 ): entry is AgentExecutionListingEntry {

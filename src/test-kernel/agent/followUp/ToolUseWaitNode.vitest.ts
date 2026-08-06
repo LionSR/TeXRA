@@ -1,6 +1,3 @@
-// Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -40,7 +37,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
-// Local file imports
 import {
   recordSessionEvents,
   runEventsOfType,
@@ -112,6 +108,54 @@ function createWaitNodeServices(
 
 function waitPrep(afterError = false) {
   return { afterError, lastResponse: undefined };
+}
+
+/** Follow-up mock that appends each text to the running message list. */
+function appendUserFollowUpMessages() {
+  return vi.fn(
+    async (
+      messages: ProviderMessage[],
+      userMessage: string,
+    ): Promise<ProviderMessage[]> => [
+      ...messages,
+      { role: 'user', content: userMessage },
+    ],
+  );
+}
+
+/** Follow-up mock that returns each text as a standalone user message. */
+function singleUserFollowUpMessage() {
+  return vi.fn(
+    async (
+      _messages: ProviderMessage[],
+      text: string,
+    ): Promise<ProviderMessage[]> => [{ role: 'user', content: text }],
+  );
+}
+
+/**
+ * Starts a goal whose latest cycle failed, with an owner session recording
+ * approval bypass-state changes.
+ */
+async function startErroredGoal(
+  streamId: StreamTabId,
+  goal: string,
+  errorMessage: string,
+): Promise<{
+  shared: ToolUseRunShared;
+  setApprovalBypassState: ReturnType<typeof vi.fn>;
+  ownerSession: SessionHandle;
+}> {
+  await installPlatform();
+  await GoalStore.start(streamId, goal);
+  const shared = toolUseRunShared();
+  shared.lastError = { message: errorMessage, userRetryable: false };
+  const setApprovalBypassState = vi.fn();
+  const ownerSession = sessionWithInteractions({
+    setApprovalBypassState,
+    cancel: vi.fn(),
+  });
+  return { shared, setApprovalBypassState, ownerSession };
 }
 
 /**
@@ -197,12 +241,7 @@ describe('ToolUseWaitNode', () => {
   it('advances a drained child-loop batch once without reading the session queue', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
     const waitForFollowUp = vi.fn();
-    const createUserFollowUpMessages = vi.fn(
-      async (
-        _messages: ProviderMessage[],
-        text: string,
-      ): Promise<ProviderMessage[]> => [{ role: 'user', content: text }],
-    );
+    const createUserFollowUpMessages = singleUserFollowUpMessage();
     const onFollowUpConsumed = vi.fn();
     const batch = [
       {
@@ -411,18 +450,9 @@ describe('ToolUseWaitNode', () => {
 
   it('pauses the goal after a failed parent cycle', async () => {
     const streamId = 'wait-node-error-goal' as StreamTabId;
-    await installPlatform();
+    const { shared, setApprovalBypassState, ownerSession } =
+      await startErroredGoal(streamId, 'finish the refactor', 'cycle failed');
 
-    await GoalStore.start(streamId, 'finish the refactor');
-
-    const shared: ToolUseRunShared = toolUseRunShared({
-      lastError: { message: 'cycle failed', userRetryable: false },
-    });
-    const setApprovalBypassState = vi.fn();
-    const ownerSession = sessionWithInteractions({
-      setApprovalBypassState,
-      cancel: vi.fn(),
-    });
     const logger = new TraceEmitter();
     const recorded = recordRunEvents(logger, streamId);
     const waitForFollowUp = vi.fn();
@@ -477,15 +507,7 @@ describe('ToolUseWaitNode', () => {
     await GoalStore.start(streamId, 'Finish the autonomous proof audit.');
 
     const shared: ToolUseRunShared = toolUseRunShared();
-    const createUserFollowUpMessages = vi.fn(
-      async (
-        messages: ProviderMessage[],
-        userMessage: string,
-      ): Promise<ProviderMessage[]> => [
-        ...messages,
-        { role: 'user', content: userMessage },
-      ],
-    );
+    const createUserFollowUpMessages = appendUserFollowUpMessages();
     const onFollowUpConsumed = vi.fn();
     const waitForFollowUp = vi.fn();
     const streamStatus = new StreamStatusMachine(new SessionEventHub());
@@ -560,15 +582,7 @@ describe('ToolUseWaitNode', () => {
     );
 
     const shared: ToolUseRunShared = toolUseRunShared();
-    const createUserFollowUpMessages = vi.fn(
-      async (
-        messages: ProviderMessage[],
-        userMessage: string,
-      ): Promise<ProviderMessage[]> => [
-        ...messages,
-        { role: 'user', content: userMessage },
-      ],
-    );
+    const createUserFollowUpMessages = appendUserFollowUpMessages();
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
       isSubagent: false,
@@ -796,15 +810,7 @@ describe('ToolUseWaitNode', () => {
         },
       },
     });
-    const createUserFollowUpMessages = vi.fn(
-      async (
-        messages: ProviderMessage[],
-        userMessage: string,
-      ): Promise<ProviderMessage[]> => [
-        ...messages,
-        { role: 'user', content: userMessage },
-      ],
-    );
+    const createUserFollowUpMessages = appendUserFollowUpMessages();
     const sequence: string[] = [];
     const info = vi.fn(() => sequence.push('info'));
     const streamId = 'test-stream' as StreamTabId;
@@ -897,31 +903,20 @@ describe('ToolUseWaitNode', () => {
   // unattended bash approval first.
   it('recovers an errored goal from a drained batch without pausing it', async () => {
     const streamId = 'wait-node-error-drained-goal' as StreamTabId;
-    await installPlatform();
-    await GoalStore.start(streamId, 'finish the autonomous proof');
+    const { shared, setApprovalBypassState, ownerSession } =
+      await startErroredGoal(
+        streamId,
+        'finish the autonomous proof',
+        'stale failure from the previous cycle',
+      );
 
-    const shared: ToolUseRunShared = toolUseRunShared();
-    shared.lastError = {
-      message: 'stale failure from the previous cycle',
-      userRetryable: false,
-    };
-    const setApprovalBypassState = vi.fn();
-    const ownerSession = sessionWithInteractions({
-      setApprovalBypassState,
-      cancel: vi.fn(),
-    });
     const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
     const services = createWaitNodeServices({
       isSubagent: true,
       ownerSession,
       streamId,
       modelHandler: {
-        createUserFollowUpMessages: vi.fn(
-          async (
-            _messages: ProviderMessage[],
-            text: string,
-          ): Promise<ProviderMessage[]> => [{ role: 'user', content: text }],
-        ),
+        createUserFollowUpMessages: singleUserFollowUpMessage(),
       },
     });
     const node = new ToolUseWaitNode(batch).setServices(services);
@@ -956,19 +951,13 @@ describe('ToolUseWaitNode', () => {
 
   it('pauses an errored goal when a drained recovery batch cannot be applied', async () => {
     const streamId = 'wait-node-error-recovery-failed' as StreamTabId;
-    await installPlatform();
-    await GoalStore.start(streamId, 'finish the autonomous proof');
+    const { shared, setApprovalBypassState, ownerSession } =
+      await startErroredGoal(
+        streamId,
+        'finish the autonomous proof',
+        'stale failure from the previous cycle',
+      );
 
-    const shared: ToolUseRunShared = toolUseRunShared();
-    shared.lastError = {
-      message: 'stale failure from the previous cycle',
-      userRetryable: false,
-    };
-    const setApprovalBypassState = vi.fn();
-    const ownerSession = sessionWithInteractions({
-      setApprovalBypassState,
-      cancel: vi.fn(),
-    });
     const applicationError = new Error('follow-up media is unreadable');
     const batch = [{ text: 'use this diagram', origin: 'user' as const }];
     const services = createWaitNodeServices({

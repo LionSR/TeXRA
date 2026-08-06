@@ -38,6 +38,12 @@ const TEMPLATE =
   '<script type="module" crossorigin src="./index.js"></script>' +
   '</head><body></body></html>';
 
+function embeddedTrace(html: string): TraceDocument {
+  const match = /window\.__TEXRA_TRACE__ = (.*?);<\/script>/s.exec(html);
+  expect(match).not.toBeNull();
+  return JSON.parse(match![1]) as TraceDocument;
+}
+
 describe('injectStandaloneTrace', () => {
   it('inserts an inline script before the module script tag', () => {
     const html = injectStandaloneTrace(TEMPLATE, trace());
@@ -50,10 +56,8 @@ describe('injectStandaloneTrace', () => {
   it('embeds the trace as valid, round-trippable JSON', () => {
     const t = trace({ executionId: 'exec-roundtrip' as ExecutionId });
     const html = injectStandaloneTrace(TEMPLATE, t);
-    const match = /window\.__TEXRA_TRACE__ = (.*?);<\/script>/s.exec(html);
-    expect(match).not.toBeNull();
-    const parsed = JSON.parse(match![1]);
-    expect(parsed.executionId).toBe('exec-roundtrip');
+
+    expect(embeddedTrace(html).executionId).toBe('exec-roundtrip');
   });
 
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
@@ -75,9 +79,7 @@ describe('injectStandaloneTrace', () => {
       '<script type="module" crossorigin src="./index.js"></script>',
     );
 
-    const match = /window\.__TEXRA_TRACE__ = (.*?);<\/script>/s.exec(html);
-    const parsed = JSON.parse(match![1]);
-    expect(parsed.meta.description).toBe(
+    expect(embeddedTrace(html).meta?.description).toBe(
       '</script><img src=x onerror=alert(1)>',
     );
   });

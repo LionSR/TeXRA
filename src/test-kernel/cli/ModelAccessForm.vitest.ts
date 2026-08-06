@@ -65,7 +65,6 @@ describe('ModelAccessForm status', () => {
     try {
       await waitFor(() => loadCliModelAccessOverview.mock.calls.length > 0);
       await waitFor(() => stdout.output.includes('model access unavailable'));
-      expect(stdout.output).toContain('model access unavailable');
       expect(stdout.output).toContain('Current preference unavailable');
       expect(stdout.output).not.toContain('Off ·');
       expect(stdout.output).toContain('✓ 4. Included access');

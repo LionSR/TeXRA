@@ -83,6 +83,18 @@ function fileStateOf(element: MainApp): FileStateContextValue {
   ).fileStateContextValue;
 }
 
+// Looks up a row action control, failing loudly (with its purpose) when the
+// row did not render it — the regression this suite guards against.
+function queryControl(
+  group: Element,
+  selector: string,
+  description: string,
+): HTMLElement {
+  const control = group.shadowRoot?.querySelector<HTMLElement>(selector);
+  expect(control, `expected ${description}`).toBeTruthy();
+  return control!;
+}
+
 describe('file-select-group row actions', () => {
   useLitComponentTestDom(() => import('@webview/frontend/MainApp'));
 
@@ -124,11 +136,11 @@ describe('file-select-group row actions', () => {
   it('removes the clicked file', async () => {
     const { element, group } = await mountWithFiles();
 
-    const removeButton = group.shadowRoot!.querySelector<HTMLElement>(
+    queryControl(
+      group,
       '[data-remove-file="main.tex"]',
-    );
-    expect(removeButton, 'expected a remove control for main.tex').toBeTruthy();
-    removeButton!.click();
+      'a remove control for main.tex',
+    ).click();
     await element.updateComplete;
 
     expect(fileStateOf(element).multiFiles.inputFiles).toEqual([
@@ -139,14 +151,11 @@ describe('file-select-group row actions', () => {
   it('reorders when a move control is clicked', async () => {
     const { element, group } = await mountWithFiles();
 
-    const moveDown = group.shadowRoot!.querySelector<HTMLElement>(
+    queryControl(
+      group,
       '[data-move-index="0"][data-move-direction="1"]',
-    );
-    expect(
-      moveDown,
-      'expected a move-down control on the first row',
-    ).toBeTruthy();
-    moveDown!.click();
+      'a move-down control on the first row',
+    ).click();
     await element.updateComplete;
 
     expect(fileStateOf(element).multiFiles.inputFiles).toEqual([

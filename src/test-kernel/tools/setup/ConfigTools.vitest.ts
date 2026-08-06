@@ -97,49 +97,29 @@ describe('ConfigTools — update_config allowlist', () => {
     assert.match(result.output ?? '', /23200/);
   });
 
-  it('rejects non-allowlisted keys at schema parse time (no write)', async () => {
+  it.each([
+    {
+      case: 'a non-allowlisted key',
+      key: 'texra.model.useOpenAIResponsesAPI',
+      value: true,
+    },
+    {
+      case: 'a type-mismatched value',
+      key: 'texra.bib.zoteroPort',
+      value: 'not a number',
+    },
+    // Port range is 1..65535
+    { case: 'port 0', key: 'texra.bib.zoteroPort', value: 0 },
+    { case: 'port -1', key: 'texra.bib.zoteroPort', value: -1 },
+    { case: 'port 70000', key: 'texra.bib.zoteroPort', value: 70000 },
+  ])('rejects $case without writing', async ({ key, value }) => {
     const { updates } = createPlatform();
     const tool = new UpdateConfigTool();
 
-    const result = await tool.call({
-      key: 'texra.model.useOpenAIResponsesAPI',
-      value: true,
-      target: 'user',
-    });
+    const result = await tool.call({ key, value, target: 'user' });
 
     assert.equal(result.status, 'error');
     assert.equal(updates.length, 0, 'must not call platform.update');
-  });
-
-  it('rejects type-mismatched values for an allowlisted key', async () => {
-    const { updates } = createPlatform();
-    const tool = new UpdateConfigTool();
-
-    const result = await tool.call({
-      key: 'texra.bib.zoteroPort',
-      value: 'not a number',
-      target: 'user',
-    });
-
-    assert.equal(result.status, 'error');
-    assert.equal(updates.length, 0);
-  });
-
-  it('rejects out-of-range numeric values', async () => {
-    const { updates } = createPlatform();
-    const tool = new UpdateConfigTool();
-
-    // Port range is 1..65535
-    for (const port of [0, -1, 70000]) {
-      const result = await tool.call({
-        key: 'texra.bib.zoteroPort',
-        value: port,
-        target: 'user',
-      });
-      assert.equal(result.status, 'error');
-    }
-
-    assert.equal(updates.length, 0);
   });
 
   it('honors target=workspace scope', async () => {

@@ -26,6 +26,13 @@ function captureSignalHandlers(): Map<string, (...args: unknown[]) => void> {
   return handlers;
 }
 
+function fakeLifecycle(runShutdown: () => Promise<void>): LifecycleHost {
+  return {
+    onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
+    runShutdown,
+  };
+}
+
 describe('CLI platform signal handlers', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -49,14 +56,10 @@ describe('CLI platform signal handlers', () => {
     mocks.flushNdjsonStdout.mockImplementation(async () => {
       events.push('flush');
     });
-    const lifecycle: LifecycleHost = {
-      onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-      runShutdown,
-    };
 
     const { installCliShutdownSignalHandlers } =
       await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers(lifecycle);
+    installCliShutdownSignalHandlers(fakeLifecycle(runShutdown));
 
     expect(handlers.has('SIGINT')).toBe(true);
     expect(handlers.has('SIGTERM')).toBe(true);
@@ -86,16 +89,13 @@ describe('CLI platform signal handlers', () => {
       return process;
     }) as typeof process.removeListener);
 
-    const lifecycle: LifecycleHost = {
-      onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-      runShutdown: vi.fn(async () => undefined),
-    };
-
     const {
       installCliShutdownSignalHandlers,
       handOffCliShutdownSignalHandlers,
     } = await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers(lifecycle);
+    installCliShutdownSignalHandlers(
+      fakeLifecycle(vi.fn(async () => undefined)),
+    );
     expect(handlers.size).toBe(2);
 
     handOffCliShutdownSignalHandlers();
@@ -124,10 +124,7 @@ describe('CLI platform signal handlers', () => {
     const runShutdown = vi.fn(async () => {
       order.push('shutdown');
     });
-    await runCliPlatformShutdownSequence({
-      onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-      runShutdown,
-    });
+    await runCliPlatformShutdownSequence(fakeLifecycle(runShutdown));
     expect(order).toEqual(['shutdown', 'flush']);
 
     // Best-effort: a lifecycle shutdown failure must not skip the flush, and
@@ -138,10 +135,7 @@ describe('CLI platform signal handlers', () => {
       throw new Error('shutdown failed');
     });
     await expect(
-      runCliPlatformShutdownSequence({
-        onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-        runShutdown: failingRunShutdown,
-      }),
+      runCliPlatformShutdownSequence(fakeLifecycle(failingRunShutdown)),
     ).resolves.toBeUndefined();
     expect(order).toEqual(['shutdown', 'flush']);
 

@@ -130,9 +130,7 @@ describe('agent skills workspace guard', () => {
       SettingsViewMessageHandler.prototype,
     ) as SnapshotHarness;
     const webview = {};
-    const sendReliabilityAndOrchestrationSettings = vi.fn(
-      async () => undefined,
-    );
+    const sendReliabilityAndOrchestrationSettings = vi.fn();
     Reflect.set(
       handler,
       'sendReliabilityAndOrchestrationSettings',

@@ -99,8 +99,7 @@ function extractGoogleFunctionResponseContent(
     ? functionResponse.response
     : undefined;
   if (response && Object.hasOwn(response, 'result')) return response.result;
-  if (response !== undefined) return response;
-  return functionResponse;
+  return response ?? functionResponse;
 }
 
 function formatToolUseMarker(
@@ -354,7 +353,7 @@ export function formatConversationContent(
 export function formatConversationMessage(
   message: unknown,
   options: ConversationFormatOptions = {},
-) {
+): { role: string; content: string } {
   const raw = isObject(message) ? message : {};
   const role = asText(raw.role) || 'unknown';
   const content = [

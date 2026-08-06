@@ -5,17 +5,14 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { runWorkflowAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
   CliConfigExecuteOptions,
   CliConfigExecuteResult,
 } from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import {
-  EXECUTION_STATUS,
-  RUN_OUTCOME,
-  type ExecutionId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => {
@@ -98,6 +95,15 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
   STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
 }));
 
+type WorkflowRunInit = Parameters<typeof runWorkflowAgent>[1];
+type WorkflowExecuteResult = CliConfigExecuteResult<
+  typeof AgentCategory.Workflow
+>;
+type WorkflowRunPayload = Extract<
+  WorkflowExecuteResult,
+  { ok: true }
+>['result'];
+
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
     renderRunProgress: true,
@@ -117,6 +123,21 @@ async function withTempRoot(
   }
 }
 
+/** Runs the workflow command with the shared happy-path inputs. */
+async function runWorkflow(
+  init: Partial<WorkflowRunInit> = {},
+  context: CliContext = cliContext(),
+): Promise<number> {
+  const { runWorkflowAgent: run } = await import('@cli/commands/workflow');
+  return run(context, {
+    agent: 'polish',
+    inputFiles: ['paper.tex'],
+    contextFiles: [],
+    instruction: '',
+    ...init,
+  });
+}
+
 function runOutputSummary(absolutePath: string, originalPath: string) {
   return {
     round: 1,
@@ -129,8 +150,29 @@ function runOutputSummary(absolutePath: string, originalPath: string) {
   } as const;
 }
 
+function workflowExecution(
+  executionId: string,
+  overrides: Partial<
+    Pick<WorkflowRunPayload, 'outcome' | 'outputs' | 'compileFailures'>
+  > = {},
+): WorkflowExecuteResult {
+  return {
+    ok: true,
+    executionId,
+    result: {
+      category: AgentCategory.Workflow,
+      executionId,
+      streamId: executionId.replace(/^exec-/, 'stream-'),
+      outcome: RUN_OUTCOME.COMPLETED,
+      outputs: [],
+      compileFailures: [],
+      ...overrides,
+    },
+  };
+}
+
 function mockWorkflowExecution(
-  result: CliConfigExecuteResult<typeof AgentCategory.Workflow>,
+  result: WorkflowExecuteResult,
   once = false,
 ): void {
   const implementation = async (
@@ -145,6 +187,42 @@ function mockWorkflowExecution(
   };
   if (once) mocks.executeCliConfig.mockImplementationOnce(implementation);
   else mocks.executeCliConfig.mockImplementation(implementation);
+}
+
+/** The result envelope the command persists for history details. */
+function expectedResultMeta(options: {
+  readonly outcome: string;
+  readonly outputs: readonly unknown[];
+  readonly compileFailures: readonly unknown[];
+  readonly copiedOutput?: string;
+  readonly copiedOutputs?: readonly string[];
+}): Record<string, unknown> {
+  const { outcome, outputs, compileFailures, ...copies } = options;
+  return {
+    producer: 'cliWorkflow',
+    ...copies,
+    result: {
+      category: 'workflow',
+      outcome,
+      outputs,
+      compileFailures,
+      diffs: [],
+      cost: 0,
+    },
+  };
+}
+
+/** Materializes the round-1 output file the copy target is sourced from. */
+async function writeGeneratedOutput(root: string): Promise<string> {
+  const generated = path.join(root, 'run', 'r1', 'paper.tex');
+  await fs.mkdir(path.dirname(generated), { recursive: true });
+  await fs.writeFile(generated, 'polished');
+  return generated;
+}
+
+function expectNoModelOrInputWork(): void {
+  expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
+  expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
 }
 
 describe('CLI workflow run command', () => {
@@ -178,38 +256,17 @@ describe('CLI workflow run command', () => {
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
-    mockWorkflowExecution({
-      ok: true,
-      executionId: 'exec-1',
-      result: {
-        category: AgentCategory.Workflow,
-        executionId: 'exec-1',
-        streamId: 'stream-1',
-        outcome: RUN_OUTCOME.COMPLETED,
-        outputs: [],
-        compileFailures: [],
-      },
-    });
+    mockWorkflowExecution(workflowExecution('exec-1'));
   });
 
   it('reports conflicting output targets before platform or model lookup', async () => {
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
     await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        output: 'out.tex',
-        outputDir: 'out',
-        instruction: '',
-      }),
+      runWorkflow({ output: 'out.tex', outputDir: 'out' }),
     ).rejects.toThrow('Use either --output or --output-dir, not both.');
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expectNoModelOrInputWork();
   });
 
   it('reports missing workflow agents before resolving the model', async () => {
@@ -218,16 +275,10 @@ describe('CLI workflow run command', () => {
         'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
       ),
     );
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
-    await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'missing-agent',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        instruction: '',
-      }),
-    ).rejects.toThrow(/Agent not found: missing-agent/);
+    await expect(runWorkflow({ agent: 'missing-agent' })).rejects.toThrow(
+      /Agent not found: missing-agent/,
+    );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
@@ -239,8 +290,7 @@ describe('CLI workflow run command', () => {
       'missing-agent',
       'run',
     );
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expectNoModelOrInputWork();
   });
 
   it('reports tool-use agents before resolving the model', async () => {
@@ -249,60 +299,38 @@ describe('CLI workflow run command', () => {
         'Agent "chat" is a toolUse agent; `texra run` only handles workflow agents.',
       ),
     );
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
-    await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'chat',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        instruction: '',
-      }),
-    ).rejects.toThrow(/`texra run` only handles workflow agents/);
+    await expect(runWorkflow({ agent: 'chat' })).rejects.toThrow(
+      /`texra run` only handles workflow agents/,
+    );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('chat', 'run');
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expectNoModelOrInputWork();
   });
 
   it('reports single-output mixed stdin usage before resolving the model', async () => {
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
     await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'polish',
-        inputFiles: ['-', 'paper.tex'],
-        contextFiles: [],
-        output: 'out.tex',
-        instruction: '',
-      }),
+      runWorkflow({ inputFiles: ['-', 'paper.tex'], output: 'out.tex' }),
     ).rejects.toThrow(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
     );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expectNoModelOrInputWork();
   });
 
   it('reports input expansion errors before resolving the model', async () => {
     mocks.withExpandedRunInputs.mockRejectedValueOnce(
       new Error('At least one workflow input file is required.'),
     );
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
-    await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'polish',
-        inputFiles: [],
-        contextFiles: [],
-        instruction: '',
-      }),
-    ).rejects.toThrow('At least one workflow input file is required.');
+    await expect(runWorkflow({ inputFiles: [] })).rejects.toThrow(
+      'At least one workflow input file is required.',
+    );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
@@ -323,16 +351,15 @@ describe('CLI workflow run command', () => {
         path.join(root, 'prompt.md'),
         'Read this prompt from disk.\n',
       );
-      const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
-      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        model: 'deepseekT',
-        instruction: 'Then keep the final response concise.',
-        instructionFile: 'prompt.md',
-      });
+      const exitCode = await runWorkflow(
+        {
+          model: 'deepseekT',
+          instruction: 'Then keep the final response concise.',
+          instructionFile: 'prompt.md',
+        },
+        cliContext({ cwd: root }),
+      );
 
       expect(exitCode).toBe(0);
       expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
@@ -350,14 +377,7 @@ describe('CLI workflow run command', () => {
   });
 
   it('enforces workflow results at the shared execution boundary', async () => {
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
-    const exitCode = await runWorkflowAgent(cliContext(), {
-      agent: 'polish',
-      inputFiles: ['paper.tex'],
-      contextFiles: [],
-      instruction: '',
-    });
+    const exitCode = await runWorkflow();
 
     expect(exitCode).toBe(0);
     expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
@@ -369,7 +389,7 @@ describe('CLI workflow run command', () => {
 
   it('keeps the single-output copy target separate from workflow output names', async () => {
     await withTempRoot(async (root) => {
-      const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      const generated = await writeGeneratedOutput(root);
       const outputSummary = runOutputSummary(
         generated,
         path.join(root, 'paper.tex'),
@@ -381,33 +401,18 @@ describe('CLI workflow run command', () => {
         logPath: 'compile/r1_paper.tex.log',
         logAbsolutePath: path.join(root, 'run', 'compile', 'r1_paper.tex.log'),
       };
-      await fs.mkdir(path.dirname(generated), { recursive: true });
-      await fs.writeFile(generated, 'polished');
       mockWorkflowExecution(
-        {
-          ok: true,
-          executionId: 'exec-output',
-          result: {
-            category: AgentCategory.Workflow,
-            executionId: 'exec-output',
-            streamId: 'stream-output',
-            outcome: RUN_OUTCOME.COMPLETED,
-            outputs: [outputSummary],
-            compileFailures: [compileFailure],
-          },
-        },
+        workflowExecution('exec-output', {
+          outputs: [outputSummary],
+          compileFailures: [compileFailure],
+        }),
         true,
       );
 
-      const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
-      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        output: 'polished.tex',
-        instruction: '',
-      });
+      const exitCode = await runWorkflow(
+        { output: 'polished.tex' },
+        cliContext({ cwd: root }),
+      );
 
       expect(exitCode).toBe(0);
       const config = mocks.executeCliConfig.mock.calls[0]?.[0];
@@ -419,18 +424,14 @@ describe('CLI workflow run command', () => {
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
       ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-        producer: 'cliWorkflow',
-        copiedOutput: path.join(root, 'polished.tex'),
-        result: {
-          category: 'workflow',
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expectedResultMeta({
+          copiedOutput: path.join(root, 'polished.tex'),
           outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [compileFailure],
-          diffs: [],
-          cost: 0,
-        },
-      });
+        }),
+      );
       const emission = mocks.emitCliResult.mock.calls[0]?.[1];
       expect(emission?.json).toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
@@ -461,93 +462,53 @@ describe('CLI workflow run command', () => {
 
   it('persists copied output-dir paths for history details', async () => {
     await withTempRoot(async (root) => {
-      const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      const generated = await writeGeneratedOutput(root);
       const outputSummary = runOutputSummary(
         generated,
         path.join(root, 'paper.tex'),
       );
-      await fs.mkdir(path.dirname(generated), { recursive: true });
-      await fs.writeFile(generated, 'polished');
       mockWorkflowExecution(
-        {
-          ok: true,
-          executionId: 'exec-output-dir',
-          result: {
-            category: AgentCategory.Workflow,
-            executionId: 'exec-output-dir',
-            streamId: 'stream-output-dir',
-            outcome: RUN_OUTCOME.COMPLETED,
-            outputs: [outputSummary],
-            compileFailures: [],
-          },
-        },
+        workflowExecution('exec-output-dir', { outputs: [outputSummary] }),
         true,
       );
 
-      const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
-      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        outputDir: 'out',
-        instruction: '',
-      });
+      const exitCode = await runWorkflow(
+        { outputDir: 'out' },
+        cliContext({ cwd: root }),
+      );
 
       expect(exitCode).toBe(0);
       await expect(
         fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
       ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-        producer: 'cliWorkflow',
-        copiedOutputs: [path.join(root, 'out', 'paper.tex')],
-        result: {
-          category: 'workflow',
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expectedResultMeta({
+          copiedOutputs: [path.join(root, 'out', 'paper.tex')],
           outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [],
-          diffs: [],
-          cost: 0,
-        },
-      });
+        }),
+      );
     });
   });
 
   it('does not fail a completed workflow when copied output metadata cannot be persisted', async () => {
     await withTempRoot(async (root) => {
-      const generated = path.join(root, 'run', 'r1', 'paper.tex');
-      await fs.mkdir(path.dirname(generated), { recursive: true });
-      await fs.writeFile(generated, 'polished');
+      const generated = await writeGeneratedOutput(root);
       mockWorkflowExecution(
-        {
-          ok: true,
-          executionId: 'exec-output-meta-fail',
-          result: {
-            category: AgentCategory.Workflow,
-            executionId: 'exec-output-meta-fail',
-            streamId: 'stream-output-meta-fail',
-            outcome: RUN_OUTCOME.COMPLETED,
-            outputs: [
-              runOutputSummary(generated, path.join(root, 'paper.tex')),
-            ],
-            compileFailures: [],
-          },
-        },
+        workflowExecution('exec-output-meta-fail', {
+          outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
+        }),
         true,
       );
       mocks.writeResultMeta.mockRejectedValueOnce(
         new Error('metadata disk full'),
       );
 
-      const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
-      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        outputDir: 'out',
-        instruction: '',
-      });
+      const exitCode = await runWorkflow(
+        { outputDir: 'out' },
+        cliContext({ cwd: root }),
+      );
 
       expect(exitCode).toBe(0);
       await expect(
@@ -570,42 +531,20 @@ describe('CLI workflow run command', () => {
       '/workspace/paper.tex',
     );
     mockWorkflowExecution(
-      {
-        ok: true,
-        executionId: 'exec-copy-fail',
-        result: {
-          category: AgentCategory.Workflow,
-          executionId: 'exec-copy-fail',
-          streamId: 'stream-copy-fail',
-          outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [outputSummary],
-          compileFailures: [],
-        },
-      },
+      workflowExecution('exec-copy-fail', { outputs: [outputSummary] }),
       true,
     );
 
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-    const exitCode = await runWorkflowAgent(cliContext(), {
-      agent: 'polish',
-      inputFiles: ['paper.tex'],
-      contextFiles: [],
-      output: 'polished.tex',
-      instruction: '',
-    });
+    const exitCode = await runWorkflow({ output: 'polished.tex' });
 
     expect(exitCode).toBe(CliExitCode.AgentError);
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-      producer: 'cliWorkflow',
-      result: {
-        category: 'workflow',
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expectedResultMeta({
         outcome: RUN_OUTCOME.FAILED,
         outputs: [outputSummary],
         compileFailures: [],
-        diffs: [],
-        cost: 0,
-      },
-    });
+      }),
+    );
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId: 'exec-copy-fail',
       outcome: 'failed',
@@ -615,23 +554,11 @@ describe('CLI workflow run command', () => {
 
   it('keeps a copy error primary when execution finalization also fails', async () => {
     mockWorkflowExecution(
-      {
-        ok: true,
-        executionId: 'exec-copy-fail',
-        result: {
-          category: AgentCategory.Workflow,
-          executionId: 'exec-copy-fail',
-          streamId: 'stream-copy-fail',
-          outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [
-            runOutputSummary(
-              '/missing/run/r1/paper.tex',
-              '/workspace/paper.tex',
-            ),
-          ],
-          compileFailures: [],
-        },
-      },
+      workflowExecution('exec-copy-fail', {
+        outputs: [
+          runOutputSummary('/missing/run/r1/paper.tex', '/workspace/paper.tex'),
+        ],
+      }),
       true,
     );
     mocks.finalizeExecution.mockResolvedValueOnce({
@@ -641,16 +568,9 @@ describe('CLI workflow run command', () => {
       terminalStatusPersisted: false,
     });
 
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-    await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        output: 'polished.tex',
-        instruction: '',
-      }),
-    ).resolves.toBe(CliExitCode.AgentError);
+    await expect(runWorkflow({ output: 'polished.tex' })).resolves.toBe(
+      CliExitCode.AgentError,
+    );
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Warning: Failed to persist failed status for execution exec-copy-fail: terminal metadata disk full',
@@ -662,59 +582,31 @@ describe('CLI workflow run command', () => {
 
   it('uses the resolved terminal outcome in the persisted envelope', async () => {
     mockWorkflowExecution(
-      {
-        ok: true,
-        executionId: 'exec-interrupted',
-        result: {
-          category: AgentCategory.Workflow,
-          executionId: 'exec-interrupted',
-          streamId: 'stream-interrupted',
-          outcome: RUN_OUTCOME.CANCELLED,
-          outputs: [],
-          compileFailures: [],
-        },
-      },
+      workflowExecution('exec-interrupted', {
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
       true,
     );
 
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-    const exitCode = await runWorkflowAgent(cliContext(), {
-      agent: 'polish',
-      inputFiles: ['paper.tex'],
-      contextFiles: [],
-      instruction: '',
-    });
+    const exitCode = await runWorkflow();
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-      producer: 'cliWorkflow',
-      result: {
-        category: 'workflow',
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expectedResultMeta({
         outcome: RUN_OUTCOME.CANCELLED,
         outputs: [],
         compileFailures: [],
-        diffs: [],
-        cost: 0,
-      },
-    });
+      }),
+    );
   });
 
   it('reports missing instruction files before starting platform or input work', async () => {
-    const { runWorkflowAgent } = await import('@cli/commands/workflow');
-
     await expect(
-      runWorkflowAgent(cliContext(), {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        instruction: '',
-        instructionFile: 'missing-prompt.md',
-      }),
+      runWorkflow({ instructionFile: 'missing-prompt.md' }),
     ).rejects.toThrow(/--instruction-file: file not found: missing-prompt\.md/);
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expectNoModelOrInputWork();
   });
 });

@@ -230,14 +230,14 @@ function errorMessageOf(error: unknown): string {
 function isStaleInteractionChainError(error: unknown): boolean {
   const status = detectStatusCode(error);
   const message = errorMessageOf(error);
-  const code =
-    typeof (error as { code?: unknown })?.code === 'string'
-      ? (error as { code: string }).code
-      : '';
+  const rawCode = (error as { code?: unknown })?.code;
+  const code = typeof rawCode === 'string' ? rawCode : '';
 
-  // Anchor: the error must mention the interaction chain to qualify.
+  const mentionsPreviousInteractionId = /previous_interaction_id/i.test(
+    message,
+  );
+  // Anchor: interaction-chain wording in the message.
   const mentionsInteractionChain =
-    /previous_interaction_id/i.test(message) ||
     /\binteraction\b[\s\S]*\b(not\s*found|expired|invalid|unknown|does not exist)\b/i.test(
       message,
     );
@@ -249,11 +249,11 @@ function isStaleInteractionChainError(error: unknown): boolean {
     'FAILED_PRECONDITION',
   ].includes(code);
 
-  // A bare status/code match is only treated as stale when the message also
-  // points at the interaction chain (avoid eating unrelated 404s); explicit
-  // previous_interaction_id wording alone is sufficient.
+  // Explicit previous_interaction_id wording alone is sufficient; a bare
+  // status/code match qualifies only when corroborated by interaction-chain
+  // wording (so an unrelated 404 is never eaten).
   return (
-    /previous_interaction_id/i.test(message) ||
+    mentionsPreviousInteractionId ||
     ((staleStatus || staleCode) && mentionsInteractionChain)
   );
 }
@@ -1530,10 +1530,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         ? base
         : base.slice(this.chainState.getSentCount()).filter(isClientInputStep),
     );
-    const previousId =
-      stateful && !shouldSendAll
-        ? (this.chainState.getAnchorId() ?? undefined)
-        : undefined;
+    // `!shouldSendAll` already implies `stateful` with a non-null chain anchor
+    // (stateless or anchor-less forces a full resend); `?? undefined` only
+    // converts getAnchorId's `string | null` for the wire shape.
+    const previousId = shouldSendAll
+      ? undefined
+      : (this.chainState.getAnchorId() ?? undefined);
 
     // Dispatch order: background > streaming > non-streaming. When background is
     // active, getStreamingConfig() already returns false, so useStreaming is
@@ -1719,18 +1721,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
 
   /**
-   * BACKGROUND path: submit with background:true + store:true, capture the id,
-   * poll interactions.get(id) until a terminal status, finalize the chain off the
-   * COMPLETED polled interaction (not the submit response), and surface the same
-   * CreateResponseResult shape the streaming / non-streaming paths return. The
-   * submit still carries the delta `input` + previous_interaction_id from
-   * commonParams, so chaining composes with background unchanged. Cancels the
-   * in-flight interaction on abort. Mirrors ModelHandlerOpenAIResponse.
-   */
-  // Generic (rather than annotating `commonParams` with the public
-  // `CreateModelInteractionParamsNonStreaming` alias) so the caller's actual
-  // request-shape fields (`model`/`input`/`store`/…) survive into
-  /**
    * Per-call options for the Speakeasy Interactions client.
    *
    * `maxRetries: 0` keeps the node loop the single retry owner: the generated
@@ -1756,9 +1746,22 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     };
   }
 
-  // `submitParams` below — see the comment on the sibling non-streaming
-  // `create()` call in `createResponseImpl` for why the public alias by
-  // itself would make TS pick `create()`'s most general overload.
+  /**
+   * BACKGROUND path: submit with background:true + store:true, capture the id,
+   * poll interactions.get(id) until a terminal status, finalize the chain off the
+   * COMPLETED polled interaction (not the submit response), and surface the same
+   * CreateResponseResult shape the streaming / non-streaming paths return. The
+   * submit still carries the delta `input` + previous_interaction_id from
+   * commonParams, so chaining composes with background unchanged. Cancels the
+   * in-flight interaction on abort. Mirrors ModelHandlerOpenAIResponse.
+   *
+   * Generic (rather than annotating `commonParams` with the public
+   * `CreateModelInteractionParamsNonStreaming` alias) so the caller's actual
+   * request-shape fields (`model`/`input`/`store`/…) survive into
+   * `submitParams` below — see the comment on the sibling non-streaming
+   * `create()` call in `createResponseImpl` for why the public alias by
+   * itself would make TS pick `create()`'s most general overload.
+   */
   private async executeBackgroundPath<
     P extends Omit<CreateModelInteractionParamsNonStreaming, 'stream'>,
   >(

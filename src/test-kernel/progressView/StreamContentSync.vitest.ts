@@ -115,10 +115,11 @@ describe('progress view stream-content projection', () => {
   it('projects the tool-use snapshot and active state', async () => {
     const { state, messages, bridge, renderer } = await createSyncHarness();
 
-    snapshotFacts(state.snapshots).addUsage(stream, runId, usage);
-    snapshotFacts(state.snapshots).setTodos(stream, [todo]);
-    snapshotFacts(state.snapshots).setPlan(stream, plan);
-    snapshotFacts(state.snapshots).setParentStream(stream, parentStream);
+    const facts = snapshotFacts(state.snapshots);
+    facts.addUsage(stream, runId, usage);
+    facts.setTodos(stream, [todo]);
+    facts.setPlan(stream, plan);
+    facts.setParentStream(stream, parentStream);
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.ToolUse,
     });
@@ -195,14 +196,15 @@ describe('progress view stream-content projection', () => {
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
     });
-    snapshotFacts(state.snapshots).addOutputFiles(stream, { 1: [outputFile] });
-    snapshotFacts(state.snapshots).updateMissingOutputs(stream, {
+    const facts = snapshotFacts(state.snapshots);
+    facts.addOutputFiles(stream, { 1: [outputFile] });
+    facts.updateMissingOutputs(stream, {
       1: ['paper.pdf'],
     });
-    snapshotFacts(state.snapshots).updateCompileFailures(stream, {
+    facts.updateCompileFailures(stream, {
       1: [compileFailure],
     });
-    snapshotFacts(state.snapshots).addUsage(stream, runId, usage);
+    facts.addUsage(stream, runId, usage);
 
     renderer.syncStreamContent(stream);
 

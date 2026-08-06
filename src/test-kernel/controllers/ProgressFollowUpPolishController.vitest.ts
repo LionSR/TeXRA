@@ -26,6 +26,17 @@ function createWorkflowConfig(): AgentConfig {
   });
 }
 
+function polishDraft(
+  controller: ProgressFollowUpPolishController,
+  text = 'draft text',
+) {
+  return controller.polishFollowUp({
+    stream: 'stream-a',
+    text,
+    runConfig: createWorkflowConfig(),
+  });
+}
+
 describe('ProgressFollowUpPolishController', () => {
   it('returns a polished text update and builds file context from the run config', async () => {
     const calls: Array<{ text: string; fileContext?: FileContext }> = [];
@@ -39,11 +50,7 @@ describe('ProgressFollowUpPolishController', () => {
       },
     });
 
-    const result = await controller.polishFollowUp({
-      stream: 'stream-a',
-      text: 'plz check proof',
-      runConfig: createWorkflowConfig(),
-    });
+    const result = await polishDraft(controller, 'plz check proof');
 
     assert.deepEqual(result, {
       kind: 'updated',
@@ -75,11 +82,7 @@ describe('ProgressFollowUpPolishController', () => {
       }),
     });
 
-    const result = await controller.polishFollowUp({
-      stream: 'stream-a',
-      text: 'draft text',
-      runConfig: createWorkflowConfig(),
-    });
+    const result = await polishDraft(controller);
 
     assert.deepEqual(result, {
       kind: 'failed',
@@ -102,11 +105,7 @@ describe('ProgressFollowUpPolishController', () => {
       }),
     });
 
-    const result = await controller.polishFollowUp({
-      stream: 'stream-a',
-      text: 'draft text',
-      runConfig: createWorkflowConfig(),
-    });
+    const result = await polishDraft(controller);
 
     assert.deepEqual(result, { kind: 'skipped' });
   });
@@ -119,11 +118,7 @@ describe('ProgressFollowUpPolishController', () => {
       },
     });
 
-    const result = await controller.polishFollowUp({
-      stream: 'stream-a',
-      text: 'draft text',
-      runConfig: createWorkflowConfig(),
-    });
+    const result = await polishDraft(controller);
 
     assert.deepEqual(result, {
       kind: 'exception',

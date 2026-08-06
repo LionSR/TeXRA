@@ -35,20 +35,35 @@ describe('runDailyUpdateCheck', () => {
   const lastCheckedAtKey = 'update.lastCheckedAt';
   const lastNotifiedVersionKey = 'update.lastNotifiedVersion';
 
+  type CheckOptions = Parameters<typeof runDailyUpdateCheck>[0];
+
+  function checkOptions(
+    state: FakeStateStore,
+    overrides: Partial<CheckOptions> = {},
+  ): CheckOptions {
+    return {
+      currentVersion: '1.0.0',
+      state,
+      lastCheckedAtKey,
+      fetchLatest: async () => ({ version: '1.0.0', refreshed: true }),
+      notify: () => {},
+      now: () => nowMs,
+      ...overrides,
+    };
+  }
+
   it('notifies before stamping a successful live check', async () => {
     const state = new FakeStateStore();
     let stampDuringNotify: number | undefined;
 
-    const latest = await runDailyUpdateCheck({
-      currentVersion: '1.0.0',
-      state,
-      lastCheckedAtKey,
-      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-      notify: () => {
-        stampDuringNotify = state.get(lastCheckedAtKey);
-      },
-      now: () => nowMs,
-    });
+    const latest = await runDailyUpdateCheck(
+      checkOptions(state, {
+        fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+        notify: () => {
+          stampDuringNotify = state.get(lastCheckedAtKey);
+        },
+      }),
+    );
 
     expect(latest).toBe('1.1.0');
     expect(stampDuringNotify).toBeUndefined();
@@ -61,15 +76,13 @@ describe('runDailyUpdateCheck', () => {
     });
     const notify = vi.fn();
 
-    await runDailyUpdateCheck({
-      currentVersion: '1.0.0',
-      state,
-      lastCheckedAtKey,
-      lastNotifiedVersionKey,
-      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-      notify,
-      now: () => nowMs,
-    });
+    await runDailyUpdateCheck(
+      checkOptions(state, {
+        lastNotifiedVersionKey,
+        fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+        notify,
+      }),
+    );
 
     expect(notify).not.toHaveBeenCalled();
     expect(state.get(lastCheckedAtKey)).toBe(nowMs);
@@ -79,14 +92,12 @@ describe('runDailyUpdateCheck', () => {
     const state = new FakeStateStore();
     const notify = vi.fn();
 
-    await runDailyUpdateCheck({
-      currentVersion: '1.0.0',
-      state,
-      lastCheckedAtKey,
-      fetchLatest: async () => ({ version: '1.1.0', refreshed: false }),
-      notify,
-      now: () => nowMs,
-    });
+    await runDailyUpdateCheck(
+      checkOptions(state, {
+        fetchLatest: async () => ({ version: '1.1.0', refreshed: false }),
+        notify,
+      }),
+    );
 
     expect(notify).toHaveBeenCalledWith('1.1.0');
     expect(state.get(lastCheckedAtKey)).toBeUndefined();
@@ -95,14 +106,7 @@ describe('runDailyUpdateCheck', () => {
   it('applies the host policy when the throttle stamp cannot be persisted', async () => {
     const state = new FakeStateStore();
     vi.spyOn(state, 'update').mockRejectedValue(new Error('read-only state'));
-    const options = {
-      currentVersion: '1.0.0',
-      state,
-      lastCheckedAtKey,
-      fetchLatest: async () => ({ version: '1.0.0', refreshed: true }),
-      notify: () => {},
-      now: () => nowMs,
-    };
+    const options = checkOptions(state);
 
     await expect(
       runDailyUpdateCheck({ ...options, stampFailure: 'ignore' }),
@@ -119,15 +123,7 @@ describe('runDailyUpdateCheck', () => {
     });
 
     await expect(
-      runDailyUpdateCheck({
-        currentVersion: '1.0.0',
-        state,
-        lastCheckedAtKey,
-        fetchLatest: async () => ({ version: '1.0.0', refreshed: true }),
-        notify: () => {},
-        now: () => nowMs,
-        stampFailure: 'ignore',
-      }),
+      runDailyUpdateCheck(checkOptions(state, { stampFailure: 'ignore' })),
     ).resolves.toBeUndefined();
   });
 });

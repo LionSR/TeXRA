@@ -24,7 +24,7 @@ function makeSummary(
     parentStreamId: STREAM,
     status: 'open',
     lastQuestionPreview: 'Prove Lemma 3.2 from manuscript',
-    lastActivityIso: new Date(Date.now() - 12 * 60_000).toISOString(),
+    lastActivityIso: '2026-08-06T11:48:00.000Z',
     turnCount: 1,
     ...partial,
   };

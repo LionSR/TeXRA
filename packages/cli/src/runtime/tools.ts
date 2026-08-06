@@ -103,8 +103,7 @@ export function readCliToolGuide(
   if (kind === 'install') {
     const lines = [def.installGuide ?? def.configNotes ?? 'No install guide.'];
     if (def.installCommand) {
-      lines.push('');
-      lines.push(`Command: ${def.installCommand}`);
+      lines.push('', `Command: ${def.installCommand}`);
     }
     if (def.installUrl) {
       lines.push(`URL: ${def.installUrl}`);
@@ -114,8 +113,7 @@ export function readCliToolGuide(
 
   const lines = [def.authNote ?? def.configNotes ?? 'No auth guide.'];
   if (def.authCommand) {
-    lines.push('');
-    lines.push(`Command: ${def.authCommand}`);
+    lines.push('', `Command: ${def.authCommand}`);
   }
   return { text: lines.join('\n'), command: def.authCommand };
 }
@@ -180,8 +178,7 @@ export function formatCliToolStatus(record: CliToolStatusRecord): string {
     lines.push(`installCommand: ${record.installCommand}`);
   if (record.authCommand) lines.push(`authCommand: ${record.authCommand}`);
   if (record.statusDetail) {
-    lines.push('');
-    lines.push(record.statusDetail);
+    lines.push('', record.statusDetail);
   }
   return lines.join('\n');
 }

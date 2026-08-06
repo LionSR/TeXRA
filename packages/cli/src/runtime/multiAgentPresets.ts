@@ -223,7 +223,7 @@ export function formatCliMultiAgentPresetLauncherSummary(
     teamLaunchBlockReason(plan),
   );
 
-  return [status, details].filter((part): part is string => !!part).join('; ');
+  return [status, details].filter(filterNotNullish).join('; ');
 }
 
 export function formatCliMultiAgentPresetLauncherHints(

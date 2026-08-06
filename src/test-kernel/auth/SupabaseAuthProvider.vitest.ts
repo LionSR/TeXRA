@@ -146,25 +146,17 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
     expect(providerMocks.signOut).not.toHaveBeenCalled();
   });
 
-  it('preserves an unexpired session when user validation is transient', async () => {
-    providerMocks.getUser.mockResolvedValue({
-      data: { user: null },
-      error: { status: 503 },
-    });
-    const { provider, clearSessionIfCurrent, showSignInPrompt } =
-      createUnexpiredProvider();
-
-    await expect(provider.getSessions()).resolves.toEqual([]);
-
-    expect(clearSessionIfCurrent).not.toHaveBeenCalled();
-    expect(showSignInPrompt).not.toHaveBeenCalled();
-  });
-
-  it('preserves an unexpired session after an inconclusive user response', async () => {
-    providerMocks.getUser.mockResolvedValue({
-      data: { user: null },
-      error: null,
-    });
+  it.each([
+    {
+      name: 'when user validation is transient',
+      userResponse: { data: { user: null }, error: { status: 503 } },
+    },
+    {
+      name: 'after an inconclusive user response',
+      userResponse: { data: { user: null }, error: null },
+    },
+  ])('preserves an unexpired session $name', async ({ userResponse }) => {
+    providerMocks.getUser.mockResolvedValue(userResponse);
     const { provider, clearSessionIfCurrent, showSignInPrompt } =
       createUnexpiredProvider();
 

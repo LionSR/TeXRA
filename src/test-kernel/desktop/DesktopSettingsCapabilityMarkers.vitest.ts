@@ -128,6 +128,18 @@ function realToolingController(): DefaultDesktopToolingSettingsController {
   });
 }
 
+/** Pin the real markers to the literal expectation, then pin the stub to the real. */
+function expectStubMirrorsReal(
+  realHandlers: Readonly<Record<string, unknown>>,
+  stubHandlers: Readonly<Record<string, unknown>>,
+  expectedRealMarkers: readonly string[],
+): void {
+  expect(unsupportedCommands(realHandlers)).toEqual(expectedRealMarkers);
+  expect(unsupportedCommands(stubHandlers)).toEqual(
+    unsupportedCommands(realHandlers),
+  );
+}
+
 /**
  * The desktop settings fixture builds its registry from stub controllers, so
  * the capability broadcast it asserts is only as accurate as those stubs.
@@ -144,18 +156,13 @@ describe('desktop settings capability markers', () => {
     const real = realCredentialController();
     const stub = createStubDesktopCredentialSettingsController(statePorts());
 
-    expect(unsupportedCommands(real.profileHandlers)).toEqual([]);
-    expect(unsupportedCommands(real.chatGptHandlers)).toEqual([]);
-    expect(unsupportedCommands(real.grokHandlers)).toEqual([]);
-    expect(unsupportedCommands(stub.profileHandlers)).toEqual(
-      unsupportedCommands(real.profileHandlers),
-    );
-    expect(unsupportedCommands(stub.chatGptHandlers)).toEqual(
-      unsupportedCommands(real.chatGptHandlers),
-    );
-    expect(unsupportedCommands(stub.grokHandlers)).toEqual(
-      unsupportedCommands(real.grokHandlers),
-    );
+    for (const key of [
+      'profileHandlers',
+      'chatGptHandlers',
+      'grokHandlers',
+    ] as const) {
+      expectStubMirrorsReal(real[key], stub[key], []);
+    }
   });
 
   it('matches the real agent and history controllers, which support every action', () => {
@@ -186,17 +193,11 @@ describe('desktop settings capability markers', () => {
     const real = realToolingController();
     const stub = createStubDesktopToolingSettingsController();
 
-    expect(unsupportedCommands(real.toolHandlers)).toEqual([
+    expectStubMirrorsReal(real.toolHandlers, stub.toolHandlers, [
       'installToolExtension',
     ]);
-    expect(unsupportedCommands(real.latexHandlers)).toEqual([
+    expectStubMirrorsReal(real.latexHandlers, stub.latexHandlers, [
       'installLatexWorkshop',
     ]);
-    expect(unsupportedCommands(stub.toolHandlers)).toEqual(
-      unsupportedCommands(real.toolHandlers),
-    );
-    expect(unsupportedCommands(stub.latexHandlers)).toEqual(
-      unsupportedCommands(real.latexHandlers),
-    );
   });
 });

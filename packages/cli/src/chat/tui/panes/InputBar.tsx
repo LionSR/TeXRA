@@ -92,7 +92,7 @@ function slashSubmitText(
     return `/${commandName}${remainder ? ` ${remainder.trimStart()}` : ''}`;
   }
   const suffix = current.slice(nameToReplace.length + 1);
-  const separator = suffix.length > 0 && !/^\s/.test(suffix) ? ' ' : '';
+  const separator = /^\S/.test(suffix) ? ' ' : '';
   return `/${commandName}${separator}${suffix}`;
 }
 

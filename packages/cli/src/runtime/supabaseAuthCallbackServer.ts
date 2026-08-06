@@ -124,6 +124,14 @@ export async function startLoopbackCallbackServer(
   };
 }
 
+function assertAcceptingCallbacks(attemptState: CallbackAttemptState): void {
+  if (!attemptState.acceptingCallbacks) {
+    throw new RecoverableCallbackRequestError(
+      'This authentication attempt was cancelled.',
+    );
+  }
+}
+
 async function handleCallbackRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -131,11 +139,7 @@ async function handleCallbackRequest(
   nonce: string,
   attemptState: CallbackAttemptState,
 ): Promise<SupabaseSession | undefined> {
-  if (!attemptState.acceptingCallbacks) {
-    throw new RecoverableCallbackRequestError(
-      'This authentication attempt was cancelled.',
-    );
-  }
+  assertAcceptingCallbacks(attemptState);
   const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`);
   if (request.method === 'GET' && url.pathname === CALLBACK_PATH) {
     writeHtml(response, 200, callbackHtml(nonce));
@@ -152,21 +156,13 @@ async function handleCallbackRequest(
         'Authentication callback did not match this login attempt.',
       );
     }
-    if (!attemptState.acceptingCallbacks) {
-      throw new RecoverableCallbackRequestError(
-        'This authentication attempt was cancelled.',
-      );
-    }
+    assertAcceptingCallbacks(attemptState);
     const result = await authCoordinator.createSessionFromCallback({
       path: CALLBACK_PATH,
       query: trimUrlMarker(body.query, '?'),
     });
     if (!result.success) throw new Error(result.error);
-    if (!attemptState.acceptingCallbacks) {
-      throw new RecoverableCallbackRequestError(
-        'This authentication attempt was cancelled.',
-      );
-    }
+    assertAcceptingCallbacks(attemptState);
 
     attemptState.commitStarted = true;
     attemptState.acceptingCallbacks = false;

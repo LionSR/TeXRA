@@ -4,13 +4,22 @@ import { logCompactionActivity } from '@agent/trace';
 import { logCompactionEvent } from '@agent/modelHandlers/support/compactionLogging';
 import { spiedTrace } from '@test/support/spiedTrace';
 
+type CompactionEvent = { key: string; text?: string; data?: unknown };
+
+function logAndCapture(
+  options: Omit<Parameters<typeof logCompactionEvent>[0], 'logger'>,
+): CompactionEvent[] {
+  const events: CompactionEvent[] = [];
+  logCompactionEvent({
+    logger: spiedTrace({ domain: (event) => events.push(event) }),
+    ...options,
+  });
+  return events;
+}
+
 describe('logCompactionEvent', () => {
   it('marks client-side compaction token counts as estimated', () => {
-    const events: Array<{ key: string; text?: string; data?: unknown }> = [];
-    const trace = spiedTrace({ domain: (event) => events.push(event) });
-
-    logCompactionEvent({
-      logger: trace,
+    const events = logAndCapture({
       tokensBefore: 120_000,
       tokensAfter: 3_200,
       contextWindow: 200_000,
@@ -36,11 +45,7 @@ describe('logCompactionEvent', () => {
   });
 
   it('logs measured compaction token counts without an estimate marker', () => {
-    const events: Array<{ key: string; text?: string; data?: unknown }> = [];
-    const trace = spiedTrace({ domain: (event) => events.push(event) });
-
-    logCompactionEvent({
-      logger: trace,
+    const events = logAndCapture({
       tokensBefore: 80_000,
       tokensAfter: 6_000,
       contextWindow: 100_000,

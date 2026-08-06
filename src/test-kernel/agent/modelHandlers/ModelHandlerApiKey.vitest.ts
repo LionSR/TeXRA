@@ -73,9 +73,26 @@ async function initFakePlatform(
   invalidateApiKeyCache();
 }
 
+function newHandler(
+  overrides?: Parameters<typeof buildTestModelConfig>[1],
+): ExposedKeyHandler {
+  return new ExposedKeyHandler(
+    buildTestModelConfig(API_KEY_TEST_CONFIG, overrides),
+  );
+}
+
+function stubRelayToken(): ReturnType<typeof vi.spyOn> {
+  return vi
+    .spyOn(SupabaseClient, 'getRelayAccessToken')
+    .mockResolvedValue('relay-token');
+}
+
 describe('ModelHandler.getApiKey resolution', () => {
   beforeEach(async () => {
     await initFakePlatform();
+    // Most cases exercise the direct-provider route; the OpenRouter-routed
+    // cases override this with `true`.
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -83,19 +100,14 @@ describe('ModelHandler.getApiKey resolution', () => {
   });
 
   it('returns the relay token after priming included-access state', async () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     const { canUseServerSideKeys } = stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,
       shouldUseServerSideKeys: true,
     });
-    const relayToken = vi
-      .spyOn(SupabaseClient, 'getRelayAccessToken')
-      .mockResolvedValue('relay-token');
+    const relayToken = stubRelayToken();
 
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG),
-    );
+    const handler = newHandler();
 
     assert.equal(await handler.exposeGetApiKey(), 'relay-token');
     assert.equal(canUseServerSideKeys.mock.calls.length, 1);
@@ -103,20 +115,15 @@ describe('ModelHandler.getApiKey resolution', () => {
   });
 
   it('blocks relay quota exhaustion before reading any key', async () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,
       shouldUseServerSideKeys: true,
       quotaAutoSwitched: true,
     });
-    const relayToken = vi
-      .spyOn(SupabaseClient, 'getRelayAccessToken')
-      .mockResolvedValue('relay-token');
+    const relayToken = stubRelayToken();
 
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG),
-    );
+    const handler = newHandler();
 
     await assert.rejects(
       handler.exposeGetApiKey(),
@@ -130,16 +137,13 @@ describe('ModelHandler.getApiKey resolution', () => {
       [apiKeySecretName('openRouter')]: 'openrouter-key',
       [apiKeySecretName('openai')]: 'personal-key',
     });
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,
       shouldUseServerSideKeys: false,
     });
 
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG, { openRouterOnly: true }),
-    );
+    const handler = newHandler({ openRouterOnly: true });
 
     assert.equal(await handler.exposeGetApiKey(), 'openrouter-key');
   });
@@ -155,17 +159,13 @@ describe('ModelHandler.getApiKey resolution', () => {
       shouldUseServerSideKeys: true,
       quotaAutoSwitched: true,
     });
-    const relayToken = vi
-      .spyOn(SupabaseClient, 'getRelayAccessToken')
-      .mockResolvedValue('relay-token');
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG, {
-        provider: ModelProvider.MOONSHOT,
-        kimiSubscription: true,
-        baseUrl: 'https://api.kimi.com/coding/v1',
-        openrouterFullName: undefined,
-      }),
-    );
+    const relayToken = stubRelayToken();
+    const handler = newHandler({
+      provider: ModelProvider.MOONSHOT,
+      kimiSubscription: true,
+      baseUrl: 'https://api.kimi.com/coding/v1',
+      openrouterFullName: undefined,
+    });
 
     assert.equal(handler.getBaseUrl(), 'https://api.kimi.com/coding/v1');
     assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
@@ -174,16 +174,13 @@ describe('ModelHandler.getApiKey resolution', () => {
   });
 
   it('rejects tier-mismatched included access instead of falling back to personal keys', async () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,
       shouldUseServerSideKeys: false,
     });
 
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG),
-    );
+    const handler = newHandler();
 
     await assert.rejects(
       handler.exposeGetApiKey(),
@@ -195,34 +192,26 @@ describe('ModelHandler.getApiKey resolution', () => {
     await initFakePlatform({
       [apiKeySecretName('openai')]: 'personal-key',
     });
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     const { canUseServerSideKeys } = stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: false,
       shouldUseServerSideKeys: false,
     });
 
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG),
-    );
+    const handler = newHandler();
 
     assert.equal(await handler.exposeGetApiKey(), 'personal-key');
     assert.equal(canUseServerSideKeys.mock.calls.length, 1);
   });
 
   it('can reject a personal candidate without disturbing the configured relay route', async () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     const { canUseServerSideKeys } = stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,
       shouldUseServerSideKeys: true,
     });
-    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
-      'relay-token',
-    );
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG),
-    );
+    stubRelayToken();
+    const handler = newHandler();
 
     await assert.rejects(
       handler.exposeResolveClientCredential('personal'),
@@ -243,9 +232,7 @@ describe('ModelHandler.getApiKey resolution', () => {
     // the OpenRouter variant, whose wording they never matched).
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
     stubServerSideKeyService();
-    const handler = new ExposedKeyHandler(
-      buildTestModelConfig(API_KEY_TEST_CONFIG),
-    );
+    const handler = newHandler();
 
     const error = await handler.exposeResolveClientCredential().then(
       () => undefined,

@@ -71,17 +71,22 @@ function runPost(
   );
 }
 
+async function runPostWithFailedAppend(
+  services: ToolUseServices<unknown>,
+  message: string,
+  execRes: WaitExecResult = userFollowUp(),
+): Promise<void> {
+  failAppend(services, message);
+  await expect(runPost(services, execRes)).rejects.toThrow(message);
+}
+
 describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 pattern on resume)', () => {
   it('logs a follow-up transcript row even when appendFollowUpAsUserMessage throws', async () => {
     // A failed follow-up append on resume (corrupt/oversized media, provider
     // validation error, ...) must still leave a record of what the user
     // asked for — otherwise that turn's transcript row silently vanishes.
     const services = buildServices();
-    failAppend(services, 'follow-up append failed');
-
-    await expect(runPost(services, userFollowUp())).rejects.toThrow(
-      'follow-up append failed',
-    );
+    await runPostWithFailedAppend(services, 'follow-up append failed');
 
     expect(services.logger.info).toHaveBeenCalledWith(
       'Do the thing.',
@@ -95,11 +100,7 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     // as consumed and drop it instead of replaying it on the next resume.
     const onFollowUpConsumed = vi.fn();
     const services = buildServices({ onFollowUpConsumed });
-    failAppend(services, 'follow-up append failed');
-
-    await expect(runPost(services, userFollowUp())).rejects.toThrow(
-      'follow-up append failed',
-    );
+    await runPostWithFailedAppend(services, 'follow-up append failed');
 
     expect(onFollowUpConsumed).not.toHaveBeenCalled();
   });
@@ -159,15 +160,12 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
 
   it('does not log synthetic (idle-continuation) follow-ups', async () => {
     const services = buildServices();
-    failAppend(services, 'boom');
 
-    await expect(
-      runPost(services, {
-        kind: 'continue',
-        followUps: [{ text: 'synthesized', origin: 'user' }],
-        synthetic: true,
-      }),
-    ).rejects.toThrow('boom');
+    await runPostWithFailedAppend(services, 'boom', {
+      kind: 'continue',
+      followUps: [{ text: 'synthesized', origin: 'user' }],
+      synthetic: true,
+    });
 
     expect(services.logger.info).not.toHaveBeenCalled();
   });

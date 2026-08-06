@@ -222,6 +222,43 @@ async function captureRejection(promise: Promise<unknown>): Promise<Error> {
   throw new Error('Expected promise to reject');
 }
 
+/** Mock the gating settings (both ON unless overridden) and arm fake timers. */
+function useBackgroundTimers(opts?: Parameters<typeof mockConfig>[0]): void {
+  mockConfig(opts);
+  vi.useFakeTimers();
+}
+
+/**
+ * Submit, let the first retrieval poll fail, and await the rejection. Returns
+ * the rejection so tests can assert error specifics; `errorText` (when given)
+ * must be a substring of the rejection message.
+ */
+async function failFirstRetrieval(
+  handler: ModelHandlerGoogleInteractions,
+  client: unknown,
+  errorText?: string,
+  messages: Step[] = [userStep('a')],
+): Promise<Error> {
+  const rejection = captureRejection(respond(handler, client, messages));
+  await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+  const error = await rejection;
+  if (errorText !== undefined) expect(error.message).toContain(errorText);
+  return error;
+}
+
+/** Retry once after a failed poll and assert the create/get/cancel ledger. */
+async function expectRetryLedger(
+  handler: ModelHandlerGoogleInteractions,
+  client: unknown,
+  calls: CapturedCalls,
+  expected: { creates: number; gets: string[] },
+): Promise<void> {
+  await respond(handler, client, [userStep('a')]);
+  expect(calls.create).toHaveLength(expected.creates);
+  expect(calls.get).toEqual(expected.gets);
+  expect(calls.cancel).toHaveLength(0);
+}
+
 describe('ModelHandlerGoogleInteractions background mode', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -229,8 +266,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B1: background submit sets background:true + store:true + stream:false', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
@@ -247,8 +283,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B2: polls get() until completed', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
@@ -267,8 +302,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('resumes the same interaction after a transient get failure', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_resume', status: 'in_progress' }),
@@ -278,10 +312,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ],
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toThrow('fetch failed');
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'fetch failed');
 
     await expect(
       runWithPolls(respond(handler, client, [userStep('a')]), 1),
@@ -293,8 +324,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('clears the submitted lifecycle id when resumed completion returns a different id', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const messages = [userStep('a')];
     const { client, calls } = bgClient({
@@ -305,10 +335,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ],
     });
 
-    const first = respond(handler, client, messages);
-    const firstRejection = expect(first).rejects.toThrow('fetch failed');
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'fetch failed', messages);
     await respond(handler, client, messages);
 
     expect(calls.create).toHaveLength(1);
@@ -330,8 +357,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
   it('resumes a pending interaction when background is disabled and preserves its chain', async () => {
     let background = true;
-    mockConfig({ background: () => background });
-    vi.useFakeTimers();
+    useBackgroundTimers({ background: () => background });
     const handler = createHandler();
     const messages = [userStep('a')];
     const { client, calls } = bgClient({
@@ -342,10 +368,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ],
     });
 
-    const first = respond(handler, client, messages);
-    const firstRejection = expect(first).rejects.toThrow('fetch failed');
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'fetch failed', messages);
 
     background = false;
     await expect(respond(handler, client, messages)).resolves.toMatchObject({
@@ -373,8 +396,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     'invalidates an existing chain before a disabled-server-state resume ends %s',
     async (outcome) => {
       let serverState = true;
-      mockConfig({ serverState: () => serverState });
-      vi.useFakeTimers();
+      useBackgroundTimers({ serverState: () => serverState });
       const handler = createHandler();
       const messages = [userStep('a')];
 
@@ -396,10 +418,12 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         submit: () => ({ id: 'int_pending_turn', status: 'in_progress' }),
         getSequence: [new TypeError('fetch failed'), resumeResult],
       });
-      const pending = respond(handler, pendingClient, messages);
-      const pendingRejection = expect(pending).rejects.toThrow('fetch failed');
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-      await pendingRejection;
+      await failFirstRetrieval(
+        handler,
+        pendingClient,
+        'fetch failed',
+        messages,
+      );
       expect(pendingCalls.create[0].previousId).toBe('int_chain');
 
       serverState = false;
@@ -438,8 +462,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   );
 
   it('keeps the original id through a transient failure, in_progress, and completion', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_long_resume', status: 'in_progress' }),
@@ -450,12 +473,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ],
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toThrow(
-      'temporarily unavailable',
-    );
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'temporarily unavailable');
 
     await runWithPolls(respond(handler, client, [userStep('a')]), 1);
 
@@ -477,10 +495,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [new TypeError('fetch failed')],
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstError = captureRejection(first);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstError;
+    await failFirstRetrieval(handler, client);
 
     await vi.advanceTimersByTimeAsync(MAX_DURATION_MS - POLL_INTERVAL_MS);
     const timeout = await captureRejection(
@@ -521,10 +536,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         },
       });
 
-      const first = respond(handler, client, [userStep('a')]);
-      const firstError = captureRejection(first);
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-      await firstError;
+      await failFirstRetrieval(handler, client);
 
       vi.setSystemTime(startedAt.getTime() + MAX_DURATION_MS - 1);
       const timeout = await captureRejection(
@@ -550,8 +562,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   ])(
     'cancels when a resumed retrieval $outcomeLabel after user abort',
     async ({ outcome }) => {
-      mockConfig();
-      vi.useFakeTimers();
+      useBackgroundTimers();
       const handler = createHandler();
       const controller = new AbortController();
       const { client, calls } = bgClient({
@@ -562,10 +573,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         },
       });
 
-      const first = respond(handler, client, [userStep('a')]);
-      const firstError = captureRejection(first);
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-      await firstError;
+      await failFirstRetrieval(handler, client);
 
       await expect(
         respond(handler, client, [userStep('a')], controller.signal),
@@ -579,8 +587,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   );
 
   it('cancels before resumed retrieval when token counting observes abort', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const controller = new AbortController();
     let countCalls = 0;
     const countTokens = vi.fn(async () => {
@@ -595,10 +602,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       countTokens,
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstError = captureRejection(first);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstError;
+    await failFirstRetrieval(handler, client);
 
     await expect(
       respond(handler, client, [userStep('a')], controller.signal),
@@ -612,8 +616,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('clears a pre-aborted pending interaction before token counting', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler(AgentCategory.Workflow, true);
     let releaseCancel!: () => void;
     const cancelPending = new Promise<void>((resolve) => {
@@ -632,10 +635,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       onCancel: () => cancelPending,
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toThrow('fetch failed');
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'fetch failed');
     expect(countTokens).toHaveBeenCalledTimes(1);
     countTokens.mockClear();
 
@@ -679,10 +679,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       onCancel: () => cancelPending,
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toThrow('fetch failed');
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'fetch failed');
     await vi.advanceTimersByTimeAsync(MAX_DURATION_MS - POLL_INTERVAL_MS);
 
     const controller = new AbortController();
@@ -711,8 +708,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('rethrows a retrieval abort without awaiting best-effort cancel', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     let releaseCancel!: () => void;
     const cancelPending = new Promise<void>((resolve) => {
@@ -725,10 +721,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       onCancel: () => cancelPending,
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toThrow('fetch failed');
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
+    await failFirstRetrieval(handler, client, 'fetch failed');
 
     let settled = false;
     let caught: unknown;
@@ -751,8 +744,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('treats queued as pending', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_queued', status: 'queued' }),
@@ -769,8 +761,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('retains an unknown status but requires manual retry before another poll', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_unknown', status: 'in_progress' }),
@@ -780,10 +771,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ],
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const unknownPromise = captureRejection(first);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    const unknown = await unknownPromise;
+    const unknown = await failFirstRetrieval(handler, client);
 
     expect(unknown.message).toMatch(/unknown status "mystery"/);
     expect(hasManualRetryOnlyErrorMarker(unknown)).toBe(true);
@@ -793,15 +781,14 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get).toEqual(['int_unknown']);
     expect(calls.cancel).toHaveLength(0);
 
-    await respond(handler, client, [userStep('a')]);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_unknown', 'int_unknown']);
-    expect(calls.cancel).toHaveLength(0);
+    await expectRetryLedger(handler, client, calls, {
+      creates: 1,
+      gets: ['int_unknown', 'int_unknown'],
+    });
   });
 
   it('retains a known id after a non-missing 4xx retrieval failure', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const forbidden = Object.assign(new Error('request rejected'), {
       status: 403,
@@ -811,10 +798,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [forbidden, completedInteraction('int_forbidden')],
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const firstErrorPromise = captureRejection(first);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    const firstError = await firstErrorPromise;
+    const firstError = await failFirstRetrieval(handler, client);
 
     expect(firstError).toBe(forbidden);
     expect(isProviderErrorAutoRetryable(firstError)).toBe(false);
@@ -822,17 +806,16 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get).toEqual(['int_forbidden']);
     expect(calls.cancel).toHaveLength(0);
 
-    await respond(handler, client, [userStep('a')]);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_forbidden', 'int_forbidden']);
-    expect(calls.cancel).toHaveLength(0);
+    await expectRetryLedger(handler, client, calls, {
+      creates: 1,
+      gets: ['int_forbidden', 'int_forbidden'],
+    });
   });
 
   it.each([404, 410])(
     'clears a definitively missing interaction on HTTP %i and requires manual retry',
     async (status) => {
-      mockConfig();
-      vi.useFakeTimers();
+      useBackgroundTimers();
       const handler = createHandler();
       let submitCount = 0;
       const { client, calls } = bgClient({
@@ -846,10 +829,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         ],
       });
 
-      const first = respond(handler, client, [userStep('a')]);
-      const missingPromise = captureRejection(first);
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-      const missing = await missingPromise;
+      const missing = await failFirstRetrieval(handler, client);
 
       expect(hasManualRetryOnlyErrorMarker(missing)).toBe(true);
       expect(normalizeProviderError(missing).userRetryable).toBe(true);
@@ -858,10 +838,10 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(calls.get).toEqual(['int_missing_1']);
       expect(calls.cancel).toHaveLength(0);
 
-      await respond(handler, client, [userStep('a')]);
-      expect(calls.create).toHaveLength(2);
-      expect(calls.get).toEqual(['int_missing_1']);
-      expect(calls.cancel).toHaveLength(0);
+      await expectRetryLedger(handler, client, calls, {
+        creates: 2,
+        gets: ['int_missing_1'],
+      });
     },
   );
 
@@ -887,8 +867,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ),
     },
   ])('clears pending identity for a $label', async ({ error }) => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     let submitCount = 0;
     const { client, calls } = bgClient({
@@ -901,10 +880,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [error],
     });
 
-    const first = respond(handler, client, [userStep('a')]);
-    const stalePromise = captureRejection(first);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    const stale = await stalePromise;
+    const stale = await failFirstRetrieval(handler, client);
 
     expect(hasManualRetryOnlyErrorMarker(stale)).toBe(true);
     expect(normalizeProviderError(stale).provider).toBe('google');
@@ -913,17 +889,16 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get).toEqual(['int_stale']);
     expect(calls.cancel).toHaveLength(0);
 
-    await respond(handler, client, [userStep('a')]);
-    expect(calls.create).toHaveLength(2);
-    expect(calls.get).toEqual(['int_stale']);
-    expect(calls.cancel).toHaveLength(0);
+    await expectRetryLedger(handler, client, calls, {
+      creates: 2,
+      gets: ['int_stale'],
+    });
   });
 
   it.each(['failed', 'cancelled', 'incomplete', 'budget_exceeded'])(
     'clears terminal status %s and prevents automatic replacement',
     async (status) => {
-      mockConfig();
-      vi.useFakeTimers();
+      useBackgroundTimers();
       const handler = createHandler();
       let submitCount = 0;
       const { client, calls } = bgClient({
@@ -936,10 +911,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         getSequence: [{ id: 'int_terminal', status }],
       });
 
-      const response = respond(handler, client, [userStep('a')]);
-      const terminalPromise = captureRejection(response);
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-      const terminal = await terminalPromise;
+      const terminal = await failFirstRetrieval(handler, client);
 
       expect(terminal.message).toContain(`status "${status}"`);
       expect(hasManualRetryOnlyErrorMarker(terminal)).toBe(true);
@@ -949,16 +921,15 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(calls.get).toEqual(['int_terminal']);
       expect(calls.cancel).toHaveLength(0);
 
-      await respond(handler, client, [userStep('a')]);
-      expect(calls.create).toHaveLength(2);
-      expect(calls.get).toEqual(['int_terminal']);
-      expect(calls.cancel).toHaveLength(0);
+      await expectRetryLedger(handler, client, calls, {
+        creates: 2,
+        gets: ['int_terminal'],
+      });
     },
   );
 
   it('B3: captures the chain id from the polled completion (not the submit)', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_submit', status: 'in_progress' }),
@@ -982,8 +953,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B4: cancel on abort calls interactions.cancel and leaves no leak', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const controller = new AbortController();
     const { client, calls } = bgClient({
@@ -1045,8 +1015,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B5: background + stateless takes the non-background path', async () => {
-    mockConfig({ serverState: false, background: true });
-    vi.useFakeTimers();
+    useBackgroundTimers({ serverState: false, background: true });
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => completedInteraction('int_1'),
@@ -1061,8 +1030,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B6: toggle off => no background', async () => {
-    mockConfig({ serverState: true, background: false });
-    vi.useFakeTimers();
+    useBackgroundTimers({ serverState: true, background: false });
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => completedInteraction('int_1'),
@@ -1077,8 +1045,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B7: terminal non-completed (failed) throws and does not chain', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
@@ -1104,8 +1071,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B8: requires_action is a serviceable terminal — returned (not thrown) so tool calls reach the cycle', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const callStep: Step = {
       type: 'function_call',
@@ -1133,8 +1099,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
   });
 
   it('B9: timeout guard throws after the max polling duration', async () => {
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
@@ -1168,8 +1133,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     // composition: background never suppresses or duplicates compaction because
     // they cannot co-occur, and the non-background path's withUpdated still
     // surfaces updatedMessages.
-    mockConfig();
-    vi.useFakeTimers();
+    useBackgroundTimers();
     const handler = createHandler(AgentCategory.ToolUse);
     handler.requestCompaction();
 

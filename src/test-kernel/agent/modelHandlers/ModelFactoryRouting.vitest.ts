@@ -10,6 +10,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
+import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
@@ -82,6 +83,19 @@ const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
   onDidChangeAccess: () => ({ dispose() {} }),
 };
 
+/** Run `inspect` against a created handler, always disposing it afterwards. */
+async function inspectHandler<T>(
+  handlerPromise: Promise<ModelHandler>,
+  inspect: (handler: ModelHandler) => T,
+): Promise<T> {
+  const handler = await handlerPromise;
+  try {
+    return inspect(handler);
+  } finally {
+    handler.dispose();
+  }
+}
+
 describe('Copilot model handler routing', () => {
   const copilotConfig = modelConfig(ModelProvider.COPILOT, {
     supportsFunctionCalling: true,
@@ -108,15 +122,12 @@ describe('Copilot model handler routing', () => {
       { languageModel: AVAILABLE_LANGUAGE_MODEL_PORT },
     );
 
-    const handler = await createModelHandler(copilotConfig);
-    try {
+    await inspectHandler(createModelHandler(copilotConfig), (handler) => {
       expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerVscodeLm',
       );
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 });
 
@@ -167,13 +178,10 @@ describe('Copilot route preference on a canonical base model', () => {
       'ModelHandlerVscodeLm',
     );
 
-    const handler = await createModelHandler(config);
-    try {
+    await inspectHandler(createModelHandler(config), (handler) => {
       expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
       expect(handler.config.name).toBe('gemini36f');
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   it('keeps the ordinary provider route without the preference', async () => {
@@ -256,21 +264,21 @@ describe('Copilot route preference on a canonical base model', () => {
       'texra.reasoningLevels': { gemini36f: 'low' },
     });
 
-    const handler = await createModelHandler(MODEL_CONFIGS.gemini36f);
-    try {
-      expect(handler.config.contextWindow).toBe(160_000);
-      expect(handler.config.inputPrice).toBe(0);
-      expect(handler.config.outputPrice).toBe(0);
-      expect(handler.config.capabilities.supportsReasoningEffort).toBe(false);
-      expect(handler.supportsReasoningLevelOverride).toBe(false);
-      // The persisted override is intentionally ignored because VS Code's LM
-      // request surface has no reasoning-effort parameter.
-      expect(handler.config.capabilities.reasoningEffort).toBe(
-        MODEL_CONFIGS.gemini36f.capabilities.reasoningEffort,
-      );
-    } finally {
-      handler.dispose();
-    }
+    await inspectHandler(
+      createModelHandler(MODEL_CONFIGS.gemini36f),
+      (handler) => {
+        expect(handler.config.contextWindow).toBe(160_000);
+        expect(handler.config.inputPrice).toBe(0);
+        expect(handler.config.outputPrice).toBe(0);
+        expect(handler.config.capabilities.supportsReasoningEffort).toBe(false);
+        expect(handler.supportsReasoningLevelOverride).toBe(false);
+        // The persisted override is intentionally ignored because VS Code's LM
+        // request surface has no reasoning-effort parameter.
+        expect(handler.config.capabilities.reasoningEffort).toBe(
+          MODEL_CONFIGS.gemini36f.capabilities.reasoningEffort,
+        );
+      },
+    );
   });
 
   it('keeps the Copilot route ahead of the Codex subscription override', async () => {
@@ -309,32 +317,29 @@ describe('Copilot route preference on a canonical base model', () => {
     );
     await refreshRuntimeModelRegistry();
 
-    const handler = await createModelHandler(MODEL_CONFIGS.gpt56);
-    try {
+    await inspectHandler(createModelHandler(MODEL_CONFIGS.gpt56), (handler) => {
       expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerVscodeLm',
       );
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   it('rebuilds the VS Code handler for a persisted canonical session', async () => {
     await installCopilotRoute();
 
-    const handler = await createModelHandlerForCompatibilityKey(
-      MODEL_CONFIGS.gemini36f,
-      'ModelHandlerVscodeLm',
-    );
-    try {
-      expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
-      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+    await inspectHandler(
+      createModelHandlerForCompatibilityKey(
+        MODEL_CONFIGS.gemini36f,
         'ModelHandlerVscodeLm',
-      );
-    } finally {
-      handler.dispose();
-    }
+      ),
+      (handler) => {
+        expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
+        expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+          'ModelHandlerVscodeLm',
+        );
+      },
+    );
   });
 });
 
@@ -405,35 +410,61 @@ describe('OpenAI model handler routing', () => {
     ).toBe(true);
   });
 
-  it('exposes the same compatibility key for switchable response models', () => {
-    expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt54, false, false),
-    ).toBe('ModelHandlerOpenAIResponse');
-    expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false, false),
-    ).toBe('ModelHandlerOpenAIResponse');
-    expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet5T, false, false),
-    ).toBe('ModelHandlerAnthropic');
-  });
-
-  it('uses the OpenRouter compatibility key when models are proxied', () => {
-    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt54, true, false)).toBe(
-      'ModelHandlerOpenRouterNative',
-    );
-    expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.deepseekT, true, false),
-    ).toBe('ModelHandlerOpenRouterNative');
-  });
-
-  it('routes Meta Muse Spark to the Meta handler directly and OpenRouter when proxied', () => {
-    expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.musespark11, false, false),
-    ).toBe('ModelHandlerMeta');
-    expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.musespark11, true, false),
-    ).toBe('ModelHandlerOpenRouterNative');
-  });
+  it.each<{
+    model: keyof typeof MODEL_CONFIGS;
+    useOpenRouter: boolean;
+    expected: string;
+  }>([
+    {
+      model: 'gpt54',
+      useOpenRouter: false,
+      expected: 'ModelHandlerOpenAIResponse',
+    },
+    {
+      model: 'gpt55',
+      useOpenRouter: false,
+      expected: 'ModelHandlerOpenAIResponse',
+    },
+    {
+      model: 'sonnet5T',
+      useOpenRouter: false,
+      expected: 'ModelHandlerAnthropic',
+    },
+    {
+      model: 'gpt54',
+      useOpenRouter: true,
+      expected: 'ModelHandlerOpenRouterNative',
+    },
+    {
+      model: 'deepseekT',
+      useOpenRouter: true,
+      expected: 'ModelHandlerOpenRouterNative',
+    },
+    {
+      model: 'musespark11',
+      useOpenRouter: false,
+      expected: 'ModelHandlerMeta',
+    },
+    {
+      model: 'musespark11',
+      useOpenRouter: true,
+      expected: 'ModelHandlerOpenRouterNative',
+    },
+  ])(
+    'computes the $expected compatibility key for $model (openRouter=$useOpenRouter)',
+    ({ model, useOpenRouter, expected }) => {
+      // Meta Muse Spark routes to the Meta handler directly and to OpenRouter
+      // when proxied; OpenRouter-proxied models always key on the native
+      // OpenRouter handler.
+      expect(
+        modelHandlerCompatibilityKey(
+          MODEL_CONFIGS[model],
+          useOpenRouter,
+          false,
+        ),
+      ).toBe(expected);
+    },
+  );
 
   it('uses short-name routing when computing compatibility keys', async () => {
     await installPlatform({
@@ -461,13 +492,13 @@ describe('OpenAI model handler routing', () => {
       globalState: { 'texra.preferShortModelNames': true },
     });
 
-    const handler = await createModelHandler(MODEL_CONFIGS.gpt56pro);
-    try {
-      expect(handler.config.fullName).toBe('gpt-5.6-sol');
-      expect(handler.capabilities.reasoningMode).toBe('pro');
-    } finally {
-      handler.dispose();
-    }
+    await inspectHandler(
+      createModelHandler(MODEL_CONFIGS.gpt56pro),
+      (handler) => {
+        expect(handler.config.fullName).toBe('gpt-5.6-sol');
+        expect(handler.capabilities.reasoningMode).toBe('pro');
+      },
+    );
   });
 
   it('rejects GPT-5.6 Pro when OpenRouter routing is enabled', async () => {
@@ -483,14 +514,11 @@ describe('OpenAI model handler routing', () => {
   it('tags created handlers with a minifier-safe compatibility key', async () => {
     await installPlatform();
 
-    const handler = await createModelHandler(MODEL_CONFIGS.gpt54);
-    try {
+    await inspectHandler(createModelHandler(MODEL_CONFIGS.gpt54), (handler) => {
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerOpenAIResponse',
       );
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   const codexEligibleConfig: ModelConfig = {
@@ -508,32 +536,33 @@ describe('OpenAI model handler routing', () => {
     codexSubscription: true,
   };
 
-  const signedInCodexSession = (): CodexSession => ({
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    expiresAtMs: Date.now() + 10 * 60_000,
-    accountId: 'account-id',
-  });
+  function signedInCodexSession(): CodexSession {
+    return {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAtMs: Date.now() + 10 * 60_000,
+      accountId: 'account-id',
+    };
+  }
 
-  const initializePreferredCodexRelay = async (): Promise<void> =>
-    installPlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-      },
-      globalState: { 'texra.useIncludedModelAccess': true },
+  async function installSignedInCodexPlatform(
+    globalState: Record<string, unknown> = {},
+  ): Promise<void> {
+    await installPlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+      globalState,
       secrets: {
         [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInCodexSession()),
       },
     });
+  }
 
-  const createdHandlerName = async (): Promise<string> => {
-    const handler = await createModelHandler(codexEligibleConfig);
-    try {
-      return handler.constructor.name;
-    } finally {
-      handler.dispose();
-    }
-  };
+  function createdHandlerName(): Promise<string> {
+    return inspectHandler(
+      createModelHandler(codexEligibleConfig),
+      (handler) => handler.constructor.name,
+    );
+  }
 
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
     await installPlatform({
@@ -561,41 +590,34 @@ describe('OpenAI model handler routing', () => {
       config: { 'texra.chatgptCodex.preferSubscription': true },
     });
 
-    const handler = await createModelHandler(codexEligibleConfig);
-    try {
+    await inspectHandler(createModelHandler(codexEligibleConfig), (handler) => {
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerOpenAIResponse',
       );
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   it('preserves the API fullName on Codex handler config even when shortName is absent', async () => {
-    const codexSession = signedInCodexSession();
-    await installPlatform({
-      config: { 'texra.chatgptCodex.preferSubscription': true },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-      },
-    });
+    await installSignedInCodexPlatform();
 
-    const handler = await createModelHandler({
-      ...codexEligibleConfig,
-      shortName: '',
-    });
-    try {
-      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
-        'ModelHandlerOpenAIResponse',
-      );
-      expect(handler.config.fullName).toBe('gpt-5.5-2026-04-23');
-    } finally {
-      handler.dispose();
-    }
+    await inspectHandler(
+      createModelHandler({
+        ...codexEligibleConfig,
+        shortName: '',
+      }),
+      (handler) => {
+        expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+          'ModelHandlerOpenAIResponse',
+        );
+        expect(handler.config.fullName).toBe('gpt-5.5-2026-04-23');
+      },
+    );
   });
 
   it('falls back when subscription re-authentication is required', async () => {
-    await initializePreferredCodexRelay();
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+    });
     const coordinator = codexCoordinator();
     vi.spyOn(coordinator, 'getFreshAccessToken').mockImplementation(
       async () => {
@@ -608,7 +630,9 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('propagates a superseded re-auth failure without falling back', async () => {
-    await initializePreferredCodexRelay();
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+    });
     const error = new CodexAuthError('session changed', 'expired');
     vi.spyOn(codexCoordinator(), 'getFreshAccessToken').mockRejectedValue(
       error,
@@ -624,7 +648,9 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('propagates session verification read failures without falling back', async () => {
-    await initializePreferredCodexRelay();
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+    });
     const coordinator = codexCoordinator();
     const readError = new Error('keychain unavailable');
     vi.spyOn(coordinator, 'getFreshAccessToken').mockRejectedValue(
@@ -641,7 +667,9 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('wraps raw token verification failures as transient auth errors', async () => {
-    await initializePreferredCodexRelay();
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+    });
     const rawError = new Error('keychain unavailable');
     vi.spyOn(codexCoordinator(), 'getFreshAccessToken').mockRejectedValue(
       rawError,
@@ -656,22 +684,23 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {
-    await initializePreferredCodexRelay();
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+    });
 
-    const handler = await createModelHandler(codexEligibleConfig);
-    try {
+    await inspectHandler(createModelHandler(codexEligibleConfig), (handler) => {
       expect(handler.constructor.name).toBe('ModelHandlerCodex');
       expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerOpenAIResponse',
       );
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   it('treats Codex and relay Responses handlers with the shared key as compatible', async () => {
-    await initializePreferredCodexRelay();
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+    });
     const codex = await createModelHandler(codexEligibleConfig);
     await codexCoordinator().signOut();
     const relay = await createModelHandler(codexEligibleConfig);
@@ -688,54 +717,41 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('does not let the Codex subscription override an explicit legacy OpenAI compatibility key', async () => {
-    const codexSession = signedInCodexSession();
-    await installPlatform({
-      config: { 'texra.chatgptCodex.preferSubscription': true },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-      },
-    });
+    await installSignedInCodexPlatform();
 
-    const handler = await createModelHandlerForCompatibilityKey(
-      codexEligibleConfig,
-      'ModelHandlerOpenAI',
-    );
-    try {
-      expect(handler.constructor.name).toBe('ModelHandlerOpenAI');
-      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+    await inspectHandler(
+      createModelHandlerForCompatibilityKey(
+        codexEligibleConfig,
         'ModelHandlerOpenAI',
-      );
-    } finally {
-      handler.dispose();
-    }
+      ),
+      (handler) => {
+        expect(handler.constructor.name).toBe('ModelHandlerOpenAI');
+        expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+          'ModelHandlerOpenAI',
+        );
+      },
+    );
   });
 
   it('keeps Responses-compatible resumes on the Codex endpoint when subscription access is preferred', async () => {
-    const codexSession = signedInCodexSession();
-    await installPlatform({
-      config: { 'texra.chatgptCodex.preferSubscription': true },
-      globalState: {
-        'texra.useIncludedModelAccess': true,
-        'texra.useOpenRouter': true,
-      },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
-      },
+    await installSignedInCodexPlatform({
+      'texra.useIncludedModelAccess': true,
+      'texra.useOpenRouter': true,
     });
 
-    const handler = await createModelHandlerForCompatibilityKey(
-      codexEligibleConfig,
-      'ModelHandlerOpenAIResponse',
-    );
-    try {
-      expect(handler.constructor.name).toBe('ModelHandlerCodex');
-      expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
-      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+    await inspectHandler(
+      createModelHandlerForCompatibilityKey(
+        codexEligibleConfig,
         'ModelHandlerOpenAIResponse',
-      );
-    } finally {
-      handler.dispose();
-    }
+      ),
+      (handler) => {
+        expect(handler.constructor.name).toBe('ModelHandlerCodex');
+        expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
+        expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+          'ModelHandlerOpenAIResponse',
+        );
+      },
+    );
   });
 
   it('uses the validation compatibility key only after the validation gate passes', async () => {
@@ -775,15 +791,13 @@ describe('OpenAI model handler routing', () => {
       ),
     ).toBe('ModelHandlerValidation');
 
-    const validationHandler = await passingFactory.createModelHandler({
+    const validationHandler = passingFactory.createModelHandler({
       ...modelConfig(ModelProvider.GOOGLE),
       requiresInteractionsAPI: true,
     } as ModelConfig);
-    try {
-      expect(validationHandler.constructor.name).toBe('ModelHandlerValidation');
-    } finally {
-      validationHandler.dispose();
-    }
+    await inspectHandler(validationHandler, (handler) => {
+      expect(handler.constructor.name).toBe('ModelHandlerValidation');
+    });
 
     vi.stubEnv('TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG', '');
     vi.resetModules();
@@ -804,6 +818,12 @@ describe('Google Interactions API routing', () => {
   });
 
   const googleConfig = (): ModelConfig => modelConfig(ModelProvider.GOOGLE);
+
+  const forcedInteractionsConfig = (): ModelConfig =>
+    ({
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    }) as ModelConfig;
 
   // Re-imports the factory alongside the platform it reads from (see the
   // module-header note on this file's vi.resetModules() calls).
@@ -826,75 +846,72 @@ describe('Google Interactions API routing', () => {
 
   it('keeps key derivation pure for Interactions-only models under OpenRouter', async () => {
     const factory = await initGoogleRouting();
-    const forced = {
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    } as ModelConfig;
-    expect(factory.modelHandlerCompatibilityKey(forced, true, false)).toBe(
-      'ModelHandlerOpenRouterNative',
-    );
+    expect(
+      factory.modelHandlerCompatibilityKey(
+        forcedInteractionsConfig(),
+        true,
+        false,
+      ),
+    ).toBe('ModelHandlerOpenRouterNative');
   });
 
   it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
     // OpenRouter cannot proxy Interactions — the live-routing path must error
     // rather than silently route to OpenRouter (spec §6.3).
     const factory = await initGoogleRouting(true);
-    const forced = {
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    } as ModelConfig;
-    await expect(factory.createModelHandler(forced)).rejects.toThrow(
-      /OpenRouter/,
-    );
+    await expect(
+      factory.createModelHandler(forcedInteractionsConfig()),
+    ).rejects.toThrow(/OpenRouter/);
   });
 
   it('creates the Interactions handler tagged with its compatibility key', async () => {
     const factory = await initGoogleRouting();
-    const handler = await factory.createModelHandler(googleConfig());
-    try {
-      expect(factory.activeModelHandlerCompatibilityKey(handler)).toBe(
+    await inspectHandler(factory.createModelHandler(googleConfig()), (h) => {
+      expect(factory.activeModelHandlerCompatibilityKey(h)).toBe(
         'ModelHandlerGoogleInteractions',
       );
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   it('keeps a direct Interactions session off OpenRouter after the global toggle changes', async () => {
     const factory = await initGoogleRouting(true);
-    const handler = await factory.createModelHandlerForCompatibilityKey(
-      googleConfig(),
-      'ModelHandlerGoogleInteractions',
+    await inspectHandler(
+      factory.createModelHandlerForCompatibilityKey(
+        googleConfig(),
+        'ModelHandlerGoogleInteractions',
+      ),
+      (handler) => {
+        expect(handler.constructor.name).toBe('ModelHandlerGoogleInteractions');
+        const routedConfig = (
+          handler as unknown as {
+            config: ModelConfig & { forceDirectProvider?: boolean };
+          }
+        ).config;
+        expect(routedConfig.forceDirectProvider).toBe(true);
+        expect(shouldRouteModelThroughOpenRouter(routedConfig, true)).toBe(
+          false,
+        );
+      },
     );
-    try {
-      expect(handler.constructor.name).toBe('ModelHandlerGoogleInteractions');
-      const routedConfig = (
-        handler as unknown as {
-          config: ModelConfig & { forceDirectProvider?: boolean };
-        }
-      ).config;
-      expect(routedConfig.forceDirectProvider).toBe(true);
-      expect(shouldRouteModelThroughOpenRouter(routedConfig, true)).toBe(false);
-    } finally {
-      handler.dispose();
-    }
   });
 
   it('keeps an OpenRouter compatibility handler on OpenRouter after the global toggle changes', async () => {
     const factory = await initGoogleRouting(false);
-    const handler = await factory.createModelHandlerForCompatibilityKey(
-      googleConfig(),
-      'ModelHandlerOpenRouterNative',
+    await inspectHandler(
+      factory.createModelHandlerForCompatibilityKey(
+        googleConfig(),
+        'ModelHandlerOpenRouterNative',
+      ),
+      (handler) => {
+        expect(handler.constructor.name).toBe('ModelHandlerOpenRouterNative');
+        const routedConfig = (handler as unknown as { config: ModelConfig })
+          .config;
+        expect(routedConfig.openRouterOnly).toBe(true);
+        expect(shouldRouteModelThroughOpenRouter(routedConfig, false)).toBe(
+          true,
+        );
+      },
     );
-    try {
-      expect(handler.constructor.name).toBe('ModelHandlerOpenRouterNative');
-      const routedConfig = (handler as unknown as { config: ModelConfig })
-        .config;
-      expect(routedConfig.openRouterOnly).toBe(true);
-      expect(shouldRouteModelThroughOpenRouter(routedConfig, false)).toBe(true);
-    } finally {
-      handler.dispose();
-    }
   });
 });
 
@@ -929,31 +946,26 @@ describe('OpenRouter-proxied provider capabilities', () => {
   });
 
   it('does not batch for proxied providers that never carried cross-call reasoning', () => {
-    expect(
-      openRouterHandler(ModelProvider.OPENAI)
-        .requiresBatchedParallelToolResults,
-    ).toBe(false);
-    expect(
-      openRouterHandler(ModelProvider.OTHERS)
-        .requiresBatchedParallelToolResults,
-    ).toBe(false);
+    for (const provider of [ModelProvider.OPENAI, ModelProvider.OTHERS]) {
+      expect(
+        openRouterHandler(provider).requiresBatchedParallelToolResults,
+      ).toBe(false);
+    }
   });
 
-  it('honors a reasoning-level override for proxied DeepSeek with reasoning but no granular effort', () => {
-    const handler = openRouterHandler(ModelProvider.DEEPSEEK, {
-      supportsReasoning: true,
-      supportsReasoningEffort: false,
-    });
-    expect(handler.supportsReasoningLevelOverride).toBe(true);
-  });
-
-  it('does not grant a reasoning-level override to non-DeepSeek proxied providers lacking configurable effort', () => {
-    const handler = openRouterHandler(ModelProvider.GOOGLE, {
-      supportsReasoning: true,
-      supportsReasoningEffort: false,
-    });
-    expect(handler.supportsReasoningLevelOverride).toBe(false);
-  });
+  it.each([
+    { provider: ModelProvider.DEEPSEEK, expected: true },
+    { provider: ModelProvider.GOOGLE, expected: false },
+  ])(
+    'grants a reasoning-level override only to proxied DeepSeek with reasoning but no granular effort ($provider → $expected)',
+    ({ provider, expected }) => {
+      const handler = openRouterHandler(provider, {
+        supportsReasoning: true,
+        supportsReasoningEffort: false,
+      });
+      expect(handler.supportsReasoningLevelOverride).toBe(expected);
+    },
+  );
 });
 
 describe('direct handler capability overrides', () => {
@@ -1060,14 +1072,11 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
         ).rejects.toThrow();
         continue;
       }
-      const handler = await create(config);
-      try {
-        const actual = activeKey(handler);
-        if (actual !== predicted) {
-          mismatches.push(`${name}: predicted ${predicted}, got ${actual}`);
-        }
-      } finally {
-        handler.dispose();
+      const actual = await inspectHandler(create(config), (handler) =>
+        activeKey(handler),
+      );
+      if (actual !== predicted) {
+        mismatches.push(`${name}: predicted ${predicted}, got ${actual}`);
       }
     }
     expect(mismatches).toEqual([]);
@@ -1103,12 +1112,7 @@ describe('Kimi Code reroute under included access', () => {
     installTexraModelAccess();
     invalidateApiKeyCache();
 
-    const handler = await create(dualBackendKimi);
-    try {
-      return handler.config;
-    } finally {
-      handler.dispose();
-    }
+    return inspectHandler(create(dualBackendKimi), (handler) => handler.config);
   }
 
   it('does not reroute dual-backend Kimi models while the relay serves requests', async () => {

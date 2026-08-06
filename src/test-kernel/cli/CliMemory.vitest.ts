@@ -52,15 +52,13 @@ describe('CLI memory formatting', () => {
     expect(list).toContain('... 1 more');
   });
 
-  it('accepts display, storage, and shorthand paths', () => {
-    for (const input of [
-      '/memories/project.md',
-      'memories/project.md',
-      'memories\\project.md',
-      'project.md',
-    ]) {
-      expect(cliMemoryStoragePathFromInput(input)).toBe('memories/project.md');
-    }
+  it.each([
+    '/memories/project.md',
+    'memories/project.md',
+    'memories\\project.md',
+    'project.md',
+  ])('accepts the path form %s', (input) => {
+    expect(cliMemoryStoragePathFromInput(input)).toBe('memories/project.md');
   });
 
   it('rejects absolute paths outside the memory display root', () => {

@@ -48,14 +48,12 @@ describe('reliability-settings-section', () => {
     );
     const input = section.shadowRoot?.querySelector('wa-input') as
       (HTMLElement & { value: string }) | null;
+    if (!input) throw new Error('wa-input not rendered');
 
-    expect(input).not.toBeNull();
-    input!.value = '2.5';
-    input!.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
+    input.value = '2.5';
+    input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
 
-    expect(input!.value).toBe('3');
+    expect(input.value).toBe('3');
     expect(mocks.postMessage).toHaveBeenCalledWith(
       SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
       {

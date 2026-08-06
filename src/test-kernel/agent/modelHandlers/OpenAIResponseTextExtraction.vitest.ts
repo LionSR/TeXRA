@@ -6,8 +6,6 @@ import { ModelProvider } from 'llm-zoo';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-// Third-party imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
 function createHandler(): ModelHandlerOpenAIResponse {

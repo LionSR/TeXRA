@@ -69,7 +69,7 @@ export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 export const EXECUTION_META_SCHEMA_VERSION = 1;
 
 /** Execution metadata stored alongside config at launch time. */
-const ExecutionMetaBaseSchema = z.object({
+export const ExecutionMetaSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
@@ -94,7 +94,6 @@ const ExecutionMetaBaseSchema = z.object({
   streamId: StreamTabIdSchema.optional(),
 });
 
-export const ExecutionMetaSchema = ExecutionMetaBaseSchema;
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
 /**

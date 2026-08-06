@@ -57,49 +57,25 @@ describe('detectGeneratedLatexdiffArtifact', () => {
 });
 
 describe('parseVersionControlDiffFilename', () => {
-  it.each([
-    {
-      label: '.tex sources',
-      input: '/paper/main-diffea268c1.tex',
-      expected: {
-        sourcePath: path.join('/paper', 'main.tex'),
+  it.each(['tex', 'pdf', 'ltx', 'latex'])(
+    'recognizes .%s sources regardless of extension',
+    (extension) => {
+      expect(
+        parseVersionControlDiffFilename(`/paper/main-diffea268c1.${extension}`),
+      ).toEqual({
+        sourcePath: path.join('/paper', `main.${extension}`),
         commitHash: 'ea268c1',
-      },
+      });
     },
-    {
-      label: 'compiled .pdf previews',
-      input: '/paper/main-diffea268c1.pdf',
-      expected: {
-        sourcePath: path.join('/paper', 'main.pdf'),
-        commitHash: 'ea268c1',
-      },
-    },
-    {
-      label: '.ltx sources',
-      input: '/paper/main-diffea268c1.ltx',
-      expected: {
-        sourcePath: path.join('/paper', 'main.ltx'),
-        commitHash: 'ea268c1',
-      },
-    },
-    {
-      label: '.latex sources',
-      input: '/paper/main-diffea268c1.latex',
-      expected: {
-        sourcePath: path.join('/paper', 'main.latex'),
-        commitHash: 'ea268c1',
-      },
-    },
-    {
-      label: 'a minimum-length abbreviated hash',
-      input: '/paper/main-diffea26.tex',
-      expected: {
+  );
+
+  it('recognizes a minimum-length abbreviated hash', () => {
+    expect(parseVersionControlDiffFilename('/paper/main-diffea26.tex')).toEqual(
+      {
         sourcePath: path.join('/paper', 'main.tex'),
         commitHash: 'ea26',
       },
-    },
-  ])('recognizes $label regardless of extension', ({ input, expected }) => {
-    expect(parseVersionControlDiffFilename(input)).toEqual(expected);
+    );
   });
 
   it.each([

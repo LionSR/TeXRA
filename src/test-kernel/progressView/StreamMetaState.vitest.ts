@@ -1,7 +1,5 @@
-// Third-party imports
 import { beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
@@ -24,6 +22,7 @@ import {
   STREAM_SUBSTATE,
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
+  type StreamStage,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -63,6 +62,50 @@ function registerStream(
     agentCategory: AgentCategory.Workflow,
     creationTimestamp: 1,
     ...overrides,
+  });
+}
+
+/**
+ * Seed a single registered workflow stream (optionally with stream state) and
+ * return a live reader over the shared appState singleton.
+ */
+function seedStream(
+  streamId: StreamTabId,
+  streamState?: Partial<StreamState>,
+): () => ProgressState {
+  const state = createInitialState();
+  registerStream(state, streamId);
+  if (streamState) {
+    state.streamStates.set(
+      streamId,
+      createStreamState(AgentCategory.Workflow, streamState),
+    );
+  }
+  return seedState(state);
+}
+
+/** A metadata patch as the webview receives it, after the postMessage JSON round-trip. */
+function metadataPatchMessage(
+  streamId: StreamTabId,
+  stage: StreamStage | null,
+): ProgressViewOutboundMessage {
+  return overWire({
+    command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+    streamInfo: {
+      name: streamId,
+      label: streamId,
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    },
+    streamState: {
+      category: AgentCategory.Workflow,
+      status: STREAM_PHASE.RUNNING,
+      conversationProgress: {
+        toolCallCount: 0,
+      },
+      stage,
+      subagents: [],
+    },
   });
 }
 
@@ -165,15 +208,7 @@ describe('stream meta frontend state', () => {
 
   it('updates and clears stream substate with status changes', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
-        status: STREAM_PHASE.RUNNING,
-      } satisfies Partial<StreamState>),
-    );
-    const getState = seedState(state);
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
 
     dispatch(streamMetaHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
@@ -244,76 +279,27 @@ describe('stream meta frontend state', () => {
 
   it('clears round stage from a transport-safe metadata patch', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
-        stage: { kind: 'round', index: 2 },
-      } satisfies Partial<StreamState>),
-    );
-    const getState = seedState(state);
-
-    const message = overWire({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-      streamInfo: {
-        name: streamId,
-        label: 'stream-a',
-        agentCategory: AgentCategory.Workflow,
-        creationTimestamp: 1,
-      },
-      streamState: {
-        category: AgentCategory.Workflow,
-        status: STREAM_PHASE.RUNNING,
-        conversationProgress: {
-          toolCallCount: 0,
-        },
-        stage: null,
-        subagents: [],
-      },
+    const getState = seedStream(streamId, {
+      stage: { kind: 'round', index: 2 },
     });
 
-    dispatch(streamMetaHandlers, message);
+    dispatch(streamMetaHandlers, metadataPatchMessage(streamId, null));
 
     expect(getState().streamStates.get(streamId)?.stage).toBeUndefined();
   });
 
   it('merges and clears a phase stage from a transport-safe metadata patch', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, streamId);
-    const getState = seedState(state);
-
-    const patch = (
-      stage: {
-        kind: 'phase';
-        label: string;
-        index?: number;
-        total?: number;
-      } | null,
-    ): ProgressViewOutboundMessage =>
-      overWire({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        streamInfo: {
-          name: streamId,
-          label: 'stream-a',
-          agentCategory: AgentCategory.Workflow,
-          creationTimestamp: 1,
-        },
-        streamState: {
-          category: AgentCategory.Workflow,
-          status: STREAM_PHASE.RUNNING,
-          conversationProgress: {
-            toolCallCount: 0,
-          },
-          stage,
-          subagents: [],
-        },
-      });
+    const getState = seedStream(streamId);
 
     dispatch(
       streamMetaHandlers,
-      patch({ kind: 'phase', label: 'Reduce', index: 1, total: 3 }),
+      metadataPatchMessage(streamId, {
+        kind: 'phase',
+        label: 'Reduce',
+        index: 1,
+        total: 3,
+      }),
     );
     expect(getState().streamStates.get(streamId)?.stage).toEqual({
       kind: 'phase',
@@ -322,7 +308,7 @@ describe('stream meta frontend state', () => {
       total: 3,
     });
 
-    dispatch(streamMetaHandlers, patch(null));
+    dispatch(streamMetaHandlers, metadataPatchMessage(streamId, null));
     expect(getState().streamStates.get(streamId)?.stage).toBeUndefined();
   });
 
@@ -382,15 +368,9 @@ describe('stream meta frontend state', () => {
 
   it('clears the stage slot when synced content explicitly clears it', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
-        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-      } satisfies Partial<StreamState>),
-    );
-    const getState = seedState(state);
+    const getState = seedStream(streamId, {
+      stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+    });
 
     const message = overWire({
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,

@@ -34,6 +34,20 @@ function mount(item: MemoryViewItem): Promise<MemoryItem> {
   return mountComponent<MemoryItem>('memory-item', { item });
 }
 
+function query<T extends Element>(
+  element: MemoryItem,
+  selector: string,
+): T | null | undefined {
+  return element.shadowRoot?.querySelector<T>(selector);
+}
+
+function tooltipText(
+  element: MemoryItem,
+  buttonId: string,
+): string | null | undefined {
+  return query(element, `wa-tooltip[for="${buttonId}"]`)?.textContent;
+}
+
 /**
  * Regression coverage for the wa-button-group + tooltip consolidation onto
  * `renderIconActionButtonParts` (src/shared/wa/actionButtons.ts): the
@@ -52,38 +66,29 @@ describe('memory-item action group', () => {
   it('renders each grouped action as a wa-button with a matching sibling tooltip', async () => {
     const element = await mount(makeItem());
 
-    const deleteButton = element.shadowRoot?.querySelector<HTMLElement>(
-      '#memory-delete-button',
-    );
+    const deleteButton = query<HTMLElement>(element, '#memory-delete-button');
     expect(deleteButton).toBeTruthy();
     expect(deleteButton?.tagName).toBe('WA-BUTTON');
     expect(deleteButton?.getAttribute('aria-label')).toBe('Delete: notes.md');
-
-    const deleteTooltip = element.shadowRoot?.querySelector(
-      'wa-tooltip[for="memory-delete-button"]',
+    expect(tooltipText(element, 'memory-delete-button')).toBe(
+      'Delete this memory',
     );
-    expect(deleteTooltip?.textContent).toBe('Delete this memory');
   });
 
   it('flips the pin button label/tooltip/icon based on item.pinned', async () => {
     const element = await mount(makeItem({ pinned: true }));
 
-    const pinButton =
-      element.shadowRoot?.querySelector<HTMLElement>('#memory-pin-button');
+    const pinButton = query<HTMLElement>(element, '#memory-pin-button');
     expect(pinButton?.getAttribute('aria-label')).toBe('Unpin: notes.md');
-    const pinTooltip = element.shadowRoot?.querySelector(
-      'wa-tooltip[for="memory-pin-button"]',
-    );
-    expect(pinTooltip?.textContent).toBe('Unpin this memory');
+    expect(tooltipText(element, 'memory-pin-button')).toBe('Unpin this memory');
   });
 
   it('posts deleteMemory on delete-button click', async () => {
     const element = await mount(makeItem());
 
-    const deleteButton = element.shadowRoot?.querySelector<HTMLElement>(
-      '#memory-delete-button',
+    query<HTMLElement>(element, '#memory-delete-button')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
     );
-    deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(mocks.postMessage.mock.calls).toEqual([
       [

@@ -64,6 +64,11 @@ const logger = spiedTrace();
 
 const tempDirs: string[] = [];
 
+afterEach(async () => {
+  vi.clearAllMocks();
+  await cleanupTempDirs(tempDirs);
+});
+
 function processLineByLine(content: string): string {
   return (
     new DiffFileProcessor() as unknown as DiffFileProcessorInternals
@@ -111,11 +116,6 @@ describe('DiffFileProcessor line formatting', () => {
 });
 
 describe('LatexMediaManager PDF compilation', () => {
-  afterEach(async () => {
-    vi.clearAllMocks();
-    await cleanupTempDirs(tempDirs);
-  });
-
   it('filters nullish compile results before adding media files', async () => {
     const workspaceDir = await makeTempDir('texra-latex-media-', tempDirs);
     await installPlatform(
@@ -229,11 +229,6 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
       await realpath(path.resolve(path.dirname(mirroredPath), target)),
     ).toBe(await realpath(figurePath));
   }
-
-  afterEach(async () => {
-    vi.clearAllMocks();
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies', async () => {
     const executionId = 'extract-basedir-dedup';

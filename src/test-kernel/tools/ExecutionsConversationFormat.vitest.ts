@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { formatConversationContent } from '@agent/storage/conversationFormat';
 import { formatConversation } from '@tools/executions/conversationFormat';
 
+/** Formats a single assistant message whose content is the given blocks. */
+function formatAssistantBlocks(blocks: unknown[]): string {
+  return formatConversation([{ role: 'assistant', content: blocks }]);
+}
+
 describe('formatConversation', () => {
   it('preserves ASCII truncation for conversation output', () => {
     const output = formatConversation([
@@ -14,15 +19,10 @@ describe('formatConversation', () => {
   });
 
   it('formats typed content blocks (text, tool_use, tool_result)', () => {
-    const output = formatConversation([
-      {
-        role: 'assistant',
-        content: [
-          { type: 'text', text: 'hello' },
-          { type: 'tool_use', name: 'read', input: { path: 'a.tex' } },
-          { type: 'tool_result', content: 'done' },
-        ],
-      },
+    const output = formatAssistantBlocks([
+      { type: 'text', text: 'hello' },
+      { type: 'tool_use', name: 'read', input: { path: 'a.tex' } },
+      { type: 'tool_result', content: 'done' },
     ]);
 
     expect(output).toContain('hello');
@@ -129,15 +129,10 @@ describe('formatConversation', () => {
   });
 
   it('renders known blocks with missing fields and JSON-stringifies unknown shapes', () => {
-    const output = formatConversation([
-      {
-        role: 'assistant',
-        content: [
-          { type: 'text' }, // known shape, missing text → empty, not JSON fallback
-          { type: 'mystery', foo: 1 }, // unknown shape → JSON fallback
-          'raw string block', // bare string passthrough
-        ],
-      },
+    const output = formatAssistantBlocks([
+      { type: 'text' }, // known shape, missing text → empty, not JSON fallback
+      { type: 'mystery', foo: 1 }, // unknown shape → JSON fallback
+      'raw string block', // bare string passthrough
     ]);
 
     expect(output).toContain('raw string block');
@@ -147,17 +142,12 @@ describe('formatConversation', () => {
   });
 
   it('formats server_tool_use blocks as a tool_use marker (not a JSON dump)', () => {
-    const output = formatConversation([
+    const output = formatAssistantBlocks([
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'server_tool_use',
-            id: 'srvtoolu_1',
-            name: 'web_search',
-            input: { query: 'texra latex' },
-          },
-        ],
+        type: 'server_tool_use',
+        id: 'srvtoolu_1',
+        name: 'web_search',
+        input: { query: 'texra latex' },
       },
     ]);
 
@@ -166,27 +156,22 @@ describe('formatConversation', () => {
   });
 
   it('formats web_search_tool_result blocks as a compact result list', () => {
-    const output = formatConversation([
+    const output = formatAssistantBlocks([
       {
-        role: 'assistant',
+        type: 'web_search_tool_result',
+        tool_use_id: 'srvtoolu_1',
         content: [
           {
-            type: 'web_search_tool_result',
-            tool_use_id: 'srvtoolu_1',
-            content: [
-              {
-                type: 'web_search_result',
-                title: 'TeXRA',
-                url: 'https://texra.ai',
-                encrypted_content: 'abc',
-              },
-              {
-                type: 'web_search_result',
-                title: 'TeXRA docs',
-                url: 'https://texra.ai/docs',
-                encrypted_content: 'def',
-              },
-            ],
+            type: 'web_search_result',
+            title: 'TeXRA',
+            url: 'https://texra.ai',
+            encrypted_content: 'abc',
+          },
+          {
+            type: 'web_search_result',
+            title: 'TeXRA docs',
+            url: 'https://texra.ai/docs',
+            encrypted_content: 'def',
           },
         ],
       },
@@ -200,20 +185,15 @@ describe('formatConversation', () => {
   });
 
   it('formats web_fetch_tool_result blocks as a title/url marker', () => {
-    const output = formatConversation([
+    const output = formatAssistantBlocks([
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'web_fetch_tool_result',
-            tool_use_id: 'srvtoolu_2',
-            content: {
-              type: 'web_fetch_result',
-              url: 'https://texra.ai',
-              content: { type: 'document', title: 'TeXRA home' },
-            },
-          },
-        ],
+        type: 'web_fetch_tool_result',
+        tool_use_id: 'srvtoolu_2',
+        content: {
+          type: 'web_fetch_result',
+          url: 'https://texra.ai',
+          content: { type: 'document', title: 'TeXRA home' },
+        },
       },
     ]);
 
@@ -225,17 +205,12 @@ describe('formatConversation', () => {
     // `src/transcript/completedRunArchive.ts`'s `webFetchEntryToMessages`
     // reconstructs this block type with top-level url/title/page_content —
     // no nested `content` — unlike the live Anthropic SDK shape above.
-    const output = formatConversation([
+    const output = formatAssistantBlocks([
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'web_fetch_tool_result',
-            url: 'https://texra.ai',
-            title: 'TeXRA home',
-            page_content: 'the full fetched page text'.repeat(20),
-          },
-        ],
+        type: 'web_fetch_tool_result',
+        url: 'https://texra.ai',
+        title: 'TeXRA home',
+        page_content: 'the full fetched page text'.repeat(20),
       },
     ]);
 
@@ -244,18 +219,13 @@ describe('formatConversation', () => {
   });
 
   it('does not emit an empty marker for a fieldless live web-fetch result', () => {
-    const output = formatConversation([
+    const output = formatAssistantBlocks([
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'web_fetch_tool_result',
-            content: {
-              type: 'web_fetch_result',
-              content: { type: 'document' },
-            },
-          },
-        ],
+        type: 'web_fetch_tool_result',
+        content: {
+          type: 'web_fetch_result',
+          content: { type: 'document' },
+        },
       },
     ]);
 
@@ -264,15 +234,10 @@ describe('formatConversation', () => {
   });
 
   it('summarizes a content-only web-fetch result without dumping page text', () => {
-    const output = formatConversation([
+    const output = formatAssistantBlocks([
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'web_fetch_tool_result',
-            page_content: 'fetched page text',
-          },
-        ],
+        type: 'web_fetch_tool_result',
+        page_content: 'fetched page text',
       },
     ]);
 

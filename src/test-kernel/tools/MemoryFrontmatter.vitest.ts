@@ -63,29 +63,24 @@ describe('memory frontmatter (yaml-backed)', () => {
     expect(parsed.content).toBe('legacy body');
   });
 
-  it('returns null metadata with full content when no frontmatter fence', () => {
-    const raw = 'just some content\nwith no frontmatter';
-    const parsed = parseFrontmatter(raw);
-    expect(parsed.meta).toBeNull();
-    expect(parsed.content).toBe(raw);
-  });
-
-  it('returns null metadata when the block lacks modifiedBy', () => {
-    const raw = [
-      '---',
-      'foo: bar',
-      'modifiedAt: 2026-01-01',
-      '---',
-      'body',
-    ].join('\n');
-    const parsed = parseFrontmatter(raw);
-    expect(parsed.meta).toBeNull();
-    // Full raw is preserved as content (back-compat with the old parser).
-    expect(parsed.content).toBe(raw);
-  });
-
-  it('degrades to null metadata on malformed YAML rather than throwing', () => {
-    const raw = ['---', 'modifiedBy: "unterminated', '---', 'body'].join('\n');
+  // In every unreadable case the full raw text is preserved as content
+  // (back-compat with the old parser).
+  it.each([
+    {
+      scenario: 'no frontmatter fence',
+      raw: 'just some content\nwith no frontmatter',
+    },
+    {
+      scenario: 'a block lacking modifiedBy',
+      raw: ['---', 'foo: bar', 'modifiedAt: 2026-01-01', '---', 'body'].join(
+        '\n',
+      ),
+    },
+    {
+      scenario: 'malformed YAML',
+      raw: ['---', 'modifiedBy: "unterminated', '---', 'body'].join('\n'),
+    },
+  ])('returns null metadata with full content for $scenario', ({ raw }) => {
     const parsed = parseFrontmatter(raw);
     expect(parsed.meta).toBeNull();
     expect(parsed.content).toBe(raw);

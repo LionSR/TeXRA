@@ -189,15 +189,18 @@ describe('progress-view onboarding refresh wiring', () => {
     finishCommand?.(true);
   });
 
-  it('reports a replacement launch failure before a run handle exists', async () => {
-    mocks.safeExecuteCommand.mockResolvedValue(false);
-    const handler = createMessageHandler(createProgressViewProvider());
-
-    await expect(executeValidatedUntilStarted(handler)).resolves.toBe(false);
-  });
-
-  it('settles a replacement launch when command error handling rejects', async () => {
-    mocks.safeExecuteCommand.mockRejectedValue(new Error('command failed'));
+  it.each([
+    {
+      label: 'reports a replacement launch failure before a run handle exists',
+      settle: () => mocks.safeExecuteCommand.mockResolvedValue(false),
+    },
+    {
+      label: 'settles a replacement launch when command error handling rejects',
+      settle: () =>
+        mocks.safeExecuteCommand.mockRejectedValue(new Error('command failed')),
+    },
+  ])('$label', async ({ settle }) => {
+    settle();
     const handler = createMessageHandler(createProgressViewProvider());
 
     await expect(executeValidatedUntilStarted(handler)).resolves.toBe(false);
@@ -335,62 +338,54 @@ describe('progress-view onboarding refresh wiring', () => {
     });
   });
 
-  it('routes agent proposal actions through host interactions', async () => {
-    const interactions = createHostInteractions({
-      submitProposalDecision: vi.fn(() => true),
-    });
-    const handler = createMessageHandler(
-      createProgressViewProvider(),
-      new FakePromptHost(),
-      interactions,
-    );
-
-    await handler.handleMessage(
-      {
+  it.each([
+    {
+      label: 'agent proposal',
+      method: 'submitProposalDecision' as const,
+      message: {
         command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
         proposalId: 'proposal-a',
         action: 'approve',
         model: 'gemini31p',
         agent: 'critic',
       },
-      createWebviewView(),
-    );
-
-    expect(interactions.submitProposalDecision).toHaveBeenCalledWith(
-      'proposal-a',
-      {
-        action: 'approve',
-        model: 'gemini31p',
-        agent: 'critic',
-      },
-    );
-  });
-
-  it('routes plan approval actions through host interactions', async () => {
-    const interactions = createHostInteractions({
-      submitPlanDecision: vi.fn(() => true),
-    });
-    const handler = createMessageHandler(
-      createProgressViewProvider(),
-      new FakePromptHost(),
-      interactions,
-    );
-
-    await handler.handleMessage(
-      {
+      expectedArgs: [
+        'proposal-a',
+        { action: 'approve', model: 'gemini31p', agent: 'critic' },
+      ],
+    },
+    {
+      label: 'plan approval',
+      method: 'submitPlanDecision' as const,
+      message: {
         command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
         approvalId: 'plan-a',
         action: 'reject',
         feedback: 'state the invariant first',
       },
-      createWebviewView(),
-    );
+      expectedArgs: [
+        'plan-a',
+        { action: 'reject', feedback: 'state the invariant first' },
+      ],
+    },
+  ])(
+    'routes $label actions through host interactions',
+    async ({ method, message, expectedArgs }) => {
+      const decision = vi.fn(() => true);
+      const interactions = createHostInteractions({
+        [method]: decision,
+      } as Partial<ProgressHostInteractions>);
+      const handler = createMessageHandler(
+        createProgressViewProvider(),
+        new FakePromptHost(),
+        interactions,
+      );
 
-    expect(interactions.submitPlanDecision).toHaveBeenCalledWith('plan-a', {
-      action: 'reject',
-      feedback: 'state the invariant first',
-    });
-  });
+      await handler.handleMessage(message, createWebviewView());
+
+      expect(decision).toHaveBeenCalledWith(...expectedArgs);
+    },
+  );
 
   it('routes workflow toolbar actions through extension capabilities', async () => {
     const provider = createProgressViewProvider();

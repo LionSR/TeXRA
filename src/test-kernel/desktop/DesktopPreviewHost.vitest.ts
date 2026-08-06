@@ -52,16 +52,19 @@ describe('desktop preview host', () => {
     return makeSharedTempDir('texra-preview-host-', tempDirs);
   }
 
-  async function makeOverlayFixture(): Promise<{
-    texPath: string;
-    pdfPath: string;
-  }> {
+  const TEX_SOURCE =
+    '\\documentclass{article}\\begin{document}x\\end{document}';
+
+  async function makeTexFixture(
+    stem: string,
+    { withPdf = true }: { withPdf?: boolean } = {},
+  ): Promise<{ dir: string; texPath: string; pdfPath: string }> {
     const dir = await makeTempDir();
-    const texPath = path.join(dir, 'paper.tex');
-    const pdfPath = path.join(dir, 'paper.pdf');
-    await writeFile(texPath, '\\documentclass{article}');
-    await writeFile(pdfPath, 'pdf');
-    return { texPath, pdfPath };
+    const texPath = path.join(dir, `${stem}.tex`);
+    const pdfPath = path.join(dir, `${stem}.pdf`);
+    await writeFile(texPath, TEX_SOURCE);
+    if (withPdf) await writeFile(pdfPath, 'pdf');
+    return { dir, texPath, pdfPath };
   }
 
   it('opens existing files through Electron shell.openPath', async () => {
@@ -143,14 +146,7 @@ describe('desktop preview host', () => {
     const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'preview.tex');
-    const pdfPath = path.join(dir, 'preview.pdf');
-    await writeFile(
-      texPath,
-      '\\documentclass{article}\\begin{document}x\\end{document}',
-    );
-    await writeFile(pdfPath, 'pdf');
+    const { dir, texPath, pdfPath } = await makeTexFixture('preview');
     const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell });
@@ -192,12 +188,7 @@ describe('desktop preview host', () => {
       undefined,
       checkToolInstalled,
     );
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'preview.tex');
-    await writeFile(
-      texPath,
-      '\\documentclass{article}\\begin{document}x\\end{document}',
-    );
+    const { texPath } = await makeTexFixture('preview', { withPdf: false });
     const showErrorMessage = vi.fn();
     const shell = makeShell();
 
@@ -217,12 +208,7 @@ describe('desktop preview host', () => {
     const compileLatex2Pdf = vi.fn(async () => ({ ok: false, logTail }));
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'preview.tex');
-    await writeFile(
-      texPath,
-      '\\documentclass{article}\\begin{document}x\\end{document}',
-    );
+    const { texPath } = await makeTexFixture('preview', { withPdf: false });
     const showErrorMessage = vi.fn();
     const shell = makeShell();
     // Silence and inspect the console.error the full log tail is routed to
@@ -247,7 +233,6 @@ describe('desktop preview host', () => {
       expect.stringContaining(logTail),
     );
     expect(shell.openPath).not.toHaveBeenCalled();
-    consoleErrorSpy.mockRestore();
   });
 
   it('opens external URLs through Electron shell.openExternal', async () => {
@@ -260,11 +245,9 @@ describe('desktop preview host', () => {
     expect(shell.openExternal).toHaveBeenCalledWith('https://texra.ai');
   });
 
-  // --- Audit item B / trajectory #17: in-app PDF overlay ----------------
-
   it('prefers the in-app PDF overlay when postToRenderer accepts the post', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const { texPath, pdfPath } = await makeOverlayFixture();
+    const { texPath, pdfPath } = await makeTexFixture('paper');
     const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => true);
 
@@ -285,7 +268,7 @@ describe('desktop preview host', () => {
 
   it('falls back to external viewer when postToRenderer returns false', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const { texPath, pdfPath } = await makeOverlayFixture();
+    const { texPath, pdfPath } = await makeTexFixture('paper');
     const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => false);
 
@@ -298,27 +281,24 @@ describe('desktop preview host', () => {
 
   it('falls back to external viewer when postToRenderer throws', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const { texPath, pdfPath } = await makeOverlayFixture();
+    const { texPath, pdfPath } = await makeTexFixture('paper');
     const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => {
       throw new Error('IPC bridge not ready');
     });
     // Silence the expected console.error so the test output is clean.
-    const consoleErrorSpy = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const host = createDesktopPreviewHost({ shell, postToRenderer });
 
     await host.openBuildDisplay(createExternalLocation(texPath));
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
-    consoleErrorSpy.mockRestore();
   });
 
   it('forceExternal=true skips the overlay path entirely', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const { texPath, pdfPath } = await makeOverlayFixture();
+    const { texPath, pdfPath } = await makeTexFixture('paper');
     const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => true);
 

@@ -112,7 +112,11 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
   },
 } satisfies RuntimePresentationNdjsonCases;
 
-type TestRunProgressRenderer = ReturnType<typeof createRunProgressRenderer>;
+// context() always sets renderRunProgress: true, so the factory never
+// returns undefined inside these helpers.
+type TestRunProgressRenderer = NonNullable<
+  ReturnType<typeof createRunProgressRenderer>
+>;
 
 type RunConfigOverrides = {
   streamId?: string;
@@ -172,7 +176,7 @@ function handleRunConfig(
   renderer: TestRunProgressRenderer,
   overrides: RunConfigOverrides = {},
 ): void {
-  renderer?.handleSessionEvent(runConfigEvent(overrides));
+  renderer.handleSessionEvent(runConfigEvent(overrides));
 }
 
 /** Input-less root run the heartbeat and live-line cases below all start from. */
@@ -189,7 +193,7 @@ function handleRoundStage(
   streamId: string,
   roundStage: RoundStage,
 ): void {
-  renderer?.handleSessionEvent({
+  renderer.handleSessionEvent({
     scope: 'run',
     streamId: streamId as StreamTabId,
     event: {
@@ -208,7 +212,7 @@ function handleConversationProgress(
   streamId: string,
   progress: ConversationProgress,
 ): void {
-  renderer?.handleSessionEvent({
+  renderer.handleSessionEvent({
     scope: 'run',
     streamId: streamId as StreamTabId,
     event: {
@@ -224,7 +228,7 @@ function handleStreamStatus(
   status: StreamPhase,
 ): void {
   // Status reaches the renderer on the session-fact rail only.
-  renderer?.handleSessionEvent({
+  renderer.handleSessionEvent({
     scope: 'session',
     event: {
       type: 'status',
@@ -241,7 +245,7 @@ function handleStreamDescription(
   streamId: string,
   description: string,
 ): void {
-  renderer?.handleSessionEvent({
+  renderer.handleSessionEvent({
     scope: 'session',
     event: {
       type: 'updateStreamDescription',
@@ -255,7 +259,7 @@ function handleActiveSubagents(
   parentStreamId: string,
   children: readonly ActiveChildInfo[],
 ): void {
-  renderer?.handleSessionEvent({
+  renderer.handleSessionEvent({
     scope: 'run',
     streamId: parentStreamId as StreamTabId,
     event: {
@@ -285,7 +289,7 @@ function plainRenderer(
     write: output.write,
     nowMs: () => 0,
     ...init,
-  });
+  })!;
 }
 
 function ansiRenderer(
@@ -297,7 +301,7 @@ function ansiRenderer(
     write: output.write,
     nowMs: () => 0,
     ...init,
-  });
+  })!;
 }
 
 function fakeTimers() {
@@ -376,7 +380,7 @@ describe('CLI run progress renderer', () => {
     handleRoundStage(renderer, 'stream-1', { index: 1 });
     expect(output.text).toContain('\r\x1b[2K[r2] · polish paper.tex · 1s');
 
-    renderer?.clear();
+    renderer.clear();
     expect(output.text.endsWith('\r\x1b[2K')).toBe(true);
   });
 
@@ -580,7 +584,7 @@ describe('CLI run progress renderer', () => {
     handleOrchestratorRootRun(renderer);
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
-    renderer?.preserve();
+    renderer.preserve();
 
     expect(timers.clearCount).toBe(1);
     expect(output.text.endsWith('\n')).toBe(true);

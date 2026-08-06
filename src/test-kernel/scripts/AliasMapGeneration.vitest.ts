@@ -88,10 +88,19 @@ describe('generated tsconfig paths match the committed copies', () => {
   // normal `npm test` loop).
   const rootPaths = loadRootPaths(rootDir);
 
+  interface CommittedTsconfig {
+    extends?: string;
+    compilerOptions: { paths?: unknown };
+  }
+
+  function readCommittedTsconfig(relativePath: string): CommittedTsconfig {
+    return JSON.parse(
+      readFileSync(resolve(rootDir, relativePath), 'utf8'),
+    ) as CommittedTsconfig;
+  }
+
   it('tsconfig.build.json paths derive from the root map', () => {
-    const committed = JSON.parse(
-      readFileSync(resolve(rootDir, 'tsconfig.build.json'), 'utf8'),
-    );
+    const committed = readCommittedTsconfig('tsconfig.build.json');
 
     expect(committed.compilerOptions.paths).toEqual(
       deriveBuildPaths(rootPaths),
@@ -99,12 +108,7 @@ describe('generated tsconfig paths match the committed copies', () => {
   });
 
   it('packages/extension/tsconfig.json extends root and inherits its paths', () => {
-    const committed = JSON.parse(
-      readFileSync(
-        resolve(rootDir, 'packages/extension/tsconfig.json'),
-        'utf8',
-      ),
-    );
+    const committed = readCommittedTsconfig('packages/extension/tsconfig.json');
 
     expect(committed.extends).toBe('../../tsconfig.json');
     expect(
@@ -114,11 +118,8 @@ describe('generated tsconfig paths match the committed copies', () => {
   });
 
   it('packages/desktop/tsconfig.paths.json paths derive from the root map', () => {
-    const committed = JSON.parse(
-      readFileSync(
-        resolve(rootDir, 'packages/desktop/tsconfig.paths.json'),
-        'utf8',
-      ),
+    const committed = readCommittedTsconfig(
+      'packages/desktop/tsconfig.paths.json',
     );
 
     expect(committed.compilerOptions.paths).toEqual(

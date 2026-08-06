@@ -118,7 +118,9 @@ export function detectProvider(err: unknown): string | undefined {
     return undefined;
   }
 
-  const candidate = err as { provider?: string; headers?: HeaderBag } & {
+  const candidate = err as {
+    provider?: string;
+    headers?: HeaderBag;
     stack?: string;
   };
 
@@ -131,12 +133,10 @@ export function detectProvider(err: unknown): string | undefined {
   );
   if (classNameProvider) return classNameProvider;
 
-  const providerFromStack = detectProviderFromText(candidate.stack ?? '');
-  if (providerFromStack) {
-    return providerFromStack;
-  }
-
-  return detectProviderFromHeaders(candidate.headers);
+  return (
+    detectProviderFromText(candidate.stack ?? '') ??
+    detectProviderFromHeaders(candidate.headers)
+  );
 }
 
 function detectProviderFromClassNames(
@@ -179,8 +179,7 @@ export function getHeaderValue(
 function detectProviderFromHeaders(
   headers: HeaderBag | undefined,
 ): HeaderDetectedProvider | undefined {
-  if (getHeaderValue(headers, 'request-id')) return 'anthropic';
-  return undefined;
+  return getHeaderValue(headers, 'request-id') ? 'anthropic' : undefined;
 }
 
 function detectProviderFromText(text: string): string | undefined {

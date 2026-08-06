@@ -10,6 +10,16 @@ import {
 } from '@cli/chat/tui/render/DiffView';
 import { fillRows } from '@cli/chat/tui/render/terminalText';
 
+const SIX_LINE_HUNK_SOURCE = [
+  'alpha',
+  'beta',
+  'gamma',
+  'delta',
+  'epsilon',
+  'zeta',
+];
+const FOUR_LINE_HUNK_SOURCE = ['alpha', 'beta', 'gamma', 'delta'];
+
 // Builds hunks where every other line was upper-cased, giving an even mix of
 // context and changed rows for the display-budget tests below.
 function alternatingHunks(lines: string[]): ReturnType<typeof buildHunks> {
@@ -21,14 +31,7 @@ function alternatingHunks(lines: string[]): ReturnType<typeof buildHunks> {
 
 describe('CLI diff display', () => {
   it('keeps the overflow marker inside the total display budget', () => {
-    const hunks = alternatingHunks([
-      'alpha',
-      'beta',
-      'gamma',
-      'delta',
-      'epsilon',
-      'zeta',
-    ]);
+    const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 30, 4, 0);
 
@@ -40,14 +43,7 @@ describe('CLI diff display', () => {
   });
 
   it('renders scroll markers around the visible diff window', () => {
-    const hunks = alternatingHunks([
-      'alpha',
-      'beta',
-      'gamma',
-      'delta',
-      'epsilon',
-      'zeta',
-    ]);
+    const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 2);
 
@@ -66,14 +62,15 @@ describe('CLI diff display', () => {
     expect(maxDiffScrollOffset(10, 4)).toBe(7);
   });
 
-  it('keeps cramped diff windows static', () => {
-    expect(maxDiffScrollOffset(10, 1)).toBe(0);
-    expect(maxDiffScrollOffset(10, 2)).toBe(0);
-    expect(maxDiffScrollOffset(10, 3)).toBe(0);
-  });
+  it.each([1, 2, 3])(
+    'keeps cramped diff windows static at a budget of %i rows',
+    (budget) => {
+      expect(maxDiffScrollOffset(10, budget)).toBe(0);
+    },
+  );
 
   it('shows a changed line in a one-row diff window', () => {
-    const hunks = alternatingHunks(['alpha', 'beta', 'gamma', 'delta']);
+    const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 0, 1, 0);
 
@@ -82,7 +79,7 @@ describe('CLI diff display', () => {
   });
 
   it('prioritizes changed rows in a cramped diff window', () => {
-    const hunks = alternatingHunks(['alpha', 'beta', 'gamma', 'delta']);
+    const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 0, 3, 0);
 

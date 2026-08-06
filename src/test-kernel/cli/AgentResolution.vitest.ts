@@ -45,15 +45,9 @@ function resolution(entry: AgentEntry): ResolvedAgent {
 
 describe('CLI agent resolution', () => {
   beforeEach(() => {
-    isAuthenticatedSpy.mockReset();
-    isAuthenticatedSpy.mockResolvedValue(false);
-    canAccessRemoteAgentCatalogSpy.mockReset();
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
-    mocks.getAgent.mockReset();
-    mocks.getAgentsByCategory.mockReset();
-    mocks.getVisibleAgents.mockReset();
-    mocks.loadAgents.mockReset();
-    mocks.resolveAgentForLaunch.mockReset();
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    isAuthenticatedSpy.mockReset().mockResolvedValue(false);
+    canAccessRemoteAgentCatalogSpy.mockReset().mockResolvedValue(false);
   });
 
   it('loads the local registry and returns a local agent for signed-out users', async () => {

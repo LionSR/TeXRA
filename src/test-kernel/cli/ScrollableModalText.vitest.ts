@@ -37,6 +37,10 @@ function bashLines(width = 76) {
   });
 }
 
+function lineTexts(lines: readonly { text: string }[]): string[] {
+  return lines.map((line) => line.text);
+}
+
 describe('CLI scrollable modal text section', () => {
   it('counts fixed extra rows before clamping the content budget', () => {
     const withoutExtra = scrollableModalTextRowsBudget({
@@ -77,9 +81,7 @@ describe('CLI scrollable modal text section', () => {
       kind: 'overflow',
       text: '… 6 more rows',
     });
-    expect(visible.map((line) => line.text)).not.toContain(
-      '  print(solutions)',
-    );
+    expect(lineTexts(visible)).not.toContain('  print(solutions)');
   });
 
   it('lets users scroll to the hidden body tail', () => {
@@ -100,8 +102,8 @@ describe('CLI scrollable modal text section', () => {
       kind: 'overflow',
       text: `… ${offset} previous rows`,
     });
-    expect(visible.map((line) => line.text)).toContain('  print(solutions)');
-    expect(visible.map((line) => line.text)).toContain('  EOF');
+    expect(lineTexts(visible)).toContain('  print(solutions)');
+    expect(lineTexts(visible)).toContain('  EOF');
   });
 
   it('lets users scroll compact previews', () => {
@@ -120,9 +122,7 @@ describe('CLI scrollable modal text section', () => {
 
     expect(offset).toBeGreaterThan(0);
     expect(visible).toHaveLength(budget);
-    expect(visible.map((line) => line.text)).toContain(
-      '      x2 = 1 + 2 * y * y',
-    );
+    expect(lineTexts(visible)).toContain('      x2 = 1 + 2 * y * y');
     expect(visible.at(-1)).toEqual({
       kind: 'overflow',
       text: '… 3 previous, 8 more rows',
@@ -189,7 +189,7 @@ describe('CLI scrollable modal text section', () => {
       width: 40,
     });
 
-    expect(lines.map((line) => line.text)).toEqual(['first', '', 'third']);
+    expect(lineTexts(lines)).toEqual(['first', '', 'third']);
   });
 
   it('strips wrap-artifact leading whitespace only when asked', () => {
@@ -215,8 +215,6 @@ describe('CLI scrollable modal text section', () => {
       width: 36,
     });
 
-    expect(lines.map((line) => line.text).join('')).toContain(
-      '    spaced argument',
-    );
+    expect(lineTexts(lines).join('')).toContain('    spaced argument');
   });
 });

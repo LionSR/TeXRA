@@ -6,6 +6,21 @@ import type { StreamTabId } from '@shared/schemas';
 
 const stream = (value: string) => value as StreamTabId;
 
+function liveFlowQueue(id: string) {
+  const queues = new ToolUseFollowUpQueue();
+  const streamId = stream(id);
+  queues.claimLive(streamId, 'flow');
+  return { queues, id: streamId };
+}
+
+function childResult(deliveryId: string) {
+  return {
+    text: 'child result',
+    origin: 'subagent_result' as const,
+    deliveryId,
+  };
+}
+
 describe('FollowUpQueue', () => {
   const activeSignal = () => new AbortController().signal;
 
@@ -148,15 +163,9 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
 describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   it('suppresses a replayed delivery id instead of appending it again', () => {
-    const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:replay');
-    queues.claimLive(id, 'flow');
+    const { queues, id } = liveFlowQueue('stream:replay');
+    const delivery = childResult('exec-1:turn:1:delivery');
 
-    const delivery = {
-      text: 'child result',
-      origin: 'subagent_result' as const,
-      deliveryId: 'exec-1:turn:1:delivery',
-    };
     expect(queues.submit(id, delivery, 'live_owner')).toEqual({
       kind: 'live_flow',
     });
@@ -169,9 +178,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   });
 
   it('keeps distinct delivery ids distinct even with identical text', () => {
-    const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:distinct-deliveries');
-    queues.claimLive(id, 'flow');
+    const { queues, id } = liveFlowQueue('stream:distinct-deliveries');
 
     const first = queues.submit(
       id,
@@ -193,11 +200,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:replay-across-release');
     const child = queues.claimLive(id, 'child')!;
-    const delivery = {
-      text: 'child result',
-      origin: 'subagent_result' as const,
-      deliveryId: 'd1',
-    };
+    const delivery = childResult('d1');
     queues.submit(id, delivery, 'live_owner');
     queues.release(child, 'recoverable');
 
@@ -208,14 +211,8 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   });
 
   it('admits concurrent submissions of one delivery id at most once', () => {
-    const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:concurrent-replay');
-    queues.claimLive(id, 'flow');
-    const delivery = {
-      text: 'child result',
-      origin: 'subagent_result' as const,
-      deliveryId: 'd1',
-    };
+    const { queues, id } = liveFlowQueue('stream:concurrent-replay');
+    const delivery = childResult('d1');
 
     const outcomes = [
       queues.submit(id, delivery, 'live_owner'),
@@ -233,9 +230,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   });
 
   it('never suppresses input that carries no delivery id', () => {
-    const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:no-delivery-id');
-    queues.claimLive(id, 'flow');
+    const { queues, id } = liveFlowQueue('stream:no-delivery-id');
 
     queues.submit(id, { text: 'repeat me' }, 'live_owner');
     queues.submit(id, { text: 'repeat me' }, 'live_owner');

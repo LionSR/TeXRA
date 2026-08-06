@@ -4,17 +4,27 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';
 
+type DesktopPromptControllerModule =
+  typeof import('@desktop/main/desktopPromptController');
+type DesktopPromptController = InstanceType<
+  DesktopPromptControllerModule['DesktopPromptController']
+>;
+
+async function createPromptController(
+  postToRenderer: (message: unknown) => boolean,
+): Promise<DesktopPromptController> {
+  const { DesktopPromptController: Controller } = await loadSourceModule(
+    '@desktop/main/desktopPromptController',
+  );
+  return new Controller({ postToRenderer });
+}
+
 describe('DesktopPromptController', () => {
   it('correlates text and password prompt results', async () => {
-    const { DesktopPromptController } = await loadSourceModule(
-      '@desktop/main/desktopPromptController',
-    );
     const messages: Record<string, unknown>[] = [];
-    const controller = new DesktopPromptController({
-      postToRenderer: (message) => {
-        messages.push(message as Record<string, unknown>);
-        return true;
-      },
+    const controller = await createPromptController((message) => {
+      messages.push(message as Record<string, unknown>);
+      return true;
     });
 
     const result = controller.request({
@@ -41,15 +51,10 @@ describe('DesktopPromptController', () => {
   });
 
   it('settles cancellation once and ignores duplicate results', async () => {
-    const { DesktopPromptController } = await loadSourceModule(
-      '@desktop/main/desktopPromptController',
-    );
     let requestId = '';
-    const controller = new DesktopPromptController({
-      postToRenderer: (message) => {
-        requestId = (message as { requestId: string }).requestId;
-        return true;
-      },
+    const controller = await createPromptController((message) => {
+      requestId = (message as { requestId: string }).requestId;
+      return true;
     });
     const resolution = vi.fn();
     void controller
@@ -70,19 +75,12 @@ describe('DesktopPromptController', () => {
   });
 
   it('cancels requests when delivery fails or the controller disposes', async () => {
-    const { DesktopPromptController } = await loadSourceModule(
-      '@desktop/main/desktopPromptController',
-    );
-    const undelivered = new DesktopPromptController({
-      postToRenderer: () => false,
-    });
+    const undelivered = await createPromptController(() => false);
     await expect(
       undelivered.request({ title: 'Name', prompt: 'Team name' }),
     ).resolves.toBeUndefined();
 
-    const delivered = new DesktopPromptController({
-      postToRenderer: () => true,
-    });
+    const delivered = await createPromptController(() => true);
     const first = delivered.request({ title: 'First', prompt: 'First value' });
     const second = delivered.request({
       title: 'Second',

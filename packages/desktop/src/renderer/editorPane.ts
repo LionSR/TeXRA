@@ -291,7 +291,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       >
         <span class="desktop-editor-tree-icon">${waIcon('file-lines')}</span>
         <span class="desktop-editor-tree-label">${node.name}</span>
-        ${isDirty ? html`<span class="desktop-editor-dirty-dot"></span>` : ''}
+        ${isDirty ? html`<span class="desktop-editor-dirty-dot"></span>` : nothing}
       </wa-tree-item>
     `;
   }

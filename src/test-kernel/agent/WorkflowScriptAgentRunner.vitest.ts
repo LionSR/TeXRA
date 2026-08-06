@@ -243,16 +243,12 @@ describe('createWorkflowScriptAgentRunner', () => {
       contextFiles: ['context.bin'],
     };
 
-    await expect(
-      Promise.all([
-        fingerprintWorkflowAgentDependencies(runExecutionId, options),
-        fingerprintWorkflowAgentDependencies(runExecutionId, options),
-      ]),
-    ).resolves.toEqual([expect.any(String), expect.any(String)]);
     const [first, second] = await Promise.all([
       fingerprintWorkflowAgentDependencies(runExecutionId, options),
       fingerprintWorkflowAgentDependencies(runExecutionId, options),
     ]);
+
+    expect(first).toEqual(expect.any(String));
     expect(first).toBe(second);
   });
 

@@ -40,23 +40,17 @@ export function computeStandardPrice(
   tokens: StandardPriceTokens,
   config: StandardPricingConfig,
 ): number {
-  let basePrice = calculateTokenPrice(
-    tokens.inputTokens,
-    tokens.outputTokens,
-    config.inputPrice,
-    config.outputPrice,
-  );
-
   const reasoningTokens = tokens.reasoningTokens ?? 0;
-  if (reasoningTokens) {
-    basePrice += (reasoningTokens * config.outputPrice) / 1e6;
-  }
   const cachedTokens = tokens.cachedTokens ?? 0;
-  if (cachedTokens) {
-    basePrice -=
-      (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) /
-      1e6;
-  }
 
-  return basePrice;
+  return (
+    calculateTokenPrice(
+      tokens.inputTokens,
+      tokens.outputTokens,
+      config.inputPrice,
+      config.outputPrice,
+    ) +
+    (reasoningTokens * config.outputPrice) / 1e6 -
+    (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) / 1e6
+  );
 }

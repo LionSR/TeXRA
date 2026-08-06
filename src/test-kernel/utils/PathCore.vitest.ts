@@ -67,66 +67,47 @@ describe('normalizeLatexPath', () => {
   });
 
   it('handles long paths without changing segment text', () => {
-    const longPath = Array.from(
+    const segments = Array.from(
       { length: 40 },
       (_, index) => `section-${index}`,
-    ).join('//');
-    const expected = Array.from(
-      { length: 40 },
-      (_, index) => `section-${index}`,
-    ).join('/');
+    );
 
-    expect(normalizeLatexPath(`./${longPath}`)).toBe(expected);
+    expect(normalizeLatexPath(`./${segments.join('//')}`)).toBe(
+      segments.join('/'),
+    );
   });
 });
 
 describe('isPathWithin', () => {
-  it('treats the target equal to base as contained', () => {
-    expect(isPathWithin('/base', '/base')).toBe(true);
-  });
-
-  it('treats a strict descendant as contained', () => {
-    expect(isPathWithin('/base', '/base/child/file.tex')).toBe(true);
-  });
-
-  it('rejects a sibling directory that merely shares a string prefix', () => {
-    expect(isPathWithin('/base', '/base-other/file.tex')).toBe(false);
-  });
-
-  it('rejects a parent-traversal escape, including via backslashes', () => {
-    expect(isPathWithin('/base/child', '/base/child/../../etc/passwd')).toBe(
+  it.each([
+    // The target equal to base counts as contained.
+    ['/base', '/base', true],
+    ['/base', '/base/child/file.tex', true],
+    // A sibling directory that merely shares a string prefix is outside.
+    ['/base', '/base-other/file.tex', false],
+    // Parent-traversal escapes, including via backslashes.
+    ['/base/child', '/base/child/../../etc/passwd', false],
+    [
+      String.raw`C:\base\child`,
+      String.raw`C:\base\child\..\..\etc\passwd`,
       false,
-    );
-    expect(
-      isPathWithin(
-        String.raw`C:\base\child`,
-        String.raw`C:\base\child\..\..\etc\passwd`,
-      ),
-    ).toBe(false);
-  });
-
-  it('rejects an absolute target unrelated to a relative base', () => {
-    expect(isPathWithin('base/child', '/etc/passwd')).toBe(false);
+    ],
+    // An absolute target unrelated to a relative base.
+    ['base/child', '/etc/passwd', false],
+  ])('isPathWithin(%j, %j) → %s', (base, target, expected) => {
+    expect(isPathWithin(base, target)).toBe(expected);
   });
 });
 
 describe('isStrictlyWithin', () => {
-  it('rejects the target equal to base', () => {
-    expect(isStrictlyWithin('/base', '/base')).toBe(false);
-  });
-
-  it('accepts a strict descendant', () => {
-    expect(isStrictlyWithin('/base', '/base/child/file.tex')).toBe(true);
-  });
-
-  it('rejects a sibling directory that merely shares a string prefix', () => {
-    expect(isStrictlyWithin('/base', '/base-other/file.tex')).toBe(false);
-  });
-
-  it('rejects a parent-traversal escape', () => {
-    expect(
-      isStrictlyWithin('/base/child', '/base/child/../../etc/passwd'),
-    ).toBe(false);
+  it.each([
+    // The target equal to base is NOT strictly within.
+    ['/base', '/base', false],
+    ['/base', '/base/child/file.tex', true],
+    ['/base', '/base-other/file.tex', false],
+    ['/base/child', '/base/child/../../etc/passwd', false],
+  ])('isStrictlyWithin(%j, %j) → %s', (base, target, expected) => {
+    expect(isStrictlyWithin(base, target)).toBe(expected);
   });
 });
 

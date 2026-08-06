@@ -544,14 +544,11 @@ describe('escapeTextttUnderscores', () => {
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(escapeTextttUnderscores(input), expected);
   });
-});
 
-describe('escapeTextttUnderscores integration', () => {
   it('runs as part of applyReplacements', () => {
     const input = 'See \\texttt{file_name} for details';
     const expected = 'See \\texttt{file\\_name} for details';
-    const result = apply(input, EQUATION_STYLE_REPLACEMENTS);
-    assert.strictEqual(result, expected);
+    assert.strictEqual(apply(input, EQUATION_STYLE_REPLACEMENTS), expected);
   });
 });
 

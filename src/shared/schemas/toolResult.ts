@@ -1,11 +1,6 @@
-// Third-party imports
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 
-// Local imports - shared schemas
 import { LineChangesSchema, LineCountSchema } from './lineChanges';
-
-// Type imports
-import type { ZodIssue } from 'zod';
 
 /**
  * Base schema for file references (metadata only, no binary data).

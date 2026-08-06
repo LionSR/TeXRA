@@ -36,6 +36,18 @@ class SuspendNode extends BaseNode<{ count: number }> {
   }
 }
 
+type ExecutionStore = ReturnType<typeof getExecutionStore>;
+
+function expectStoredRecord(
+  store: ExecutionStore,
+  executionId: ExecutionId,
+  expected: Record<string, unknown>,
+): Promise<void> {
+  return expect(
+    store.read<FlowRecord>(flowKey(executionId)),
+  ).resolves.toMatchObject(expected);
+}
+
 describe('PersistedFlow', () => {
   // Regression for the executionKvFiles leak fix: consumers that recognize a
   // flow record's KV filename (e.g. `isKVFile`) now import FLOW_KEY_PREFIX
@@ -52,9 +64,7 @@ describe('PersistedFlow', () => {
 
     await flow.run({ count: 0 });
 
-    await expect(
-      store.read<FlowRecord>(flowKey(executionId)),
-    ).resolves.toMatchObject({
+    await expectStoredRecord(store, executionId, {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       cursor: { nextNodeId: null, lastAction: 'complete' },
       nodes: [{ action: 'complete' }],
@@ -81,9 +91,7 @@ describe('PersistedFlow', () => {
 
     await flow.run({ count: 999, continue: true });
 
-    await expect(
-      store.read<FlowRecord>(flowKey(executionId)),
-    ).resolves.toMatchObject({
+    await expectStoredRecord(store, executionId, {
       shared: { count: 1, continue: false },
       cursor: { nextNodeId: null, lastAction: 'complete' },
       nodes: [{ action: 'complete', nodeId: 'start/again' }],
@@ -109,9 +117,7 @@ describe('PersistedFlow', () => {
 
     await flow.run({ count: 999, continue: true });
 
-    await expect(
-      store.read<FlowRecord>(flowKey(executionId)),
-    ).resolves.toMatchObject({
+    await expectStoredRecord(store, executionId, {
       shared: { count: 2, continue: false },
       cursor: { nextNodeId: null, lastAction: 'complete' },
       nodes: [
@@ -128,9 +134,7 @@ describe('PersistedFlow', () => {
 
     await expect(flow.run({ count: 0 })).resolves.toBe(FlowTransition.WAITING);
 
-    await expect(
-      store.read<FlowRecord>(flowKey(executionId)),
-    ).resolves.toMatchObject({
+    await expectStoredRecord(store, executionId, {
       shared: { count: 1 },
       cursor: {
         nextNodeId: 'start',
@@ -142,9 +146,7 @@ describe('PersistedFlow', () => {
     await expect(flow.run({ count: 999 })).resolves.toBe(
       FlowTransition.WAITING,
     );
-    await expect(
-      store.read<FlowRecord>(flowKey(executionId)),
-    ).resolves.toMatchObject({
+    await expectStoredRecord(store, executionId, {
       shared: { count: 2 },
       cursor: {
         nextNodeId: 'start',

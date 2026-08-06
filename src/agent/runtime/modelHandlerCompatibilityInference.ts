@@ -76,7 +76,8 @@ export function inferAndLogPersistedModelHandlerCompatibilityKey(
 }
 
 function stringValue(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  if (typeof value !== 'string') return undefined;
+  return value.trim() || undefined;
 }
 
 function currentModelFromRawSharedState(

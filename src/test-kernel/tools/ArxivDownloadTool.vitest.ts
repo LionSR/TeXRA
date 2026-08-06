@@ -1,8 +1,5 @@
-// Node imports
-import * as assert from 'node:assert';
-
 // Third-party imports
-import { describe, it, afterEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const gitignoreMock = vi.hoisted(() => ({
   ignoredPaths: new Set<string>(),
@@ -57,12 +54,9 @@ describe('ArxivDownloadTool', () => {
   it('returns download summary and a listing of the extracted files', async () => {
     let receivedId: string | undefined;
     let receivedAutoIndent: boolean | undefined;
-    let validateCalls = 0;
+    const validateId = vi.fn(() => null);
 
-    processor.validateId = () => {
-      validateCalls += 1;
-      return null;
-    };
+    processor.validateId = validateId;
 
     processor.downloadSource = async (id, options) => {
       receivedId = id;
@@ -85,13 +79,13 @@ describe('ArxivDownloadTool', () => {
     const tool = new ArxivDownloadTool();
     const result = await tool.call({ id: '2401.12345v2', autoIndent: false });
 
-    assert.strictEqual(validateCalls, 1);
-    assert.strictEqual(receivedId, '2401.12345v2');
-    assert.strictEqual(receivedAutoIndent, false);
-    assert.strictEqual(result.summary, 'arXiv source downloaded to sample');
-    assert.ok(result.output?.includes('Directory listing for sample'));
-    assert.ok(result.output?.includes('file main.tex'));
-    assert.ok(!result.output?.includes('.gitignore'));
-    assert.ok(!result.output?.includes('node_modules'));
+    expect(validateId).toHaveBeenCalledTimes(1);
+    expect(receivedId).toBe('2401.12345v2');
+    expect(receivedAutoIndent).toBe(false);
+    expect(result.summary).toBe('arXiv source downloaded to sample');
+    expect(result.output).toContain('Directory listing for sample');
+    expect(result.output).toContain('file main.tex');
+    expect(result.output).not.toContain('.gitignore');
+    expect(result.output).not.toContain('node_modules');
   });
 });

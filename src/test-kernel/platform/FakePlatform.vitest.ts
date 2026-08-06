@@ -40,12 +40,13 @@ async function createProviderCase(
   }
 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-fs-'));
+  const resolve = (testPath: string): string =>
+    path.join(root, testPath.slice(1));
   return {
     name,
     provider: nodeFilesystem,
-    resolve: (testPath) => path.join(root, testPath.slice(1)),
-    expectedRealPath: (testPath) =>
-      fs.realpath(path.join(root, testPath.slice(1))),
+    resolve,
+    expectedRealPath: (testPath) => fs.realpath(resolve(testPath)),
     cleanup: () => fs.rm(root, { recursive: true, force: true }),
   };
 }

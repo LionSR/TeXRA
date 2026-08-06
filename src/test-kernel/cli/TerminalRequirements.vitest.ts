@@ -7,6 +7,9 @@ import {
 } from '@cli/runtime/terminalRequirements';
 
 describe('terminal requirement diagnostics', () => {
+  const DUMB_TERMINAL_HINT =
+    'texra chat needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`.';
+
   it('classifies interactive terminal failures once for CLI entry points', () => {
     const cases: ReadonlyArray<{
       input: Parameters<typeof interactiveTerminalFailure>[0];
@@ -36,16 +39,14 @@ describe('terminal requirement diagnostics', () => {
   });
 
   it('gives interactive PTY users an exact TERM recovery hint', () => {
-    expect(dumbTerminalMessage('chat')).toBe(
-      'texra chat needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`.',
-    );
+    expect(dumbTerminalMessage('chat')).toBe(DUMB_TERMINAL_HINT);
   });
 
   it('keeps the non-interactive fallback when one applies', () => {
     expect(
       dumbTerminalMessage('chat', { nonInteractiveFallback: '`texra run`' }),
     ).toBe(
-      'texra chat needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
+      `${DUMB_TERMINAL_HINT} For non-interactive runs, use \`texra run\`.`,
     );
   });
 
@@ -63,7 +64,7 @@ describe('terminal requirement diagnostics', () => {
         dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
       }),
     ).toBe(
-      'texra chat needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
+      `${DUMB_TERMINAL_HINT} For non-interactive runs, use \`texra run\`.`,
     );
   });
 });

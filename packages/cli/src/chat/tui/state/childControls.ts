@@ -58,30 +58,23 @@ export function resolveChildListTarget({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildListTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const activeHasRows = hasChildListItems(
-    activeStreamId,
-    childStreamEntries,
-    streams,
-  );
-  if (!activeStreamId || activeHasRows) {
-    return {
-      streamId: activeStreamId,
-      slice: activeSlice,
-    };
-  }
-
-  const ancestor = nearestActiveStreamAncestor({
-    activeStreamId,
-    parentStream,
-    values: streams,
-    canUseValue: (_slice, streamId) =>
-      hasChildListItems(streamId, childStreamEntries, streams),
-  });
-  if (ancestor) {
-    return {
-      streamId: ancestor.streamId,
-      slice: ancestor.value,
-    };
+  if (
+    activeStreamId &&
+    !hasChildListItems(activeStreamId, childStreamEntries, streams)
+  ) {
+    const ancestor = nearestActiveStreamAncestor({
+      activeStreamId,
+      parentStream,
+      values: streams,
+      canUseValue: (_slice, streamId) =>
+        hasChildListItems(streamId, childStreamEntries, streams),
+    });
+    if (ancestor) {
+      return {
+        streamId: ancestor.streamId,
+        slice: ancestor.value,
+      };
+    }
   }
 
   return {

@@ -59,44 +59,36 @@ function installLifecycle(argv: string[] = []) {
 }
 
 describe('desktop protocol callbacks', () => {
-  it('parses texra auth callback URLs into host-neutral callback parts', () => {
-    expect(
-      parseDesktopProtocolCallback(
-        'texra://texra-ai.texra/auth-callback?state=abc&code=authorization-code',
-      ),
-    ).toEqual({
-      rawUrl:
-        'texra://texra-ai.texra/auth-callback?state=abc&code=authorization-code',
+  it.each([
+    {
+      name: 'parses texra auth callback URLs into host-neutral callback parts',
+      url: 'texra://texra-ai.texra/auth-callback?state=abc&code=authorization-code',
       path: '/auth-callback',
       query: 'state=abc&code=authorization-code',
-    });
-  });
-
-  it('accepts compact texra://auth-callback URLs from argv handlers', () => {
-    expect(parseDesktopProtocolCallback('texra://auth-callback')).toEqual({
-      rawUrl: 'texra://auth-callback',
+    },
+    {
+      name: 'accepts compact texra://auth-callback URLs from argv handlers',
+      url: 'texra://auth-callback',
       path: '/auth-callback',
       query: '',
-    });
-  });
-
-  it('accepts compact callback URLs with a trailing slash', () => {
-    expect(parseDesktopProtocolCallback('texra://auth-callback/')).toEqual({
-      rawUrl: 'texra://auth-callback/',
+    },
+    {
+      name: 'accepts compact callback URLs with a trailing slash',
+      url: 'texra://auth-callback/',
       path: '/auth-callback',
       query: '',
-    });
-  });
-
-  it('accepts full callback URLs with a trailing slash', () => {
-    expect(
-      parseDesktopProtocolCallback(
-        'texra://texra-ai.texra/auth-callback/?state=abc',
-      ),
-    ).toEqual({
-      rawUrl: 'texra://texra-ai.texra/auth-callback/?state=abc',
+    },
+    {
+      name: 'accepts full callback URLs with a trailing slash',
+      url: 'texra://texra-ai.texra/auth-callback/?state=abc',
       path: '/auth-callback',
       query: 'state=abc',
+    },
+  ])('$name', ({ url, path, query }) => {
+    expect(parseDesktopProtocolCallback(url)).toEqual({
+      rawUrl: url,
+      path,
+      query,
     });
   });
 

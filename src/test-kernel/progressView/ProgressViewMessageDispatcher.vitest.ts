@@ -162,6 +162,18 @@ function seededPermission(): PermissionState {
   } as PermissionState;
 }
 
+function seedStreamWithLogListToggle(streamId: StreamTabId): void {
+  appState.get().streamById.set(streamId, {
+    name: streamId,
+    label: streamId,
+    agentCategory: AgentCategory.Workflow,
+    creationTimestamp: 1,
+  });
+  webviewStorage.set(logListStateKey(streamId), {
+    groupToggleStates: [['group-1', true]],
+  });
+}
+
 describe('progressView dispatchMessage (createDispatcher migration)', () => {
   beforeEach(() => {
     resetProgressState();
@@ -197,15 +209,7 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
 
   it("DELETE_ALL clears every remaining stream's persisted LogList toggle state", () => {
     const streamId = 'stream-delete-all' as StreamTabId;
-    appState.get().streamById.set(streamId, {
-      name: streamId,
-      label: 'stream-delete-all',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
-    });
-    webviewStorage.set(logListStateKey(streamId), {
-      groupToggleStates: [['group-1', true]],
-    });
+    seedStreamWithLogListToggle(streamId);
     expect(webviewStorage.get(logListStateKey(streamId))).toBeDefined();
 
     const handled = dispatchMessage(
@@ -219,15 +223,7 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
 
   it("DELETE_STREAM clears that stream's persisted LogList toggle state", () => {
     const streamId = 'stream-delete-one' as StreamTabId;
-    appState.get().streamById.set(streamId, {
-      name: streamId,
-      label: 'stream-delete-one',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
-    });
-    webviewStorage.set(logListStateKey(streamId), {
-      groupToggleStates: [['group-1', true]],
-    });
+    seedStreamWithLogListToggle(streamId);
 
     const handled = dispatchMessage(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: streamId },
@@ -346,6 +342,11 @@ describe('dispatchProgressViewOutbound Unsupported-command gating (@shared/utils
 // `NODE_ENV=test`, so `assertOutboundMessage`/`assertKnownOutboundMessage`
 // are always in their dev/test-assertion (throwing) mode here.
 describe('assertOutboundMessage / assertKnownOutboundMessage (#8123)', () => {
+  const KNOWN_MESSAGE_SCHEMAS = [
+    MainViewMessageSchema,
+    ProgressViewOutboundMessageSchema,
+  ];
+
   it('does not throw for a well-formed MainView outbound message', () => {
     expect(() =>
       assertOutboundMessage(MainViewMessageSchema, {
@@ -368,28 +369,30 @@ describe('assertOutboundMessage / assertKnownOutboundMessage (#8123)', () => {
 
   it('lets a command unrecognized by any listed domain pass through unchecked (desktop-only messages)', () => {
     expect(() =>
-      assertKnownOutboundMessage(
-        [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
-        { command: 'desktop:showPdf', title: 'paper.pdf', pdfPath: '/x.pdf' },
-      ),
+      assertKnownOutboundMessage(KNOWN_MESSAGE_SCHEMAS, {
+        command: 'desktop:showPdf',
+        title: 'paper.pdf',
+        pdfPath: '/x.pdf',
+      }),
     ).not.toThrow();
   });
 
-  it("throws when a command matches a known domain but fails that domain's own validation", () => {
+  it.each([
+    {
+      name: "a command matches a known domain but fails that domain's own validation",
+      // Missing `activeStream`, required by the SET_ACTIVE_STREAM schema.
+      message: { command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM },
+    },
+    {
+      name: 'a bad discriminator is nested inside a matched command (UPDATE_PERMISSION.action), not just a top-level unknown command',
+      message: {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'bogus',
+      },
+    },
+  ])('throws when $name', ({ message }) => {
     expect(() =>
-      assertKnownOutboundMessage(
-        [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
-        { command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM }, // missing `activeStream`
-      ),
-    ).toThrow(/Outbound message failed schema validation/);
-  });
-
-  it('throws for a bad discriminator nested inside a matched command (UPDATE_PERMISSION.action), not just a top-level unknown command', () => {
-    expect(() =>
-      assertKnownOutboundMessage(
-        [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
-        { command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION, action: 'bogus' },
-      ),
+      assertKnownOutboundMessage(KNOWN_MESSAGE_SCHEMAS, message),
     ).toThrow(/Outbound message failed schema validation/);
   });
 });

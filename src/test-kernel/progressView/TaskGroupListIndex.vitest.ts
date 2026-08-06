@@ -15,6 +15,7 @@ import {
   type LogMessageData,
   type StreamTabId,
   type TaskGroup,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 
 // Local file imports
@@ -62,15 +63,49 @@ function createMessage(
 function createGroup(
   id: string,
   status: TaskGroup['status'],
-  options: Partial<Pick<TaskGroup, 'kind' | 'name'>> = {},
+  overrides: Partial<TaskGroup> = {},
 ): TaskGroup {
+  return { id, name: id, startTime: 1, status, ...overrides };
+}
+
+function runGroup(name: string, overrides: Partial<TaskGroup> = {}): TaskGroup {
+  return createGroup('run', STREAM_PHASE.RUNNING, { name, ...overrides });
+}
+
+function workflowTaskMessage(
+  groupId: string,
+  id: string,
+  timestamp: number,
+  data: WorkflowCallProgress,
+  level: LogMessageData['level'] = LOG_LEVELS.INFO,
+): LogMessageData {
   return {
     id,
-    name: options.name ?? id,
-    startTime: 1,
-    status,
-    ...(options.kind !== undefined ? { kind: options.kind } : {}),
+    text: data.id,
+    timestamp,
+    level,
+    groupId,
+    messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+    data,
   };
+}
+
+function groupHeader(
+  list: TaskGroupListInternals,
+  groupId: string,
+): Element | null | undefined {
+  return list.shadowRoot?.querySelector(
+    `#${GROUP_DOM_IDS.HEADER_PREFIX}${groupId}`,
+  );
+}
+
+function groupContent(
+  list: TaskGroupListInternals,
+  groupId: string,
+): Element | null | undefined {
+  return list.shadowRoot?.querySelector(
+    `#${GROUP_DOM_IDS.CONTENT_PREFIX}${groupId}`,
+  );
 }
 
 function createList(messages: LogMessageData[]): TaskGroupListInternals {
@@ -212,23 +247,46 @@ describe('task-group-list ungrouped message indexes', () => {
     expect(list.index.timeline).toHaveLength(1);
   });
 
-  it('bounds top-level timeline DOM for large ungrouped streams', async () => {
-    const messages = Array.from({ length: 130 }, (_, index) =>
-      createMessage(`m${index}`, `entry ${index}`, index),
+  it.each([
+    {
+      name: 'top-level timeline DOM for large ungrouped streams',
+      revealKind: 'timeline',
+      total: 130,
+      shown: 120,
+      hidden: '10',
+      grouped: false,
+    },
+    {
+      name: 'rendered message DOM inside large groups',
+      revealKind: 'messages',
+      total: 450,
+      shown: 400,
+      hidden: '50',
+      grouped: true,
+    },
+  ])('bounds $name', async ({ revealKind, total, shown, hidden, grouped }) => {
+    const group = createGroup('g1', STREAM_PHASE.RUNNING);
+    const messages = Array.from({ length: total }, (_, index) =>
+      createMessage(
+        `m${index}`,
+        `entry ${index}`,
+        index,
+        grouped ? group.id : undefined,
+      ),
     );
 
-    const list = await renderList([], messages);
+    const list = await renderList(grouped ? [group] : [], messages);
 
     expect(list.shadowRoot?.querySelectorAll('[data-log-id]')).toHaveLength(
-      120,
+      shown,
     );
     expect(list.shadowRoot?.textContent).not.toContain('entry 0');
-    expect(list.shadowRoot?.textContent).toContain('entry 129');
+    expect(list.shadowRoot?.textContent).toContain(`entry ${total - 1}`);
 
     const revealButton = list.shadowRoot?.querySelector<HTMLButtonElement>(
-      '[data-reveal-kind="timeline"]',
+      `[data-reveal-kind="${revealKind}"]`,
     );
-    expect(revealButton?.dataset.hiddenCount).toBe('10');
+    expect(revealButton?.dataset.hiddenCount).toBe(hidden);
     // Regression coverage: the reveal control renders as a themed
     // <wa-button>, not a hand-rolled native <button> (see logEntryStyles.ts).
     expect(revealButton?.tagName).toBe('WA-BUTTON');
@@ -237,37 +295,9 @@ describe('task-group-list ungrouped message indexes', () => {
     await list.updateComplete;
 
     expect(list.shadowRoot?.querySelectorAll('[data-log-id]')).toHaveLength(
-      130,
+      total,
     );
     expect(list.shadowRoot?.textContent).toContain('entry 0');
-  });
-
-  it('bounds rendered message DOM inside large groups', async () => {
-    const group = createGroup('g1', STREAM_PHASE.RUNNING);
-    const messages = Array.from({ length: 450 }, (_, index) =>
-      createMessage(`m${index}`, `group entry ${index}`, index, group.id),
-    );
-
-    const list = await renderList([group], messages);
-
-    expect(list.shadowRoot?.querySelectorAll('[data-log-id]')).toHaveLength(
-      400,
-    );
-    expect(list.shadowRoot?.textContent).not.toContain('group entry 0');
-    expect(list.shadowRoot?.textContent).toContain('group entry 449');
-
-    const revealButton = list.shadowRoot?.querySelector<HTMLButtonElement>(
-      '[data-reveal-kind="messages"]',
-    );
-    expect(revealButton?.dataset.hiddenCount).toBe('50');
-
-    revealButton?.click();
-    await list.updateComplete;
-
-    expect(list.shadowRoot?.querySelectorAll('[data-log-id]')).toHaveLength(
-      450,
-    );
-    expect(list.shadowRoot?.textContent).toContain('group entry 0');
   });
 
   it('resets expanded render windows when leaving terminal mode', async () => {
@@ -328,20 +358,14 @@ describe('task-group-list orphan re-rooting', () => {
     const list = createList([]);
     // "run" points at a parent that is NOT in the set — e.g. a cross-trace
     // stage id this stream never recorded. It must still render.
-    const run: TaskGroup = {
-      id: 'run',
-      name: 'Run: subagent',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
+    const run = runGroup('Run: subagent', {
       parentGroupId: 'phantom-orchestrator-stage',
-    };
-    const init: TaskGroup = {
-      id: 'init',
+    });
+    const init = createGroup('init', STREAM_PHASE.COMPLETED, {
       name: 'Init',
       startTime: 2,
-      status: STREAM_PHASE.COMPLETED,
       parentGroupId: 'run',
-    };
+    });
     const scratchpad = createMessage('m1', 'scratchpad', 3, 'init');
 
     list.index.rebuildTree([run, init], [scratchpad]);
@@ -362,13 +386,9 @@ describe('task-group-list orphan re-rooting', () => {
     // A group with a dangling parent is promoted to a tree root; the renderer
     // must give it the root container (keyed on tree position), not the
     // collapsible <details> layout it would get from its raw parentGroupId.
-    const run: TaskGroup = {
-      id: 'run',
-      name: 'Run: subagent',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
+    const run = runGroup('Run: subagent', {
       parentGroupId: 'phantom-orchestrator-stage',
-    };
+    });
     const list = await renderList([run], []);
 
     // Root layout emits a div.log-run with data-run-id; child groups never do
@@ -389,72 +409,53 @@ describe('task-group-list orphan re-rooting', () => {
 // completed one.
 describe('task-group-list status icon (#7993 step 3)', () => {
   it('formats round group titles with the shared one-based label', async () => {
-    const parent: TaskGroup = {
-      id: 'run',
-      name: 'Run: reflection',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
-    };
-    const round: TaskGroup = {
-      id: 'round-0',
+    const parent = runGroup('Run: reflection');
+    const round = createGroup('round-0', STREAM_PHASE.RUNNING, {
       name: 'r0',
       kind: 'round',
       index: 0,
       total: 3,
       startTime: 2,
-      status: STREAM_PHASE.RUNNING,
       parentGroupId: 'run',
-    };
+    });
 
     const list = await renderList([parent, round], []);
-    const title = list.shadowRoot
-      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 .group-title`)
-      ?.textContent?.trim();
-    const statusLabel = list.shadowRoot
-      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 wa-icon`)
-      ?.getAttribute('label');
+    const header = groupHeader(list, 'round-0');
 
-    expect(title).toBe('r1/3');
-    expect(statusLabel).toBe('Running');
+    expect(header?.querySelector('.group-title')?.textContent?.trim()).toBe(
+      'r1/3',
+    );
+    expect(header?.querySelector('wa-icon')?.getAttribute('label')).toBe(
+      'Running',
+    );
   });
 
   it('renders a distinct icon for completed, cancelled, and failed groups', async () => {
-    const parent: TaskGroup = {
-      id: 'run',
-      name: 'Run: workflow',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
-    };
+    const parent = runGroup('Run: workflow');
     const groups: TaskGroup[] = [
       parent,
-      {
-        id: 'completed-phase',
+      createGroup('completed-phase', STREAM_PHASE.COMPLETED, {
         name: 'Completed phase',
         startTime: 2,
-        status: STREAM_PHASE.COMPLETED,
         parentGroupId: 'run',
-      },
-      {
-        id: 'cancelled-phase',
+      }),
+      createGroup('cancelled-phase', STREAM_PHASE.CANCELLED, {
         name: 'Cancelled phase',
         startTime: 3,
-        status: STREAM_PHASE.CANCELLED,
         parentGroupId: 'run',
-      },
-      {
-        id: 'failed-phase',
+      }),
+      createGroup('failed-phase', STREAM_PHASE.FAILED, {
         name: 'Failed phase',
         startTime: 4,
-        status: STREAM_PHASE.FAILED,
         parentGroupId: 'run',
-      },
+      }),
     ];
 
     const list = await renderList(groups, []);
 
     const iconFor = (groupId: string): string | null =>
-      list.shadowRoot
-        ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}${groupId} wa-icon`)
+      groupHeader(list, groupId)
+        ?.querySelector('wa-icon')
         ?.getAttribute('name') ?? null;
 
     expect(iconFor('completed-phase')).toBe('check');
@@ -469,49 +470,31 @@ describe('task-group-list status icon (#7993 step 3)', () => {
 // the renderer does not parse status prefixes from prose.
 describe('task-group-list workflow-script phase rendering (#8722)', () => {
   it('renders a phase group with its (i/n) header and call cards beneath', async () => {
-    const run: TaskGroup = {
-      id: 'run',
-      name: 'Run: workflow',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
-    };
-    const phase: TaskGroup = {
-      id: 'phase-review',
+    const run = runGroup('Run: workflow');
+    const phase = createGroup('phase-review', STREAM_PHASE.RUNNING, {
       name: 'Review',
       startTime: 2,
-      status: STREAM_PHASE.RUNNING,
       parentGroupId: 'run',
       kind: 'phase',
       index: 1,
       total: 3,
-    };
+    });
     const messages: LogMessageData[] = [
-      {
-        id: 'agent-a',
-        text: 'reviewer',
-        timestamp: 3,
-        level: LOG_LEVELS.INFO,
-        groupId: 'phase-review',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: {
-          id: 'reviewer',
-          label: 'Review manuscript',
-          phase: 'Review',
-          status: 'completed',
-          childStreamId: 'reviewer@claude-opus-4#child-1',
-          model: 'claude-opus-4',
-          durationMs: 12_300,
-          totalCostUsd: 0.04,
-        },
-      },
-      {
-        id: 'agent-b',
-        text: 'critic',
-        timestamp: 4,
-        level: LOG_LEVELS.ERROR,
-        groupId: 'phase-review',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: {
+      workflowTaskMessage('phase-review', 'agent-a', 3, {
+        id: 'reviewer',
+        label: 'Review manuscript',
+        phase: 'Review',
+        status: 'completed',
+        childStreamId: 'reviewer@claude-opus-4#child-1',
+        model: 'claude-opus-4',
+        durationMs: 12_300,
+        totalCostUsd: 0.04,
+      }),
+      workflowTaskMessage(
+        'phase-review',
+        'agent-b',
+        4,
+        {
           id: 'critic',
           label: 'Check argument',
           phase: 'Review',
@@ -519,66 +502,44 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
           error: 'timed out',
           totalCostUsd: 0.01,
         },
-      },
-      {
-        id: 'agent-c',
-        text: 'deferred',
-        timestamp: 5,
-        level: LOG_LEVELS.INFO,
-        groupId: 'phase-review',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: {
-          id: 'deferred',
-          label: 'Deferred check',
-          phase: 'Review',
-          status: 'skipped',
-          reason: 'not-reached',
-        },
-      },
-      {
-        id: 'agent-d',
-        text: 'stopped',
-        timestamp: 6,
-        level: LOG_LEVELS.INFO,
-        groupId: 'phase-review',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: {
-          id: 'stopped',
-          label: 'Stopped review',
-          phase: 'Review',
-          status: 'skipped',
-          reason: 'user',
-          model: 'kimi-k2',
-          durationMs: 2_000,
-          totalCostUsd: 0.02,
-        },
-      },
+        LOG_LEVELS.ERROR,
+      ),
+      workflowTaskMessage('phase-review', 'agent-c', 5, {
+        id: 'deferred',
+        label: 'Deferred check',
+        phase: 'Review',
+        status: 'skipped',
+        reason: 'not-reached',
+      }),
+      workflowTaskMessage('phase-review', 'agent-d', 6, {
+        id: 'stopped',
+        label: 'Stopped review',
+        phase: 'Review',
+        status: 'skipped',
+        reason: 'user',
+        model: 'kimi-k2',
+        durationMs: 2_000,
+        totalCostUsd: 0.02,
+      }),
     ];
 
     const list = await renderList([run, phase], messages);
 
     // Header shows the phase label plus the one-based position, matching the
     // CLI's `(index+1/total)` diamond header.
-    const title = list.shadowRoot
-      ?.querySelector(
-        `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-review .group-title`,
-      )
-      ?.textContent?.trim();
-    expect(title).toBe('Review (2/3)');
+    const header = groupHeader(list, 'phase-review');
+    expect(header?.querySelector('.group-title')?.textContent?.trim()).toBe(
+      'Review (2/3)',
+    );
 
     // The header also folds its own cards into a completion count. All four
     // are terminal here (completed / failed / skipped x2).
-    const progress = list.shadowRoot
-      ?.querySelector(
-        `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-review .group-progress`,
-      )
-      ?.textContent?.trim();
-    expect(progress).toBe('4/4');
+    expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
+      '4/4',
+    );
 
     // Each task is one structured card with its status and terminal metadata.
-    const content = list.shadowRoot?.querySelector(
-      `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-review`,
-    );
+    const content = groupContent(list, 'phase-review');
     expect(content?.textContent).toContain('Review manuscript');
     expect(content?.textContent).toContain('Finished');
     expect(content?.textContent).toContain('claude-opus-4 · 12s · $0.040');
@@ -623,26 +584,17 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {
-    const run: TaskGroup = {
-      id: 'run',
-      name: 'Run: workflow',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
-    };
-    const phase: TaskGroup = {
-      id: 'phase-solo',
+    const run = runGroup('Run: workflow');
+    const phase = createGroup('phase-solo', STREAM_PHASE.RUNNING, {
       name: 'Solo phase',
       startTime: 2,
-      status: STREAM_PHASE.RUNNING,
       parentGroupId: 'run',
       kind: 'phase',
-    };
+    });
 
     const list = await renderList([run, phase], []);
 
-    const header = list.shadowRoot?.querySelector(
-      `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-solo`,
-    );
+    const header = groupHeader(list, 'phase-solo');
     expect(header?.querySelector('.group-title')?.textContent?.trim()).toBe(
       'Solo phase',
     );
@@ -651,69 +603,38 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
   });
 
   it('tracks an in-flight phase fold and drops the redundant phase chip', async () => {
-    const run: TaskGroup = {
-      id: 'run',
-      name: 'Run: workflow',
-      startTime: 1,
-      status: STREAM_PHASE.RUNNING,
-    };
-    const phase: TaskGroup = {
-      id: 'phase-map',
+    const run = runGroup('Run: workflow');
+    const phase = createGroup('phase-map', STREAM_PHASE.RUNNING, {
       name: 'Map',
       startTime: 2,
-      status: STREAM_PHASE.RUNNING,
       parentGroupId: 'run',
       kind: 'phase',
       index: 0,
       total: 3,
-    };
+    });
     const messages: LogMessageData[] = [
-      {
-        id: 'task-a',
-        text: 'seams',
-        timestamp: 3,
-        level: LOG_LEVELS.INFO,
-        groupId: 'phase-map',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: {
-          id: 'seams',
-          label: 'Map the seams',
-          phase: 'Map',
-          status: 'completed',
-          durationMs: 72_000,
-        },
-      },
-      {
-        id: 'task-b',
-        text: 'contracts',
-        timestamp: 4,
-        level: LOG_LEVELS.INFO,
-        groupId: 'phase-map',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: {
-          id: 'contracts',
-          label: 'Read the contracts',
-          phase: 'Map',
-          status: 'running',
-        },
-      },
+      workflowTaskMessage('phase-map', 'task-a', 3, {
+        id: 'seams',
+        label: 'Map the seams',
+        phase: 'Map',
+        status: 'completed',
+        durationMs: 72_000,
+      }),
+      workflowTaskMessage('phase-map', 'task-b', 4, {
+        id: 'contracts',
+        label: 'Read the contracts',
+        phase: 'Map',
+        status: 'running',
+      }),
       // A malformed row must drop out of the fold rather than throw.
-      {
-        id: 'task-bad',
-        text: 'broken',
-        timestamp: 5,
-        level: LOG_LEVELS.INFO,
-        groupId: 'phase-map',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        data: { id: 'broken' },
-      },
+      workflowTaskMessage('phase-map', 'task-bad', 5, {
+        id: 'broken',
+      } as unknown as WorkflowCallProgress),
     ];
 
     const list = await renderList([run, phase], messages);
 
-    const header = list.shadowRoot?.querySelector(
-      `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-map`,
-    );
+    const header = groupHeader(list, 'phase-map');
     expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
       '1/2',
     );
@@ -722,9 +643,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       'circle',
     );
     // The enclosing header is the card's one home for its phase.
-    const content = list.shadowRoot?.querySelector(
-      `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-map`,
-    );
+    const content = groupContent(list, 'phase-map');
     expect(content?.querySelector('.workflow-task-phase')).toBeNull();
     expect(content?.querySelector('.workflow-task-details')).toBeNull();
     expect(content?.querySelector('wa-spinner')).toBeNull();

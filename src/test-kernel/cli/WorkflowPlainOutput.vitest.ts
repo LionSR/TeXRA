@@ -56,6 +56,24 @@ function readTask(
   };
 }
 
+function logMessage(
+  events: SessionEventHub,
+  message: string,
+  extras: Partial<{
+    stageId: string;
+    level: 'info' | 'debug';
+    messageType: string;
+  }> = {},
+): void {
+  emit(events, {
+    type: 'log',
+    stageId: 'phase-map',
+    level: 'info',
+    ...extras,
+    message,
+  });
+}
+
 function completeWorkflow(
   events: SessionEventHub,
   status:
@@ -107,24 +125,10 @@ describe('attachWorkflowPlainOutput', () => {
     // Resolving the navigation target updates the structured card but does not
     // change its human-readable line.
     emit(events, readTask('running', otherStreamId));
-    emit(events, {
-      type: 'log',
-      stageId: 'phase-map',
-      level: 'info',
-      message: 'Found two boundary cases.',
-    });
-    emit(events, {
-      type: 'log',
-      stageId: 'phase-map',
-      level: 'debug',
-      message: 'hidden debug detail',
-    });
-    emit(events, {
-      type: 'log',
-      stageId: 'phase-map',
-      level: 'info',
+    logMessage(events, 'Found two boundary cases.');
+    logMessage(events, 'hidden debug detail', { level: 'debug' });
+    logMessage(events, 'hidden internal detail', {
       messageType: MESSAGE_TYPES.INTERNAL,
-      message: 'hidden internal detail',
     });
     emit(events, readTask('completed', otherStreamId));
     emit(
@@ -150,12 +154,7 @@ describe('attachWorkflowPlainOutput', () => {
     expect(beforeWrite).toHaveBeenCalledTimes(lines.length);
 
     detach();
-    emit(events, {
-      type: 'log',
-      stageId: 'phase-map',
-      level: 'info',
-      message: 'after detach',
-    });
+    logMessage(events, 'after detach');
     expect(lines.at(-1)).toBe('Finished: proof-workflow');
   });
 
@@ -189,12 +188,7 @@ describe('attachWorkflowPlainOutput', () => {
       logId: 'loose',
       call: { id: 'loose', label: 'Loose check', status: 'planned' },
     });
-    emit(events, {
-      type: 'log',
-      stageId: 'run',
-      level: 'info',
-      message: 'Preparing the phase-less check.',
-    });
+    logMessage(events, 'Preparing the phase-less check.', { stageId: 'run' });
     emit(events, {
       type: 'workflow.call',
       stageId: 'phase-write',

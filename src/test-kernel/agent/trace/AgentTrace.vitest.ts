@@ -14,6 +14,15 @@ import {
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
+/** Collect every event a fresh trace emits while `act` runs. */
+function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
+  const trace = new TraceEmitter();
+  const events: AgentEvent[] = [];
+  trace.subscribe((event) => events.push(event));
+  act(trace);
+  return events;
+}
+
 // ---------------------------------------------------------------------------
 // StageMetadata
 // ---------------------------------------------------------------------------
@@ -26,21 +35,20 @@ describe('run-fact event vocabulary', () => {
 
 describe('TraceEmitter stage metadata', () => {
   it('emits typed stage metadata for round stages', () => {
-    const trace = new TraceEmitter();
-    const starts: StageStartEvent[] = [];
-    trace.subscribe((event) => {
-      if (event.type === 'stage.start') starts.push(event);
-    });
-
-    const stage = trace.openStage('r1', {
-      kind: 'round',
-      index: 1,
-      total: 3,
-    });
+    let stageId: string | undefined;
+    const starts = collectEvents((trace) => {
+      stageId = trace.openStage('r1', {
+        kind: 'round',
+        index: 1,
+        total: 3,
+      }).id;
+    }).filter(
+      (event): event is StageStartEvent => event.type === 'stage.start',
+    );
 
     expect(starts).toEqual([
       expect.objectContaining({
-        id: stage.id,
+        id: stageId,
         label: 'r1',
         kind: 'round',
         index: 1,
@@ -56,11 +64,9 @@ describe('TraceEmitter stage metadata', () => {
 
 describe('TraceEmitter responseFinalized', () => {
   it('emits a response.finalized event carrying the given text', () => {
-    const trace = new TraceEmitter();
-    const events: AgentEvent[] = [];
-    trace.subscribe((event) => events.push(event));
-
-    trace.responseFinalized('The answer is 2.');
+    const events = collectEvents((trace) => {
+      trace.responseFinalized('The answer is 2.');
+    });
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -71,17 +77,17 @@ describe('TraceEmitter responseFinalized', () => {
   });
 
   it('stamps the ambient stage id when no explicit stageId is given', () => {
-    const trace = new TraceEmitter();
-    const events: AgentEvent[] = [];
-    trace.subscribe((event) => events.push(event));
-
-    const stage = trace.openStage('r0', { kind: 'round' });
-    void stage.within(() => {
-      trace.responseFinalized('Final answer.');
+    let stageId: string | undefined;
+    const events = collectEvents((trace) => {
+      const stage = trace.openStage('r0', { kind: 'round' });
+      stageId = stage.id;
+      void stage.within(() => {
+        trace.responseFinalized('Final answer.');
+      });
     });
 
     const finalized = events.find((e) => e.type === 'response.finalized');
-    expect(finalized).toMatchObject({ stageId: stage.id });
+    expect(finalized).toMatchObject({ stageId });
   });
 });
 
@@ -93,71 +99,68 @@ type ToolUseCard = Parameters<typeof emitToolUseCard>[1];
 
 /** Emit a card on a fresh trace and return only its tool.start/tool.end events. */
 function collectToolEvents(card: ToolUseCard): AgentEvent[] {
-  const trace = new TraceEmitter();
-  const events: AgentEvent[] = [];
-  trace.subscribe((event) => events.push(event));
-
-  emitToolUseCard(trace, card);
-
-  return events.filter((e) => e.type === 'tool.start' || e.type === 'tool.end');
+  return collectEvents((trace) => emitToolUseCard(trace, card)).filter(
+    (e) => e.type === 'tool.start' || e.type === 'tool.end',
+  );
 }
 
 describe('emitToolUseCard', () => {
-  it('emits only tool.start when no status is passed (slow-tool path)', () => {
-    const toolEvents = collectToolEvents({
-      toolName: 'bash',
-      input: { command: 'ls' },
-    });
+  it.each<{ name: string; card: ToolUseCard }>([
+    {
+      name: 'no status is passed (slow-tool path)',
+      card: { toolName: 'bash', input: { command: 'ls' } },
+    },
+    {
+      name: 'status is explicitly in_progress',
+      card: {
+        toolName: 'bash',
+        input: { command: 'sleep' },
+        status: 'in_progress',
+      },
+    },
+  ])('emits only tool.start when $name', ({ card }) => {
+    const toolEvents = collectToolEvents(card);
 
     expect(toolEvents).toHaveLength(1);
     expect(toolEvents[0]?.type).toBe('tool.start');
   });
 
-  it('emits tool.start + tool.end when status is completed (fast-tool path)', () => {
-    const toolEvents = collectToolEvents({
-      toolName: 'todo_write',
-      input: { items: [] },
-      output: 'ok',
-      isError: false,
+  it.each<{ status: 'completed' | 'failed'; card: ToolUseCard }>([
+    {
       status: 'completed',
-    });
-
-    expect(toolEvents).toHaveLength(2);
-    expect(toolEvents[0]?.type).toBe('tool.start');
-    expect(toolEvents[1]?.type).toBe('tool.end');
-    if (toolEvents[1]?.type === 'tool.end') {
-      expect(toolEvents[1].status).toBe('completed');
-      // start and end share the same logId so the transcript can match them
-      const startLogId =
-        toolEvents[0]?.type === 'tool.start' ? toolEvents[0].logId : null;
-      expect(toolEvents[1].logId).toBe(startLogId);
-    }
-  });
-
-  it('emits tool.start + tool.end when status is failed', () => {
-    const toolEvents = collectToolEvents({
-      toolName: 'bash',
-      input: { command: 'false' },
-      isError: true,
+      card: {
+        toolName: 'todo_write',
+        input: { items: [] },
+        output: 'ok',
+        isError: false,
+        status: 'completed',
+      },
+    },
+    {
       status: 'failed',
-    });
+      card: {
+        toolName: 'bash',
+        input: { command: 'false' },
+        isError: true,
+        status: 'failed',
+      },
+    },
+  ])(
+    'emits tool.start + tool.end when status is $status (fast-tool path)',
+    ({ status, card }) => {
+      const toolEvents = collectToolEvents(card);
 
-    expect(toolEvents).toHaveLength(2);
-    if (toolEvents[1]?.type === 'tool.end') {
-      expect(toolEvents[1].status).toBe('failed');
-    }
-  });
-
-  it('does not emit tool.end when status is explicitly in_progress', () => {
-    const toolEvents = collectToolEvents({
-      toolName: 'bash',
-      input: { command: 'sleep' },
-      status: 'in_progress',
-    });
-
-    expect(toolEvents).toHaveLength(1);
-    expect(toolEvents[0]?.type).toBe('tool.start');
-  });
+      expect(toolEvents).toHaveLength(2);
+      const [start, end] = toolEvents;
+      expect(start?.type).toBe('tool.start');
+      expect(end?.type).toBe('tool.end');
+      if (start?.type === 'tool.start' && end?.type === 'tool.end') {
+        expect(end.status).toBe(status);
+        // start and end share the same logId so the transcript can match them
+        expect(end.logId).toBe(start.logId);
+      }
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -183,10 +186,10 @@ describe('logFileCategory', () => {
     disposeTrace();
   });
 
-  const capturedMessages = (): any[] => {
+  function capturedMessages(): any[] {
     const log = store.get('TestFileListLogger');
     return log?.getRange(0, log.head) ?? [];
-  };
+  }
 
   it('handles empty file array gracefully (no-op)', () => {
     logFileCategory(logger, 'Input Files', []);

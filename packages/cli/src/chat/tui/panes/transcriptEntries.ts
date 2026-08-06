@@ -48,7 +48,7 @@ export function trimAssistantTranscriptLead(text: string): string {
       continue;
     }
     const newline = /^[ \t]*\r?\n/.exec(text.slice(index));
-    if (newline?.[0]) {
+    if (newline) {
       index += newline[0].length;
       consumedInvisibleLead = true;
       continue;

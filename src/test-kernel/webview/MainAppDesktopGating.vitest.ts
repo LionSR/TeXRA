@@ -81,24 +81,16 @@ describe('MainApp desktop host gating', () => {
     mainViewState = await import('@webview/frontend/mainViewState');
   });
 
-  it('renders the latexdiffs section on the extension host', async () => {
-    const element = await mountMainApp({ desktop: false });
+  it.each([
+    { host: 'extension', desktop: false, visible: true },
+    { host: 'desktop', desktop: true, visible: false },
+  ])(
+    'gates the latexdiffs section and view header by host: $host',
+    async ({ desktop, visible }) => {
+      const element = await mountMainApp({ desktop });
 
-    expect(hasSection(element, 'latexdiffs-section')).toBe(true);
-  });
-
-  it('hides the latexdiffs section on the desktop host', async () => {
-    const element = await mountMainApp({ desktop: true });
-
-    expect(hasSection(element, 'latexdiffs-section')).toBe(false);
-  });
-
-  it('hides the view header on the desktop host but shows it otherwise', async () => {
-    const extensionHost = await mountMainApp({ desktop: false });
-    expect(hasSection(extensionHost, '.view-header')).toBe(true);
-
-    const desktopHost = await mountMainApp({ desktop: true });
-
-    expect(hasSection(desktopHost, '.view-header')).toBe(false);
-  });
+      expect(hasSection(element, 'latexdiffs-section')).toBe(visible);
+      expect(hasSection(element, '.view-header')).toBe(visible);
+    },
+  );
 });

@@ -35,6 +35,8 @@ export class ShortcutsTab extends LitElement {
       }
 
       .shortcuts-feedback {
+        min-height: 1.4em;
+        margin: 0 0 var(--wa-space-xs);
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
       }
@@ -63,11 +65,6 @@ export class ShortcutsTab extends LitElement {
         border-color: var(--wa-color-focus);
         box-shadow: 0 0 0 var(--focus-ring-width)
           color-mix(in srgb, var(--wa-color-focus) 26%, transparent);
-      }
-
-      .shortcuts-feedback {
-        min-height: 1.4em;
-        margin: 0 0 var(--wa-space-xs);
       }
 
       .shortcuts-feedback[data-error='true'] {

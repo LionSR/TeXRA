@@ -5,13 +5,13 @@ import { glob, hasMagic } from 'glob';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
-// swap; safe at both call sites below since the input is always a relative
-// path already validated by isStrictlyWithin or path.relative.
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { Disposable } from '@platform/interfaces';
 import { unique } from '@utils/core';
+// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
+// swap; safe at both call sites below since the input is always a relative
+// path already validated by isStrictlyWithin or path.relative.
 import {
   isPathWithin,
   isStrictlyWithin,

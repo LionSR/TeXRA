@@ -177,10 +177,20 @@ export class ApprovalRequestHandler<
 
   /** Release one entry without notifying the webview (dismiss/cancel cleanup). */
   private releaseSilently(id: string, entry: PendingRequest<T, Result>): void {
+    this.settleEntry(id, entry, undefined, false);
+  }
+
+  /** Remove an entry, cancelling it first when it bears a response promise. */
+  private settleEntry(
+    id: string,
+    entry: PendingRequest<T, Result>,
+    cause: string | undefined,
+    notify: boolean,
+  ): void {
     if (entry.mode === 'interaction') {
-      this.completeEntry(id, entry, entry.cancellationResult(), false);
+      this.completeEntry(id, entry, entry.cancellationResult(cause), notify);
     } else {
-      this.removeEntry(id, entry, false);
+      this.removeEntry(id, entry, notify);
     }
   }
 
@@ -212,12 +222,7 @@ export class ApprovalRequestHandler<
 
   private removeExisting(id: string, cause: string): void {
     const entry = this.pending.get(id);
-    if (!entry) return;
-    if (entry.mode === 'interaction') {
-      this.completeEntry(id, entry, entry.cancellationResult(cause), true);
-    } else {
-      this.removeEntry(id, entry, true);
-    }
+    if (entry) this.settleEntry(id, entry, cause, true);
   }
 
   private completeEntry(

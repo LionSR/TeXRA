@@ -92,7 +92,7 @@ export function formatFileListTemplate(
 }
 
 /** Render XML link template. */
-function renderXmlLink(xmlFile: string) {
+function renderXmlLink(xmlFile: string): TemplateResult {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
   return html`<div class="xml-link-container">${waIcon('file-code')} <span>Open XML to check tag consistency:</span> ${buildFileLinkSpan(xmlFile, xmlFileName)} <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;

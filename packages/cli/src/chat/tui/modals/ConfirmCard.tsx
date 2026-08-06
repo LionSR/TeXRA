@@ -2,8 +2,7 @@
 // title, padded body slot, key handling, and KeyHints footer.
 
 import { useState } from 'react';
-import { Box, Text, useWindowSize, type BoxProps } from 'ink';
-import { useInput } from 'ink';
+import { Box, Text, useInput, useWindowSize, type BoxProps } from 'ink';
 
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import {

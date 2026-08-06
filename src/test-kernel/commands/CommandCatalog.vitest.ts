@@ -1,8 +1,8 @@
-// Third-party imports
-
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import { createRequire } from 'node:module';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
 // Local imports - commands

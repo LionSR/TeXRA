@@ -39,6 +39,19 @@ function publishLoopbackUrl(url: string): void {
   });
 }
 
+async function runSignIn(
+  url: string,
+  options: { device?: boolean; noBrowser?: boolean } = {},
+): Promise<string[]> {
+  publishLoopbackUrl(url);
+  const progress: string[] = [];
+  await signInCliChatGpt(
+    { device: options.device ?? false, noBrowser: options.noBrowser ?? false },
+    { writeProgress: (message) => progress.push(message) },
+  );
+  return progress;
+}
+
 describe('signInCliChatGpt browser choice', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -46,13 +59,8 @@ describe('signInCliChatGpt browser choice', () => {
 
   it('prints the sign-in link once, then browser status without repeating the URL', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(true);
-    publishLoopbackUrl('https://auth.openai.com/authorize?x=1');
-    const progress: string[] = [];
 
-    await signInCliChatGpt(
-      { device: false, noBrowser: false },
-      { writeProgress: (message) => progress.push(message) },
-    );
+    const progress = await runSignIn('https://auth.openai.com/authorize?x=1');
 
     expect(progress).toEqual([
       'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=1',
@@ -63,13 +71,8 @@ describe('signInCliChatGpt browser choice', () => {
 
   it('prints the URL once when the browser fails to launch', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(false);
-    publishLoopbackUrl('https://auth.openai.com/authorize?x=2');
-    const progress: string[] = [];
 
-    await signInCliChatGpt(
-      { device: false, noBrowser: false },
-      { writeProgress: (message) => progress.push(message) },
-    );
+    const progress = await runSignIn('https://auth.openai.com/authorize?x=2');
 
     expect(progress).toEqual([
       'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
@@ -79,13 +82,9 @@ describe('signInCliChatGpt browser choice', () => {
   });
 
   it('skips the launch attempt and prints the URL with --no-browser', async () => {
-    publishLoopbackUrl('https://auth.openai.com/authorize?x=3');
-    const progress: string[] = [];
-
-    await signInCliChatGpt(
-      { device: false, noBrowser: true },
-      { writeProgress: (message) => progress.push(message) },
-    );
+    const progress = await runSignIn('https://auth.openai.com/authorize?x=3', {
+      noBrowser: true,
+    });
 
     expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
     expect(progress).toEqual([

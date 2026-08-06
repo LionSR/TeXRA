@@ -207,24 +207,22 @@ export class ReadFileTool extends defineTool({
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
     const extension = getExtensionLowercase(filePath);
 
-    const isPdf = mimeType === 'application/pdf' || extension === '.pdf';
-    if (isPdf) {
+    if (mimeType === 'application/pdf' || extension === '.pdf') {
       return 'pdf';
     }
 
     // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
     // even though the underlying file is XML text.
-    const isImage =
-      mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension);
-    if (isImage) {
+    if (mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension)) {
       return 'image';
     }
 
     // Office documents are binary formats that cannot be read as text.
     // Return them as attachments so models with file input support can process them.
-    const isDocument =
-      OFFICE_EXTENSIONS.has(extension) || OFFICE_MIME_TYPES.has(mimeType ?? '');
-    if (isDocument) {
+    if (
+      OFFICE_EXTENSIONS.has(extension) ||
+      OFFICE_MIME_TYPES.has(mimeType ?? '')
+    ) {
       return 'document';
     }
 

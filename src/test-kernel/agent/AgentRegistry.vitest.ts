@@ -89,6 +89,17 @@ async function initPlatformWithState(
   );
 }
 
+function remoteAgentFixture(id: string, name: string, description: string) {
+  return {
+    id,
+    name,
+    description,
+    visibility: [],
+    tools: [],
+    agentCategory: 'toolUse',
+  };
+}
+
 describe('agent registry', () => {
   beforeAll(async () => {
     // Use the real bundled agent YAMLs rather than synthetic fixtures.
@@ -144,27 +155,9 @@ describe('agent registry', () => {
       remoteCall += 1;
       if (remoteCall === 1) {
         await staleLoadGate.promise;
-        return [
-          {
-            id: 'stale-agent',
-            name: 'staleAgent',
-            description: 'Stale',
-            visibility: [],
-            tools: [],
-            agentCategory: 'toolUse',
-          },
-        ];
+        return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
       }
-      return [
-        {
-          id: 'fresh-agent',
-          name: 'freshAgent',
-          description: 'Fresh',
-          visibility: [],
-          tools: [],
-          agentCategory: 'toolUse',
-        },
-      ];
+      return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
     });
 
     const staleInitialization = loadAgents({ includeRemote: true });
@@ -239,14 +232,7 @@ describe('agent registry', () => {
     listRemoteAgents.mockImplementationOnce(async () => {
       await remoteLoad.promise;
       return [
-        {
-          id: 'late-remote',
-          name: 'lateRemote',
-          description: 'Late remote result',
-          visibility: [],
-          tools: [],
-          agentCategory: 'toolUse',
-        },
+        remoteAgentFixture('late-remote', 'lateRemote', 'Late remote result'),
       ];
     });
 

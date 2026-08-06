@@ -147,9 +147,9 @@ export class ToolUseDispatchNode<C> extends Node<
   async _exec(calls: SdkToolCall[]): Promise<(ToolExecutionResult | null)[]> {
     if (calls.length === 0) return [];
 
-    const results: (ToolExecutionResult | null)[] = new Array<null>(
-      calls.length,
-    ).fill(null);
+    const results = new Array<ToolExecutionResult | null>(calls.length).fill(
+      null,
+    );
     // Duplicates execute nothing — schedule only the live calls, then copy
     // the primaries' results onto them afterwards.
     const live = calls.flatMap((call, index) =>
@@ -162,9 +162,9 @@ export class ToolUseDispatchNode<C> extends Node<
       if (signal.aborted) {
         break;
       }
-      if (!this.isParallelSafe(calls[live[i]])) {
+      const index = live[i];
+      if (!this.isParallelSafe(calls[index])) {
         // Barrier: mutating/unknown tools run alone, in order.
-        const index = live[i];
         results[index] = await this.exec(calls[index]);
         i += 1;
         if (endsToolUseTurn(results[index])) break;
@@ -318,7 +318,7 @@ export class ToolUseDispatchNode<C> extends Node<
       return {
         status: 'error',
         error: message.trim() || 'Tool execution failed.',
-        ...(diagnostics !== undefined ? { diagnostics } : {}),
+        ...(diagnostics ? { diagnostics } : {}),
       };
     }
   }
@@ -457,7 +457,7 @@ export class ToolUseDispatchNode<C> extends Node<
       toolName: call.name,
       input: parsedInput ?? call.raw,
       ...(Object.keys(logOutput).length > 0 ? { output: logOutput } : {}),
-      ...(editedFiles.length && { files: editedFiles }),
+      ...(editedFiles.length > 0 ? { files: editedFiles } : {}),
       isError: extracted.sanitizedResult.status === 'error',
     };
 
@@ -544,7 +544,7 @@ export class ToolUseDispatchNode<C> extends Node<
     if (interrupted) {
       shared.shouldStop = true;
     }
-    const endTurn = allResults.some((result) => endsToolUseTurn(result));
+    const endTurn = allResults.some(endsToolUseTurn);
     if (endTurn) {
       shared.shouldStop = true;
       shared.endTurn = true;

@@ -1,5 +1,3 @@
-// Local imports - shared schemas
-
 // Local imports - shared formatting
 import {
   COLOR_BORDER,

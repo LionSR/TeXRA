@@ -131,6 +131,27 @@ async function withExternalDirs(
   });
 }
 
+const STDIN_DOCUMENT =
+  '\\documentclass{article}\\begin{document}Hi\\end{document}';
+
+function trackedStdinMaterializer(
+  root: string,
+  body: string = STDIN_DOCUMENT,
+): {
+  stdinInputFile: ReturnType<typeof createStdinWorkflowInputMaterializer>;
+  readCount: () => number;
+} {
+  let reads = 0;
+  const stdinInputFile = createStdinWorkflowInputMaterializer({
+    tempDir: root,
+    readStdinText: async () => {
+      reads += 1;
+      return body;
+    },
+  });
+  return { stdinInputFile, readCount: () => reads };
+}
+
 describe('CLI root argument routing', () => {
   it('routes top-level version shortcuts to the version command', () => {
     expect(normalizeRootShortcuts(['--version'])).toEqual(['version']);
@@ -228,38 +249,19 @@ describe('CLI root argument routing', () => {
   });
 
   it('detects unknown command-group children', async () => {
-    await expect(detectUnknownCliCommand(['agents', 'bogus'])).resolves.toEqual(
-      {
-        typedCommand: 'texra agents bogus',
-        helpCommand: 'texra agents',
-      },
-    );
-    await expect(
-      detectUnknownCliCommand(['history', 'bogus']),
-    ).resolves.toEqual({
-      typedCommand: 'texra history bogus',
-      helpCommand: 'texra history',
-    });
-    await expect(detectUnknownCliCommand(['auth', 'bogus'])).resolves.toEqual({
-      typedCommand: 'texra auth bogus',
-      helpCommand: 'texra auth',
-    });
-    await expect(detectUnknownCliCommand(['models', 'bogus'])).resolves.toEqual(
-      {
-        typedCommand: 'texra models bogus',
-        helpCommand: 'texra models',
-      },
-    );
-    await expect(detectUnknownCliCommand(['skills', 'bogus'])).resolves.toEqual(
-      {
-        typedCommand: 'texra skills bogus',
-        helpCommand: 'texra skills',
-      },
-    );
-    await expect(detectUnknownCliCommand(['tools', 'bogus'])).resolves.toEqual({
-      typedCommand: 'texra tools bogus',
-      helpCommand: 'texra tools',
-    });
+    for (const group of [
+      'agents',
+      'history',
+      'auth',
+      'models',
+      'skills',
+      'tools',
+    ]) {
+      await expect(detectUnknownCliCommand([group, 'bogus'])).resolves.toEqual({
+        typedCommand: `texra ${group} bogus`,
+        helpCommand: `texra ${group}`,
+      });
+    }
   });
 
   it('suggests close command names inside command groups', async () => {
@@ -320,35 +322,16 @@ describe('CLI root argument routing', () => {
   });
 
   it('does not classify flag values or known aliases as unknown flags', async () => {
-    await expect(
-      detectUnknownCliFlag(['run', 'polish', '--instruction', '--literal']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliFlag(['run', 'polish', '-mdeepseekT', '--no-color']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliFlag(['setup', '--no-input']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliFlag(['resume', 'abc123', '--print']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliFlag([
-        'multi-agent',
-        'run',
-        'mathematician',
-        '--instruction-file=prompt.md',
-      ]),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliFlag([
-        'run',
-        'polish',
-        '--input',
-        'paper.tex',
-        '--instruction-file=prompt.md',
-      ]),
-    ).resolves.toBeUndefined();
+    for (const args of [
+      ['run', 'polish', '--instruction', '--literal'],
+      ['run', 'polish', '-mdeepseekT', '--no-color'],
+      ['setup', '--no-input'],
+      ['resume', 'abc123', '--print'],
+      ['multi-agent', 'run', 'mathematician', '--instruction-file=prompt.md'],
+      ['run', 'polish', '--input', 'paper.tex', '--instruction-file=prompt.md'],
+    ]) {
+      await expect(detectUnknownCliFlag(args)).resolves.toBeUndefined();
+    }
   });
 
   it('rejects camelCase spellings for kebab-case flags', async () => {
@@ -389,18 +372,14 @@ describe('CLI root argument routing', () => {
   });
 
   it('does not classify known command arguments as unknown commands', async () => {
-    await expect(
-      detectUnknownCliCommand(['run', 'polish', '--input', 'paper.tex']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliCommand(['history', 'show', 'abc123']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliCommand(['completion', 'zsh']),
-    ).resolves.toBeUndefined();
-    await expect(
-      detectUnknownCliCommand(['--unknown', 'bogus']),
-    ).resolves.toBeUndefined();
+    for (const args of [
+      ['run', 'polish', '--input', 'paper.tex'],
+      ['history', 'show', 'abc123'],
+      ['completion', 'zsh'],
+      ['--unknown', 'bogus'],
+    ]) {
+      await expect(detectUnknownCliCommand(args)).resolves.toBeUndefined();
+    }
   });
 
   it('collects repeated run context flags from raw args', () => {
@@ -480,34 +459,47 @@ describe('CLI root argument routing', () => {
   });
 
   it('rejects headless-only flags on interactive command bodies', () => {
-    expect(() => rejectHeadlessOnlyFlags(['--print'], 'chat')).toThrow(
-      'texra chat is interactive and does not support --print.',
-    );
-    expect(() => rejectHeadlessOnlyFlags(['-p'], 'chat')).toThrow(
-      'texra chat is interactive and does not support --print.',
-    );
-    expect(() =>
-      rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
-    ).toThrow(
-      'texra orchestrate is interactive and does not support --output-format.',
-    );
-    expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
-      'texra chat is interactive and does not support --no-input.',
-    );
-    expect(() => rejectHeadlessOnlyFlags(['--no-input=true'], 'chat')).toThrow(
-      'texra chat is interactive and does not support --no-input.',
-    );
-    expect(() => rejectHeadlessOnlyFlags(['--print=true'], 'chat')).toThrow(
-      'texra chat is interactive and does not support --print.',
-    );
-    expect(() =>
-      rejectHeadlessOnlyFlags(
+    const rejected: Array<[string[], string, string]> = [
+      [
+        ['--print'],
+        'chat',
+        'texra chat is interactive and does not support --print.',
+      ],
+      [
+        ['-p'],
+        'chat',
+        'texra chat is interactive and does not support --print.',
+      ],
+      [
+        ['--output-format=json'],
+        'orchestrate',
+        'texra orchestrate is interactive and does not support --output-format.',
+      ],
+      [
+        ['--no-input'],
+        'chat',
+        'texra chat is interactive and does not support --no-input.',
+      ],
+      [
+        ['--no-input=true'],
+        'chat',
+        'texra chat is interactive and does not support --no-input.',
+      ],
+      [
+        ['--print=true'],
+        'chat',
+        'texra chat is interactive and does not support --print.',
+      ],
+      [
         ['--print', '--output-format', 'json', '--no-input'],
         'chat',
-      ),
-    ).toThrow(
-      'texra chat is interactive and does not support --print, --output-format, and --no-input.',
-    );
+        'texra chat is interactive and does not support --print, --output-format, and --no-input.',
+      ],
+    ];
+
+    for (const [args, command, message] of rejected) {
+      expect(() => rejectHeadlessOnlyFlags(args, command)).toThrow(message);
+    }
     expect(() =>
       rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
     ).not.toThrow();
@@ -554,14 +546,10 @@ describe('CLI root argument routing', () => {
 
   it('materializes stdin when --input - is passed', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      let readCount = 0;
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () => {
-          readCount += 1;
-          return '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n';
-        },
-      });
+      const { stdinInputFile, readCount } = trackedStdinMaterializer(
+        root,
+        '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n',
+      );
 
       const expanded = await expandWorkflowInputSpecs(
         ['-', '-'],
@@ -573,7 +561,7 @@ describe('CLI root argument routing', () => {
       );
 
       expect(expanded).toHaveLength(1);
-      expect(readCount).toBe(1);
+      expect(readCount()).toBe(1);
       expect(path.basename(expanded[0])).toBe('stdin.tex');
       expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
       await expect(
@@ -590,11 +578,7 @@ describe('CLI root argument routing', () => {
   it('preserves stdin position when mixed with file inputs', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
       await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () =>
-          '\\documentclass{article}\\begin{document}Hi\\end{document}',
-      });
+      const { stdinInputFile } = trackedStdinMaterializer(root);
 
       const expanded = await expandWorkflowInputSpecs(
         ['-', 'paper.tex'],
@@ -613,10 +597,7 @@ describe('CLI root argument routing', () => {
 
   it('rejects empty stdin input', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () => ' \n\t ',
-      });
+      const { stdinInputFile } = trackedStdinMaterializer(root, ' \n\t ');
 
       await expect(
         expandWorkflowInputSpecs(['-'], root, '--input', { stdinInputFile }),
@@ -645,51 +626,34 @@ describe('CLI root argument routing', () => {
 
   it('does not read stdin before later --input validation errors', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      let readCount = 0;
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () => {
-          readCount += 1;
-          return '\\documentclass{article}\\begin{document}Hi\\end{document}';
-        },
-      });
+      const { stdinInputFile, readCount } = trackedStdinMaterializer(root);
 
       await expect(
         expandWorkflowInputSpecs(['-', 'missing.tex'], root, '--input', {
           stdinInputFile,
         }),
       ).rejects.toThrow(/--input: file not found: missing\.tex/);
-      expect(readCount).toBe(0);
+      expect(readCount()).toBe(0);
     });
   });
 
   it('does not read stdin before --context validation errors', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      let readCount = 0;
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () => {
-          readCount += 1;
-          return '\\documentclass{article}\\begin{document}Hi\\end{document}';
-        },
-      });
+      const { stdinInputFile, readCount } = trackedStdinMaterializer(root);
 
       await expect(
         expandRunInputs(['-'], ['missing-context.tex'], root, {
           stdinInputFile,
         }),
       ).rejects.toThrow(/--context: file not found: missing-context\.tex/);
-      expect(readCount).toBe(0);
+      expect(readCount()).toBe(0);
     });
   });
 
   it('materializes stdin for --context - when input is a normal file', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
       await fs.writeFile(path.join(root, 'main.tex'), 'main');
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () => 'context body',
-      });
+      const { stdinInputFile } = trackedStdinMaterializer(root, 'context body');
 
       const { inputFiles, contextFiles } = await expandRunInputs(
         ['main.tex'],
@@ -710,10 +674,7 @@ describe('CLI root argument routing', () => {
 
   it('rejects stdin across both input and context with a clear usage error', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const stdinInputFile = createStdinWorkflowInputMaterializer({
-        tempDir: root,
-        readStdinText: async () => 'piped body',
-      });
+      const { stdinInputFile } = trackedStdinMaterializer(root, 'piped body');
       await expect(
         expandRunInputs(['-'], ['-'], root, { stdinInputFile }),
       ).rejects.toThrow(/Use `-` for either --input or --context/);
@@ -1225,18 +1186,29 @@ describe('runCli usage output stream routing', () => {
     await initDefaultFakePlatform();
   });
 
+  function expectOk(result: { exitCode: number }): void {
+    expect(result.exitCode).toBe(0);
+    expect(stderr).toBe('');
+  }
+
+  function expectUsageError(
+    result: { exitCode: number },
+    message: string,
+  ): void {
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(message);
+    expect(stdout).toBe('');
+  }
+
   it('routes usage text to stderr (not stdout) on a usage error', async () => {
     // Regression guard for the headless-parity contract: usage shown because
     // of an ERROR must not land on STDOUT, or it pollutes
     // `--output-format json|ndjson` (e.g. `texra run ... | jq`).
     // Mirrors the documented repro: a usage error under --output-format json.
     const result = await runCli(['run', 'badagent', '--output-format', 'json']);
-    expect(result.exitCode).toBe(2);
-    // Usage banner + the short error line both go to the diagnostic stream.
+    expectUsageError(result, 'Missing required argument: --input');
+    // Usage banner goes to the diagnostic stream alongside the error line.
     expect(stderr).toContain('USAGE');
-    expect(stderr).toContain('Missing required argument: --input');
-    // STDOUT stays clean so structured output remains machine-parseable.
-    expect(stdout).toBe('');
   });
 
   it('prints explicit --help usage to stdout, not stderr', async () => {
@@ -1244,45 +1216,40 @@ describe('runCli usage output stream routing', () => {
     // Only usage shown on an error is diagnostic (STDERR). This must not
     // regress when fixing the error path.
     const result = await runCli(['run', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('USAGE');
-    expect(stderr).toBe('');
   });
 
   it('rejects unknown commands before honoring explicit --help', async () => {
     const result = await runCli(['workflows', '--help']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(
+    expectUsageError(
+      result,
       'Unknown command: texra workflows. Run `texra --help` for usage.',
     );
-    expect(stdout).toBe('');
   });
 
   it('points run-command agent arguments at the full agent catalog', async () => {
     let result = await runCli(['run', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain(
       'Workflow agent name from `texra agents list --category workflow --all`',
     );
-    expect(stderr).toBe('');
 
     stdout = '';
     stderr = '';
     result = await runCli(['agents', 'run', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain(
       'Tool-use agent name from `texra agents list --category toolUse --all`',
     );
-    expect(stderr).toBe('');
   });
 
   it('rejects unknown flags before running command bodies', async () => {
     const result = await runCli(['doctor', '--bogus', '--no-input']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(
+    expectUsageError(
+      result,
       'Unknown option: --bogus. Run `texra doctor --help` for usage.',
     );
-    expect(stdout).toBe('');
   });
 
   it('keeps stdout clean when rejecting unknown flags in structured mode', async () => {
@@ -1294,59 +1261,57 @@ describe('runCli usage output stream routing', () => {
       '--output-format',
       'json',
     ]);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(
+    expectUsageError(
+      result,
       'Unknown option: --unknown. Run `texra models list --help` for usage.',
     );
-    expect(stdout).toBe('');
   });
 
   it('preserves the interactive-command error for headless-only flags', async () => {
-    const result = await runCli(['chat', '--print']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(
-      'texra chat is interactive and does not support --print.',
-    );
-    expect(stderr).not.toContain('--output-format');
-    expect(stderr).not.toContain('--no-input');
-    expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
+    const cases: Array<{ args: string[]; message: string; absent: string[] }> =
+      [
+        {
+          args: ['chat', '--print'],
+          message: 'texra chat is interactive and does not support --print.',
+          absent: ['--output-format', '--no-input', 'Unknown option'],
+        },
+        {
+          args: ['setup', '--no-input'],
+          message:
+            'texra setup is interactive and does not support --no-input.',
+          absent: ['--print', '--output-format', 'Unknown option'],
+        },
+        {
+          args: ['setup', '--no-input=true'],
+          message:
+            'texra setup is interactive and does not support --no-input.',
+          absent: ['--print', '--output-format', 'Unknown option'],
+        },
+      ];
 
-    stderr = '';
-    const setupResult = await runCli(['setup', '--no-input']);
-    expect(setupResult.exitCode).toBe(2);
-    expect(stderr).toContain(
-      'texra setup is interactive and does not support --no-input.',
-    );
-    expect(stderr).not.toContain('--print');
-    expect(stderr).not.toContain('--output-format');
-    expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
+    for (const { args, message, absent } of cases) {
+      stderr = '';
 
-    stderr = '';
-    const inlineSetupResult = await runCli(['setup', '--no-input=true']);
-    expect(inlineSetupResult.exitCode).toBe(2);
-    expect(stderr).toContain(
-      'texra setup is interactive and does not support --no-input.',
-    );
-    expect(stderr).not.toContain('--print');
-    expect(stderr).not.toContain('--output-format');
-    expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
+      const result = await runCli(args);
+
+      expectUsageError(result, message);
+      for (const text of absent) {
+        expect(stderr).not.toContain(text);
+      }
+    }
   });
 
   it('rejects camelCase headless-only flags on interactive commands', async () => {
     const result = await runCli(['chat', '--outputFormat', 'json']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(
+    expectUsageError(
+      result,
       'Unknown option: --outputFormat. Run `texra chat --help` for usage.',
     );
-    expect(stdout).toBe('');
   });
 
   it('documents interactive chat controls in chat --help', async () => {
     const result = await runCli(['chat', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('/help');
     expect(stdout).toContain('/status');
@@ -1371,41 +1336,36 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('focus a visible stream');
     expect(stdout).toContain('approvals');
     expect(stdout).toContain('Ctrl-C');
-    expect(stderr).toBe('');
   });
 
   it('documents launcher controls in orchestrate --help', async () => {
     const result = await runCli(['orchestrate', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('↑/↓');
     expect(stdout).toContain('1-9/a-z');
     expect(stdout).toContain('open an item directly');
     expect(stdout).toContain('Enter');
     expect(stdout).toContain('Esc');
-    expect(stderr).toBe('');
   });
 
   // Resume is dual-mode: a workflow run resumes headless, so the headless
   // globals are accepted and advertised alongside the interactive ones.
   it('advertises headless globals in resume --help', async () => {
     const result = await runCli(['resume', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('USAGE texra resume');
     expect(stdout).toContain('--approval-policy');
     expect(stdout).toContain('--print');
     expect(stdout).toContain('--output-format');
     expect(stdout).toContain('--no-input');
-    expect(stderr).toBe('');
   });
 
   it('accepts headless globals on resume instead of rejecting them', async () => {
     const result = await runCli(['resume', 'abc123', '--print']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain('Execution not found: abc123');
+    expectUsageError(result, 'Execution not found: abc123');
     expect(stderr).not.toContain('is interactive');
     expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
 
     stderr = '';
     const shortcutResult = await runCli([
@@ -1414,43 +1374,38 @@ describe('runCli usage output stream routing', () => {
       '--resume',
       'abc123',
     ]);
-    expect(shortcutResult.exitCode).toBe(2);
-    expect(stderr).toContain('Execution not found: abc123');
+    expectUsageError(shortcutResult, 'Execution not found: abc123');
     expect(stderr).not.toContain('is interactive');
     expect(stderr).not.toContain('Unknown option');
-    expect(stdout).toBe('');
   });
 
   it('points setup users at the existing auth status command', async () => {
     const result = await runCli(['setup', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('texra auth status');
     expect(stdout).not.toContain('texra status');
-    expect(stderr).toBe('');
   });
 
   it('shows ChatGPT and Researcher examples in login help', async () => {
     let result = await runCli(['login', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('EXAMPLES');
     expect(stdout).toContain('texra auth chatgpt login');
     expect(stdout).toContain('texra login');
     expect(stdout).toContain('Researcher Access');
-    expect(stderr).toBe('');
 
     stdout = '';
     stderr = '';
     result = await runCli(['auth', 'login', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('USAGE texra auth login');
     expect(stdout).toContain('texra auth chatgpt login');
     expect(stdout).toContain('texra login --device');
-    expect(stderr).toBe('');
   });
 
   it('shows EXAMPLES and a docs link in root --help', async () => {
     const result = await runCli(['--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('EXAMPLES');
     expect(stdout).toContain('texra auth chatgpt login');
     expect(stdout).toContain('texra login');
@@ -1459,23 +1414,20 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('texra agents list');
     expect(stdout).toContain('texra doctor');
     expect(stdout).toContain('Learn more: https://texra.ai');
-    expect(stderr).toBe('');
   });
 
   it('honors --no-color in explicit help output', async () => {
     const result = await runCli(['--no-color', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('USAGE');
     expect(stdout).toBe(stripAnsi(stdout));
-    expect(stderr).toBe('');
   });
 
   it('honors --no-color in help command output', async () => {
     const result = await runCli(['--no-color', 'help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('USAGE');
     expect(stdout).toBe(stripAnsi(stdout));
-    expect(stderr).toBe('');
   });
 
   it('prints version output when no-op global color flags are present', async () => {
@@ -1489,19 +1441,17 @@ describe('runCli usage output stream routing', () => {
 
       const result = await runCli(args);
 
-      expect(result.exitCode).toBe(0);
+      expectOk(result);
       expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
-      expect(stderr).toBe('');
     }
   });
 
   it('honors structured output for the version command', async () => {
     const jsonResult = await runCli(['version', '--output-format', 'json']);
-    expect(jsonResult.exitCode).toBe(0);
+    expectOk(jsonResult);
     expect(JSON.parse(stdout)).toMatchObject({
       version: expect.stringMatching(/^\d+\.\d+\.\d+/),
     });
-    expect(stderr).toBe('');
 
     stdout = '';
     stderr = '';
@@ -1511,13 +1461,12 @@ describe('runCli usage output stream routing', () => {
       '--output-format',
       'ndjson',
     ]);
-    expect(ndjsonResult.exitCode).toBe(0);
+    expectOk(ndjsonResult);
     expect(JSON.parse(stdout.trim())).toMatchObject({
       kind: 'version',
       version: expect.stringMatching(/^\d+\.\d+\.\d+/),
       ts: expect.any(String),
     });
-    expect(stderr).toBe('');
   });
 
   it('prints version output without resolving workspace context', async () => {
@@ -1529,11 +1478,10 @@ describe('runCli usage output stream routing', () => {
       'json',
     ]);
 
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(JSON.parse(stdout)).toMatchObject({
       version: expect.stringMatching(/^\d+\.\d+\.\d+/),
     });
-    expect(stderr).toBe('');
   });
 
   it('honors TEXRA_OUTPUT_FORMAT for version output without workspace context', async () => {
@@ -1546,13 +1494,12 @@ describe('runCli usage output stream routing', () => {
         '--version',
       ]);
 
-      expect(result.exitCode).toBe(0);
+      expectOk(result);
       expect(JSON.parse(stdout.trim())).toMatchObject({
         kind: 'version',
         version: expect.stringMatching(/^\d+\.\d+\.\d+/),
         ts: expect.any(String),
       });
-      expect(stderr).toBe('');
     } finally {
       if (previousOutputFormat === undefined) {
         delete process.env.TEXRA_OUTPUT_FORMAT;
@@ -1564,15 +1511,14 @@ describe('runCli usage output stream routing', () => {
 
   it('shows EXAMPLES and a docs link for bare `help`', async () => {
     const result = await runCli(['help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('EXAMPLES');
     expect(stdout).toContain('Learn more: https://texra.ai');
-    expect(stderr).toBe('');
   });
 
   it('shows command-specific usage for help command paths', async () => {
     const result = await runCli(['help', 'chat']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('Interactive tool-use chat session');
     expect(stdout).toContain('USAGE texra chat');
     expect(stdout).toContain('INTERACTIVE CONTROLS');
@@ -1580,24 +1526,22 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('select a visible child session or process');
     expect(stdout).not.toContain('open subagents when available');
     expect(stdout).toContain('Esc 1..9');
-    expect(stderr).toBe('');
   });
 
   it('shows orchestrate controls for help command paths', async () => {
     const result = await runCli(['help', 'orchestrate']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('Interactive launcher');
     expect(stdout).toContain('USAGE texra orchestrate');
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('1-9/a-z');
     expect(stdout).toContain('open an item directly');
     expect(stdout).toContain('Esc');
-    expect(stderr).toBe('');
   });
 
   it('shows nested command-specific usage for help command paths', async () => {
     const result = await runCli(['help', 'multi-agent', 'run']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('Run a multi-agent team preset');
     expect(stdout).toContain('USAGE texra multi-agent run');
     expect(stdout).toContain(
@@ -1610,23 +1554,19 @@ describe('runCli usage output stream routing', () => {
     );
     expect(stdout).toContain('use `texra orchestrate`');
     expect(stdout).not.toContain('root tool-use agent');
-    expect(stderr).toBe('');
   });
 
   it('shows full command paths for nested --help usage', async () => {
     const result = await runCli(['history', 'show', '--help']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('Show one stored execution');
     expect(stdout).toContain('USAGE texra history show');
     expect(stdout).toContain('Show the full stored conversation');
-    expect(stderr).toBe('');
   });
 
   it('shows full command paths for nested usage errors', async () => {
     const result = await runCli(['history', 'show']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain('USAGE texra history show');
-    expect(stdout).toBe('');
+    expectUsageError(result, 'USAGE texra history show');
   });
 
   it('defaults bare history to list while accepting global flags', async () => {
@@ -1639,9 +1579,8 @@ describe('runCli usage output stream routing', () => {
         'json',
       ]);
 
-      expect(result.exitCode).toBe(0);
+      expectOk(result);
       expect(JSON.parse(stdout)).toEqual([]);
-      expect(stderr).toBe('');
     });
   });
 
@@ -1662,29 +1601,25 @@ describe('runCli usage output stream routing', () => {
       'json',
     ]);
 
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(`--cwd: path does not exist: ${missingRoot}`);
-    expect(stdout).toBe('');
+    expectUsageError(result, `--cwd: path does not exist: ${missingRoot}`);
   });
 
   it('shows the history parent default and global flags in help', async () => {
     const result = await runCli(['history', '--help']);
 
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('USAGE texra history');
     expect(stdout).toContain('--output-format=<text|json|ndjson>');
     expect(stdout).toContain('list');
-    expect(stderr).toBe('');
   });
 
   it('accepts the documented multi-agent show command', async () => {
     const result = await runCli(['multi-agent', 'show', 'mathematician']);
-    expect(result.exitCode).toBe(0);
+    expectOk(result);
     expect(stdout).toContain('Mathematician (mathematician)');
     expect(stdout).toContain('Team root agent:');
     expect(stdout).toContain('Available workflow agents:');
     expect(stdout).toContain('Missing tool-use agents:');
-    expect(stderr).toBe('');
   });
 
   it('prints recovery hints for unknown multi-agent presets', async () => {
@@ -1715,8 +1650,6 @@ describe('runCli usage output stream routing', () => {
 
   it('reports unknown command paths passed to help', async () => {
     const result = await runCli(['help', 'bogus']);
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain('Unknown command: texra bogus');
-    expect(stdout).toBe('');
+    expectUsageError(result, 'Unknown command: texra bogus');
   });
 });
