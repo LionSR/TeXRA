@@ -105,21 +105,7 @@ export class FileSelectGroup extends LitElement {
     );
   }
 
-  // One listener for the whole list: lit rejects duplicate attribute bindings,
-  // so the remove and move handlers cannot each bind @click on the container.
-  // Both are delegation guards keyed to mutually exclusive selectors and no-op
-  // when their selector does not match, so dispatching to both is equivalent to
-  // two independent listeners.
-  private handleFileListClick(event: MouseEvent): void {
-    this.handleRemoveClick(event);
-    this.handleMoveClick(event);
-  }
-
-  private handleRemoveClick(event: MouseEvent): void {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-remove-file]',
-    );
-    if (!button) return;
+  private handleRemoveClick(button: HTMLElement): void {
     const file = button.dataset.removeFile;
     if (file) {
       this.dispatchEvent(
@@ -131,11 +117,7 @@ export class FileSelectGroup extends LitElement {
   /** Keyboard/touch counterpart to Sortable drag reordering (order is
    * semantic: the first input file is the primary input). Dispatches the
    * same filesReordered event as a drag. */
-  private handleMoveClick(event: MouseEvent): void {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-move-index]',
-    );
-    if (!button) return;
+  private handleMoveClick(button: HTMLElement): void {
     const index = Number(button.dataset.moveIndex);
     const direction = Number(button.dataset.moveDirection);
     const files = this.currentFiles;
@@ -149,6 +131,22 @@ export class FileSelectGroup extends LitElement {
     this.dispatchEvent(
       MainViewEvents.filesReordered({ listId: this.listId, files: reordered }),
     );
+  }
+
+  /** Single delegate for the file-list row: lit-html rejects two `@click`
+   * bindings on the same element, so remove and move share one dispatch,
+   * each matching its own `data-*` marker on a distinct button. */
+  private handleFileListClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const removeButton = target.closest<HTMLElement>('[data-remove-file]');
+    if (removeButton) {
+      this.handleRemoveClick(removeButton);
+      return;
+    }
+    const moveButton = target.closest<HTMLElement>('[data-move-index]');
+    if (moveButton) {
+      this.handleMoveClick(moveButton);
+    }
   }
 
   private get currentCheckboxValues(): CheckboxValues {

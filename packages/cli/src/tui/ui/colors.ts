@@ -1,3 +1,5 @@
+import { cliEnvValue } from '@cli/runtime/cliContext';
+
 // Semantic color palette for the CLI TUI. Components say WHAT (semantic
 // color); this module says WHICH Ink/chalk color name backs it — so
 // re-theming or contrast-tuning happens in one owned place instead of at
@@ -35,7 +37,7 @@
 // never regress a dark one. Resolved once here so every call site keeps
 // consuming a plain string.
 const LIGHT_TERMINAL_BACKGROUND = ((): boolean => {
-  const background = process.env.COLORFGBG?.split(';').at(-1);
+  const background = cliEnvValue('COLORFGBG')?.split(';').at(-1);
   return background === '7' || background === '15';
 })();
 
