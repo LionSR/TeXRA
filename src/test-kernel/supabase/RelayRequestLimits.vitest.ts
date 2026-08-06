@@ -464,8 +464,8 @@ describe('relay free-tier request limits', () => {
         releases += 1;
       },
       undefined,
-      0,
       () => {},
+      0,
     );
     if (wrapped === null) assert.fail('expected wrapped stream');
 
@@ -498,10 +498,10 @@ describe('relay free-tier request limits', () => {
         releases += 1;
       },
       undefined,
-      0,
       () => {
         throw observerError;
       },
+      0,
     );
     if (wrapped === null) assert.fail('expected wrapped stream');
 
@@ -586,6 +586,7 @@ describe('relay free-tier request limits', () => {
       async () => {
         refreshes += 1;
       },
+      undefined,
       10,
     );
     if (wrapped === null) assert.fail('expected wrapped stream');
@@ -614,6 +615,7 @@ describe('relay free-tier request limits', () => {
         refreshes += 1;
         throw new Error('refresh unavailable');
       },
+      undefined,
       10,
     );
     if (wrapped === null) assert.fail('expected wrapped stream');
@@ -661,10 +663,10 @@ describe('relay free-tier request limits', () => {
       pendingBody,
       slot.release,
       slot.refresh,
-      10,
       () => {
         upstreamBodyFailures += 1;
       },
+      10,
     );
     if (wrapped === null) assert.fail('expected wrapped stream');
 
