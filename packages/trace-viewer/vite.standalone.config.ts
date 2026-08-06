@@ -24,20 +24,20 @@ import { aliases } from '../../scripts/aliases.mjs';
  * and never hits this restriction.
  */
 const RESOURCES_OUT_DIR = resolve(
-  __dirname,
+  import.meta.dirname,
   '../extension/resources/traceViewer',
 );
 
 export default defineConfig({
   base: './',
-  root: resolve(__dirname, 'src'),
+  root: resolve(import.meta.dirname, 'src'),
   plugins: [viteSingleFile()],
   build: {
     outDir: RESOURCES_OUT_DIR,
     emptyOutDir: true,
     target: 'es2022',
     rollupOptions: {
-      input: resolve(__dirname, 'src/index.html'),
+      input: resolve(import.meta.dirname, 'src/index.html'),
     },
   },
   resolve: {

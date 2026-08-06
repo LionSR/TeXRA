@@ -38,7 +38,10 @@ export default defineConfig(({ mode }) => {
       // Note: KaTeX_Size3-Regular.woff2 (3.6KB) would otherwise be inlined and blocked by CSP
       assetsInlineLimit: 0,
       rollupOptions: {
-        input: resolve(__dirname, `src/${webviewName}/frontend/index.ts`),
+        input: resolve(
+          import.meta.dirname,
+          `src/${webviewName}/frontend/index.ts`,
+        ),
         output: {
           // Single self-contained bundle per webview
           entryFileNames: `${webviewName}/bundle.js`,
