@@ -1537,7 +1537,9 @@ describe('StreamSnapshotStore', () => {
         state: unknown,
       ) => Promise<void>;
     };
-    const replayHarness = store as unknown as ReplayHarness;
+    // The replay/drain loop lives on the store's StagedDeletionCoordinator.
+    const replayHarness = (store as unknown as { deletions: ReplayHarness })
+      .deletions;
     const replay = replayHarness.replayStagedWrites.bind(replayHarness);
     const replaySpy = vi
       .spyOn(replayHarness, 'replayStagedWrites')
