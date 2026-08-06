@@ -58,7 +58,7 @@ This PRD sequences a **setting-gated** migration for direct `api.x.ai` Grok mode
 | Handler                 | `ModelHandlerXAI` extends chat-completions `ModelHandlerOpenAI` |
 | Factory                 | `ModelProvider.XAI` → `ModelHandlerXAI` only                    |
 | `shouldUseResponsesAPI` | **OpenAI only**                                                 |
-| Chain                   | None for xAI; OpenAI uses `ServerChainState`                  |
+| Chain                   | None for xAI; OpenAI uses `ServerChainState`                    |
 | Auth                    | API key / server key / OpenRouter; SuperGrok OAuth on #9709     |
 | Catalog                 | `grok-4.5`, `grok-4.3`, retired older; no build/4.20            |
 
