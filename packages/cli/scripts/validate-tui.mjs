@@ -58,8 +58,12 @@ const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
+  // Keep in sync with FOCUSED_BACKGROUND_TASK in src/shared/copy/nestedRuns.ts.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
 const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START}.`;
+const STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE =
+  // Keep in sync with FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting.
+  'The selected background task is no longer accepting follow-ups.';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
   'solutions = []',
@@ -150,7 +154,7 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_WORKFLOW_TIMELINE: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, '\r'],
     expect: [
       'Repository audit Finished',
@@ -175,7 +179,7 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_WORKFLOW_RUNNING: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: [
       "Workflow script 'live-workflow-validation'",
@@ -729,7 +733,7 @@ const SCENARIOS = [
       '/resume',
       'Nothing to resume yet.',
       'Esc close',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['/resume is registered but has no harness action.'],
   },
@@ -1525,7 +1529,7 @@ const SCENARIOS = [
       'y approve',
       'n reject',
       'approval',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
   },
@@ -1693,7 +1697,7 @@ const SCENARIOS = [
       'Directory:',
       'y approve',
       'a approve commands for session',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
     maxOccurrences: [{ text: '{ T } TeXRA', max: 1 }],
@@ -1762,7 +1766,7 @@ const SCENARIOS = [
       'more rows',
       'scroll command',
       'y approve',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['╚═    print', 'Option-p tasks'],
   },
@@ -1783,7 +1787,7 @@ const SCENARIOS = [
       'more rows',
       'scroll command',
       'y approve',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: ['╚═    print', 'Option-p tasks'],
   },
@@ -2377,7 +2381,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: [
       'strategy',
@@ -2421,21 +2425,21 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+.
     checkpoints: [
       {
-        unexpect: ['Tab children', '1 sub', 'orderChecker'],
+        unexpect: ['Tab sessions', '1 sub', 'orderChecker'],
       },
       {
-        unexpect: ['Tab children', '1 sub', 'orderChecker'],
+        unexpect: ['Tab sessions', '1 sub', 'orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab children'],
+    expect: ['1 sub', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   {
@@ -2453,22 +2457,22 @@ const SCENARIOS = [
         // Active via the roster's retained-parent fallback, before the
         // child's own StreamSlice exists — not yet focusable.
         expect: ['1 sub'],
-        unexpect: ['Tab children', 'orderChecker'],
+        unexpect: ['Tab sessions', 'orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab children'],
+    expect: ['1 sub', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   {
@@ -2486,7 +2490,7 @@ const SCENARIOS = [
         // An edge alone cannot be focused until the child's StreamSlice exists.
         expect: ['◆'],
         unexpect: [
-          'Tab children',
+          'Tab sessions',
           '1 sub',
           'orderChecker',
           'harness-child-eve',
@@ -2495,19 +2499,19 @@ const SCENARIOS = [
       {
         // Attachment creates the slice and makes the existing edge focusable;
         // the running marker still waits for the next status fact.
-        expect: ['Tab children'],
+        expect: ['Tab sessions'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab children'],
+        expect: ['Tab sessions'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab children'],
+    expect: ['1 sub', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   {
@@ -2523,7 +2527,7 @@ const SCENARIOS = [
     checkpoints: [
       {
         unexpect: [
-          'Tab children',
+          'Tab sessions',
           '1 sub',
           'orderChecker',
           'harness-child-eve',
@@ -2533,22 +2537,22 @@ const SCENARIOS = [
         // Attachment does not supply a parent edge, so the running slice is
         // registered but still absent from the root's session list.
         unexpect: [
-          'Tab children',
+          'Tab sessions',
           '1 sub',
           'orderChecker',
           'harness-child-eve',
         ],
       },
       {
-        expect: ['Tab children'],
+        expect: ['Tab sessions'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab children'],
+    expect: ['1 sub', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   // The remaining four orderings correct old ambiguous transients (promotion,
@@ -2565,21 +2569,21 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+, E0 (promote to top-level), R_P+ (late,
     // stale roster from the former parent).
     checkpoints: [
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { expect: ['Tab children', '1 sub'], unexpect: ['orderChecker'] },
-      { expect: ['Tab children', '1 sub'], unexpect: ['orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
+      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
       {
         // Promoted to top-level: no longer active under root. The historical
         // relationship still contributes to the retained subagent count, but
         // the unified root session list omits the unrelated row.
-        expect: ['1 sub', 'Tab children'],
+        expect: ['1 sub', 'Tab sessions'],
         unexpect: ['orderChecker'],
       },
       {
         // A stale roster resend from the former parent must not resurrect
         // the edge or active membership; only retained history remains.
-        expect: ['1 sub', 'Tab children'],
+        expect: ['1 sub', 'Tab sessions'],
         unexpect: ['orderChecker'],
       },
     ],
@@ -2598,26 +2602,26 @@ const SCENARIOS = [
     // (root), R_P+ (root), R_other+ (late, stale — from the child's former,
     // never-displayed parent).
     checkpoints: [
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
       // Facts scoped to the never-displayed former parent must not leak into
       // root's own view at any point.
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
       {
-        expect: ['Tab children'],
+        expect: ['Tab sessions'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
       {
         // A late, stale roster from the child's former parent must not erase
         // active membership under the new (root) parent.
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
     ],
@@ -2638,7 +2642,7 @@ const SCENARIOS = [
     // that late facts naming a removed parent don't resurrect it anywhere or
     // wedge the TUI.
     checkpoints: [
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
       { unexpect: ['1 sub', 'orderChecker'] },
       { unexpect: ['1 sub', 'orderChecker'] },
       { unexpect: ['1 sub', 'orderChecker'] },
@@ -2663,33 +2667,33 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+, R_P- (roster omission), S(terminal),
     // X(child), R_P+ (late), E_P+ (late), A (late), late resume attempt.
     checkpoints: [
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { expect: ['Tab children', '1 sub'], unexpect: ['orderChecker'] },
-      { expect: ['Tab children', '1 sub'], unexpect: ['orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
+      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
       {
         // Untrack (roster omission) arrives before the terminal status: the
         // retained/historical relationship survives in the compact count.
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub'],
+        expect: ['Tab sessions', '1 sub'],
         unexpect: ['orderChecker'],
       },
       {
         // Removal scrubs every trace, including the retained/historical row.
-        unexpect: ['orderChecker', '1 sub', 'Tab children'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', 'Tab children'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', 'Tab children'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
         // A late re-attachment attempt for the removed id must stay ignored.
-        unexpect: ['orderChecker', '1 sub', 'Tab children'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
         // A late resume-transition attempt is the one status fact that would
@@ -2697,7 +2701,7 @@ const SCENARIOS = [
         // transition is a same-value no-op the status machine drops before
         // it gets there) — it must still stay suppressed by the removal
         // tombstone.
-        unexpect: ['orderChecker', '1 sub', 'Tab children'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
     ],
     // Prove the TUI is still interactive after the removal + late facts:
@@ -2717,7 +2721,7 @@ const SCENARIOS = [
       HARNESS_FAILED_CHILD: 'reviewer',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: [
       'strategy running',
@@ -2739,7 +2743,7 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: ['+3 sessions', '3 sub', 'Tab input', 'Ctrl-C stop'],
   },
@@ -2754,7 +2758,7 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: ['+3 sessions', 'Enter focus', 'Esc input', 'Ctrl-C stop'],
     unexpect: ['Option-p tasks'],
@@ -2771,10 +2775,10 @@ const SCENARIOS = [
     },
     // The collapsed frame must retain a discoverable Tab affordance even when
     // the child count no longer fits; Tab then expands and focuses the list.
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: ['+3 sessions'],
-    expectCollapsed: ['Session selection active.'],
+    expectCollapsed: ['Choosing a session'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2785,7 +2789,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: [
       '\t',
       DOWN,
@@ -2816,7 +2820,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: ['strategy is checking the harness-child-strategy details'],
     unexpect: [
@@ -2837,7 +2841,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
     expect: ['leanSolver w', '+3 sessions'],
@@ -2852,7 +2856,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, ESC, '\t'],
     expect: ['›   ● strategy running', 'Tab input', 'Esc input'],
     unexpect: ['signal read during notification phase', 'ERROR'],
@@ -2866,13 +2870,13 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['draft survives resize', '\t', DOWN],
     resizes: [{ cols: 44, rows: 5 }],
     keysAfterResize: [' and accepts input'],
     // The draft is windowed to the input's soft-break rows at narrow widths,
     // so the sentence may wrap — assert it collapsed rather than on one line.
-    expect: ['Tab children'],
+    expect: ['Tab sessions'],
     expectCollapsed: ['draft survives resize and accepts input'],
     unexpect: ['Enter focus', 'signal read during notification phase', 'ERROR'],
   },
@@ -2887,14 +2891,14 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t', UP, UP, UP, '\r'],
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
       '$ npm run compile:safe',
       'y approve',
-      'Use foreground panel shortcuts',
+      'Keys go to the panel above',
     ],
     unexpect: [
       'subagent: strategy · parent: main · model: harness-model',
@@ -2913,7 +2917,7 @@ const SCENARIOS = [
       HARNESS_LONG_CHILD_OUTPUT: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: ['strategy detail line 15', 'strategy detail line 18'],
     unexpect: [
@@ -2936,7 +2940,7 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t'],
     expect: ['1 subagent', 'localChecker running'],
     unexpect: [
@@ -2957,7 +2961,7 @@ const SCENARIOS = [
       HARNESS_LONG_CHILD_OUTPUT: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'v'],
     expect: [
       '[Full output: strategy]',
@@ -2979,7 +2983,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r', '/status', '\r'],
     frame: 'viewport',
     expect: ['strategy is checking the harness-child-strategy details'],
@@ -3003,11 +3007,11 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'v'],
     expect: [
       '›   ● strategy running',
-      'Session selection active.',
+      'Choosing a session',
       'v full output',
       'Esc input',
     ],
@@ -3026,7 +3030,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'v', '\r', '\t', UP, UP, UP, '\r'],
     expect: [
       'entry-1 chat history line',
@@ -3034,7 +3038,7 @@ const SCENARIOS = [
       '[Full output: strategy]',
       'strategy is checking the harness-child-strategy details',
       '3 subagents',
-      'Tab children',
+      'Tab sessions',
     ],
     maxOccurrences: [
       { text: 'entry-1 chat history line', max: 1 },
@@ -3075,7 +3079,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k'],
     expect: [
       '›   ● strategy stopped',
@@ -3096,7 +3100,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
     expect: [
@@ -3115,7 +3119,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r', '\t', UP, '\r'],
     frame: 'viewport',
     expect: ['◆ waiting for you', 'root active'],
@@ -3133,7 +3137,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: [
       '\t',
       DOWN,
@@ -3148,7 +3152,7 @@ const SCENARIOS = [
     expect: ['◆ stopped', 'root active', STOPPED_SUBAGENT_INPUT_MESSAGE_START],
     expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
     unexpect: [
-      'The selected background task is no longer accepting follow-ups.',
+      STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
       'Harness received: can you still receive this?',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
@@ -3225,7 +3229,7 @@ const SCENARIOS = [
       '◆ stopped own API keys',
       'latest stopped prompt',
     ],
-    unexpect: ['older stopped prompt', 'Session selection active.'],
+    unexpect: ['older stopped prompt', 'Choosing a session'],
   },
   {
     name: 'escape-stops-focused-main-only',
@@ -3234,7 +3238,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: [{ input: ESC, delayMs: 700 }, DOWN],
     frame: 'viewport',
     expect: [
@@ -3244,7 +3248,7 @@ const SCENARIOS = [
       'leanSolver waiting for you',
       'reviewer running',
       '3 sub',
-      'Session selection active.',
+      'Choosing a session',
     ],
     unexpect: ['Harness interrupt requested.'],
   },
@@ -3255,7 +3259,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: [
       '\t',
       DOWN,
@@ -3272,7 +3276,7 @@ const SCENARIOS = [
       'leanSolver waiting for you',
       'reviewer running',
       '3 subagents',
-      'Session selection active.',
+      'Choosing a session',
     ],
     unexpect: ['Harness interrupt requested.', '› ✓ ● main stopped'],
   },
@@ -3284,7 +3288,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
       HARNESS_RETARGET_FOCUSED_ESCAPE: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r', { input: ESC, delayMs: 700 }, '\t'],
     frame: 'viewport',
     expect: [
@@ -3307,7 +3311,7 @@ const SCENARIOS = [
     bootExpect: 'Run command?',
     keys: [{ input: ESC, delayMs: 700 }],
     frame: 'viewport',
-    expect: ['3 subagents', 'Tab children', 'Ctrl-C stop'],
+    expect: ['3 subagents', 'Tab sessions', 'Ctrl-C stop'],
     unexpect: [
       'Run command?',
       'Harness focused interrupt requested',
@@ -3321,10 +3325,10 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: [{ input: ESC, delayMs: 80 }, '2'],
     frame: 'viewport',
-    expect: ['waiting for you', 'root active', 'Tab children'],
+    expect: ['waiting for you', 'root active', 'Tab sessions'],
     unexpect: [
       'Harness focused interrupt requested',
       'Harness interrupt requested.',
@@ -3353,14 +3357,14 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'Tab children',
+    bootExpect: 'Tab sessions',
     keys: [ETX],
     frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
       '◆ stopped own API keys',
       '3 subagents',
-      'Tab children',
+      'Tab sessions',
       'Ctrl-C exit',
     ],
     unexpect: ['Ctrl-C stop'],
@@ -3722,12 +3726,13 @@ function exactFrameDifference(actualFrame, expectedFrame, oracleName) {
 
 function expectedFrameTextVisible(scenario, frame) {
   const collapsedFrame = collapseFrameText(frame);
+  const expectTexts = scenario.expect ?? [];
+  const expectPatterns = scenario.expectPatterns ?? [];
+  const expectCollapsed = scenario.expectCollapsed ?? [];
   return (
-    (scenario.expect ?? []).every((text) => frame.includes(text)) &&
-    (scenario.expectPatterns ?? []).every((pattern) => pattern.test(frame)) &&
-    (scenario.expectCollapsed ?? []).every((text) =>
-      collapsedFrame.includes(text),
-    )
+    expectTexts.every((text) => frame.includes(text)) &&
+    expectPatterns.every((pattern) => pattern.test(frame)) &&
+    expectCollapsed.every((text) => collapsedFrame.includes(text))
   );
 }
 
@@ -4033,32 +4038,32 @@ function writeSnapshotReport(results) {
   );
 }
 
+function createSkipResult(scenario, reason) {
+  return {
+    name: scenario.name,
+    ok: true,
+    skipped: true,
+    skipReason: reason,
+    failures: [],
+    frame: reason,
+    rows: scenarioRows(scenario),
+  };
+}
+
 async function runScenario(scenario, index) {
   if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
-    const skipReason = `scenario is only supported on ${scenario.platforms.join(', ')}`;
-    return {
-      name: scenario.name,
-      ok: true,
-      skipped: true,
-      skipReason,
-      failures: [],
-      frame: skipReason,
-      rows: scenarioRows(scenario),
-    };
+    return createSkipResult(
+      scenario,
+      `scenario is only supported on ${scenario.platforms.join(', ')}`,
+    );
   }
 
   const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
   if (scenario.fakeClipboard && !fakeClipboard) {
-    const skipReason = `fake clipboard is not supported on ${process.platform}`;
-    return {
-      name: scenario.name,
-      ok: true,
-      skipped: true,
-      skipReason,
-      failures: [],
-      frame: skipReason,
-      rows: scenarioRows(scenario),
-    };
+    return createSkipResult(
+      scenario,
+      `fake clipboard is not supported on ${process.platform}`,
+    );
   }
   try {
     return await runScenarioWithResources(scenario, fakeClipboard, index);
@@ -4086,6 +4091,113 @@ function scenarioChildEnv(scenario, cols, rows) {
     COLUMNS: String(cols),
     LINES: String(rows),
   };
+}
+
+function gatherAssertionFailures({
+  scenario,
+  frame,
+  rawOutput,
+  fakeClipboard,
+  checkpointFailures,
+  booted,
+  exited,
+  exitedCleanly,
+}) {
+  const collapsedFrame = collapseFrameText(frame);
+  const missing = (scenario.expect ?? []).filter((t) => !frame.includes(t));
+  const missingCollapsed = (scenario.expectCollapsed ?? []).filter(
+    (t) => !collapsedFrame.includes(t),
+  );
+  const missingPatterns = (scenario.expectPatterns ?? []).filter(
+    (pattern) => !pattern.test(frame),
+  );
+  const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
+  const presentPatterns = (scenario.unexpectPatterns ?? []).filter((pattern) =>
+    pattern.test(frame),
+  );
+  const failures = [...checkpointFailures];
+
+  if (!booted) failures.push('input prompt never rendered (boot timeout)');
+  for (const t of missing)
+    failures.push(`expected text missing: ${JSON.stringify(t)}`);
+  for (const t of missingCollapsed)
+    failures.push(`expected collapsed text missing: ${JSON.stringify(t)}`);
+  for (const pattern of missingPatterns)
+    failures.push(`expected pattern missing: ${pattern.toString()}`);
+  for (const t of present)
+    failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  for (const pattern of presentPatterns)
+    failures.push(`unexpected pattern present: ${pattern.toString()}`);
+  for (const check of scenario.maxOccurrences ?? []) {
+    const actual = countOccurrences(frame, check.text);
+    if (actual > check.max) {
+      failures.push(
+        `text appears too many times: ${JSON.stringify(check.text)} (${actual} > ${check.max})`,
+      );
+    }
+  }
+  for (const check of scenario.ordered ?? []) {
+    const failure = orderedTextFailure(frame, check);
+    if (failure) failures.push(failure);
+  }
+  for (const check of scenario.maxBlankLinesBetween ?? []) {
+    const actual = blankLinesBetween(frame, check.from, check.to);
+    if (actual === undefined) {
+      failures.push(
+        `could not find compactness markers: ${JSON.stringify(check.from)} → ${JSON.stringify(check.to)}`,
+      );
+    } else if (actual > check.max) {
+      failures.push(
+        `too many blank lines between ${JSON.stringify(check.from)} and ${JSON.stringify(check.to)}: ${actual} > ${check.max}`,
+      );
+    }
+  }
+  if (scenario.maxLineColumns != null) {
+    const maxColumns = Number(scenario.maxLineColumns);
+    const tooWide = frame
+      .split('\n')
+      .map((line, index) => ({
+        index: index + 1,
+        columns: lineColumns(line),
+        line,
+      }))
+      .filter((line) => line.columns > maxColumns);
+    if (tooWide.length > 0) {
+      const first = tooWide[0];
+      failures.push(
+        `line ${first.index} exceeds ${maxColumns} columns: ${first.columns} (${JSON.stringify(first.line)})`,
+      );
+    }
+  }
+  if (scenario.expectExit && !exitedCleanly) {
+    const exitDetails = exited
+      ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
+      : '';
+    failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
+  }
+  if (scenario.rawUnexpectSgr) {
+    const sgrSequences = [...new Set(rawOutput.match(ANSI_SGR_PATTERN) ?? [])];
+    if (sgrSequences.length > 0) {
+      failures.push(
+        `raw output contains SGR escapes: ${sgrSequences
+          .slice(0, 5)
+          .map((sequence) => JSON.stringify(sequence))
+          .join(', ')}`,
+      );
+    }
+  }
+  if (fakeClipboard) {
+    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
+    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
+      if (!copiedText.includes(text)) {
+        failures.push(
+          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+  }
+
+  return failures;
 }
 
 async function runScenarioWithResources(scenario, fakeClipboard, index) {
@@ -4273,98 +4385,16 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     } catch {}
   }
 
-  const collapsedFrame = collapseFrameText(frame);
-  const missing = (scenario.expect ?? []).filter((t) => !frame.includes(t));
-  const missingCollapsed = (scenario.expectCollapsed ?? []).filter(
-    (t) => !collapsedFrame.includes(t),
-  );
-  const missingPatterns = (scenario.expectPatterns ?? []).filter(
-    (pattern) => !pattern.test(frame),
-  );
-  const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
-  const presentPatterns = (scenario.unexpectPatterns ?? []).filter((pattern) =>
-    pattern.test(frame),
-  );
-  const failures = [...checkpointFailures];
-  if (!booted) failures.push('input prompt never rendered (boot timeout)');
-  for (const t of missing)
-    failures.push(`expected text missing: ${JSON.stringify(t)}`);
-  for (const t of missingCollapsed)
-    failures.push(`expected collapsed text missing: ${JSON.stringify(t)}`);
-  for (const pattern of missingPatterns)
-    failures.push(`expected pattern missing: ${pattern.toString()}`);
-  for (const t of present)
-    failures.push(`unexpected text present: ${JSON.stringify(t)}`);
-  for (const pattern of presentPatterns)
-    failures.push(`unexpected pattern present: ${pattern.toString()}`);
-  for (const check of scenario.maxOccurrences ?? []) {
-    const actual = countOccurrences(frame, check.text);
-    if (actual > check.max) {
-      failures.push(
-        `text appears too many times: ${JSON.stringify(check.text)} (${actual} > ${check.max})`,
-      );
-    }
-  }
-  for (const check of scenario.ordered ?? []) {
-    const failure = orderedTextFailure(frame, check);
-    if (failure) failures.push(failure);
-  }
-  for (const check of scenario.maxBlankLinesBetween ?? []) {
-    const actual = blankLinesBetween(frame, check.from, check.to);
-    if (actual === undefined) {
-      failures.push(
-        `could not find compactness markers: ${JSON.stringify(check.from)} → ${JSON.stringify(check.to)}`,
-      );
-    } else if (actual > check.max) {
-      failures.push(
-        `too many blank lines between ${JSON.stringify(check.from)} and ${JSON.stringify(check.to)}: ${actual} > ${check.max}`,
-      );
-    }
-  }
-  if (scenario.maxLineColumns != null) {
-    const maxColumns = Number(scenario.maxLineColumns);
-    const tooWide = frame
-      .split('\n')
-      .map((line, index) => ({
-        index: index + 1,
-        columns: lineColumns(line),
-        line,
-      }))
-      .filter((line) => line.columns > maxColumns);
-    if (tooWide.length > 0) {
-      const first = tooWide[0];
-      failures.push(
-        `line ${first.index} exceeds ${maxColumns} columns: ${first.columns} (${JSON.stringify(first.line)})`,
-      );
-    }
-  }
-  if (scenario.expectExit && !exitedCleanly) {
-    const exitDetails = exited
-      ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
-      : '';
-    failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
-  }
-  if (scenario.rawUnexpectSgr) {
-    const sgrSequences = [...new Set(rawOutput.match(ANSI_SGR_PATTERN) ?? [])];
-    if (sgrSequences.length > 0) {
-      failures.push(
-        `raw output contains SGR escapes: ${sgrSequences
-          .slice(0, 5)
-          .map((sequence) => JSON.stringify(sequence))
-          .join(', ')}`,
-      );
-    }
-  }
-  if (fakeClipboard) {
-    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
-    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
-      if (!copiedText.includes(text)) {
-        failures.push(
-          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
-        );
-      }
-    }
-  }
+  const failures = gatherAssertionFailures({
+    scenario,
+    frame,
+    rawOutput,
+    fakeClipboard,
+    checkpointFailures,
+    booted,
+    exited,
+    exitedCleanly,
+  });
 
   return {
     name: scenario.name,

@@ -36,6 +36,12 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
+import {
+  CHATGPT_AUTH,
+  GROK_AUTH,
+  RESEARCHER_ACCESS_AUTH,
+} from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -56,18 +62,19 @@ const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
 
 export function loginStartMessage(args: CliLoginSlashArgs): string {
   if (args.target === 'chatgpt') {
-    if (args.device) return 'Starting ChatGPT device-code sign-in.';
-    if (args.noBrowser) return 'Starting ChatGPT sign-in.';
-    return 'Opening browser for ChatGPT sign-in...';
+    if (args.device) return CHATGPT_AUTH.startingDevice;
+    if (args.noBrowser) return CHATGPT_AUTH.startingNoBrowser;
+    return CHATGPT_AUTH.startingBrowser;
   }
   if (args.target === 'grok') {
-    if (args.device) return 'Starting Grok device-code sign-in.';
-    if (args.noBrowser) return 'Starting Grok sign-in.';
-    return 'Opening browser for Grok sign-in...';
+    if (args.device) return GROK_AUTH.startingDevice;
+    if (args.noBrowser) return GROK_AUTH.startingNoBrowser;
+    return GROK_AUTH.startingBrowser;
   }
-  if (args.device) return 'Starting TeXRA device-code sign-in.';
-  if (args.noBrowser) return `Starting TeXRA ${args.provider} sign-in.`;
-  return `Opening browser for TeXRA ${args.provider} sign-in...`;
+  if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
+  if (args.noBrowser)
+    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
+  return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
 }
 
 async function loginToChatGptSubscription(
@@ -84,8 +91,11 @@ async function loginToChatGptSubscription(
 
   output.appendOutcome(
     update.effective
-      ? `Signed in with ChatGPT as ${codexAccountLabel(session)} (Codex models enabled).`
-      : `Signed in with ChatGPT as ${codexAccountLabel(session)} (Codex models remain disabled because a more specific setting overrides ${update.target} config).`,
+      ? CHATGPT_AUTH.signedInEnabled(codexAccountLabel(session))
+      : CHATGPT_AUTH.signedInOverrideDisabled(
+          codexAccountLabel(session),
+          update.target,
+        ),
   );
 }
 
@@ -103,8 +113,11 @@ async function loginToGrokSubscription(
 
   output.appendOutcome(
     update.effective
-      ? `Signed in with Grok as ${xaiAccountLabel(session)} (xAI models enabled).`
-      : `Signed in with Grok as ${xaiAccountLabel(session)} (xAI models remain disabled because a more specific setting overrides ${update.target} config).`,
+      ? GROK_AUTH.signedInEnabled(xaiAccountLabel(session))
+      : GROK_AUTH.signedInOverrideDisabled(
+          xaiAccountLabel(session),
+          update.target,
+        ),
   );
 }
 
@@ -141,9 +154,7 @@ async function loginToTexraIncludedAccess(
         signal,
       });
   setCliSessionApiMode('included');
-  output.appendOutcome(
-    `Signed in with TeXRA as ${session.account.label} (included models enabled).`,
-  );
+  output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 }
 
 export function loginFromChat(
@@ -210,32 +221,43 @@ export async function logoutFromChat(
     try {
       await signOutCliSupabase();
       texraSignedOut = true;
-      lines.push('Signed out of TeXRA.');
+      lines.push(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     } catch (error: unknown) {
-      lines.push(`TeXRA sign-out failed: ${toErrorMessage(error)}`);
+      lines.push(
+        `${RESEARCHER_ACCESS.label} sign-out failed: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  async function signOutSubscription<T>(
+    label: string,
+    signOut: () => Promise<T>,
+    preferenceMessage: (update: T) => string,
+  ): Promise<void> {
+    try {
+      const update = await signOut();
+      refreshCodexPreferenceViews();
+      lines.push(`Signed out of ${label}.`);
+      lines.push(preferenceMessage(update));
+    } catch (error: unknown) {
+      lines.push(`${label} sign-out failed: ${toErrorMessage(error)}`);
     }
   }
 
   if (target === 'chatgpt' || target === 'all') {
-    try {
-      const chatGptUpdate = await signOutCliChatGpt();
-      refreshCodexPreferenceViews();
-      lines.push('Signed out of ChatGPT.');
-      lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
-    } catch (error: unknown) {
-      lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
-    }
+    await signOutSubscription(
+      CHATGPT_AUTH.label,
+      signOutCliChatGpt,
+      chatGptSignOutPreferenceMessage,
+    );
   }
 
   if (target === 'grok' || target === 'all') {
-    try {
-      const grokUpdate = await signOutCliGrok();
-      refreshCodexPreferenceViews();
-      lines.push('Signed out of Grok.');
-      lines.push(grokSignOutPreferenceMessage(grokUpdate));
-    } catch (error: unknown) {
-      lines.push(`Grok sign-out failed: ${toErrorMessage(error)}`);
-    }
+    await signOutSubscription(
+      GROK_AUTH.label,
+      signOutCliGrok,
+      grokSignOutPreferenceMessage,
+    );
   }
 
   if (texraSignedOut) {

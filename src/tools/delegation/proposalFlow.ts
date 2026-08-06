@@ -83,6 +83,29 @@ export function requireVisibleAgent(
   );
 }
 
+/**
+ * Resolve an agent across both Workflow and ToolUse rosters, returning the
+ * first match and its category. Used by delegate_multi_agents where the outer
+ * `agent` parameter accepts both kinds.
+ */
+export function requireWorkflowOrToolUseAgent(
+  name: string,
+  scope?: AgentDelegationScope,
+): { agent: AgentEntry; category: AgentCategory } {
+  let firstError: unknown;
+  for (const category of [
+    AgentCategory.Workflow,
+    AgentCategory.ToolUse,
+  ] as const) {
+    try {
+      return { agent: requireVisibleAgent(category, name, scope), category };
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+  throw firstError;
+}
+
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
