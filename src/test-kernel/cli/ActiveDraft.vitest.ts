@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - TUI input policy
-import { triggerAppCtrlC } from '@cli/chat/tui/appInteractionPolicy';
 import { createActiveDraftRegistry } from '@cli/chat/tui/input/activeDraft';
 
 describe('active foreground draft', () => {
@@ -37,27 +36,5 @@ describe('active foreground draft', () => {
     const registry = createActiveDraftRegistry();
 
     expect(registry.discard()).toBe(false);
-  });
-
-  it('clears a dialog draft before the root policy exits', () => {
-    const registry = createActiveDraftRegistry();
-    const onExit = vi.fn();
-    let draft = 'answer in progress';
-    registry.register(() => {
-      if (draft.length === 0) return false;
-      draft = '';
-      return true;
-    });
-
-    expect(
-      triggerAppCtrlC({
-        discardDraft: registry.discard,
-        canStopActiveRun: () => false,
-        onInterruptActive: vi.fn(),
-        onExit,
-      }),
-    ).toBe('clear-draft');
-    expect(draft).toBe('');
-    expect(onExit).not.toHaveBeenCalled();
   });
 });

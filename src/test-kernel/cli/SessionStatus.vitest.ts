@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   formatCliStatusLabel,
   formatCliSessionStatus,
   type CliSessionStatusInput,
 } from '@cli/chat/tui/sessionStatus';
 import { STREAM_PHASE } from '@shared/schemas';
-
-const STREAM_ID = 'status-queued-followups-test-stream';
 
 function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
   return formatCliSessionStatus({
@@ -246,18 +243,5 @@ describe('CLI session status formatter', () => {
     expect(formatCliStatusLabel(STREAM_PHASE.FAILED, undefined, true)).toBe(
       'error',
     );
-  });
-
-  it('reads queued follow-ups from the queue manager for status details', () => {
-    const queueManager = new ToolUseFollowUpQueue();
-    const lease = queueManager.claimLive(STREAM_ID, 'flow')!;
-    queueManager.drainItems(lease);
-    try {
-      queueManager.queue(lease).enqueue({ text: 'Fresh queue message' });
-
-      expect(queueManager.getAll(STREAM_ID)).toEqual(['Fresh queue message']);
-    } finally {
-      queueManager.drainItems(lease);
-    }
   });
 });

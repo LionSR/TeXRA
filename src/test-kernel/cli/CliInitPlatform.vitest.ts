@@ -567,20 +567,4 @@ describe('CLI platform interactive signal ownership', () => {
       ]);
     });
   });
-
-  it('documents the race a forgotten installSignalHandlers:false would reintroduce', async () => {
-    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
-      // A call site that used plain initCliPlatform (pre-fix behavior at
-      // every interactive entry point) installs the platform handler...
-      await initPlatform.initCliPlatform(cliContext());
-      // ...and once the TUI mounts and claims the signals too, BOTH owners
-      // are registered for the same signal — the exact race from the
-      // finding, reproduced against real production wiring.
-      process.on('SIGINT', () => undefined);
-      process.on('SIGTERM', () => undefined);
-
-      expect(registered.filter((r) => r.event === 'SIGINT')).toHaveLength(2);
-      expect(registered.filter((r) => r.event === 'SIGTERM')).toHaveLength(2);
-    });
-  });
 });

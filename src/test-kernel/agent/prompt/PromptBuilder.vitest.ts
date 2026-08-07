@@ -1,15 +1,12 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// Type imports
+import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import {
   buildInitialToolUsePrompts,
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
-import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 
-function buildMemoryPrompts() {
+function buildMemoryPrompts(): ReturnType<typeof buildInitialToolUsePrompts> {
   return buildInitialToolUsePrompts(
     {
       systemPrompt: 'system',
@@ -32,13 +29,13 @@ describe('PromptBuilder', () => {
 
     const builder = new PromptBuilder(prompt, { value: 'test' });
     const initial = await builder.buildInitialPrompts();
-    assert.equal(initial.userRequest, 'initial test');
+    expect(initial.userRequest).toBe('initial test');
 
     const reflect = await builder.buildUserRequest(1);
-    assert.equal(reflect, 'reflect test');
+    expect(reflect).toBe('reflect test');
 
     const fallback = await builder.buildUserRequest(3);
-    assert.equal(fallback, 'reflect test');
+    expect(fallback).toBe('reflect test');
   });
 
   it('handles single string userRequest by reusing for subsequent rounds', async () => {
@@ -50,21 +47,20 @@ describe('PromptBuilder', () => {
 
     const builder = new PromptBuilder(prompt, {});
     const initial = await builder.buildInitialPrompts();
-    assert.equal(initial.userRequest, 'initial only');
+    expect(initial.userRequest).toBe('initial only');
 
     // Single-template agents reuse the template for subsequent rounds
     const reflectPrompt = await builder.buildUserRequest(1);
-    assert.equal(reflectPrompt, 'initial only');
+    expect(reflectPrompt).toBe('initial only');
   });
 
   it('keeps memory checks relevant and points view at the memory root', async () => {
     const prompts = await buildMemoryPrompts();
 
-    assert.match(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).toMatch(
       /do not read unpinned memory files or write memory/,
     );
-    assert.match(prompts.instructionSuffix, /`view`[^`\n]*`\/memories`/);
+    expect(prompts.instructionSuffix).toMatch(/`view`[^`\n]*`\/memories`/);
   });
 
   it('keeps pinned-memory consultation unconditional even for self-contained requests', async () => {
@@ -77,28 +73,22 @@ describe('PromptBuilder', () => {
     // files must be individually viewed at session start — a directory
     // listing alone does not load their content — and this must hold even
     // for self-contained-looking requests.
-    assert.match(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).toMatch(
       /Pinned memories are always loaded/,
     );
-    assert.match(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).toMatch(
       /`view` each \[pinned\] file|`view` each pinned file|read each pinned memory file/,
     );
-    assert.match(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).toMatch(
       /regardless of how self-contained|even for requests that otherwise look self-contained/,
     );
-    assert.doesNotMatch(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).not.toMatch(
       /When memory is relevant, consult pinned memories first/,
     );
-    assert.match(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).toMatch(
       /When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history/,
     );
-    assert.doesNotMatch(
-      prompts.instructionSuffix,
+    expect(prompts.instructionSuffix).not.toMatch(
       /^ +- When git is available, look into git history/m,
     );
   });

@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
 // Third-party imports
-import { describe, it, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -20,51 +20,36 @@ setupPlatform({
 });
 
 describe('maybeSaveDebugObject', () => {
-  let storageWrites: { relativePath: string; value: unknown }[];
-  let ensured: string[];
-  let workspaceWrites: { relativePath: string; value: unknown }[];
-  let infoLogs: string[];
-  let errorLogs: string[];
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
-  beforeEach(() => {
-    storageWrites = [];
-    ensured = [];
-    workspaceWrites = [];
-    infoLogs = [];
-    errorLogs = [];
+  it('creates the run directory and writes debug objects under storage when executionId is provided', async () => {
+    const storageWrites: { relativePath: string; value: unknown }[] = [];
+    const ensured: string[] = [];
+    const workspaceWrites: { relativePath: string; value: unknown }[] = [];
+    const infoLogs: string[] = [];
+    const errorLogs: string[] = [];
 
     vi.spyOn(StorageFS, 'writeJson').mockImplementation(
       async (relativePath, value) => {
         storageWrites.push({ relativePath, value });
       },
     );
-
     vi.spyOn(StorageFS, 'ensureDir').mockImplementation(
       async (relativePath) => {
         ensured.push(relativePath);
       },
     );
-
     vi.spyOn(StorageFS, 'fullPath').mockImplementation((relativePath) =>
       path.join('/mock/storage', relativePath),
     );
-
     vi.spyOn(WorkspaceFS, 'writeJson').mockImplementation(
       async (relativePath, value) => {
         workspaceWrites.push({ relativePath, value });
       },
     );
 
-    vi.spyOn(WorkspaceFS, 'fullPath').mockImplementation((relativePath) =>
-      path.join('/mock/workspace', relativePath),
-    );
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('creates the run directory and writes debug objects under storage when executionId is provided', async () => {
     const executionId = 'run-42' as ExecutionId;
 
     const logger = {

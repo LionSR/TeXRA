@@ -205,7 +205,7 @@ describe('AgentTrace stream output', () => {
   });
 });
 
-describe('tool-use card groupId resolution', () => {
+describe('tool-use card input redaction', () => {
   it('redacts set_api_key input from fast-tool transcript persistence', () => {
     withStore((store, logger) => {
       const rawInput = { provider: 'openai', key: 'sk-secret-value' };
@@ -229,7 +229,9 @@ describe('tool-use card groupId resolution', () => {
       expect(rawInput.key).toBe('sk-secret-value');
     });
   });
+});
 
+describe('tool-use card groupId resolution', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
     const store = StreamLogStore.ephemeral('test');
     const logger = createRunTrace('stream', store).trace;

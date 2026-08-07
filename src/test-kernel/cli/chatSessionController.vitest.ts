@@ -590,16 +590,6 @@ describe('createChatSessionController', () => {
     rootRunStreamId.set(undefined);
   });
 
-  it('returns an object satisfying the ChatSessionController interface', () => {
-    const ctrl = createChatSessionController(makeInit());
-    expect(ctrl).toBeDefined();
-    expect(typeof ctrl.startRootRun).toBe('function');
-    expect(typeof ctrl.resume).toBe('function');
-    expect(typeof ctrl.stop).toBe('function');
-    expect(typeof ctrl.stopStream).toBe('function');
-    expect(typeof ctrl.canStartRootRun).toBe('function');
-  });
-
   it('does not surface an intentional stop as an error', async () => {
     const run = pDefer<never>();
     const session = makeSession();

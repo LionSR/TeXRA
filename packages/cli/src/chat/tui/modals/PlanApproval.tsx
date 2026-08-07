@@ -26,7 +26,7 @@ export interface PlanApprovalProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
+const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 export const PLAN_APPROVAL_FEEDBACK_PLACEHOLDER =

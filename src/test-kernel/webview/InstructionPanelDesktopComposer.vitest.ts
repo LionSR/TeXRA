@@ -62,9 +62,8 @@ function countExecutes(element: InstructionPanel): () => number {
 describe('instruction-panel desktop composer', () => {
   useLitComponentTestDom(loadInstructionPanelModules);
 
-  it('opts into the desktop treatment without changing the extension default', async () => {
+  it('opts into the desktop layout and controls when desktopHost is set', async () => {
     const desktop = await mountPanel(true);
-    const extension = await mountPanel(false);
 
     expect(desktop.hasAttribute('desktop-host')).toBe(true);
     expect(query(desktop, '.desktop-drop-affordance')).toBeTruthy();
@@ -77,6 +76,16 @@ describe('instruction-panel desktop composer', () => {
         '.instruction-header #sessionTypeToggle',
       ),
     ).toBeNull();
+    expect(desktop.shadowRoot?.querySelector('#sessionTypeToggle')).toBeNull();
+    expect(desktop.shadowRoot?.querySelector('#launchTargetToggle')).toBeNull();
+    expect(
+      query(desktop, '.desktop-drop-affordance .icon-surface.is-size-m'),
+    ).toBeTruthy();
+  });
+
+  it('uses the compact composer affordances on desktop', async () => {
+    const desktop = await mountPanel(true);
+
     expect(query(desktop, '#instruction').getAttribute('rows')).toBe('4');
     expect(query(desktop, '#instruction').getAttribute('enterkeyhint')).toBe(
       'send',
@@ -87,14 +96,13 @@ describe('instruction-panel desktop composer', () => {
     expect(query(desktop, '#executeButton wa-icon').getAttribute('name')).toBe(
       'arrow-up',
     );
-    expect(desktop.shadowRoot?.querySelector('#sessionTypeToggle')).toBeNull();
-    expect(desktop.shadowRoot?.querySelector('#launchTargetToggle')).toBeNull();
     for (const id of ['#desktopLaunchMode', '#toolUseAgent', '#model']) {
       expect(query(desktop, id).getAttribute('size')).toBe('xs');
     }
-    expect(
-      query(desktop, '.desktop-drop-affordance .icon-surface.is-size-m'),
-    ).toBeTruthy();
+  });
+
+  it('keeps the extension panel on the default treatment when desktopHost is unset', async () => {
+    const extension = await mountPanel(false);
 
     expect(extension.hasAttribute('desktop-host')).toBe(false);
     expect(

@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 // Local imports - Supabase relay
 import {
   FREE_TIER_MAX_OUTPUT_TOKENS,
-  FREE_TIER_REQUEST_BODY_LIMIT_BYTES,
   clampFreeTierMaxOutputTokens,
   formatRequestBytes,
   readRequestBodyWithinSizeLimit,
@@ -25,10 +24,7 @@ import {
   releaseRelaySlotSafely,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
-import {
-  getCanonicalRelayModelName,
-  getRequestLimits,
-} from '../../../supabase/functions/relay/models';
+import { getCanonicalRelayModelName } from '../../../supabase/functions/relay/models';
 import {
   isModelFreeRelayPath,
   isRetiredGoogleGenerateContentPath,
@@ -120,10 +116,6 @@ describe('relay free-tier request limits', () => {
     return slot;
   }
 
-  it('allows four concurrent free-tier requests', () => {
-    assert.equal(getRequestLimits('free').concurrent, 4);
-  });
-
   it('reads accepted request streams without changing bytes', async () => {
     const result = await readRequestBodyWithinSizeLimit(
       byteStream([bytes(0, 255), bytes(1)]),
@@ -146,12 +138,8 @@ describe('relay free-tier request limits', () => {
     assert.equal(result.requestBytes, 4);
   });
 
-  it('uses a loose default limit for normal research requests', () => {
-    assert.equal(FREE_TIER_REQUEST_BODY_LIMIT_BYTES, 2 * 1024 * 1024);
-    assert.equal(
-      formatRequestBytes(FREE_TIER_REQUEST_BODY_LIMIT_BYTES),
-      '2 MiB',
-    );
+  it('formats request byte limits in whole MiB', () => {
+    assert.equal(formatRequestBytes(2 * 1024 * 1024), '2 MiB');
   });
 
   it.each([

@@ -24,11 +24,6 @@
     {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
       "category": "exports",
-      "name": "KEYCHAIN_DENIED_WARNING_MESSAGE"
-    },
-    {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "exports",
       "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
     },
     {

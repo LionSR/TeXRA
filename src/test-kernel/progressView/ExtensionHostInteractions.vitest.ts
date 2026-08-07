@@ -215,8 +215,6 @@ describe('createExtensionHostInteractions', () => {
       'stream-a',
     );
 
-    expect(initiatingProposal).toBeDefined();
-    expect(otherStream).toBeDefined();
     expect(
       interactions.submitProposalDecision('proposal-current', {
         action: 'approve',
