@@ -20,10 +20,9 @@
 
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
-/** OpenAI-compatible base URL for the Kimi Code coding endpoint. */
-export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
+import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
 
 /**
  * Open-platform `fullName` → coding-endpoint wire ID. Exclusive plan aliases

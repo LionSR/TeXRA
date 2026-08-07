@@ -11,7 +11,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
-import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 

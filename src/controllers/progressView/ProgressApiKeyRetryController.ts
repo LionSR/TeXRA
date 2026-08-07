@@ -18,6 +18,7 @@ interface ProgressApiKeyPreparationResult {
   proceeded: boolean;
   disabledIncludedModelAccess: boolean;
   disabledChatGptSubscription: boolean;
+  disabledKimiCodeSubscription: boolean;
 }
 
 export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
@@ -27,6 +28,7 @@ export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResu
 interface ProgressApiRoutingSnapshot {
   readonly useIncludedModelAccess: boolean;
   readonly preferChatGptSubscription: boolean;
+  readonly preferKimiCode: boolean;
 }
 
 function noRetryResult(): ProgressApiKeyRetryResult {
@@ -35,6 +37,7 @@ function noRetryResult(): ProgressApiKeyRetryResult {
     retried: false,
     disabledIncludedModelAccess: false,
     disabledChatGptSubscription: false,
+    disabledKimiCodeSubscription: false,
   };
 }
 
@@ -47,6 +50,8 @@ export interface ProgressApiKeyRetryControllerDeps {
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
   getPreferChatGptSubscription(): boolean;
   setPreferChatGptSubscription(enabled: boolean): Promise<void>;
+  getPreferKimiCode(): boolean;
+  setPreferKimiCode(enabled: boolean): Promise<void>;
   invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
   triggerRetry(stream: StreamTabId, requestId: string): boolean;
@@ -122,7 +127,8 @@ export class ProgressApiKeyRetryController {
     return (
       request.viaRelay === true ||
       request.exhaustionReason === 'chatgpt-subscription' ||
-      request.exhaustionReason === 'copilot-subscription'
+      request.exhaustionReason === 'copilot-subscription' ||
+      request.exhaustionReason === 'kimi-code-subscription'
     );
   }
 
@@ -134,6 +140,12 @@ export class ProgressApiKeyRetryController {
       request.exhaustionReason === 'copilot-subscription' &&
       request.chatGptSubscriptionEligible === true
     );
+  }
+
+  private isKimiCodeSubscriptionExhausted(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): boolean {
+    return request.exhaustionReason === 'kimi-code-subscription';
   }
 
   private async applyOwnApiKeyRouting(
@@ -165,10 +177,25 @@ export class ProgressApiKeyRetryController {
       disabledChatGptSubscription = true;
     }
 
+    // Kimi Code quota exhausted: turn off "Prefer Kimi Code" so dual-backend
+    // Kimi models (e.g. `kimi3`) re-route through the Moonshot open-platform
+    // API key on retry. Exclusive Kimi Code models have no open-platform route
+    // and cannot fall back this way.
+    let disabledKimiCodeSubscription = false;
+    if (
+      this.deps.getPreferKimiCode() &&
+      this.isKimiCodeSubscriptionExhausted(request)
+    ) {
+      await this.deps.setPreferKimiCode(false);
+      this.deps.invalidateModelOptionsCache();
+      disabledKimiCodeSubscription = true;
+    }
+
     return {
       proceeded: true,
       disabledIncludedModelAccess,
       disabledChatGptSubscription,
+      disabledKimiCodeSubscription,
     };
   }
 
@@ -195,6 +222,7 @@ export class ProgressApiKeyRetryController {
     return {
       useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
       preferChatGptSubscription: this.deps.getPreferChatGptSubscription(),
+      preferKimiCode: this.deps.getPreferKimiCode(),
     };
   }
 
@@ -214,6 +242,9 @@ export class ProgressApiKeyRetryController {
           before.preferChatGptSubscription,
         ),
       );
+    }
+    if (prepared.disabledKimiCodeSubscription) {
+      restores.push(this.deps.setPreferKimiCode(before.preferKimiCode));
     }
     await Promise.all(restores);
     if (restores.length > 0) this.deps.invalidateModelOptionsCache();

@@ -58,6 +58,10 @@ import {
   parseChatGptSubscriptionLimit,
 } from './chatgptSubscriptionDetection';
 import {
+  describeKimiCodeSubscriptionLimit,
+  parseKimiCodeSubscriptionLimit,
+} from './kimiCodeSubscriptionDetection';
+import {
   type SdkErrorEntry,
   SDK_ERRORS,
   SDK_ERRORS_BY_KIND,
@@ -255,6 +259,17 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const chatgptSubscriptionMessage = chatgptSubscriptionLimit
     ? describeChatGptSubscriptionLimit(chatgptSubscriptionLimit)
     : undefined;
+  // Kimi Code (Moonshot coding-subscription) quota exhaustion — same pattern:
+  // a credential exhaustion that disables the "Prefer Kimi Code" preference on
+  // accept so dual-backend Kimi models re-route through the Moonshot API key.
+  const kimiCodeSubscriptionLimit = parseKimiCodeSubscriptionLimit(
+    err,
+    rawErrorBody,
+  );
+  const isKimiCodeSubscriptionLimited = kimiCodeSubscriptionLimit !== null;
+  const kimiCodeSubscriptionMessage = kimiCodeSubscriptionLimit
+    ? describeKimiCodeSubscriptionLimit(kimiCodeSubscriptionLimit)
+    : undefined;
   // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
   // upstream-credit are independently detected first; relay monthly limit
   // (by body or message) is the remaining exhaustion condition. Explicit SDK
@@ -263,6 +278,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (exhaustionReason === undefined) {
     if (isChatGptSubscriptionLimited) {
       exhaustionReason = 'chatgpt-subscription';
+    } else if (isKimiCodeSubscriptionLimited) {
+      exhaustionReason = 'kimi-code-subscription';
     } else if (isUpstreamCreditDepleted) {
       exhaustionReason = 'upstream-credit';
     } else if (
@@ -343,7 +360,10 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       ...classification,
       // Prefer the actionable subscription-limit message over the raw
       // `HTTP 429 – The usage limit has been reached`.
-      message: chatgptSubscriptionMessage ?? sdkMatch.message,
+      message:
+        chatgptSubscriptionMessage ??
+        kimiCodeSubscriptionMessage ??
+        sdkMatch.message,
       // Credential-exhausted errors keep userRetryable=true so the retry
       // panel surfaces with the "Use your own API key" affordance, but
       // shouldAutoRetry separately suppresses auto-retry for them — a
@@ -372,7 +392,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 
   return {
     ...classification,
-    message: chatgptSubscriptionMessage ?? message,
+    message:
+      chatgptSubscriptionMessage ?? kimiCodeSubscriptionMessage ?? message,
     statusCode,
     statusText,
     provider,
