@@ -33,6 +33,10 @@ async function generatePrivateKeyPem(): Promise<string> {
   ].join('\n');
 }
 
+// Key content is never inspected by the stubs — only used to locally sign a
+// JWT — so one suite-wide key avoids four ~100ms RSA generations.
+const sharedPrivateKeyPem = generatePrivateKeyPem();
+
 interface StubbedCall {
   url: string;
   method: string;
@@ -42,10 +46,7 @@ interface StubbedCall {
 type ContentsResponder = (ref: string) => Response;
 
 function jsonOk(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return Response.json(payload, { status });
 }
 
 /**
@@ -59,21 +60,13 @@ function stubGitHub(contents: ContentsResponder): {
   const originalFetch = globalThis.fetch;
   const calls: StubbedCall[] = [];
 
-  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url;
-    const method = (
-      init?.method ?? (input instanceof Request ? input.method : 'GET')
-    ).toUpperCase();
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
     const body =
       typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
-    calls.push({ url, method, body });
+    calls.push({ url: request.url, method: request.method, body });
 
-    const { pathname, searchParams } = new URL(url);
+    const { pathname, searchParams } = new URL(request.url);
     if (pathname === '/repos/owner/repo/installation') {
       return Promise.resolve(jsonOk({ id: 42 }));
     }
@@ -99,7 +92,7 @@ function stubGitHub(contents: ContentsResponder): {
       return Promise.resolve(contents(searchParams.get('ref') ?? ''));
     }
     return Promise.resolve(new Response('unexpected', { status: 500 }));
-  }) as typeof fetch;
+  };
 
   return { calls, restore: () => (globalThis.fetch = originalFetch) };
 }
@@ -115,7 +108,7 @@ async function withStubbedGitHub<T>(
   try {
     const client = await createGitHubAppClient({
       appId: '4507914',
-      privateKey: await generatePrivateKeyPem(),
+      privateKey: await sharedPrivateKeyPem,
       owner: 'owner',
       repo: 'repo',
     });
