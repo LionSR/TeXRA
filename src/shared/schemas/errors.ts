@@ -48,6 +48,10 @@ export const ExhaustionReasonSchema = z.enum([
    *  the "Prefer Kimi Code" preference so dual-backend Kimi models re-route
    *  through the Moonshot open-platform API key. */
   'kimi-code-subscription',
+  /** A GLM Coding Plan request was rejected because the plan's usage quota is
+   *  exhausted; accepting the switch turns off the Coding Plan toggle so GLM
+   *  requests route through the regular pay-as-you-go endpoint. */
+  'glm-coding-plan',
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
 
@@ -206,6 +210,16 @@ export function isKimiCodeSubscriptionLimitError(
   errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
 ): boolean {
   return errorDetails?.exhaustionReason === 'kimi-code-subscription';
+}
+
+/** Single source of truth for "this error is a GLM Coding Plan usage-limit
+ *  rejection". Hosts branch on this to switch the retry from the coding-plan
+ *  path to the regular GLM pay-as-you-go endpoint by turning off the Coding
+ *  Plan toggle. */
+export function isGlmCodingPlanLimitError(
+  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
+): boolean {
+  return errorDetails?.exhaustionReason === 'glm-coding-plan';
 }
 
 /** Single source of truth for "the upstream provider account itself is out of

@@ -3,7 +3,7 @@ import { Text, useWindowSize } from 'ink';
 import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-  isCliKimiCodeSubscriptionRetry,
+  isCliCodingPlanRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -48,14 +48,15 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const errorText = props.payload.errorMessage ?? props.payload.operation;
   const isSubscriptionLimit = isCliChatGptSubscriptionRetry(props.payload);
-  const isKimiCodeLimit = isCliKimiCodeSubscriptionRetry(props.payload);
+  const isGlmCodingPlanLimit = isCliCodingPlanRetry(props.payload);
   const isApiSwitchable = isCliApiSwitchableRetry(props.payload);
   const personalApiKeyAvailable = props.payload.personalApiKeyAvailable;
   const canSwitchToPersonalKey =
     isApiSwitchable && personalApiKeyAvailable === true;
   // Both switches flip the api-mode to personal keys so the retry uses the
   // user's own key (not the relay JWT); the subscription switches additionally
-  // turn off the "prefer ChatGPT subscription" / "Prefer Kimi Code" preference.
+  // turn off the "prefer ChatGPT subscription" / coding-plan preference.
+  const exhaustionReason = props.payload.errorDetails?.exhaustionReason;
   let switchDecision: ApprovalDecision;
   if (isSubscriptionLimit) {
     switchDecision = {
@@ -63,7 +64,13 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       disableChatGptSubscription: true,
       apiMode: 'personal',
     };
-  } else if (isKimiCodeLimit) {
+  } else if (exhaustionReason === 'glm-coding-plan') {
+    switchDecision = {
+      accepted: true,
+      disableGlmCodingPlan: true,
+      apiMode: 'personal',
+    };
+  } else if (isGlmCodingPlanLimit) {
     switchDecision = {
       accepted: true,
       disableKimiCode: true,
