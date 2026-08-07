@@ -15,7 +15,6 @@ Waves below are sized for #9828-style fix PRs (one theme, one owner, gates
 per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
 (session-local; regenerate via workflow wf_e5709b0d-2e7 journal if gone).
 
-
 ## Partial — real problem, lead shape wrong (needs design) (34)
 
 - **transcriptViewport.ts estimateEntryRows wraps transcriptEntryLayout in try/catch returning a 1-row fallback — an M2-ish silent swallow worth error-pipeline L-classification**
@@ -25,19 +24,19 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: packages/cli/src/chat/tui/input/BaseTextInput.tsx:276 export, consumed in-file by textInputCappedRowCount (:296) and by src/test-kernel/cli/TextInputEditing.vitest.ts:20,316-339; zero external prod co
   fix: Keep the export. The test-only-export wave should skip this symbol; the correct shape is the planned InputBar windowing rework consuming it, after which the export has a real prod consumer. Deleting now would force re-ad
 - **inputHistory.ts uses Zod .catch(0) on persisted history timestamps — M3 masking shape on a persisted read; may want .prefault or a line-skip**
-  evidence: packages/cli/src/chat/tui/history/inputHistory.ts:17 `z.object({ t: z.number().catch(0), v: z.string() })` on the persisted history file; loadInputHistory (:43-57) already skips unparseable lines via 
-  fix: Error-pipeline/CLI owner: drop `.catch(0)` so a record with a corrupt timestamp fails validation and is skipped by the existing unwrapOr(undefined) line-skip — no new code, one schema edit. `.prefault(0)` would preserve 
+  evidence: packages/cli/src/chat/tui/history/inputHistory.ts:17 `z.object({ t: z.number().catch(0), v: z.string() })` on the persisted history file; loadInputHistory (:43-57) already skips unparseable lines via
+  fix: Error-pipeline/CLI owner: drop `.catch(0)` so a record with a corrupt timestamp fails validation and is skipped by the existing unwrapOr(undefined) line-skip — no new code, one schema edit. `.prefault(0)` would preserve
 - **preflightCliTeamAvailability has one caller (orchestrate.ts); inline the CLI adapter body and delete the module**
   evidence: Single prod caller confirmed (commands/orchestrate.ts:261). The adapter (teamAvailabilityPreflight.ts:23-39) is options assembly with 3 lines of real glue (missingAgents flatten + teamHostedNamesForPr
   fix: CLI runtime owner — legal inline per single-caller rule, but the module is the dedicated test seam (CliTeamAvailabilityPreflight.vitest.ts invokes it 7+ times); right shape is inline the assembly at orchestrate.ts:261 AN
 - **knip-baseline lists 7 dead-export findings in VscodeIntegration.ts that are really LeanLanguageServices port members knip can't see through setLeanLanguageServices**
   evidence: config/ratchets/knip-baseline.json:45-79 lists executeFileCommand/executeProjectCommand/fetchDiagnosticsForFile/getGoalState/getHoverInfo/getTermGoal/navigateToFirstError for packages/extension/src/fr
-  fix: Better shape than the lead's comment/config-note: at packages/extension/src/extension.ts:523 pass an explicit object literal `setLeanLanguageServices({ executeFileCommand, getGoalState, ... })` with named imports — knip 
+  fix: Better shape than the lead's comment/config-note: at packages/extension/src/extension.ts:523 pass an explicit object literal `setLeanLanguageServices({ executeFileCommand, getGoalState, ... })` with named imports — knip
 - **dispatchMessage re-validates ProgressViewOutboundMessageSchema while every host caller also safeParses first (double parse)**
   evidence: packages/extension/src/progressView/frontend/messageDispatcher.ts:61-66 delegates to createDispatcher which safeParses internally (src/shared/utils/dispatcher.ts:138-148); the ONLY pre-checking caller
   fix: Owner: desktop renderer. Replace main.ts:1565-1567 with a bare `dispatchMessage(event.data)` — it returns false on parse failure with no onError, so routing/silence behavior is byte-identical and the double parse disappe
 - **SettingsProfileController.getProviderDisplayName/getProviderKeyUrl exist largely to be re-injected as deps into SettingsProfileKeyController by host wiring (apiKeyCommands.ts + desktopCredentialSettingsController.ts) …**
-  evidence: The cited extension wiring does NOT self-carry: packages/extension/src/commands/api/apiKeyCommands.ts:37-42 and packages/extension/src/settingsView/SettingsViewMessageHandler.ts:197-202 both wire the 
+  evidence: The cited extension wiring does NOT self-carry: packages/extension/src/commands/api/apiKeyCommands.ts:37-42 and packages/extension/src/settingsView/SettingsViewMessageHandler.ts:197-202 both wire the
   fix: Owner: desktop settings wiring. Not a chain collapse — a 1-site wiring alignment: make desktopCredentialSettingsController.ts:181-184 wire the key-controller deps the way both extension sites already do ((provider) => ge
 - **ClientCompactionResult didCompact:false always returns compactedMessages===input, so handler-side didCompact forks can collapse to unconditional compactedMessages**
   evidence: Invariant verified: src/agent/modelHandlers/ModelHandler.ts:1375,1460,1471,1499 all return `{ compactedMessages: messages, didCompact: false }`. The fork at src/agent/modelHandlers/openai/modelHandler
@@ -47,16 +46,16 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: Owner: desktop host. Add local private parameterized methods in the same file, mirroring the file's own signInSubscription (:263-297) and refreshAfterSubscriptionAuthChange (:417-427) patterns: one signOutSubscription({c
 - **openFileCompile is a one-line pass-through (single-caller inline candidate); runLatexdiffFile wraps fileActions.runLatexdiffFile in a try/catch worth auditing for masking**
   evidence: openFileCompile half is true: packages/desktop/src/main/desktopAgentExecution.ts:1276-1278 is `return this.fileActions.openFileCompile(filePath)` with exactly one prod caller (line 850) — but the lead
-  fix: Owner: desktop host / test-only-export wave. Inline at line 850 (`(file) => this.fileActions.openFileCompile(file)`), reroute DesktopAgentExecutionFactory.vitest.ts:458 through commands.file.openFileCompile, then delete 
+  fix: Owner: desktop host / test-only-export wave. Inline at line 850 (`(file) => this.fileActions.openFileCompile(file)`), reroute DesktopAgentExecutionFactory.vitest.ts:458 through commands.file.openFileCompile, then delete
 - **auth.ts loginInitFromArgs/assertLoginTransportExclusive/shouldPromptForLoginProvider exported solely for LoginArgs.vitest.ts plus one internal caller each — unexport-and-inline candidate**
   evidence: Partially wrong on the key symbol: loginInitFromArgs has a real second prod consumer — packages/cli/src/commands/orchestrate.ts:74 imports it and calls it at :284 and :377 (plus auth.ts:211). The othe
   fix: test-only-export wave — applies only to assertLoginTransportExclusive and shouldPromptForLoginProvider (drop `export` once LoginArgs.vitest.ts is refactored to drive loginCommand). loginInitFromArgs must stay exported; o
 - **toolCallParsing.ts exports type DuplicateCallMap with no importer outside its own file — candidate for unexport, verify against knip baseline first**
   evidence: src/agent/core/flows/toolUseRound/toolCallParsing.ts:21,44-45 — zero external importers (grep incl. string refs); not in config/ratchets/knip-baseline.json; but it is the declared return type of expor
-  fix: test-only-export wave N/A; owner: agent-core flows. Plain unexport fails TS4023 (private name in exported signature) under the packages/agent d.ts build. Right shape: change partitionDuplicateCalls' return annotation to 
+  fix: test-only-export wave N/A; owner: agent-core flows. Plain unexport fails TS4023 (private name in exported signature) under the packages/agent d.ts build. Right shape: change partitionDuplicateCalls' return annotation to
 - **DuplicateCallMap is consumed only inside its own file (ToolUseDispatchNode re-declares Map<string, number> inline); could be unexported or deleted outright — left alone because it is the declared return type of partit…**
   evidence: src/agent/core/flows/toolUseRound/ToolUseDispatchNode.ts:99,124 (declares `new Map<string, number>()`, receives partitionDuplicateCalls result without importing the alias); toolCallParsing.ts:21; pack
-  fix: Same issue as the sibling DuplicateCallMap lead, one fix covers both. Owner: agent-core flows. Inline Map<string, number> as partitionDuplicateCalls' return annotation (ToolUseDispatchNode needs no change), relocate the 
+  fix: Same issue as the sibling DuplicateCallMap lead, one fix covers both. Owner: agent-core flows. Inline Map<string, number> as partitionDuplicateCalls' return annotation (ToolUseDispatchNode needs no change), relocate the
 - **StreamLogStore and StreamSnapshotStore independently implement per-stream dirty-write serialization with near-identical retry caps — shared dirty-writer primitive**
   evidence: StreamLogStore.ts:263 dirtyIds+debounce+executeWrite, :1043 MAX_WRITE_RETRIES=3; StreamSnapshotStore.ts:88 MAX_DIRTY_WRITE_RETRIES=3, :341 writeMutexes map, :1318 retryDirtyWrites. Different concurren
   fix: Observation accurate but the proposed shared primitive is a 2-subsystem convergence trap (refactor-LOC lesson: cross-divergent abstraction net-adds). Decline unless flush semantics are formally unified; at most share the
@@ -65,15 +64,15 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: Real but small: narrow the three implementation signatures to the abstract's non-null U and drop the redundant guards, updating the one test that pins computeGoogleInteractionsPrice(null). Owner: modelHandlers partition;
 - **AgentWorkspaceState.reasoning carries both thinkingBlocks and thinkingAdded — boolean derivable from thinkingBlocks.length > 0**
   evidence: AgentWorkspaceState.ts:203-205 (schema pair, both prefault), :489-492 resetReasoning resets both; all four write sites set/clear both in lockstep, and consumption at modelHandlerAnthropic.ts:1414 alre
-  fix: Derivability verified at current write sites. Right shape: delete thinkingAdded from ReasoningCacheStateSchema and derive at the 4 guard sites, treating legacy persisted booleans as disposable (loud-degradation ruling); 
+  fix: Derivability verified at current write sites. Right shape: delete thinkingAdded from ReasoningCacheStateSchema and derive at the 4 guard sites, treating legacy persisted booleans as disposable (loud-degradation ruling);
 - **OutputNode is sole prod caller of outputState one-liners hasRoundOutputs/hasCompileFailures (and getStorageKey/setCompileFailures/setActiveRun) — inline to remove exports**
   evidence: src/agent/output/outputState.ts:122-128 — the two 2-line accessors have exactly one prod caller (OutputNode.ts:131,150) and zero test consumers. But the parenthetical is wrong: getStorageKey has 3 pro
-  fix: Owner: agent output. Inline ONLY hasRoundOutputs/hasCompileFailures into OutputNode.ts (delete outputState.ts:122-128); leave getStorageKey/setActiveRun — multi-consumer. setCompileFailures (sole caller OutputNode) is a 
+  fix: Owner: agent output. Inline ONLY hasRoundOutputs/hasCompileFailures into OutputNode.ts (delete outputState.ts:122-128); leave getStorageKey/setActiveRun — multi-consumer. setCompileFailures (sole caller OutputNode) is a
 - **Test-only production exports: resumeHint.ts formatResumeUsage, transcript.ts resolveLocalTranscriptStreamId**
   evidence: formatResumeUsage (packages/cli/src/chat/tui/state/resumeHint.ts:94): only non-test use is intra-module (resumeHint.ts:165) — export exists solely for ResumeHint.vitest.ts. resolveLocalTranscriptStrea
   fix: test-only-export wave. formatResumeUsage: confirmed wave candidate (unexport or test through the public formatter). resolveLocalTranscriptStreamId: NOT zero-consumer — the TUI harness imports it; wave must repoint the ha
 - **modelHandlerGoogleInteractions.ts carries ~8 comments referencing 'the chat handler' though no chat Google handler exists anymore**
-  evidence: Core claim real but specifics stale: 4 comments found (not ~8), at src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:722, 788, 1088, 1207 (lead's line numbers predate #9827/#9829). The 
+  evidence: Core claim real but specifics stale: 4 comments found (not ~8), at src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:722, 788, 1088, 1207 (lead's line numbers predate #9827/#9829). The
   fix: Owner: model handlers. Comment-only PR: re-anchor the 4 dangling references to name the deleted GenAI chat handler as historical lineage (e.g. 'the removed GenAI chat handler, deleted in 20e08318a6') or prune where the n
 - **taskGroupProjection.ts GroupLogPayloadSchema.catch({}) and AgentDirectorySync.readSyncMarker .catch(undefined): silent-default parses on trace/persisted data**
   evidence: readSyncMarker (src/agent/index/AgentDirectorySync.ts:139): a schema-validation failure on valid JSON is swallowed to undefined with no warn, unlike the outer catch which warns (line 143) — genuine si
@@ -81,16 +80,16 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
 - **src/shared has recurring test-kernel-only exports (8+ instances); needs a ruling doc before deletion**
   evidence: Theme is real (consistent with leads 2 and 23 verified by grep), but this lead names zero specific symbols — '8+ instances this partition' is unverifiable as stated.
   fix: test-only-export wave — the separate campaign already owns the theme; this lead contributes only the process note (ruling doc before per-symbol deletion), no actionable symbols.
-- **Dead exports: EditInput, OpenPdfInput, CodexCliReasoningEffort, AgentWorkspaceOptions, and 5 settingsView *Ports interfaces imported nowhere**
+- *_Dead exports: EditInput, OpenPdfInput, CodexCliReasoningEffort, AgentWorkspaceOptions, and 5 settingsView *Ports interfaces imported nowhere*_
   evidence: Wrong on 3 of 5: EditInput consumed by packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts; CodexCliReasoningEffort by src/tools/codex.ts; AgentWorkspa
   fix: test-only-export wave — real residue is OpenPdfInput (dead export, delete) and dropping `export` from locally-used Ports interfaces; discard the lead's other named items.
 - **figCommands.ts/arXivCommands.ts quick-pick label string surgery; convert to MarkupItem value-field pattern**
   evidence: packages/extension/src/commands/latex/figCommands.ts:48 has `selected.label.split(' (')[0]` — real. But arXivCommands.ts:34,39 already uses the value-field pattern (`value: 'references'`, `destination
-  fix: Owner packages/extension/src/commands/latex: add a `value: label` field to the figCommands quick-pick item (item built at figCommands.ts:35-39) and read selected.value; single-site fix, no 'UI-wide canon pass' warranted.
+fix: Owner packages/extension/src/commands/latex: add a `value: label` field to the figCommands quick-pick item (item built at figCommands.ts:35-39) and read selected.value; single-site fix, no 'UI-wide canon pass' warranted.
 - **AgentReviewService.issuePath falls back to path.join('',file); clear() never resets reviewRoot**
   evidence: Facts verified: packages/extension/src/frontend/review/AgentReviewService.ts:139 `path.join(this.reviewRoot ?? '', issue.file)` and clear() at :456-462 resets issues/dismissed/summary/pendingCommitRev
   fix: Owner packages/extension/src/frontend/review: small loud-degradation tidy — either clear reviewRoot in clear() or drop the `?? ''` and have issuePath require reviewRoot; NOT the lead's 'derive from presence of issues' co
-- **store.ts MULTI_FILE_LIST_BY_SET_COMMAND typed Record<string, ...|undefined> forces runtime guard; type over exact SET_* union instead**
+- _*store.ts MULTI_FILE_LIST_BY_SET_COMMAND typed Record<string, ...|undefined> forces runtime guard; type over exact SET_* union instead_*
   evidence: Accurate: store.ts:120-122 casts Object.fromEntries to Record<string, MultiFileList | undefined>, forcing `if (!list) return` at the sole consumer documentSlice.ts:45-46. The guard is statically unnee
   fix: Owner packages/extension/src/webview/frontend: tighten the cast to Record<SetMultipleFilesMessage['command'], MultiFileList> (honest — all four keys provably present) and delete the guard; typing-only change, no schema t
 - **store.ts MULTI_FILE_LIST_BY_SET_COMMAND Object.fromEntries+cast forces narrowing guard; derive record type from entries keys**
@@ -109,7 +108,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: Wrapper is real (src/latex/texcount.ts:285-287, { label: string }), but the consumer analysis is wrong: TeXCountNode.ts:3 uses getTeXCountStats (returns string|null), never TeXCountStat. Sole parseTeX
   fix: latex owner: parseTeXCountStats returns string[], delete TeXCountStat, latexCommands needs no change (showQuickPick takes string[]), update TeXCountStats.vitest.ts expectations to bare strings. −1 interface; 3-file edit
 - **pathResolution/formatting/fileEditFlow shared helpers: multi-caller, likely keepers, but worth a dead-export check**
-  evidence: Mostly keepers confirmed, but the check uncovers real targets: replaceFirstLiteral/replaceAllLiteral/findOccurrenceLineNumbers (src/tools/fileEditFlow.ts:26,50,68) have zero external prod consumers — 
+  evidence: Mostly keepers confirmed, but the check uncovers real targets: replaceFirstLiteral/replaceAllLiteral/findOccurrenceLineNumbers (src/tools/fileEditFlow.ts:26,50,68) have zero external prod consumers —
   fix: test-only-export wave: unexport the three fileEditFlow internals (or test them through replaceLiteralMatches); drop the two formatting type exports if knip baseline permits. Remaining exports all have live multi-caller u
 - **getCodexCliReasoningEffort is a one-line composition with one prod caller; inline into codex.ts**
   evidence: src/tools/codexConfig.ts:61-63 (composition of module-private getCodexReasoningEffort + toCodexCliReasoningEffort); sole prod caller src/tools/codex.ts:463 via lazy namespace import; mocked in CodexRe
@@ -169,14 +168,14 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: grep: src/agent/modelHandlers/utils/toolAttachmentUtils.ts:179 (definition) and :278 (same-file call from formatToolResultAsText) are the only prod hits; the only other importer is src/test-kernel/age
   fix: test-only-export wave. Caveat for the wave owner: the test exercises custom maxLength arguments (vitest lines 59-87) while formatToolResultAsText (line 278) only ever uses the default limit, so routing the test through t
 - **DesktopProgressBridge.deleteStream/deleteAllStreams have no production callers; only the DesktopAgentExecution vitest uses them**
-  evidence: packages/desktop/src/main/desktopAgentExecution.ts:1131-1137 (public wrappers over this.backend). Exhaustive grep over packages/desktop/src and src shows zero prod callers — the real user-action path 
+  evidence: packages/desktop/src/main/desktopAgentExecution.ts:1131-1137 (public wrappers over this.backend). Exhaustive grep over packages/desktop/src and src shows zero prod callers — the real user-action path
   fix: test-only-export wave: reroute DesktopAgentExecution.vitest.ts deletion tests through the commands.lifecycle / ProgressViewCommandHandlers inbound path (or the backend directly), then delete the two public wrapper method
 - **Knip coverage gap: 4 electronSecrets.ts + 1 warningDialog.ts baseline entries are actually consumed by src/test-kernel; fixing knip's entry/scope for test-kernel could clear baseline entries repo-wide without code cha…**
   evidence: All 5 config/ratchets/knip-baseline.json entries verified test-consumed: getSecretStorageMode / KEYCHAIN_DENIED_WARNING_MESSAGE / LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE via src/test-kernel/desktop/El
-  fix: test-only-export wave / config-level sweep, not per-file edits: teach the packages/desktop knip workspace to treat the loadSourceModule-pinned modules as reachable (entry hints or equivalent config), then regenerate and 
+  fix: test-only-export wave / config-level sweep, not per-file edits: teach the packages/desktop knip workspace to treat the loadSourceModule-pinned modules as reachable (entry hints or equivalent config), then regenerate and
 - **formatUpdatedDate has a single production caller (MemoryItem.ts:163) plus direct test-kernel coverage; inline the formatShortDateTime + 'Updated' prefix/'Updated: unknown' fallback at the caller and drop the wrapper t…**
   evidence: src/shared/utils/string.ts:36-41; sole prod consumer packages/extension/src/settingsView/frontend/components/memory/MemoryItem.ts:163; test coverage at src/test-kernel/shared/DateTimeFormatters.vitest
-  fix: Owner: extension settingsView webview. In MemoryItem.renderMeta use a temp: `const updated = formatShortDateTime(item.mtime); parts.push(updated ? `Updated ${updated}` : 'Updated: unknown');`, add formatShortDateTime to 
+  fix: Owner: extension settingsView webview. In MemoryItem.renderMeta use a temp: `const updated = formatShortDateTime(item.mtime); parts.push(updated ? `Updated ${updated}` : 'Updated: unknown');`, add formatShortDateTime to
 - **src/latex exports kept alive solely by test-kernel imports: buildKpathseaSearchPath, buildLatexInputEnv, buildLatexSearchParts, resolveArxivPaperDirectoryRelative, diffCommandExecutor flag helpers, ArxivProcessor.down…**
   evidence: texTools.ts:47/74/103 and arxivProcessor.ts:59/158 — each has only same-file prod use; all external consumers are src/test-kernel/latex/TexTools.vitest.ts:6-8, ArxivProcessor.vitest.ts:8, LatexdiffBib
   fix: test-only-export wave: unexport (or move helpers next to tests) with the coordinated test-kernel rewrite; ~8 production export elements shed.
@@ -202,7 +201,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: src/agent/runtime/restartRepair.ts:64-80 (5 array fields + factory); sole prod caller SessionHandle.ts:625-647 reads only result.nextLeaseCheckAt (:647); the arrays are written at restartRepair.ts:322
   fix: Owner: agent-runtime + test-kernel (same PR). repairRestartedStreams returns { nextLeaseCheckAt?: number }; delete createRestartRepairResult, the 5 push lines (:322-326), and the per-stream arrays in repairRestartedStrea
 - **StopReasonTypes.ts: delete OPENAI_COMPLETION_FINISH (values duplicate OPENAI_CHAT_FINISH) and trim MCP_STOP to MAX_TOKENS — needs paired test-kernel edit**
-  evidence: src/agent/types/StopReasonTypes.ts:22-27 (OPENAI_COMPLETION_FINISH: stop/length/content_filter — all present in OPENAI_CHAT_FINISH:9-15); its only prod uses are the redundant TOKEN_LIMIT_STOP_REASONS 
+  evidence: src/agent/types/StopReasonTypes.ts:22-27 (OPENAI_COMPLETION_FINISH: stop/length/content_filter — all present in OPENAI_CHAT_FINISH:9-15); its only prod uses are the redundant TOKEN_LIMIT_STOP_REASONS
   fix: Owner: agent/types + test-kernel (same PR). Delete OPENAI_COMPLETION_FINISH + its token-limit entry + union member; trim MCP_STOP to { MAX_TOKENS } (MCPStopReason collapses, union simplifies); update stopReasonUtils.vite
 - **src/tools/setup/platform.ts:88 'export type { TerminalRunResult }' has test-only consumers; repoint tests to '@hosts/uiHosts' and delete**
   evidence: src/tools/setup/platform.ts:88 re-export; prod code imports TerminalRunResult from '@hosts/uiHosts' (definition src/hosts/uiHosts.ts:116; prod user packages/extension/src/frontend/setupTerminalRunner.
@@ -211,7 +210,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: packages/cli/src/chat/tui/panes/InputBar.tsx:78-80 (one-line negation of shouldRedactSlashInput, single prod use :285) and :99-122 (single prod use :321); only other importer is src/test-kernel/cli/In
   fix: test-only-export wave: inline '!shouldRedactSlashInput(historyText)' at :285 and the runWhenIdle+slashSubmitText body at :321; delete both exports. Repoint the history test at shouldRedactSlashInput directly; for the sub
 - **browser.ts windowsVerbatimArguments is false on every platform branch; delete the field, three literals, and the spawn option (paired test edit)**
-  evidence: packages/cli/src/runtime/browser.ts:8 (interface field), :24/:32/:38 (all three literals false), :50 (spawn option; node spawn default is false so removal is behavior-identical). Only test reference: 
+  evidence: packages/cli/src/runtime/browser.ts:8 (interface field), :24/:32/:38 (all three literals false), :50 (spawn option; node spawn default is false so removal is behavior-identical). Only test reference:
   fix: Owner: cli runtime + test-kernel same PR. Delete the BrowserLaunchCommand field, the 3 branch literals, and the spawn option; drop the assertion at BrowserLaunch.vitest.ts:41. ~-6 elements.
 - **diffCommandExecutor.ts exports buildLatexdiffTextCommandExclusionFlag and resolveLatexdiffSubtype consumed only by test-kernel — un-export both**
   evidence: src/latex/latexdiff/diffCommandExecutor.ts:38,44 — both have internal prod uses (:130, :279) but the only external importer is src/test-kernel/latex/LatexdiffBibQuality.vitest.ts:4-7.
@@ -232,7 +231,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: src/shared/wa/webAwesomeIcons.ts:328-330 export; only consumer is src/test-kernel/desktop/DesktopIconLibrary.vitest.ts:11,101; iconNames.ts:12-13 documents the satisfies constraint keeping TEXRA_ICON_
   fix: test-only-export wave: re-point DesktopIconLibrary.vitest.ts to TEXRA_ICON_CANONICAL_NAMES from '@shared/wa/iconNames', delete TEXRA_ICON_NAMES (webAwesomeIcons.ts:327-330).
 - **TeamPlan.ts teamExecutionFields/buildTeamOptions consumed externally only by test-kernel — unexport if knip baseline tightens**
-  evidence: src/common/teams/TeamPlan.ts:207,223 exports; internal use at :277 and :372; the only external importer is src/test-kernel/common/teams/TeamPlan.vitest.ts:4,12 — zero external prod consumers verified 
+  evidence: src/common/teams/TeamPlan.ts:207,223 exports; internal use at :277 and :372; the only external importer is src/test-kernel/common/teams/TeamPlan.vitest.ts:4,12 — zero external prod consumers verified
   fix: test-only-export wave: drop the export keyword on both functions once TeamPlan.vitest.ts exercises them through the public parse/plan API (or the wave's policy keeps direct unit access). Needs knip-baseline check. (Leads
 - **buildTeamOptions/teamExecutionFields exported; only test-kernel + internal ReturnType anchor — drop exports in a dedicated pass**
   evidence: Duplicate of the previous lead — src/common/teams/TeamPlan.ts:207,223; sole external consumer src/test-kernel/common/teams/TeamPlan.vitest.ts
@@ -278,18 +277,18 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: test-only-export wave: unexport the function (keep module-private), rewrite the four vitest cases through readOnboardingFlags.
 - **TierService fake in ServerSideKeyService.vitest.ts:67 still defines getAccessDescription(), dead mock surface after prod removal**
   evidence: src/test-kernel/auth/ServerSideKeyService.vitest.ts:67-69 defines getAccessDescription() in the fake; grep across all of src/ and packages/*/src finds zero other references — src/auth/serverKeys/TierS
-  fix: test-owning pass (fleet is test-restricted): delete the 3 lines 67-69 (`getAccessDescription() { return 'No included model access'; },`) from the fake in ServerSideKeyService.vitest.ts. Single-file, ~3-line deletion, no 
+  fix: test-owning pass (fleet is test-restricted): delete the 3 lines 67-69 (`getAccessDescription() { return 'No included model access'; },`) from the fake in ServerSideKeyService.vitest.ts. Single-file, ~3-line deletion, no
 
 ## Wave B — barrel / re-export retirement (14)
 
 - **approvalQueue.ts `export type { ApprovalBypassKind }` has exactly one consumer (ConfirmCard.tsx) — repoint to '@shared/approvalBypassKind' and delete the re-export**
-  evidence: packages/cli/src/chat/tui/state/approvalQueue.ts:35 re-export; sole consumer packages/cli/src/chat/tui/modals/ConfirmCard.tsx:26-29 (multi-line type import from '../state/approvalQueue'); every other 
+  evidence: packages/cli/src/chat/tui/state/approvalQueue.ts:35 re-export; sole consumer packages/cli/src/chat/tui/modals/ConfirmCard.tsx:26-29 (multi-line type import from '../state/approvalQueue'); every other
   fix: ConfirmCard owner: split the type import — ApprovalBypassKind from '@shared/approvalBypassKind', ApprovalDecision stays from '../state/approvalQueue' — then delete approvalQueue.ts:18 import (if unused) and :35 re-export
 - **isNativeAgentRun predicate (`identity?.kind === 'agent' && identity.tool === undefined`) has one owner in controllers but 3 more copies (StreamHeader.ts:357, subscribeStreamLog.ts:153 negated, resumeHint.ts:139) — can…**
   evidence: Canonical: src/controllers/progressView/ProgressViewCommandHandlers.ts:50-52. Copies: packages/extension/src/progressView/frontend/components/StreamHeader.ts:356-357 (exact), packages/cli/src/chat/tui
   fix: Shared-schemas owner: add `export function isNativeAgentRun(identity: RunIdentity | undefined): boolean` to src/shared/schemas/runIdentity.ts; re-export the controllers copy from it (ProgressViewCommandHandlers keeps its
 - **agent.ts carries dual type aliases AgentSourceType and AgentSource for the same z.infer<>; collapsing requires editing out-of-assignment consumers**
-  evidence: src/shared/schemas/agent.ts:58 (`export type AgentSourceType = z.infer<typeof AgentSourceSchema>`) and agent.ts:64 (`export type AgentSource = AgentSourceType`) — two names, one type. AgentSource has 
+  evidence: src/shared/schemas/agent.ts:58 (`export type AgentSourceType = z.infer<typeof AgentSourceSchema>`) and agent.ts:64 (`export type AgentSource = AgentSourceType`) — two names, one type. AgentSource has
   fix: Owner: shared/schemas. Keep `AgentSource` (the name with 20 consumers), delete `AgentSourceType`: update AgentSelectionPanel.ts (5 uses, import already from '@shared/schemas/agent') and switch packages/agent/src/schemas.
 - **outputFileUtils.getOutputFileName is a pure pass-through of workflowOutputPath({ext, round}) with two call sites; inline and delete**
   evidence: src/agent/utils/outputFileUtils.ts:23-25 body is exactly `return workflowOutputPath({ ext: extension, round });`; only two callers, both in src/agent/implementations/flows/reflection/runReflectionFlow
@@ -319,7 +318,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   evidence: src/housekeeping/pack.ts:167-177 is a pure ternary dispatcher; sole caller packages/extension/src/commands/housekeeping/packCommands.ts:59; runPackSingle/runPackMultiple already imported directly by t
   fix: cli/extension housekeeping owner: replace packCommands.ts:59 with outputFiles.length>0 ? runPackMultiple(...) : runPackSingle(...), delete runPack from pack.ts and from the barrel src/housekeeping/index.ts:7. ~2 elements
 - **src/tools/goal/index.ts 3-line barrel violates no-barrels rule but has ~15 prod importers + vi.mock/dynamic-import path refs — needs a string-path-aware cross-partition sweep**
-  evidence: src/tools/goal/index.ts:1-3 re-exports isGoalEnabled/GoalStore+subscribeGoalStateChanges/setGoalSessionBashAutoApproval; 29 files import '@tools/goal' across src/agent, src/controllers, and all three 
+  evidence: src/tools/goal/index.ts:1-3 re-exports isGoalEnabled/GoalStore+subscribeGoalStateChanges/setGoalSessionBashAutoApproval; 29 files import '@tools/goal' across src/agent, src/controllers, and all three
   fix: cross-partition sweep (single dedicated PR): repoint all ~29 import sites plus the vi.mock/dynamic-import path strings to the defining files (goalFeatureFlag/goalStore/goalAutoApproval), then delete index.ts. Mechanical;
 - **src/tools/latex/index.ts is a pure 3-line re-export barrel; delete per no-convenience-barrels rule**
   evidence: src/tools/latex/index.ts (3 re-export lines, no logic); prod consumer src/tools/registry.ts:23 (`} from './latex'`); test consumers ExtractFiguresTool/ExtractBibliographyTool/ExtractTikzFiguresTool vi
@@ -332,7 +331,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: Owner: commands/files. Inline the two lines at fileSelectionCommands.ts:117 and delete the selectFile export from dialogs.ts (note: this duplicates a batch-5 lead — one owner should take it).
 - **DUPLICATE DIVERGENT REGISTRY: two monacoLanguageForPath implementations with disjoint language coverage**
   evidence: packages/extension/src/progressView/frontend/components/monacoLanguage.ts:7-41 (table-driven; has mdx/scss/less/sql/php/ruby/csharp, LACKS tex/bib/lean — so .tex diffs in ToolEditRequestPanel.ts:144 r
-  fix: Owner: src/shared/monaco. Extract a pure mapping module (e.g. src/shared/monaco/monacoLanguages.ts — no monaco runtime import, mirroring the existing languageForPath helper shape) holding the UNION of both maps plus the 
+  fix: Owner: src/shared/monaco. Extract a pure mapping module (e.g. src/shared/monaco/monacoLanguages.ts — no monaco runtime import, mirroring the existing languageForPath helper shape) holding the UNION of both maps plus the
 - **version.ts hand-rolls isCliOutputFormat/parseVersionOutputFormat duplicating cliContext.ts's private pickEnum; unify only if warning-silence and no-config-load semantics preserved**
   evidence: Duplication is real: packages/cli/src/commands/version.ts:14-25 re-implements enum-pick (flag -> TEXRA_OUTPUT_FORMAT env -> 'text') that packages/cli/src/runtime/cliContext.ts:309-323 (pickEnum: candi
   fix: Owner: cli runtime. Export pickEnum from cliContext.ts (gains its required second consumer in the same PR), rewrite version.ts's parseVersionOutputFormat as pickEnum([flagString, cliEnvValue('TEXRA_OUTPUT_FORMAT')], CLI_
@@ -355,7 +354,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
 ## Wave D — inlines, ownership, misc structural (36)
 
 - **childExecutionKey is a trivial pass-through (`return child.childStreamId`) with exactly one production caller (streamViews.ts:115) — inline and delete the export**
-  evidence: packages/cli/src/chat/tui/state/childExecutions.ts:568 (`return child.childStreamId;`); sole prod caller packages/cli/src/chat/tui/state/streamViews.ts:115; grep across packages+src+test-kernel shows 
+  evidence: packages/cli/src/chat/tui/state/childExecutions.ts:568 (`return child.childStreamId;`); sole prod caller packages/cli/src/chat/tui/state/streamViews.ts:115; grep across packages+src+test-kernel shows
   fix: streamViews owner: replace `childExecutionKey(entry) === streamId` with `entry.childStreamId === streamId`, drop the import, delete the export in childExecutions.ts. ~3 lines net-negative.
 - **agents.ts:80 re-declares AGENT_CATEGORIES locally instead of importing the SSOT from src/shared/schemas/agent.ts**
   evidence: packages/cli/src/runtime/agents.ts:80-83 declares the identical two-element tuple exported at src/shared/schemas/agent.ts:19-22 (same order, same values). Import precedent exists: packages/cli/src/run
@@ -368,7 +367,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: CLI runtime owner — write `plans.map(cliMultiAgentPresetListRecord)` at multiAgent.ts:100, delete the plural wrapper. −1 export, −4 lines.
 - **secretManager.ts ApiProviderQuickPickItem interface is not exported, forcing the Awaited<ReturnType<...>>[number] chain in apiKeyCommands.ts**
   evidence: packages/extension/src/frontend/secretManager.ts:19 declares `interface ApiProviderQuickPickItem` with no export keyword; packages/extension/src/commands/api/apiKeyCommands.ts:109-112 derives `type Pr
-  fix: Owner: extension frontend/api-commands. Add `export` to the interface at secretManager.ts:19 and replace the Awaited<ReturnType> chain in apiKeyCommands.ts with a direct type import. ~2 lines, element-neutral type tighte
+fix: Owner: extension frontend/api-commands. Add `export` to the interface at secretManager.ts:19 and replace the Awaited<ReturnType> chain in apiKeyCommands.ts with a direct type import. ~2 lines, element-neutral type tighte
 - **sharedStorageRoot.ts is the sole production consumer of legacyDataMigration.ts; both retire together when the storageUri migration window closes**
   evidence: Repo-wide grep: only packages/extension/src/frontend/vscode/sharedStorageRoot.ts:26 imports '@platform/defaults/legacyDataMigration' in prod (other hits are test-kernel vitest files); migrateLegacyVsc
   fix: Retirement-ledger entry, not an edit: when the context.storageUri/globalStorageUri migration window is ruled closed (cf. #7987/#8622 and the disposable-intermediate-data ruling), delete src/platform/defaults/legacyDataMi
@@ -386,7 +385,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: modelHandlers/openai owner: inline the 8-line factory body into the line-410 call site, retype the `aggregator` param at line 536 as BaseReasoningStreamAggregator | null, delete the StreamingAggregator Pick alias and its
 - **Unexport micro-sweep: MediaKind (mediaClassification.ts), ViewBundle/PanelOptions/MessageHandlerOptions (extension common/webview) are exported but referenced only inside their own files**
   evidence: Repo-wide grep: MediaKind appears only in src/agent/modelHandlers/support/mediaClassification.ts:21 and the packages/agent dist .d.ts (build artifact) — external callers (modelHandlerAnthropic.ts:1210
-  fix: extension + modelHandlers owners: drop the `export` keyword on all four type declarations (MediaKind can stay non-exported as classifyMediaEntry's inferred return type). Trivial; batch with the knip dead-export sweep as 
+  fix: extension + modelHandlers owners: drop the `export` keyword on all four type declarations (MediaKind can stay non-exported as classifyMediaEntry's inferred return type). Trivial; batch with the knip dead-export sweep as
 - **desktopViewStateIpc.ts exports `DesktopTheme = DesktopThemeKind` alias consumed only by mainViewIpc.ts; one-line canonicalization**
   evidence: packages/desktop/src/main/desktopViewStateIpc.ts:15 `export type DesktopTheme = DesktopThemeKind;` — grep across packages/desktop/src and src/test-kernel shows exactly one consumer: packages/desktop/s
   fix: Owner: desktop host. mainViewIpc.ts imports DesktopThemeKind from @shared/schemas/commonViewMessages and uses it at line 31; delete desktopViewStateIpc.ts:15. −1 export, 2-line edit.
@@ -414,7 +413,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
 - **Two progressView PRDs still reference the deleted ProviderErrorSchema name**
   evidence: docs/prds/2026-01-24-prd-progressview-phase1.md:30 and 2026-01-24-prd-progressview-modernization.md:314 mention ProviderErrorSchema; zero code references repo-wide
   fix: Docs hygiene: fold a one-line name fix into whichever PR next touches those PRDs. Non-blocking.
-- **~26 src/tools *Input z.infer types exported with zero external consumers — one unexport PR**
+- *_~26 src/tools *Input z.infer types exported with zero external consumers — one unexport PR*_
   evidence: Spot-verified all 26 named types: zero references outside their defining src/tools files (test-kernel included). Note: ZoteroSearchInput/ZoteroAddInput/ZoteroExportInput are already unexported at Zote
   fix: Drop the export keyword on the remaining ~23 types in one sweep PR (same edit as the already-landed zotero trio). Element-neutral but shrinks the frozen export surface; verify knip baseline stays green.
 - **agentToolResolution.ts ResolvedAgentTools single-field wrapper pinned by three test-kernel suites destructuring { tools }; could return ToolDefinition[] directly**
@@ -431,7 +430,7 @@ per wave). Full machine-readable verdicts: /tmp/prod-leads-verified.json
   fix: Owner agent-SDK track: make the Tier-1 manifest decision per CLAUDE.md (explicit export list), not via knip dead-export deletion; this lead restates documented open work rather than adding a new finding.
 - **latexdiffCommands.ts four pack/clean handlers differ only in label/wording/clean flag; parameterize ~60 lines**
   evidence: packages/extension/src/commands/latex/latexdiffCommands.ts:235-310 read: handlePackLatexdiffvc/handleCleanLatexdiffvc differ only in error text + clean:true hardcode; same for the Multiple pair. Clean
-  fix: Owner packages/extension/src/commands/latex: parameterize on {verb: 'packing'|'cleaning', clean} for single and multiple variants (4 fns → 2); debug-log wording differs only incidentally — keep user-facing error strings 
+  fix: Owner packages/extension/src/commands/latex: parameterize on {verb: 'packing'|'cleaning', clean} for single and multiple variants (4 fns → 2); debug-log wording differs only incidentally — keep user-facing error strings
 - **vscodeHostConfig.ts: all four exports have exactly one consumer (latexSettingsHandlers.ts, which imports vscode directly); inline and delete the 42-line module**
   evidence: packages/extension/src/frontend/vscode/vscodeHostConfig.ts:5,13,18,28 — four thin wrappers over vscode.workspace.getConfiguration(); sole consumer packages/extension/src/settingsView/handlers/latexSet
   fix: Owner: extension settingsView. Move the 4 wrappers into latexSettingsHandlers.ts as module-local functions (getConfig/getGlobalValue/isExplicitlySet/update), delete vscodeHostConfig.ts and the 5-line import. Net ~-15 lin
