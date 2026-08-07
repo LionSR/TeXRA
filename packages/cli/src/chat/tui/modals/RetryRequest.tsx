@@ -56,11 +56,22 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   // Both switches flip the api-mode to personal keys so the retry uses the
   // user's own key (not the relay JWT); the subscription switches additionally
   // turn off the "prefer ChatGPT subscription" / "Prefer Kimi Code" preference.
-  const switchDecision: ApprovalDecision = isSubscriptionLimit
-    ? { accepted: true, disableChatGptSubscription: true, apiMode: 'personal' }
-    : isKimiCodeLimit
-      ? { accepted: true, disableKimiCode: true, apiMode: 'personal' }
-      : { accepted: true, apiMode: 'personal' };
+  let switchDecision: ApprovalDecision;
+  if (isSubscriptionLimit) {
+    switchDecision = {
+      accepted: true,
+      disableChatGptSubscription: true,
+      apiMode: 'personal',
+    };
+  } else if (isKimiCodeLimit) {
+    switchDecision = {
+      accepted: true,
+      disableKimiCode: true,
+      apiMode: 'personal',
+    };
+  } else {
+    switchDecision = { accepted: true, apiMode: 'personal' };
+  }
   let guidanceText: string | undefined;
   if (isApiSwitchable && personalApiKeyAvailable !== true) {
     const requestedProvider = props.payload.errorDetails?.provider;

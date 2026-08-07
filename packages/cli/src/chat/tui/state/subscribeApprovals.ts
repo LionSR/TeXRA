@@ -55,7 +55,6 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
-import { getPreferKimiCode } from '@utils/config/providerConfig';
 import { platform } from '@platform/platform';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
@@ -76,6 +75,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import { filterNotNullish } from '@utils/core';
+import { getPreferKimiCode } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
