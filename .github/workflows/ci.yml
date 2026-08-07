@@ -115,12 +115,25 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Validate relay edge function
-        working-directory: supabase/functions/relay
+      # Every function that owns a deno.json is validated, so a new edge
+      # function cannot ship untested by being omitted from this list.
+      - name: Validate edge functions
         run: |
-          deno check index.ts *_test.ts
-          deno lint
-          deno test --allow-env
+          shopt -s nullglob
+          for dir in supabase/functions/*/; do
+            [ -f "${dir}deno.json" ] || continue
+            echo "::group::${dir}"
+            (
+              cd "${dir}"
+              tests=(*_test.ts)
+              deno check index.ts "${tests[@]}"
+              deno lint
+              if [ ${#tests[@]} -gt 0 ]; then
+                deno test --allow-env
+              fi
+            )
+            echo "::endgroup::"
+          done
 
       - name: Check dead-code ratchet
         run: pnpm run check:dead-code-ratchet
