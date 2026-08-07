@@ -246,7 +246,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toContain('Tab sessions');
-    expect(display.bindings).toContain('Ctrl-T full output');
+    expect(display.bindings).toContain('Ctrl-T transcript');
     expect(display.bindings).not.toContain('Alt-s subagents');
   });
 
@@ -290,7 +290,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc back · Ctrl-T full output · Ctrl-C stop root',
+      'Esc back · Ctrl-T transcript · Ctrl-C stop root',
     );
   });
 
@@ -308,7 +308,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc back · Tab sessions · Ctrl-T full output · /agent agents · Ctrl-C exit',
+      'Esc back · Tab sessions · Ctrl-T transcript · /agent agents · Ctrl-C exit',
     );
   });
 
@@ -325,9 +325,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe(
-      'Esc back · Ctrl-T full output · Ctrl-C exit',
-    );
+    expect(display.bindings).toBe('Esc back · Ctrl-T transcript · Ctrl-C exit');
   });
 
   it('omits Esc back at the same bounded width without a parent', () => {
@@ -410,7 +408,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Ctrl-T full output');
+    expect(display.bindings).toContain('Ctrl-T transcript');
     expect(display.bindings).toContain('Ctrl-C exit');
   });
 
@@ -448,7 +446,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Ctrl-T full output');
+    expect(display.bindings).toContain('Ctrl-T transcript');
     expect(display.bindings).toContain('/agent agents');
   });
 
@@ -741,7 +739,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Tab sessions · Ctrl-T full output · Ctrl-C stop',
+      'Tab sessions · Ctrl-T transcript · Ctrl-C stop',
     );
   });
 

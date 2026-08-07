@@ -539,6 +539,25 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
+/**
+ * Stream whose full transcript is open in the scrollable foreground reader,
+ * or `undefined` when the reader is closed. Holding the id rather than a text
+ * snapshot keeps the reader live: a run that is still producing rows updates
+ * under the reader instead of freezing at the moment it was opened.
+ */
+const TRANSCRIPT_READER_STREAM = signal<StreamTabId | undefined>(undefined);
+export const transcriptReaderStreamId: Signal.Computed<
+  StreamTabId | undefined
+> = computed(() => TRANSCRIPT_READER_STREAM.get());
+
+export function openTranscriptReader(streamId: StreamTabId): void {
+  TRANSCRIPT_READER_STREAM.set(streamId);
+}
+
+export function closeTranscriptReader(): void {
+  TRANSCRIPT_READER_STREAM.set(undefined);
+}
+
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
  *  with stream-focus Tab. */
@@ -718,6 +737,7 @@ export function resetCliState(
   resetChildStreamEntries();
   activeForm.set(undefined);
   INFO_PANE_QUEUE.set([]);
+  TRANSCRIPT_READER_STREAM.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   clearTransientNotice();

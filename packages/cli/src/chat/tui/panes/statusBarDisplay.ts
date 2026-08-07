@@ -626,7 +626,7 @@ function statusBarBindingsText(
       })
     : undefined;
   const fullOutput = transcriptAvailable
-    ? keyHintText({ key: 'Ctrl-T', action: 'full output' })
+    ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
   const agent = agentSelectionAvailable
     ? keyHintText({ key: '/agent', action: 'agents' })
