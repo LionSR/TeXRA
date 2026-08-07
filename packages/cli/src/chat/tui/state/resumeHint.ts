@@ -13,9 +13,8 @@ import {
   sumUsageStats,
   type StreamTabId,
   type TokenUsageStats,
-  type UsageRoute,
 } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { usageRouteBadge } from '@shared/copy/modelAccess';
 
 import { formatCostUsd } from '@utils/text/stringUtils';
 
@@ -79,42 +78,16 @@ function usageHasTokens(usage: TokenUsageStats): boolean {
   );
 }
 
-/** User-facing label for how a session's model calls were paid for. */
-function usageRouteLabel(route: UsageRoute): string {
-  switch (route) {
-    case 'chatgpt-subscription':
-      return 'ChatGPT';
-    case 'xai-subscription':
-      return 'Grok';
-    case 'kimi-code-subscription':
-      return 'Kimi Code';
-    case 'relay':
-      return INCLUDED_ACCESS.inline;
-    case 'api-key':
-      return OWN_API_KEYS.inline;
-  }
-}
-
-/** Whether a usage route means model calls were covered by a subscription. */
-function isSubscriptionRoute(route: UsageRoute): boolean {
-  return (
-    route === 'chatgpt-subscription' ||
-    route === 'xai-subscription' ||
-    route === 'kimi-code-subscription'
-  );
-}
-
-/** Session-level cost line — mirrors the extension UsagePanel's cost+route
- *  label so the CLI and extension bill the same way. Empty when there is no
+/** Session-level cost line — reuses the shared usage-route badge so the
+ *  CLI and extension attribute payment the same way. Empty when there is no
  *  cost to report and no known route to attribute. */
 function formatSessionCost(usage: TokenUsageStats): string | undefined {
-  const route = usage.usageRoute;
-  if (route != null) {
-    const label = usageRouteLabel(route);
-    if (isSubscriptionRoute(route) && usage.cost === 0) {
-      return `free via ${label}`;
+  const badge = usageRouteBadge(usage.usageRoute);
+  if (badge) {
+    if (badge.subscription && usage.cost === 0) {
+      return `free via ${badge.label}`;
     }
-    return `${formatCostUsd(usage.cost)} via ${label}`;
+    return `${formatCostUsd(usage.cost)} via ${badge.label}`;
   }
   return usage.cost > 0 ? formatCostUsd(usage.cost) : undefined;
 }

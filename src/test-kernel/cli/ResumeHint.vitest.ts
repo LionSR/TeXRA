@@ -263,6 +263,24 @@ describe('formatResumeHint', () => {
     );
   });
 
+  it('flows the session cost line through the full hint', () => {
+    expect(
+      formatResumeHint([{ executionId: 'root', label: 'main', isRoot: true }], {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 0.012,
+        usageRoute: 'relay',
+      } satisfies TokenUsageStats),
+    ).toBe(
+      [
+        'Token usage: total=120 input=100 output=20',
+        'Session cost: $0.012 via included access',
+        'Resume this session with:',
+        '  texra resume root  (main)',
+      ].join('\n'),
+    );
+  });
+
   it('is undefined when there is nothing to resume', () => {
     expect(formatResumeHint([])).toBeUndefined();
   });
