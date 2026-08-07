@@ -581,23 +581,23 @@ export class StreamLogStore {
       streamId,
       append: (entry) => {
         assertOwned();
-        return this.append(streamId, entry);
+        return this.appendEntry(streamId, entry, false);
       },
       appendSettled: (entry) => {
         assertOwned();
-        return this.appendSettled(streamId, entry);
+        return this.appendEntry(streamId, entry, true);
       },
       update: (id, patch) => {
         assertOwned();
-        return this.update(streamId, id, patch);
+        return this.mutateEntry(streamId, (log) => log.update(id, patch));
       },
       settle: (id, patch) => {
         assertOwned();
-        return this.settle(streamId, id, patch);
+        return this.mutateEntry(streamId, (log) => log.settle(id, patch));
       },
       appendText: (id, text) => {
         assertOwned();
-        return this.appendText(streamId, id, text);
+        return this.mutateEntry(streamId, (log) => log.appendText(id, text));
       },
       close: () => {
         if (closed) return;
@@ -720,20 +720,6 @@ export class StreamLogStore {
   // minted by `acquireWriter`/`loadAndAcquireWriter`, so one logical
   // execution holds mutation authority per stream.
 
-  private append(
-    streamId: StreamTabId,
-    entry: StreamLogAppendInput,
-  ): StreamLogEntry {
-    return this.appendEntry(streamId, entry, false);
-  }
-
-  private appendSettled(
-    streamId: StreamTabId,
-    entry: StreamLogAppendInput,
-  ): StreamLogEntry {
-    return this.appendEntry(streamId, entry, true);
-  }
-
   private appendEntry(
     streamId: StreamTabId,
     entry: StreamLogAppendInput,
@@ -784,30 +770,6 @@ export class StreamLogStore {
     this.commitChange(streamId, logInstance);
     void this.save();
     return updated;
-  }
-
-  private update(
-    streamId: StreamTabId,
-    id: string,
-    patch: StreamLogUpdatePatch,
-  ): StreamLogEntry | undefined {
-    return this.mutateEntry(streamId, (log) => log.update(id, patch));
-  }
-
-  private settle(
-    streamId: StreamTabId,
-    id: string,
-    patch: StreamLogUpdatePatch,
-  ): StreamLogEntry | undefined {
-    return this.mutateEntry(streamId, (log) => log.settle(id, patch));
-  }
-
-  private appendText(
-    streamId: StreamTabId,
-    id: string,
-    appendText: string,
-  ): StreamLogEntry | undefined {
-    return this.mutateEntry(streamId, (log) => log.appendText(id, appendText));
   }
 
   clearDirtyUpdates(streamId: StreamTabId): void {

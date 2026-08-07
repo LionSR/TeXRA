@@ -9,7 +9,6 @@ import { z } from 'zod';
 
 import {
   NonEmptyJwtClaim,
-  claimsPreferringIdToken,
   decodeJwtClaimsWithSchema,
 } from '../oauth/jwtDecode';
 
@@ -39,35 +38,4 @@ const EMPTY_CLAIMS: XaiJwtClaims = {};
  */
 export function decodeXaiJwtClaims(token: string): XaiJwtClaims {
   return decodeJwtClaimsWithSchema(token, XaiJwtClaimsSchema, EMPTY_CLAIMS);
-}
-
-/**
- * Extract display email preferring the id_token, falling back to the
- * access_token. Expiry is not merged here — refresh must use the access JWT
- * via {@link decodeXaiJwtClaims} / {@link accessTokenIsExpiring} (id_token.exp
- * can outlive the access token).
- */
-export function extractXaiClaims(
-  idToken: string | undefined,
-  accessToken: string | undefined,
-): Pick<XaiJwtClaims, 'email'> {
-  return claimsPreferringIdToken(idToken, accessToken, decodeXaiJwtClaims, [
-    'email',
-  ]);
-}
-
-/**
- * Whether a JWT access token is inside the refresh skew window. Opaque or
- * non-expiring tokens return false so the stored `expiresAtMs` (or a live 401)
- * drives refresh instead.
- */
-export function accessTokenIsExpiring(
-  token: string | undefined,
-  nowMs: number,
-  skewMs: number,
-): boolean {
-  if (!token) return false;
-  const expMs = decodeXaiJwtClaims(token).expiresAtMs;
-  if (expMs == null) return false;
-  return expMs <= nowMs + Math.max(0, skewMs);
 }

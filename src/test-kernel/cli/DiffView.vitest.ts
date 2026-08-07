@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildHunks,
-  diffVisualRowCount,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
@@ -255,7 +254,7 @@ describe('CLI diff display', () => {
 
     expect(rendered).toContain('after $2n-1$.');
     expect(rendered).not.toContain('…');
-    expect(diffVisualRowCount(hunks, 36)).toBeGreaterThan(
+    expect(lines.length).toBeGreaterThan(
       scrollBoundedDiffDisplayLines(hunks, 0, 0, 0).length,
     );
   });

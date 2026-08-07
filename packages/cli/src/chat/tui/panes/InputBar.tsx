@@ -74,12 +74,7 @@ export interface InputBarHandle {
   readonly discardDraft: () => boolean;
 }
 
-/** Whether a submitted line is safe to retain in persistent input history. */
-export function shouldPersistInputHistory(input: string): boolean {
-  return !shouldRedactSlashInput(input);
-}
-
-function slashSubmitText(
+export function slashSubmitText(
   current: string,
   commandName: string,
   remainder: string,
@@ -94,28 +89,6 @@ function slashSubmitText(
   const suffix = current.slice(nameToReplace.length + 1);
   const separator = /^\S/.test(suffix) ? ' ' : '';
   return `/${commandName}${separator}${suffix}`;
-}
-
-export function submitSlashCommandWhenReady({
-  commandName,
-  handleSubmit,
-  imagePasteQueue,
-  readDraft,
-  remainder,
-  typedName,
-}: {
-  readonly commandName: string;
-  readonly handleSubmit: (value: string) => void;
-  readonly imagePasteQueue: ImagePasteQueue;
-  readonly readDraft: () => string;
-  readonly remainder: string;
-  readonly typedName?: string;
-}): void {
-  imagePasteQueue.runWhenIdle(() => {
-    handleSubmit(
-      slashSubmitText(readDraft(), commandName, remainder, typedName),
-    );
-  });
 }
 
 /** Cap on visible draft rows: a huge paste windows instead of consuming the
@@ -282,7 +255,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // ENOSPC) must not block the submit. Surface the failure through the
       // shared log sink so it isn't completely silent.
       const historyPersist =
-        historyText.length > 0 && shouldPersistInputHistory(historyText)
+        historyText.length > 0 && !shouldRedactSlashInput(historyText)
           ? historyRef.current?.push(historyText)
           : null;
       historyPersist?.catch((err: unknown) => {
@@ -318,13 +291,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         return;
       }
       if (intent === 'submit') {
-        submitSlashCommandWhenReady({
-          commandName: cmd.name,
-          handleSubmit,
-          imagePasteQueue,
-          readDraft: () => draftValueRef.current,
-          remainder,
-          typedName,
+        imagePasteQueue.runWhenIdle(() => {
+          handleSubmit(
+            slashSubmitText(
+              draftValueRef.current,
+              cmd.name,
+              remainder,
+              typedName,
+            ),
+          );
         });
         return;
       }

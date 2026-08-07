@@ -33,10 +33,7 @@ import {
 } from '@frontend/latex/inlineCriticism';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
-import {
-  applyGitAuthorConfig,
-  readGitAuthorSettings,
-} from '@frontend/git/gitAuthorSetup';
+import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import {
   logErrorMessage,
   showLoggedErrorMessage,
@@ -101,6 +98,7 @@ import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
+  type GitAuthorSettings,
 } from '@utils/system/gitAuthorSettings';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import {
@@ -677,7 +675,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async sendGitAuthorSettings(
     webview: vscode.Webview,
-    settings?: ReturnType<typeof readGitAuthorSettings>,
+    settings?: GitAuthorSettings,
   ): Promise<void> {
     await webview.postMessage(
       buildGitAuthorSettingsMessage(

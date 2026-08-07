@@ -218,12 +218,6 @@ export async function readCliHistoryDetails(
   };
 }
 
-export async function readCliHistoryConfig(
-  id: ExecutionId,
-): Promise<AgentConfig | null> {
-  return getExecutionStore(id).readConfig();
-}
-
 /** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
 export type CliHistoryExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }

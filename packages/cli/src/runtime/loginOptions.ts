@@ -70,12 +70,6 @@ export function unsupportedLoginProviderMessage(provider: string): string {
   return `Unsupported provider: ${provider}. Expected ${CLI_OAUTH_PROVIDER_INPUTS}.`;
 }
 
-export function isCliLoginProvider(
-  provider: string,
-): provider is OAuthProvider {
-  return isOAuthProvider(provider);
-}
-
 // `--device` and `--no-browser` are distinct sign-in transports, not
 // refinements of each other (device-code shows no loopback URL), and the
 // device branch silently wins when both are set. Both the CLI command and the
@@ -159,6 +153,6 @@ export function parseChatLoginSlashArgs(
 
   if (positionals.length > 1) return undefined;
   const provider = positionals[0] ?? DEFAULT_OAUTH_PROVIDER;
-  if (!isCliLoginProvider(provider)) return undefined;
+  if (!isOAuthProvider(provider)) return undefined;
   return { target, provider, noBrowser, device, selectAccount, loginHint };
 }

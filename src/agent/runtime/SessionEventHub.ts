@@ -163,6 +163,47 @@ export class SessionEventHub {
     };
   }
 
+  /**
+   * Subscribe to run-scoped facts with the callback pre-narrowed by scope and
+   * by the `types` filter, so consumers neither re-check `event.scope` nor
+   * cast `event.event`. The single cast here is sound: the hub applies the
+   * scope and type filters before invoking the callback.
+   */
+  subscribeRunFacts<T extends AgentEvent['type']>(
+    subscriber: (runFact: {
+      readonly streamId: StreamTabId;
+      readonly event: Extract<AgentEvent, { type: T }>;
+    }) => void,
+    filter: {
+      readonly streamId?: StreamTabId;
+      readonly types: readonly T[];
+    },
+  ): () => void {
+    return this.subscribe(
+      (event) => {
+        if (event.scope !== 'run') return;
+        subscriber({
+          streamId: event.streamId,
+          event: event.event as Extract<AgentEvent, { type: T }>,
+        });
+      },
+      { scope: 'run', streamId: filter.streamId, types: filter.types },
+    );
+  }
+
+  /**
+   * Subscribe to session-scoped facts with the callback pre-narrowed, so
+   * consumers don't re-check `event.scope`.
+   */
+  subscribeSessionFacts(subscriber: (fact: SessionFact) => void): () => void {
+    return this.subscribe(
+      (event) => {
+        if (event.scope === 'session') subscriber(event.event);
+      },
+      { scope: 'session' },
+    );
+  }
+
   /** Subscribe to canonical status facts on the synchronous session rail. */
   subscribeStatus(subscriber: (event: StatusEvent) => void): () => void {
     return this.subscribe(

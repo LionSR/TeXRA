@@ -8,7 +8,6 @@
 import { wrapProviderOAuthClient } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
-  type SubscriptionAuthorizeRequest,
   type SubscriptionOAuthClient,
   type SubscriptionOAuthPolicy,
   type SubscriptionSessionStatus,
@@ -37,7 +36,6 @@ import {
 export type CodexSessionStorage = SubscriptionSessionStorage;
 export type CodexOAuthClient = SubscriptionOAuthClient;
 export type CodexSessionStatus = SubscriptionSessionStatus;
-export type CodexAuthorizeRequest = SubscriptionAuthorizeRequest;
 
 export interface CodexSessionCoordinatorInit {
   storage: CodexSessionStorage;

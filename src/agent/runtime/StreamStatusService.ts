@@ -278,10 +278,6 @@ export class StreamStatusMachine {
     return values;
   }
 
-  has(stream: StreamTabId): boolean {
-    return this.streams.has(stream);
-  }
-
   isActiveOrResuming(stream: StreamTabId): boolean {
     return isActivePhase(this.get(stream));
   }

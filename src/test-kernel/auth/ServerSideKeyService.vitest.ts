@@ -64,9 +64,6 @@ function createTierService(
     isModelAvailable() {
       return false;
     },
-    getAccessDescription() {
-      return 'No included model access';
-    },
     getExpirationDate() {
       return null;
     },

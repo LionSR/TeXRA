@@ -9,11 +9,7 @@
  * preferences, owned by `@model/xai/xaiPreference` so the model layer can
  * read them without depending on this OAuth machinery.
  */
-export {
-  accessTokenIsExpiring,
-  decodeXaiJwtClaims,
-  extractXaiClaims,
-} from './xaiJwt';
+export { decodeXaiJwtClaims } from './xaiJwt';
 export {
   XaiAuthError,
   formatXaiAuthUnavailableMessage,

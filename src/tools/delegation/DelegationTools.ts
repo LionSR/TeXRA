@@ -59,8 +59,6 @@ import {
 } from './inputFields';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
-export { rejectOversizedBibAttachments } from './inputFields';
-
 const LOG_CHANNEL = 'delegation';
 
 /**

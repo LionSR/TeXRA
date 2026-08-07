@@ -217,12 +217,6 @@ export function noRunnableModelAccessReason(
   return apiMode;
 }
 
-export function formatCliNoRunnableModelsLaunchBlock(
-  reason: NoRunnableModelAccessReason,
-): string {
-  return NO_RUNNABLE_MODEL_ACCESS_COPY[reason];
-}
-
 function formatCliNoRunnableModelsRecovery(
   reason: NoRunnableModelAccessReason,
   options: CliNoAvailableModelsRecoveryOptions = {},
@@ -306,9 +300,9 @@ export function modelAccessLaunchBlockDescriptionForCliMode(
   models: readonly CliModelAccess[],
   apiMode: ApiAccessMode,
 ): string {
-  return formatCliNoRunnableModelsLaunchBlock(
-    noRunnableModelAccessReason(models, apiMode),
-  );
+  return NO_RUNNABLE_MODEL_ACCESS_COPY[
+    noRunnableModelAccessReason(models, apiMode)
+  ];
 }
 
 export function emptyModelListMessageForCliMode(
