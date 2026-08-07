@@ -1,0 +1,109 @@
+// Scrollable, closable full-transcript reader. Ctrl-T's predecessor printed the
+// same content straight into terminal scrollback, which the terminal owns and
+// nothing can take back. This renders it in the live region instead, so Esc
+// restores the conversation exactly as it was. `p` still prints, for when the
+// point is to select and copy the text out of the terminal.
+//
+// The TUI never enters the alternate screen (see tui/terminalCleanup.ts), so a
+// full-screen pager is not an option here — this is an ordinary foreground
+// surface, sized by the same row budget every other one uses.
+
+import { useMemo } from 'react';
+import { useInput, useWindowSize } from 'ink';
+
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+
+import { formFrameWidth } from '../forms/_shared/FormFrame';
+import { isEscapeInput } from '../input/inputKeys';
+import {
+  ScrollableModalText,
+  scrollableModalTextRowsBudget,
+} from '../modals/ScrollableModalText';
+import { streams as streamsSignal } from '../state/cliState';
+import { transcriptToLines } from '../state/transcriptLines';
+import { useSignal } from '../state/useSignal';
+
+const READER_HORIZONTAL_CHROME_COLUMNS = 4;
+const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
+
+export function transcriptReaderTitle(label: string | undefined): string {
+  return label ? `Transcript: ${label}` : 'Transcript';
+}
+
+export function TranscriptReader({
+  availableRows,
+  executionLabels,
+  onClose,
+  onPrintToScrollback,
+  streamId,
+  title,
+}: {
+  readonly availableRows: number;
+  readonly executionLabels?: ExecutionLabels;
+  readonly onClose: () => void;
+  readonly onPrintToScrollback: (streamId: StreamTabId) => void;
+  readonly streamId: StreamTabId;
+  readonly title: string;
+}): React.JSX.Element {
+  const { columns } = useWindowSize();
+  const streams = useSignal(streamsSignal);
+  const slice = streams.get(streamId);
+  const width = formFrameWidth(columns) - READER_HORIZONTAL_CHROME_COLUMNS;
+
+  // Recomputed as the run appends rows, so the reader stays live rather than
+  // freezing at the content present when it opened.
+  const text = useMemo(() => {
+    const body = transcriptToLines(slice, width, executionLabels)
+      .join('\n')
+      .trimEnd();
+    return body || EMPTY_TRANSCRIPT_TEXT;
+  }, [executionLabels, slice, width]);
+
+  useInput((input, key) => {
+    if (isEscapeInput(input, key)) {
+      onClose();
+      return;
+    }
+    if (input.toLowerCase() === 'p') {
+      onPrintToScrollback(streamId);
+      onClose();
+    }
+  });
+
+  return (
+    <BorderedPanel
+      color={COLOR_HINT}
+      title={title}
+      width={formFrameWidth(columns)}
+      footer={
+        <KeyHints
+          hints={[
+            { key: '↑/↓', action: 'scroll' },
+            { key: 'p', action: 'print to scrollback' },
+            { key: 'Esc', action: 'close' },
+          ]}
+          confirmCancel={false}
+        />
+      }
+    >
+      <ScrollableModalText
+        hiddenNoun="transcript rows"
+        maxRows={scrollableModalTextRowsBudget({
+          availableRows,
+          columns,
+          title,
+        })}
+        resetKey={streamId}
+        scrollHint="scroll transcript"
+        showScrollHints={false}
+        startAtEnd
+        text={text}
+        width={width}
+      />
+    </BorderedPanel>
+  );
+}

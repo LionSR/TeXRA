@@ -142,6 +142,15 @@ interface ScrollableModalTextProps {
   readonly marginWhenSpacious?: boolean;
   /** Release ↑/↓ while another surface owns them (feedback input). */
   readonly scrollActive?: boolean;
+  /** Open at the last line instead of the first. A transcript reads newest-last,
+   *  so the rows worth seeing on open are at the bottom. */
+  readonly startAtEnd?: boolean;
+  /** What counts as "new content" for the purpose of restoring the initial
+   *  scroll position. Defaults to the text itself, which is right for a modal
+   *  whose body is replaced wholesale. A view over a growing transcript passes
+   *  something stabler (the stream id), so appended rows do not yank the
+   *  reader back from wherever it scrolled to. */
+  readonly resetKey?: unknown;
   /** Suppress the hint row where no row is budgeted for it (compact cards). */
   readonly showScrollHints?: boolean;
   /** ↑/↓ hint verb, e.g. `scroll command`. */
@@ -179,8 +188,9 @@ export function ScrollableModalText(
   });
   const { scrollOffset, scrollable } = useScrollableOffset({
     active: props.scrollActive !== false,
+    initialOffset: props.startAtEnd === true ? maxScrollOffset : 0,
     maxScrollOffset,
-    resetKey: text,
+    resetKey: props.resetKey ?? text,
     pageRows: scrollPageRows({
       compactRows: COMPACT_MODAL_TEXT_ROWS,
       maxDisplayLines: maxRows,

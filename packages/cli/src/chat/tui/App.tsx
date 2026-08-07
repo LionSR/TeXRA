@@ -39,6 +39,10 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
+import {
+  TranscriptReader,
+  transcriptReaderTitle,
+} from './panes/TranscriptReader';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
@@ -69,8 +73,11 @@ import {
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
+  closeTranscriptReader,
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
+  openTranscriptReader,
+  transcriptReaderStreamId as transcriptReaderStreamIdSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
   slashPaletteOpen as slashPaletteOpenSignal,
@@ -172,6 +179,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const infoPane = useSignal(infoPaneSignal);
+  const transcriptReaderStreamId = useSignal(transcriptReaderStreamIdSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
@@ -212,7 +220,10 @@ export function App(props: AppProps): React.JSX.Element {
 
   const stdin = useStdin();
   const foregroundOpen =
-    activeApprovalVisible || activeForm !== undefined || infoPane !== undefined;
+    activeApprovalVisible ||
+    activeForm !== undefined ||
+    infoPane !== undefined ||
+    transcriptReaderStreamId !== undefined;
   const childInputDisabledMessage = focusedChildInputDisabledMessage({
     activeStreamId,
     parentStream,
@@ -424,6 +435,7 @@ export function App(props: AppProps): React.JSX.Element {
     formBusy,
     infoPaneOpen: infoPane !== undefined,
     pendingApproval: activeApprovalVisible,
+    transcriptReaderOpen: transcriptReaderStreamId !== undefined,
   });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
@@ -457,6 +469,24 @@ export function App(props: AppProps): React.JSX.Element {
       case 'approval':
         return activeApprovalVisible && pending ? (
           <ApprovalModal pending={pending} availableRows={availableRows} />
+        ) : null;
+      case 'transcriptReader':
+        return transcriptReaderStreamId ? (
+          <TranscriptReader
+            availableRows={availableRows}
+            executionLabels={subagentExecutionLabels}
+            onClose={closeTranscriptReader}
+            onPrintToScrollback={printStreamOutput}
+            streamId={transcriptReaderStreamId}
+            title={transcriptReaderTitle(
+              streamDisplayLabel({
+                childStreamEntries,
+                parentStream,
+                streamId: transcriptReaderStreamId,
+                streams,
+              }),
+            )}
+          />
         ) : null;
       case undefined:
         return null;
@@ -701,7 +731,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (!focusShortcutsActive) return;
 
     if (key.ctrl && input.toLowerCase() === 't') {
-      if (activeStreamId) printStreamOutput(activeStreamId);
+      if (activeStreamId) openTranscriptReader(activeStreamId);
       return;
     }
 

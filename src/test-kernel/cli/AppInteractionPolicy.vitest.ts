@@ -103,6 +103,7 @@ function foregroundInput(
     formBusy: false,
     infoPaneOpen: false,
     pendingApproval: true,
+    transcriptReaderOpen: false,
     ...overrides,
   };
 }
@@ -329,6 +330,29 @@ describe('app interaction policy', () => {
       ],
       [foregroundInput(), 'approval'],
       [foregroundInput({ pendingApproval: false }), undefined],
+      // The transcript reader is passive, so every surface that needs an
+      // answer takes the foreground away from it.
+      [
+        foregroundInput({ pendingApproval: false, transcriptReaderOpen: true }),
+        'transcriptReader',
+      ],
+      [foregroundInput({ transcriptReaderOpen: true }), 'approval'],
+      [
+        foregroundInput({
+          activeFormOpen: true,
+          pendingApproval: false,
+          transcriptReaderOpen: true,
+        }),
+        'form',
+      ],
+      [
+        foregroundInput({
+          infoPaneOpen: true,
+          pendingApproval: false,
+          transcriptReaderOpen: true,
+        }),
+        'infoPane',
+      ],
     ] satisfies readonly (readonly [
       ForegroundSurfaceInput,
       ForegroundSurfaceKind | undefined,
