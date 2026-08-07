@@ -5,7 +5,7 @@ import {
   formatProviderHttpError,
   parseKimiCodeSubscriptionLimit,
 } from '@common/errors/sdkErrorUtils';
-import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
 const USAGE_LIMIT_MESSAGE =
   "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/code/#pricing";
