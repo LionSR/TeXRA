@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -9,6 +9,14 @@ import { runCli } from '@cli/commands/root';
 import { defaultBranch, parseGitHubSlug } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+
+const browserMocks = vi.hoisted(() => ({
+  tryOpenBrowser: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('@cli/runtime/browser', () => ({
+  tryOpenBrowser: browserMocks.tryOpenBrowser,
+}));
 
 const repos: string[] = [];
 
@@ -44,6 +52,7 @@ describe('install-github-action command', () => {
   beforeEach(() => {
     spyOnStreamWrite(process.stdout);
     spyOnStreamWrite(process.stderr);
+    browserMocks.tryOpenBrowser.mockClear();
   });
 
   it('commits only the generated workflow file', async () => {
@@ -65,6 +74,36 @@ describe('install-github-action command', () => {
     );
     expect(git(repo, 'diff', '--cached', '--name-only')).toBe(
       'already-staged.txt',
+    );
+    const workflow = readFileSync(
+      path.join(repo, '.github/workflows/texra-code-review.yml'),
+      'utf8',
+    );
+    expect(workflow).toContain('id-token: write');
+    expect(workflow).not.toContain('TEXRA_APP_PRIVATE_KEY');
+  });
+
+  it('opens the public GitHub App installer for the repository', async () => {
+    const repo = makeRepo();
+    git(
+      repo,
+      'remote',
+      'add',
+      'origin',
+      'https://github.com/example/project.git',
+    );
+
+    const result = await runCli([
+      '--cwd',
+      repo,
+      'install-github-action',
+      '--no-pr',
+      '--no-color',
+    ]);
+
+    expect(result.exitCode).toBe(CliExitCode.Success);
+    expect(browserMocks.tryOpenBrowser).toHaveBeenCalledWith(
+      'https://github.com/apps/texra-ai-bot/installations/new',
     );
   });
 

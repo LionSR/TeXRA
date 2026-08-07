@@ -29,6 +29,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
+      id-token: write
     steps:
       # Consume the trigger label so a later `re-review` re-application fires
       # a fresh run. Fork PR tokens are read-only and their provider-key check
@@ -105,11 +106,12 @@ jobs:
 
       - name: TeXRA review
         if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        # texra-ai/texra-action v1.1.3; pin the reviewed release commit so
-        # PR review behavior only changes through an explicit workflow update.
-        # Keep the secret-bearing review job read-only: provider keys and the
-        # GitHub token are present, so shell/tool mutations must stay disabled.
-        uses: texra-ai/texra-action/review@94bd5336d31ac62b1a196c6039a71d69e15ba0c5
+        # texra-ai/texra-action v1.1.3 (GitHub App OIDC). Pin the reviewed
+        # release commit so PR review behavior only changes through an explicit
+        # workflow update. Empty github-token uses TeXRA GitHub App OIDC
+        # (id-token: write above). Keep the secret-bearing review job read-only:
+        # provider keys are present, so shell/tool mutations must stay disabled.
+        uses: texra-ai/texra-action/review@e7a7803136723ee55ebf2c49a91902f60486c959
         with:
           prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
           approval-policy: yolo
@@ -118,9 +120,8 @@ jobs:
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
           model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
           texra-version: ${{ vars.TEXRA_CLI_VERSION }}
-          github-token: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN || github.token }}
           review-marker: '<!-- texra-review -->'
-          resolve-threads: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN != '' && 'true' || 'false' }}
+          resolve-threads: 'true'
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}

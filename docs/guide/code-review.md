@@ -10,15 +10,16 @@ flag.
 
 It runs from your own GitHub Actions environment, using model provider API keys
 you put in your repo's secrets. Your code and diffs are not sent through any
-TeXRA service.
+TeXRA service; only a GitHub-signed workload identity is exchanged for a
+short-lived TeXRA GitHub App token.
 
 This page walks through the whole setup from zero — no prior GitHub Actions
-experience needed. If you just want the short version: add one API key secret,
-add one workflow file, open a PR.
+experience needed. If you just want the short version: install the TeXRA GitHub
+App, add one API key secret, add one workflow file, and open a PR.
 
 ## What you'll see on a PR
 
-Once installed, every PR gets a single review from `github-actions[bot]`: a
+Once installed, every PR gets a single review from `texra-ai-bot[bot]`: a
 summary comment at the top with TeXRA's overall verdict, plus inline comments on
 the lines it wants to question. On the next push to the same PR, TeXRA updates
 those same threads instead of posting duplicates.
@@ -52,14 +53,23 @@ If you haven't used GitHub Actions before, here is the whole picture:
 
 - A GitHub repository you administer (you need access to its **Settings**
   tab), with Actions enabled — it is enabled by default on GitHub.
+- The [TeXRA GitHub App](https://github.com/apps/texra-ai-bot) installed on
+  that repository.
 - An API key from at least one model provider (Anthropic, OpenAI, Google,
-  etc.). If you don't have one yet, Step 1 below covers it.
+  etc.). If you don't have one yet, Step 2 below covers it.
 - Nothing else — the workflow below already declares the GitHub permissions it
   needs to read code and write review comments.
 
 ## Setup
 
-### 1. Get a model provider API key
+### 1. Install the TeXRA GitHub App
+
+Open [github.com/apps/texra-ai-bot](https://github.com/apps/texra-ai-bot),
+click **Install**, and grant it access to the repository you want TeXRA to
+review. The App provides the `texra-ai-bot[bot]` identity; its private key is
+never stored in your repository.
+
+### 2. Get a model provider API key
 
 Sign up with the provider of your choice and create an API key in their
 console — for example
@@ -72,7 +82,7 @@ next step — many consoles only show it once.
 You only need **one** provider key. TeXRA also supports DeepSeek, OpenRouter,
 and xAI keys.
 
-### 2. Save the key as a repository secret
+### 3. Save the key as a repository secret
 
 A _secret_ is an encrypted value that only your repo's Actions runs can read —
 it never appears in logs or in the repo itself.
@@ -97,7 +107,7 @@ Without at least one of these, TeXRA can't talk to any model — the workflow
 posts no review and skips quietly (you'll see a "no model provider API key"
 notice on the run).
 
-### 3. Add the workflow file
+### 4. Add the workflow file
 
 Create a file at exactly this path in your repository:
 
@@ -127,6 +137,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
     steps:
       # Provider keys are unavailable to pull_request runs from forks; skip
       # gracefully instead of failing when no key is configured.
@@ -184,9 +195,8 @@ jobs:
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
           model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
           texra-version: ${{ vars.TEXRA_CLI_VERSION }}
-          github-token: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN || github.token }}
           review-marker: '<!-- texra-review -->'
-          resolve-threads: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN != '' && 'true' || 'false' }}
+          resolve-threads: 'true'
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -204,8 +214,9 @@ What each part does, in plain words:
   reviewed.
 - **`if: vars.TEXRA_REVIEW_ENABLED != 'false'`** — a kill switch you can flip
   later without touching the file (see [Pausing reviews](#pausing-reviews)).
-- **`permissions`** — the job may read your code and write PR reviews, and
-  nothing else.
+- **`permissions`** — the job may read your code, write PR reviews, and request
+  a GitHub-signed OIDC identity token. The action exchanges that identity for
+  a one-hour App token restricted to this repository.
 - **Check provider key** — if no key secret is configured (which is also the
   case for PRs from forks), the run skips quietly instead of failing.
 - **Check pull request merge ref** — if the PR has a merge conflict, GitHub
@@ -239,7 +250,7 @@ tip above), adds a custom prompt (see
 triggers on PR open only — a `re-review` label requests a fresh run instead of
 reviewing every push.
 
-### 4. Open a pull request and watch it run
+### 5. Open a pull request and watch it run
 
 Commit the workflow file to your **default branch** (usually `main`) — from
 then on, every new PR from a branch in the same repository gets a TeXRA review.
@@ -357,13 +368,9 @@ unset it) to resume.
 
 ### Letting TeXRA resolve its own threads
 
-Out of the box, TeXRA posts review comments but can't resolve or reply to its
-own earlier threads — GitHub's default Actions token isn't allowed to. If you
-want TeXRA to clean up its own threads on subsequent pushes (resolving fixed
-ones, replying with updates rather than re-posting), create a personal or
-fine-grained access token with pull-request review permissions and add it as a
-`TEXRA_REVIEW_GITHUB_TOKEN` repo secret. The workflow above detects the secret
-and switches thread resolution on automatically — no workflow edit needed.
+The workflow above sets `resolve-threads: 'true'`, so the installed TeXRA
+GitHub App can resolve fixed findings and reply to earlier threads under the
+same bot identity. No personal access token is needed.
 
 ### Choosing whose PRs get reviewed
 

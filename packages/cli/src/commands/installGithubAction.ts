@@ -26,6 +26,8 @@ import type { CliContext } from '../runtime/cliContext';
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';
 const DEFAULT_BRANCH_NAME = 'texra/add-code-review';
+const TEXRA_GITHUB_APP_INSTALL_URL =
+  'https://github.com/apps/texra-ai-bot/installations/new';
 
 // Single-quoted lines keep the GitHub `${{ ... }}` expressions literal (a
 // template literal would try to interpolate them).
@@ -50,6 +52,7 @@ const WORKFLOW_TEMPLATE = [
   '    permissions:',
   '      contents: read',
   '      pull-requests: write',
+  '      id-token: write',
   '    steps:',
   '      - name: Checkout pull request',
   '        uses: actions/checkout@v6',
@@ -77,6 +80,7 @@ const WORKFLOW_TEMPLATE = [
 const PR_BODY = [
   'Adds a TeXRA code-review GitHub Action that reviews every pull request.',
   '',
+  'The workflow authenticates through the installed TeXRA GitHub App using a short-lived OIDC token.',
   'Set a provider API key secret (e.g. `ANTHROPIC_API_KEY`) so the review can run.',
   'Disable without deleting by setting repo variable `TEXRA_REVIEW_ENABLED=false`.',
   '',
@@ -132,6 +136,22 @@ function printSecretChecklist(slug: GitHubSlug | null): void {
   );
 }
 
+async function openGitHubAppInstaller(slug: GitHubSlug | null): Promise<void> {
+  if (!slug) return;
+
+  const opened = await tryOpenBrowser(TEXRA_GITHUB_APP_INSTALL_URL);
+  writeTextStdout('');
+  if (opened) {
+    writeTextStdout(
+      `Opened the TeXRA GitHub App installer. Grant it access to ${slug.owner}/${slug.repo}.`,
+    );
+  } else {
+    writeTextStdout(
+      `Install the TeXRA GitHub App on ${slug.owner}/${slug.repo}:\n${TEXRA_GITHUB_APP_INSTALL_URL}`,
+    );
+  }
+}
+
 async function runInstallGithubAction(
   context: CliContext,
   opts: InstallOptions,
@@ -157,6 +177,7 @@ async function runInstallGithubAction(
 
   const url = remoteUrl(root);
   const slug = url ? parseGitHubSlug(url) : null;
+  await openGitHubAppInstaller(slug);
   const base = opts.base ?? defaultBranch(root) ?? 'main';
   const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
   const startBranch = currentBranch(root);
@@ -331,7 +352,7 @@ async function runInstallGithubAction(
 export const installGithubActionCommand = defineCliCommand({
   meta: {
     name: 'install-github-action',
-    description: 'Scaffold the TeXRA code-review GitHub Action and open a PR',
+    description: 'Install the TeXRA GitHub App and scaffold code review',
   },
   args: {
     ...GLOBAL_ARGS,
