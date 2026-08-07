@@ -283,7 +283,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       }
     };
 
-    const { meta, defaultAgent, defaultAgentCategory } = await runPhase(() => {
+    const { meta, defaultAgent } = await runPhase(() => {
       const { meta } = parseWorkflowScript(script);
       const resolved = requireWorkflowOrToolUseAgent(
         input.agent,
@@ -292,7 +292,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       return {
         meta,
         defaultAgent: resolved.agent,
-        defaultAgentCategory: resolved.category,
       };
     });
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model

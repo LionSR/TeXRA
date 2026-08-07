@@ -689,6 +689,22 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
   });
 
+  it('rejects a tool-use default agent used as a workflow agent', async () => {
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      { ...defaultAgent, category: 'toolUse', source: 'builtInToolUse' },
+      'tool-call-8',
+      run,
+    );
+
+    await expect(runner(invocation({}))).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringMatching(
+        /is a toolUse agent but was launched as workflow/,
+      ),
+    });
+  });
+
   it('allows empty input files when the agent declares default outputs', async () => {
     const runner = createWorkflowScriptAgentRunner(
       parentContext(),

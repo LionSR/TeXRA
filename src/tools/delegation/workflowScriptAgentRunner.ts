@@ -273,6 +273,12 @@ export function createWorkflowScriptAgentRunner(
                     invocation.options.agentName,
                     runScope.delegationAgentScope ?? undefined,
                   );
+            if (agent.category !== AgentCategory.Workflow) {
+              throw new WorkflowRunAbortError(
+                `Agent '${agent.name}' is a ${agent.category} agent but was ` +
+                  `launched as workflow. Use delegate_agent instead.`,
+              );
+            }
             // Model resolves before any file I/O so an unavailable/invalid
             // declared model fails the call without touching the filesystem.
             const model = await workflowScriptModelSelection(
