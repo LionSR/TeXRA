@@ -22,8 +22,16 @@ export function subscribeToSignalChanges(
     queueMicrotask(() => {
       notifyPending = false;
       if (disposed) return;
-      notify();
-      watcher.watch();
+      // Re-arm in `finally`: a Watcher fires once and stays dormant until
+      // `watch()` runs again, so letting a throw from `notify()` skip it
+      // silently kills this subscription for the rest of the process. For a
+      // React subscriber that means a component frozen on stale data with no
+      // error and no recovery.
+      try {
+        notify();
+      } finally {
+        watcher.watch();
+      }
     });
   });
   watcher.watch(...signals);
