@@ -1,5 +1,28 @@
 // Shared utility functions for the progress view frontend.
 
+import type { StreamTabInfo } from '@shared/schemas';
+
+/**
+ * The single accessor for a stream's user-facing display label. Every
+ * `StreamTabInfo.label` is guaranteed non-empty by `buildStreamTabInfo()`
+ * (`src/controllers/session/streamTabInfo.ts`) — this function exists so no
+ * call site is tempted to add its own `?? info.name` / `?? streamId`
+ * fallback. `.name` and `StreamTabId` are the opaque `agent#executionId`
+ * handle (`src/agent/runtime/streamTab.ts`) and must never reach the user as
+ * display text. Returns undefined when there's no entry to read from (e.g. a
+ * lookup by id came back empty because that stream's tab was evicted) —
+ * callers decide their own placeholder or omit the label entirely.
+ */
+export function streamDisplayLabel(info: Pick<StreamTabInfo, 'label'>): string;
+export function streamDisplayLabel(
+  info: Pick<StreamTabInfo, 'label'> | undefined,
+): string | undefined;
+export function streamDisplayLabel(
+  info: Pick<StreamTabInfo, 'label'> | undefined,
+): string | undefined {
+  return info?.label;
+}
+
 /**
  * Find the first matching element in a composed event path.
  */

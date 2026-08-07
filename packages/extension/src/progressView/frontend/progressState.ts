@@ -29,7 +29,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toNewestFirstByTimestamp } from '@utils/core';
 
-import { setsEqual } from './utils';
+import { setsEqual, streamDisplayLabel } from './utils';
 import { clearFollowUpInputTransientStateStore } from './followUpInputState';
 import {
   createInitialState,
@@ -216,7 +216,7 @@ export function diffStatusAnnouncement(
     const noun = PERMISSION_ANNOUNCEMENT_NOUN[permission.kind];
     const streamId = permission.data.streamId;
     const label = streamId
-      ? streamById.get(streamId)?.label || streamId
+      ? streamDisplayLabel(streamById.get(streamId))
       : undefined;
     text = label
       ? `Approval requested: ${noun} — ${label}`
@@ -235,8 +235,8 @@ export function diffStatusAnnouncement(
       status !== STREAM_STATUS.READY &&
       isTerminalOutcomePhase(status)
     ) {
-      const label = streamById.get(streamId)?.label || streamId;
-      text = `Run ${status}: ${label}`;
+      const label = streamDisplayLabel(streamById.get(streamId));
+      text = label ? `Run ${status}: ${label}` : `Run ${status}`;
     }
   }
 
