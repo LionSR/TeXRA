@@ -12,7 +12,7 @@ import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
   agentName,
-} from '@shared/schemas/agent';
+} from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
