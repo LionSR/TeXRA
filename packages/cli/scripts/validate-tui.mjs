@@ -363,7 +363,7 @@ const SCENARIOS = [
     expect: [
       '● bash (python3 enumerate_triples.py)',
       'tool-output-line-01',
-      '… +9 lines (Ctrl-T to print full output)',
+      '… +9 lines (Ctrl-T to view full output)',
       'tool-output-line-18',
     ],
     unexpect: ['tool-output-line-10 hidden-middle'],
