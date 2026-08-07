@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { isStreamingTextLogMessage } from '@progressView/frontend/formatters';
+import { isStreamingTextLogMessage } from '@progressView/frontend/formatters/baseLogFormatter';
 import { logHandlers } from '@progressView/frontend/slices/logSlice';
 import {
   appState,

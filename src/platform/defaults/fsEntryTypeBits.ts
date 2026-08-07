@@ -11,13 +11,17 @@ export type FileTypeProbe = {
   isDirectory(): boolean;
 };
 
-export interface StatCapableFs {
+/**
+ * Minimal duck-typed stat-capable fs handle, satisfied by both node:fs and
+ * memfs's IFs (used by the test-kernel fake platform).
+ */
+type StatCapableFs = {
   promises: {
     stat(
       target: string,
     ): Promise<Pick<FileTypeProbe, 'isFile' | 'isDirectory'>>;
   };
-}
+};
 
 /**
  * Resolve the target type of a symlink, producing combined bitmasks

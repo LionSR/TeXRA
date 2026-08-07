@@ -1128,14 +1128,6 @@ export class DesktopProgressBridge {
     return 'revealed';
   }
 
-  deleteStream(streamId: StreamTabId): Promise<void> {
-    return this.backend.deleteStream(streamId);
-  }
-
-  deleteAllStreams(): Promise<void> {
-    return this.backend.deleteAllStreams();
-  }
-
   private syncStreamContent(streamId: StreamTabId | ''): void {
     if (!streamId) {
       this.backend.syncStreamContent('');

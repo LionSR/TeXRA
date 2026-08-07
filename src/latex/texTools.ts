@@ -1,11 +1,10 @@
 // Node imports
 import * as path from 'node:path';
 
+// External imports
+import { z } from 'zod';
+
 // Local imports
-import {
-  LaTeXCompileOptionsSchema,
-  type LaTeXCompileOptions,
-} from '@common/schemas';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -20,6 +19,29 @@ const CHANNEL = 'LaTeXCommands';
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
 // caller gets the same last-N-lines excerpt an LLM or a human can read as-is.
 const LOG_TAIL_LINES = 200;
+
+/**
+ * Options for LaTeX compilation, used by {@link compileLatex2Pdf}.
+ */
+const LaTeXCompileOptionsSchema = z.object({
+  channel: z.string().optional(),
+  outputDirectory: z.string().optional(),
+  compiler: z.enum(['pdflatex', 'latexmk']).prefault('latexmk'),
+  /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
+  timeout: z.int().positive().optional(),
+  /**
+   * Extra directories to prepend onto the kpathsea search path (TEXINPUTS /
+   * BIBINPUTS / BSTINPUTS), after the main file's own directory and before the
+   * workspace root. Used when a run-storage document compiles outside its
+   * original location so relative `\input{…}` / `\bibliography{…}` targets
+   * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
+   * source directory.
+   */
+  extraInputDirs: z.array(z.string()).prefault([]),
+});
+
+/** Input type - compiler optional with default applied by schema.parse() */
+type LaTeXCompileOptions = z.input<typeof LaTeXCompileOptionsSchema>;
 
 /**
  * Read the tail of the `.log` file a LaTeX engine drops next to its output

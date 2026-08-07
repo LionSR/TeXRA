@@ -35,7 +35,7 @@ export function shouldSaveModelIO(): boolean {
   return getConfig<boolean>('texra.debug.saveModelIO', false);
 }
 
-export interface SaveDebugParams {
+interface SaveDebugParams {
   object: unknown;
   objectType: DebugObjectType;
   context: DebugContext;

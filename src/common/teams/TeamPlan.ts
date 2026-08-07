@@ -204,7 +204,7 @@ export function teamAvailability(plan: TeamRunPlan): TeamAvailability {
   };
 }
 
-export function teamExecutionFields<T extends TeamCatalogAgent>(
+function teamExecutionFields<T extends TeamCatalogAgent>(
   plan: TeamRunPlan<T> & { readonly rootAgent: T },
 ): {
   agent: string;

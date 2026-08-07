@@ -70,11 +70,6 @@ async function openWorkspaceConfigStore(
   return JsonStore.open(internalConfigPath);
 }
 
-export interface ExtensionConfigWorkspaceTransition {
-  readonly generation: number;
-  readonly completion: Promise<void>;
-}
-
 export class ExtensionTexraConfig extends JsonConfigProvider {
   private transitionGeneration = 0;
   private failedTransitionGeneration: number | undefined;
@@ -113,7 +108,7 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
   enqueueWorkspaceTransition(
     workspaceRoot: string | undefined,
     reloadStorage: (hooks: WorkspaceStorageTransitionHooks) => Promise<void>,
-  ): ExtensionConfigWorkspaceTransition {
+  ): { readonly generation: number; readonly completion: Promise<void> } {
     const generation = ++this.transitionGeneration;
     const completion = this.workspaceQueue.add(async () => {
       if (

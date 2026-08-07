@@ -13,13 +13,13 @@ import {
 import { triggerAppCtrlC } from '@cli/chat/tui/appInteractionPolicy';
 import {
   InputBar,
-  shouldPersistInputHistory,
-  submitSlashCommandWhenReady,
+  slashSubmitText,
   type InputBarHandle,
 } from '@cli/chat/tui/panes/InputBar';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   registerSlashCommand,
+  shouldRedactSlashInput,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import {
@@ -207,7 +207,7 @@ describe('InputBar slash submit', () => {
         ['ordinary message', true],
       ];
       for (const [input, expected] of cases) {
-        expect(shouldPersistInputHistory(input)).toBe(expected);
+        expect(!shouldRedactSlashInput(input)).toBe(expected);
       }
     } finally {
       unregisterSlashCommand('key');
@@ -230,13 +230,8 @@ describe('InputBar slash submit', () => {
       }),
     );
 
-    submitSlashCommandWhenReady({
-      commandName: 'help',
-      handleSubmit: (value) => submitted.push(value),
-      imagePasteQueue,
-      readDraft: () => draft,
-      remainder: '',
-      typedName: 'h',
+    imagePasteQueue.runWhenIdle(() => {
+      submitted.push(slashSubmitText(draft, 'help', '', 'h'));
     });
 
     expect(submitted).toEqual([]);

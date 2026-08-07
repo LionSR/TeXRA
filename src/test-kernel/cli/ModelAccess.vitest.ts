@@ -5,10 +5,10 @@ import {
   findCliModelAccessEntry,
   formatCliModelDetails,
   formatCliNoAvailableModelsRecovery,
-  formatCliNoRunnableModelsLaunchBlock,
   formatCliNoRunnableModelsMessage,
   formatModelStatusForCliMode,
   getCliModelAccessList,
+  modelAccessLaunchBlockDescriptionForCliMode,
   modelSelectItemsForCliMode,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
@@ -621,13 +621,24 @@ describe('CLI model access resolution', () => {
   });
 
   it('formats no-runnable model reasons for launch and model picker views', () => {
-    expect(formatCliNoRunnableModelsLaunchBlock('includedLoginRequired')).toBe(
-      'Sign in to use included access',
-    );
-    expect(formatCliNoRunnableModelsLaunchBlock('included')).toBe(
+    expect(
+      modelAccessLaunchBlockDescriptionForCliMode(
+        [
+          model('gpt54', {
+            available: false,
+            status: 'sign in required',
+            model: modelOption('gpt54', {
+              availability: 'included-login-required',
+            }),
+          }),
+        ],
+        'included',
+      ),
+    ).toBe('Sign in to use included access');
+    expect(modelAccessLaunchBlockDescriptionForCliMode([], 'included')).toBe(
       'No models are available with included access',
     );
-    expect(formatCliNoRunnableModelsLaunchBlock('personal')).toBe(
+    expect(modelAccessLaunchBlockDescriptionForCliMode([], 'personal')).toBe(
       'No models are available with your own API keys',
     );
     expect(

@@ -9,7 +9,6 @@ import {
   refreshRemoteCatalogForGaps,
   resolveTeamLaunch,
   teamAvailability,
-  teamExecutionFields,
   teamLaunchBlockReason,
   teamPlanHasGaps,
   teamPlanStatus,
@@ -323,22 +322,6 @@ describe('plan status and launchability', () => {
       missingAgentOverride: 'missing-lead',
     });
     expect(teamAvailability(manualPlan()).agents.workflow.label).toBe('1');
-  });
-});
-
-describe('teamExecutionFields', () => {
-  it('builds execution fields from a launchable plan', () => {
-    const plan = manualPlan();
-    if (!canLaunchTeam(plan)) throw new Error('Expected a launchable plan');
-
-    expect(teamExecutionFields(plan)).toEqual({
-      agent: 'builtInToolUse:lead',
-      delegationAgentScope: {
-        workflow: ['builtInWorkflow:writer'],
-        toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
-      },
-      cliMultiAgentPresetId: 'custom-team',
-    });
   });
 });
 

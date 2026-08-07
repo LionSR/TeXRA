@@ -10,12 +10,6 @@ import { workspaceSM } from '@common/state';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import {
-  getVscodeHostConfig,
-  inspectVscodeHostConfig,
-  isVscodeHostConfigExplicitlySet,
-  updateVscodeHostConfig,
-} from '@frontend/vscode/vscodeHostConfig';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -43,10 +37,19 @@ export class LatexSettingsHandlers {
   private readonly recommendedSettingsController =
     new LatexRecommendedSettingsController({
       config: {
-        getConfig: (key) => getVscodeHostConfig<unknown>(key),
+        getConfig: (key) => vscode.workspace.getConfiguration().get(key),
         getGlobalValue: (key) =>
-          inspectVscodeHostConfig<Record<string, unknown>>(key)?.globalValue,
-        isExplicitlySet: isVscodeHostConfigExplicitlySet,
+          vscode.workspace
+            .getConfiguration()
+            .inspect<Record<string, unknown>>(key)?.globalValue,
+        isExplicitlySet: (key) => {
+          const inspection = vscode.workspace.getConfiguration().inspect(key);
+          return (
+            inspection?.globalValue !== undefined ||
+            inspection?.workspaceValue !== undefined ||
+            inspection?.workspaceFolderValue !== undefined
+          );
+        },
       },
     });
 
@@ -99,7 +102,9 @@ export class LatexSettingsHandlers {
           field: data.field,
           reset: data.reset ?? false,
         })) {
-          await updateVscodeHostConfig(key, value, 'global');
+          await vscode.workspace
+            .getConfiguration()
+            .update(key, value, vscode.ConfigurationTarget.Global);
         }
 
         await this.ctx.withActiveWebview((w) =>

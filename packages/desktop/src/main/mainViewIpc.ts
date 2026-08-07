@@ -1,5 +1,6 @@
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
+import type { DesktopThemeKind } from '@shared/schemas';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
@@ -16,10 +17,7 @@ import {
   createDesktopShellIpc,
   type DesktopShellActions,
 } from './desktopShellIpc.js';
-import {
-  createDesktopViewStateIpc,
-  type DesktopTheme,
-} from './desktopViewStateIpc.js';
+import { createDesktopViewStateIpc } from './desktopViewStateIpc.js';
 import type { BrowserWindow } from 'electron';
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
@@ -28,7 +26,7 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
-  getTheme?: () => DesktopTheme;
+  getTheme?: () => DesktopThemeKind;
   fileSelection: DesktopFileSelection;
   prompt: DesktopPromptIpc;
   settings: DesktopSettingsIpc;

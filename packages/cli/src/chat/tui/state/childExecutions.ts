@@ -565,10 +565,6 @@ export function focusOrderDescendants(
 // generic child-execution helpers
 // ---------------------------------------------------------------------------
 
-export function childExecutionKey(child: ActiveChildInfo): string {
-  return child.childStreamId;
-}
-
 export function childExecutionLabel(
   child: Pick<ActiveChildInfo, 'identity' | 'agentName' | 'executionId'>,
 ): string {

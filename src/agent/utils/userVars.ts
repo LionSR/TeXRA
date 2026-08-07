@@ -125,7 +125,7 @@ type LoadedFileEntry = FileListEntry & {
  * Minimal provider info needed for prompt variable rendering.
  * Eliminates the need to pass a full IModelHandler reference.
  */
-export interface ModelProviderFlags {
+interface ModelProviderFlags {
   isOpenai: boolean;
   isAnthropic: boolean;
   isGoogle: boolean;

@@ -8,13 +8,27 @@ import {
   currentToolRoot,
   resolveAndFormat,
 } from '@tools/pathResolution';
-import { countOccurrences } from '@tools/utils';
 import {
   appendApprovalDiffNote,
   requestAndWriteApprovedEdit,
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+
+/**
+ * Count non-overlapping occurrences of `needle` in `haystack`.
+ * Returns 0 for empty needles.
+ */
+function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) return 0;
+  let count = 0;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count++;
+    index = haystack.indexOf(needle, index + needle.length);
+  }
+  return count;
+}
 
 /**
  * Replace the first literal occurrence of `oldStr` with `newStr`.

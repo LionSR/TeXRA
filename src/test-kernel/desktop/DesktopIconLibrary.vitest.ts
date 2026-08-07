@@ -6,10 +6,8 @@ import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/libr
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared icon contract
-import {
-  TEXRA_ICON_LIBRARY,
-  TEXRA_ICON_NAMES,
-} from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/wa/iconNames';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - test support
 import { desktopSourcePath } from './desktopTestPaths.ts';
@@ -98,7 +96,7 @@ describe('desktop icon library', () => {
     },
     {
       table: 'canonical TeXRA name',
-      readNames: () => TEXRA_ICON_NAMES,
+      readNames: () => TEXRA_ICON_CANONICAL_NAMES,
       unmapped: 'circle-question',
       minimumSize: 100,
     },

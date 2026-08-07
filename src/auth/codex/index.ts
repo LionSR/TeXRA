@@ -31,7 +31,6 @@ export {
   type CodexSessionStorage,
   type CodexOAuthClient,
   type CodexSessionStatus,
-  type CodexAuthorizeRequest,
 } from './CodexSessionCoordinator';
 export {
   codexCoordinator,

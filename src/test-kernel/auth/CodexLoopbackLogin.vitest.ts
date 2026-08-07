@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CODEX_CALLBACK_PATH,
   loginWithLoopback,
-  type CodexAuthorizeRequest,
   type CodexSession,
   type CodexSessionCoordinator,
 } from '@auth/codex';
+import type { SubscriptionAuthorizeRequest } from '@auth/oauth/SubscriptionOAuthCoordinator';
 
 function testSession(): CodexSession {
   return {
@@ -16,7 +16,7 @@ function testSession(): CodexSession {
   };
 }
 
-function loopbackRequest(port: number): CodexAuthorizeRequest {
+function loopbackRequest(port: number): SubscriptionAuthorizeRequest {
   return {
     url: 'https://auth.example.test/oauth/authorize',
     verifier: 'verifier',
@@ -69,11 +69,11 @@ describe('Codex loopback login', () => {
 
   it('does not exchange a code when cancellation follows its callback', async () => {
     const controller = new AbortController();
-    let request!: CodexAuthorizeRequest;
+    let request!: SubscriptionAuthorizeRequest;
     const completeLoginWithCode = vi.fn();
     const completion = loginWithLoopback({
       coordinator: coordinatorStub({
-        buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
+        buildAuthorizeRequest: (port: number): SubscriptionAuthorizeRequest => {
           request = loopbackRequest(port);
           return request;
         },
@@ -97,10 +97,10 @@ describe('Codex loopback login', () => {
     const state = 'expected-state';
     const verifier = 'verifier';
     const expectedSession = testSession();
-    let request!: CodexAuthorizeRequest;
+    let request!: SubscriptionAuthorizeRequest;
     const completeLoginWithCode = vi.fn(async () => expectedSession);
     const coordinator = coordinatorStub({
-      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
+      buildAuthorizeRequest: (port: number): SubscriptionAuthorizeRequest => {
         const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
         const url = new URL('https://auth.example.test/oauth/authorize');
         url.searchParams.set('redirect_uri', redirectUri);

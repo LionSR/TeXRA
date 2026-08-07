@@ -94,6 +94,7 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
+import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
 const tempDirs: string[] = [];
 
@@ -146,7 +147,7 @@ async function seedStreams(
   return snapshots;
 }
 
-type LogRow = Parameters<StreamLogStore['append']>[1];
+type LogRow = Parameters<TranscriptWriter['append']>[0];
 
 let entryCounter = 0;
 
