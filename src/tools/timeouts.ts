@@ -11,6 +11,7 @@ import { HTTPError, TimeoutError } from 'ky';
 import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
 
 import { ToolError } from '@shared/schemas/toolResult';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -64,11 +65,7 @@ export function isTimeoutError(error: unknown): boolean {
 export function isTransientHttpError(error: unknown): boolean {
   if (isTimeoutError(error)) return true;
   if (error instanceof HTTPError) {
-    return (
-      error.response.status === 408 ||
-      error.response.status === 429 ||
-      error.response.status >= 500
-    );
+    return isTransientHttpStatus(error.response.status);
   }
   // Network-level failure from the underlying fetch — connection reset, DNS
   // hiccup, socket hang-up. `fetch` surfaces these as a `TypeError`, but a bare

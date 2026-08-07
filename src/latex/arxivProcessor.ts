@@ -12,6 +12,7 @@ import * as tar from 'tar';
 
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -151,9 +152,10 @@ class ArxivSourceProcessor {
   }
 
   /**
-   * Download `url` to disk, retrying transient network / server (5xx)
-   * failures with exponential backoff. Permanent failures — any 4xx status
-   * or a PDF-only submission — abort the retry loop immediately.
+   * Download `url` to disk, retrying transient failures — network errors,
+   * 408/429, or 5xx (see {@link isTransientHttpStatus}) — with exponential
+   * backoff. Permanent failures — other 4xx statuses or a PDF-only
+   * submission — abort the retry loop immediately.
    */
   public async downloadFile(
     url: string,
@@ -193,10 +195,9 @@ class ArxivSourceProcessor {
 
       if (response.status !== StatusCodes.OK) {
         const message = `Failed to download: HTTP ${response.status}`;
-        // 4xx is permanent and won't change on retry; only retry 5xx.
-        throw response.status < StatusCodes.INTERNAL_SERVER_ERROR
-          ? new AbortError(message)
-          : new Error(message);
+        throw isTransientHttpStatus(response.status)
+          ? new Error(message)
+          : new AbortError(message);
       }
 
       // Extract filename from Content-Disposition header if available.
