@@ -60,37 +60,24 @@ describe('applyHelperModelPreference', () => {
     );
   });
 
-  it('keeps the model when the helper model already equals it', async () => {
-    getHelperModelName.mockReturnValue('opus');
-
-    const result = await resolve(configFor('opus'));
-
-    expect(result.model).toBe('opus');
-    expect(getModelUnavailableReason).not.toHaveBeenCalled();
-  });
-
-  it('keeps the selected model when a tool-use helper cannot call functions', async () => {
-    getHelperModelName.mockReturnValue('chatonly');
-
-    const result = await resolve(configFor('opus', 'toolUse'));
-
-    expect(result.model).toBe('opus');
-    expect(getModelUnavailableReason).not.toHaveBeenCalled();
-  });
-
-  it('keeps the selected model when the tool-use helper model is unknown to the registry', async () => {
-    getHelperModelName.mockReturnValue('mysteryModel');
-
-    const result = await resolve(configFor('opus', 'toolUse'));
-
-    expect(result.model).toBe('opus');
-    expect(getModelUnavailableReason).not.toHaveBeenCalled();
-  });
-
-  it("keeps the selected model when the tool-use helper model doesn't declare function calling", async () => {
-    // capabilities present but supportsFunctionCalling omitted — the tool-use
+  it.each([
+    { helper: 'opus', scenario: 'the helper model already equals it' },
+    {
+      helper: 'chatonly',
+      scenario: 'a tool-use helper cannot call functions',
+    },
+    {
+      helper: 'mysteryModel',
+      scenario: 'the tool-use helper model is unknown to the registry',
+    },
+    // Capabilities present but supportsFunctionCalling omitted — the tool-use
     // flow would strip tools, so don't swap.
-    getHelperModelName.mockReturnValue('undeclared');
+    {
+      helper: 'undeclared',
+      scenario: "the tool-use helper model doesn't declare function calling",
+    },
+  ])('keeps the selected model when $scenario', async ({ helper }) => {
+    getHelperModelName.mockReturnValue(helper);
 
     const result = await resolve(configFor('opus', 'toolUse'));
 

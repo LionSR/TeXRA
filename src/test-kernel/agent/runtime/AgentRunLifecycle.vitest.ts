@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { describe, expect, it, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { FinalizeExecutionResult } from '@agent/storage';
@@ -99,6 +99,11 @@ vi.mock('@agent/trace', async (importOriginal) => {
   };
 });
 
+beforeEach(() => {
+  storageMocks.finalizeExecution.mockClear();
+  channelTraceMocks.warn.mockClear();
+});
+
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
   await installPlatform({
     globalState: {
@@ -183,13 +188,59 @@ function takeWaitingHandle(executionId: ExecutionId): AgentExecutionHandle {
   return handle;
 }
 
+/** Gate the next finalizeExecution call on an explicit release. */
+function parkNextFinalize(): { started: () => boolean; release: () => void } {
+  let releasePersist: (() => void) | undefined;
+  storageMocks.finalizeExecution.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        releasePersist = () =>
+          resolve({
+            status: 'durable',
+            outcomePersisted: true,
+            flowRecord: 'deleted',
+          });
+      }),
+  );
+  return {
+    started: () => releasePersist !== undefined,
+    release: () => releasePersist?.(),
+  };
+}
+
+/**
+ * Seed the open run-group row a suspended run's parked teardown must (or must
+ * not) close. Production writes it via the transcript recorder's stage.start
+ * handler, which the fake runners in this file skip.
+ */
+function seedOpenRunGroup(
+  ctx: AgentLaunchContext,
+  streamId: StreamTabId,
+): string {
+  const parentStageId = ctx.parentStage.id;
+  if (!parentStageId) {
+    throw new Error('The fixture parent stage must carry an id.');
+  }
+  withTranscriptWriter(defaultSession().transcripts, streamId, (writer) =>
+    writer.appendSettled({
+      id: parentStageId,
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: 'info',
+      timestamp: Date.now(),
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'run',
+      data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+    }),
+  );
+  return parentStageId;
+}
+
 describe('runFlowWithLifecycle', () => {
   it('interrupts and suppresses terminal persistence after lease takeover', async () => {
     vi.useFakeTimers();
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lease-takeover',
     );
-    storageMocks.finalizeExecution.mockClear();
     await acquireResumedExecutionLease(executionId);
 
     try {
@@ -294,7 +345,6 @@ describe('runFlowWithLifecycle', () => {
       'assistant',
     );
     const updateOnboarding = vi.spyOn(fake.globalState, 'update');
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       await runFlowWithLifecycle(ctx, async () =>
@@ -509,7 +559,6 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-subagent-waiting',
     );
     const onError = vi.fn();
-    storageMocks.finalizeExecution.mockClear();
     await acquireResumedExecutionLease(executionId);
 
     try {
@@ -549,19 +598,7 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-completed-not-suspended',
     );
-    storageMocks.finalizeExecution.mockClear();
-    let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeExecution.mockImplementationOnce(
-      async () =>
-        new Promise((resolve) => {
-          releasePersist = () =>
-            resolve({
-              status: 'durable',
-              outcomePersisted: true,
-              flowRecord: 'deleted',
-            });
-        }),
-    );
+    const parked = parkNextFinalize();
 
     try {
       const running = runFlowWithLifecycle(
@@ -569,11 +606,11 @@ describe('runFlowWithLifecycle', () => {
         async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
         { isSubagent: true },
       );
-      await vi.waitFor(() => expect(releasePersist).toBeDefined());
+      await vi.waitFor(() => expect(parked.started()).toBe(true));
 
       expect(defaultSession().executions.kill(executionId)).toBe(false);
 
-      releasePersist?.();
+      parked.release();
       const result = await running;
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
@@ -677,7 +714,6 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-stale-phase-early-stop',
     );
-    storageMocks.finalizeExecution.mockClear();
     let terminalResult: AgentRunHandle['result'] | undefined;
 
     try {
@@ -758,7 +794,6 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-stop-during-completion',
     );
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(ctx, async () => {
@@ -789,7 +824,6 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-subagent-stop-then-failure',
     );
     const onError = vi.fn();
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(
@@ -823,7 +857,6 @@ describe('runFlowWithLifecycle', () => {
       ctx.runScope.session.followUps,
       'terminalize',
     );
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(
@@ -843,23 +876,8 @@ describe('runFlowWithLifecycle', () => {
       const waitingHandle = takeWaitingHandle(executionId);
 
       // Seed the open run-group row this suspension's parked teardown must
-      // close — production writes it via the transcript recorder's
-      // stage.start handler (the fake runner skips the recorder).
-      const parentStageId = ctx.parentStage.id;
-      if (!parentStageId) {
-        throw new Error('The fixture parent stage must carry an id.');
-      }
-      withTranscriptWriter(defaultSession().transcripts, streamId, (writer) =>
-        writer.appendSettled({
-          id: parentStageId,
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: 'info',
-          timestamp: Date.now(),
-          messageType: MESSAGE_TYPES.DEFAULT,
-          text: 'run',
-          data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
-        }),
-      );
+      // close.
+      const parentStageId = seedOpenRunGroup(ctx, streamId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // preserves the follow-up queue for WAITING — it does not dispose the
@@ -926,7 +944,6 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-waiting-cleanup-lease-loss',
     );
     const transcripts = ctx.runScope.session.transcripts;
-    storageMocks.finalizeExecution.mockClear();
     const originalLoadAndAcquireWriter =
       transcripts.loadAndAcquireWriter.bind(transcripts);
     let markWriterLoadStarted = (): void => undefined;
@@ -956,21 +973,7 @@ describe('runFlowWithLifecycle', () => {
 
       // Seed the open run-group row so a wrongly-run close would be visible
       // as a GROUP_END settle on this exact row (mirrors the kill test).
-      const parentStageId = ctx.parentStage.id;
-      if (!parentStageId) {
-        throw new Error('The fixture parent stage must carry an id.');
-      }
-      withTranscriptWriter(transcripts, streamId, (writer) =>
-        writer.appendSettled({
-          id: parentStageId,
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: 'info',
-          timestamp: Date.now(),
-          messageType: MESSAGE_TYPES.DEFAULT,
-          text: 'run',
-          data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
-        }),
-      );
+      const parentStageId = seedOpenRunGroup(ctx, streamId);
 
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await writerLoadStarted;
@@ -1028,7 +1031,6 @@ describe('runFlowWithLifecycle', () => {
         `outcome-${expected.outcome}`,
       );
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-      storageMocks.finalizeExecution.mockClear();
 
       try {
         const result = await runFlowWithLifecycle(ctx, async () =>
@@ -1055,7 +1057,6 @@ describe('runFlowWithLifecycle', () => {
       'outcome-thrown-abort',
     );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(ctx, async () => {
@@ -1080,7 +1081,6 @@ describe('runFlowWithLifecycle', () => {
       'outcome-thrown-error',
     );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       await expect(
@@ -1167,7 +1167,6 @@ describe('runFlowWithLifecycle', () => {
     );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     const emit = vi.spyOn(ctx.logger, 'emit');
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       await expect(
@@ -1217,7 +1216,6 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-carried-missing-key',
     );
     const emit = vi.spyOn(ctx.logger, 'emit');
-    storageMocks.finalizeExecution.mockClear();
 
     try {
       await expect(
@@ -1285,21 +1283,9 @@ describe('finalizeRunTerminal', () => {
     const { executionId, streamId, streamStatus, handle, untrack } =
       finalizeFixture('finalize-race');
     const traceEmit = vi.spyOn(noopTrace, 'emit');
-    storageMocks.finalizeExecution.mockClear();
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
-    let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeExecution.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          releasePersist = () =>
-            resolve({
-              status: 'durable' as const,
-              outcomePersisted: true as const,
-              flowRecord: 'deleted' as const,
-            });
-        }),
-    );
+    const parked = parkNextFinalize();
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, {
@@ -1320,8 +1306,8 @@ describe('finalizeRunTerminal', () => {
 
       // The loser no-ops without waiting on (or duplicating) the persist.
       await expect(second).resolves.toBeUndefined();
-      expect(releasePersist).toBeDefined();
-      releasePersist?.();
+      expect(parked.started()).toBe(true);
+      parked.release();
       const event = await first;
 
       expect(event).toMatchObject({
@@ -1405,7 +1391,6 @@ describe('finalizeRunTerminal', () => {
       outcomePersisted: false,
       error: durabilityError,
     });
-    channelTraceMocks.warn.mockClear();
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, {
@@ -1458,8 +1443,6 @@ describe('finalizeRunTerminal', () => {
     const { executionId, streamId, streamStatus, handle, untrack } =
       finalizeFixture('finalize-stopped');
     const stage = { end: vi.fn() };
-    storageMocks.finalizeExecution.mockClear();
-    channelTraceMocks.warn.mockClear();
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, {
@@ -1509,7 +1492,6 @@ describe('finalizeRunTerminal', () => {
   it('keeps an already-failed stream phase over a later cancelled report', async () => {
     const { executionId, streamId, streamStatus, handle, untrack } =
       finalizeFixture('finalize-failed-then-stopped');
-    channelTraceMocks.warn.mockClear();
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, {

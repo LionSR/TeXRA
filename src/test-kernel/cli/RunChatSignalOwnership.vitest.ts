@@ -10,6 +10,7 @@ import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -222,12 +223,34 @@ function inkInstance() {
   };
 }
 
-function deferred(): { readonly promise: Promise<void>; resolve(): void } {
-  let resolvePromise = (): void => undefined;
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve;
-  });
-  return { promise, resolve: resolvePromise };
+type OnSubmit = (line: string, mediaFiles?: readonly string[]) => void;
+
+// Capture the onSubmit prop of the next Ink render. Tests that assert the
+// render call's position in callOrder pass recordRender so the once-only
+// override still logs it.
+function captureNextRenderOnSubmit(options?: { recordRender?: boolean }): {
+  current: OnSubmit | undefined;
+} {
+  const holder: { current: OnSubmit | undefined } = { current: undefined };
+  mocks.render.mockImplementationOnce(
+    (element: { readonly props?: { readonly onSubmit?: OnSubmit } }) => {
+      if (options?.recordRender) mocks.callOrder.push('ink.render');
+      holder.current = element.props?.onSubmit;
+      return inkInstance();
+    },
+  );
+  return holder;
+}
+
+async function stubAgentRegistry(): Promise<() => void> {
+  const agents = await import('@agent/index');
+  const spies = [
+    vi.spyOn(agents, 'loadAgents').mockResolvedValue(undefined),
+    vi.spyOn(agents, 'getVisibleAgents').mockReturnValue([]),
+  ];
+  return () => {
+    for (const spy of spies) spy.mockRestore();
+  };
 }
 
 describe('runChat signal ownership wiring', () => {
@@ -325,23 +348,13 @@ describe('runChat signal ownership wiring', () => {
       mocks.callOrder.push(`process.on:${String(event)}`);
       tuiListeners.set(event as TargetSignal, listener);
     };
-    const waitStarted = deferred();
-    const exitTui = deferred();
-    let onSubmit:
-      ((line: string, mediaFiles?: readonly string[]) => void) | undefined;
+    const waitStarted = createDeferred();
+    const exitTui = createDeferred();
+    const submit = captureNextRenderOnSubmit({ recordRender: true });
     mocks.waitUntilExit.mockImplementation(() => {
       waitStarted.resolve();
       return exitTui.promise;
     });
-    mocks.render.mockImplementationOnce(
-      (element: {
-        readonly props?: { readonly onSubmit?: typeof onSubmit };
-      }) => {
-        mocks.callOrder.push('ink.render');
-        onSubmit = element.props?.onSubmit;
-        return inkInstance();
-      },
-    );
     process.on('newListener', observeNewListener);
     mocks.supportsTerminalJobControl.mockReturnValue(true);
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
@@ -350,13 +363,7 @@ describe('runChat signal ownership wiring', () => {
       return undefined as never;
     }) as typeof process.exit);
 
-    const agents = await import('@agent/index');
-    const loadAgentsSpy = vi
-      .spyOn(agents, 'loadAgents')
-      .mockResolvedValue(undefined);
-    const getVisibleAgentsSpy = vi
-      .spyOn(agents, 'getVisibleAgents')
-      .mockReturnValue([]);
+    const restoreAgentRegistry = await stubAgentRegistry();
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {});
 
@@ -404,7 +411,7 @@ describe('runChat signal ownership wiring', () => {
       });
       expect(mocks.terminalTitleResume).toHaveBeenCalledTimes(1);
 
-      onSubmit?.('check the ordinary case', []);
+      submit.current?.('check the ordinary case', []);
       await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
       expect(mocks.startRootRun).toHaveBeenCalledWith({
         agent: 'assistant',
@@ -450,33 +457,17 @@ describe('runChat signal ownership wiring', () => {
           process.removeListener(signal, listener);
         }
       }
-      loadAgentsSpy.mockRestore();
-      getVisibleAgentsSpy.mockRestore();
+      restoreAgentRegistry();
       kill.mockRestore();
       exit.mockRestore();
     }
   }, 20_000);
 
   it('constructs the exact initial run configuration for a resumed team', async () => {
-    const exitTui = deferred();
-    let onSubmit:
-      ((line: string, mediaFiles?: readonly string[]) => void) | undefined;
+    const exitTui = createDeferred();
+    const submit = captureNextRenderOnSubmit();
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);
-    mocks.render.mockImplementationOnce(
-      (element: {
-        readonly props?: { readonly onSubmit?: typeof onSubmit };
-      }) => {
-        onSubmit = element.props?.onSubmit;
-        return inkInstance();
-      },
-    );
-    const agents = await import('@agent/index');
-    const loadAgentsSpy = vi
-      .spyOn(agents, 'loadAgents')
-      .mockResolvedValue(undefined);
-    const getVisibleAgentsSpy = vi
-      .spyOn(agents, 'getVisibleAgents')
-      .mockReturnValue([]);
+    const restoreAgentRegistry = await stubAgentRegistry();
     const delegationAgentScope = {
       workflow: ['builtInWorkflow:physicsReviewer'],
       toolUse: ['builtInToolUse:orchestrator'],
@@ -505,11 +496,11 @@ describe('runChat signal ownership wiring', () => {
 
     try {
       await vi.waitFor(() => {
-        expect(onSubmit).toBeTypeOf('function');
+        expect(submit.current).toBeTypeOf('function');
         expect(mocks.onSkillSelect).toBeTypeOf('function');
       });
       mocks.onSkillSelect?.({ name: 'proof-audit', activationPrompt });
-      onSubmit?.('', mediaFiles);
+      submit.current?.('', mediaFiles);
 
       await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
       mediaFiles.push('/tmp/late.png');
@@ -532,8 +523,7 @@ describe('runChat signal ownership wiring', () => {
     } finally {
       exitTui.resolve();
       await runPromise;
-      loadAgentsSpy.mockRestore();
-      getVisibleAgentsSpy.mockRestore();
+      restoreAgentRegistry();
     }
   }, 20_000);
 });

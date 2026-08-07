@@ -43,6 +43,10 @@ const ONBOARDING_WAIT_OPTIONS = Object.freeze({
   timeoutMessage: 'Timed out waiting for onboarding interaction',
 });
 
+function waitForOnboarding(condition: () => boolean): Promise<void> {
+  return waitForCondition(condition, ONBOARDING_WAIT_OPTIONS);
+}
+
 const originalStdin = Object.getOwnPropertyDescriptor(process, 'stdin');
 const originalStdout = Object.getOwnPropertyDescriptor(process, 'stdout');
 const originalStderr = Object.getOwnPropertyDescriptor(process, 'stderr');
@@ -106,27 +110,21 @@ describe('provider-key onboarding flow', () => {
     // Ink attaches its input stream before the active Select handler has
     // necessarily committed. Wait for both input attachment and the rendered
     // picker so the shortcut cannot be discarded during a loaded CI run.
-    await waitForCondition(
+    await waitForOnboarding(
       () =>
         stdin.listenerCount('readable') > 0 &&
         stdout.output.includes('Choose how to power model calls'),
-      ONBOARDING_WAIT_OPTIONS,
     );
     stdin.write('3');
-    await waitForCondition(
-      () => stdout.output.includes('Choose your provider:'),
-      ONBOARDING_WAIT_OPTIONS,
+    await waitForOnboarding(() =>
+      stdout.output.includes('Choose your provider:'),
     );
     stdin.write('\r');
-    await waitForCondition(
-      () => stdout.output.includes('enter your API key (hidden)'),
-      ONBOARDING_WAIT_OPTIONS,
+    await waitForOnboarding(() =>
+      stdout.output.includes('enter your API key (hidden)'),
     );
     stdin.write(providerKey);
-    await waitForCondition(
-      () => stdout.output.includes('•'),
-      ONBOARDING_WAIT_OPTIONS,
-    );
+    await waitForOnboarding(() => stdout.output.includes('•'));
     stdin.write('\r');
 
     await expect(resultPromise).resolves.toEqual({

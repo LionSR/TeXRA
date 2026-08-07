@@ -85,6 +85,7 @@ export class ToolUseCycleNode<C> extends Node<
         ? this.services.finalTool
         : undefined;
 
+    const instruction = prepRes.userChannels.transient.INSTRUCTION;
     const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
@@ -93,9 +94,7 @@ export class ToolUseCycleNode<C> extends Node<
       roundResponseTimeMs: 0,
       systemPrompt: prepRes.systemPrompt,
       currentUserInstruction:
-        typeof prepRes.userChannels.transient.INSTRUCTION === 'string'
-          ? prepRes.userChannels.transient.INSTRUCTION
-          : undefined,
+        typeof instruction === 'string' ? instruction : undefined,
       finalTool,
       finalToolAttempted: finalTool !== undefined,
     };

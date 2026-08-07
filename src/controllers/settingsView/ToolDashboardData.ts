@@ -10,7 +10,6 @@
 import type {
   ToolCommandKind,
   ToolDashboardItem,
-  ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import type { RegisteredToolName } from '@tools/registry';
@@ -54,14 +53,6 @@ export function planToolTerminalAction(input: {
   if (!command) return { kind: 'none', reason: 'missingCommand' };
 
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
-}
-
-// ============================================================
-// Tool description enrichment
-// ============================================================
-
-function enrichTools(toolNames: readonly string[]): ToolInfo[] {
-  return toolNames.map((name) => ({ name }));
 }
 
 // ============================================================
@@ -166,7 +157,7 @@ export async function buildToolDashboardItems(
   const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.map(
     ({ toolNames, ...rest }) => ({
       ...rest,
-      tools: enrichTools(toolNames),
+      tools: toolNames.map((name) => ({ name })),
       status: 'available' as const,
     }),
   );
@@ -183,7 +174,7 @@ export async function buildToolDashboardItems(
       name: def.name,
       category: def.category,
       description: def.description,
-      tools: enrichTools(tools),
+      tools: tools.map((name) => ({ name })),
       status,
       statusLabel,
       requiresSetup: true,

@@ -110,15 +110,13 @@ function portThrowing(
   message: string,
 ): ReturnType<typeof fakePort> {
   const port = fakePort();
-  port.sendRequest.mockImplementation(() => ({
-    [Symbol.asyncIterator]() {
-      return {
-        next: async () => {
-          throw new LanguageModelPortError(code, message);
-        },
-      };
-    },
-  }));
+  port.sendRequest.mockImplementation(() =>
+    // The mock stream fails on first pull and never yields.
+    // eslint-disable-next-line require-yield
+    (async function* () {
+      throw new LanguageModelPortError(code, message);
+    })(),
+  );
   return port;
 }
 
@@ -444,9 +442,7 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
     await expect(response).rejects.toMatchObject({
       code: LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
     });
-    await response.catch((error: unknown) =>
-      expect(isUserAbort(error)).toBe(true),
-    );
+    await expect(response).rejects.toSatisfy(isUserAbort);
   });
 
   it('preserves partial text when the provider stream fails', async () => {
@@ -468,9 +464,9 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
       temperature: 0,
     });
 
-    await response.catch((error: unknown) => {
-      expect(detectPartialText(error)).toBe('partial answer');
-    });
+    await expect(response).rejects.toSatisfy(
+      (error) => detectPartialText(error) === 'partial answer',
+    );
   });
 
   it('counts messages through the host port without treating text as usage', async () => {
@@ -503,9 +499,7 @@ describe('ModelHandlerVscodeLm port errors', () => {
       temperature: 0,
     });
 
-    await response.catch((error: unknown) =>
-      expect(isUserAbort(error)).toBe(true),
-    );
+    await expect(response).rejects.toSatisfy(isUserAbort);
   });
 
   it('classifies Copilot quota exhaustion without automatic retry', async () => {
@@ -521,7 +515,7 @@ describe('ModelHandlerVscodeLm port errors', () => {
       temperature: 0,
     });
 
-    await response.catch((error: unknown) => {
+    await expect(response).rejects.toSatisfy((error: unknown) => {
       const formatted = normalizeProviderError(error);
       expect(formatted).toMatchObject({
         provider: ModelProvider.COPILOT,
@@ -530,6 +524,7 @@ describe('ModelHandlerVscodeLm port errors', () => {
         userRetryable: true,
       });
       expect(isCredentialExhausted(formatted)).toBe(true);
+      return true;
     });
   });
 });

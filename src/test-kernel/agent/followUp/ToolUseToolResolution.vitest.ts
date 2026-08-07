@@ -26,6 +26,24 @@ describe('tool-use tool resolution', () => {
     toolInjections = new ToolInjectionRegistry();
   });
 
+  /** Resolves the named tools against the default registry, returning names. */
+  async function resolveNames(
+    names: readonly string[],
+    options: {
+      approvalPromptsUnavailable: boolean;
+      runtimeUnavailableTools?: readonly string[];
+    },
+  ): Promise<string[]> {
+    const { tools } = await resolveAgentTools({
+      tools: toolDefs(names),
+      registry: getDefaultToolRegistry(),
+      logger,
+      toolInjections,
+      ...options,
+    });
+    return tools.map((tool) => tool.name);
+  }
+
   it('filters approval-gated tools when approval prompts are unavailable', async () => {
     const names = [
       'ask_user_question',
@@ -39,17 +57,10 @@ describe('tool-use tool resolution', () => {
       'wolfram',
       'write_file',
     ];
-    const registry = getDefaultToolRegistry();
 
-    const { tools } = await resolveAgentTools({
-      tools: toolDefs(names),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: true,
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
+    await expect(
+      resolveNames(names, { approvalPromptsUnavailable: true }),
+    ).resolves.toEqual(['grep']);
   });
 
   it('keeps approval-gated tools when approval prompts are available', async () => {
@@ -62,52 +73,22 @@ describe('tool-use tool resolution', () => {
       'plan',
       'update_config',
     ];
-    const registry = getDefaultToolRegistry();
 
-    const { tools } = await resolveAgentTools({
-      tools: toolDefs(names),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: false,
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual([
-      'ask_user_question',
-      'bash',
-      'delegate_agent',
-      'grep',
-      'inquiry',
-      'plan',
-      'update_config',
-    ]);
+    await expect(
+      resolveNames(names, { approvalPromptsUnavailable: false }),
+    ).resolves.toEqual(names);
   });
 
   it('filters runtime-unavailable tools without hiding other approval-gated tools', async () => {
-    const names = [
-      'ask_user_question',
-      'bash',
-      'grep',
-      'inquiry',
-      'write_file',
-    ];
-    const registry = getDefaultToolRegistry();
-
-    const { tools } = await resolveAgentTools({
-      tools: toolDefs(names),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: false,
-      runtimeUnavailableTools: ['inquiry'],
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual([
-      'ask_user_question',
-      'bash',
-      'grep',
-      'write_file',
-    ]);
+    await expect(
+      resolveNames(
+        ['ask_user_question', 'bash', 'grep', 'inquiry', 'write_file'],
+        {
+          approvalPromptsUnavailable: false,
+          runtimeUnavailableTools: ['inquiry'],
+        },
+      ),
+    ).resolves.toEqual(['ask_user_question', 'bash', 'grep', 'write_file']);
   });
 
   it('narrows diagnostics to read-only commands when add is host-unavailable', async () => {
@@ -162,37 +143,24 @@ describe('tool-use tool resolution', () => {
       globalState: { [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script'] },
     });
     try {
-      const registry = getDefaultToolRegistry();
-
-      const { tools } = await resolveAgentTools({
-        tools: toolDefs(['bash', 'delegate_multi_agents']),
-        registry,
-        logger,
-        toolInjections,
-        approvalPromptsUnavailable: false,
-      });
-
-      expect(tools.map((tool) => tool.name)).toEqual(['bash']);
+      await expect(
+        resolveNames(['bash', 'delegate_multi_agents'], {
+          approvalPromptsUnavailable: false,
+        }),
+      ).resolves.toEqual(['bash']);
     } finally {
       await installPlatform();
     }
   });
 
   it('filters injected approval-gated tools when approval prompts are unavailable', async () => {
-    const registry = getDefaultToolRegistry();
     toolInjections.register({
       toolName: 'update_config',
       shouldInject: () => true,
     });
 
-    const { tools } = await resolveAgentTools({
-      tools: toolDefs(['grep']),
-      registry,
-      logger,
-      toolInjections,
-      approvalPromptsUnavailable: true,
-    });
-
-    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
+    await expect(
+      resolveNames(['grep'], { approvalPromptsUnavailable: true }),
+    ).resolves.toEqual(['grep']);
   });
 });

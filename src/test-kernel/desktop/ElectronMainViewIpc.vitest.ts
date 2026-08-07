@@ -200,6 +200,14 @@ function createMainViewCommandCapabilities() {
   };
 }
 
+function emptyStartupOptionsLoader(teamOptions?: unknown[]) {
+  return async () => ({
+    agentOptions: { workflow: [] as unknown[], toolUse: [] as unknown[] },
+    modelOptions: [] as unknown[],
+    ...(teamOptions === undefined ? {} : { teamOptions }),
+  });
+}
+
 type RendererSend = { channel: string; message: unknown };
 
 function commandOf(message: unknown): string | undefined {
@@ -302,11 +310,7 @@ describe('desktop main-view IPC', () => {
       executeAgent,
       // This test only cares about theme/debug pushes; keep the startup
       // catalog loader (which reads platform workspace state) out of scope.
-      loadStartupOptions: async () => ({
-        agentOptions: { workflow: [], toolUse: [] },
-        modelOptions: [],
-        teamOptions: [],
-      }),
+      loadStartupOptions: emptyStartupOptionsLoader([]),
     });
 
     expect(ipcMain.on).toHaveBeenCalledWith(
@@ -484,13 +488,7 @@ describe('desktop main-view IPC', () => {
     installDesktopMainViewIpc(window, {
       ...createMainViewCommandCapabilities(),
       getAuthStatus: async () => ({ authenticated: true }),
-      loadStartupOptions: async () => ({
-        agentOptions: {
-          workflow: [],
-          toolUse: [],
-        },
-        modelOptions: [],
-      }),
+      loadStartupOptions: emptyStartupOptionsLoader(),
     });
     sendFromRenderer({
       command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
@@ -550,11 +548,7 @@ describe('desktop main-view IPC', () => {
     ];
     installDesktopMainViewIpc(window, {
       ...createMainViewCommandCapabilities(),
-      loadStartupOptions: async () => ({
-        agentOptions: { workflow: [], toolUse: [] },
-        modelOptions: [],
-        teamOptions,
-      }),
+      loadStartupOptions: emptyStartupOptionsLoader(teamOptions),
     });
     sendFromRenderer({
       command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,

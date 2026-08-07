@@ -226,12 +226,10 @@ export function openWorkbenchTab(
   };
 
   // A generic Editor placeholder is superseded as soon as a real file opens.
-  const withoutEditorPlaceholder =
-    request.kind === 'editor' && request.target
-      ? state.workbenchTabs.filter((entry) => entry.id !== 'workbench:editor')
-      : state.workbenchTabs;
+  let tabs = state.workbenchTabs;
   const activeWorkbenchTabIds = { ...state.activeWorkbenchTabIds };
   if (request.kind === 'editor' && request.target) {
+    tabs = tabs.filter((entry) => entry.id !== 'workbench:editor');
     for (const placement of WORKBENCH_PLACEMENTS) {
       if (activeWorkbenchTabIds[placement] === 'workbench:editor') {
         activeWorkbenchTabIds[placement] = undefined;
@@ -242,7 +240,7 @@ export function openWorkbenchTab(
   return activateWorkbenchTab(
     {
       ...state,
-      workbenchTabs: [...withoutEditorPlaceholder, tab],
+      workbenchTabs: [...tabs, tab],
       activeWorkbenchTabIds,
     },
     tab,

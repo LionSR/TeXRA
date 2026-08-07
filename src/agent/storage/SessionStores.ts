@@ -120,10 +120,8 @@ export class SessionStores {
     if (existing) return existing;
     const pending = start();
     this.pendingStreamDeletions.set(stream, pending);
-    void pending.then(
-      () => this.finishStreamDeletion(stream, pending),
-      () => this.finishStreamDeletion(stream, pending),
-    );
+    const finish = (): void => this.finishStreamDeletion(stream, pending);
+    void pending.then(finish, finish);
     return pending;
   }
 
@@ -301,10 +299,8 @@ export class SessionStores {
     if (this.pendingDeleteAll) return this.pendingDeleteAll;
     const pending = this.enqueueDeletion(() => this.deleteAllOnce());
     this.pendingDeleteAll = pending;
-    void pending.then(
-      () => this.finishDeleteAll(pending),
-      () => this.finishDeleteAll(pending),
-    );
+    const finish = (): void => this.finishDeleteAll(pending);
+    void pending.then(finish, finish);
     return pending;
   }
 

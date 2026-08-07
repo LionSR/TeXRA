@@ -18,6 +18,21 @@ import {
 describe('CLI retry request', () => {
   afterEach(() => clearApprovals());
 
+  function subscriptionLimitPayload(personalApiKeyAvailable: boolean) {
+    return {
+      requestId: 'subscription-limit',
+      streamId: 'retry-stream' as StreamTabId,
+      operation: 'Tool-use call',
+      errorMessage: 'ChatGPT subscription usage limit reached.',
+      errorDetails: {
+        message: 'ChatGPT subscription usage limit reached.',
+        exhaustionReason: 'chatgpt-subscription' as const,
+        provider: 'openai',
+      },
+      personalApiKeyAvailable,
+    };
+  }
+
   it('dismisses immediately instead of asking for rejection feedback', async () => {
     const { ink, React } = await loadInk();
     const decision = enqueueApproval({
@@ -75,18 +90,7 @@ describe('CLI retry request', () => {
     const { ink, React } = await loadInk();
     const decision = enqueueApproval({
       kind: 'retry',
-      payload: {
-        requestId: 'subscription-limit',
-        streamId: 'retry-stream' as StreamTabId,
-        operation: 'Tool-use call',
-        errorMessage: 'ChatGPT subscription usage limit reached.',
-        errorDetails: {
-          message: 'ChatGPT subscription usage limit reached.',
-          exhaustionReason: 'chatgpt-subscription',
-          provider: 'openai',
-        },
-        personalApiKeyAvailable: true,
-      },
+      payload: subscriptionLimitPayload(true),
     });
     const { instance, stdin } = renderInteractive(
       ink,
@@ -111,22 +115,7 @@ describe('CLI retry request', () => {
   });
 
   it.each([
-    [
-      'subscription',
-      {
-        requestId: 'subscription-limit',
-        streamId: 'retry-stream' as StreamTabId,
-        operation: 'Tool-use call',
-        errorMessage: 'ChatGPT subscription usage limit reached.',
-        errorDetails: {
-          message: 'ChatGPT subscription usage limit reached.',
-          exhaustionReason: 'chatgpt-subscription' as const,
-          provider: 'openai',
-        },
-        personalApiKeyAvailable: false,
-      },
-      'OpenAI',
-    ],
+    ['subscription', subscriptionLimitPayload(false), 'OpenAI'],
     [
       'relay',
       {

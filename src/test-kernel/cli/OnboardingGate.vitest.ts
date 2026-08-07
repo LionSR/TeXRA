@@ -43,6 +43,9 @@ const INTERACTIVE = {
   termIsDumb: false,
 };
 
+/** The gate's early-return result: onboarding skipped, nothing changed. */
+const SKIPPED = { configured: false, declined: false };
+
 describe('maybeRunCliOnboarding gate', () => {
   let originalIsTty: unknown;
 
@@ -66,10 +69,7 @@ describe('maybeRunCliOnboarding gate', () => {
 
   it('skips (configured:false) when the user already has a credential', async () => {
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
-    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
-      configured: false,
-      declined: false,
-    });
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
   });
 
@@ -77,10 +77,7 @@ describe('maybeRunCliOnboarding gate', () => {
     mocks.state.set(GlobalStateKey.LAST_KNOWN_VERSION, '1.2.3');
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
 
-    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
-      configured: false,
-      declined: false,
-    });
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
       true,
     );
@@ -112,19 +109,13 @@ describe('maybeRunCliOnboarding gate', () => {
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
     await expect(
       maybeRunCliOnboarding({ ...INTERACTIVE, apiMode: 'included' }),
-    ).resolves.toEqual({
-      configured: false,
-      declined: false,
-    });
+    ).resolves.toEqual(SKIPPED);
     expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith('included');
   });
 
   it('skips when onboarding was previously declined', async () => {
     mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
-    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
-      configured: false,
-      declined: false,
-    });
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
   });
 
@@ -136,44 +127,30 @@ describe('maybeRunCliOnboarding gate', () => {
     // `configured` stays false: only the picker actually configuring a
     // credential in this process is a post-picker continuation. A pre-existing
     // credential must not route every launch into the setup agent.
-    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
-      configured: false,
-      declined: false,
-    });
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_DECLINED)).toBe(false);
   });
 
   it('skips onboarding for credential-less users with prior run history', async () => {
     mocks.listExecutions.mockResolvedValue([{ id: 'previous-run' }]);
 
-    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
-      configured: false,
-      declined: false,
-    });
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
       true,
     );
   });
 
-  it('skips on a dumb terminal before checking credentials', async () => {
-    await expect(
-      maybeRunCliOnboarding({
-        mode: 'interactive',
-        stdoutIsTty: true,
-        termIsDumb: true,
-      }),
-    ).resolves.toEqual({ configured: false, declined: false });
-    expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
-  });
-
-  it('skips in headless mode before checking credentials', async () => {
-    await expect(
-      maybeRunCliOnboarding({
-        mode: 'headless',
-        stdoutIsTty: true,
-        termIsDumb: false,
-      }),
-    ).resolves.toEqual({ configured: false, declined: false });
+  it.each([
+    {
+      scenario: 'on a dumb terminal',
+      options: { ...INTERACTIVE, termIsDumb: true },
+    },
+    {
+      scenario: 'in headless mode',
+      options: { ...INTERACTIVE, mode: 'headless' as const },
+    },
+  ])('skips $scenario before checking credentials', async ({ options }) => {
+    await expect(maybeRunCliOnboarding(options)).resolves.toEqual(SKIPPED);
     expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
   });
 });
@@ -182,50 +159,43 @@ describe('maybeRunCliOnboarding gate', () => {
 // configures a credential on a true first run, chat/orchestrate start the
 // session with the setup agent instead of the default agent / launcher.
 describe('firstRunSetupAgentOverride', () => {
-  it('hands the session to the setup agent on a true first run', () => {
-    expect(
-      firstRunSetupAgentOverride({
-        onboardingConfigured: true,
-        firstRunDone: false,
-      }),
-    ).toBe(SETUP_AGENT_NAME);
-  });
-
-  it('does nothing when onboarding did not just configure a credential', () => {
-    expect(
-      firstRunSetupAgentOverride({
-        onboardingConfigured: false,
-        firstRunDone: false,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('does nothing once the first run is done (backfilled or earned)', () => {
-    expect(
-      firstRunSetupAgentOverride({
-        onboardingConfigured: true,
-        firstRunDone: true,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('never displaces an agent the user pinned themselves', () => {
-    expect(
-      firstRunSetupAgentOverride({
+  it.each([
+    {
+      scenario: 'hands the session to the setup agent on a true first run',
+      input: { onboardingConfigured: true, firstRunDone: false },
+      expected: SETUP_AGENT_NAME as string | undefined,
+    },
+    {
+      scenario:
+        'does nothing when onboarding did not just configure a credential',
+      input: { onboardingConfigured: false, firstRunDone: false },
+      expected: undefined,
+    },
+    {
+      scenario:
+        'does nothing once the first run is done (backfilled or earned)',
+      input: { onboardingConfigured: true, firstRunDone: true },
+      expected: undefined,
+    },
+    {
+      scenario: 'never displaces an agent the user pinned themselves',
+      input: {
         onboardingConfigured: true,
         firstRunDone: false,
         pinnedAgent: 'research',
-      }),
-    ).toBeUndefined();
-  });
-
-  it('ignores a blank pinned agent', () => {
-    expect(
-      firstRunSetupAgentOverride({
+      },
+      expected: undefined,
+    },
+    {
+      scenario: 'ignores a blank pinned agent',
+      input: {
         onboardingConfigured: true,
         firstRunDone: false,
         pinnedAgent: '   ',
-      }),
-    ).toBe(SETUP_AGENT_NAME);
+      },
+      expected: SETUP_AGENT_NAME as string | undefined,
+    },
+  ])('$scenario', ({ input, expected }) => {
+    expect(firstRunSetupAgentOverride(input)).toBe(expected);
   });
 });

@@ -31,6 +31,10 @@ interface DispatchProbe {
   maxInFlight: number;
 }
 
+function newProbe(): DispatchProbe {
+  return { events: [], inFlight: 0, maxInFlight: 0 };
+}
+
 function probeTool(
   probe: DispatchProbe,
   name: string,
@@ -109,6 +113,21 @@ function dispatchHarness(opts: HarnessOptions) {
   return { node, trace: runTrace.trace, dispose: () => runTrace.dispose() };
 }
 
+type DispatchHarness = ReturnType<typeof dispatchHarness>;
+
+/** Run `fn` with a dispatch harness that is always disposed afterwards. */
+async function withDispatchHarness<T>(
+  opts: HarnessOptions,
+  fn: (harness: DispatchHarness) => Promise<T>,
+): Promise<T> {
+  const harness = dispatchHarness(opts);
+  try {
+    return await fn(harness);
+  } finally {
+    harness.dispose();
+  }
+}
+
 interface DispatchInternals {
   prep(shared: unknown): Promise<SdkToolCall[]>;
   _exec(items: unknown[]): Promise<unknown[]>;
@@ -144,7 +163,7 @@ async function runDispatch(
     messages: [],
     currentUserInstruction,
   });
-  return await execPrepped(node, prepped);
+  return execPrepped(node, prepped);
 }
 
 function countStarts(probe: DispatchProbe, toolName = ''): number {
@@ -157,6 +176,17 @@ type ExecResult = {
   result: ToolResult;
   editedFiles: unknown[];
 } | null;
+
+/** The duplicate inherits the primary's output, not a synthetic error. */
+function assertDuplicateInheritsOutput(results: ExecResult[]): void {
+  const primary = results[0]?.result;
+  const duplicate = results[1]?.result;
+  assert.equal(duplicate?.status, 'executed');
+  assert.equal(
+    duplicate?.status === 'executed' ? duplicate.output : undefined,
+    primary?.status === 'executed' ? primary.output : 'missing',
+  );
+}
 
 describe('ToolUseDispatchNode parallel dispatch', () => {
   beforeAll(() => installPlatform({ workspacePath: '/workspace' }));
@@ -177,334 +207,333 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         return { status: 'executed', output: 'ok' };
       },
     } as ITool;
-    const { node, trace, dispose } = dispatchHarness({
-      tools: { inspect_context: inspectContext },
-      rootUserInstruction: 'Do not use files or external tools.',
-    });
 
-    try {
-      await runDispatch(
-        node,
-        [makeCall('c1', 'inspect_context', {})],
-        'Wrapped child instruction with prior handoff boilerplate.',
-      );
-      assert.equal(observedInstruction, 'Do not use files or external tools.');
-      assert.equal(observedTrace, trace);
-    } finally {
-      dispose();
-    }
+    await withDispatchHarness(
+      {
+        tools: { inspect_context: inspectContext },
+        rootUserInstruction: 'Do not use files or external tools.',
+      },
+      async ({ node, trace }) => {
+        await runDispatch(
+          node,
+          [makeCall('c1', 'inspect_context', {})],
+          'Wrapped child instruction with prior handoff boilerplate.',
+        );
+        assert.equal(
+          observedInstruction,
+          'Do not use files or external tools.',
+        );
+        assert.equal(observedTrace, trace);
+      },
+    );
   });
 
   it('executes contiguous parallel-safe calls concurrently, preserving order', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        grep: probeTool(probe, 'grep', 25, { parallelSafe: true }),
-        read_file: probeTool(probe, 'read_file', 25, { parallelSafe: true }),
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: {
+          grep: probeTool(probe, 'grep', 25, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 25, { parallelSafe: true }),
+        },
       },
-    });
-    try {
-      const results = (await runDispatch(node, [
-        makeCall('c1', 'grep', { pattern: 'a' }),
-        makeCall('c2', 'read_file', { path: 'b' }),
-      ])) as ExecResult[];
+      async ({ node }) => {
+        const results = (await runDispatch(node, [
+          makeCall('c1', 'grep', { pattern: 'a' }),
+          makeCall('c2', 'read_file', { path: 'b' }),
+        ])) as ExecResult[];
 
-      assert.equal(probe.maxInFlight, 2, 'safe calls should overlap');
-      assert.equal(results.length, 2);
-      assert.equal(results[0]?.call.callId, 'c1');
-      assert.equal(results[1]?.call.callId, 'c2');
-      assert.equal(results[0]?.result.status, 'executed');
-      assert.equal(results[1]?.result.status, 'executed');
-    } finally {
-      dispose();
-    }
+        assert.equal(probe.maxInFlight, 2, 'safe calls should overlap');
+        assert.equal(results.length, 2);
+        assert.equal(results[0]?.call.callId, 'c1');
+        assert.equal(results[1]?.call.callId, 'c2');
+        assert.equal(results[0]?.result.status, 'executed');
+        assert.equal(results[1]?.result.status, 'executed');
+      },
+    );
   });
 
   it('passes the run-bound client to batched follow-up construction', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const probe = newProbe();
     const runClient = { route: 'personal' };
     let receivedClient: unknown;
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
-      },
-      runClient,
-      modelHandlerOverrides: {
-        requiresBatchedParallelToolResults: true,
-        createBatchedToolUseFollowUpMessages: async (
-          _entries: unknown,
-          _workspace: unknown,
-          _text: unknown,
-          client: unknown,
-        ) => {
-          receivedClient = client;
-          return [];
+    await withDispatchHarness(
+      {
+        tools: {
+          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
+        },
+        runClient,
+        modelHandlerOverrides: {
+          requiresBatchedParallelToolResults: true,
+          createBatchedToolUseFollowUpMessages: async (
+            _entries: unknown,
+            _workspace: unknown,
+            _text: unknown,
+            client: unknown,
+          ) => {
+            receivedClient = client;
+            return [];
+          },
         },
       },
-    });
-    const calls = [
-      makeCall('c1', 'grep', { pattern: 'a' }),
-      makeCall('c2', 'grep', { pattern: 'b' }),
-    ];
-    const shared = { toolCalls: calls, shouldStop: false, messages: [] };
+      async ({ node }) => {
+        const calls = [
+          makeCall('c1', 'grep', { pattern: 'a' }),
+          makeCall('c2', 'grep', { pattern: 'b' }),
+        ];
+        const shared = { toolCalls: calls, shouldStop: false, messages: [] };
 
-    try {
-      const prepped = await internals(node).prep(shared);
-      const results = await execPrepped(node, prepped);
-      await internals(node).post(shared, prepped, results);
+        const prepped = await internals(node).prep(shared);
+        const results = await execPrepped(node, prepped);
+        await internals(node).post(shared, prepped, results);
 
-      assert.equal(receivedClient, runClient);
-    } finally {
-      dispose();
-    }
+        assert.equal(receivedClient, runClient);
+      },
+    );
   });
 
   it('treats non-safe tools as ordering barriers', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        read_file: probeTool(probe, 'read_file', 20, { parallelSafe: true }),
-        write_file: probeTool(probe, 'write_file', 10),
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: {
+          read_file: probeTool(probe, 'read_file', 20, { parallelSafe: true }),
+          write_file: probeTool(probe, 'write_file', 10),
+        },
       },
-    });
-    try {
-      await runDispatch(node, [
-        makeCall('c1', 'read_file', { n: 1 }),
-        makeCall('c2', 'write_file', { n: 2 }),
-        makeCall('c3', 'read_file', { n: 3 }),
-      ]);
+      async ({ node }) => {
+        await runDispatch(node, [
+          makeCall('c1', 'read_file', { n: 1 }),
+          makeCall('c2', 'write_file', { n: 2 }),
+          makeCall('c3', 'read_file', { n: 3 }),
+        ]);
 
-      assert.equal(probe.maxInFlight, 1, 'barrier should force sequential');
-      assert.deepEqual(probe.events, [
-        'start read_file:{"n":1}',
-        'end read_file:{"n":1}',
-        'start write_file:{"n":2}',
-        'end write_file:{"n":2}',
-        'start read_file:{"n":3}',
-        'end read_file:{"n":3}',
-      ]);
-    } finally {
-      dispose();
-    }
+        assert.equal(probe.maxInFlight, 1, 'barrier should force sequential');
+        assert.deepEqual(probe.events, [
+          'start read_file:{"n":1}',
+          'end read_file:{"n":1}',
+          'start write_file:{"n":2}',
+          'end write_file:{"n":2}',
+          'start read_file:{"n":3}',
+          'end read_file:{"n":3}',
+        ]);
+      },
+    );
   });
 
   it('stops dispatch and ends the turn after a terminal result', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        submit_output: probeTool(probe, 'submit_output', 0, { endTurn: true }),
-        write_file: probeTool(probe, 'write_file', 0),
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: {
+          submit_output: probeTool(probe, 'submit_output', 0, {
+            endTurn: true,
+          }),
+          write_file: probeTool(probe, 'write_file', 0),
+        },
       },
-    });
-    const calls = [
-      makeCall('c1', 'submit_output', { title: 'done' }),
-      makeCall('c2', 'write_file', { path: 'late.txt' }),
-    ];
-    const shared = {
-      toolCalls: calls,
-      shouldStop: false,
-      endTurn: false,
-      messages: [],
-    };
+      async ({ node }) => {
+        const calls = [
+          makeCall('c1', 'submit_output', { title: 'done' }),
+          makeCall('c2', 'write_file', { path: 'late.txt' }),
+        ];
+        const shared = {
+          toolCalls: calls,
+          shouldStop: false,
+          endTurn: false,
+          messages: [],
+        };
 
-    try {
-      const prepped = await internals(node).prep(shared);
-      const results = await execPrepped(node, prepped);
-      const transition = await internals(node).post(shared, prepped, results);
+        const prepped = await internals(node).prep(shared);
+        const results = await execPrepped(node, prepped);
+        const transition = await internals(node).post(shared, prepped, results);
 
-      assert.deepEqual(probe.events, [
-        'start submit_output:{"title":"done"}',
-        'end submit_output:{"title":"done"}',
-      ]);
-      assert.equal(shared.shouldStop, true);
-      assert.equal(shared.endTurn, true);
-      assert.equal(transition, FlowTransition.COMPLETE);
-    } finally {
-      dispose();
-    }
+        assert.deepEqual(probe.events, [
+          'start submit_output:{"title":"done"}',
+          'end submit_output:{"title":"done"}',
+        ]);
+        assert.equal(shared.shouldStop, true);
+        assert.equal(shared.endTurn, true);
+        assert.equal(transition, FlowTransition.COMPLETE);
+      },
+    );
   });
 
   it('executes duplicate parallel calls once and fans the result out', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
-    });
-    try {
-      const results = (await runDispatch(node, [
-        makeCall('c1', 'grep', { pattern: 'same' }),
-        makeCall('c2', 'grep', { pattern: 'same' }),
-        makeCall('c3', 'grep', { pattern: 'other' }),
-      ])) as ExecResult[];
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
+      },
+      async ({ node }) => {
+        const results = (await runDispatch(node, [
+          makeCall('c1', 'grep', { pattern: 'same' }),
+          makeCall('c2', 'grep', { pattern: 'same' }),
+          makeCall('c3', 'grep', { pattern: 'other' }),
+        ])) as ExecResult[];
 
-      const startCount = countStarts(probe);
-      assert.equal(startCount, 2, 'duplicate must not execute the tool again');
-
-      assert.equal(results[1]?.call.callId, 'c2');
-      assert.equal(results[1]?.result.status, 'executed');
-      // The duplicate shares the primary's output, not an error.
-      assert.equal(
-        results[1]?.result.status === 'executed'
-          ? results[1].result.output
-          : undefined,
-        results[0]?.result.status === 'executed'
-          ? results[0].result.output
-          : 'missing',
-      );
-      assert.deepEqual(
-        results[1]?.editedFiles,
-        [],
-        'duplicate must not re-track edits',
-      );
-      assert.deepEqual(
-        (results[1] as { extracted?: { attachments: unknown[] } })?.extracted
-          ?.attachments,
-        [],
-        'duplicate must not re-inject the primary attachments',
-      );
-    } finally {
-      dispose();
-    }
+        assert.equal(
+          countStarts(probe),
+          2,
+          'duplicate must not execute the tool again',
+        );
+        assert.equal(results[1]?.call.callId, 'c2');
+        assertDuplicateInheritsOutput(results);
+        assert.deepEqual(
+          results[1]?.editedFiles,
+          [],
+          'duplicate must not re-track edits',
+        );
+        assert.deepEqual(
+          (results[1] as { extracted?: { attachments: unknown[] } })?.extracted
+            ?.attachments,
+          [],
+          'duplicate must not re-inject the primary attachments',
+        );
+      },
+    );
   });
 
   it('cancels every concurrent call from the one run signal', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const probe = newProbe();
     const runController = new AbortController();
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
-        read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
+    await withDispatchHarness(
+      {
+        tools: {
+          grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
+        },
+        abortSignal: runController.signal,
       },
-      abortSignal: runController.signal,
-    });
-    try {
-      const pending = runDispatch(node, [
-        makeCall('c1', 'grep', { pattern: 'a' }),
-        makeCall('c2', 'read_file', { path: 'b' }),
-      ]);
-      await delay(15);
-      assert.equal(probe.maxInFlight, 2, 'both calls should be in flight');
-      runController.abort();
+      async ({ node }) => {
+        const pending = runDispatch(node, [
+          makeCall('c1', 'grep', { pattern: 'a' }),
+          makeCall('c2', 'read_file', { path: 'b' }),
+        ]);
+        await delay(15);
+        assert.equal(probe.maxInFlight, 2, 'both calls should be in flight');
+        runController.abort();
 
-      const results = (await pending) as ExecResult[];
-      assert.deepEqual(
-        results,
-        [null, null],
-        'aborted concurrent calls should resolve to null',
-      );
-    } finally {
-      dispose();
-    }
+        const results = (await pending) as ExecResult[];
+        assert.deepEqual(
+          results,
+          [null, null],
+          'aborted concurrent calls should resolve to null',
+        );
+      },
+    );
   });
 
   it('does not share read results across a mutating barrier', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        read_file: probeTool(probe, 'read_file', 5, { parallelSafe: true }),
-        write_file: probeTool(probe, 'write_file', 5),
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: {
+          read_file: probeTool(probe, 'read_file', 5, { parallelSafe: true }),
+          write_file: probeTool(probe, 'write_file', 5),
+        },
       },
-    });
-    try {
-      const results = (await runDispatch(node, [
-        makeCall('c1', 'read_file', { path: 'x' }),
-        makeCall('c2', 'write_file', { path: 'x', content: 'new' }),
-        makeCall('c3', 'read_file', { path: 'x' }),
-      ])) as ExecResult[];
+      async ({ node }) => {
+        const results = (await runDispatch(node, [
+          makeCall('c1', 'read_file', { path: 'x' }),
+          makeCall('c2', 'write_file', { path: 'x', content: 'new' }),
+          makeCall('c3', 'read_file', { path: 'x' }),
+        ])) as ExecResult[];
 
-      const readStarts = countStarts(probe, 'read_file');
-      // The post-barrier read must execute again — the write may have
-      // changed what it returns, so sharing the pre-barrier result would
-      // feed the model stale contents.
-      assert.equal(readStarts, 2, 'read after a barrier must re-execute');
-      assert.equal(results[2]?.result.status, 'executed');
-    } finally {
-      dispose();
-    }
+        // The post-barrier read must execute again — the write may have
+        // changed what it returns, so sharing the pre-barrier result would
+        // feed the model stale contents.
+        assert.equal(
+          countStarts(probe, 'read_file'),
+          2,
+          'read after a barrier must re-execute',
+        );
+        assert.equal(results[2]?.result.status, 'executed');
+      },
+    );
   });
 
   it('leaves side-effect duplicates cancelled when their primary never ran', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const probe = newProbe();
     const runController = new AbortController();
-    const { node, dispose } = dispatchHarness({
-      tools: { write_file: probeTool(probe, 'write_file', 5) },
-      abortSignal: runController.signal,
-    });
-    try {
-      const calls = [
-        makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
-        makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
-      ];
-      const shared = { toolCalls: calls, shouldStop: false, messages: [] };
-      const prepped = await internals(node).prep(shared);
-      // Interrupt lands after planning but before anything executes.
-      runController.abort();
-      const results = (await execPrepped(node, prepped)) as ExecResult[];
+    await withDispatchHarness(
+      {
+        tools: { write_file: probeTool(probe, 'write_file', 5) },
+        abortSignal: runController.signal,
+      },
+      async ({ node }) => {
+        const calls = [
+          makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
+          makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
+        ];
+        const shared = { toolCalls: calls, shouldStop: false, messages: [] };
+        const prepped = await internals(node).prep(shared);
+        // Interrupt lands after planning but before anything executes.
+        runController.abort();
+        const results = (await execPrepped(node, prepped)) as ExecResult[];
 
-      assert.equal(probe.events.length, 0, 'nothing should execute');
-      // The duplicate stays cancelled with its primary — no synthetic
-      // success when no effect happened at all.
-      assert.deepEqual(results, [null, null]);
-    } finally {
-      dispose();
-    }
+        assert.equal(probe.events.length, 0, 'nothing should execute');
+        // The duplicate stays cancelled with its primary — no synthetic
+        // success when no effect happened at all.
+        assert.deepEqual(results, [null, null]);
+      },
+    );
   });
 
   it('allows an identical mutation again after a different mutation', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: {
-        write_file: probeTool(probe, 'write_file', 5),
-        edit_file: probeTool(probe, 'edit_file', 5),
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: {
+          write_file: probeTool(probe, 'write_file', 5),
+          edit_file: probeTool(probe, 'edit_file', 5),
+        },
       },
-    });
-    try {
-      const results = (await runDispatch(node, [
-        makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
-        makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
-        makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
-      ])) as ExecResult[];
+      async ({ node }) => {
+        const results = (await runDispatch(node, [
+          makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
+          makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
+          makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
+        ])) as ExecResult[];
 
-      // The edit changed state, so re-issuing the identical write is a
-      // plausible restore — it must execute, not be swallowed as a glitch.
-      const writeStarts = countStarts(probe, 'write_file');
-      assert.equal(writeStarts, 2, 'post-mutation identical write must run');
-      assert.equal(results[2]?.result.status, 'executed');
-    } finally {
-      dispose();
-    }
+        // The edit changed state, so re-issuing the identical write is a
+        // plausible restore — it must execute, not be swallowed as a glitch.
+        assert.equal(
+          countStarts(probe, 'write_file'),
+          2,
+          'post-mutation identical write must run',
+        );
+        assert.equal(results[2]?.result.status, 'executed');
+      },
+    );
   });
 
   it('shares the primary result for side-effect tool duplicates', async () => {
-    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const { node, dispose } = dispatchHarness({
-      tools: { write_file: probeTool(probe, 'write_file', 5) },
-    });
-    try {
-      const results = (await runDispatch(node, [
-        makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
-        makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
-      ])) as ExecResult[];
+    const probe = newProbe();
+    await withDispatchHarness(
+      {
+        tools: { write_file: probeTool(probe, 'write_file', 5) },
+      },
+      async ({ node }) => {
+        const results = (await runDispatch(node, [
+          makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
+          makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
+        ])) as ExecResult[];
 
-      const startCount = countStarts(probe);
-      assert.equal(startCount, 1, 'the side effect must run exactly once');
-      assert.equal(results[0]?.result.status, 'executed');
-      // Accidental GPT re-emissions get the primary's result, not an error.
-      assert.equal(results[1]?.result.status, 'executed');
-      assert.equal(
-        results[1]?.result.status === 'executed'
-          ? results[1].result.output
-          : undefined,
-        results[0]?.result.status === 'executed'
-          ? results[0].result.output
-          : 'missing',
-      );
-      assert.deepEqual(
-        results[1]?.editedFiles,
-        [],
-        'duplicate must not re-track edits',
-      );
-    } finally {
-      dispose();
-    }
+        assert.equal(
+          countStarts(probe),
+          1,
+          'the side effect must run exactly once',
+        );
+        assert.equal(results[0]?.result.status, 'executed');
+        // Accidental GPT re-emissions get the primary's result, not an error.
+        assertDuplicateInheritsOutput(results);
+        assert.deepEqual(
+          results[1]?.editedFiles,
+          [],
+          'duplicate must not re-track edits',
+        );
+      },
+    );
   });
 });

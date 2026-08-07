@@ -11,8 +11,6 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-// Local file imports
-
 type CommandMessage = { command: string };
 
 /** Type guard to check if a message has a command field */
@@ -172,7 +170,6 @@ export abstract class BaseViewMessageHandler<
    * When trackActiveView is enabled, updates the active view reference.
    */
   public async handleMessage(message: unknown, webviewView: T): Promise<void> {
-    // Track active view when option is enabled
     this.setActiveView(webviewView);
 
     if (!isCommandMessage(message)) {

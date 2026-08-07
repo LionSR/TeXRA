@@ -115,16 +115,12 @@ export function withToolUseSubagentHandoffInstruction(
   const trimmedParent = parentInstruction?.trim();
   const parts = trimmed ? [trimmed] : [];
   if (trimmedParent) {
+    const contextBlock =
+      trimmedParent === trimmed
+        ? 'The delegated task above is copied verbatim from the parent user request.'
+        : `Parent user request (constraint context only):\n${trimmedParent}`;
     parts.push(
-      [
-        ...(trimmedParent === trimmed
-          ? [
-              'The delegated task above is copied verbatim from the parent user request.',
-            ]
-          : ['Parent user request (constraint context only):', trimmedParent]),
-        '',
-        'Constraints in the parent user request are mandatory and override conflicting delegated-task wording; do not repeat orchestration actions assigned to the parent.',
-      ].join('\n'),
+      `${contextBlock}\n\nConstraints in the parent user request are mandatory and override conflicting delegated-task wording; do not repeat orchestration actions assigned to the parent.`,
     );
   }
   parts.push(TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION);

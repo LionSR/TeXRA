@@ -43,47 +43,49 @@ const { hasUsableSetupCredential } =
   await import('@model/setupCredentialAccess');
 
 describe('setup credential access', () => {
+  // Outcomes the mocked access paths return; the mocks record their call
+  // order in `events` so tests assert the probing sequence.
+  const access = {
+    subscription: false,
+    keys: {} as Record<string, string | undefined>,
+    included: false,
+  };
+
   beforeEach(() => {
     events.length = 0;
+    access.subscription = false;
+    access.keys = {};
+    access.included = false;
     mocks.isCodexSubscriptionActive.mockReset().mockImplementation(async () => {
       events.push('subscription');
-      return false;
+      return access.subscription;
     });
     mocks.lookupApiKey.mockReset().mockImplementation(async (_, provider) => {
       events.push(`key:${provider}`);
-      return undefined;
+      return access.keys[provider];
     });
     mocks.canUseServerSideKeys.mockReset().mockImplementation(async () => {
       events.push('included');
-      return false;
+      return access.included;
     });
   });
 
   it('stops after an active ChatGPT subscription', async () => {
-    mocks.isCodexSubscriptionActive.mockImplementation(async () => {
-      events.push('subscription');
-      return true;
-    });
+    access.subscription = true;
 
     await expect(hasUsableSetupCredential(secrets)).resolves.toBe(true);
     expect(events).toEqual(['subscription']);
   });
 
   it('checks provider keys sequentially before included access', async () => {
-    mocks.lookupApiKey.mockImplementation(async (_, provider) => {
-      events.push(`key:${provider}`);
-      return provider === 'anthropic' ? 'sk-ant-test' : '   ';
-    });
+    access.keys = { openai: '   ', anthropic: 'sk-ant-test' };
 
     await expect(hasUsableSetupCredential(secrets)).resolves.toBe(true);
     expect(events).toEqual(['subscription', 'key:openai', 'key:anthropic']);
   });
 
   it('checks included access only after local credentials are exhausted', async () => {
-    mocks.canUseServerSideKeys.mockImplementation(async () => {
-      events.push('included');
-      return true;
-    });
+    access.included = true;
 
     await expect(hasUsableSetupCredential(secrets)).resolves.toBe(true);
     expect(events).toEqual([

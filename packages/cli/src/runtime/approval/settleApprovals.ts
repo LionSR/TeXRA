@@ -33,7 +33,7 @@ import { warnApprovalDenied } from './approvalPrompts';
 const EXTERNAL_INQUIRY_YOLO_MESSAGE =
   'External inquiry requires human input; yolo mode cannot synthesize an external answer.';
 
-function livePolicy() {
+function livePolicy(): TexraApprovalPolicy {
   return defaultSession().approvalPolicy;
 }
 

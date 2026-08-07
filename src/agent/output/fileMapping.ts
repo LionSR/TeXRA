@@ -24,7 +24,7 @@ export function createFileMapping(
   sourceFiles: FileLocation[],
   targetFiles: FileLocation[],
   matchStrategy: 'basename' | 'contains' = 'basename',
-  roundAware: boolean = false,
+  roundAware = false,
 ): Map<string, FileLocation> {
   const fileMapping = new Map<string, FileLocation>();
 

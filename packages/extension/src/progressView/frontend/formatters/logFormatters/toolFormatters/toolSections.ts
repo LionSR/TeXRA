@@ -55,9 +55,8 @@ import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 // imported from `@tools/**` here — only their inferred types, which are
 // erased at build time. Each builder below therefore validates the input
 // shape itself with `isObject`/`typeof` guards rather than a schema parse;
-// `ReadInput`/`WriteInput` are used purely for their (erased) type shape,
-// the rest are documented in each builder's own comment.
-import type { ReadInput } from '@tools/ReadTool';
+// `WriteInput` is used purely for its (erased) type shape, the rest are
+// documented in each builder's own comment.
 import type { WriteInput } from '@tools/WriteTool';
 import { isObject } from '@utils/core';
 
@@ -76,6 +75,11 @@ export type ToolSectionContext = {
   parsedOutput: unknown;
   outputText: string;
 };
+
+/** Narrow an unknown field value to a string, dropping non-string values. */
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
 
 function buildFileGroupsSection(
   fileGroups: readonly ProposalFileGroup[],
@@ -138,8 +142,10 @@ function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
-/** Narrows `input.range` to `ReadInput['range']`'s display-relevant fields. */
-function readRangeOf(input: unknown): ReadInput['range'] {
+/** Narrows `input.range` to the read tool's display-relevant fields. */
+function readRangeOf(
+  input: unknown,
+): { start: number; end?: number } | undefined {
   if (!isObject(input) || !isObject(input.range)) return undefined;
   const { start, end } = input.range;
   if (typeof start !== 'number') return undefined;
@@ -155,7 +161,7 @@ function buildFileLinkSections(ctx: ToolSectionContext): TemplateResult[] {
       'File:',
       buildFileLinkWithLines(filePath, {
         startLine: range?.start,
-        endLine: range?.end ?? undefined,
+        endLine: range?.end,
       }),
     ),
   ];
@@ -198,7 +204,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
   if (!isObject(input) || typeof input.command !== 'string') return [];
   const command = input.command;
-  const path = typeof input.path === 'string' ? input.path : undefined;
+  const path = asString(input.path);
   const memPath = command === 'rename' ? '' : (path ?? '');
   const sections: TemplateResult[] = [];
 
@@ -208,18 +214,14 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
     );
   }
 
-  const oldStr = typeof input.old_str === 'string' ? input.old_str : undefined;
-  const newStr = typeof input.new_str === 'string' ? input.new_str : undefined;
-  const fileText =
-    typeof input.file_text === 'string' ? input.file_text : undefined;
-  const insertText =
-    typeof input.insert_text === 'string' ? input.insert_text : undefined;
+  const oldStr = asString(input.old_str);
+  const newStr = asString(input.new_str);
+  const fileText = asString(input.file_text);
+  const insertText = asString(input.insert_text);
   const insertLine =
     typeof input.insert_line === 'number' ? input.insert_line : undefined;
-  const oldPath =
-    typeof input.old_path === 'string' ? input.old_path : undefined;
-  const newPath =
-    typeof input.new_path === 'string' ? input.new_path : undefined;
+  const oldPath = asString(input.old_path);
+  const newPath = asString(input.new_path);
 
   if (command === 'str_replace' && oldStr != null && newStr != null) {
     sections.push(
@@ -267,9 +269,8 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
 function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
-  const execPath = typeof input.path === 'string' ? input.path : '';
-  const action: string =
-    typeof input.action === 'string' ? input.action : EXECUTIONS_DEFAULT_ACTION;
+  const execPath = asString(input.path) ?? '';
+  const action = asString(input.action) ?? EXECUTIONS_DEFAULT_ACTION;
   const sections: TemplateResult[] = [];
 
   if (execPath) {
@@ -318,10 +319,7 @@ function acceptRunFileEntryOf(raw: unknown): {
   original?: string;
 } {
   if (!isObject(raw)) return { path: '' };
-  return {
-    path: typeof raw.path === 'string' ? raw.path : '',
-    original: typeof raw.original === 'string' ? raw.original : undefined,
-  };
+  return { path: asString(raw.path) ?? '', original: asString(raw.original) };
 }
 
 /**
@@ -337,8 +335,7 @@ function buildAcceptRunFilesSections(
   if (!isObject(input)) return [];
   const sections: TemplateResult[] = [];
 
-  const executionId =
-    typeof input.execution_id === 'string' ? input.execution_id : undefined;
+  const executionId = asString(input.execution_id);
   if (executionId) {
     // prettier-ignore
     sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${executionId}</code>`));
@@ -357,8 +354,8 @@ function buildAcceptRunFilesSections(
     // prettier-ignore
     const fileItems = html`${files.map((raw) => {
       const f = acceptRunFileEntryOf(raw);
-      const dest = f.original ?? f.path ?? '';
-      const source = f.path ?? '';
+      const dest = f.original ?? f.path;
+      const source = f.path;
       const isMapped = dest && source && dest !== source;
       const edit = editsByPath.get(dest);
       const diffStats = edit?.lineChanges
@@ -390,15 +387,14 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   if (!isObject(input)) return [];
   const sections: TemplateResult[] = [];
 
-  const execId =
-    typeof input.execution_id === 'string' ? input.execution_id : undefined;
+  const execId = asString(input.execution_id);
   if (execId) {
     // prettier-ignore
     sections.push(buildToolUseSection('Resume:', html`<code class="execution-id">${execId}</code>`));
   }
 
-  const agent = typeof input.agent === 'string' ? input.agent : undefined;
-  const model = typeof input.model === 'string' ? input.model : undefined;
+  const agent = asString(input.agent);
+  const model = asString(input.model);
   if (agent || model) {
     const agentPart = agent ?? 'unknown';
     const modelPart = model
@@ -408,8 +404,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
   }
 
-  const instruction =
-    typeof input.instruction === 'string' ? input.instruction : undefined;
+  const instruction = asString(input.instruction);
   if (instruction) {
     sections.push(buildToolUseSection('Instruction:', wrapInPre(instruction)));
   }
@@ -448,14 +443,16 @@ function buildWorkflowScriptSections(
   }
 
   const sections: TemplateResult[] = [];
-  if (typeof input.agent === 'string') {
+  const agent = asString(input.agent);
+  if (agent !== undefined) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${input.agent}</code>`));
+    sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agent}</code>`));
   }
 
-  if (typeof input.script === 'string') {
+  const script = asString(input.script);
+  if (script !== undefined) {
     sections.push(
-      buildToolSection('Script:', input.script, {
+      buildToolSection('Script:', script, {
         language: 'javascript',
         extraClass: 'tool-command-input',
       }),

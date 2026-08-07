@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,24 +40,22 @@ describe('desktop file selection', () => {
 
   beforeEach(async () => {
     workspacePath = await mkdtemp(join(tmpdir(), 'texra-files-'));
-    await mkdir(join(workspacePath, 'sections'), { recursive: true });
-    await mkdir(join(workspacePath, 'build'), { recursive: true });
-    await mkdir(join(workspacePath, 'figures'), { recursive: true });
-    await mkdir(join(workspacePath, 'templates'), { recursive: true });
-    await mkdir(join(workspacePath, 'node_modules', 'pkg'), {
-      recursive: true,
-    });
-    await writeFile(join(workspacePath, 'main.tex'), '');
-    await writeFile(join(workspacePath, 'notes.md'), '');
-    await writeFile(join(workspacePath, 'command.tex'), '');
-    await writeFile(join(workspacePath, 'sections', 'main_r1.tex'), '');
-    await writeFile(join(workspacePath, 'sections', 'main_edited.tex'), '');
-    await writeFile(join(workspacePath, 'build', 'ignored.tex'), '');
-    await writeFile(join(workspacePath, 'figures', 'plot.png'), '');
-    await writeFile(join(workspacePath, 'templates', 'main.tex'), '');
-    await writeFile(
-      join(workspacePath, 'node_modules', 'pkg', 'ignored.tex'),
-      '',
+    const entries = [
+      'main.tex',
+      'notes.md',
+      'command.tex',
+      'sections/main_r1.tex',
+      'sections/main_edited.tex',
+      'build/ignored.tex',
+      'figures/plot.png',
+      'templates/main.tex',
+      'node_modules/pkg/ignored.tex',
+    ];
+    await Promise.all(
+      entries.map(async (entry) => {
+        await mkdir(join(workspacePath, dirname(entry)), { recursive: true });
+        await writeFile(join(workspacePath, entry), '');
+      }),
     );
   });
 
@@ -170,43 +168,42 @@ describe('desktop file selection', () => {
     );
   });
 
-  it('does not open the multi-file picker without a workspace', async () => {
-    const showOpenFileDialog = vi.fn();
-    const { files } = await createFileSelection({
-      getWorkspacePath: () => undefined,
-      showOpenFileDialog,
-    });
+  it.each([
+    {
+      name: 'without a workspace',
+      overrides: { getWorkspacePath: () => undefined },
+      request: { fileType: 'input' },
+    },
+    {
+      // 'output' is a valid MultipleDocumentFileType and the shared webview
+      // frontend's "Select output files" button posts it through this same
+      // command on every host, but MULTI_SET_COMMAND_BY_FILE_TYPE here only
+      // covers input/context/media, so isDesktopMultiFileType rejects it and
+      // the picker never opens. Pinned so a future fix to add output support
+      // has to update this expectation deliberately.
+      name: 'for output files',
+      overrides: {},
+      request: { fileType: 'output', currentFile: 'main.tex' },
+    },
+  ])(
+    'does not open the multi-file picker $name',
+    async ({ overrides, request }) => {
+      const showOpenFileDialog = vi.fn();
+      const { files } = await createFileSelection({
+        showOpenFileDialog,
+        ...overrides,
+      });
 
-    expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
-        fileType: 'input',
-      }),
-    ).toBe(true);
+      expect(
+        files.handleMessage({
+          command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
+          ...request,
+        }),
+      ).toBe(true);
 
-    await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
-  });
-
-  // 'output' is a valid MultipleDocumentFileType and the shared webview
-  // frontend's "Select output files" button posts it through this same
-  // command on every host, but MULTI_SET_COMMAND_BY_FILE_TYPE here only
-  // covers input/context/media, so isDesktopMultiFileType rejects it and the
-  // picker never opens. Pinned so a future fix to add output support has to
-  // update this expectation deliberately.
-  it('does not open the multi-file picker for output files', async () => {
-    const showOpenFileDialog = vi.fn();
-    const { files } = await createFileSelection({ showOpenFileDialog });
-
-    expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
-        fileType: 'output',
-        currentFile: 'main.tex',
-      }),
-    ).toBe(true);
-
-    await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
-  });
+      await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
+    },
+  );
 
   it('leaves recent-commit requests for the main IPC router', async () => {
     const { files } = await createFileSelection();

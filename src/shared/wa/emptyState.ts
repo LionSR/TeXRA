@@ -97,7 +97,7 @@ export function renderEmptyState({
       <${tag} class="empty-state-title">${title}</${tag}>
       ${body ? html`<p class="empty-state-body">${body}</p>` : nothing}
       ${
-        actions && actions.length > 0
+        actions?.length
           ? html`
               <div class="empty-state-actions">
                 ${actions.map(

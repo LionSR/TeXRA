@@ -13,8 +13,6 @@ import {
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-// Third-party imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
 const COMPACTION_TEST_CONFIG = Object.freeze({
@@ -176,6 +174,37 @@ function userTextMessage(text: string): ResponseInputItem {
   } as unknown as ResponseInputItem;
 }
 
+function compactedState(): ResponseInputItem[] {
+  return [userTextMessage('compacted state')];
+}
+
+/** 800 > the 750-token (75%) threshold of the 1000-token test window. */
+const OVER_THRESHOLD_COUNT = async () => ({ input_tokens: 800 });
+
+/** A /responses/compact mock returning `output`, optionally recording params. */
+function compactTo(output: ResponseInputItem[], sink?: any[]) {
+  return async (params: any) => {
+    sink?.push(params);
+    return { output, usage: { output_tokens: 100 } };
+  };
+}
+
+/** A responses.create mock that records params and dispatches by attempt. */
+function recordCreate(requests: any[], respond: (attempt: number) => unknown) {
+  return async (params: any) => {
+    requests.push(params);
+    return respond(requests.length);
+  };
+}
+
+/** Turn 1 sits over the threshold (800); the post-compaction resend is small. */
+function overThresholdThenCompacted(afterId: string) {
+  return (attempt: number) =>
+    attempt === 1
+      ? createResponse('resp-before-threshold', 800)
+      : createResponse(afterId, 150);
+}
+
 function withSdkOptions<T extends { responses: object }>(client: T) {
   return Object.assign(client, {
     withOptions: vi.fn(() => client),
@@ -202,14 +231,13 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const requests: any[] = [];
     const compactRequests: any[] = [];
     const compactOptions: any[] = [];
-    const compactedMessages = [userTextMessage('compacted state')];
+    const compactedMessages = compactedState();
     const client = withSdkOptions({
       responses: {
         inputTokens: {
-          // 800 > the 75% threshold (750) of the 1000-token window. Turn 1
-          // has nothing to compact (no prior response); turn 2 compacts off
-          // this live pre-flight count.
-          count: async () => ({ input_tokens: 800 }),
+          // Turn 1 has nothing to compact (no prior response); turn 2
+          // compacts off this live pre-flight count.
+          count: OVER_THRESHOLD_COUNT,
         },
         compact: async (params: any, options: any) => {
           compactRequests.push(params);
@@ -219,12 +247,10 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             usage: { output_tokens: 100 },
           };
         },
-        create: async (params: any) => {
-          requests.push(params);
-          return requests.length === 1
-            ? createResponse('resp-before-threshold', 800)
-            : createResponse('resp-after-compaction', 150);
-        },
+        create: recordCreate(
+          requests,
+          overThresholdThenCompacted('resp-after-compaction'),
+        ),
       },
     });
     const firstTurnMessages = createMessages(2);
@@ -258,23 +284,18 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // return value: an internal request that bypassed the token API would
     // leave the counter untouched.
     const handler = createHandler();
-    const compactedMessages = [userTextMessage('compacted state')];
+    const compactedMessages = compactedState();
     const requests: any[] = [];
     const client = withSdkOptions({
       responses: {
         inputTokens: {
-          count: async () => ({ input_tokens: 800 }),
+          count: OVER_THRESHOLD_COUNT,
         },
-        compact: async () => ({
-          output: compactedMessages,
-          usage: { output_tokens: 100 },
-        }),
-        create: async (params: any) => {
-          requests.push(params);
-          return requests.length === 1
-            ? createResponse('resp-before-threshold', 800)
-            : createResponse('resp-after-compaction', 150);
-        },
+        compact: compactTo(compactedMessages),
+        create: recordCreate(
+          requests,
+          overThresholdThenCompacted('resp-after-compaction'),
+        ),
       },
     });
 
@@ -302,7 +323,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const client = withSdkOptions({
       responses: {
         inputTokens: {
-          count: async () => ({ input_tokens: 800 }),
+          count: OVER_THRESHOLD_COUNT,
         },
         compact: async () => {
           controller.abort();
@@ -333,33 +354,26 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
-    const compactedMessages = [userTextMessage('compacted state')];
+    const compactedMessages = compactedState();
     const client = withSdkOptions({
       responses: {
         inputTokens: {
           // Over the 750-token threshold: turn 2's live count triggers the
           // compaction whose payload the same-turn retry must then reuse.
-          count: async () => ({ input_tokens: 800 }),
+          count: OVER_THRESHOLD_COUNT,
         },
-        compact: async (params: any) => {
-          compactRequests.push(params);
-          return {
-            output: compactedMessages,
-            usage: { output_tokens: 100 },
-          };
-        },
-        create: async (params: any) => {
-          requests.push(params);
-          if (requests.length === 1) {
+        compact: compactTo(compactedMessages, compactRequests),
+        create: recordCreate(requests, (attempt) => {
+          if (attempt === 1) {
             return createResponse('resp-before-threshold', 800);
           }
-          if (requests.length === 2) {
+          if (attempt === 2) {
             // The request that follows a successful compaction fails once,
             // forcing a same-turn retry with the same `messages` reference.
             throw new Error('transient network failure');
           }
           return createResponse('resp-after-compaction', 150);
-        },
+        }),
       },
     });
     const firstTurnMessages = createMessages(2);
@@ -398,7 +412,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
-    const compactedMessages = [userTextMessage('compacted state')];
+    const compactedMessages = compactedState();
     let tokenCountCalls = 0;
     const client = withSdkOptions({
       responses: {
@@ -412,20 +426,12 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             return { input_tokens: tokenCountCalls <= 2 ? 800 : 160 };
           },
         },
-        compact: async (params: any) => {
-          compactRequests.push(params);
-          return {
-            output: compactedMessages,
-            usage: { output_tokens: 100 },
-          };
-        },
-        create: async (params: any) => {
-          requests.push(params);
-          if (requests.length === 1) return createResponse('resp-turn1', 800);
-          if (requests.length === 2)
-            return createResponse('resp-turn2-compacted', 150);
+        compact: compactTo(compactedMessages, compactRequests),
+        create: recordCreate(requests, (attempt) => {
+          if (attempt === 1) return createResponse('resp-turn1', 800);
+          if (attempt === 2) return createResponse('resp-turn2-compacted', 150);
           return createResponse('resp-turn3', 160);
-        },
+        }),
       },
     });
 
@@ -481,19 +487,12 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
         inputTokens: {
           count: async () => ({ input_tokens: 100 }),
         },
-        compact: async (params: any) => {
-          compactRequests.push(params);
-          return {
-            output: createMessages(1),
-            usage: { output_tokens: 100 },
-          };
-        },
-        create: async (params: any) => {
-          requests.push(params);
-          return requests.length === 1
+        compact: compactTo(createMessages(1), compactRequests),
+        create: recordCreate(requests, (attempt) =>
+          attempt === 1
             ? createResponse('resp-before-threshold', 800)
-            : createResponse('resp-without-compaction', 850);
-        },
+            : createResponse('resp-without-compaction', 850),
+        ),
       },
     });
     const firstTurnMessages = createMessages(2);
@@ -521,16 +520,12 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const compactRequests: any[] = [];
     const client = withSdkOptions({
       responses: {
-        compact: async (params: any) => {
-          compactRequests.push(params);
-          return { output: createMessages(1), usage: { output_tokens: 100 } };
-        },
-        create: async (params: any) => {
-          requests.push(params);
+        compact: compactTo(createMessages(1), compactRequests),
+        create: recordCreate(requests, (attempt) =>
           // 800 is over the 750-token threshold of the 1000-token window, so
           // a compaction-capable route would compact on the second turn.
-          return createResponse(`resp-${requests.length}`, 800);
-        },
+          createResponse(`resp-${attempt}`, 800),
+        ),
       },
     });
 
@@ -575,19 +570,18 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             },
           });
         },
-        create: async (params: any) => {
-          requests.push(params);
-          if (requests.length === 2) {
+        create: recordCreate(requests, (attempt) => {
+          if (attempt === 2) {
             tokensAfterDuringCall = (
               handler as unknown as {
                 compactionResult?: { tokensAfter: number };
               }
             ).compactionResult?.tokensAfter;
           }
-          return requests.length === 1
+          return attempt === 1
             ? createResponse('resp-before-threshold', 800)
             : createResponse('resp-after-client-side-compaction', 150);
-        },
+        }),
       },
     });
     const firstTurnMessages = createMessages(2);
@@ -661,12 +655,11 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           });
           return capturedStream;
         },
-        create: async (params: any) => {
-          requests.push(params);
-          return requests.length === 1
+        create: recordCreate(requests, (attempt) =>
+          attempt === 1
             ? createResponse('resp-before-threshold', 9000)
-            : createResponse('resp-after-bounded-compaction', 150);
-        },
+            : createResponse('resp-after-bounded-compaction', 150),
+        ),
       },
     });
 
@@ -721,12 +714,10 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
               usage: { output_tokens: 7 },
             },
           }),
-        create: async (params: any) => {
-          requests.push(params);
-          return requests.length === 1
-            ? createResponse('resp-before-threshold', 800)
-            : createResponse('resp-after-client-side-compaction', 150);
-        },
+        create: recordCreate(
+          requests,
+          overThresholdThenCompacted('resp-after-client-side-compaction'),
+        ),
       },
     });
 

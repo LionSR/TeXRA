@@ -19,7 +19,7 @@ const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
 
 function normalizeGitHubToken(token: string | undefined): string | undefined {
   const trimmed = token?.trim();
-  return trimmed ? trimmed : undefined;
+  return trimmed || undefined;
 }
 
 function getGitHubEnvToken(

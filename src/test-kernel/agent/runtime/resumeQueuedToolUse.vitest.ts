@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
@@ -37,6 +37,18 @@ function seedRecoverable(
   session.followUps.release(flow, 'recoverable');
 }
 
+const sessions: ReturnType<typeof createTestSession>[] = [];
+
+afterEach(() => {
+  for (const session of sessions.splice(0)) session.dispose();
+});
+
+function createSession(): ReturnType<typeof createTestSession> {
+  const session = createTestSession();
+  sessions.push(session);
+  return session;
+}
+
 describe('resumeQueuedToolUseFromResumeData ownership', () => {
   beforeEach(() => {
     resumeToolUseFromResumeDataMock.mockReset();
@@ -49,43 +61,35 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
   });
 
   it('claims recovery before draining and preserves ordered raced input', async () => {
-    const session = createTestSession();
+    const session = createSession();
     seedRecoverable(session, 'first');
     const tools = [
       { definition: { name: 'run_scoped' }, call: vi.fn() },
     ] as unknown as readonly ITool[];
 
-    try {
-      await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-          session,
-          tools,
-          onFollowUpQueueReady: () => {
-            expect(
-              session.followUps.submit(
-                STREAM,
-                { text: 'second' },
-                'recoverable',
-              ),
-            ).toEqual({ kind: 'recovering' });
-          },
-          onError: vi.fn(),
-        }),
-      ).resolves.toBe(true);
+    await expect(
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+        session,
+        tools,
+        onFollowUpQueueReady: () => {
+          expect(
+            session.followUps.submit(STREAM, { text: 'second' }, 'recoverable'),
+          ).toEqual({ kind: 'recovering' });
+        },
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(true);
 
-      const options = resumeToolUseFromResumeDataMock.mock.calls[0]?.[1];
-      expect(options.tools).toBe(tools);
-      expect(options.drainedFollowUps.map((item: any) => item.text)).toEqual([
-        'first',
-        'second',
-      ]);
-    } finally {
-      session.dispose();
-    }
+    const options = resumeToolUseFromResumeDataMock.mock.calls[0]?.[1];
+    expect(options.tools).toBe(tools);
+    expect(options.drainedFollowUps.map((item: any) => item.text)).toEqual([
+      'first',
+      'second',
+    ]);
   });
 
   it('rejects a competing recovery consumer deterministically', async () => {
-    const session = createTestSession();
+    const session = createSession();
     seedRecoverable(session, 'once');
     const barrier = createDeferred();
     resumeToolUseFromResumeDataMock.mockImplementationOnce(async () => {
@@ -93,48 +97,40 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
       return completed;
     });
 
-    try {
-      const first = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+    const first = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+      session,
+      onError: vi.fn(),
+    });
+    await vi.waitFor(() =>
+      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
+    );
+    await expect(
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         session,
         onError: vi.fn(),
-      });
-      await vi.waitFor(() =>
-        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
-      );
-      await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-          session,
-          onError: vi.fn(),
-        }),
-      ).resolves.toBe(false);
-      barrier.resolve();
-      await first;
-      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-    } finally {
-      session.dispose();
-    }
+      }),
+    ).resolves.toBe(false);
+    barrier.resolve();
+    await first;
+    expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
   });
 
   it('restores an unconsumed batch after resume failure', async () => {
-    const session = createTestSession();
+    const session = createSession();
     seedRecoverable(session, 'keep me');
     resumeToolUseFromResumeDataMock.mockRejectedValueOnce(new Error('failed'));
 
-    try {
-      await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-          session,
-          onError: vi.fn(),
-        }),
-      ).resolves.toBe(false);
-      expect(session.followUps.getAll(STREAM)).toEqual(['keep me']);
-    } finally {
-      session.dispose();
-    }
+    await expect(
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+        session,
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(false);
+    expect(session.followUps.getAll(STREAM)).toEqual(['keep me']);
   });
 
   it('replays a completed-child result that races a failed recovery', async () => {
-    const session = createTestSession();
+    const session = createSession();
     seedRecoverable(session, 'original');
     let rejectResume!: (error: unknown) => void;
     const barrier = new Promise<never>((_resolve, reject) => {
@@ -142,36 +138,32 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     });
     resumeToolUseFromResumeDataMock.mockReturnValueOnce(barrier);
 
-    try {
-      const resuming = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-        session,
-        onError: vi.fn(),
-      });
-      await vi.waitFor(() =>
-        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
-      );
+    const resuming = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+      session,
+      onError: vi.fn(),
+    });
+    await vi.waitFor(() =>
+      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
+    );
 
-      expect(
-        session.followUps.submit(
-          STREAM,
-          { text: 'completed child', origin: 'subagent_result' },
-          'recoverable',
-        ),
-      ).toEqual({ kind: 'recovering' });
-      rejectResume(new Error('resume failed'));
+    expect(
+      session.followUps.submit(
+        STREAM,
+        { text: 'completed child', origin: 'subagent_result' },
+        'recoverable',
+      ),
+    ).toEqual({ kind: 'recovering' });
+    rejectResume(new Error('resume failed'));
 
-      await expect(resuming).resolves.toBe(false);
-      expect(session.followUps.getAll(STREAM)).toEqual([
-        'original',
-        'completed child',
-      ]);
-    } finally {
-      session.dispose();
-    }
+    await expect(resuming).resolves.toBe(false);
+    expect(session.followUps.getAll(STREAM)).toEqual([
+      'original',
+      'completed child',
+    ]);
   });
 
   it('adopts the exact recovery generation claimed by submission', async () => {
-    const session = createTestSession();
+    const session = createSession();
     const submission = session.followUps.submit(
       STREAM,
       { text: 'claimed' },
@@ -181,17 +173,13 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     if (submission.kind !== 'recovery') throw new Error('recovery not claimed');
     const recovery = submission.lease;
 
-    try {
-      await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-          session,
-          recovery,
-          onError: vi.fn(),
-        }),
-      ).resolves.toBe(true);
-      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-    } finally {
-      session.dispose();
-    }
+    await expect(
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+        session,
+        recovery,
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(true);
+    expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
   });
 });

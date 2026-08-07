@@ -47,7 +47,7 @@ describe('VS Code shared-storage migration', () => {
       migrateLegacyVscodeStorage(context, storage),
     ).resolves.toBeUndefined();
 
-    expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledTimes(1);
+    expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledOnce();
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledWith(
       '/legacy/global',
       '/shared/global',
@@ -74,7 +74,7 @@ describe('VS Code shared-storage migration', () => {
       migrateLegacyVscodeStorage(context, storage),
     ).resolves.toBeUndefined();
 
-    expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledTimes(1);
+    expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledOnce();
     expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledWith(
       '/legacy/workspace',
       '/shared/workspace',

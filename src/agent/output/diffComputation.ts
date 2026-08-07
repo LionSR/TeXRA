@@ -36,8 +36,7 @@ async function computeDiffStats(
   try {
     if (!baseLocation) {
       const outContent = await AbsoluteFS.read(outputLocation.absolutePath);
-      const added = countLines(outContent);
-      return { added };
+      return { added: countLines(outContent) };
     }
 
     const [baseContent, outContent] = await Promise.all([
@@ -116,12 +115,14 @@ export async function computeOutputDiffStats(
 
       // Use original as diff base when there's no direct base mapping
       // and the original is a different file (not self-referencing)
-      let diffBaseLocation =
-        baseLocation ??
-        (originalLocation &&
+      let diffBaseLocation = baseLocation;
+      if (
+        !diffBaseLocation &&
+        originalLocation &&
         getComparablePath(originalLocation) !== locationPath
-          ? originalLocation
-          : null);
+      ) {
+        diffBaseLocation = originalLocation;
+      }
 
       // Fallback for single-input multi-output: when an agent extracts N
       // documents from one base file, the extracted doc names (e.g. "chapter1",

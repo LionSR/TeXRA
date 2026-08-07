@@ -48,61 +48,65 @@ describe('read_file line ranges', () => {
     expect(result.output).toContain('line 10');
   });
 
-  it('reads an explicit in-bounds range inclusively', async () => {
-    const result = await callRead({
-      path: 'small.txt',
+  it.each([
+    {
+      name: 'an explicit in-bounds range inclusively',
       range: { start: 3, end: 5 },
-    });
-
-    expect(result.summary).toBe('Read lines 3-5 of small.txt');
-    expect(result.output).toContain('line 3');
-    expect(result.output).toContain('line 5');
-    expect(result.output).not.toContain('line 6');
-    expect(result.output).not.toContain('line 2');
-  });
-
-  it('renders a single-line range with the singular label', async () => {
-    const result = await callRead({
-      path: 'small.txt',
+      summary: 'Read lines 3-5 of small.txt',
+      contains: ['line 3', 'line 5'],
+      excludes: ['line 2', 'line 6'],
+    },
+    {
+      name: 'a single-line range with the singular label',
       range: { start: 4, end: 4 },
-    });
-
-    expect(result.summary).toBe('Read line 4 of small.txt');
-    expect(result.output).toContain('line 4');
-    expect(result.output).not.toContain('line 5');
-  });
-
-  it('clamps an end past EOF and says so in the summary', async () => {
-    const result = await callRead({
-      path: 'small.txt',
+      summary: 'Read line 4 of small.txt',
+      contains: ['line 4'],
+      excludes: ['line 5'],
+    },
+    {
+      name: 'an end clamped past EOF, saying so in the summary',
       range: { start: 8, end: 999 },
-    });
-
-    expect(result.summary).toBe(
-      'Read lines 8-10 of small.txt (requested end 999 exceeds file length 10)',
-    );
-    expect(result.output).toContain('line 10');
-  });
-
-  it('reports an empty view when the start is past EOF', async () => {
-    const result = await callRead({
-      path: 'small.txt',
+      summary:
+        'Read lines 8-10 of small.txt (requested end 999 exceeds file length 10)',
+      contains: ['line 10'],
+      excludes: [],
+    },
+    {
+      name: 'an empty view when the start is past EOF',
       range: { start: 50, end: 60 },
-    });
+      summary:
+        'Read small.txt (no lines in requested range) (requested end 60 exceeds file length 10)',
+      contains: [],
+      excludes: [],
+      empty: true,
+    },
+    {
+      name: 'to EOF when only a start is given',
+      range: { start: 7 },
+      summary: 'Read lines 7-10 of small.txt',
+      contains: ['line 7', 'line 10'],
+      excludes: ['line 6'],
+    },
+    {
+      name: 'the array range form some models emit',
+      range: [2, 4],
+      summary: 'Read lines 2-4 of small.txt',
+      contains: ['line 2', 'line 4'],
+      excludes: ['line 5'],
+    },
+  ])('reads $name', async ({ range, summary, contains, excludes, empty }) => {
+    const result = await callRead({ path: 'small.txt', range });
 
-    expect(result.summary).toBe(
-      'Read small.txt (no lines in requested range) (requested end 60 exceeds file length 10)',
-    );
-    expect(result.output).toBe('');
-  });
-
-  it('reads to EOF when only a start is given', async () => {
-    const result = await callRead({ path: 'small.txt', range: { start: 7 } });
-
-    expect(result.summary).toBe('Read lines 7-10 of small.txt');
-    expect(result.output).toContain('line 7');
-    expect(result.output).toContain('line 10');
-    expect(result.output).not.toContain('line 6');
+    expect(result.summary).toBe(summary);
+    if (empty) {
+      expect(result.output).toBe('');
+    }
+    for (const line of contains) {
+      expect(result.output).toContain(line);
+    }
+    for (const line of excludes) {
+      expect(result.output).not.toContain(line);
+    }
   });
 
   it('reports remaining lines when a start-only range is truncated', async () => {
@@ -113,15 +117,6 @@ describe('read_file line ranges', () => {
 
     expect(result.summary).toBe('Read lines 2-2001 of large.txt');
     expect(result.output).toContain('...(truncated, 499 more lines)');
-  });
-
-  it('accepts the array range form some models emit', async () => {
-    const result = await callRead({ path: 'small.txt', range: [2, 4] });
-
-    expect(result.summary).toBe('Read lines 2-4 of small.txt');
-    expect(result.output).toContain('line 2');
-    expect(result.output).toContain('line 4');
-    expect(result.output).not.toContain('line 5');
   });
 
   it('rejects an end below the start', async () => {

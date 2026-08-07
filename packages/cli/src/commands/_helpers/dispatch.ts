@@ -228,12 +228,14 @@ async function resolveDeepestSubCommandPath({
 export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   const { leadingGlobals, restIndex, stoppedOnUnknownFlag } =
     collectLeadingGlobalFlags(rawArgs);
-  if (stoppedOnUnknownFlag) {
-    // Unknown leading flag: leave the rest intact so runMain can surface
-    // `--help`, `--version`, or an unknown-flag error.
-    return [...rawArgs];
-  }
-  if (restIndex >= rawArgs.length || leadingGlobals.length === 0) {
+  // Unknown leading flag, no subcommand, or no leading globals: leave the
+  // args intact so runMain can surface `--help`, `--version`, or an
+  // unknown-flag error.
+  if (
+    stoppedOnUnknownFlag ||
+    restIndex >= rawArgs.length ||
+    leadingGlobals.length === 0
+  ) {
     return [...rawArgs];
   }
   return [...rawArgs.slice(restIndex), ...leadingGlobals];

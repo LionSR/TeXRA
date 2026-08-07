@@ -105,6 +105,31 @@ function completedChildRunLoop(): { completion: Promise<void> } {
   return { completion: Promise.resolve() };
 }
 
+function toolContext(runContext: Record<string, unknown> = {}): unknown {
+  return {
+    runContext: {
+      streamId: parentStreamId,
+      executionId,
+      workingDirectory: undefined,
+      interactions: { name: 'fake-runtime-host' },
+      ...runContext,
+    },
+    callContext: { tracker: {}, hooks: {} },
+  };
+}
+
+/** Capture the strategy passed to the (single) child run loop launch. */
+function captureRunLoopStrategy(): () => ChildRunStrategy<unknown> | undefined {
+  let strategy: ChildRunStrategy<unknown> | undefined;
+  mocks.startChildRunLoop.mockImplementation(
+    (params: { strategy: ChildRunStrategy<unknown> }) => {
+      strategy = params.strategy;
+      return completedChildRunLoop();
+    },
+  );
+  return () => strategy;
+}
+
 describe('codex tool - atomic resume fallback', () => {
   beforeEach(() => {
     mocks.startChildRunLoop.mockReset();
@@ -112,15 +137,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.importCodexClass.mockReset();
     mocks.findCodexBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
-    mocks.getCurrentToolContexts.mockReturnValue({
-      runContext: {
-        streamId: parentStreamId,
-        executionId,
-        workingDirectory: undefined,
-        interactions: { name: 'fake-runtime-host' },
-      },
-      callContext: { tracker: {}, hooks: {} },
-    });
+    mocks.getCurrentToolContexts.mockReturnValue(toolContext());
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.ensureRunDir.mockResolvedValue(undefined);
@@ -140,15 +157,9 @@ describe('codex tool - atomic resume fallback', () => {
   });
 
   it('refuses a one-shot run whose follow-up could never be collected', async () => {
-    mocks.getCurrentToolContexts.mockReturnValue({
-      runContext: {
-        streamId: parentStreamId,
-        executionId,
-        stopAfterCycle: true,
-        interactions: { name: 'fake-runtime-host' },
-      },
-      callContext: { tracker: {}, hooks: {} },
-    });
+    mocks.getCurrentToolContexts.mockReturnValue(
+      toolContext({ stopAfterCycle: true }),
+    );
 
     await expect(
       new CodexTool().call({
@@ -209,18 +220,12 @@ describe('codex tool - atomic resume fallback', () => {
       getAgentHandleByStream: () => undefined,
       getHandle: () => undefined,
     } as any;
-    let strategy: ChildRunStrategy<unknown> | undefined;
+    const getStrategy = captureRunLoopStrategy();
 
     mocks.importCodexClass.mockImplementation(() => {
       sdkImportStarted.resolve(undefined);
       return sdkReady.promise;
     });
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        strategy = params.strategy;
-        return completedChildRunLoop();
-      },
-    );
 
     const tool = new CodexTool();
     const first = tool.call({
@@ -249,7 +254,7 @@ describe('codex tool - atomic resume fallback', () => {
       },
     );
     const firstResult = await first;
-    strategy?.onTurnSuccess?.({}, { executions } as any);
+    getStrategy()?.onTurnSuccess?.({}, { executions } as any);
     const secondResult = await second;
 
     expect(firstResult.status).toBe('executed');
@@ -264,25 +269,19 @@ describe('codex tool - atomic resume fallback', () => {
       expect.objectContaining({ session: expect.anything() }),
     );
 
-    strategy?.releaseSessionOwnership?.();
+    getStrategy()?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 
   it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
     const interrupt = vi.fn();
     const thread = { id: undefined, runStreamed: vi.fn() };
-    let strategy: ChildRunStrategy<unknown> | undefined;
+    const getStrategy = captureRunLoopStrategy();
     mocks.importCodexClass.mockResolvedValue(
       class MockCodex {
         startThread(): typeof thread {
           return thread;
         }
-      },
-    );
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        strategy = params.strategy;
-        return completedChildRunLoop();
       },
     );
 
@@ -294,18 +293,18 @@ describe('codex tool - atomic resume fallback', () => {
     const executions = {
       getAgentHandleByStream: () => ({ interrupt }),
     } as any;
-    strategy?.onLoopStart?.({ executions } as any);
+    getStrategy()?.onLoopStart?.({ executions } as any);
     CodexThreads.interruptAll();
 
     expect(interrupt).toHaveBeenCalledOnce();
-    strategy?.releaseSessionOwnership?.();
+    getStrategy()?.releaseSessionOwnership?.();
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
     const firstImportStarted = pDefer<void>();
     const firstImport = pDefer<any>();
     const thread = { id: 'stale-thread', runStreamed: vi.fn() };
-    let strategy: ChildRunStrategy<unknown> | undefined;
+    const getStrategy = captureRunLoopStrategy();
     mocks.importCodexClass
       .mockImplementationOnce(() => {
         firstImportStarted.resolve(undefined);
@@ -318,12 +317,6 @@ describe('codex tool - atomic resume fallback', () => {
           }
         },
       );
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        strategy = params.strategy;
-        return completedChildRunLoop();
-      },
-    );
 
     const tool = new CodexTool();
     const first = tool.call({
@@ -348,7 +341,7 @@ describe('codex tool - atomic resume fallback', () => {
     expect(mocks.importCodexClass).toHaveBeenCalledTimes(2);
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
 
-    strategy?.releaseSessionOwnership?.();
+    getStrategy()?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 });

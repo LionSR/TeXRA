@@ -106,6 +106,16 @@ async function persistTranscriptEntry(
 describe('ChatExportController.exportAsHtml', () => {
   const controller = new ChatExportController({ latexPreamble: '' });
 
+  async function expectStreamLogsMissing(
+    executionId: ExecutionId,
+  ): Promise<void> {
+    const outcome = await controller.exportAsHtml(
+      executionId,
+      await writeTemplate(),
+    );
+    expect(outcome).toEqual({ status: 'streamLogs_missing' });
+  }
+
   beforeEach(installStoragePlatform);
 
   afterEach(async () => {
@@ -125,21 +135,14 @@ describe('ChatExportController.exportAsHtml', () => {
   });
 
   it('returns streamLogs_missing when metadata carries no stamped stream id', async () => {
-    const templatePath = await writeTemplate();
     await getExecutionStore('exec-missing-logs' as ExecutionId).writeRunRecord(
       config(),
     );
 
-    const outcome = await controller.exportAsHtml(
-      'exec-missing-logs',
-      templatePath,
-    );
-
-    expect(outcome).toEqual({ status: 'streamLogs_missing' });
+    await expectStreamLogsMissing('exec-missing-logs' as ExecutionId);
   });
 
   it('never resolves a transcript from sidecar candidates without a stamped stream id', async () => {
-    const templatePath = await writeTemplate();
     const executionId = 'aaa555aaa555' as ExecutionId;
     const executionConfig = config();
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
@@ -147,39 +150,32 @@ describe('ChatExportController.exportAsHtml', () => {
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(first, executionConfig, executionId);
-    snapshotFacts(snapshots).setRunConfig(second, executionConfig, executionId);
+    const facts = snapshotFacts(snapshots);
+    facts.setRunConfig(first, executionConfig, executionId);
+    facts.setRunConfig(second, executionConfig, executionId);
     await snapshots.flush();
 
-    const outcome = await controller.exportAsHtml(executionId, templatePath);
-
-    expect(outcome).toEqual({ status: 'streamLogs_missing' });
+    await expectStreamLogsMissing(executionId);
   });
 
   it('returns streamLogs_missing when only delegated child sidecars remain', async () => {
-    const templatePath = await writeTemplate();
     const executionId = 'aaa556aaa556' as ExecutionId;
     const executionConfig = config();
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
+    const facts = snapshotFacts(snapshots);
     for (const streamId of [
       `bash@tool#${executionId}`,
       `codex@tool#${executionId}`,
     ] as StreamTabId[]) {
-      snapshotFacts(snapshots).setRunConfig(
-        streamId,
-        executionConfig,
-        executionId,
-      );
-      snapshotFacts(snapshots).setParentStream(streamId, parent);
+      facts.setRunConfig(streamId, executionConfig, executionId);
+      facts.setParentStream(streamId, parent);
     }
     await snapshots.flush();
 
-    const outcome = await controller.exportAsHtml(executionId, templatePath);
-
-    expect(outcome).toEqual({ status: 'streamLogs_missing' });
+    await expectStreamLogsMissing(executionId);
   });
 
   it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {

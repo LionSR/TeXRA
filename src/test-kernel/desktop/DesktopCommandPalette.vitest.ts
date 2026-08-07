@@ -152,17 +152,21 @@ describe('desktop command palette', () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
     const controller = createDesktopCommandPalette({
       document,
-      actions: {
-        showLauncher: vi.fn(),
-        openWorkbench: vi.fn(),
-        showSettings: vi.fn(),
-      },
+      actions: createActionsStub(),
       platform: 'darwin',
       ...options,
     });
     document.body.append(controller.element);
     await flushDialogTicks();
     return controller;
+  }
+
+  function createActionsStub() {
+    return {
+      showLauncher: vi.fn(),
+      openWorkbench: vi.fn(),
+      showSettings: vi.fn(),
+    };
   }
 
   function setWaInputValue(element: HTMLElement, value: string): void {
@@ -172,11 +176,7 @@ describe('desktop command palette', () => {
   }
 
   it('renders catalog entries and dispatches the active command on Enter', async () => {
-    const actions = {
-      showLauncher: vi.fn(),
-      openWorkbench: vi.fn(),
-      showSettings: vi.fn(),
-    };
+    const actions = createActionsStub();
     const controller = await mountPalette({ actions });
 
     expect(controller.element.getAttribute('aria-label')).toBe(
@@ -205,9 +205,7 @@ describe('desktop command palette', () => {
 
   it('adds current streams as switch commands when opened', async () => {
     const actions = {
-      showLauncher: vi.fn(),
-      openWorkbench: vi.fn(),
-      showSettings: vi.fn(),
+      ...createActionsStub(),
       showStream: vi.fn(),
     };
     let streams: DesktopPaletteStream[] = [];
@@ -243,11 +241,7 @@ describe('desktop command palette', () => {
   });
 
   it('clicking an item dispatches its command and closes the dialog', async () => {
-    const actions = {
-      showLauncher: vi.fn(),
-      openWorkbench: vi.fn(),
-      showSettings: vi.fn(),
-    };
+    const actions = createActionsStub();
     const controller = await mountPalette({ actions });
     controller.open();
     await flushDialogTicks();

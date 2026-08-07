@@ -16,7 +16,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@progressView/frontend/components/UserMessage';
 
 // Third-party imports - Lit template utilities
-import { html } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
@@ -26,6 +26,7 @@ import {
   ErrorLogDataSchema,
   UserMessagePayloadSchema,
   type ErrorLogData,
+  type LogLevel,
   type LogMessageData,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
@@ -38,6 +39,14 @@ import { ICON_BY_LEVEL } from '../constants';
 import { registerCopyContent } from '../contentStore';
 import { stopSummaryToggleKeydown } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
+
+/** Level-decorated icon shared by the progress-status and default formatters. */
+function buildLevelIcon(level: LogLevel): TemplateResult {
+  return waIcon(ICON_BY_LEVEL[level], {
+    className: `log-level-icon log-level-icon--${level}`,
+    label: level === 'error' || level === 'warn' ? level : undefined,
+  });
+}
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(
@@ -62,10 +71,7 @@ export function formatProgressStatusTemplate(
 
   const summaryText = (text ?? '').trim() || 'Status update';
   const detailText = stringifyWithLanguage(data).text;
-  const levelIcon = waIcon(ICON_BY_LEVEL[level], {
-    className: `log-level-icon log-level-icon--${level}`,
-    label: level === 'error' || level === 'warn' ? level : undefined,
-  });
+  const levelIcon = buildLevelIcon(level);
 
   // prettier-ignore
   return html`<div
@@ -166,10 +172,7 @@ export function formatDefaultLogMessageTemplate(
   logMessage: LogMessageData,
 ): FormatResult {
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
-  const levelIcon = waIcon(ICON_BY_LEVEL[level], {
-    className: `log-level-icon log-level-icon--${level}`,
-    label: level === 'error' || level === 'warn' ? level : undefined,
-  });
+  const levelIcon = buildLevelIcon(level);
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));
 

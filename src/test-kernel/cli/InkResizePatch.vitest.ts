@@ -35,6 +35,22 @@ function patchedInkSource(): string {
   return readFileSync(path.join(inkBuildDir(), 'ink.js'), 'utf8');
 }
 
+/**
+ * Asserts each token occurs in `source` strictly after the previous one, so a
+ * patch hunks reordering fails loudly instead of passing on stale anchors.
+ */
+function expectInOrder(source: string, tokens: readonly string[]): void {
+  let cursor = 0;
+  for (const token of tokens) {
+    const index = source.indexOf(token, cursor);
+    expect(
+      index,
+      `missing or out-of-order token: ${token}`,
+    ).toBeGreaterThanOrEqual(0);
+    cursor = index;
+  }
+}
+
 async function createLogUpdateRenderer(
   incremental: boolean,
 ): Promise<LogUpdateRenderer> {
@@ -66,33 +82,15 @@ describe('CLI Ink resize patch', () => {
   });
 
   it('wraps full repaint writes in synchronized output when supported', () => {
-    const repaint = source.indexOf('repaint(options = {})');
-    const logReset = source.indexOf('this.log.reset()', repaint);
-    const shouldSync = source.indexOf(
+    expectInOrder(source, [
+      'repaint(options = {})',
+      'this.log.reset()',
       'const sync = this.shouldSync();',
-      logReset,
-    );
-    const beginSync = source.indexOf(
       'this.options.stdout.write(bsu);',
-      shouldSync,
-    );
-    const writeFrame = source.indexOf(
       'this.options.stdout.write(clearSequence + previousStaticOutput + nextStaticOutput + outputToRender);',
-      beginSync,
-    );
-    const endSync = source.indexOf(
       'this.options.stdout.write(esu);',
-      writeFrame,
-    );
-    const logSync = source.indexOf('this.log.sync(outputToRender);', endSync);
-
-    expect(repaint).toBeGreaterThanOrEqual(0);
-    expect(logReset).toBeGreaterThanOrEqual(0);
-    expect(shouldSync).toBeGreaterThan(logReset);
-    expect(beginSync).toBeGreaterThan(shouldSync);
-    expect(writeFrame).toBeGreaterThan(beginSync);
-    expect(endSync).toBeGreaterThan(writeFrame);
-    expect(logSync).toBeGreaterThan(endSync);
+      'this.log.sync(outputToRender);',
+    ]);
   });
 
   it('calls a real log-update reset method for both renderer variants', async () => {
@@ -120,24 +118,12 @@ describe('CLI Ink resize patch', () => {
   });
 
   it('updates layout synchronously before scheduling the repaint', () => {
-    const resizeStart = source.indexOf('resized = () => {');
-    const scheduleRepaint = source.indexOf(
-      'setTimeout(this.repaintAfterResize',
-      resizeStart,
-    );
-    const calculateLayout = source.indexOf(
+    expectInOrder(source, [
+      'resized = () => {',
       'this.calculateLayout();',
-      resizeStart,
-    );
-    const emitLayout = source.indexOf(
       'dom.emitLayoutListeners(this.rootNode);',
-      resizeStart,
-    );
-
-    expect(resizeStart).toBeGreaterThanOrEqual(0);
-    expect(calculateLayout).toBeGreaterThan(resizeStart);
-    expect(emitLayout).toBeGreaterThan(calculateLayout);
-    expect(scheduleRepaint).toBeGreaterThan(emitLayout);
+      'setTimeout(this.repaintAfterResize',
+    ]);
   });
 
   it('no longer references the removed clearWidthAware helper', () => {

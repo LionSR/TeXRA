@@ -46,6 +46,10 @@ const DELEGATE_AGENT_DESCRIPTION = [
   WORKTREE_PLACEHOLDER,
 ].join('\n');
 
+function delegateTool(): ToolDefinition {
+  return { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION };
+}
+
 describe('delegation worktree availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -53,12 +57,8 @@ describe('delegation worktree availability', () => {
 
   it('substitutes the ENABLED guidance when worktrees are on', () => {
     mocks.isWorktreeSupportEnabled.mockReturnValue(true);
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description: DELEGATE_AGENT_DESCRIPTION,
-    };
 
-    const rewritten = withDelegationWorktreeAvailability(tool);
+    const rewritten = withDelegationWorktreeAvailability(delegateTool());
 
     expect(rewritten.description).toContain('Git worktree support: ENABLED.');
     expect(rewritten.description).toContain('Pass `working_directory`');
@@ -73,12 +73,8 @@ describe('delegation worktree availability', () => {
 
   it('substitutes the DISABLED guidance when worktrees are off', () => {
     mocks.isWorktreeSupportEnabled.mockReturnValue(false);
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description: DELEGATE_AGENT_DESCRIPTION,
-    };
 
-    const rewritten = withDelegationWorktreeAvailability(tool);
+    const rewritten = withDelegationWorktreeAvailability(delegateTool());
 
     expect(rewritten.description).toContain(
       'Git worktree support: DISABLED in this workspace.',
@@ -148,25 +144,25 @@ describe('resolveAgentTools worktree annotation', () => {
     return tools.find((t) => t.name === 'delegate_agent')?.description;
   }
 
-  it('resolves the worktree line at the resolveAgentTools boundary', async () => {
-    mocks.isWorktreeSupportEnabled.mockReturnValue(true);
+  it.each([
+    {
+      enabled: true,
+      expected: 'Git worktree support: ENABLED.',
+    },
+    {
+      enabled: false,
+      expected: 'Git worktree support: DISABLED in this workspace.',
+    },
+  ])(
+    'resolves the worktree line at the resolveAgentTools boundary ($expected)',
+    async ({ enabled, expected }) => {
+      mocks.isWorktreeSupportEnabled.mockReturnValue(enabled);
 
-    const description = await resolveDelegateAgentDescription();
-    expect(description).toContain('Git worktree support: ENABLED.');
-    expect(description).not.toContain(
-      'resolved from the active workspace at runtime',
-    );
-  });
-
-  it('resolves the DISABLED worktree line at the resolveAgentTools boundary', async () => {
-    mocks.isWorktreeSupportEnabled.mockReturnValue(false);
-
-    const description = await resolveDelegateAgentDescription();
-    expect(description).toContain(
-      'Git worktree support: DISABLED in this workspace.',
-    );
-    expect(description).not.toContain(
-      'resolved from the active workspace at runtime',
-    );
-  });
+      const description = await resolveDelegateAgentDescription();
+      expect(description).toContain(expected);
+      expect(description).not.toContain(
+        'resolved from the active workspace at runtime',
+      );
+    },
+  );
 });

@@ -112,6 +112,16 @@ async function settleDelivery(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+async function deliverSubscriptionFollowUp(
+  binder: ExecutionSubscriptionBinder,
+  registry: ExecutionRegistry,
+  executionId: string,
+): Promise<void> {
+  binder.bind(streamId, executionId);
+  registry.untrack(executionId);
+  await settleDelivery();
+}
+
 describe('ExecutionSubscriptionBinder lifecycle', () => {
   it('owns bind and unbind state per stream/execution pair', () => {
     const { logger, binder, executionId, dispose } = setupBinder(
@@ -176,10 +186,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       setupSessionBinder('exec-subscription-session-test');
 
     try {
-      binder.bind(streamId, executionId);
-
-      registry.untrack(executionId);
-      await settleDelivery();
+      await deliverSubscriptionFollowUp(binder, registry, executionId);
 
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
@@ -204,10 +211,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       submitFollowUpMock.mockResolvedValueOnce(sendResult);
 
       try {
-        binder.bind(streamId, executionId);
-
-        registry.untrack(executionId);
-        await settleDelivery();
+        await deliverSubscriptionFollowUp(binder, registry, executionId);
 
         expect(recorded.events).toEqual(
           shouldEmit ? [QUEUED_FOLLOW_UPS_EVENT] : [],
@@ -243,10 +247,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      binder.bind(streamId, executionId);
-
-      registry.untrack(executionId);
-      await settleDelivery();
+      await deliverSubscriptionFollowUp(binder, registry, executionId);
 
       expect(unhandledRejection).not.toHaveBeenCalled();
       expect(recorded.events).toEqual([]);

@@ -49,13 +49,11 @@ export async function buildProfileMessage(
   const authenticated =
     storedSessionState === 'authenticated' ||
     SupabaseClient.hasUsableRelayToken();
-  const globalStreamingDefault = getGlobalStreaming();
-  const tierConstants = { ultra: ULTRA_TIER, max: MAX_TIER };
   const base = {
     command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
-    tierConstants,
+    tierConstants: { ultra: ULTRA_TIER, max: MAX_TIER },
     providerKeyStatuses,
-    globalStreamingDefault,
+    globalStreamingDefault: getGlobalStreaming(),
   };
 
   // Preserve the distinction between an authoritatively rejected refresh

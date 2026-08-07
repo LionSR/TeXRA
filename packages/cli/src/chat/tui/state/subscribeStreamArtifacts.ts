@@ -109,7 +109,7 @@ export function subscribeStreamArtifacts(
     previous = next;
     if (!changed) return;
     if (!next) {
-      focusRevision += 1;
+      ++focusRevision;
       return;
     }
     hydrate(next);

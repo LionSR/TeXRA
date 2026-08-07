@@ -166,7 +166,7 @@ export class TierService {
     schema: z.ZodType<T>,
     label: string,
   ): T | null {
-    if (raw === undefined || raw === null) return null;
+    if (raw == null) return null;
     const parsed = schema.safeParse(raw);
     if (parsed.success) return parsed.data;
     this.logger.error?.(

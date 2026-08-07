@@ -73,6 +73,19 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.Workflow,
 });
 
+const STAMPED_META = {
+  timestamp: '2026-07-31T00:00:00.000Z',
+  streamId: STREAM_ID,
+  identity: { kind: 'agent', agent: 'planner' },
+};
+
+// FK-first: a row without a registration-stamped stream id has no persisted
+// stream to continue.
+const META_WITHOUT_STREAM_ID = {
+  timestamp: '2026-07-31T00:00:00.000Z',
+  identity: { kind: 'agent', agent: 'planner' },
+};
+
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
     mode: 'interactive',
@@ -101,11 +114,7 @@ describe('runResumeExecution', () => {
       },
     });
     mocks.readConfig.mockResolvedValue(TOOL_USE_CONFIG);
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      streamId: STREAM_ID,
-      identity: { kind: 'agent', agent: 'planner' },
-    });
+    mocks.readMeta.mockResolvedValue(STAMPED_META);
     mocks.retrieveSessionResumeData.mockResolvedValue(
       createToolUseResumeData({
         executionId: EXECUTION_ID,
@@ -217,12 +226,7 @@ describe('runResumeExecution', () => {
   });
 
   it('reports a row without a stamped stream id as not resumable', async () => {
-    // FK-first: a row without a registration-stamped stream id has no
-    // persisted stream to continue.
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      identity: { kind: 'agent', agent: 'planner' },
-    });
+    mocks.readMeta.mockResolvedValue(META_WITHOUT_STREAM_ID);
 
     await expect(run(cliContext())).resolves.toBe(2);
 
@@ -262,11 +266,7 @@ describe('runResumeExecution', () => {
 describe('readCliToolUseResumeData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      streamId: STREAM_ID,
-      identity: { kind: 'agent', agent: 'planner' },
-    });
+    mocks.readMeta.mockResolvedValue(STAMPED_META);
   });
 
   async function read(config: AgentConfig, id: ExecutionId = EXECUTION_ID) {
@@ -300,11 +300,7 @@ describe('readCliToolUseResumeData', () => {
   });
 
   it('returns null when metadata carries no stamped stream id', async () => {
-    // A row without a stamped streamId has no persisted stream: not resumable.
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      identity: { kind: 'agent', agent: 'planner' },
-    });
+    mocks.readMeta.mockResolvedValue(META_WITHOUT_STREAM_ID);
 
     expect(await read(TOOL_USE_CONFIG)).toBeNull();
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();

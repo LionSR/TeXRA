@@ -38,6 +38,7 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   TOOL_USE_STATUS,
+  type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
@@ -60,6 +61,13 @@ const SESSION_META = {
   canDelegate: true,
   transcriptMode: 'persistent',
   version: '0.39.6',
+} as const;
+
+// Full-log rendering keys on the parsed identity, not the stream-id prefix:
+// this stream is a workflow-script child run.
+const WORKFLOW_IDENTITY = {
+  kind: 'multiAgentWorkflow',
+  workflowName: 'draft-sections',
 } as const;
 
 function openRunTrace(
@@ -111,18 +119,29 @@ function entryTexts(items: StaticItems): string[] {
   return staticEntries(items).map((entry) => entry.text);
 }
 
+function transcriptEntry(id: string): StreamLogEntry | undefined {
+  return defaultSession()
+    .transcripts.get(STREAM_ID)
+    ?.getRange(0)
+    .find((entry) => entry.id === id);
+}
+
+function expectOutputOrder(output: string, markers: readonly string[]): void {
+  for (const [index, marker] of markers.entries()) {
+    if (index === 0) continue;
+    expect(output.indexOf(markers[index - 1])).toBeLessThan(
+      output.indexOf(marker),
+    );
+  }
+}
+
 beforeEach(async () => {
   resetCliState();
   clearAllStreamStatusesForTest(defaultSession().status);
   await defaultSession().transcripts.clear();
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    // Full-log rendering keys on the parsed identity, not the stream-id
-    // prefix: this stream is a workflow-script child run.
-    identity: {
-      kind: 'multiAgentWorkflow' as const,
-      workflowName: 'draft-sections',
-    },
+    identity: WORKFLOW_IDENTITY,
     category: AgentCategory.Workflow,
     model: 'deepseekT',
   }));
@@ -312,10 +331,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'draft-sections',
-      },
+      identity: WORKFLOW_IDENTITY,
       model: 'deepseekT',
     }));
     setStreamStatusInCliState({
@@ -443,33 +459,20 @@ describe('CLI workflow-script child-stream transcript', () => {
       .get(STREAM_ID)
       ?.entries.find((entry) => entry.synthetic);
     expect(syntheticEntry).toBeDefined();
-    expect(
-      defaultSession()
-        .transcripts.get(STREAM_ID)
-        ?.getRange(0)
-        .find((entry) => entry.id === response.id),
-    ).toMatchObject({
+    expect(transcriptEntry(response.id)).toMatchObject({
       settlementSeqNo: 2,
       text: 'Partial cancellation answer',
     });
-    expect(
-      defaultSession()
-        .transcripts.get(STREAM_ID)
-        ?.getRange(0)
-        .find((entry) => entry.id === 'cancel-tool'),
-    ).toMatchObject({
+    expect(transcriptEntry('cancel-tool')).toMatchObject({
       settlementSeqNo: 3,
       data: {
         status: 'failed',
         error: 'The stream ended before this tool completed.',
       },
     });
-    expect(
-      defaultSession()
-        .transcripts.get(STREAM_ID)
-        ?.getRange(0)
-        .find((entry) => entry.id === 'cancel-plan'),
-    ).not.toHaveProperty('settlementSeqNo');
+    expect(transcriptEntry('cancel-plan')).not.toHaveProperty(
+      'settlementSeqNo',
+    );
 
     runTrace.trace.emit({
       type: 'workflow.call',
@@ -500,10 +503,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'draft-sections',
-      },
+      identity: WORKFLOW_IDENTITY,
       model: 'deepseekT',
       entries: syntheticEntry ? [syntheticEntry] : [],
     }));
@@ -517,18 +517,13 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(entryIds(coldItems)).toEqual(entryIds(liveItems));
     const coldOutput = await renderStaticTranscript();
     expect(coldOutput).toBe(liveOutput);
-    expect(coldOutput.indexOf('◆ Cancellation audit')).toBeLessThan(
-      coldOutput.indexOf('Local cancellation checkpoint'),
-    );
-    expect(coldOutput.indexOf('Local cancellation checkpoint')).toBeLessThan(
-      coldOutput.indexOf('Partial cancellation answer'),
-    );
-    expect(coldOutput.indexOf('Partial cancellation answer')).toBeLessThan(
-      coldOutput.indexOf('The stream ended before this tool completed.'),
-    );
-    expect(
-      coldOutput.indexOf('The stream ended before this tool completed.'),
-    ).toBeLessThan(coldOutput.indexOf('Skipped: Audit after cancellation'));
+    expectOutputOrder(coldOutput, [
+      '◆ Cancellation audit',
+      'Local cancellation checkpoint',
+      'Partial cancellation answer',
+      'The stream ended before this tool completed.',
+      'Skipped: Audit after cancellation',
+    ]);
   });
 
   it('keeps declared-plan phase-task and print chronology identical live and cold', async () => {
@@ -570,12 +565,11 @@ describe('CLI workflow-script child-stream transcript', () => {
       'audit-phase',
     ]);
     const initialOutput = await renderStaticTranscript();
-    expect(initialOutput.indexOf('Preparing repository audit')).toBeLessThan(
-      initialOutput.indexOf('Local audit checkpoint'),
-    );
-    expect(initialOutput.indexOf('Local audit checkpoint')).toBeLessThan(
-      initialOutput.indexOf('◆ Repository audit'),
-    );
+    expectOutputOrder(initialOutput, [
+      'Preparing repository audit',
+      'Local audit checkpoint',
+      '◆ Repository audit',
+    ]);
 
     runTrace.trace.emit({
       type: 'workflow.call',
@@ -597,15 +591,12 @@ describe('CLI workflow-script child-stream transcript', () => {
       'core-task',
     ]);
     const liveOutput = await renderStaticTranscript();
-    expect(liveOutput.indexOf('Preparing repository audit')).toBeLessThan(
-      liveOutput.indexOf('Local audit checkpoint'),
-    );
-    expect(liveOutput.indexOf('Local audit checkpoint')).toBeLessThan(
-      liveOutput.indexOf('◆ Repository audit'),
-    );
-    expect(liveOutput.indexOf('◆ Repository audit')).toBeLessThan(
-      liveOutput.indexOf('Finished: Audit core'),
-    );
+    expectOutputOrder(liveOutput, [
+      'Preparing repository audit',
+      'Local audit checkpoint',
+      '◆ Repository audit',
+      'Finished: Audit core',
+    ]);
 
     phase.end('completed');
     syncStreamLog(STREAM_ID);
@@ -648,15 +639,12 @@ describe('CLI workflow-script child-stream transcript', () => {
       incrementalItems.map((item) => item.id),
     );
     const coldOutput = await renderStaticTranscript();
-    expect(coldOutput.indexOf('Preparing repository audit')).toBeLessThan(
-      coldOutput.indexOf('Local audit checkpoint'),
-    );
-    expect(coldOutput.indexOf('Local audit checkpoint')).toBeLessThan(
-      coldOutput.indexOf('◆ Repository audit'),
-    );
-    expect(coldOutput.indexOf('◆ Repository audit')).toBeLessThan(
-      coldOutput.indexOf('Finished: Audit core'),
-    );
+    expectOutputOrder(coldOutput, [
+      'Preparing repository audit',
+      'Local audit checkpoint',
+      '◆ Repository audit',
+      'Finished: Audit core',
+    ]);
   });
 
   it('keeps a dynamic phase header above tasks introduced inside it', async () => {
@@ -764,13 +752,12 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
     expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
     const output = await renderStaticTranscript();
-    expect(output.indexOf('Before legacy load')).toBeLessThan(
-      output.indexOf('Legacy A'),
-    );
-    expect(output.indexOf('Legacy A')).toBeLessThan(output.indexOf('Legacy B'));
-    expect(output.indexOf('Legacy B')).toBeLessThan(
-      output.indexOf('After legacy load'),
-    );
+    expectOutputOrder(output, [
+      'Before legacy load',
+      'Legacy A',
+      'Legacy B',
+      'After legacy load',
+    ]);
   });
 
   it('settles a repeated tool lifecycle at its terminal update', async () => {
@@ -989,10 +976,7 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'draft-sections',
-      },
+      identity: WORKFLOW_IDENTITY,
     }));
     const staticItems = appendItems([], {
       childStreamEntries: new Map([
@@ -1008,10 +992,7 @@ describe('CLI workflow-script child-stream transcript', () => {
             summary: {
               agentName: 'draft-sections',
               executionId: 'exec-1',
-              identity: {
-                kind: 'multiAgentWorkflow' as const,
-                workflowName: 'draft-sections',
-              },
+              identity: WORKFLOW_IDENTITY,
             },
           },
         ],

@@ -964,7 +964,6 @@ export class StreamLogStore {
             data: recoveredCall,
           });
           if (updated) updatedAny = true;
-          continue;
         }
       }
 

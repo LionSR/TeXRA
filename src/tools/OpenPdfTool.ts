@@ -63,7 +63,8 @@ export class OpenPdfTool extends defineTool({
       preserveFocus: input.preserve_focus ?? false,
     });
 
-    return executed(`Opened PDF: ${displayPath}`, `Opened PDF: ${displayPath}`);
+    const message = `Opened PDF: ${displayPath}`;
+    return executed(message, message);
   }
 }
 
@@ -81,8 +82,7 @@ function resolvePdfLocation(rawPath: string): FileLocation {
     return runStorageLocation;
   }
 
-  const root = currentToolRoot();
-  const resolved = resolveWorkspaceRelativePath(trimmed, root);
+  const resolved = resolveWorkspaceRelativePath(trimmed, currentToolRoot());
   return pathToLocation(resolved.absolute);
 }
 

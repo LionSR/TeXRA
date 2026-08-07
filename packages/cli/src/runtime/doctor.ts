@@ -479,9 +479,9 @@ export function writeDoctorReport(
   // report goes to stdout, a failing one to stderr (clig.dev). Using a single
   // stderr-keyed gate leaked ANSI into `doctor | cat` and stripped color from
   // `doctor 2>/dev/null` on a TTY.
-  const stdoutColorEnabled = context.stdoutColorEnabled;
-  const stderrColorEnabled = context.stderrColorEnabled;
-  const colorEnabled = report.ok ? stdoutColorEnabled : stderrColorEnabled;
+  const colorEnabled = report.ok
+    ? context.stdoutColorEnabled
+    : context.stderrColorEnabled;
   const text = formatDoctorText(report, createCliStyle(colorEnabled));
   if (report.ok) {
     writeTextStdout(text);

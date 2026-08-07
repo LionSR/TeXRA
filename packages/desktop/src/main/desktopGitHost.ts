@@ -179,8 +179,8 @@ export function createDesktopGitHost(
 
       return {
         isGitRepository: true,
-        ...(branch ? { branch } : {}),
-        ...(upstream ? { upstream } : {}),
+        ...(branch && { branch }),
+        ...(upstream && { upstream }),
         changedFiles,
         additions,
         deletions,

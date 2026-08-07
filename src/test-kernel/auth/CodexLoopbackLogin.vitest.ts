@@ -25,14 +25,20 @@ function loopbackRequest(port: number): CodexAuthorizeRequest {
   };
 }
 
+function coordinatorStub(
+  overrides: Record<string, unknown> = {},
+): CodexSessionCoordinator {
+  return {
+    buildAuthorizeRequest: loopbackRequest,
+    ...overrides,
+  } as unknown as CodexSessionCoordinator;
+}
+
 describe('Codex loopback login', () => {
   it('closes the callback wait when its host cancels', async () => {
     const controller = new AbortController();
-    const coordinator = {
-      buildAuthorizeRequest: loopbackRequest,
-    } as unknown as CodexSessionCoordinator;
     const completion = loginWithLoopback({
-      coordinator,
+      coordinator: coordinatorStub(),
       openBrowser: () => controller.abort(),
       signal: controller.signal,
     });
@@ -43,11 +49,8 @@ describe('Codex loopback login', () => {
   it('settles cancellation while the browser launcher remains pending', async () => {
     const controller = new AbortController();
     let finishBrowserLaunch!: () => void;
-    const coordinator = {
-      buildAuthorizeRequest: loopbackRequest,
-    } as unknown as CodexSessionCoordinator;
     const completion = loginWithLoopback({
-      coordinator,
+      coordinator: coordinatorStub(),
       openBrowser: () =>
         new Promise<void>((resolve) => {
           finishBrowserLaunch = resolve;
@@ -68,15 +71,14 @@ describe('Codex loopback login', () => {
     const controller = new AbortController();
     let request!: CodexAuthorizeRequest;
     const completeLoginWithCode = vi.fn();
-    const coordinator = {
-      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
-        request = loopbackRequest(port);
-        return request;
-      },
-      completeLoginWithCode,
-    } as unknown as CodexSessionCoordinator;
     const completion = loginWithLoopback({
-      coordinator,
+      coordinator: coordinatorStub({
+        buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
+          request = loopbackRequest(port);
+          return request;
+        },
+        completeLoginWithCode,
+      }),
       openBrowser: async () => {
         const callback = new URL(request.redirectUri);
         callback.searchParams.set('state', request.state);
@@ -97,7 +99,7 @@ describe('Codex loopback login', () => {
     const expectedSession = testSession();
     let request!: CodexAuthorizeRequest;
     const completeLoginWithCode = vi.fn(async () => expectedSession);
-    const coordinator = {
+    const coordinator = coordinatorStub({
       buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
         const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
         const url = new URL('https://auth.example.test/oauth/authorize');
@@ -112,7 +114,7 @@ describe('Codex loopback login', () => {
         return request;
       },
       completeLoginWithCode,
-    } as unknown as CodexSessionCoordinator;
+    });
 
     const session = await loginWithLoopback({
       coordinator,

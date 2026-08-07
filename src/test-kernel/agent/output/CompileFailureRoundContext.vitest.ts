@@ -7,23 +7,20 @@ import {
 } from '@agent/output/compileFailureRoundContext';
 import type { CompileFailure, CompileResult } from '@shared/schemas';
 
-const outputLocation = {
-  kind: 'workspace',
-  absolutePath: '/workspace/main.tex',
-  relativePath: 'main.tex',
-} as const;
-const logLocation = {
-  kind: 'runStorage',
-  absolutePath: '/run/compile/r0_main.tex.log',
-  relativePath: 'compile/r0_main.tex.log',
-  executionId: '00000000-0000-4000-8000-000000000001',
-} as const;
-
 const failure: CompileFailure = {
   round: 0,
   displayName: 'main.tex',
-  output: outputLocation,
-  log: logLocation,
+  output: {
+    kind: 'workspace',
+    absolutePath: '/workspace/main.tex',
+    relativePath: 'main.tex',
+  },
+  log: {
+    kind: 'runStorage',
+    absolutePath: '/run/compile/r0_main.tex.log',
+    relativePath: 'compile/r0_main.tex.log',
+    executionId: '00000000-0000-4000-8000-000000000001',
+  },
   logRelativePath: 'compile/r0_main.tex.log',
 };
 

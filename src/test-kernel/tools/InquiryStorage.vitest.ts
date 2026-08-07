@@ -57,6 +57,27 @@ async function readTextFile(target: string): Promise<string> {
   return Buffer.from(await platform().fs.readFile(target)).toString('utf8');
 }
 
+/**
+ * Seed a manifest that must read as missing, then assert the read is null and
+ * loud. Returns the manifest path so tests can also assert the on-disk file
+ * is preserved byte-for-byte.
+ */
+async function expectUnreadableManifest(
+  threadId: string,
+  body: string,
+  expectedLog: string,
+): Promise<string> {
+  const threadDir = threadDirFor(threadId);
+  const manifestPath = `${threadDir}/manifest.json`;
+  await platform().fs.createDirectory(threadDir);
+  await writeTextFile(manifestPath, body);
+  const logLines = captureLogLines();
+
+  await expect(readExternalInquiryThread(threadId)).resolves.toBeNull();
+  expect(logLines.join('\n')).toContain(expectedLog);
+  return manifestPath;
+}
+
 describe('InquiryStorage', () => {
   // Each test seeds threads against a fresh platform: state must not leak
   // between tests in this file, so this installs (and resets) per test
@@ -117,33 +138,29 @@ describe('InquiryStorage', () => {
     expect(stillOpen).toHaveLength(0);
   });
 
-  it('rejects re-dispatch on an open thread', async () => {
+  it.each([
+    {
+      name: 'rejects re-dispatch on an open thread',
+      retire: async (_threadId: ExternalInquiryThreadId) => {},
+    },
+    {
+      name: 'rejects ask on a dropped thread',
+      retire: async (threadId: ExternalInquiryThreadId) => {
+        await markDropped({ threadId });
+      },
+    },
+  ])('$name', async ({ retire }) => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
       question: 'Q1',
     });
+    await retire(opened.threadId);
 
     await expect(
       recordOpenQuestion({
         threadId: opened.threadId,
         parentStreamId: STREAM_A,
         question: 'Q2',
-      }),
-    ).rejects.toBeInstanceOf(ToolError);
-  });
-
-  it('rejects ask on a dropped thread', async () => {
-    const opened = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      question: 'Q1',
-    });
-    await markDropped({ threadId: opened.threadId });
-
-    await expect(
-      recordOpenQuestion({
-        threadId: opened.threadId,
-        parentStreamId: STREAM_A,
-        question: 'Follow-up',
       }),
     ).rejects.toBeInstanceOf(ToolError);
   });
@@ -306,16 +323,9 @@ describe('InquiryStorage', () => {
   });
 
   it('treats a corrupt manifest as missing (loud read) without clobbering it', async () => {
-    const threadDir = threadDirFor('ei_aabbccdd0033');
-    const manifestPath = `${threadDir}/manifest.json`;
-    await platform().fs.createDirectory(threadDir);
-    await writeTextFile(manifestPath, '{ not valid json');
-    const logLines = captureLogLines();
-
-    await expect(
-      readExternalInquiryThread('ei_aabbccdd0033'),
-    ).resolves.toBeNull();
-    expect(logLines.join('\n')).toContain(
+    const manifestPath = await expectUnreadableManifest(
+      'ei_aabbccdd0033',
+      '{ not valid json',
       'Unreadable external-inquiry manifest for ei_aabbccdd0033',
     );
 
@@ -332,25 +342,14 @@ describe('InquiryStorage', () => {
   });
 
   it('treats a schema-invalid manifest as missing (loud read)', async () => {
-    const threadDir = threadDirFor('ei_aabbccdd0044');
-    await platform().fs.createDirectory(threadDir);
-    await writeTextFile(
-      `${threadDir}/manifest.json`,
+    await expectUnreadableManifest(
+      'ei_aabbccdd0044',
       JSON.stringify({ threadId: 42, turns: 'nope' }),
-    );
-    const logLines = captureLogLines();
-
-    await expect(
-      readExternalInquiryThread('ei_aabbccdd0044'),
-    ).resolves.toBeNull();
-    expect(logLines.join('\n')).toContain(
       'Failed to parse external-inquiry manifest for ei_aabbccdd0044',
     );
   });
 
   it('treats an unknown schemaVersion as unreadable, never as legacy data', async () => {
-    const threadDir = threadDirFor('ei_aabbccdd0055');
-    const manifestPath = `${threadDir}/manifest.json`;
     // Legacy-shaped body stamped with a future version: without the version
     // gate this would fail the canonical arm and silently parse as a legacy
     // thread (status rewritten to 'answered', parentStreamId to null).
@@ -369,14 +368,10 @@ describe('InquiryStorage', () => {
         },
       ],
     });
-    await platform().fs.createDirectory(threadDir);
-    await writeTextFile(manifestPath, futureManifest);
-    const logLines = captureLogLines();
 
-    await expect(
-      readExternalInquiryThread('ei_aabbccdd0055'),
-    ).resolves.toBeNull();
-    expect(logLines.join('\n')).toContain(
+    const manifestPath = await expectUnreadableManifest(
+      'ei_aabbccdd0055',
+      futureManifest,
       'Unsupported external-inquiry manifest schemaVersion 2 for ei_aabbccdd0055',
     );
 
@@ -385,8 +380,6 @@ describe('InquiryStorage', () => {
   });
 
   it('rejects an unversioned manifest without rewriting it', async () => {
-    const threadDir = threadDirFor('ei_aabbccdd0066');
-    const manifestPath = `${threadDir}/manifest.json`;
     const unversionedManifest = JSON.stringify({
       threadId: 'ei_aabbccdd0066',
       parentStreamId: STREAM_A,
@@ -395,26 +388,20 @@ describe('InquiryStorage', () => {
       updatedAt: '2025-01-02T00:00:00.000Z',
       turns: [],
     });
-    await platform().fs.createDirectory(threadDir);
-    await writeTextFile(manifestPath, unversionedManifest);
-    const logLines = captureLogLines();
 
-    await expect(
-      readExternalInquiryThread('ei_aabbccdd0066'),
-    ).resolves.toBeNull();
-    expect(logLines.join('\n')).toContain(
+    const manifestPath = await expectUnreadableManifest(
+      'ei_aabbccdd0066',
+      unversionedManifest,
       'Failed to parse external-inquiry manifest for ei_aabbccdd0066',
     );
     expect(await readTextFile(manifestPath)).toBe(unversionedManifest);
   });
 
   it('rejects a version-stamped manifest whose canonical shape is invalid', async () => {
-    const threadDir = threadDirFor('ei_aabbccdd0077');
     // schemaVersion present (current) but `status`/`parentStreamId` missing:
     // the canonical schema rejects it.
-    await platform().fs.createDirectory(threadDir);
-    await writeTextFile(
-      `${threadDir}/manifest.json`,
+    await expectUnreadableManifest(
+      'ei_aabbccdd0077',
       JSON.stringify({
         schemaVersion: 1,
         threadId: 'ei_aabbccdd0077',
@@ -422,13 +409,6 @@ describe('InquiryStorage', () => {
         updatedAt: '2025-01-02T00:00:00.000Z',
         turns: [],
       }),
-    );
-    const logLines = captureLogLines();
-
-    await expect(
-      readExternalInquiryThread('ei_aabbccdd0077'),
-    ).resolves.toBeNull();
-    expect(logLines.join('\n')).toContain(
       'Failed to parse external-inquiry manifest for ei_aabbccdd0077',
     );
   });

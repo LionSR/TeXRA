@@ -37,6 +37,12 @@ describe('BaseFS stat predicates', () => {
     vi.restoreAllMocks();
   });
 
+  const statPredicates = [
+    ['exists', (path: string) => AbsoluteFS.exists(path)],
+    ['isFile', (path: string) => AbsoluteFS.isFile(path)],
+    ['isSymbolicLink', (path: string) => AbsoluteFS.isSymbolicLink(path)],
+  ] as const;
+
   it('returns ordinary predicate results for present and missing paths', async () => {
     await AbsoluteFS.write('/present.txt', 'content');
 
@@ -52,31 +58,29 @@ describe('BaseFS stat predicates', () => {
     );
   });
 
-  it.each([
-    ['exists', () => AbsoluteFS.exists('/file/child')],
-    ['isFile', () => AbsoluteFS.isFile('/file/child')],
-    ['isSymbolicLink', () => AbsoluteFS.isSymbolicLink('/file/child')],
-  ])('returns false for ENOTDIR from %s', async (_name, run) => {
-    const error = Object.assign(new Error('parent path is not a directory'), {
-      code: 'ENOTDIR',
-    });
-    vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+  it.each(statPredicates)(
+    'returns false for ENOTDIR from %s',
+    async (_name, run) => {
+      const error = Object.assign(new Error('parent path is not a directory'), {
+        code: 'ENOTDIR',
+      });
+      vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
-    await expect(run()).resolves.toBe(false);
-  });
+      await expect(run('/file/child')).resolves.toBe(false);
+    },
+  );
 
-  it.each([
-    ['exists', () => AbsoluteFS.exists('/unreadable')],
-    ['isFile', () => AbsoluteFS.isFile('/unreadable')],
-    ['isSymbolicLink', () => AbsoluteFS.isSymbolicLink('/unreadable')],
-  ])('propagates operational stat failures from %s', async (_name, run) => {
-    const error = Object.assign(new Error('path is unreadable'), {
-      code: 'EACCES',
-    });
-    vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+  it.each(statPredicates)(
+    'propagates operational stat failures from %s',
+    async (_name, run) => {
+      const error = Object.assign(new Error('path is unreadable'), {
+        code: 'EACCES',
+      });
+      vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
-    await expect(run()).rejects.toBe(error);
-  });
+      await expect(run('/unreadable')).rejects.toBe(error);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -289,17 +293,15 @@ describe('pastedImageFileName', () => {
     );
   });
 
-  it('rejects paths and non-pasted names from webview input', () => {
-    for (const name of [
-      '../pasted_1234_abcd.png',
-      '/tmp/pasted_1234_abcd.png',
-      'C:\\tmp\\pasted_1234_abcd.png',
-      'avatar.png',
-      '',
-    ]) {
-      expect(() => pastedImageFileName(name)).toThrow(
-        'Invalid pasted image filename.',
-      );
-    }
+  it.each([
+    '../pasted_1234_abcd.png',
+    '/tmp/pasted_1234_abcd.png',
+    'C:\\tmp\\pasted_1234_abcd.png',
+    'avatar.png',
+    '',
+  ])('rejects paths and non-pasted names from webview input: %s', (name) => {
+    expect(() => pastedImageFileName(name)).toThrow(
+      'Invalid pasted image filename.',
+    );
   });
 });

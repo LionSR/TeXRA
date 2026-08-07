@@ -84,74 +84,93 @@ describe('CLI login arguments (texra login)', () => {
     });
   });
 
-  it('parses in-chat login slash command options through the same runtime owner', () => {
-    expect(parseChatLoginSlashArgs('')).toEqual({
-      target: 'texra',
-      provider: 'github',
-      noBrowser: false,
-      device: false,
-      selectAccount: false,
-      loginHint: undefined,
-    });
-    expect(
-      parseChatLoginSlashArgs('google --no-browser --select-account'),
-    ).toEqual({
-      target: 'texra',
-      provider: 'google',
-      noBrowser: true,
-      device: false,
-      selectAccount: true,
-      loginHint: undefined,
-    });
-    expect(parseChatLoginSlashArgs('--login-hint user@example.edu')).toEqual({
-      target: 'texra',
-      provider: 'github',
-      noBrowser: false,
-      device: false,
-      selectAccount: false,
-      loginHint: 'user@example.edu',
-    });
-    expect(parseChatLoginSlashArgs('github --login-hint=octocat')).toEqual({
-      target: 'texra',
-      provider: 'github',
-      noBrowser: false,
-      device: false,
-      selectAccount: false,
-      loginHint: 'octocat',
-    });
-    expect(parseChatLoginSlashArgs('texra github --device')).toEqual({
-      target: 'texra',
-      provider: 'github',
-      noBrowser: false,
-      device: true,
-      selectAccount: false,
-      loginHint: undefined,
-    });
-    expect(parseChatLoginSlashArgs('chatgpt')).toEqual({
-      target: 'chatgpt',
-      noBrowser: false,
-      device: false,
-    });
-    expect(parseChatLoginSlashArgs('chatgpt --device')).toEqual({
-      target: 'chatgpt',
-      noBrowser: false,
-      device: true,
-    });
-    expect(parseChatLoginSlashArgs('codex --no-browser')).toEqual({
-      target: 'chatgpt',
-      noBrowser: true,
-      device: false,
-    });
-    expect(parseChatLoginSlashArgs('grok')).toEqual({
-      target: 'grok',
-      noBrowser: false,
-      device: false,
-    });
-    expect(parseChatLoginSlashArgs('xai --device')).toEqual({
-      target: 'grok',
-      noBrowser: false,
-      device: true,
-    });
+  it.each<{
+    input: string;
+    expected: NonNullable<ReturnType<typeof parseChatLoginSlashArgs>>;
+  }>([
+    {
+      input: '',
+      expected: {
+        target: 'texra',
+        provider: 'github',
+        noBrowser: false,
+        device: false,
+        selectAccount: false,
+        loginHint: undefined,
+      },
+    },
+    {
+      input: 'google --no-browser --select-account',
+      expected: {
+        target: 'texra',
+        provider: 'google',
+        noBrowser: true,
+        device: false,
+        selectAccount: true,
+        loginHint: undefined,
+      },
+    },
+    {
+      input: '--login-hint user@example.edu',
+      expected: {
+        target: 'texra',
+        provider: 'github',
+        noBrowser: false,
+        device: false,
+        selectAccount: false,
+        loginHint: 'user@example.edu',
+      },
+    },
+    {
+      input: 'github --login-hint=octocat',
+      expected: {
+        target: 'texra',
+        provider: 'github',
+        noBrowser: false,
+        device: false,
+        selectAccount: false,
+        loginHint: 'octocat',
+      },
+    },
+    {
+      input: 'texra github --device',
+      expected: {
+        target: 'texra',
+        provider: 'github',
+        noBrowser: false,
+        device: true,
+        selectAccount: false,
+        loginHint: undefined,
+      },
+    },
+    {
+      input: 'chatgpt',
+      expected: { target: 'chatgpt', noBrowser: false, device: false },
+    },
+    {
+      input: 'chatgpt --device',
+      expected: { target: 'chatgpt', noBrowser: false, device: true },
+    },
+    {
+      input: 'codex --no-browser',
+      expected: { target: 'chatgpt', noBrowser: true, device: false },
+    },
+    {
+      input: 'grok',
+      expected: { target: 'grok', noBrowser: false, device: false },
+    },
+    {
+      input: 'xai --device',
+      expected: { target: 'grok', noBrowser: false, device: true },
+    },
+  ])(
+    'parses in-chat login slash command options through the same runtime owner: "$input"',
+    ({ input, expected }) => {
+      expect(parseChatLoginSlashArgs(input)).toEqual(expected);
+    },
+  );
+
+  it('parses a bare --device as a texra device login', () => {
     expect(parseChatLoginSlashArgs('--device')).toMatchObject({
       target: 'texra',
       device: true,
@@ -159,20 +178,17 @@ describe('CLI login arguments (texra login)', () => {
     });
   });
 
-  it('treats --device and --no-browser as a transport conflict only when both are set', () => {
-    expect(hasLoginTransportConflict({ device: true, noBrowser: true })).toBe(
-      true,
-    );
-    expect(hasLoginTransportConflict({ device: true, noBrowser: false })).toBe(
-      false,
-    );
-    expect(hasLoginTransportConflict({ device: false, noBrowser: true })).toBe(
-      false,
-    );
-    expect(hasLoginTransportConflict({ device: false, noBrowser: false })).toBe(
-      false,
-    );
-  });
+  it.each([
+    { device: true, noBrowser: true, expected: true },
+    { device: true, noBrowser: false, expected: false },
+    { device: false, noBrowser: true, expected: false },
+    { device: false, noBrowser: false, expected: false },
+  ])(
+    'treats --device and --no-browser as a transport conflict only when both are set (device=$device, noBrowser=$noBrowser)',
+    ({ device, noBrowser, expected }) => {
+      expect(hasLoginTransportConflict({ device, noBrowser })).toBe(expected);
+    },
+  );
 
   it('rejects --device + --no-browser from the CLI login command', () => {
     expect(() =>
@@ -189,19 +205,17 @@ describe('CLI login arguments (texra login)', () => {
     ).not.toThrow();
   });
 
-  it('rejects invalid in-chat login slash command options', () => {
-    expect(parseChatLoginSlashArgs('slack')).toBeUndefined();
-    expect(parseChatLoginSlashArgs('github google')).toBeUndefined();
-    expect(parseChatLoginSlashArgs('chatgpt github')).toBeUndefined();
-    expect(parseChatLoginSlashArgs('chatgpt --select-account')).toBeUndefined();
-    expect(
-      parseChatLoginSlashArgs('chatgpt --login-hint user@example.edu'),
-    ).toBeUndefined();
-    expect(parseChatLoginSlashArgs('--login-hint')).toBeUndefined();
-    expect(
-      parseChatLoginSlashArgs('--login-hint --no-browser'),
-    ).toBeUndefined();
-    expect(parseChatLoginSlashArgs('--unexpected')).toBeUndefined();
+  it.each([
+    'slack',
+    'github google',
+    'chatgpt github',
+    'chatgpt --select-account',
+    'chatgpt --login-hint user@example.edu',
+    '--login-hint',
+    '--login-hint --no-browser',
+    '--unexpected',
+  ])('rejects invalid in-chat login slash command options: "%s"', (input) => {
+    expect(parseChatLoginSlashArgs(input)).toBeUndefined();
   });
 
   it('formats login provider policy messages from one runtime owner', () => {
@@ -224,56 +238,55 @@ describe('CLI login arguments (texra login)', () => {
     ).toBeUndefined();
   });
 
-  it('prompts for provider only for bare interactive text login', () => {
-    const interactiveText = {
-      mode: 'interactive' as const,
-      outputFormat: 'text' as const,
-      stdoutIsTty: true,
-      termIsDumb: false,
-    };
+  const interactiveText = {
+    mode: 'interactive' as const,
+    outputFormat: 'text' as const,
+    stdoutIsTty: true,
+    termIsDumb: false,
+  };
 
-    expect(
-      shouldPromptForLoginProvider(interactiveText, {
-        providerExplicit: false,
-        noBrowser: false,
-        device: false,
-      }),
-    ).toBe(true);
-    expect(
-      shouldPromptForLoginProvider(interactiveText, {
-        providerExplicit: true,
-        noBrowser: false,
-        device: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldPromptForLoginProvider(interactiveText, {
-        providerExplicit: false,
-        noBrowser: true,
-        device: false,
-      }),
-    ).toBe(false);
-    // Device logins pick the provider in the browser, never in the terminal.
-    expect(
-      shouldPromptForLoginProvider(interactiveText, {
-        providerExplicit: false,
-        noBrowser: false,
-        device: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldPromptForLoginProvider(
-        { ...interactiveText, outputFormat: 'json' },
-        { providerExplicit: false, noBrowser: false, device: false },
-      ),
-    ).toBe(false);
-    expect(
-      shouldPromptForLoginProvider(
-        { ...interactiveText, mode: 'headless' },
-        { providerExplicit: false, noBrowser: false, device: false },
-      ),
-    ).toBe(false);
-  });
+  it.each<{
+    context: Parameters<typeof shouldPromptForLoginProvider>[0];
+    init: Parameters<typeof shouldPromptForLoginProvider>[1];
+    expected: boolean;
+  }>([
+    {
+      context: interactiveText,
+      init: { providerExplicit: false, noBrowser: false, device: false },
+      expected: true,
+    },
+    {
+      context: interactiveText,
+      init: { providerExplicit: true, noBrowser: false, device: false },
+      expected: false,
+    },
+    {
+      context: interactiveText,
+      init: { providerExplicit: false, noBrowser: true, device: false },
+      expected: false,
+    },
+    {
+      // Device logins pick the provider in the browser, never in the terminal.
+      context: interactiveText,
+      init: { providerExplicit: false, noBrowser: false, device: true },
+      expected: false,
+    },
+    {
+      context: { ...interactiveText, outputFormat: 'json' },
+      init: { providerExplicit: false, noBrowser: false, device: false },
+      expected: false,
+    },
+    {
+      context: { ...interactiveText, mode: 'headless' },
+      init: { providerExplicit: false, noBrowser: false, device: false },
+      expected: false,
+    },
+  ])(
+    'prompts for provider only for bare interactive text login (init=$init, context=$context, expected=$expected)',
+    ({ context, init, expected }) => {
+      expect(shouldPromptForLoginProvider(context, init)).toBe(expected);
+    },
+  );
 
   it('describes manual login as a loopback callback, not any-device auth', () => {
     const message = formatCliManualAuthUrlMessage(

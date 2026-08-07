@@ -93,9 +93,9 @@ function buildOverleafClonePorts(
         `Git is not installed or is not on PATH. Install it from ${GIT_DOWNLOAD_URL}.`,
       );
     },
-    listWorkspaceEntries: async (workspacePath) => {
+    listWorkspaceEntries: async (dir) => {
       try {
-        return await readdir(workspacePath);
+        return await readdir(dir);
       } catch (error) {
         if (isFileNotFoundError(error)) return [];
         throw error;

@@ -69,6 +69,8 @@ import {
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
+const ROOT_STREAM = 'root-stream' as StreamTabId;
+const CHILD_STREAM = 'claude@agent-sdk#1' as StreamTabId;
 const SESSION_META = {
   agent: 'research',
   category: AgentCategory.ToolUse,
@@ -880,62 +882,52 @@ describe('CLI conversation transcript splitting', () => {
     ).toEqual(['t1']);
   });
 
-  it('budgets user band margins before inserting compact static headers', () => {
-    const band = entry('u1', 'user', 'short prompt', true);
-    const compact = staticItems([band], { maxRows: 0, width: 80 });
+  it.each([
+    {
+      // One text row plus the band's top and bottom margin rows = 3; the full
+      // header needs 4 more.
+      name: 'user band margins',
+      target: entry('u1', 'user', 'short prompt', true),
+      budgetWithoutHeader: 6,
+      budgetWithHeader: 7,
+    },
+    {
+      // 77 chars wraps to two rows at the padded width (80 - 4 = 76);
+      // the full header needs 4 more.
+      name: 'static error rows at the padded wrap width',
+      target: entry('e1', 'error', 'x'.repeat(77), true),
+      budgetWithoutHeader: 5,
+      budgetWithHeader: 6,
+    },
+    {
+      // One text row and no margin rows; the full header needs 4 more.
+      name: 'inquiry continuation without band margins',
+      target: entry('u1', 'user', '[inquiry] ei_123 answered.', true),
+      budgetWithoutHeader: 4,
+      budgetWithHeader: 5,
+    },
+  ])(
+    'budgets $name before inserting a compact static header',
+    ({ target, budgetWithoutHeader, budgetWithHeader }) => {
+      const compact = staticItems([target], { maxRows: 0, width: 80 });
 
-    expect(compact.map((item) => item.id)).toEqual(['u1']);
-    // One text row plus the band's top and bottom margin rows = 3; the full
-    // header needs 4 more.
-    expect(
-      staticItemIds([band], { currentItems: compact, maxRows: 6, width: 80 }),
-    ).toEqual(['u1']);
-    expect(
-      staticItemIds([band], { currentItems: compact, maxRows: 7, width: 80 }),
-    ).toEqual(['session-header', 'u1']);
-  });
-
-  it('budgets static error rows at the padded wrap width', () => {
-    const error = entry('e1', 'error', 'x'.repeat(77), true);
-    const compact = staticItems([error], { maxRows: 0, width: 80 });
-
-    expect(compact.map((item) => item.id)).toEqual(['e1']);
-    // 77 chars wraps to two rows at the padded width (80 - 4 = 76);
-    // the full header needs 4 more.
-    expect(
-      staticItemIds([error], { currentItems: compact, maxRows: 5, width: 80 }),
-    ).toEqual(['e1']);
-    expect(
-      staticItemIds([error], { currentItems: compact, maxRows: 6, width: 80 }),
-    ).toEqual(['session-header', 'e1']);
-  });
-
-  it('does not budget band margins for inquiry continuations in the static budget', () => {
-    const continuation = entry(
-      'u1',
-      'user',
-      '[inquiry] ei_123 answered.',
-      true,
-    );
-    const compact = staticItems([continuation], { maxRows: 0, width: 80 });
-
-    expect(compact.map((item) => item.id)).toEqual(['u1']);
-    // One text row and no margin rows; the full header needs 4 more.
-    expect(
-      staticItemIds([continuation], {
-        currentItems: compact,
-        maxRows: 4,
-        width: 80,
-      }),
-    ).toEqual(['u1']);
-    expect(
-      staticItemIds([continuation], {
-        currentItems: compact,
-        maxRows: 5,
-        width: 80,
-      }),
-    ).toEqual(['session-header', 'u1']);
-  });
+      expect(compact.map((item) => item.id)).toEqual([target.id]);
+      expect(
+        staticItemIds([target], {
+          currentItems: compact,
+          maxRows: budgetWithoutHeader,
+          width: 80,
+        }),
+      ).toEqual([target.id]);
+      expect(
+        staticItemIds([target], {
+          currentItems: compact,
+          maxRows: budgetWithHeader,
+          width: 80,
+        }),
+      ).toEqual(['session-header', target.id]);
+    },
+  );
 
   it('preserves static transcript order when an entry exceeds the compact row budget', () => {
     const first = entry('u1', 'user', 'first', true);
@@ -1082,19 +1074,10 @@ describe('CLI conversation transcript splitting', () => {
   });
 
   it('only feeds the root scrollback stream, not background subagents', () => {
-    const rootUser = entry('u1', 'user', 'do x', true);
-    const childAssistant = entry('a1', 'assistant', 'done', true);
-    const ROOT = 'root-stream' as StreamTabId;
-    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [ROOT, sliceWithEntries(ROOT, [rootUser])],
-      [CHILD, sliceWithEntries(CHILD, [childAssistant])],
-    ]);
-
     const items = appendStaticTranscriptItems({
-      scrollbackStreamId: ROOT,
+      scrollbackStreamId: ROOT_STREAM,
       currentItems: [],
-      streams,
+      streams: rootChildStreams('do x', 'done'),
       meta: SESSION_META,
     });
 
@@ -1102,56 +1085,41 @@ describe('CLI conversation transcript splitting', () => {
   });
 
   it('keeps background children out of the root scrollback owner', () => {
-    const rootUser = entry('u1', 'user', 'root prompt', true);
-    const childAssistant = entry('a1', 'assistant', 'child detail', true);
-    const ROOT = 'root-stream' as StreamTabId;
-    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [ROOT, sliceWithEntries(ROOT, [rootUser])],
-      [CHILD, sliceWithEntries(CHILD, [childAssistant])],
-    ]);
-
     const scrollbackTarget = staticScrollbackTarget({
-      activeStreamId: CHILD,
-      rootStreamId: ROOT,
+      activeStreamId: CHILD_STREAM,
+      rootStreamId: ROOT_STREAM,
       scopedTranscript: false,
     });
     const items = appendStaticTranscriptItems({
       scrollbackStreamId: scrollbackTarget.streamId,
       currentItems: [],
-      streams,
+      streams: rootChildStreams('root prompt', 'child detail'),
       meta: SESSION_META,
     });
 
-    expect(scrollbackTarget).toEqual({ ownerKey: 'root', streamId: ROOT });
+    expect(scrollbackTarget).toEqual({
+      ownerKey: 'root',
+      streamId: ROOT_STREAM,
+    });
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
 
   it('uses the focused child as the static scrollback owner in scoped view', () => {
-    const rootUser = entry('u1', 'user', 'root prompt', true);
-    const childAssistant = entry('a1', 'assistant', 'child detail', true);
-    const ROOT = 'root-stream' as StreamTabId;
-    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [ROOT, sliceWithEntries(ROOT, [rootUser])],
-      [CHILD, sliceWithEntries(CHILD, [childAssistant])],
-    ]);
-
     const scrollbackTarget = staticScrollbackTarget({
-      activeStreamId: CHILD,
-      rootStreamId: ROOT,
+      activeStreamId: CHILD_STREAM,
+      rootStreamId: ROOT_STREAM,
       scopedTranscript: true,
     });
     const items = appendStaticTranscriptItems({
       scrollbackStreamId: scrollbackTarget.streamId,
       currentItems: [],
-      streams,
+      streams: rootChildStreams('root prompt', 'child detail'),
       meta: SESSION_META,
     });
 
     expect(scrollbackTarget).toEqual({
-      ownerKey: `stream:${CHILD}`,
-      streamId: CHILD,
+      ownerKey: `stream:${CHILD_STREAM}`,
+      streamId: CHILD_STREAM,
     });
     expect(items.slice(1).map((item) => item.id)).toEqual(['a1']);
   });
@@ -1178,20 +1146,20 @@ describe('CLI conversation transcript splitting', () => {
   });
 
   it('separates root scrollback from scoped child transcript viewports', () => {
-    const ROOT = 'root-stream' as StreamTabId;
-    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
-    const parentStream = new Map<StreamTabId, StreamTabId>([[CHILD, ROOT]]);
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [CHILD_STREAM, ROOT_STREAM],
+    ]);
     const rootViewportKey = transcriptViewportKey({
-      activeStreamId: ROOT,
+      activeStreamId: ROOT_STREAM,
       parentStream,
     });
     const childViewportKey = transcriptViewportKey({
-      activeStreamId: CHILD,
+      activeStreamId: CHILD_STREAM,
       parentStream,
     });
 
     expect(rootViewportKey).toBe('root-scrollback');
-    expect(childViewportKey).toBe(`scoped:${CHILD}`);
+    expect(childViewportKey).toBe(`scoped:${CHILD_STREAM}`);
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {
@@ -1347,6 +1315,25 @@ function sliceWithEntries(
   init: Partial<StreamSlice> = {},
 ): StreamSlice {
   return { ...emptySlice(streamId), entries, ...init };
+}
+
+/** A root stream with one user entry plus a background child stream. */
+function rootChildStreams(
+  rootText: string,
+  childText: string,
+): Map<StreamTabId, StreamSlice> {
+  return new Map([
+    [
+      ROOT_STREAM,
+      sliceWithEntries(ROOT_STREAM, [entry('u1', 'user', rootText, true)]),
+    ],
+    [
+      CHILD_STREAM,
+      sliceWithEntries(CHILD_STREAM, [
+        entry('a1', 'assistant', childText, true),
+      ]),
+    ],
+  ]);
 }
 
 /** Static scrollback for a single-stream transcript of `entries`. */

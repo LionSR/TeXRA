@@ -45,9 +45,7 @@ type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
  */
 export function useSignal<T>(signal: ReadableSignal<T>): T {
   const subscribe = useCallback(
-    (notify: () => void) => {
-      return subscribeToSignalChanges([signal], notify);
-    },
+    (notify: () => void) => subscribeToSignalChanges([signal], notify),
     [signal],
   );
   return useSyncExternalStore(subscribe, () => signal.get());

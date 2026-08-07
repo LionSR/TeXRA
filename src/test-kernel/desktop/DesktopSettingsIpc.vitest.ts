@@ -124,6 +124,27 @@ function createCapturedSettingsFixture(
   return { ...fixture, posted };
 }
 
+function findPosted(
+  posted: readonly RendererMessage[],
+  command: string,
+): RendererMessage | undefined {
+  return posted.find((message) => commandOf(message) === command);
+}
+
+function createFailureReportingFixture(workspaceState: FakeStateStore) {
+  const onError = vi.fn();
+  const showErrorMessage = vi.fn(async () => undefined);
+  const postLatexConfigValues = vi.fn();
+  const { settings } = createCapturedSettingsFixture({
+    workspaceState,
+    toolingSettingsController: createStubDesktopToolingSettingsController({
+      postLatexConfigValues,
+    }),
+    ui: { onError, showErrorMessage },
+  });
+  return { settings, onError, showErrorMessage, postLatexConfigValues };
+}
+
 function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
@@ -184,11 +205,7 @@ describe('desktop settings IPC', () => {
       ]),
     });
     expect(
-      posted.find(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS),
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
       markCommits: DEFAULT_GIT_MARK_COMMITS,
@@ -755,11 +772,7 @@ describe('desktop settings IPC', () => {
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 
     expect(
-      posted.find(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      ),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       bashApprovalEnabled: false,
@@ -768,20 +781,13 @@ describe('desktop settings IPC', () => {
     // Without these the Git tab renders a permanently "Not set" token status
     // and an empty subscription list until the user mutates either one.
     expect(
-      posted.find(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      ),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
       status: 'none',
     });
     expect(
-      posted.find(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      ),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
       subscriptions: [],
@@ -812,11 +818,7 @@ describe('desktop settings IPC', () => {
       'workspace',
     );
     expect(
-      posted.find(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      ),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       bashApprovalEnabled: false,
@@ -827,17 +829,8 @@ describe('desktop settings IPC', () => {
     const workspaceState = new FakeStateStore();
     const failure = new Error('workspace write failed');
     vi.spyOn(workspaceState, 'update').mockRejectedValueOnce(failure);
-    const onError = vi.fn();
-    const showErrorMessage = vi.fn(async () => undefined);
-    const postLatexConfigValues = vi.fn();
-
-    const { settings } = createCapturedSettingsFixture({
-      workspaceState,
-      toolingSettingsController: createStubDesktopToolingSettingsController({
-        postLatexConfigValues,
-      }),
-      ui: { onError, showErrorMessage },
-    });
+    const { settings, onError, showErrorMessage, postLatexConfigValues } =
+      createFailureReportingFixture(workspaceState);
 
     expect(
       settings.handleMessage({
@@ -858,17 +851,8 @@ describe('desktop settings IPC', () => {
   it('reports rejected setting values and restores the authoritative snapshot', async () => {
     const workspaceState = new FakeStateStore();
     const update = vi.spyOn(workspaceState, 'update');
-    const onError = vi.fn();
-    const showErrorMessage = vi.fn(async () => undefined);
-    const postLatexConfigValues = vi.fn();
-
-    const { settings } = createCapturedSettingsFixture({
-      workspaceState,
-      toolingSettingsController: createStubDesktopToolingSettingsController({
-        postLatexConfigValues,
-      }),
-      ui: { onError, showErrorMessage },
-    });
+    const { settings, onError, showErrorMessage, postLatexConfigValues } =
+      createFailureReportingFixture(workspaceState);
 
     expect(
       settings.handleMessage({
@@ -909,11 +893,7 @@ describe('desktop settings IPC', () => {
     expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
     expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
     expect(
-      posted.find(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
-      ),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
       enabled: false,

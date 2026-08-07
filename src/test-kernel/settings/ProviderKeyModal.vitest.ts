@@ -50,6 +50,20 @@ function submitForm(modal: ProviderKeyModalElement): void {
     .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 }
 
+function countModalEvents(modal: ProviderKeyModalElement): {
+  cancelled: number;
+  submitted: number;
+} {
+  const counts = { cancelled: 0, submitted: 0 };
+  modal.addEventListener('provider-key-cancel', () => {
+    counts.cancelled += 1;
+  });
+  modal.addEventListener('provider-key-submit', () => {
+    counts.submitted += 1;
+  });
+  return counts;
+}
+
 describe('ProviderKeyModal', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/components/profile/ProviderKeyModal'),
@@ -74,15 +88,7 @@ describe('ProviderKeyModal', () => {
 
   it('clears input and emits cancel without submitting a key', async () => {
     const modal = await mountModal();
-
-    let cancelled = 0;
-    let submitted = 0;
-    modal.addEventListener('provider-key-cancel', () => {
-      cancelled += 1;
-    });
-    modal.addEventListener('provider-key-submit', () => {
-      submitted += 1;
-    });
+    const counts = countModalEvents(modal);
 
     const input = setKey(modal, 'sk-cancel');
     // First wa-button in the footer is "Cancel" (outlined / neutral); clicking
@@ -93,8 +99,7 @@ describe('ProviderKeyModal', () => {
     cancelButton.click();
     await flushDialogTicks();
 
-    expect(cancelled).toBe(1);
-    expect(submitted).toBe(0);
+    expect(counts).toEqual({ cancelled: 1, submitted: 0 });
     expect(input.value).toBe('');
   });
 
@@ -107,10 +112,7 @@ describe('ProviderKeyModal', () => {
     // wa-dialog opens itself when `open` is set in firstUpdated.
     expect(dialog.open).toBe(true);
 
-    let cancelled = 0;
-    modal.addEventListener('provider-key-cancel', () => {
-      cancelled += 1;
-    });
+    const counts = countModalEvents(modal);
 
     setKey(modal, 'sk-after-submit');
     submitForm(modal);
@@ -118,6 +120,6 @@ describe('ProviderKeyModal', () => {
 
     // Submit closes the dialog programmatically and must NOT also fire cancel.
     expect(dialog.open).toBe(false);
-    expect(cancelled).toBe(0);
+    expect(counts.cancelled).toBe(0);
   });
 });

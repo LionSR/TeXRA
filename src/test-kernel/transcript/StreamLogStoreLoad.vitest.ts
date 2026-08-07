@@ -172,6 +172,7 @@ function runningWorkflowCallEntry(
   timestamp: number,
   status: 'planned' | 'running' = 'running',
 ): StreamLogEntry {
+  const label = status === 'planned' ? 'Audit extension' : 'Audit core';
   return {
     seqNo,
     id: `${streamId}-workflow-task-${seqNo}`,
@@ -179,10 +180,10 @@ function runningWorkflowCallEntry(
     level: LOG_LEVELS.INFO,
     timestamp,
     messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-    text: status === 'planned' ? 'Audit extension' : 'Audit core',
+    text: label,
     data: {
       id: status === 'planned' ? 'audit-extension' : 'audit-core',
-      label: status === 'planned' ? 'Audit extension' : 'Audit core',
+      label,
       phase: 'Audit',
       status,
     },
@@ -335,6 +336,24 @@ function mockStorage({
   };
 }
 
+type MockStorage = ReturnType<typeof mockStorage>;
+
+/**
+ * Flushes while the paused write is in flight, then deletes mid-flush: the
+ * delete must win over the pending write.
+ */
+async function flushAcrossDelete(
+  store: StreamLogStore,
+  storage: MockStorage,
+  streamId: string,
+): Promise<void> {
+  const flush = store.flush();
+  await storage.waitForPausedWrite();
+  const deletion = store.delete(streamId);
+  storage.releasePausedWrite();
+  await Promise.all([flush, deletion]);
+}
+
 describe('StreamLogStore load', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -358,9 +377,7 @@ describe('StreamLogStore load', () => {
     first.ensureStream('registered-empty');
     await first.flush();
 
-    expect(
-      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'registered-empty')),
-    ).toEqual([]);
+    expect(writtenLog(storage.writes, 'registered-empty')).toEqual([]);
     logs['registered-empty'] = [];
 
     const second = await StreamLogStore.open();
@@ -513,9 +530,7 @@ describe('StreamLogStore load', () => {
 
     storage.releasePausedWrite();
     await flush;
-    expect(
-      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta')),
-    ).toHaveLength(1);
+    expect(writtenLog(storage.writes, 'beta')).toHaveLength(1);
     expect(store.get('beta')).toBeUndefined();
     alphaWriter.close();
   });
@@ -1272,11 +1287,7 @@ describe('StreamLogStore load', () => {
       namedEntry('delete-me-entry', 500, 'soon deleted'),
     );
 
-    const flush = store.flush();
-    await storage.waitForPausedWrite();
-    const deletion = store.delete('delete-me');
-    storage.releasePausedWrite();
-    await Promise.all([flush, deletion]);
+    await flushAcrossDelete(store, storage, 'delete-me');
 
     expect(storage.writes.has(storageFile(STREAM_LOGS_DIR, 'delete-me'))).toBe(
       false,
@@ -1334,11 +1345,7 @@ describe('StreamLogStore load', () => {
       namedEntry('old-entry', 500, 'old entry'),
     );
 
-    const flush = store.flush();
-    await storage.waitForPausedWrite();
-    const deletion = store.delete('reuse-me');
-    storage.releasePausedWrite();
-    await Promise.all([flush, deletion]);
+    await flushAcrossDelete(store, storage, 'reuse-me');
 
     appendTranscriptEntry(
       store,
@@ -1347,9 +1354,7 @@ describe('StreamLogStore load', () => {
     );
     await store.flush();
 
-    expect(
-      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'reuse-me')),
-    ).toEqual([
+    expect(writtenLog(storage.writes, 'reuse-me')).toEqual([
       expect.objectContaining({
         id: 'new-entry',
         text: 'new entry',
@@ -1371,9 +1376,7 @@ describe('StreamLogStore load', () => {
     );
     await store.flush();
 
-    expect(
-      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'new-stream')),
-    ).toHaveLength(1);
+    expect(writtenLog(storage.writes, 'new-stream')).toHaveLength(1);
     expect(writtenSummary(storage.writes, 'new-stream')).toEqual(
       settledSummary(500, 500),
     );
@@ -1434,7 +1437,7 @@ describe('StreamLogStore load', () => {
     );
     await store.flush();
 
-    expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'alpha'))).toEqual([
+    expect(writtenLog(storage.writes, 'alpha')).toEqual([
       expect.objectContaining({ id: 'alpha-1', seqNo: 1 }),
       unknownFutureEntry,
       expect.objectContaining({ id: 'alpha-3', seqNo: 2 }),
@@ -1471,7 +1474,7 @@ describe('StreamLogStore load', () => {
     );
     await store.flush();
 
-    expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta'))).toEqual([
+    expect(writtenLog(storage.writes, 'beta')).toEqual([
       unknownEntry,
       expect.objectContaining({ id: 'beta-new', seqNo: 1 }),
     ]);
@@ -1509,9 +1512,7 @@ describe('StreamLogStore load', () => {
       ),
     ).toThrow('Cannot acquire a writer for released stream gamma');
 
-    expect(
-      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'gamma')),
-    ).toBeUndefined();
+    expect(writtenLog(storage.writes, 'gamma')).toBeUndefined();
     expect(storage.writes.size).toBe(0);
   });
 

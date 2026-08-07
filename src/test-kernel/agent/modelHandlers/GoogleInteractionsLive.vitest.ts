@@ -116,6 +116,20 @@ function mockConfig(background: boolean): void {
   vi.spyOn(providerConfigModule, 'getGlobalStreaming').mockReturnValue(false);
 }
 
+/** Real client wrapped for recording, driving the real handler. */
+function liveHandler(category: AgentCategory): {
+  client: unknown;
+  calls: ReturnType<typeof recordingClient>['calls'];
+  handler: ModelHandlerGoogleInteractions;
+} {
+  const real = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
+  const { client, calls } = recordingClient(real);
+  const handler = new ModelHandlerGoogleInteractions(liveConfig());
+  handler.setLogger({ ...noopTrace });
+  handler.setAgentCategory(category);
+  return { client, calls, handler };
+}
+
 describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -123,12 +137,8 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
 
   it('S3/S1: store:true chaining sends a delta + previous_interaction_id on turn 2', async () => {
     mockConfig(/* background */ false);
-    const real = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
-    const { client, calls } = recordingClient(real);
-
-    const handler = new ModelHandlerGoogleInteractions(liveConfig());
-    handler.setLogger({ ...noopTrace });
-    handler.setAgentCategory(AgentCategory.ToolUse); // non-workflow ⇒ no background
+    // ToolUse (non-workflow) ⇒ no background.
+    const { client, calls, handler } = liveHandler(AgentCategory.ToolUse);
 
     // Turn 1 — full send, store:true, no chain.
     const messages: Step[] = [userStep('Reply with exactly: ALPHA')];
@@ -177,12 +187,8 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
 
   it('background: workflow run submits background:true and polls to completion', async () => {
     mockConfig(/* background */ true);
-    const real = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
-    const { client, calls } = recordingClient(real);
-
-    const handler = new ModelHandlerGoogleInteractions(liveConfig());
-    handler.setLogger({ ...noopTrace });
-    handler.setAgentCategory(AgentCategory.Workflow); // ⇒ background eligible
+    // Workflow ⇒ background eligible.
+    const { client, calls, handler } = liveHandler(AgentCategory.Workflow);
 
     const r = await handler.createResponse({
       client: client as never,
@@ -209,12 +215,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
 
   it('tool round-trip: chained round 2 sends function_result-only and completes', async () => {
     mockConfig(/* background */ false);
-    const real = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
-    const { client, calls } = recordingClient(real);
-
-    const handler = new ModelHandlerGoogleInteractions(liveConfig());
-    handler.setLogger({ ...noopTrace });
-    handler.setAgentCategory(AgentCategory.ToolUse);
+    const { client, calls, handler } = liveHandler(AgentCategory.ToolUse);
 
     const tools = [
       {

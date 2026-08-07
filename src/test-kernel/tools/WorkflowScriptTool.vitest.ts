@@ -116,6 +116,35 @@ function runExecutionIdFor(name: string): ExecutionId {
   return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
 }
 
+/** The registration options a launch of `name` must record. */
+function registrationOptionsFor(name: string) {
+  return {
+    streamId: `workflow-script#${runExecutionIdFor(name)}`,
+    identity: { kind: 'multiAgentWorkflow', workflowName: name },
+    parentExecutionId: executionId,
+    description: 'tests the workflow script tool',
+  };
+}
+
+async function writeWorkspaceScript(
+  path: string,
+  content: string,
+): Promise<void> {
+  await WorkspaceFS.ensureDir('.texra/workflow-scripts');
+  await WorkspaceFS.write(path, content);
+}
+
+/** Point the run's persisted report and outcome at scripted values. */
+function mockPersistedReport(
+  name: string,
+  report: string,
+  outcome: (typeof RUN_OUTCOME)[keyof typeof RUN_OUTCOME],
+): void {
+  const store = getExecutionStore(runExecutionIdFor(name));
+  vi.spyOn(store, 'readReport').mockResolvedValue(report);
+  vi.spyOn(store, 'readMeta').mockResolvedValue({ outcome } as never);
+}
+
 async function callTool(
   options: {
     script?: string;
@@ -336,12 +365,7 @@ describe('WorkflowScriptTool', () => {
         model: 'parent-model',
       },
       'tool-test',
-      {
-        streamId: `workflow-script#${runExecutionId}`,
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
+      registrationOptionsFor('tool-test'),
     );
     expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
       runExecutionId,
@@ -398,8 +422,7 @@ describe('WorkflowScriptTool', () => {
 
   it('never overwrites an edited submitted-source draft', async () => {
     const originalPath = '.texra/workflow-scripts/draft-tool-call.mjs';
-    await WorkspaceFS.ensureDir('.texra/workflow-scripts');
-    await WorkspaceFS.write(originalPath, '// edited by the model');
+    await writeWorkspaceScript(originalPath, '// edited by the model');
 
     const result = await callTool();
     const savedPath = result.output?.match(
@@ -417,8 +440,7 @@ describe('WorkflowScriptTool', () => {
       .replace("name: 'tool-test'", "name: 'edited-tool-test'")
       .replace('saved call', 'edited saved call');
     const scriptPath = '.texra/workflow-scripts/edited.mjs';
-    await WorkspaceFS.ensureDir('.texra/workflow-scripts');
-    await WorkspaceFS.write(scriptPath, editedScript);
+    await writeWorkspaceScript(scriptPath, editedScript);
 
     const result = await callToolInput({
       agent: 'correct',
@@ -435,15 +457,7 @@ describe('WorkflowScriptTool', () => {
       runExecutionIdFor('edited-tool-test'),
       expect.anything(),
       'edited-tool-test',
-      {
-        streamId: `workflow-script#${runExecutionIdFor('edited-tool-test')}`,
-        identity: {
-          kind: 'multiAgentWorkflow',
-          workflowName: 'edited-tool-test',
-        },
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
+      registrationOptionsFor('edited-tool-test'),
     );
   });
 
@@ -466,8 +480,7 @@ describe('WorkflowScriptTool', () => {
 
   it('reports the same editable file when file-mode parsing fails', async () => {
     const scriptPath = '.texra/workflow-scripts/broken.mjs';
-    await WorkspaceFS.ensureDir('.texra/workflow-scripts');
-    await WorkspaceFS.write(scriptPath, 'return null');
+    await writeWorkspaceScript(scriptPath, 'return null');
 
     const result = await callToolInput({
       agent: 'correct',
@@ -519,16 +532,13 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('waits for the workflow report in a one-cycle headless run', async () => {
-    const runExecutionId = runExecutionIdFor('tool-test');
-    const store = getExecutionStore(runExecutionId);
     const scriptReference =
       'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
-    vi.spyOn(store, 'readReport').mockResolvedValue(
+    mockPersistedReport(
+      'tool-test',
       `<workflow-script-result>solved</workflow-script-result>\n\n${scriptReference}`,
+      RUN_OUTCOME.COMPLETED,
     );
-    vi.spyOn(store, 'readMeta').mockResolvedValue({
-      outcome: RUN_OUTCOME.COMPLETED,
-    } as never);
 
     const result = await callTool({ stopAfterCycle: true });
 
@@ -546,16 +556,13 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('returns a persisted headless failure without duplicating its script reference', async () => {
-    const runExecutionId = runExecutionIdFor('tool-test');
-    const store = getExecutionStore(runExecutionId);
     const scriptReference =
       'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
-    vi.spyOn(store, 'readReport').mockResolvedValue(
+    mockPersistedReport(
+      'tool-test',
       `<workflow-script-error>broken</workflow-script-error>\n\n${scriptReference}`,
+      RUN_OUTCOME.FAILED,
     );
-    vi.spyOn(store, 'readMeta').mockResolvedValue({
-      outcome: RUN_OUTCOME.FAILED,
-    } as never);
 
     const result = await callTool({ stopAfterCycle: true });
 
@@ -624,12 +631,7 @@ describe('WorkflowScriptTool', () => {
       runExecutionIdFor('tool-test'),
       expect.objectContaining({ model: 'served-model' }),
       'tool-test',
-      {
-        streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
+      registrationOptionsFor('tool-test'),
     );
   });
 

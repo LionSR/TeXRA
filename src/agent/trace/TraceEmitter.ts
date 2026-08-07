@@ -250,9 +250,7 @@ export class TraceEmitter implements AgentTrace {
       return new StreamHandleImpl(NO_EMIT, id, phaseOnly, null);
     }
 
-    const emit: TraceEmitFn = (event) => {
-      this.emit(event);
-    };
+    const emit: TraceEmitFn = (event) => this.emit(event);
     // Resolve the stage now so a deferred start lands in the same group an
     // eager start would have used, not whatever scope is active when the
     // first chunk finally arrives.
@@ -346,23 +344,20 @@ class StreamHandleImpl implements StreamHandle {
   // stream costs O(n) instead of repeated full-buffer string copies.
   private readonly chunks: string[] = [];
   private finalText: string | undefined;
-  /**
-   * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
-   * once started — eager streams are constructed already started. A deferred
-   * stream finalized without content emits no events at all, while a
-   * finalize that carries text emits the start/end pair so reasoning that
-   * only arrives in the final response still lands as a single entry.
-   */
-  private pendingStart: (() => void) | null;
 
   constructor(
     private readonly emit: TraceEmitFn,
     readonly id: string,
     private readonly phaseOnly: boolean,
-    pendingStart: (() => void) | null,
-  ) {
-    this.pendingStart = pendingStart;
-  }
+    /**
+     * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
+     * once started — eager streams are constructed already started. A deferred
+     * stream finalized without content emits no events at all, while a
+     * finalize that carries text emits the start/end pair so reasoning that
+     * only arrives in the final response still lands as a single entry.
+     */
+    private pendingStart: (() => void) | null,
+  ) {}
 
   private start(): void {
     const pending = this.pendingStart;

@@ -364,11 +364,10 @@ export class FileSelectGroup extends LitElement {
 
   private formatFilePath(file: string): { name: string; folder: string } {
     const normalized = normalizeFilePath(file);
+    // getBasename returns a trailing substring of `normalized` (or the whole
+    // string on the fallback), so the length difference can't go negative.
     const name = getBasename(normalized) || normalized;
-    const folder = normalized.slice(
-      0,
-      Math.max(0, normalized.length - name.length),
-    );
+    const folder = normalized.slice(0, normalized.length - name.length);
     return {
       name,
       folder: folder.replace(/\/$/, ''),

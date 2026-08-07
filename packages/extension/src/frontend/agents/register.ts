@@ -16,10 +16,7 @@ export function getAgentRegistrationSkipReason(
   agentName: string,
   configuredAgents: string[],
 ): AgentRegistrationSkipReason | undefined {
-  if (configuredAgents.includes(agentName)) {
-    return 'alreadyRegistered';
-  }
-  return undefined;
+  return configuredAgents.includes(agentName) ? 'alreadyRegistered' : undefined;
 }
 
 export async function promptToAddAgentToConfig(

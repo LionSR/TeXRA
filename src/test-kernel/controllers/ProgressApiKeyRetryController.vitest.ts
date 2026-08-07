@@ -15,6 +15,21 @@ const PROVIDERS = [
   'anthropic',
 ] as const satisfies readonly ApiProvider[];
 
+// The two dominant outcomes: the controller refused to act, or it switched to
+// a stored key and triggered the retry.
+const IDLE_RESULT = {
+  proceeded: false,
+  retried: false,
+  disabledIncludedModelAccess: false,
+  disabledChatGptSubscription: false,
+};
+const RETRIED_WITH_OWN_KEY_RESULT = {
+  proceeded: true,
+  retried: true,
+  disabledIncludedModelAccess: true,
+  disabledChatGptSubscription: false,
+};
+
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
@@ -100,12 +115,7 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, {
-      proceeded: true,
-      retried: true,
-      disabledIncludedModelAccess: true,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, RETRIED_WITH_OWN_KEY_RESULT);
     assert.deepEqual(harness.prompts, ['anthropic']);
     assert.deepEqual(harness.includedAccessValues, [false]);
     assert.equal(harness.invalidations, 1);
@@ -128,12 +138,7 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, {
-      proceeded: false,
-      retried: false,
-      disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, IDLE_RESULT);
     assert.deepEqual(harness.prompts, ['anthropic']);
     assert.deepEqual(harness.includedAccessValues, []);
     assert.equal(harness.invalidations, 0);
@@ -153,12 +158,7 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'copilot-subscription',
     });
 
-    assert.deepEqual(result, {
-      proceeded: false,
-      retried: false,
-      disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, IDLE_RESULT);
     assert.deepEqual(harness.includedAccessValues, []);
     assert.equal(harness.invalidations, 0);
     assert.deepEqual(harness.retries, []);
@@ -198,12 +198,7 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, {
-      proceeded: true,
-      retried: true,
-      disabledIncludedModelAccess: true,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, RETRIED_WITH_OWN_KEY_RESULT);
     assert.deepEqual(harness.prompts, [undefined]);
     assert.deepEqual(harness.includedAccessValues, [false]);
     assert.equal(harness.invalidations, 1);
@@ -221,12 +216,7 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, {
-      proceeded: true,
-      retried: true,
-      disabledIncludedModelAccess: true,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, RETRIED_WITH_OWN_KEY_RESULT);
     // A usable key already exists, so the switch must not pop the key prompt.
     assert.deepEqual(harness.prompts, []);
     assert.deepEqual(harness.includedAccessValues, [false]);
@@ -247,12 +237,7 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: false,
     });
 
-    assert.deepEqual(result, {
-      proceeded: false,
-      retried: false,
-      disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, IDLE_RESULT);
     assert.deepEqual(harness.includedAccessValues, []);
     assert.equal(harness.invalidations, 0);
     assert.deepEqual(harness.retries, ['stream-c']);
@@ -271,12 +256,7 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    assert.deepEqual(result, {
-      proceeded: false,
-      retried: false,
-      disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, IDLE_RESULT);
     assert.deepEqual(harness.includedAccessValues, [false, true]);
     assert.deepEqual(harness.chatGptSubscriptionValues, [false, true]);
     assert.equal(harness.invalidations, 3);
@@ -322,12 +302,7 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    assert.deepEqual(result, {
-      proceeded: false,
-      retried: false,
-      disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-    });
+    assert.deepEqual(result, IDLE_RESULT);
     // No usable key exists, so the prompt is still shown (then declined here).
     assert.deepEqual(harness.prompts, ['openai']);
     assert.deepEqual(harness.chatGptSubscriptionValues, []);

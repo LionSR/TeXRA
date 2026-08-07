@@ -215,13 +215,11 @@ export class ModelSelectionList extends LitElement {
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
-    const available = !model.disabled;
-
     return html`
       <div class="model-row">
         <wa-switch
           ?checked=${model.enabled}
-          ?disabled=${!available && !model.enabled}
+          ?disabled=${model.disabled && !model.enabled}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {

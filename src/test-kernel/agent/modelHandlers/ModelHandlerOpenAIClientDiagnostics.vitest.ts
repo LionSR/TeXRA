@@ -30,6 +30,18 @@ function diagnosticRoute(
   return 'api-key';
 }
 
+function diagnosticCredential(
+  config: ModelConfig,
+  baseUrl: string | null,
+  useRelay: boolean,
+): ResolvedClientCredential {
+  return {
+    apiKey: TEST_API_KEY,
+    baseUrl,
+    route: diagnosticRoute(config, useRelay),
+  };
+}
+
 const KIMI_DIAGNOSTICS_CONFIG = Object.freeze({
   name: 'kimi-test',
   fullName: 'kimi-k2.5',
@@ -55,11 +67,7 @@ class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   protected override async resolveClientCredential(
     _selection: ModelCredentialSelection = 'configured',
   ): Promise<ResolvedClientCredential> {
-    return {
-      apiKey: TEST_API_KEY,
-      baseUrl: this.getBaseUrl(),
-      route: diagnosticRoute(this.config, this.useRelay),
-    };
+    return diagnosticCredential(this.config, this.getBaseUrl(), this.useRelay);
   }
 }
 
@@ -78,11 +86,7 @@ class TestModelHandlerOpenAIResponse extends ModelHandlerOpenAIResponse {
   protected override async resolveClientCredential(
     _selection: ModelCredentialSelection = 'configured',
   ): Promise<ResolvedClientCredential> {
-    return {
-      apiKey: TEST_API_KEY,
-      baseUrl: this.getBaseUrl(),
-      route: diagnosticRoute(this.config, this.useRelay),
-    };
+    return diagnosticCredential(this.config, this.getBaseUrl(), this.useRelay);
   }
 }
 

@@ -486,8 +486,19 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
   });
 
-  it('reports after sign-out that a configured relay token still authenticates', async () => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}ci-token`);
+  it.each([
+    {
+      name: 'reports after sign-out that a configured relay token still authenticates',
+      relayToken: `${RELAY_CI_TOKEN_PREFIX}ci-token`,
+      expectedInfos: [expect.stringContaining(RELAY_TOKEN_ENV_VAR)],
+    },
+    {
+      name: 'stays silent after sign-out when no relay token is configured',
+      relayToken: '',
+      expectedInfos: [],
+    },
+  ])('$name', async ({ relayToken, expectedInfos }) => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, relayToken);
     const fixture = await createFixture();
 
     await assertSupported(fixture.controller.profileHandlers.signOut)({
@@ -495,21 +506,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     });
 
     expect(fixture.signOut).toHaveBeenCalledOnce();
-    expect(fixture.infos).toEqual([
-      expect.stringContaining(RELAY_TOKEN_ENV_VAR),
-    ]);
-  });
-
-  it('stays silent after sign-out when no relay token is configured', async () => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
-    const fixture = await createFixture();
-
-    await assertSupported(fixture.controller.profileHandlers.signOut)({
-      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT,
-    });
-
-    expect(fixture.signOut).toHaveBeenCalledOnce();
-    expect(fixture.infos).toEqual([]);
+    expect(fixture.infos).toEqual(expectedInfos);
   });
 
   it('applies the Included-Access reasoning cap to the model list', async () => {

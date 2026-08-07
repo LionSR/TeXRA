@@ -43,6 +43,7 @@ import {
   resetSetting,
   settingDefault,
   writeSetting,
+  type SettingsHostKind,
 } from '@shared/config/settingsAccess';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
@@ -536,6 +537,25 @@ describe('core settings host split', () => {
 });
 
 describe('settingsAccess', () => {
+  async function assertResetRestoresDefault(options: {
+    key: string;
+    host: SettingsHostKind;
+    storeName: 'config' | 'workspaceState';
+    expectedDefault: unknown;
+  }): Promise<void> {
+    const fake = makeFakeSettingsStores();
+    const entry = entryByKey(options.key);
+    const store = fake[options.storeName];
+    await writeSetting(entry, false, fake.stores, options.host);
+    assert.equal(isStored(store, entry.key), true);
+    await resetSetting(entry, fake.stores, options.host);
+    assert.equal(isStored(store, entry.key), false);
+    assert.equal(
+      readSetting(entry, fake.stores, options.host),
+      options.expectedDefault,
+    );
+  }
+
   it('reads the default when the key is absent', () => {
     const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
@@ -604,26 +624,21 @@ describe('settingsAccess', () => {
   });
 
   it('reset deletes the key so the default reappears', async () => {
-    const { stores, workspaceState } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY);
-    await writeSetting(entry, false, stores, 'extension');
-    assert.equal(isStored(workspaceState, entry.key), true);
-    await resetSetting(entry, stores, 'extension');
-    assert.equal(isStored(workspaceState, entry.key), false);
-    assert.equal(
-      readSetting(entry, stores, 'extension'),
-      LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-    );
+    await assertResetRestoresDefault({
+      key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+      host: 'extension',
+      storeName: 'workspaceState',
+      expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
+    });
   });
 
   it('reset deletes a config-slot (ConfigProvider) key too', async () => {
-    const { stores, config } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await writeSetting(entry, false, stores, 'cli');
-    assert.equal(isStored(config, entry.key), true);
-    await resetSetting(entry, stores, 'cli');
-    assert.equal(isStored(config, entry.key), false);
-    assert.equal(readSetting(entry, stores, 'cli'), DEFAULT_GIT_MARK_COMMITS);
+    await assertResetRestoresDefault({
+      key: WorkspaceStateKey.GIT_MARK_COMMITS,
+      host: 'cli',
+      storeName: 'config',
+      expectedDefault: DEFAULT_GIT_MARK_COMMITS,
+    });
   });
 
   it('falls back to the default for a stored value that no longer validates', () => {

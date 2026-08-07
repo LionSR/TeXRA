@@ -112,6 +112,58 @@ async function writeHistoryConfig(): Promise<void> {
   await getExecutionStore(HISTORY_ID).writeRunRecord(HISTORY_CONFIG);
 }
 
+type HistoryHandlers = ReturnType<typeof createHistoryHandlers>;
+
+async function deleteAgent(
+  actions: HistoryHandlers,
+  historyId: string,
+): Promise<void> {
+  await assertSupported(actions.deleteAgent)({
+    command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+    historyId,
+  });
+}
+
+async function clearHistory(actions: HistoryHandlers): Promise<void> {
+  await assertSupported(actions.clearHistory)({
+    command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
+  });
+}
+
+async function restoreAgent(
+  actions: HistoryHandlers,
+  historyId: string,
+): Promise<void> {
+  await assertSupported(actions.restoreAgent)({
+    command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+    historyId,
+  });
+}
+
+async function exportChatMd(
+  actions: HistoryHandlers,
+  historyId: string,
+): Promise<void> {
+  await assertSupported(actions.exportChatMd)({
+    command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+    historyId,
+  });
+}
+
+function stubSuccessfulExportInput(): void {
+  chatExportMocks.buildExportInput.mockResolvedValue({
+    status: 'ok',
+    exportInput: EXPORT_INPUT,
+  });
+}
+
+function stubMarkdownExport(historyId: string): void {
+  chatExportMocks.exportAsMarkdown.mockResolvedValue({
+    storagePath: `executions/${historyId}/chat.md`,
+    absolutePath: `/tmp/executions/${historyId}/chat.md`,
+  });
+}
+
 describe('DesktopHistoryHandlers', () => {
   beforeAll(async () => {
     ({ DesktopHistoryHandlers } = await loadSourceModule(
@@ -176,10 +228,7 @@ describe('DesktopHistoryHandlers', () => {
       showWarningMessage,
     });
 
-    await assertSupported(actions.deleteAgent)({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-      historyId: HISTORY_ID,
-    });
+    await deleteAgent(actions, HISTORY_ID);
 
     expect(await getExecutionStore(HISTORY_ID).readConfig()).toEqual(
       HISTORY_CONFIG,
@@ -194,10 +243,7 @@ describe('DesktopHistoryHandlers', () => {
     const showWarningMessage = vi.fn(async () => undefined);
     const actions = createHistoryHandlers({ showWarningMessage });
 
-    await assertSupported(actions.deleteAgent)({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-      historyId: 'eeee5555',
-    });
+    await deleteAgent(actions, 'eeee5555');
 
     expect(showWarningMessage).toHaveBeenCalledWith(
       'History item not found: eeee5555',
@@ -209,10 +255,7 @@ describe('DesktopHistoryHandlers', () => {
     const postToRenderer = vi.fn();
     const actions = createHistoryHandlers({ postToRenderer });
 
-    await assertSupported(actions.deleteAgent)({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-      historyId: HISTORY_ID,
-    });
+    await deleteAgent(actions, HISTORY_ID);
 
     expect(await getExecutionStore(HISTORY_ID).readConfig()).toBeNull();
     expect(postToRenderer).toHaveBeenCalledWith({
@@ -229,10 +272,7 @@ describe('DesktopHistoryHandlers', () => {
     await GoalStore.start(survivor, 'keep me');
     const actions = createHistoryHandlers();
 
-    await assertSupported(actions.deleteAgent)({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-      historyId: HISTORY_ID,
-    });
+    await deleteAgent(actions, HISTORY_ID);
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
     expect(GoalStore.getForStream(survivor)?.objective).toBe('keep me');
@@ -246,9 +286,7 @@ describe('DesktopHistoryHandlers', () => {
     const showInfoMessage = vi.fn(async () => undefined);
     const actions = createHistoryHandlers({ postToRenderer, showInfoMessage });
 
-    await assertSupported(actions.clearHistory)({
-      command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
-    });
+    await clearHistory(actions);
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
     expect(showInfoMessage).toHaveBeenCalledWith('Agent history cleared');
@@ -263,9 +301,7 @@ describe('DesktopHistoryHandlers', () => {
     const confirmAction = vi.fn(async () => false);
     const actions = createHistoryHandlers({ showInfoMessage, confirmAction });
 
-    await assertSupported(actions.clearHistory)({
-      command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
-    });
+    await clearHistory(actions);
 
     expect(confirmAction).toHaveBeenCalledWith(
       'Clear all history? This deletes every stored execution and cannot be undone.',
@@ -292,9 +328,7 @@ describe('DesktopHistoryHandlers', () => {
       showInfoMessage,
     });
 
-    await assertSupported(actions.clearHistory)({
-      command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
-    });
+    await clearHistory(actions);
 
     expect(await getExecutionStore(activeHistoryId).readConfig()).toEqual(
       HISTORY_CONFIG,
@@ -318,10 +352,7 @@ describe('DesktopHistoryHandlers', () => {
       history: { restoreRunConfig },
     });
 
-    await assertSupported(actions.restoreAgent)({
-      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-      historyId: HISTORY_ID,
-    });
+    await restoreAgent(actions, HISTORY_ID);
 
     expect(showErrorMessage).not.toHaveBeenCalled();
     expect(restoreRunConfig).toHaveBeenCalledWith(HISTORY_CONFIG);
@@ -331,25 +362,18 @@ describe('DesktopHistoryHandlers', () => {
     const showErrorMessage = vi.fn();
     const actions = createHistoryHandlers({ showErrorMessage });
     const historyId = 'ffff9999';
+    const notFoundMessage =
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
 
     await assertSupported(actions.rerunAgent)({
       command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
       historyId,
     });
-    await assertSupported(actions.restoreAgent)({
-      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-      historyId,
-    });
+    await restoreAgent(actions, historyId);
 
     expect(showErrorMessage).toHaveBeenCalledTimes(2);
-    expect(showErrorMessage).toHaveBeenNthCalledWith(
-      1,
-      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
-    );
-    expect(showErrorMessage).toHaveBeenNthCalledWith(
-      2,
-      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
-    );
+    expect(showErrorMessage).toHaveBeenNthCalledWith(1, notFoundMessage);
+    expect(showErrorMessage).toHaveBeenNthCalledWith(2, notFoundMessage);
   });
 
   it('reports when restoring the run config fails', async () => {
@@ -361,10 +385,7 @@ describe('DesktopHistoryHandlers', () => {
       history: { restoreRunConfig },
     });
 
-    await assertSupported(actions.restoreAgent)({
-      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-      historyId: HISTORY_ID,
-    });
+    await restoreAgent(actions, HISTORY_ID);
 
     expect(restoreRunConfig).toHaveBeenCalledWith(HISTORY_CONFIG);
     expect(showErrorMessage).toHaveBeenCalledWith(
@@ -373,22 +394,13 @@ describe('DesktopHistoryHandlers', () => {
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'ok',
-      exportInput: EXPORT_INPUT,
-    });
-    chatExportMocks.exportAsMarkdown.mockResolvedValue({
-      storagePath: 'executions/abc/chat.md',
-      absolutePath: '/tmp/executions/abc/chat.md',
-    });
+    stubSuccessfulExportInput();
+    stubMarkdownExport('abc');
     const openPath = vi.fn();
     const showInfoMessage = vi.fn();
     const actions = createHistoryHandlers({ openPath, showInfoMessage });
 
-    await assertSupported(actions.exportChatMd)({
-      command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-      historyId: 'abc',
-    });
+    await exportChatMd(actions, 'abc');
 
     expect(chatExportMocks.buildExportInput).toHaveBeenCalledWith('abc');
     expect(chatExportMocks.exportAsMarkdown).toHaveBeenCalledWith(
@@ -403,25 +415,13 @@ describe('DesktopHistoryHandlers', () => {
   });
 
   it('shares the controller load across concurrent first exports', async () => {
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'ok',
-      exportInput: EXPORT_INPUT,
-    });
-    chatExportMocks.exportAsMarkdown.mockResolvedValue({
-      storagePath: 'executions/abc/chat.md',
-      absolutePath: '/tmp/executions/abc/chat.md',
-    });
+    stubSuccessfulExportInput();
+    stubMarkdownExport('abc');
     const actions = createHistoryHandlers();
 
     await Promise.all([
-      assertSupported(actions.exportChatMd)({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-        historyId: 'abc',
-      }),
-      assertSupported(actions.exportChatMd)({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-        historyId: 'def',
-      }),
+      exportChatMd(actions, 'abc'),
+      exportChatMd(actions, 'def'),
     ]);
 
     expect(chatExportMocks.constructorDeps).toHaveLength(1);
@@ -429,30 +429,15 @@ describe('DesktopHistoryHandlers', () => {
   });
 
   it('retries controller construction after the first load fails', async () => {
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'ok',
-      exportInput: EXPORT_INPUT,
-    });
-    chatExportMocks.exportAsMarkdown.mockResolvedValue({
-      storagePath: 'executions/def/chat.md',
-      absolutePath: '/tmp/executions/def/chat.md',
-    });
+    stubSuccessfulExportInput();
+    stubMarkdownExport('def');
     chatExportMocks.constructorError = new Error('controller setup failed');
     const actions = createHistoryHandlers();
-    const exportChatMd = assertSupported(actions.exportChatMd);
 
-    await expect(
-      exportChatMd({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-        historyId: 'abc',
-      }),
-    ).rejects.toThrow('controller setup failed');
-    await expect(
-      exportChatMd({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-        historyId: 'def',
-      }),
-    ).resolves.toBeUndefined();
+    await expect(exportChatMd(actions, 'abc')).rejects.toThrow(
+      'controller setup failed',
+    );
+    await expect(exportChatMd(actions, 'def')).resolves.toBeUndefined();
 
     expect(chatExportMocks.constructorDeps).toHaveLength(2);
     expect(chatExportMocks.buildExportInput).toHaveBeenCalledOnce();
@@ -460,10 +445,7 @@ describe('DesktopHistoryHandlers', () => {
   });
 
   it('falls back to opening the .tex source when LaTeX compilation fails', async () => {
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'ok',
-      exportInput: EXPORT_INPUT,
-    });
+    stubSuccessfulExportInput();
     chatExportMocks.exportAsLatex.mockResolvedValue({
       storagePath: 'executions/abc/chat.tex',
       absolutePath: '/tmp/executions/abc/chat.tex',
@@ -515,10 +497,7 @@ describe('DesktopHistoryHandlers', () => {
     const showInfoMessage = vi.fn();
     const actions = createHistoryHandlers({ showInfoMessage });
 
-    await assertSupported(actions.exportChatMd)({
-      command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-      historyId: 'missing',
-    });
+    await exportChatMd(actions, 'missing');
 
     expect(showInfoMessage).toHaveBeenCalledWith('History item not found');
   });

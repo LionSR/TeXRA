@@ -129,6 +129,47 @@ function createOAuthClient() {
   };
 }
 
+/**
+ * Builds the router/coordinator/oauthClient/auth set most tests need; tests
+ * pass only the pieces they observe or customize.
+ */
+function createAuthSetup(options: Partial<DesktopAuthTestOptions> = {}) {
+  const router = options.router ?? createDesktopProtocolCallbackRouter();
+  const coordinator =
+    (options.coordinator as ReturnType<typeof createCoordinator> | undefined) ??
+    createCoordinator();
+  const oauthClient =
+    (options.oauthClient as ReturnType<typeof createOAuthClient> | undefined) ??
+    createOAuthClient();
+  const auth = createTestAuth({ ...options, router, coordinator, oauthClient });
+  return { router, coordinator, oauthClient, auth };
+}
+
+/** Holds the next storeSession call until the returned gate resolves. */
+function gateNextStoreSession(
+  coordinator: ReturnType<typeof createCoordinator>,
+) {
+  const gate = createDeferred<void>();
+  const storeSession = coordinator.storeSession.getMockImplementation();
+  coordinator.storeSession.mockImplementationOnce(async (session) => {
+    await gate.promise;
+    await storeSession?.(session);
+  });
+  return gate;
+}
+
+/** Holds the next createSessionFromCallback call until the gate resolves. */
+function gateNextCallbackProcessing(
+  coordinator: ReturnType<typeof createCoordinator>,
+) {
+  const gate = createDeferred<void>();
+  coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
+    await gate.promise;
+    return callbackSessionResult();
+  });
+  return gate;
+}
+
 function authCallbackUrl(input: { code: string; nonce?: string }): string {
   const query = new URLSearchParams({
     code: input.code,
@@ -193,15 +234,8 @@ describe('desktop Supabase auth', () => {
   });
 
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
-    const coordinator = createCoordinator();
-    const oauthClient = createOAuthClient();
     const openExternalUrl = vi.fn(async () => {});
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator,
-      oauthClient,
-      openExternalUrl,
-    });
+    const { oauthClient, auth } = createAuthSetup({ openExternalUrl });
 
     await auth.signIn();
 
@@ -220,7 +254,6 @@ describe('desktop Supabase auth', () => {
 
   it('persists the nonce before sending it to Supabase', async () => {
     const events: string[] = [];
-    const coordinator = createCoordinator();
     const callbackState: DesktopAuthCallbackState = {
       hasPendingSignIn: vi.fn(() => false),
       beginAuthAttempt: vi.fn(async () => {
@@ -245,9 +278,7 @@ describe('desktop Supabase auth', () => {
     const openExternalUrl = vi.fn(async () => {
       events.push('open');
     });
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator,
+    const { auth } = createAuthSetup({
       oauthClient,
       callbackState,
       openExternalUrl,
@@ -259,14 +290,8 @@ describe('desktop Supabase auth', () => {
   });
 
   it('stores routed callback sessions and refreshes settings profile state', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const onSessionChanged = vi.fn(async () => {});
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       onSessionChanged,
     });
 
@@ -293,14 +318,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('waits for the matching callback before completing sign-in', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
-    });
+    const { router, coordinator, oauthClient, auth } = createAuthSetup();
 
     let completed = false;
     const completion = auth
@@ -321,12 +339,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('cancels a waiting system-browser sign-in without throwing', async () => {
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator: createCoordinator(),
-      oauthClient,
-    });
+    const { oauthClient, auth } = createAuthSetup();
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
     });
@@ -340,22 +353,16 @@ describe('desktop Supabase auth', () => {
   });
 
   it('treats a denied system-browser callback as cancellation', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
+    const showErrorMessage = vi.fn(async () => {});
+    const log = createLog();
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
+      showErrorMessage,
+      log,
+    });
     coordinator.createSessionFromCallback.mockResolvedValueOnce({
       success: false,
       error: 'The user closed the authorization page',
       isAuthError: true,
-    });
-    const oauthClient = createOAuthClient();
-    const showErrorMessage = vi.fn(async () => {});
-    const log = createLog();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
-      showErrorMessage,
-      log,
     });
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
@@ -378,22 +385,16 @@ describe('desktop Supabase auth', () => {
   });
 
   it('contains a failed cancellation notification without rejecting', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    coordinator.createSessionFromCallback.mockRejectedValueOnce(
-      new Error('callback failure'),
-    );
-    const oauthClient = createOAuthClient();
     const log = createLog();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       showErrorMessage: vi.fn(async () => {
         throw new Error('notification failure');
       }),
       log,
     });
+    coordinator.createSessionFromCallback.mockRejectedValueOnce(
+      new Error('callback failure'),
+    );
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
     });
@@ -412,16 +413,8 @@ describe('desktop Supabase auth', () => {
   });
 
   it('rejects a foreign callback whose nonce does not match the pending sign-in (login-CSRF)', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    const oauthClient = createOAuthClient();
     const log = createLog();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
-      log,
-    });
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({ log });
 
     await auth.signIn();
     // Attacker-delivered deeplink carrying a valid code for another account but
@@ -442,13 +435,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('rejects a callback with no nonce while a sign-in is pending', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-    });
+    const { router, coordinator, auth } = createAuthSetup();
 
     await auth.signIn();
     router.routeUrl(
@@ -463,15 +450,8 @@ describe('desktop Supabase auth', () => {
   });
 
   it('ignores routed callbacks until desktop sign-in starts', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const log = createLog();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-      log,
-    });
+    const { router, coordinator } = createAuthSetup({ log });
 
     router.routeUrl(
       'texra://texra-ai.texra/auth-callback?code=authorization-code',
@@ -487,18 +467,12 @@ describe('desktop Supabase auth', () => {
   });
 
   it('preserves pending sign-in across desktop auth recreation', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const stateStore = new FakeStateStore();
     const callbackState = createDesktopAuthCallbackState(
       createLog(),
       stateStore,
     );
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
     });
 
@@ -531,14 +505,8 @@ describe('desktop Supabase auth', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
-      const router = createDesktopProtocolCallbackRouter();
-      const coordinator = createCoordinator();
       const stateStore = new FakeStateStore();
-      const oauthClient = createOAuthClient();
-      const auth = createTestAuth({
-        router,
-        coordinator,
-        oauthClient,
+      const { router, coordinator, auth } = createAuthSetup({
         callbackState: createDesktopAuthCallbackState(createLog(), stateStore),
       });
 
@@ -641,15 +609,9 @@ describe('desktop Supabase auth', () => {
   });
 
   it('cancels pending callback state on sign-out', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const callbackState = createDesktopAuthCallbackState(createLog());
-    const oauthClient = createOAuthClient();
     const log = createLog();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
       log,
     });
@@ -668,16 +630,8 @@ describe('desktop Supabase auth', () => {
   });
 
   it('claims only the first matching callback for an OAuth attempt', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const log = createLog();
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
-      log,
-    });
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({ log });
 
     await auth.signIn();
     routeMatchingCallback(router, oauthClient, 'first');
@@ -693,21 +647,11 @@ describe('desktop Supabase auth', () => {
   });
 
   it('does not store a superseded callback or clear the newer sign-in', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const callbackState = createDesktopAuthCallbackState(createLog());
-    const oauthClient = createOAuthClient();
-    const callbackProcessing = createDeferred<void>();
-    coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
-      await callbackProcessing.promise;
-      return callbackSessionResult();
-    });
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
     });
+    const callbackProcessing = gateNextCallbackProcessing(coordinator);
 
     await auth.signIn();
     routeMatchingCallback(router, oauthClient);
@@ -724,24 +668,13 @@ describe('desktop Supabase auth', () => {
   });
 
   it('removes a callback session when sign-out begins during storage', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    const oauthClient = createOAuthClient();
-    const sessionStorage = createDeferred<void>();
-    const storeSession = coordinator.storeSession.getMockImplementation();
-    coordinator.storeSession.mockImplementationOnce(async (session) => {
-      await sessionStorage.promise;
-      await storeSession?.(session);
-    });
     const onSessionChanged = vi.fn(async () => {});
     const showInfoMessage = vi.fn(async () => {});
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       onSessionChanged,
       showInfoMessage,
     });
+    const sessionStorage = gateNextStoreSession(coordinator);
 
     await auth.signIn();
     routeMatchingCallback(router, oauthClient, 'stale-code');
@@ -761,24 +694,13 @@ describe('desktop Supabase auth', () => {
   });
 
   it('removes a stored callback before starting a newer sign-in', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
     const callbackState = createDesktopAuthCallbackState(createLog());
-    const oauthClient = createOAuthClient();
-    const sessionStorage = createDeferred<void>();
-    const storeSession = coordinator.storeSession.getMockImplementation();
-    coordinator.storeSession.mockImplementationOnce(async (session) => {
-      await sessionStorage.promise;
-      await storeSession?.(session);
-    });
     const onSessionChanged = vi.fn(async () => {});
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
       onSessionChanged,
     });
+    const sessionStorage = gateNextStoreSession(coordinator);
 
     await auth.signIn();
     routeMatchingCallback(router, oauthClient, 'stale-code');
@@ -813,17 +735,11 @@ describe('desktop Supabase auth', () => {
   it.each(['signIn', 'dispose'] as const)(
     'removes a callback session when %s invalidates it during session refresh',
     async (action) => {
-      const router = createDesktopProtocolCallbackRouter();
-      const coordinator = createCoordinator();
-      const oauthClient = createOAuthClient();
       const sessionRefresh = createDeferred<void>();
       const onSessionChanged = vi.fn(async () => {
         await sessionRefresh.promise;
       });
-      const auth = createTestAuth({
-        router,
-        coordinator,
-        oauthClient,
+      const { router, coordinator, oauthClient, auth } = createAuthSetup({
         onSessionChanged,
       });
 
@@ -851,19 +767,8 @@ describe('desktop Supabase auth', () => {
   it.each(['signOut', 'dispose'] as const)(
     'does not store a claimed callback after %s',
     async (action) => {
-      const router = createDesktopProtocolCallbackRouter();
-      const coordinator = createCoordinator();
-      const oauthClient = createOAuthClient();
-      const callbackProcessing = createDeferred<void>();
-      coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
-        await callbackProcessing.promise;
-        return callbackSessionResult();
-      });
-      const auth = createTestAuth({
-        router,
-        coordinator,
-        oauthClient,
-      });
+      const { router, coordinator, oauthClient, auth } = createAuthSetup();
+      const callbackProcessing = gateNextCallbackProcessing(coordinator);
 
       await auth.signIn();
       routeMatchingCallback(router, oauthClient);
@@ -881,14 +786,7 @@ describe('desktop Supabase auth', () => {
   );
 
   it('keeps a newer attempt valid beyond a superseded waiter timeout', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
-    });
+    const { router, coordinator, oauthClient, auth } = createAuthSetup();
 
     const first = auth.signInAndWaitForSession(undefined, { timeoutMs: 10 });
     await vi.waitFor(() => {
@@ -907,15 +805,10 @@ describe('desktop Supabase auth', () => {
   });
 
   it('settles the waiter when starting the sign-in fails', async () => {
-    const oauthClient = createOAuthClient();
+    const { oauthClient, auth } = createAuthSetup();
     oauthClient.auth.signInWithOAuth.mockResolvedValueOnce({
       data: { url: null },
       error: { message: 'provider unavailable' },
-    });
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator: createCoordinator(),
-      oauthClient,
     });
 
     vi.useFakeTimers();
@@ -932,21 +825,15 @@ describe('desktop Supabase auth', () => {
   });
 
   it('surfaces rejected routed callback processing failures', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    coordinator.createSessionFromCallback.mockRejectedValueOnce(
-      new Error('network down'),
-    );
     const showErrorMessage = vi.fn(async () => {});
     const log = createLog();
-    const oauthClient = createOAuthClient();
-    const auth = createTestAuth({
-      router,
-      coordinator,
-      oauthClient,
+    const { router, coordinator, oauthClient, auth } = createAuthSetup({
       showErrorMessage,
       log,
     });
+    coordinator.createSessionFromCallback.mockRejectedValueOnce(
+      new Error('network down'),
+    );
 
     await auth.signIn();
     routeMatchingCallback(router, oauthClient);
@@ -963,14 +850,9 @@ describe('desktop Supabase auth', () => {
   });
 
   it('clears included-access caches on sign-out', async () => {
-    const coordinator = createCoordinator();
     const clearAllCaches = vi.fn();
     setServerSideKeyService({ clearAllCaches } as never);
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator,
-      oauthClient: createOAuthClient(),
-    });
+    const { coordinator, auth } = createAuthSetup();
 
     await auth.signOut();
 
@@ -985,16 +867,9 @@ describe('desktop Supabase auth', () => {
     vi.mocked(
       agentRegistry.invalidateRemoteAgentsAfterSignOut,
     ).mockRejectedValueOnce(new Error('local rebuild failed'));
-    const coordinator = createCoordinator();
     const onSessionChanged = vi.fn(async () => {});
     const log = createLog();
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator,
-      oauthClient: createOAuthClient(),
-      onSessionChanged,
-      log,
-    });
+    const { coordinator, auth } = createAuthSetup({ onSessionChanged, log });
 
     await expect(auth.signOut()).resolves.toBeUndefined();
 

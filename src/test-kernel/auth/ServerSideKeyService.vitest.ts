@@ -36,15 +36,16 @@ function createTierService(
     },
   };
   let configSnapshot: typeof config | null = null;
-  const fake = {
-    clearCacheCalls: 0,
-    getConfigCalls: 0,
+  let clearCacheCalls = 0;
+  let getConfigCalls = 0;
+
+  const service = {
     clearCache() {
-      this.clearCacheCalls += 1;
+      clearCacheCalls += 1;
     },
     async getConfig() {
-      this.getConfigCalls += 1;
-      if (this.getConfigCalls <= (options.configFailures ?? 0)) return null;
+      getConfigCalls += 1;
+      if (getConfigCalls <= (options.configFailures ?? 0)) return null;
       configSnapshot = config;
       return configSnapshot;
     },
@@ -69,16 +70,16 @@ function createTierService(
     getExpirationDate() {
       return null;
     },
-  };
+  } as unknown as TierService;
 
   return {
     get clearCacheCalls() {
-      return fake.clearCacheCalls;
+      return clearCacheCalls;
     },
     get getConfigCalls() {
-      return fake.getConfigCalls;
+      return getConfigCalls;
     },
-    service: fake as unknown as TierService,
+    service,
   };
 }
 
@@ -96,21 +97,22 @@ function createService(
   );
 }
 
-function createQuotaExceededSetup(): {
+function mockAuthenticatedSupabase(): void {
+  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+}
+
+function createIncludedAccessSetup(tierOptions: {
+  quotaExceeded?: boolean;
+  configFailures?: number;
+}): {
   state: FakeStateStore;
   tier: FakeTierService;
   service: ServerSideKeyService;
 } {
   const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
-  const tier = createTierService({
-    providers: ['openai'],
-    quotaExceeded: true,
-  });
-  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
-  vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+  const tier = createTierService({ providers: ['openai'], ...tierOptions });
   const service = createService(tier.service, state);
-
   return { state, tier, service };
 }
 
@@ -179,6 +181,17 @@ describe('ServerSideKeyService quota fallback', () => {
     vi.restoreAllMocks();
   });
 
+  function createQuotaExceededSetup(): {
+    state: FakeStateStore;
+    tier: FakeTierService;
+    service: ServerSideKeyService;
+  } {
+    const setup = createIncludedAccessSetup({ quotaExceeded: true });
+    mockAuthenticatedSupabase();
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+    return setup;
+  }
+
   it('does not repeat the quota auto-switch after manual re-enable', async () => {
     const { service } = createQuotaExceededSetup();
 
@@ -220,14 +233,11 @@ describe('ServerSideKeyService anonymous access cache', () => {
   });
 
   it('refetches instead of serving a cached anonymous fetch', async () => {
-    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
-    const tier = createTierService({ providers: ['openai'] });
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const { tier, service } = createIncludedAccessSetup({});
+    mockAuthenticatedSupabase();
     const tokenSpy = vi
       .spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockResolvedValue(null);
-    const service = createService(tier.service, state);
 
     // Session refresh is dead: the fetch runs anonymously.
     expect(await service.canUseServerSideKeys()).toBe(true);
@@ -246,8 +256,7 @@ describe('ServerSideKeyService anonymous access cache', () => {
   });
 
   it('does not let a stale anonymous fetch erase authenticated access', async () => {
-    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
-    const tier = createTierService({ providers: ['openai'] });
+    const { service } = createIncludedAccessSetup({});
     const firstAuthentication = createDeferred<boolean>();
     vi.spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockResolvedValueOnce(null)
@@ -256,7 +265,6 @@ describe('ServerSideKeyService anonymous access cache', () => {
       .mockReturnValueOnce(firstAuthentication.promise)
       .mockResolvedValueOnce(true);
     vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
-    const service = createService(tier.service, state);
 
     const anonymousFetch = service.canUseServerSideKeys();
     await Promise.resolve();
@@ -274,15 +282,9 @@ describe('ServerSideKeyService anonymous access cache', () => {
   });
 
   it('retries an authenticated Ultra check after a config fetch fails', async () => {
-    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
-    const tier = createTierService({
-      providers: ['openai'],
-      configFailures: 1,
-    });
+    const { tier, service } = createIncludedAccessSetup({ configFailures: 1 });
+    mockAuthenticatedSupabase();
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
-    const service = createService(tier.service, state);
 
     expect(await service.canUseServerSideKeys()).toBe(false);
     expect(await service.canUseServerSideKeys()).toBe(true);

@@ -27,10 +27,12 @@ function restoreDom(): void {
 }
 
 describe('themeIsDark', () => {
-  it('treats dark and high-contrast as dark', () => {
-    expect(themeIsDark('dark')).toBe(true);
-    expect(themeIsDark('high-contrast')).toBe(true);
-    expect(themeIsDark('light')).toBe(false);
+  it.each([
+    { theme: 'dark', expected: true },
+    { theme: 'high-contrast', expected: true },
+    { theme: 'light', expected: false },
+  ] as const)('treats $theme as dark=$expected', ({ theme, expected }) => {
+    expect(themeIsDark(theme)).toBe(expected);
   });
 });
 

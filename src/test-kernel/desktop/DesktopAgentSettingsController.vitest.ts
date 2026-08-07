@@ -118,6 +118,50 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   };
 }
 
+type Controller = DefaultDesktopAgentSettingsController;
+
+function applyAgentPreset(
+  controller: Controller,
+  presetId: string,
+): Promise<void> | void {
+  return assertSupported(controller.handlers.applyAgentModePreset)({
+    command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+    presetId,
+  });
+}
+
+function deleteAgentPreset(
+  controller: Controller,
+  presetId: string,
+): Promise<void> | void {
+  return assertSupported(controller.handlers.deleteAgentModePreset)({
+    command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+    presetId,
+  });
+}
+
+function postedCommands(posted: unknown[]): Array<string | undefined> {
+  return posted.map(commandOf);
+}
+
+function customTeamState(preset: Record<string, unknown>): FakeStateStore {
+  return new FakeStateStore({
+    [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [preset],
+  });
+}
+
+function remoteTeamPreset(): Record<string, unknown> {
+  return {
+    id: 'remote-team',
+    name: 'Remote team',
+    description: 'Uses a hosted root',
+    icon: 'screwdriver-wrench',
+    workflowAgents: [],
+    toolUseAgents: ['orchestrator'],
+    texraHostedAgents: ['orchestrator'],
+  };
+}
+
 function physicistCatalog(): AgentCatalog {
   const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
     source: 'builtInWorkflow',
@@ -169,7 +213,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     await controller.postStartupData();
 
     expect(loadAgents).toHaveBeenCalledOnce();
-    expect(posted.map(commandOf)).toEqual(
+    expect(postedCommands(posted)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -198,7 +242,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       kind: 'custom',
       agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
     });
-    expect(posted.map(commandOf)).toEqual(
+    expect(postedCommands(posted)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
         MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
@@ -213,12 +257,9 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
     await controller.refreshCatalogData();
 
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      ),
-    ).toBe(true);
+    expect(postedCommands(posted)).toContain(
+      MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+    );
     const teamOptionsMessage = posted.find(
       (message) => commandOf(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
     ) as { optionsData?: unknown } | undefined;
@@ -248,7 +289,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
     });
 
-    expect(posted.map(commandOf)).toEqual(
+    expect(postedCommands(posted)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
         MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
@@ -263,14 +304,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
         catalog: physicistCatalog(),
         chooseTeamAvailability: async () => 'continue',
       });
-    const applyPreset = assertSupported(
-      controller.handlers.applyAgentModePreset,
-    );
 
-    await applyPreset({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'physicist',
-    });
+    await applyAgentPreset(controller, 'physicist');
 
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
@@ -284,17 +319,12 @@ describe('DefaultDesktopAgentSettingsController', () => {
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       selectedToolUseAgent: 'orchestrator',
     });
-    expect(
-      posted.some(
-        (message) => commandOf(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-      ),
-    ).toBe(true);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      ),
-    ).toBe(true);
+    expect(postedCommands(posted)).toContain(
+      MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    );
+    expect(postedCommands(posted)).toContain(
+      SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+    );
     // The fixture catalog is missing the preset's hosted members, so the
     // notification must say the team is only partially applied.
     expect(infoMessages).toEqual([
@@ -304,48 +334,26 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
   it('reports a fully applied team without an unavailable-member suffix', async () => {
     const catalog = physicistCatalog();
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
-        {
-          id: 'paper-team',
-          name: 'Paper Team',
-          description: 'Every member resolves locally',
-          icon: 'screwdriver-wrench',
-          workflowAgents: ['correct'],
-          toolUseAgents: ['review'],
-        },
-      ],
+    const workspaceState = customTeamState({
+      id: 'paper-team',
+      name: 'Paper Team',
+      description: 'Every member resolves locally',
+      icon: 'screwdriver-wrench',
+      workflowAgents: ['correct'],
+      toolUseAgents: ['review'],
     });
     const { controller, infoMessages } = createControllerFixture({
       catalog,
       workspaceState,
     });
-    const applyPreset = assertSupported(
-      controller.handlers.applyAgentModePreset,
-    );
 
-    await applyPreset({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'paper-team',
-    });
+    await applyAgentPreset(controller, 'paper-team');
 
     expect(infoMessages).toEqual(['Applied "Paper Team" team']);
   });
 
   it('signs in before one forced remote refresh and commits the team once', async () => {
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
-        {
-          id: 'remote-team',
-          name: 'Remote team',
-          description: 'Uses a hosted root',
-          icon: 'screwdriver-wrench',
-          workflowAgents: [],
-          toolUseAgents: ['orchestrator'],
-          texraHostedAgents: ['orchestrator'],
-        },
-      ],
-    });
+    const workspaceState = customTeamState(remoteTeamPreset());
     const catalog: AgentCatalog = { workflow: [], toolUse: [] };
     const order: string[] = [];
     const refreshAgents = vi.fn(async () => {
@@ -373,14 +381,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
       refreshAgents,
     });
     update.mockClear();
-    const applyPreset = assertSupported(
-      controller.handlers.applyAgentModePreset,
-    );
 
-    await applyPreset({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'remote-team',
-    });
+    await applyAgentPreset(controller, 'remote-team');
 
     expect(order).toEqual(['sign-in', 'refresh']);
     expect(refreshAgents).toHaveBeenCalledOnce();
@@ -396,19 +398,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
   });
 
   it('does not write roster state when team preflight is cancelled', async () => {
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
-        {
-          id: 'remote-team',
-          name: 'Remote team',
-          description: 'Uses a hosted root',
-          icon: 'screwdriver-wrench',
-          workflowAgents: [],
-          toolUseAgents: ['orchestrator'],
-          texraHostedAgents: ['orchestrator'],
-        },
-      ],
-    });
+    const workspaceState = customTeamState(remoteTeamPreset());
     const update = vi.spyOn(workspaceState, 'update');
     const refreshAgents = vi.fn(async () => undefined);
     const { controller } = createControllerFixture({
@@ -417,14 +407,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
       refreshAgents,
     });
     update.mockClear();
-    const applyPreset = assertSupported(
-      controller.handlers.applyAgentModePreset,
-    );
 
-    await applyPreset({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'remote-team',
-    });
+    await applyAgentPreset(controller, 'remote-team');
 
     expect(refreshAgents).not.toHaveBeenCalled();
     expect(
@@ -470,35 +454,25 @@ describe('DefaultDesktopAgentSettingsController', () => {
     );
   });
 
-  function customTeamState(): FakeStateStore {
-    return new FakeStateStore({
-      [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
-        {
-          id: 'custom-team',
-          name: 'Custom Team',
-          description: 'test',
-          icon: 'codicon-bookmark',
-          workflowAgents: ['correct'],
-          toolUseAgents: ['review'],
-        },
-      ],
+  function savedTeamState(): FakeStateStore {
+    return customTeamState({
+      id: 'custom-team',
+      name: 'Custom Team',
+      description: 'test',
+      icon: 'codicon-bookmark',
+      workflowAgents: ['correct'],
+      toolUseAgents: ['review'],
     });
   }
 
   it('keeps a custom team when its delete confirmation is declined', async () => {
-    const workspaceState = customTeamState();
+    const workspaceState = savedTeamState();
     const { confirmed, controller } = createControllerFixture({
       workspaceState,
       confirm: async () => false,
     });
-    const deletePreset = assertSupported(
-      controller.handlers.deleteAgentModePreset,
-    );
 
-    await deletePreset({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-      presetId: 'custom-team',
-    });
+    await deleteAgentPreset(controller, 'custom-team');
 
     expect(confirmed).toEqual(['Delete team "Custom Team"?']);
     expect(
@@ -507,18 +481,12 @@ describe('DefaultDesktopAgentSettingsController', () => {
   });
 
   it('deletes custom teams and reports unknown team ids', async () => {
-    const workspaceState = customTeamState();
+    const workspaceState = savedTeamState();
     const { controller, errorMessages, posted } = createControllerFixture({
       workspaceState,
     });
-    const deletePreset = assertSupported(
-      controller.handlers.deleteAgentModePreset,
-    );
 
-    await deletePreset({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-      presetId: 'custom-team',
-    });
+    await deleteAgentPreset(controller, 'custom-team');
 
     expect(workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)).toEqual(
       [],
@@ -533,10 +501,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       }),
     );
 
-    await deletePreset({
-      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-      presetId: 'missing-team',
-    });
+    await deleteAgentPreset(controller, 'missing-team');
 
     expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
   });
@@ -558,14 +523,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
   it('reports unknown presets without writing roster state', async () => {
     const { controller, errorMessages, workspaceState } =
       createControllerFixture();
-    const applyPreset = assertSupported(
-      controller.handlers.applyAgentModePreset,
-    );
 
-    await applyPreset({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'missing-team',
-    });
+    await applyAgentPreset(controller, 'missing-team');
 
     expect(errorMessages).toEqual(['Unknown team: missing-team']);
     expect(

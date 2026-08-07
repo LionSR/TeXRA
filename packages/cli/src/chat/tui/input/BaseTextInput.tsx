@@ -308,11 +308,11 @@ export function textInputDisplayWindow({
   readonly value: string;
   readonly width?: number;
 }): TextInputDisplayWindow {
-  const rowCount = Math.max(1, maxDisplayRows ?? 0);
-  const columnCount = Math.max(1, width ?? 0);
   if (maxDisplayRows === undefined || width === undefined) {
     return { value, cursor: clampCursor(cursor, value.length), clipped: false };
   }
+  const rowCount = Math.max(1, maxDisplayRows);
+  const columnCount = Math.max(1, width);
 
   const sourceCursor = clampCursor(cursor, value.length);
   const rows = textInputDisplayRows(value, columnCount);

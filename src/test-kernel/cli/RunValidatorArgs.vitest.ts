@@ -32,28 +32,29 @@ function runValidator(args: string[]) {
   });
 }
 
+function runValidatorWithoutRebuild(args: string[]) {
+  const before = bundleMtimes();
+  const result = runValidator(args);
+  expect(bundleMtimes()).toEqual(before);
+  return result;
+}
+
 describe('CLI run validator args', () => {
   it('prints help without building the CLI bundle', () => {
-    const before = bundleMtimes();
-    const result = runValidator(['--help']);
-    const after = bundleMtimes();
+    const result = runValidatorWithoutRebuild(['--help']);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[validate-run] usage:');
     expect(result.stdout).toContain('--no-build');
-    expect(after).toEqual(before);
   });
 
   it('rejects unknown options before running validation', () => {
-    const before = bundleMtimes();
-    const result = runValidator(['--definitely-missing']);
-    const after = bundleMtimes();
+    const result = runValidatorWithoutRebuild(['--definitely-missing']);
 
     expect(result.status).toBe(2);
     expect(result.stderr).toContain(
       '[validate-run] unknown argument: --definitely-missing',
     );
     expect(result.stderr).toContain('[validate-run] usage:');
-    expect(after).toEqual(before);
   });
 });

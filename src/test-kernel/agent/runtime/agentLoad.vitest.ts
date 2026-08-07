@@ -90,8 +90,11 @@ describe('validateAgentYamlContent', () => {
 describe('loadAgentSettingAndPrompts', () => {
   const fileContents = new Map<string, string>();
 
-  function normalize(filePath: string): string {
-    return path.normalize(filePath);
+  function putYaml(resolution: ResolvedAgent, lines: string[]): void {
+    fileContents.set(
+      path.normalize(resolution.definitionPath),
+      lines.join('\n'),
+    );
   }
 
   function customResolution(
@@ -110,12 +113,12 @@ describe('loadAgentSettingAndPrompts', () => {
     fileContents.clear();
 
     vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
-      async (filePath: string) => fileContents.has(normalize(filePath)),
+      async (filePath: string) => fileContents.has(path.normalize(filePath)),
     );
 
     vi.spyOn(AbsoluteFS, 'read').mockImplementation(
       async (filePath: string) => {
-        const content = fileContents.get(normalize(filePath));
+        const content = fileContents.get(path.normalize(filePath));
         if (!content) {
           throw new Error(`File not found: ${filePath}`);
         }
@@ -131,20 +134,17 @@ describe('loadAgentSettingAndPrompts', () => {
   it('loads settings and prompts from the given definition path', async () => {
     const resolution = customResolution('polish', AgentCategory.Workflow);
 
-    fileContents.set(
-      normalize(resolution.definitionPath),
-      [
-        'name: polish',
-        'settings:',
-        // agentCategory is the discriminator of AgentSettingSchema; only
-        // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
-        '  agentCategory: workflow',
-        '  rounds: 1',
-        'prompts:',
-        '  userRequest: unified variant',
-        '',
-      ].join('\n'),
-    );
+    putYaml(resolution, [
+      'name: polish',
+      'settings:',
+      // agentCategory is the discriminator of AgentSettingSchema; only
+      // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
+      '  agentCategory: workflow',
+      '  rounds: 1',
+      'prompts:',
+      '  userRequest: unified variant',
+      '',
+    ]);
 
     const [, prompts] = await loadAgentSettingAndPrompts(resolution);
 
@@ -155,7 +155,7 @@ describe('loadAgentSettingAndPrompts', () => {
     const resolution = customResolution('broken', AgentCategory.Workflow);
 
     fileContents.set(
-      normalize(resolution.definitionPath),
+      path.normalize(resolution.definitionPath),
       'name: "unterminated\n',
     );
 
@@ -177,28 +177,22 @@ describe('loadAgentSettingAndPrompts', () => {
       agent_b: resolutionB,
     };
 
-    fileContents.set(
-      normalize(resolutionA.definitionPath),
-      [
-        'name: agent_a',
-        'inherits: agent_b',
-        'settings:',
-        '  agentCategory: workflow',
-        'prompts: {}',
-        '',
-      ].join('\n'),
-    );
-    fileContents.set(
-      normalize(resolutionB.definitionPath),
-      [
-        'name: agent_b',
-        'inherits: agent_a',
-        'settings:',
-        '  agentCategory: workflow',
-        'prompts: {}',
-        '',
-      ].join('\n'),
-    );
+    putYaml(resolutionA, [
+      'name: agent_a',
+      'inherits: agent_b',
+      'settings:',
+      '  agentCategory: workflow',
+      'prompts: {}',
+      '',
+    ]);
+    putYaml(resolutionB, [
+      'name: agent_b',
+      'inherits: agent_a',
+      'settings:',
+      '  agentCategory: workflow',
+      'prompts: {}',
+      '',
+    ]);
 
     const actual =
       await vi.importActual<typeof import('@agent/index')>('@agent/index');

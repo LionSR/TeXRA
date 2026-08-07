@@ -48,6 +48,11 @@ const mergeTaskRuns: BucketMigration = (sourcePath, targetPath, options) =>
     ...options,
     mergePerChild: 'all',
   });
+const mergeGlobalBuckets: BucketMigration = (sourcePath, targetPath, options) =>
+  mergeLegacyStorageBucket(sourcePath, targetPath, {
+    ...options,
+    mergePerChild: GLOBAL_MERGE_PER_CHILD,
+  });
 
 /**
  * Best-effort, one-time move of the extension's legacy `context.storageUri` /
@@ -109,10 +114,6 @@ export async function migrateLegacyVscodeStorage(
     () => context.globalStorageUri?.fsPath,
     () => storage.getGlobalStoragePath(),
     'vscode-global-storage',
-    (sourcePath, targetPath, options) =>
-      mergeLegacyStorageBucket(sourcePath, targetPath, {
-        ...options,
-        mergePerChild: GLOBAL_MERGE_PER_CHILD,
-      }),
+    mergeGlobalBuckets,
   );
 }

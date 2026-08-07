@@ -54,9 +54,10 @@ export function queuedFollowUpPanelDisplay({
   }
 
   const hasOverflow = messages.length > messageSlots;
+  // On overflow, reserve the last slot for the hidden-count row.
   const visibleMessageCount = hasOverflow
     ? Math.max(0, messageSlots - 1)
-    : Math.min(messages.length, messageSlots);
+    : messages.length;
   const rows: QueuedFollowUpPanelRow[] = messages
     .slice(0, visibleMessageCount)
     .map((message, index) => {

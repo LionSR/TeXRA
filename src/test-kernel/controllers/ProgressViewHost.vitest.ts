@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it, vi } from 'vitest';
+import { beforeEach, describe, it, vi } from 'vitest';
 
 const tryResumeStreamMock = vi.hoisted(() =>
   vi.fn(async (_streamId: string) => true),
@@ -131,7 +131,18 @@ function createHostHarness(
   };
 }
 
+function createToolUseHostHarness(identity?: RunIdentity): HostHarness {
+  return createHostHarness(
+    createAgentConfig({ agentCategory: AgentCategory.ToolUse }),
+    identity,
+  );
+}
+
 describe('ProgressViewHost', () => {
+  beforeEach(() => {
+    tryResumeStreamMock.mockClear();
+  });
+
   it('constructs shared controllers and command handlers from host adapters', async () => {
     const runConfig = createWorkflowConfig();
     const harness = createHostHarness(runConfig);
@@ -171,11 +182,7 @@ describe('ProgressViewHost', () => {
   });
 
   it('resumes a tool-use stream through the host resume port', async () => {
-    tryResumeStreamMock.mockClear();
-    const runConfig = createAgentConfig({
-      agentCategory: AgentCategory.ToolUse,
-    });
-    const harness = createHostHarness(runConfig);
+    const harness = createToolUseHostHarness();
 
     await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
       command: PROGRESS_VIEW_COMMANDS.RESUME,
@@ -187,7 +194,6 @@ describe('ProgressViewHost', () => {
   });
 
   it('starts a fresh run for a tool-use stream on Run New', async () => {
-    tryResumeStreamMock.mockClear();
     const runConfig = createAgentConfig({
       agentCategory: AgentCategory.ToolUse,
     });
@@ -213,11 +219,7 @@ describe('ProgressViewHost', () => {
 
   for (const identity of nonNativeIdentities) {
     it(`refuses RESUME and RUN_NEW with feedback for ${JSON.stringify(identity)}`, async () => {
-      tryResumeStreamMock.mockClear();
-      const runConfig = createAgentConfig({
-        agentCategory: AgentCategory.ToolUse,
-      });
-      const harness = createHostHarness(runConfig, identity);
+      const harness = createToolUseHostHarness(identity);
 
       await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
         command: PROGRESS_VIEW_COMMANDS.RESUME,

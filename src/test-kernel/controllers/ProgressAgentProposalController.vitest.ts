@@ -5,7 +5,10 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import {
+  ProgressAgentProposalController,
+  type ProgressAgentProposalControllerDeps,
+} from '@controllers/progressView/ProgressAgentProposalController';
 import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
@@ -26,19 +29,35 @@ function createWorkflowProposal(): AgentProposalPermission {
   };
 }
 
+function createController(
+  overrides: Partial<ProgressAgentProposalControllerDeps> = {},
+): {
+  controller: ProgressAgentProposalController;
+  resolved: { proposalId: string; result: unknown }[];
+} {
+  const resolved: { proposalId: string; result: unknown }[] = [];
+  const controller = new ProgressAgentProposalController({
+    getPendingProposal: () => createWorkflowProposal(),
+    restoreRunConfig: async () => {
+      throw new Error('restore should not run');
+    },
+    settleProposal: (proposalId, result) => {
+      resolved.push({ proposalId, result });
+    },
+    ...overrides,
+  });
+  return { controller, resolved };
+}
+
 describe('ProgressAgentProposalController', () => {
   it('restores pending setup proposals and resolves the coordinator', async () => {
     const proposal = createWorkflowProposal();
     const restored: unknown[] = [];
-    const resolved: unknown[] = [];
-    const controller = new ProgressAgentProposalController({
+    const { controller, resolved } = createController({
       getPendingProposal: () => proposal,
       restoreRunConfig: async (config) => {
         restored.push(config);
         return true;
-      },
-      settleProposal: (proposalId, result) => {
-        resolved.push({ proposalId, result });
       },
     });
 
@@ -71,11 +90,8 @@ describe('ProgressAgentProposalController', () => {
 
   it('returns false for missing setup proposals', async () => {
     let missingProposalId = '';
-    const controller = new ProgressAgentProposalController({
+    const { controller } = createController({
       getPendingProposal: () => undefined,
-      restoreRunConfig: async () => {
-        throw new Error('restore should not run');
-      },
       settleProposal: () => {
         throw new Error('resolve should not run');
       },
@@ -95,13 +111,8 @@ describe('ProgressAgentProposalController', () => {
   });
 
   it('rejects pending setup proposals when restore fails', async () => {
-    const resolved: unknown[] = [];
-    const controller = new ProgressAgentProposalController({
-      getPendingProposal: () => createWorkflowProposal(),
+    const { controller, resolved } = createController({
       restoreRunConfig: async () => false,
-      settleProposal: (proposalId, result) => {
-        resolved.push({ proposalId, result });
-      },
     });
 
     assert.equal(
@@ -123,16 +134,7 @@ describe('ProgressAgentProposalController', () => {
   });
 
   it('passes approve and reject actions through without restoring state', async () => {
-    const resolved: unknown[] = [];
-    const controller = new ProgressAgentProposalController({
-      getPendingProposal: () => createWorkflowProposal(),
-      restoreRunConfig: async () => {
-        throw new Error('restore should not run');
-      },
-      settleProposal: (proposalId, result) => {
-        resolved.push({ proposalId, result });
-      },
-    });
+    const { controller, resolved } = createController();
 
     assert.equal(
       await controller.handleAction({
@@ -164,16 +166,7 @@ describe('ProgressAgentProposalController', () => {
   });
 
   it('omits absent optional fields when approving or rejecting', async () => {
-    const resolved: { result: Record<string, unknown> }[] = [];
-    const controller = new ProgressAgentProposalController({
-      getPendingProposal: () => createWorkflowProposal(),
-      restoreRunConfig: async () => {
-        throw new Error('restore should not run');
-      },
-      settleProposal: (_proposalId, result) => {
-        resolved.push({ result });
-      },
-    });
+    const { controller, resolved } = createController();
 
     await controller.handleAction({
       proposalId: 'proposal-approve',
@@ -185,8 +178,8 @@ describe('ProgressAgentProposalController', () => {
     });
 
     assert.deepEqual(resolved, [
-      { result: { action: 'approve' } },
-      { result: { action: 'reject' } },
+      { proposalId: 'proposal-approve', result: { action: 'approve' } },
+      { proposalId: 'proposal-reject', result: { action: 'reject' } },
     ]);
   });
 });

@@ -46,11 +46,34 @@ import {
   track,
 } from './progressBackendHarness';
 
+type RecordingTarget = ReturnType<typeof createIsolatedRecordingBackend>;
+
+function emitRemoveStream(
+  target: RecordingTarget,
+  streamId: StreamTabId,
+): void {
+  target.session.events.emit({
+    scope: 'session',
+    event: { type: 'removeStream', payload: { streamId } },
+  });
+}
+
+function stubClearAll(
+  backend: RecordingTarget['backend'],
+  active: Set<StreamTabId> = new Set(),
+): void {
+  vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+    active,
+    failed: new Set(),
+  });
+}
+
 describe('ProgressBackend', () => {
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
+    const kinds = ['bash', 'toolEdit', 'superYolo'] as const;
 
-    for (const kind of ['bash', 'toolEdit', 'superYolo'] as const) {
+    for (const kind of kinds) {
       backend.setApprovalBypassState({
         streamId: 'stream:bypass',
         kind,
@@ -58,31 +81,19 @@ describe('ProgressBackend', () => {
       });
     }
 
-    expect(messages).toEqual([
-      {
+    expect(messages).toEqual(
+      kinds.map((kind) => ({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
         stream: 'stream:bypass',
-        type: 'bash',
+        type: kind,
         bypassActive: true,
-      },
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
-        stream: 'stream:bypass',
-        type: 'toolEdit',
-        bypassActive: true,
-      },
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
-        stream: 'stream:bypass',
-        type: 'superYolo',
-        bypassActive: true,
-      },
-    ]);
+      })),
+    );
   });
 
   it('handles session facts through its local subscription', () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, session } = target;
+    const { backend } = target;
     backend.setupEventListeners();
     const streamId = 'desktop-local-stream' as StreamTabId;
 
@@ -160,12 +171,13 @@ describe('ProgressBackend', () => {
 
   it('routes removeStream session facts through the shared lifecycle delete path', async () => {
     const deletedStreams: StreamTabId[] = [];
-    const { backend, session } = createIsolatedRecordingBackend(
+    const target = createIsolatedRecordingBackend(
       createTestSession(),
       createLifecycleOptions({
         cleanupDeletedStream: (stream) => deletedStreams.push(stream),
       }),
     );
+    const { backend } = target;
     backend.setupEventListeners();
     const streamId = 'desktop-child-stream' as StreamTabId;
 
@@ -173,10 +185,7 @@ describe('ProgressBackend', () => {
       backend.state.streamLogs.ensureStream(streamId);
       backend.state.getOrCreateStreamState(streamId, AgentCategory.ToolUse);
 
-      session.events.emit({
-        scope: 'session',
-        event: { type: 'removeStream', payload: { streamId } },
-      });
+      emitRemoveStream(target, streamId);
 
       await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
       expect(backend.state.streamLogs.has(streamId)).toBe(false);
@@ -187,15 +196,13 @@ describe('ProgressBackend', () => {
   });
 
   it('handles removeStream session facts before backend load', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const target = createIsolatedRecordingBackend();
+    const { backend } = target;
     const clearStream = vi.spyOn(backend.state, 'clearStream');
     backend.setupEventListeners();
     const streamId = 'preload-child-stream' as StreamTabId;
 
-    session.events.emit({
-      scope: 'session',
-      event: { type: 'removeStream', payload: { streamId } },
-    });
+    emitRemoveStream(target, streamId);
 
     await vi.waitFor(() => expect(clearStream).toHaveBeenCalledWith(streamId));
   });
@@ -356,10 +363,7 @@ describe('ProgressBackend', () => {
     const second = 'bulk-second' as StreamTabId;
     backend.state.streamLogs.ensureStream(first);
     backend.state.streamLogs.ensureStream(second);
-    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
-      active: new Set(),
-      failed: new Set(),
-    });
+    stubClearAll(backend);
 
     await backend.deleteAllStreams();
 
@@ -381,28 +385,21 @@ describe('ProgressBackend', () => {
     const { backend, lifecycle, session } = createIsolatedRecordingBackend();
     const first = 'owned-first' as StreamTabId;
     const second = 'owned-second' as StreamTabId;
-    backend.state.streamLogs.ensureStream(first);
-    backend.state.streamLogs.ensureStream(second);
-    session.status.transition(
-      first,
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
-    session.status.transition(
-      second,
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
+    for (const stream of [first, second]) {
+      backend.state.streamLogs.ensureStream(stream);
+      session.status.transition(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      );
+    }
     vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
       {} as never,
     );
     const waitForRelease = vi
       .spyOn(backend.state, 'waitForOwnedExecutionRelease')
       .mockResolvedValue(undefined);
-    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
-      active: new Set(),
-      failed: new Set(),
-    });
+    stubClearAll(backend);
 
     await backend.deleteAllStreams();
 
@@ -452,10 +449,7 @@ describe('ProgressBackend', () => {
     const retained = 'bulk-retained' as StreamTabId;
     backend.state.streamLogs.ensureStream(deleted);
     backend.state.streamLogs.ensureStream(retained);
-    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
-      active: new Set([retained]),
-      failed: new Set(),
-    });
+    stubClearAll(backend, new Set([retained]));
 
     await backend.deleteAllStreams();
 
@@ -567,19 +561,16 @@ describe('ProgressBackend', () => {
 
   it('stops projecting session facts once disposed', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, session, messages } = target;
+    const { backend, messages } = target;
     backend.setupEventListeners();
     const stream = 'disposed-projection' as StreamTabId;
 
     backend.dispose();
     messages.length = 0;
 
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: { streamId: stream, agentCategory: AgentCategory.Workflow },
-      },
+    emitActiveStream(target, {
+      streamId: stream,
+      agentCategory: AgentCategory.Workflow,
     });
     await Promise.resolve();
 
@@ -589,18 +580,15 @@ describe('ProgressBackend', () => {
 
   it('attaches nothing when listeners are set up after disposal', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, session, messages } = target;
+    const { backend, messages } = target;
     const stream = 'late-attach-projection' as StreamTabId;
 
     backend.dispose();
     backend.setupEventListeners();
 
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: { streamId: stream, agentCategory: AgentCategory.Workflow },
-      },
+    emitActiveStream(target, {
+      streamId: stream,
+      agentCategory: AgentCategory.Workflow,
     });
     await Promise.resolve();
 

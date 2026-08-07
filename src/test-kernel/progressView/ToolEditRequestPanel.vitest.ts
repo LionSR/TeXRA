@@ -54,6 +54,15 @@ function querySplitButton(element: ToolEditRequestPanel): ApproveSplit | null {
   );
 }
 
+function tooltipText(
+  element: ToolEditRequestPanel,
+  anchorId: string,
+): string | undefined {
+  return element.shadowRoot
+    ?.querySelector(`wa-tooltip[for="${anchorId}"]`)
+    ?.textContent?.trim();
+}
+
 describe('tool-edit-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/ToolEditRequestPanel'),
@@ -67,11 +76,9 @@ describe('tool-edit-request-panel', () => {
 
     expect(button).toBeTruthy();
     expect(button?.hasAttribute('title')).toBe(false);
-    expect(
-      element.shadowRoot
-        ?.querySelector('wa-tooltip[for="tool-edit-diff-button"]')
-        ?.textContent?.trim(),
-    ).toBe('Open inline diff (d)');
+    expect(tooltipText(element, 'tool-edit-diff-button')).toBe(
+      'Open inline diff (d)',
+    );
   });
 
   it('anchors the line-change hint with wa-tooltip instead of title', async () => {
@@ -83,44 +90,38 @@ describe('tool-edit-request-panel', () => {
       '#tool-edit-diff-summary',
     );
     expect(summary?.hasAttribute('title')).toBe(false);
-    expect(
-      element.shadowRoot
-        ?.querySelector('wa-tooltip[for="tool-edit-diff-summary"]')
-        ?.textContent?.trim(),
-    ).toBe('+2 / -1 lines changed');
-  });
-
-  it('renders inline diff when only proposed content is available', async () => {
-    const element = await mountPanel(
-      createPermission({
-        proposedContent: 'new content\n',
-      }),
+    expect(tooltipText(element, 'tool-edit-diff-summary')).toBe(
+      '+2 / -1 lines changed',
     );
-
-    element.handleKeyboardShortcut('d');
-    await element.updateComplete;
-
-    const diffView = queryDiffView(element);
-    expect(diffView).toBeTruthy();
-    expect(diffView?.originalText).toBe('');
-    expect(diffView?.proposedText).toBe('new content\n');
   });
 
-  it('renders inline diff when only original content is available', async () => {
-    const element = await mountPanel(
-      createPermission({
-        originalContent: 'deleted content\n',
-      }),
-    );
+  it.each([
+    {
+      name: 'only proposed content is available',
+      permission: { proposedContent: 'new content\n' },
+      originalText: '',
+      proposedText: 'new content\n',
+    },
+    {
+      name: 'only original content is available',
+      permission: { originalContent: 'deleted content\n' },
+      originalText: 'deleted content\n',
+      proposedText: '',
+    },
+  ])(
+    'renders inline diff when $name',
+    async ({ permission, originalText, proposedText }) => {
+      const element = await mountPanel(createPermission(permission));
 
-    element.handleKeyboardShortcut('d');
-    await element.updateComplete;
+      element.handleKeyboardShortcut('d');
+      await element.updateComplete;
 
-    const diffView = queryDiffView(element);
-    expect(diffView).toBeTruthy();
-    expect(diffView?.originalText).toBe('deleted content\n');
-    expect(diffView?.proposedText).toBe('');
-  });
+      const diffView = queryDiffView(element);
+      expect(diffView).toBeTruthy();
+      expect(diffView?.originalText).toBe(originalText);
+      expect(diffView?.proposedText).toBe(proposedText);
+    },
+  );
 
   it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
     const element = await mountPanel(createPermission({ allowBypass: false }));

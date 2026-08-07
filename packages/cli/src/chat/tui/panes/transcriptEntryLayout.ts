@@ -321,14 +321,7 @@ export function transcriptEntryLayout(
     previousEntry === undefined
       ? declaredTopRows
       : Math.max(0, declaredTopRows - entryMarginBottomRows(previousEntry));
-  let marginBottomRows: number;
-  if (entry.role === 'tool') {
-    marginBottomRows = toolUseMarginBottomRows(entry.toolUse);
-  } else if (isInquiryContinuation) {
-    marginBottomRows = 0;
-  } else {
-    marginBottomRows = base.marginBottomRows;
-  }
+  const marginBottomRows = entryMarginBottomRows(entry);
   const columns = transcriptColumns(width, inset);
   return {
     columns,

@@ -97,6 +97,54 @@ function setRoundFlowState(state: Partial<typeof roundFlowState>): void {
   });
 }
 
+function createErrorLoggerNode(): {
+  error: ReturnType<typeof vi.fn>;
+  node: ToolUseCycleNode<unknown>;
+} {
+  const error = vi.fn();
+  const node = new ToolUseCycleNode().setServices({
+    logger: { error },
+  } as unknown as ToolUseServices);
+  return { error, node };
+}
+
+type CycleOutcome = Parameters<ToolUseCycleNode<unknown>['post']>[2];
+
+// Runs ToolUseCycleNode.post against a prepared workspace with only the
+// onCycleResponse service wired, returning the spy and mutated shared state.
+async function runCyclePost(options: {
+  assemblyText?: string;
+  shouldSkipCycle: boolean;
+  prepBaseline?: string;
+  sharedLastResponse?: string;
+  result: CycleOutcome;
+}): Promise<{
+  onCycleResponse: ReturnType<typeof vi.fn>;
+  shared: ToolUseRunShared;
+}> {
+  const workspaceState = AgentWorkspaceState.create();
+  if (options.assemblyText !== undefined) {
+    workspaceState.assembly.lastResponse = options.assemblyText;
+  }
+  const prepRes = createPrepResult(
+    workspaceState,
+    options.shouldSkipCycle,
+    options.prepBaseline ?? '',
+  );
+  const shared = (
+    options.sharedLastResponse === undefined
+      ? {}
+      : { lastResponse: options.sharedLastResponse }
+  ) as ToolUseRunShared;
+  const onCycleResponse = vi.fn();
+  const node = new ToolUseCycleNode().setServices({
+    onCycleResponse,
+  } as unknown as ToolUseServices);
+
+  await node.post(shared, prepRes, options.result);
+  return { onCycleResponse, shared };
+}
+
 function createCycleNode(
   streamId: StreamTabId,
   host: ReturnType<typeof createRecordingHost>['host'],
@@ -199,10 +247,7 @@ describe('tool-use progress events', () => {
     const workspaceState = AgentWorkspaceState.create();
     const prepRes = createPrepResult(workspaceState);
     const shared: Partial<ToolUseRunShared> = {};
-    const error = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      logger: { error },
-    } as unknown as ToolUseServices);
+    const { error, node } = createErrorLoggerNode();
 
     const failed = await node.execFallback(
       prepRes,
@@ -226,10 +271,7 @@ describe('tool-use progress events', () => {
   it('does not repeat an inner model failure at the outer cycle boundary', async () => {
     const prepRes = createPrepResult(AgentWorkspaceState.create());
     const shared: Partial<ToolUseRunShared> = {};
-    const error = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      logger: { error },
-    } as unknown as ToolUseServices);
+    const { error, node } = createErrorLoggerNode();
 
     const lastError = {
       message: 'HTTP 503 Service Unavailable',
@@ -245,18 +287,14 @@ describe('tool-use progress events', () => {
   });
 
   it('reports partial assistant text from a failed non-skipped cycle', async () => {
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'same response';
-    const prepRes = createPrepResult(workspaceState, false);
-    const shared = { lastResponse: 'same response' } as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, {
-      outcome: 'failed',
-      lastError: { message: 'stream failed', userRetryable: true },
+    const { onCycleResponse, shared } = await runCyclePost({
+      assemblyText: 'same response',
+      shouldSkipCycle: false,
+      sharedLastResponse: 'same response',
+      result: {
+        outcome: 'failed',
+        lastError: { message: 'stream failed', userRetryable: true },
+      },
     });
 
     expect(onCycleResponse).toHaveBeenCalledWith('same response');
@@ -264,16 +302,11 @@ describe('tool-use progress events', () => {
   });
 
   it('does not report restored assembly text from a skipped prepare cycle', async () => {
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'historical response';
-    const prepRes = createPrepResult(workspaceState, true);
-    const shared = {} as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, { outcome: 'skipped' });
+    const { onCycleResponse } = await runCyclePost({
+      assemblyText: 'historical response',
+      shouldSkipCycle: true,
+      result: { outcome: 'skipped' },
+    });
 
     expect(onCycleResponse).not.toHaveBeenCalled();
   });
@@ -281,44 +314,27 @@ describe('tool-use progress events', () => {
   it('does not return the previous cycle response for an answerless completed cycle', async () => {
     // Assembly text unchanged since prep is historical: the cycle produced no
     // new assistant response, so it must not become this cycle's result (#9531).
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'previous turn response';
-    const prepRes = createPrepResult(
-      workspaceState,
-      false,
-      'previous turn response',
-    );
-    const shared = {
-      lastResponse: 'previous turn response',
-    } as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, { outcome: 'completed', messages: [] });
+    const { onCycleResponse, shared } = await runCyclePost({
+      assemblyText: 'previous turn response',
+      shouldSkipCycle: false,
+      prepBaseline: 'previous turn response',
+      sharedLastResponse: 'previous turn response',
+      result: { outcome: 'completed', messages: [] },
+    });
 
     expect(onCycleResponse).not.toHaveBeenCalled();
     expect(shared.lastResponse).toBe('previous turn response');
   });
 
   it('does not return the previous cycle response for an answerless failed cycle', async () => {
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'previous turn response';
-    const prepRes = createPrepResult(
-      workspaceState,
-      false,
-      'previous turn response',
-    );
-    const shared = {} as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, {
-      outcome: 'failed',
-      lastError: { message: 'stream failed', userRetryable: true },
+    const { onCycleResponse, shared } = await runCyclePost({
+      assemblyText: 'previous turn response',
+      shouldSkipCycle: false,
+      prepBaseline: 'previous turn response',
+      result: {
+        outcome: 'failed',
+        lastError: { message: 'stream failed', userRetryable: true },
+      },
     });
 
     expect(onCycleResponse).not.toHaveBeenCalled();
@@ -328,22 +344,14 @@ describe('tool-use progress events', () => {
   it('reports assembly text written during the cycle over the prep baseline', async () => {
     // The failure path in exec copies this cycle's partial text into assembly;
     // differing from the prep-time baseline is what makes it reportable.
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'partial cycle text';
-    const prepRes = createPrepResult(
-      workspaceState,
-      false,
-      'previous turn response',
-    );
-    const shared = {} as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, {
-      outcome: 'failed',
-      lastError: { message: 'stream failed', userRetryable: true },
+    const { onCycleResponse, shared } = await runCyclePost({
+      assemblyText: 'partial cycle text',
+      shouldSkipCycle: false,
+      prepBaseline: 'previous turn response',
+      result: {
+        outcome: 'failed',
+        lastError: { message: 'stream failed', userRetryable: true },
+      },
     });
 
     expect(onCycleResponse).toHaveBeenCalledWith('partial cycle text');

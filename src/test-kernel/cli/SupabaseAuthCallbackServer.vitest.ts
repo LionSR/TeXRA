@@ -3,12 +3,40 @@ import { describe, expect, it, vi } from 'vitest';
 import { type SupabaseSessionCoordinator } from '@auth/SupabaseSession';
 import { startLoopbackCallbackServer } from '@cli/runtime/supabaseAuthCallbackServer';
 
+type LoopbackServer = Awaited<ReturnType<typeof startLoopbackCallbackServer>>;
+
+function stubCoordinator(overrides: {
+  createSessionFromCallback?: ReturnType<typeof vi.fn>;
+  storeSession?: ReturnType<typeof vi.fn>;
+}): SupabaseSessionCoordinator {
+  return {
+    createSessionFromCallback: vi.fn(),
+    storeSession: vi.fn(),
+    ...overrides,
+  } as unknown as SupabaseSessionCoordinator;
+}
+
+async function fetchCallbackNonce(server: LoopbackServer): Promise<string> {
+  const callbackPage = await fetch(`${server.redirectTo}?code=oauth-code`);
+  const nonce = (await callbackPage.text()).match(/nonce: "([^"]+)"/)?.[1];
+  expect(nonce).toBeDefined();
+  return nonce as string;
+}
+
+function postCallbackCompletion(
+  server: LoopbackServer,
+  nonce: string,
+): Promise<Response> {
+  return fetch(`${server.redirectTo}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: '?code=oauth-code', nonce }),
+  });
+}
+
 describe('CLI Supabase authentication callback server', () => {
   it('stops waiting when interactive sign-in is cancelled', async () => {
-    const coordinator = {
-      createSessionFromCallback: vi.fn(),
-      storeSession: vi.fn(),
-    } as unknown as SupabaseSessionCoordinator;
+    const coordinator = stubCoordinator({});
     const server = await startLoopbackCallbackServer(coordinator);
     const controller = new AbortController();
     const completion = server.waitForSession(controller.signal);
@@ -37,24 +65,18 @@ describe('CLI Supabase authentication callback server', () => {
         }),
     );
     const storeSession = vi.fn();
-    const coordinator = {
+    const coordinator = stubCoordinator({
       createSessionFromCallback,
       storeSession,
-    } as unknown as SupabaseSessionCoordinator;
+    });
     const server = await startLoopbackCallbackServer(coordinator);
-    const callbackPage = await fetch(`${server.redirectTo}?code=oauth-code`);
-    const nonce = (await callbackPage.text()).match(/nonce: "([^"]+)"/)?.[1];
-    expect(nonce).toBeDefined();
+    const nonce = await fetchCallbackNonce(server);
     const controller = new AbortController();
     const completion = server.waitForSession(controller.signal);
     const rejection = expect(completion).rejects.toMatchObject({
       name: 'AbortError',
     });
-    const callbackResponse = fetch(`${server.redirectTo}/complete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: '?code=oauth-code', nonce }),
-    });
+    const callbackResponse = postCallbackCompletion(server, nonce);
     await vi.waitFor(() =>
       expect(createSessionFromCallback).toHaveBeenCalled(),
     );
@@ -74,30 +96,23 @@ describe('CLI Supabase authentication callback server', () => {
   it('finishes a callback whose storage commit began before cancellation', async () => {
     let finishStorage!: () => void;
     const session = { account: { label: 'person@example.edu' } };
-    const createSessionFromCallback = vi
-      .fn()
-      .mockResolvedValue({ success: true, session });
     const storeSession = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishStorage = resolve;
         }),
     );
-    const coordinator = {
-      createSessionFromCallback,
+    const coordinator = stubCoordinator({
+      createSessionFromCallback: vi
+        .fn()
+        .mockResolvedValue({ success: true, session }),
       storeSession,
-    } as unknown as SupabaseSessionCoordinator;
+    });
     const server = await startLoopbackCallbackServer(coordinator);
-    const callbackPage = await fetch(`${server.redirectTo}?code=oauth-code`);
-    const nonce = (await callbackPage.text()).match(/nonce: "([^"]+)"/)?.[1];
-    expect(nonce).toBeDefined();
+    const nonce = await fetchCallbackNonce(server);
     const controller = new AbortController();
     const completion = server.waitForSession(controller.signal);
-    const callbackResponse = fetch(`${server.redirectTo}/complete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: '?code=oauth-code', nonce }),
-    });
+    const callbackResponse = postCallbackCompletion(server, nonce);
     await vi.waitFor(() => expect(storeSession).toHaveBeenCalled());
 
     controller.abort();

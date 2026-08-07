@@ -85,7 +85,7 @@ describe('desktop package native CLI payload', () => {
     { cli: 'claude' as const, label: 'Claude Code CLI' },
   ])('fails when the $label platform package is bundled', ({ cli, label }) => {
     const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-    writeNativeCliPlatformPackage(resourcesDir, cli);
+    writeNativeCliPackage(resourcesDir, cli, 'package');
 
     const result = runVerifier(packageRoot);
     expect(result.status).toBe(1);
@@ -98,7 +98,7 @@ describe('desktop package native CLI payload', () => {
     'fails when the $cli payload is bundled through the pnpm store layout',
     ({ cli }) => {
       const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-      writeNativeCliPnpmStorePackage(resourcesDir, cli);
+      writeNativeCliPackage(resourcesDir, cli, 'pnpmStore');
 
       const result = runVerifier(packageRoot);
       expect(result.status).toBe(1);
@@ -256,42 +256,29 @@ function createFakeDesktopPackage(
   return { packageRoot, resourcesDir: appRoot };
 }
 
-function writeNativeCliPlatformPackage(
+function writeNativeCliPackage(
   appRoot: string,
   cli: NativeCliName,
+  layout: 'package' | 'pnpmStore',
 ): void {
   const info = nativeCliPlatformPackages[cli];
   const packageDir = join(
     appRoot,
     'app.asar.unpacked',
     'node_modules',
-    ...info.packagePath,
+    ...(layout === 'pnpmStore' ? info.pnpmStorePath : info.packagePath),
   );
 
   writeJson(join(packageDir, 'package.json'), {
     name: info.packagePath.join('/'),
     version: '0.0.0',
   });
-  writeBinary(join(packageDir, ...info.binaryPath));
-}
-
-function writeNativeCliPnpmStorePackage(
-  appRoot: string,
-  cli: NativeCliName,
-): void {
-  const info = nativeCliPlatformPackages[cli];
-  const packageDir = join(
-    appRoot,
-    'app.asar.unpacked',
-    'node_modules',
-    ...info.pnpmStorePath,
+  writeBinary(
+    join(
+      packageDir,
+      ...(layout === 'pnpmStore' ? info.pnpmBinaryPath : info.binaryPath),
+    ),
   );
-
-  writeJson(join(packageDir, 'package.json'), {
-    name: info.packagePath.join('/'),
-    version: '0.0.0',
-  });
-  writeBinary(join(packageDir, ...info.pnpmBinaryPath));
 }
 
 function runVerifier(packageRoot: string): {

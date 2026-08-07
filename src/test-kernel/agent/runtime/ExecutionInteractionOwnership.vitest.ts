@@ -4,12 +4,26 @@
 // another's runs. Design note: docs/design/execution-interaction-ownership.md.
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+
+const liveRegistries: ExecutionRegistry[] = [];
+
+afterEach(() => {
+  for (const registry of liveRegistries.splice(0)) {
+    registry.dispose();
+  }
+});
+
+function createRegistry(): ExecutionRegistry {
+  const registry = new ExecutionRegistry();
+  liveRegistries.push(registry);
+  return registry;
+}
 
 function trackRun(
   registry: ExecutionRegistry,
@@ -29,7 +43,7 @@ function trackRun(
 
 describe('execution interaction ownership', () => {
   it('releases only once the owner finished and its last run was untracked', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const onRelease = vi.fn();
     const scope = registry.interactionOwnership.open(onRelease);
 
@@ -45,11 +59,10 @@ describe('execution interaction ownership', () => {
 
     registry.untrack('root');
     expect(onRelease).toHaveBeenCalledOnce();
-    registry.dispose();
   });
 
   it('releases immediately when a claimed run never reached the registry', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const onRelease = vi.fn();
     const scope = registry.interactionOwnership.open(onRelease);
 
@@ -58,11 +71,10 @@ describe('execution interaction ownership', () => {
 
     scope.finish();
     expect(onRelease).toHaveBeenCalledOnce();
-    registry.dispose();
   });
 
   it('keeps a detached child of a finished root attached to its owner', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const onRelease = vi.fn();
     const scope = registry.interactionOwnership.open(onRelease);
     const rootStream = 'root-stream' as StreamTabId;
@@ -80,11 +92,10 @@ describe('execution interaction ownership', () => {
 
     registry.untrack('child');
     expect(onRelease).toHaveBeenCalledOnce();
-    registry.dispose();
   });
 
   it('inherits a grandchild through the child stream it already owns', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const scope = registry.interactionOwnership.open(vi.fn());
     const rootStream = 'root-stream' as StreamTabId;
     const childStream = 'child-stream' as StreamTabId;
@@ -100,11 +111,10 @@ describe('execution interaction ownership', () => {
     );
 
     expect(registry.interactionOwnership.ownerOf('grandchild')).toBe(scope);
-    registry.dispose();
   });
 
   it('holds the owner across the gap between a child activation and its handle', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const onRelease = vi.fn();
     const scope = registry.interactionOwnership.open(onRelease);
     const rootStream = 'root-stream' as StreamTabId;
@@ -128,11 +138,10 @@ describe('execution interaction ownership', () => {
 
     registry.untrack('child');
     expect(onRelease).toHaveBeenCalledOnce();
-    registry.dispose();
   });
 
   it('releases the owner when a reserved child activation fails to start', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const onRelease = vi.fn();
     const scope = registry.interactionOwnership.open(onRelease);
     const rootStream = 'root-stream' as StreamTabId;
@@ -152,11 +161,10 @@ describe('execution interaction ownership', () => {
     releaseActivation();
     expect(onRelease).toHaveBeenCalledOnce();
     expect(registry.interactionOwnership.ownerOf('child')).toBeUndefined();
-    registry.dispose();
   });
 
   it('does not let a later generation inherit or release an earlier one', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const releaseFirst = vi.fn();
     const releaseSecond = vi.fn();
     const first = registry.interactionOwnership.open(releaseFirst);
@@ -187,11 +195,10 @@ describe('execution interaction ownership', () => {
 
     registry.untrack('first-child');
     expect(releaseFirst).toHaveBeenCalledOnce();
-    registry.dispose();
   });
 
   it('drops a run whose replacement handle another generation claimed', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const releaseFirst = vi.fn();
     const releaseSecond = vi.fn();
     const first = registry.interactionOwnership.open(releaseFirst);
@@ -213,11 +220,10 @@ describe('execution interaction ownership', () => {
     expect(releaseSecond).not.toHaveBeenCalled();
     registry.untrack('root');
     expect(releaseSecond).toHaveBeenCalledOnce();
-    registry.dispose();
   });
 
   it('stops observing the registry after an explicit release', () => {
-    const registry = new ExecutionRegistry();
+    const registry = createRegistry();
     const onRelease = vi.fn();
     const scope = registry.interactionOwnership.open(onRelease);
     const rootStream = 'root-stream' as StreamTabId;
@@ -236,6 +242,5 @@ describe('execution interaction ownership', () => {
     scope.finish();
     expect(onRelease).toHaveBeenCalledOnce();
     expect(registry.interactionOwnership.ownerOf('root')).toBeUndefined();
-    registry.dispose();
   });
 });

@@ -304,16 +304,15 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
 
 function execList(): ToolResult {
   const { streamId } = requireRunStream('github_subscription');
-  const prKeys = listPRSubscriptionBindings()
-    .filter((b) => b.streamIds.includes(streamId))
-    .map((b) => b.key);
-  const repoKeys = listRepoSubscriptionBindings()
-    .filter((b) => b.streamIds.includes(streamId))
-    .map((b) => b.key);
-  const issueKeys = listIssueSubscriptionBindings()
-    .filter((b) => b.streamIds.includes(streamId))
-    .map((b) => b.key);
-  const all = [...repoKeys, ...prKeys, ...issueKeys];
+  const keysBoundToStream = (
+    bindings: ReadonlyArray<{ key: string; streamIds: readonly string[] }>,
+  ): string[] =>
+    bindings.filter((b) => b.streamIds.includes(streamId)).map((b) => b.key);
+  const all = [
+    ...keysBoundToStream(listRepoSubscriptionBindings()),
+    ...keysBoundToStream(listPRSubscriptionBindings()),
+    ...keysBoundToStream(listIssueSubscriptionBindings()),
+  ];
   if (all.length === 0) {
     return executed(
       'No active subscriptions on this stream.',

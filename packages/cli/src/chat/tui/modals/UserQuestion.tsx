@@ -475,13 +475,14 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const [answers, setAnswers] = useState<UserQuestionAnswers>({});
   const question = props.payload.questions[index];
 
-  const cancel = () =>
+  function cancel(): void {
     props.onDecide({
       accepted: false,
       userMessage: USER_QUESTION_SKIPPED_FEEDBACK,
     });
+  }
 
-  const submitAnswer = (answer: string | string[] | undefined) => {
+  function submitAnswer(answer: string | string[] | undefined): void {
     if (!question) {
       props.onDecide(userQuestionDecision(answers));
       return;
@@ -493,11 +494,9 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     }
     setAnswers(nextAnswers);
     setIndex(index + 1);
-  };
-
-  if (!question) {
-    return <Text />;
   }
+
+  if (!question) return <Text />;
 
   const variantProps: QuestionVariantProps = {
     availableRows: props.availableRows,

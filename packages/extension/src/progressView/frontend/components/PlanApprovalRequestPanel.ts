@@ -49,19 +49,13 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
   protected readonly approvalDecision = { action: 'approve' } as const;
 
   protected override handleExtraKey(key: string): boolean {
-    if (key === 'r') {
-      const data = this.permission.data;
-      if (data.goalEnabled) {
-        this.emitAction({ action: 'approve_and_goal' });
-        return true;
-      }
-    }
-    return false;
+    if (key !== 'r' || !this.permission.data.goalEnabled) return false;
+    this.emitAction({ action: 'approve_and_goal' });
+    return true;
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data;
-    const { plan, goalEnabled } = data;
+    const { plan, goalEnabled } = this.permission.data;
 
     return this.renderRequestShell({
       prefix: 'plan-approval-request',

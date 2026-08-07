@@ -132,10 +132,10 @@ class TikzPictureManagerImpl {
 
     const compiledFiles: FileLocation[] = [];
 
-    for (const [label, tikzpicturess] of labeledTikzPictures) {
-      const hasMultiple = tikzpicturess.length > 1;
+    for (const [label, tikzPictures] of labeledTikzPictures) {
+      const hasMultiple = tikzPictures.length > 1;
 
-      for (const [i, tikzpictures] of tikzpicturess.entries()) {
+      for (const [i, tikzpictures] of tikzPictures.entries()) {
         // Disambiguate multiple pictures under one label with a/b/c… suffixes.
         const suffix = hasMultiple ? String.fromCharCode(97 + i) : undefined;
 

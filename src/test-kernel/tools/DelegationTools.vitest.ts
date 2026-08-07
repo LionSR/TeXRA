@@ -60,38 +60,36 @@ describe('DelegationTools', () => {
     WorkspaceFS.stat = originalStat;
   });
 
-  it('rejects context .bib files larger than 100KB', async () => {
-    WorkspaceFS.stat = async () => stat(100 * 1024 + 1);
+  it.each([
+    {
+      name: 'rejects context .bib files larger than 100KB',
+      sizeBytes: 100 * 1024 + 1,
+      paths: ['references.bib'],
+      rejectedPath: 'references.bib',
+      formattedSize: '100 KiB',
+    },
+    {
+      name: 'rejects context .bib files in the multi-list larger than 100KB',
+      sizeBytes: 150 * 1024,
+      paths: ['paper.tex', 'bibliography/main.bib'],
+      rejectedPath: 'bibliography/main.bib',
+      formattedSize: '150 KiB',
+    },
+  ])('$name', async ({ sizeBytes, paths, rejectedPath, formattedSize }) => {
+    WorkspaceFS.stat = async () => stat(sizeBytes);
 
-    const result = await rejectOversizedBibAttachments(['references.bib']);
+    const result = await rejectOversizedBibAttachments(paths);
 
     assert.strictEqual(result?.status, 'error');
     assert.strictEqual(result?.summary, 'Rejected oversized BibTeX attachment');
     assert.strictEqual(
       result?.error,
-      'references.bib is 102401 bytes (100 KiB), over the 102400 byte (100 KiB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.',
+      `${rejectedPath} is ${sizeBytes} bytes (${formattedSize}), over the 102400 byte (100 KiB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`,
     );
     assert.deepStrictEqual(result?.diagnostics, {
       type: 'oversized_bib_attachment',
-      path: 'references.bib',
-      sizeBytes: 102401,
-      limitBytes: 102400,
-    });
-  });
-
-  it('rejects context .bib files in the multi-list larger than 100KB', async () => {
-    WorkspaceFS.stat = async () => stat(150 * 1024);
-
-    const result = await rejectOversizedBibAttachments([
-      'paper.tex',
-      'bibliography/main.bib',
-    ]);
-
-    assert.strictEqual(result?.status, 'error');
-    assert.deepStrictEqual(result?.diagnostics, {
-      type: 'oversized_bib_attachment',
-      path: 'bibliography/main.bib',
-      sizeBytes: 153600,
+      path: rejectedPath,
+      sizeBytes,
       limitBytes: 102400,
     });
   });

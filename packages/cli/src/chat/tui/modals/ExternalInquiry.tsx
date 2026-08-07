@@ -239,11 +239,7 @@ export function ExternalInquiry(
     if (copyStatus === 'copying') return;
     setCopyStatus('copying');
     const result = await writeClipboardText(props.payload.question);
-    if (result.ok) {
-      setCopyStatus('copied');
-      return;
-    }
-    setCopyStatus('failed');
+    setCopyStatus(result.ok ? 'copied' : 'failed');
   }
 
   useEffect(() => {

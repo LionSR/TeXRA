@@ -56,7 +56,7 @@ export function diffTextByChar(
 ): TextDiff[] {
   const dmp = new diff_match_patch();
   const diffs = dmp.diff_main(oldText, newText, options.checkLines ?? false);
-  if (options.cleanupSemantic === true) {
+  if (options.cleanupSemantic) {
     dmp.diff_cleanupSemantic(diffs);
   }
   return diffs;
@@ -77,7 +77,7 @@ export function diffTextByLine(
     newText,
   );
   const diffs = dmp.diff_main(chars1, chars2, false);
-  if (options.cleanupSemantic === true) {
+  if (options.cleanupSemantic) {
     dmp.diff_cleanupSemantic(diffs);
   }
   dmp.diff_charsToLines_(diffs, lineArray);

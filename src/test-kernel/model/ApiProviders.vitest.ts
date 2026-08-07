@@ -1,7 +1,5 @@
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import {
   apiKeyEnvName,
   apiKeyExistsUncached,
@@ -94,9 +92,7 @@ function setupApiKeyToolPlatform(
 describe('API provider key caches', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
-    setupSecretsMocks.deleteApiKey.mockReset();
-    setupSecretsMocks.hasUsableApiKey.mockReset();
-    setupSecretsMocks.storedApiKeyExists.mockReset();
+    for (const mock of Object.values(setupSecretsMocks)) mock.mockReset();
   });
 
   afterEach(() => {

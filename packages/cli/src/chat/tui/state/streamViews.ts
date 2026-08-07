@@ -142,15 +142,13 @@ export function streamViewForId(init: {
 }): StreamView {
   const parentId = init.parentStream.get(init.streamId);
   const childEntry = init.childStreamEntries.get(init.streamId);
+  const liveSummary =
+    childEntry?.kind === 'live' ? childEntry.summary : undefined;
   return {
     id: init.streamId,
     label: streamDisplayLabel(init),
-    identity:
-      childEntry?.kind === 'live' ? childEntry.summary?.identity : undefined,
-    workflowPhase:
-      childEntry?.kind === 'live'
-        ? childEntry.summary?.workflowPhase
-        : undefined,
+    identity: liveSummary?.identity,
+    workflowPhase: liveSummary?.workflowPhase,
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({

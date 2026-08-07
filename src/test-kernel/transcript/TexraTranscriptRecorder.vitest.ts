@@ -16,7 +16,7 @@ import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
-function attachRecorder(streamId: StreamTabId): {
+function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
   trace: TraceEmitter;
   rows: () => StreamLogEntry[];
   row: (id: string | undefined) => StreamLogEntry | undefined;
@@ -29,26 +29,25 @@ function attachRecorder(streamId: StreamTabId): {
   return { trace, rows, row: (id) => rows().find((entry) => entry.id === id) };
 }
 
+/** A persisted row's `data` payload, or {} when the row carries none. */
+function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
+  return isObject(entry?.data) ? entry.data : {};
+}
+
 describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)', () => {
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
-    const { trace, row } = attachRecorder(
-      'stream:group-start-native' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
 
     const startEntry = row(stage.id);
 
     expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
-    expect(isObject(startEntry?.data) && startEntry.data.status).toBe(
-      STREAM_PHASE.RUNNING,
-    );
+    expect(dataOf(startEntry).status).toBe(STREAM_PHASE.RUNNING);
   });
 
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
-    const { trace, row } = attachRecorder(
-      'stream:group-end-default-outcome' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end();
@@ -56,30 +55,22 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
     const endEntry = row(stage.id);
 
     expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
-      RUN_OUTCOME.COMPLETED,
-    );
+    expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.COMPLETED);
   });
 
   it('writes an explicit RunOutcome passed to stage.end() verbatim', () => {
-    const { trace, row } = attachRecorder(
-      'stream:group-end-explicit-outcome' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end(RUN_OUTCOME.CANCELLED);
 
     const endEntry = row(stage.id);
 
-    expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
-      RUN_OUTCOME.CANCELLED,
-    );
+    expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.CANCELLED);
   });
 
   it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
-    const { trace, row } = attachRecorder(
-      'stream:group-end-run-failure' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
     await expect(
@@ -90,17 +81,13 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
 
     const endEntry = row(stage.id);
 
-    expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
-      RUN_OUTCOME.FAILED,
-    );
+    expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.FAILED);
   });
 });
 
 describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
-    const { trace, row } = attachRecorder(
-      'stream:kind-preserved' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.end();
@@ -108,13 +95,11 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     const roundEntry = row(round.id);
 
     expect(roundEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(isObject(roundEntry?.data) && roundEntry.data.kind).toBe('round');
+    expect(dataOf(roundEntry).kind).toBe('round');
   });
 
   it("preserves the root run stage's kind onto its persisted GROUP_END row", () => {
-    const { trace, row } = attachRecorder(
-      'stream:run-kind-preserved' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const runStage = trace.openStage('Run: agent', { kind: 'run' });
     runStage.end();
@@ -122,13 +107,11 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     const runEntry = row(runStage.id);
 
     expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(isObject(runEntry?.data) && runEntry.data.kind).toBe('run');
+    expect(dataOf(runEntry).kind).toBe('run');
   });
 
   it('preserves phase position metadata on the terminal row', () => {
-    const { trace, row } = attachRecorder(
-      'stream:phase-position-preserved' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const phase = trace.openStage('Review', {
       kind: 'phase',
@@ -151,7 +134,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
 
 describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
-    const { trace, rows } = attachRecorder('stream:upsert' as StreamTabId);
+    const { trace, rows } = attachRecorder();
 
     // The round's own stream writes raw provider text in real time...
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -170,7 +153,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
-    const { trace, rows } = attachRecorder('stream:append' as StreamTabId);
+    const { trace, rows } = attachRecorder();
 
     trace.responseFinalized('The answer is 2.');
 
@@ -182,7 +165,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('does not let an earlier round leak its stream id into a later round', () => {
-    const { trace, rows } = attachRecorder('stream:round-reset' as StreamTabId);
+    const { trace, rows } = attachRecorder();
 
     const round0 = trace.openStage('r0', { kind: 'round', index: 0 });
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -209,9 +192,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
-    const { trace, rows } = attachRecorder(
-      'stream:inner-round-reset' as StreamTabId,
-    );
+    const { trace, rows } = attachRecorder();
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.run(() => {
@@ -241,7 +222,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('ignores an empty finalized response', () => {
-    const { trace, rows } = attachRecorder('stream:empty' as StreamTabId);
+    const { trace, rows } = attachRecorder();
 
     trace.responseFinalized('');
 
@@ -447,9 +428,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
   });
 
   it('updates one typed task entry from planned to completed', () => {
-    const { trace, rows } = attachRecorder(
-      'stream:workflow-task' as StreamTabId,
-    );
+    const { trace, rows } = attachRecorder();
 
     trace.emit({
       type: 'workflow.call',
@@ -498,7 +477,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   const API_KEY = 'sk-live1234567890abcdef';
 
   it('redacts a secret in a plain log row before it is persisted', () => {
-    const { trace, rows } = attachRecorder('stream:redact-log' as StreamTabId);
+    const { trace, rows } = attachRecorder();
 
     trace.info(`Configured with ${API_KEY}`);
 
@@ -506,9 +485,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 
   it("redacts an error row's provider detail, not just its summary", () => {
-    const { trace, rows } = attachRecorder(
-      'stream:redact-error' as StreamTabId,
-    );
+    const { trace, rows } = attachRecorder();
 
     trace.error(`Request failed for ${API_KEY}`, {
       messageType: MESSAGE_TYPES.ERROR,
@@ -528,9 +505,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 
   it('redacts a secret split across streamed chunks once the stream settles', () => {
-    const { trace, row } = attachRecorder(
-      'stream:redact-chunks' as StreamTabId,
-    );
+    const { trace, row } = attachRecorder();
 
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Use sk-live');
@@ -541,9 +516,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 
   it('redacts the authoritative finalized response text', () => {
-    const { trace, rows } = attachRecorder(
-      'stream:redact-finalized' as StreamTabId,
-    );
+    const { trace, rows } = attachRecorder();
 
     trace.responseFinalized(`Set API_KEY=${API_KEY} in your shell.`);
 
@@ -551,7 +524,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 
   it('redacts a stage label', () => {
-    const { trace, row } = attachRecorder('stream:redact-stage' as StreamTabId);
+    const { trace, row } = attachRecorder();
 
     const stage = trace.openStage(`Probe ${API_KEY}`, { kind: 'phase' });
 
@@ -559,9 +532,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 
   it("redacts a failed workflow call's label and provider error", () => {
-    const { trace, rows } = attachRecorder(
-      'stream:redact-workflow-task' as StreamTabId,
-    );
+    const { trace, rows } = attachRecorder();
 
     trace.emit({
       type: 'workflow.call',

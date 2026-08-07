@@ -1,3 +1,4 @@
+// Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,8 +10,6 @@ import type { IModelHandler } from '@agent/types/IModelHandler';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
-
-// Third-party imports
 import type { GoogleGenAI } from '@google/genai';
 
 interface TestClient {

@@ -48,11 +48,14 @@ export class LatexConfigPersistenceController {
     }
 
     if (coreConfig) {
-      for (const [field, key] of Object.entries(REPLACEMENT_CONFIG_FIELDS)) {
+      for (const [field, key] of Object.entries(REPLACEMENT_CONFIG_FIELDS) as [
+        keyof typeof REPLACEMENT_CONFIG_FIELDS,
+        string,
+      ][]) {
         if (!coreConfig.isExplicitlySet(key)) continue;
-        const parsed = LatexConfigValuesSchema.shape[
-          field as keyof typeof REPLACEMENT_CONFIG_FIELDS
-        ].safeParse(coreConfig.get(key));
+        const parsed = LatexConfigValuesSchema.shape[field].safeParse(
+          coreConfig.get(key),
+        );
         if (parsed.success) values[field as LatexConfigField] = parsed.data;
       }
     }

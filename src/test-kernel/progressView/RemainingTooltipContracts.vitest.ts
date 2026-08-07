@@ -19,6 +19,20 @@ function expectUniqueIds(root: ShadowRoot): void {
   expect(new Set(ids).size).toBe(ids.length);
 }
 
+/**
+ * Mount a component and return its shadow root after asserting the shared
+ * tooltip contract: no native [title] attributes and no duplicate ids.
+ */
+async function mountCheckedShadow<
+  T extends HTMLElement & { updateComplete: Promise<unknown> },
+>(tag: string, props: Partial<T>): Promise<ShadowRoot> {
+  const element = await mountComponent<T>(tag, props);
+  const shadow = element.shadowRoot!;
+  expect(shadow.querySelector('[title]')).toBeNull();
+  expectUniqueIds(shadow);
+  return shadow;
+}
+
 describe('remaining progress-view tooltip contracts', () => {
   useLitComponentTestDom(() =>
     Promise.all([
@@ -29,7 +43,7 @@ describe('remaining progress-view tooltip contracts', () => {
   );
 
   it('anchors repeated context-stat hints with indexed ids', async () => {
-    const element = await mountComponent<ContextManagement>(
+    const shadow = await mountCheckedShadow<ContextManagement>(
       'context-management',
       {
         config: {
@@ -44,9 +58,6 @@ describe('remaining progress-view tooltip contracts', () => {
       },
     );
 
-    const shadow = element.shadowRoot!;
-    expect(shadow.querySelector('[title]')).toBeNull();
-    expectUniqueIds(shadow);
     expect(
       shadow.querySelector('wa-tooltip[for="context-stat-1"]')?.textContent,
     ).toBe('After');
@@ -54,13 +65,13 @@ describe('remaining progress-view tooltip contracts', () => {
 
   it('only adds the queued-message tooltip when text is truncated', async () => {
     const full = 'x'.repeat(201);
-    const element = await mountComponent<QueuedFollowUps>('queued-follow-ups', {
-      messages: ['short', full],
-    });
+    const shadow = await mountCheckedShadow<QueuedFollowUps>(
+      'queued-follow-ups',
+      {
+        messages: ['short', full],
+      },
+    );
 
-    const shadow = element.shadowRoot!;
-    expect(shadow.querySelector('[title]')).toBeNull();
-    expectUniqueIds(shadow);
     expect(
       shadow.querySelector('wa-tooltip[for="queued-follow-up-0"]'),
     ).toBeNull();
@@ -70,7 +81,7 @@ describe('remaining progress-view tooltip contracts', () => {
   });
 
   it('anchors latexdiff messages to their indexed rows', async () => {
-    const element = await mountComponent<LatexdiffResults>(
+    const shadow = await mountCheckedShadow<LatexdiffResults>(
       'latexdiff-results',
       {
         entries: [
@@ -88,9 +99,6 @@ describe('remaining progress-view tooltip contracts', () => {
       },
     );
 
-    const shadow = element.shadowRoot!;
-    expect(shadow.querySelector('[title]')).toBeNull();
-    expectUniqueIds(shadow);
     const row = shadow.querySelector('#latexdiff-entry-0');
     const tooltip = shadow.querySelector('wa-tooltip[for="latexdiff-entry-0"]');
     expect(tooltip?.textContent).toBe('LaTeXdiff failed');

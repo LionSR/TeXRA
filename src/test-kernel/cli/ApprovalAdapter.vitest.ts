@@ -84,6 +84,58 @@ function requestNewProofEdit(): ReturnType<typeof requestToolEditApproval> {
   });
 }
 
+function agentProposal(
+  overrides: Partial<AgentProposalPermission> = {},
+): AgentProposalPermission {
+  const base = {
+    proposalId: 'proposal-1',
+    streamId: 'root@deepseekT#abc',
+    agent: 'review',
+    model: 'deepseekT',
+    instruction: 'Please check this proof.',
+    memories: [],
+  };
+  const { agentCategory, ...rest } = overrides;
+  if (agentCategory === AgentCategory.Workflow) {
+    return {
+      ...base,
+      agentCategory,
+      inputFiles: [],
+      contextFiles: [],
+      mediaFiles: [],
+      outputFiles: [],
+      toolConfig: DEFAULT_TOOL_CONFIG,
+      ...rest,
+    };
+  }
+  return {
+    ...base,
+    agentCategory: AgentCategory.ToolUse,
+    ...rest,
+  };
+}
+
+/** Records before-prompt/prompt ordering for approval-prompt hook tests. */
+function trackPromptEvents(): {
+  events: string[];
+  hooks: CliApprovalPromptHooks;
+  answerWith: (answer: string) => () => Promise<string>;
+} {
+  const events: string[] = [];
+  return {
+    events,
+    hooks: {
+      beforePrompt: () => {
+        events.push('before');
+      },
+    },
+    answerWith: (answer) => async () => {
+      events.push('prompt');
+      return answer;
+    },
+  };
+}
+
 const credentialExhaustedRetry: RetryPermission = {
   requestId: 'relay-limit-retry',
   streamId: 'test-stream' as RetryPermission['streamId'],
@@ -216,15 +268,7 @@ describe('human input approval policy', () => {
 });
 
 describe('approval prompt hooks', () => {
-  const proposal: AgentProposalPermission = {
-    proposalId: 'proposal-1',
-    streamId: 'root@deepseekT#abc',
-    agent: 'review',
-    model: 'deepseekT',
-    instruction: 'Please check this proof.',
-    memories: [],
-    agentCategory: AgentCategory.ToolUse,
-  };
+  const proposal = agentProposal();
 
   it('forwards presentation events to the attached CLI presenter', () => {
     const emit = vi.fn();
@@ -240,41 +284,28 @@ describe('approval prompt hooks', () => {
   });
 
   it('runs the before-prompt hook for interactive approval events', async () => {
-    const events: string[] = [];
+    const tracker = trackPromptEvents();
     const result = await createHeadlessCliHostInteractions(
-      context({
-        approvalPrompt: async () => {
-          events.push('prompt');
-          return 'n no review needed';
-        },
-      }),
-      {
-        beforePrompt: () => {
-          events.push('before');
-        },
-      },
+      context({ approvalPrompt: tracker.answerWith('n no review needed') }),
+      tracker.hooks,
     ).requestAgentProposal?.(proposal);
 
     expect(result).toEqual({
       action: 'reject',
       feedback: 'no review needed',
     });
-    expect(events).toEqual(['before', 'prompt']);
+    expect(tracker.events).toEqual(['before', 'prompt']);
   });
 
   it('does not run the before-prompt hook for auto-approved events', async () => {
-    const events: string[] = [];
+    const tracker = trackPromptEvents();
     const result = await createHeadlessCliHostInteractions(
       context({ approvalPolicy: 'yolo' }),
-      {
-        beforePrompt: () => {
-          events.push('before');
-        },
-      },
+      tracker.hooks,
     ).requestAgentProposal?.(proposal);
 
     expect(result).toEqual({ action: 'approve' });
-    expect(events).toEqual([]);
+    expect(tracker.events).toEqual([]);
   });
 
   it('routes automatic proposal rejection through the headless interaction port', async () => {
@@ -289,20 +320,11 @@ describe('approval prompt hooks', () => {
   });
 
   it('does not prompt for external inquiry in non-TUI CLI runs', async () => {
-    const events: string[] = [];
+    const tracker = trackPromptEvents();
 
     await createHeadlessCliHostInteractions(
-      context({
-        approvalPrompt: async () => {
-          events.push('prompt');
-          return 'yes';
-        },
-      }),
-      {
-        beforePrompt: () => {
-          events.push('before');
-        },
-      },
+      context({ approvalPrompt: tracker.answerWith('yes') }),
+      tracker.hooks,
     ).openExternalInquiry?.({
       requestId: 'ei_aabbccdd0011',
       mode: 'followUp' as const,
@@ -315,7 +337,7 @@ describe('approval prompt hooks', () => {
       transcript: null,
     });
 
-    expect(events).toEqual([]);
+    expect(tracker.events).toEqual([]);
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_aabbccdd0011',
@@ -332,10 +354,19 @@ describe('requestRetry classification (#7331)', () => {
     errorMessage: 'stream dropped before first token',
   };
 
+  function requestHeadlessRetry(
+    ctx: CliContext,
+    overrides: Partial<HostRetryRequest> = {},
+  ) {
+    return createHeadlessCliHostInteractions(ctx).requestRetry?.({
+      ...retryRequest,
+      ...overrides,
+    });
+  }
+
   it('denies (not cancels) a retry when no human input is available', async () => {
     const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
-    const result =
-      await createHeadlessCliHostInteractions(ctx).requestRetry?.(retryRequest);
+    const result = await requestHeadlessRetry(ctx);
 
     // A policy/headless auto-denial is a deny, not a user cancel: the model
     // receives the reason as feedback instead of the turn being abandoned.
@@ -351,13 +382,12 @@ describe('requestRetry classification (#7331)', () => {
   ])(
     'preserves the credential denial reason in $approvalPolicy/$mode mode',
     async ({ approvalPolicy, mode }) => {
-      const ctx = context({ approvalPolicy, mode });
-      const result = await createHeadlessCliHostInteractions(
-        ctx,
-      ).requestRetry?.({
-        ...retryRequest,
-        errorDetails: credentialExhaustedRetry.errorDetails,
-      });
+      const result = await requestHeadlessRetry(
+        context({ approvalPolicy, mode }),
+        {
+          errorDetails: credentialExhaustedRetry.errorDetails,
+        },
+      );
 
       expect(result).toEqual({
         action: 'deny',
@@ -367,9 +397,9 @@ describe('requestRetry classification (#7331)', () => {
   );
 
   it('denies a yolo retry without changing provider-failure exit classification', async () => {
-    const ctx = context({ approvalPolicy: 'yolo' });
-    const result =
-      await createHeadlessCliHostInteractions(ctx).requestRetry?.(retryRequest);
+    const result = await requestHeadlessRetry(
+      context({ approvalPolicy: 'yolo' }),
+    );
 
     expect(result).toEqual({
       action: 'deny',
@@ -386,10 +416,10 @@ describe('requestRetry classification (#7331)', () => {
   ])(
     'preserves the credential denial reason for yolo credential/auth failure %#',
     async (errorDetails) => {
-      const ctx = context({ approvalPolicy: 'yolo' });
-      const result = await createHeadlessCliHostInteractions(
-        ctx,
-      ).requestRetry?.({ ...retryRequest, errorDetails });
+      const result = await requestHeadlessRetry(
+        context({ approvalPolicy: 'yolo' }),
+        { errorDetails },
+      );
 
       expect(result).toEqual({
         action: 'deny',
@@ -399,9 +429,9 @@ describe('requestRetry classification (#7331)', () => {
   );
 
   it('cancels a retry the interactive user explicitly rejects', async () => {
-    const result = await createHeadlessCliHostInteractions(
+    const result = await requestHeadlessRetry(
       context({ approvalPrompt: async () => 'n not now' }),
-    ).requestRetry?.(retryRequest);
+    );
 
     expect(result).toEqual({ action: 'cancel' });
   });
@@ -493,25 +523,16 @@ describe('formatToolEditApprovalSummary', () => {
   });
 
   it('runs the before-prompt hook for tool edit approvals', async () => {
-    const events: string[] = [];
+    const tracker = trackPromptEvents();
     useCliHostInteractions(
-      context({
-        approvalPrompt: async () => {
-          events.push('prompt');
-          return 'y';
-        },
-      }),
-      {
-        beforePrompt: () => {
-          events.push('before');
-        },
-      },
+      context({ approvalPrompt: tracker.answerWith('y') }),
+      tracker.hooks,
     );
 
     const result = await requestNewProofEdit();
 
     expect(result.accepted).toBe(true);
-    expect(events).toEqual(['before', 'prompt']);
+    expect(tracker.events).toEqual(['before', 'prompt']);
   });
 
   it('passes one-line rejection feedback to the tool result', async () => {
@@ -612,16 +633,12 @@ describe('formatToolEditApprovalSummary', () => {
 
 describe('formatAgentProposalApprovalSummary', () => {
   it('formats subagent approvals without raw JSON internals', () => {
-    const summary = formatAgentProposalApprovalSummary({
-      proposalId: 'proposal-1',
-      streamId: 'root@deepseekT#abc',
-      agent: 'review',
-      model: 'deepseekT',
-      instruction:
-        'Please verify the proof carefully.\nReport any gaps or hidden cases.',
-      memories: [],
-      agentCategory: AgentCategory.ToolUse,
-    });
+    const summary = formatAgentProposalApprovalSummary(
+      agentProposal({
+        instruction:
+          'Please verify the proof carefully.\nReport any gaps or hidden cases.',
+      }),
+    );
 
     expect(summary).toContain(
       'Agent proposal requested: review (tool-use agent)',
@@ -641,16 +658,13 @@ describe('formatAgentProposalApprovalSummary', () => {
       (_, index) => `${index + 1}. ${longLine}`,
     ).join('\n');
 
-    const summary = formatAgentProposalApprovalSummary({
-      proposalId: 'proposal-1',
-      streamId: 'root@deepseekT#abc',
-      agent: 'review',
-      model: 'deepseekT',
-      instruction,
-      memories: ['/memories/proof-style.md'],
-      workingDirectory: '/tmp/project',
-      agentCategory: AgentCategory.ToolUse,
-    });
+    const summary = formatAgentProposalApprovalSummary(
+      agentProposal({
+        instruction,
+        memories: ['/memories/proof-style.md'],
+        workingDirectory: '/tmp/project',
+      }),
+    );
 
     expect(summary).toContain('Working directory: /tmp/project');
     expect(summary).toContain('Memories: /memories/proof-style.md');
@@ -660,20 +674,18 @@ describe('formatAgentProposalApprovalSummary', () => {
   });
 
   it('includes workflow proposal file groups', () => {
-    const summary = formatAgentProposalApprovalSummary({
-      proposalId: 'proposal-1',
-      streamId: 'root@deepseekT#abc',
-      agent: 'polish',
-      model: 'deepseekT',
-      instruction: 'Polish the draft and write the revised file.',
-      memories: [],
-      inputFiles: ['draft.tex'],
-      contextFiles: ['notes.md'],
-      mediaFiles: ['figure.png'],
-      outputFiles: ['draft-polished.tex'],
-      toolConfig: DEFAULT_TOOL_CONFIG,
-      agentCategory: AgentCategory.Workflow,
-    });
+    const summary = formatAgentProposalApprovalSummary(
+      agentProposal({
+        agent: 'polish',
+        instruction: 'Polish the draft and write the revised file.',
+        inputFiles: ['draft.tex'],
+        contextFiles: ['notes.md'],
+        mediaFiles: ['figure.png'],
+        outputFiles: ['draft-polished.tex'],
+        toolConfig: DEFAULT_TOOL_CONFIG,
+        agentCategory: AgentCategory.Workflow,
+      }),
+    );
 
     expect(summary).toContain(
       'Agent proposal requested: polish (workflow agent)',

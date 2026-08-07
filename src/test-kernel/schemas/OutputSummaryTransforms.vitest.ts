@@ -11,19 +11,23 @@ import {
   type RoundOutput,
 } from '@shared/schemas';
 
-const workspace = (
+function workspace(
   relativePath: string,
   absolutePath = `/workspace/${relativePath}`,
-): FileLocation => ({
-  kind: 'workspace',
-  absolutePath,
-  relativePath,
-});
+): FileLocation {
+  return {
+    kind: 'workspace',
+    absolutePath,
+    relativePath,
+  };
+}
 
-const external = (absolutePath: string): FileLocation => ({
-  kind: 'external',
-  absolutePath,
-});
+function external(absolutePath: string): FileLocation {
+  return {
+    kind: 'external',
+    absolutePath,
+  };
+}
 
 function outputFile(overrides: Partial<OutputFileInfo> = {}): OutputFileInfo {
   return {

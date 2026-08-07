@@ -141,6 +141,44 @@ function toolUseConfig() {
   };
 }
 
+function loadRunExecution(): Promise<
+  typeof import('@cli/runtime/runExecution')
+> {
+  return import('@cli/runtime/runExecution');
+}
+
+type LeaseOptions = {
+  onExecutionLeaseAcquired?: (
+    scope: (operation: () => unknown) => unknown,
+  ) => void;
+};
+
+/**
+ * Stubs runAgent to publish its lease options via `handleOptions` and then
+ * hang until the test resolves it — the shape the shutdown-interrupt tests
+ * drive.
+ */
+function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
+  resolve: (result: unknown) => void;
+} {
+  let resolveRun!: (result: unknown) => void;
+  mocks.runAgent.mockImplementation(async (_request, options: LeaseOptions) => {
+    handleOptions(options);
+    return new Promise((resolve) => {
+      resolveRun = resolve;
+    });
+  });
+  return { resolve: (result: unknown) => resolveRun(result) };
+}
+
+/** Spies on the default session's transcript store flush. */
+async function spyOnTranscriptFlush() {
+  const { defaultSession } = await import('@agent/runtime/SessionHandle');
+  const store = defaultSession().transcripts;
+  const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+  return { store, flushSpy };
+}
+
 function stubRunExecutionDeps(): void {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
@@ -193,7 +231,7 @@ describe('executeCliRequest', () => {
   it.each(['text', 'json'] as const)(
     'does not attach the CLI progress projection for %s output',
     async (outputFormat) => {
-      const { executeCliRequest } = await import('@cli/runtime/runExecution');
+      const { executeCliRequest } = await loadRunExecution();
       const { attachCliSessionProgressProjection } =
         await import('@cli/runtime/sessionProgressSubscription');
       const attachProjection = vi.mocked(attachCliSessionProgressProjection);
@@ -207,7 +245,7 @@ describe('executeCliRequest', () => {
   );
 
   it('attaches the CLI progress projection for NDJSON output before the run starts', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const { attachCliSessionProgressProjection } =
       await import('@cli/runtime/sessionProgressSubscription');
     const attachProjection = vi.mocked(attachCliSessionProgressProjection);
@@ -225,7 +263,7 @@ describe('executeCliRequest', () => {
   });
 
   it('observes workflow-script children for every visible text run', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = {
       config: toolUseConfig(),
       executionId: 'abcdef',
@@ -252,7 +290,7 @@ describe('executeCliRequest', () => {
   });
 
   it('keeps workflow-script progress quiet when run progress is disabled', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = {
       config: {
         agent: 'proof-workflow',
@@ -270,36 +308,28 @@ describe('executeCliRequest', () => {
     expect(mocks.attachWorkflowPlainOutput).not.toHaveBeenCalled();
   });
 
-  it('marks headless never runs as approval-unavailable for agent execution', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = baseRequest();
+  it.each([
+    { policy: 'never', overrides: {} },
+    { policy: 'ask', overrides: { approvalPolicy: 'ask' } },
+  ] as const)(
+    'marks headless $policy runs as approval-unavailable for agent execution',
+    async ({ overrides }) => {
+      const { executeCliRequest } = await loadRunExecution();
+      const request = baseRequest();
 
-    await executeCliRequest(request, cliContext());
+      await executeCliRequest(request, cliContext(overrides));
 
-    expect(mocks.runAgent).toHaveBeenCalledWith(
-      request,
-      expect.objectContaining({
-        approvalPromptsUnavailable: true,
-      }),
-    );
-  });
-
-  it('marks headless ask runs as approval-unavailable for agent execution', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = baseRequest();
-
-    await executeCliRequest(request, cliContext({ approvalPolicy: 'ask' }));
-
-    expect(mocks.runAgent).toHaveBeenCalledWith(
-      request,
-      expect.objectContaining({
-        approvalPromptsUnavailable: true,
-      }),
-    );
-  });
+      expect(mocks.runAgent).toHaveBeenCalledWith(
+        request,
+        expect.objectContaining({
+          approvalPromptsUnavailable: true,
+        }),
+      );
+    },
+  );
 
   it('keeps yolo runs approval-available for agent execution', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
 
@@ -315,7 +345,7 @@ describe('executeCliRequest', () => {
   });
 
   it('hides host-unavailable tools in CLI execution', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
 
     await executeCliRequest(
@@ -338,7 +368,7 @@ describe('executeCliRequest', () => {
   });
 
   it('preserves caller-provided runtime tool exclusions', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {
@@ -360,7 +390,7 @@ describe('executeCliRequest', () => {
   });
 
   it('installs CLI host interactions with the runtime prompt hook', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
     const context = cliContext({ mode: 'interactive', approvalPolicy: 'ask' });
 
@@ -403,7 +433,7 @@ describe('executeCliRequest', () => {
   });
 
   it('restores CLI host interactions before closing the runtime host', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext());
@@ -418,7 +448,7 @@ describe('executeCliRequest', () => {
   });
 
   it('reports outcome read failures without rejecting a successful run', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const readError = new Error('metadata read failed');
     mocks.readCliRunOutcome.mockImplementationOnce(
       async (
@@ -443,7 +473,7 @@ describe('executeCliRequest', () => {
 
   it('persists headless stream sidecars from session events', async () => {
     await installStoragePlatform();
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
     const streamId = 'stream-1' as StreamTabId;
     const parentStreamId = 'parent-stream' as StreamTabId;
@@ -557,12 +587,11 @@ describe('executeCliRequest', () => {
   });
 
   it('uses an opened persistent store and flushes it after the run', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const store = defaultSession().transcripts;
+    const { store, flushSpy } = await spyOnTranscriptFlush();
     const callOrder: string[] = [];
-    vi.spyOn(store, 'flush').mockImplementation(async () => {
+    flushSpy.mockImplementation(async () => {
       callOrder.push('flush');
     });
     mocks.runAgent.mockImplementationOnce(async () => {
@@ -582,11 +611,9 @@ describe('executeCliRequest', () => {
   });
 
   it('flushes the stream log store even when the run throws', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const store = defaultSession().transcripts;
-    const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+    const { flushSpy } = await spyOnTranscriptFlush();
     mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
 
     // #7645: a classified run failure resolves to a non-zero exit code
@@ -600,11 +627,9 @@ describe('executeCliRequest', () => {
   });
 
   it('rethrows a non-AgentError rejection instead of swallowing it into an exit code', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const store = defaultSession().transcripts;
-    const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+    const { flushSpy } = await spyOnTranscriptFlush();
     // An unclassified failure (e.g. registerExecution disk I/O,
     // workspaceState.update) is genuinely unexpected — it must keep
     // propagating so bin/texra.ts's crash handler reports it, instead of
@@ -621,7 +646,7 @@ describe('executeCliRequest', () => {
   });
 
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
     // runAgent resolves (default mock): the lifecycle has already persisted
     // the run's true terminal status. A rejection from wrap's post-run
@@ -647,7 +672,7 @@ describe('executeCliRequest', () => {
   });
 
   it('resolves a classified run failure to a non-zero exit code without rethrowing or finalizing again', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
     mocks.runAgent.mockImplementationOnce(
       async (_request: unknown, options: { readonly onRun?: () => void }) => {
@@ -664,7 +689,7 @@ describe('executeCliRequest', () => {
   });
 
   it('maps a completed run to Success even after a shared policy denial', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const { runOutcomeExitCode } = await import('@cli/runtime/terminalStatus');
     const request = baseRequest();
     const context = cliContext();
@@ -707,7 +732,7 @@ describe('executeCliRequest', () => {
 
     try {
       await installFreshDefaultSession();
-      const { executeCliRequest } = await import('@cli/runtime/runExecution');
+      const { executeCliRequest } = await loadRunExecution();
       const request = baseRequest();
 
       await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
@@ -726,22 +751,15 @@ describe('executeCliRequest', () => {
     const { initPlatform } = await import('@platform/platform');
     const platform = createFakePlatform();
     initPlatform(platform);
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = baseRequest();
-    let resolveRun:
-      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
-      | undefined;
+    const { executeCliRequest } = await loadRunExecution();
     const runWithOwnership = vi.fn((operation: () => unknown) => operation());
     let publishLeaseScope:
       ((scope: typeof runWithOwnership) => void) | undefined;
-    mocks.runAgent.mockImplementation(async (_request, options) => {
+    const hangingRun = stubHangingRun((options) => {
       publishLeaseScope = options.onExecutionLeaseAcquired;
-      return new Promise((resolve) => {
-        resolveRun = resolve;
-      });
     });
 
-    const run = executeCliRequest(request, cliContext(), {
+    const run = executeCliRequest(baseRequest(), cliContext(), {
       registerExecution: true,
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
@@ -757,7 +775,7 @@ describe('executeCliRequest', () => {
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
-    resolveRun?.(COMPLETED_RUN);
+    hangingRun.resolve(COMPLETED_RUN);
     mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
     await expect(run).resolves.toEqual({
       ok: true,
@@ -775,21 +793,15 @@ describe('executeCliRequest', () => {
     const { initPlatform } = await import('@platform/platform');
     const platform = createFakePlatform();
     initPlatform(platform);
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     // Imported dynamically (matching the module above) so the `instanceof`
     // check in runExecution.ts sees the same module instance even after an
     // earlier test's `vi.resetModules()` in this file.
     const { ExecutionLeaseLostError } =
       await import('@agent/storage/executionLease');
-    let resolveRun:
-      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
-      | undefined;
-    mocks.runAgent.mockImplementation(async (_request, options) => {
+    const hangingRun = stubHangingRun((options) => {
       options.onExecutionLeaseAcquired?.(() => {
         throw new ExecutionLeaseLostError('exec-1');
-      });
-      return new Promise((resolve) => {
-        resolveRun = resolve;
       });
     });
 
@@ -800,7 +812,7 @@ describe('executeCliRequest', () => {
     await platform.lifecycle.runShutdown();
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
-    resolveRun?.(COMPLETED_RUN);
+    hangingRun.resolve(COMPLETED_RUN);
     await run;
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
@@ -809,7 +821,7 @@ describe('executeCliRequest', () => {
     const { initPlatform } = await import('@platform/platform');
     const platform = createFakePlatform();
     initPlatform(platform);
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const persistenceError = new Error('terminal metadata disk full');
     mocks.finalizeExecution.mockResolvedValue({
       status: 'failed',
@@ -817,16 +829,10 @@ describe('executeCliRequest', () => {
       stage: 'terminal-status',
       outcomePersisted: false,
     });
-    let resolveRun:
-      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
-      | undefined;
-    mocks.runAgent.mockImplementation(async (_request, options) => {
+    const hangingRun = stubHangingRun((options) => {
       options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
         operation(),
       );
-      return new Promise((resolve) => {
-        resolveRun = resolve;
-      });
     });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
@@ -838,7 +844,7 @@ describe('executeCliRequest', () => {
       message:
         'Failed to persist cancelled status for execution exec-1: terminal metadata disk full',
     });
-    resolveRun?.(COMPLETED_RUN);
+    hangingRun.resolve(COMPLETED_RUN);
     mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 
     await expect(run).resolves.toEqual({
@@ -859,7 +865,7 @@ describe('executeCliRequest', () => {
     const { initPlatform } = await import('@platform/platform');
     const platform = createFakePlatform();
     initPlatform(platform);
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {
@@ -878,8 +884,44 @@ describe('executeCliConfig', () => {
     await installFreshDefaultSession();
   });
 
+  /** Stubs a completed tool-use run and drives executeCliToolUseConfig. */
+  async function runCompletedToolUseConfig(resolvedOutcome: string) {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliToolUseConfig } = await loadRunExecution();
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.ToolUse,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      response: 'Done.',
+    });
+    mocks.readCliRunOutcome.mockResolvedValueOnce(resolvedOutcome);
+    return executeCliToolUseConfig(toolUseConfig(), cliContext(), {
+      registerExecution: true,
+      stopAfterCycle: true,
+    });
+  }
+
+  /** Stubs a workflow-category result where a tool-use run was expected. */
+  async function runWorkflowCategoryMismatch() {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliConfig } = await loadRunExecution();
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.Workflow,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      outputs: [],
+      compileFailures: [],
+    });
+    return executeCliConfig(toolUseConfig(), cliContext(), {
+      expectedCategory: AgentCategory.ToolUse,
+      categoryMismatchMessage: 'wrong category',
+    });
+  }
+
   it('reports invalid configs without starting the runtime host', async () => {
-    const { executeCliConfig } = await import('@cli/runtime/runExecution');
+    const { executeCliConfig } = await loadRunExecution();
     const invalidConfig = { agentCategory: 'invalid' } as unknown as Parameters<
       typeof executeCliConfig
     >[0];
@@ -893,26 +935,7 @@ describe('executeCliConfig', () => {
   });
 
   it('derives the internal CLI result and exit code for tool-use configs', async () => {
-    const { AgentCategory } =
-      await import('@agent/core/definition/AgentDataclass');
-    const { executeCliToolUseConfig } =
-      await import('@cli/runtime/runExecution');
-    mocks.runAgent.mockResolvedValueOnce({
-      category: AgentCategory.ToolUse,
-      executionId: 'exec-1',
-      outcome: 'completed',
-      response: 'Done.',
-    });
-    mocks.readCliRunOutcome.mockResolvedValueOnce('completed');
-
-    const result = await executeCliToolUseConfig(
-      toolUseConfig(),
-      cliContext(),
-      {
-        registerExecution: true,
-        stopAfterCycle: true,
-      },
-    );
+    const result = await runCompletedToolUseConfig('completed');
 
     expect(result).toMatchObject({
       ok: true,
@@ -935,26 +958,7 @@ describe('executeCliConfig', () => {
   });
 
   it('carries only the resolved outcome after a shutdown interruption', async () => {
-    const { AgentCategory } =
-      await import('@agent/core/definition/AgentDataclass');
-    const { executeCliToolUseConfig } =
-      await import('@cli/runtime/runExecution');
-    mocks.runAgent.mockResolvedValueOnce({
-      category: AgentCategory.ToolUse,
-      executionId: 'exec-1',
-      outcome: 'completed',
-      response: 'Done.',
-    });
-    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
-
-    const result = await executeCliToolUseConfig(
-      toolUseConfig(),
-      cliContext(),
-      {
-        registerExecution: true,
-        stopAfterCycle: true,
-      },
-    );
+    const result = await runCompletedToolUseConfig('cancelled');
 
     expect(result).toMatchObject({
       ok: true,
@@ -972,21 +976,7 @@ describe('executeCliConfig', () => {
   });
 
   it('marks executions errored when the resolved category is unexpected', async () => {
-    const { AgentCategory } =
-      await import('@agent/core/definition/AgentDataclass');
-    const { executeCliConfig } = await import('@cli/runtime/runExecution');
-    mocks.runAgent.mockResolvedValueOnce({
-      category: AgentCategory.Workflow,
-      executionId: 'exec-1',
-      outcome: 'completed',
-      outputs: [],
-      compileFailures: [],
-    });
-
-    const result = await executeCliConfig(toolUseConfig(), cliContext(), {
-      expectedCategory: AgentCategory.ToolUse,
-      categoryMismatchMessage: 'wrong category',
-    });
+    const result = await runWorkflowCategoryMismatch();
 
     expect(result).toMatchObject({ ok: false });
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
@@ -999,16 +989,6 @@ describe('executeCliConfig', () => {
   });
 
   it('reports category finalization failures and still returns the mismatch', async () => {
-    const { AgentCategory } =
-      await import('@agent/core/definition/AgentDataclass');
-    const { executeCliConfig } = await import('@cli/runtime/runExecution');
-    mocks.runAgent.mockResolvedValueOnce({
-      category: AgentCategory.Workflow,
-      executionId: 'exec-1',
-      outcome: 'completed',
-      outputs: [],
-      compileFailures: [],
-    });
     mocks.finalizeExecution.mockResolvedValueOnce({
       status: 'failed',
       error: new Error('terminal metadata disk full'),
@@ -1016,12 +996,10 @@ describe('executeCliConfig', () => {
       outcomePersisted: false,
     });
 
-    await expect(
-      executeCliConfig(toolUseConfig(), cliContext(), {
-        expectedCategory: AgentCategory.ToolUse,
-        categoryMismatchMessage: 'wrong category',
-      }),
-    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+    await expect(runWorkflowCategoryMismatch()).resolves.toEqual({
+      ok: false,
+      exitCode: CliExitCode.AgentError,
+    });
 
     expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(
       1,

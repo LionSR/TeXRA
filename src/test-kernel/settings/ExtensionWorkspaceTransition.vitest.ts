@@ -174,55 +174,88 @@ function driveTransitions(
   );
 }
 
-async function createProject(root: string, port: number): Promise<void> {
+async function writeProjectConfig(
+  root: string,
+  contents: string,
+): Promise<void> {
   await mkdir(join(root, '.texra'), { recursive: true });
-  await writeFile(
-    join(root, '.texra', 'config.json'),
-    `{"texra.bib.zoteroPort": ${port}}\n`,
-  );
+  await writeFile(join(root, '.texra', 'config.json'), contents);
+}
+
+function createProject(root: string, port: number): Promise<void> {
+  return writeProjectConfig(root, `{"texra.bib.zoteroPort": ${port}}\n`);
+}
+
+function projectConfigPath(root: string): string {
+  return join(root, '.texra', 'config.json');
+}
+
+async function expectConfigContains(
+  configPath: string,
+  content: string,
+): Promise<void> {
+  await expect(readFile(configPath, 'utf8')).resolves.toContain(content);
 }
 
 describe.skipIf(process.platform === 'win32')(
   'extension workspace transition integration',
   () => {
-    let tempDir: string | undefined;
+    let tempDir: string;
+    let workspaceRoot: string | undefined;
+    let provider: InstanceType<typeof ProgressViewProvider> | undefined;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       mocks.backend.reloadAfterStorageRootChange.mockReset();
       mocks.showErrorMessage.mockReset();
       mocks.workspaceListeners.length = 0;
       mocks.setApprovalPolicy.mockReset();
+      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
     });
 
     afterEach(async () => {
-      if (tempDir) await rm(tempDir, { recursive: true, force: true });
-      tempDir = undefined;
+      provider?.dispose();
+      provider = undefined;
+      await rm(tempDir, { recursive: true, force: true });
     });
 
-    it('ignores folder changes that keep the active workspace root unchanged', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
-      const workspace = join(tempDir, 'project');
+    /** Wire storage + config + the progress view provider over `tempDir`. */
+    async function buildFixture(initialRoot: string | undefined): Promise<{
+      storage: InstanceType<typeof WorkspaceStorageProvider>;
+      config: Awaited<ReturnType<typeof createExtensionTexraConfig>>;
+    }> {
+      workspaceRoot = initialRoot;
       const storageRoot = join(tempDir, 'storage');
-      await Promise.all([createProject(workspace, 24001), mkdir(storageRoot)]);
-
+      await mkdir(storageRoot);
       const storage = new WorkspaceStorageProvider(
         storageRoot,
-        () => workspace,
+        () => workspaceRoot,
       );
-      const config = await createExtensionTexraConfig(storage, workspace);
-      const storageCommit = vi.spyOn(storage, 'commitWorkspaceStorageChange');
-      const configReplacement = vi.spyOn(config, 'replaceWorkspaceStore');
-      const listener = vi.fn();
-      config.watch('texra.bib.zoteroPort', listener);
-      const provider = new ProgressViewProvider(
+      const config = await createExtensionTexraConfig(storage, workspaceRoot);
+      provider = new ProgressViewProvider(
         {
           storageUri: { fsPath: join(tempDir, 'extension-storage') },
         } as unknown as vscode.ExtensionContext,
         config,
-        { getWorkspacePath: () => workspace } as never,
+        { getWorkspacePath: () => workspaceRoot } as never,
       );
+      return { storage, config };
+    }
 
+    function fireWorkspaceFolderChange(): void {
       mocks.workspaceListeners[0]?.();
+    }
+
+    it('ignores folder changes that keep the active workspace root unchanged', async () => {
+      const workspace = join(tempDir, 'project');
+      await createProject(workspace, 24001);
+      const { storage, config } = await buildFixture(workspace);
+
+      const storageCommit = vi.spyOn(storage, 'commitWorkspaceStorageChange');
+      const configReplacement = vi.spyOn(config, 'replaceWorkspaceStore');
+      const listener = vi.fn();
+      config.watch('texra.bib.zoteroPort', listener);
+
+      fireWorkspaceFolderChange();
       await config.update('texra.bib.zoteroPort', 25000);
 
       expect(mocks.backend.reloadAfterStorageRootChange).not.toHaveBeenCalled();
@@ -230,46 +263,28 @@ describe.skipIf(process.platform === 'win32')(
       expect(configReplacement).not.toHaveBeenCalled();
       expect(mocks.showErrorMessage).not.toHaveBeenCalled();
       expect(listener).toHaveBeenCalledOnce();
-      await expect(
-        readFile(join(workspace, '.texra', 'config.json'), 'utf8'),
-      ).resolves.toContain('25000');
-      provider.dispose();
+      await expectConfigContains(projectConfigPath(workspace), '25000');
     });
 
     it('blocks workspace writes across storage and config commit windows while allowing global writes', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const firstWorkspace = join(tempDir, 'first');
       const secondWorkspace = join(tempDir, 'second');
-      const storageRoot = join(tempDir, 'storage');
       await Promise.all([
         createProject(firstWorkspace, 24001),
         createProject(secondWorkspace, 24002),
-        mkdir(storageRoot),
       ]);
+      const { storage, config } = await buildFixture(firstWorkspace);
 
-      let workspaceRoot: string | undefined = firstWorkspace;
-      const storage = new WorkspaceStorageProvider(
-        storageRoot,
-        () => workspaceRoot,
-      );
-      const config = await createExtensionTexraConfig(storage, workspaceRoot);
       const storageCommit = pDefer<void>();
       const configCommit = pDefer<void>();
       driveTransitions(storage, {
         beforeStorageCommit: storageCommit.promise,
         beforeConfigCommit: configCommit.promise,
       });
-      const provider = new ProgressViewProvider(
-        {
-          storageUri: { fsPath: join(tempDir, 'extension-storage') },
-        } as unknown as vscode.ExtensionContext,
-        config,
-        { getWorkspacePath: () => workspaceRoot } as never,
-      );
 
       workspaceRoot = secondWorkspace;
-      mocks.workspaceListeners[0]?.();
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
+      fireWorkspaceFolderChange();
       let workspaceWriteFinished = false;
       const workspaceWrite = config
         .update('texra.bib.zoteroPort', 25000)
@@ -279,12 +294,11 @@ describe.skipIf(process.platform === 'win32')(
       await config.update('texra.telemetry.enabled', false, 'global');
 
       expect(workspaceWriteFinished).toBe(false);
-      await expect(
-        readFile(join(firstWorkspace, '.texra', 'config.json'), 'utf8'),
-      ).resolves.toContain('24001');
-      await expect(
-        readFile(join(storage.getGlobalStoragePath(), 'config.json'), 'utf8'),
-      ).resolves.toContain('false');
+      await expectConfigContains(projectConfigPath(firstWorkspace), '24001');
+      await expectConfigContains(
+        join(storage.getGlobalStoragePath(), 'config.json'),
+        'false',
+      );
 
       storageCommit.resolve();
       await vi.waitFor(() =>
@@ -295,154 +309,87 @@ describe.skipIf(process.platform === 'win32')(
       configCommit.resolve();
       await workspaceWrite;
       expect(mocks.backend.reloadAfterStorageRootChange).toHaveBeenCalledOnce();
-      await expect(
-        readFile(join(secondWorkspace, '.texra', 'config.json'), 'utf8'),
-      ).resolves.toContain('25000');
-      await expect(
-        readFile(join(firstWorkspace, '.texra', 'config.json'), 'utf8'),
-      ).resolves.toContain('24001');
-      provider.dispose();
+      await expectConfigContains(projectConfigPath(secondWorkspace), '25000');
+      await expectConfigContains(projectConfigPath(firstWorkspace), '24001');
     });
 
     it('moves writable project config to the no-folder internal store', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const workspace = join(tempDir, 'project');
-      const storageRoot = join(tempDir, 'storage');
-      await Promise.all([createProject(workspace, 24001), mkdir(storageRoot)]);
-
-      let workspaceRoot: string | undefined = workspace;
-      const storage = new WorkspaceStorageProvider(
-        storageRoot,
-        () => workspaceRoot,
-      );
-      const config = await createExtensionTexraConfig(storage, workspaceRoot);
+      await createProject(workspace, 24001);
+      const { storage, config } = await buildFixture(workspace);
       driveTransitions(storage);
-      const provider = new ProgressViewProvider(
-        {
-          storageUri: { fsPath: join(tempDir, 'extension-storage') },
-        } as unknown as vscode.ExtensionContext,
-        config,
-        { getWorkspacePath: () => workspaceRoot } as never,
-      );
 
       workspaceRoot = undefined;
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
       await config.update('texra.bib.zoteroPort', 25000);
 
-      await expect(
-        readFile(join(storage.getStoragePath(), 'config.json'), 'utf8'),
-      ).resolves.toContain('25000');
-      await expect(
-        readFile(join(workspace, '.texra', 'config.json'), 'utf8'),
-      ).resolves.toContain('24001');
-      provider.dispose();
+      await expectConfigContains(
+        join(storage.getStoragePath(), 'config.json'),
+        '25000',
+      );
+      await expectConfigContains(projectConfigPath(workspace), '24001');
     });
 
     it('re-seeds the default session approval policy from the new workspace after a transition commits', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const firstWorkspace = join(tempDir, 'first');
       const secondWorkspace = join(tempDir, 'second');
-      const storageRoot = join(tempDir, 'storage');
       await Promise.all([
         createProject(firstWorkspace, 24001),
-        mkdir(join(secondWorkspace, '.texra'), { recursive: true }),
-        mkdir(storageRoot),
+        writeProjectConfig(
+          secondWorkspace,
+          '{"texra.approvalPolicy": "yolo"}\n',
+        ),
       ]);
-      await writeFile(
-        join(secondWorkspace, '.texra', 'config.json'),
-        '{"texra.approvalPolicy": "yolo"}\n',
-      );
-
-      let workspaceRoot: string | undefined = firstWorkspace;
-      const storage = new WorkspaceStorageProvider(
-        storageRoot,
-        () => workspaceRoot,
-      );
-      const config = await createExtensionTexraConfig(storage, workspaceRoot);
+      const { storage } = await buildFixture(firstWorkspace);
       driveTransitions(storage);
-      const provider = new ProgressViewProvider(
-        {
-          storageUri: { fsPath: join(tempDir, 'extension-storage') },
-        } as unknown as vscode.ExtensionContext,
-        config,
-        { getWorkspacePath: () => workspaceRoot } as never,
-      );
 
       expect(mocks.setApprovalPolicy).not.toHaveBeenCalled();
       workspaceRoot = secondWorkspace;
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
       await vi.waitFor(() =>
         expect(mocks.setApprovalPolicy).toHaveBeenCalledWith('yolo'),
       );
-      provider.dispose();
     });
 
     it('re-seeds the default session approval policy after a transition rolls back', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const firstWorkspace = join(tempDir, 'first');
       const secondWorkspace = join(tempDir, 'second');
-      const storageRoot = join(tempDir, 'storage');
       await Promise.all([
-        createProject(firstWorkspace, 24001),
-        mkdir(join(secondWorkspace, '.texra'), { recursive: true }),
-        mkdir(storageRoot),
+        writeProjectConfig(
+          firstWorkspace,
+          '{"texra.bib.zoteroPort": 24001, "texra.approvalPolicy": "ask"}\n',
+        ),
+        writeProjectConfig(
+          secondWorkspace,
+          '{"texra.approvalPolicy": "yolo"}\n',
+        ),
       ]);
-      await writeFile(
-        join(firstWorkspace, '.texra', 'config.json'),
-        '{"texra.bib.zoteroPort": 24001, "texra.approvalPolicy": "ask"}\n',
-      );
-      await writeFile(
-        join(secondWorkspace, '.texra', 'config.json'),
-        '{"texra.approvalPolicy": "yolo"}\n',
-      );
-
-      let workspaceRoot: string | undefined = firstWorkspace;
-      const storage = new WorkspaceStorageProvider(
-        storageRoot,
-        () => workspaceRoot,
-      );
-      const config = await createExtensionTexraConfig(storage, workspaceRoot);
+      const { storage } = await buildFixture(firstWorkspace);
       driveTransitions(storage, {
         failWorkspaceRoots: new Set([secondWorkspace]),
       });
-      const provider = new ProgressViewProvider(
-        {
-          storageUri: { fsPath: join(tempDir, 'extension-storage') },
-        } as unknown as vscode.ExtensionContext,
-        config,
-        { getWorkspacePath: () => workspaceRoot } as never,
-      );
 
       workspaceRoot = secondWorkspace;
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
       await vi.waitFor(() => expect(mocks.showErrorMessage).toHaveBeenCalled());
       // Commit briefly seeds yolo from the failed target, then rollback
       // restores the prior workspace store and re-seeds ask.
       expect(mocks.setApprovalPolicy.mock.calls.map((call) => call[0])).toEqual(
         ['yolo', 'ask'],
       );
-      provider.dispose();
     });
 
     it('serializes rapid moves, rolls a failed move back, and preserves watchers for retry', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const firstWorkspace = join(tempDir, 'first');
       const secondWorkspace = join(tempDir, 'second');
       const thirdWorkspace = join(tempDir, 'third');
-      const storageRoot = join(tempDir, 'storage');
       await Promise.all([
         createProject(firstWorkspace, 24001),
         createProject(secondWorkspace, 24002),
         createProject(thirdWorkspace, 24003),
-        mkdir(storageRoot),
       ]);
+      const { storage, config } = await buildFixture(firstWorkspace);
 
-      let workspaceRoot: string | undefined = firstWorkspace;
-      const storage = new WorkspaceStorageProvider(
-        storageRoot,
-        () => workspaceRoot,
-      );
-      const config = await createExtensionTexraConfig(storage, workspaceRoot);
       const failedRoots = new Set<string | undefined>([thirdWorkspace]);
       const operations: string[] = [];
       const storagePaths = new Map<string | undefined, string>();
@@ -451,20 +398,13 @@ describe.skipIf(process.platform === 'win32')(
         operations,
         storagePaths,
       });
-      const provider = new ProgressViewProvider(
-        {
-          storageUri: { fsPath: join(tempDir, 'extension-storage') },
-        } as unknown as vscode.ExtensionContext,
-        config,
-        { getWorkspacePath: () => workspaceRoot } as never,
-      );
       const listener = vi.fn();
       config.watch('texra.bib.zoteroPort', listener);
 
       workspaceRoot = secondWorkspace;
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
       workspaceRoot = thirdWorkspace;
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
       const failedWorkspaceWrite = expect(
         config.update('texra.bib.zoteroPort', 26000),
       ).rejects.toThrow('workspace transition 2 failed');
@@ -486,15 +426,12 @@ describe.skipIf(process.platform === 'win32')(
 
       const callsAfterRollback = listener.mock.calls.length;
       failedRoots.clear();
-      mocks.workspaceListeners[0]?.();
+      fireWorkspaceFolderChange();
       await config.update('texra.bib.zoteroPort', 25003);
 
       expect(config.get('texra.bib.zoteroPort')).toBe(25003);
       expect(listener.mock.calls.length).toBeGreaterThan(callsAfterRollback);
-      await expect(
-        readFile(join(thirdWorkspace, '.texra', 'config.json'), 'utf8'),
-      ).resolves.toContain('25003');
-      provider.dispose();
+      await expectConfigContains(projectConfigPath(thirdWorkspace), '25003');
     });
   },
 );

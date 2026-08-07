@@ -42,18 +42,12 @@ describe('toOpenRouterReasoningEffort', () => {
     );
   });
 
-  it('passes through every value OpenRouter natively accepts', () => {
-    for (const effort of [
-      'xhigh',
-      'high',
-      'medium',
-      'low',
-      'minimal',
-      'none',
-    ]) {
+  it.each(['xhigh', 'high', 'medium', 'low', 'minimal', 'none'])(
+    'passes %s through unchanged when OpenRouter natively accepts it',
+    (effort) => {
       expect(toOpenRouterReasoningEffort(effort, false)).toBe(effort);
-    }
-  });
+    },
+  );
 
   it('falls back to "low" for unrecognized values', () => {
     expect(toOpenRouterReasoningEffort('bogus', false)).toBe('low');
@@ -68,14 +62,12 @@ describe('clampReasoningEffortToHighOrMax', () => {
     expect(clampReasoningEffortToHighOrMax(ReasoningEffort.MAX)).toBe('max');
   });
 
-  it('maps high and every below-high tier to the "high" floor', () => {
-    for (const effort of [
-      ReasoningEffort.HIGH,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.LOW,
-      ReasoningEffort.NONE,
-    ]) {
-      expect(clampReasoningEffortToHighOrMax(effort)).toBe('high');
-    }
+  it.each([
+    ReasoningEffort.HIGH,
+    ReasoningEffort.MEDIUM,
+    ReasoningEffort.LOW,
+    ReasoningEffort.NONE,
+  ])('maps %s and every below-high tier to the "high" floor', (effort) => {
+    expect(clampReasoningEffortToHighOrMax(effort)).toBe('high');
   });
 });

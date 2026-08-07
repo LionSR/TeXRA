@@ -271,22 +271,34 @@ describe('ModelHandlerOpenRouterNative forced tool choice', () => {
 });
 
 describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
-  it('rejects a non-streaming response on the streaming path', async () => {
+  it.each([
+    {
+      name: 'rejects a non-streaming response on the streaming path',
+      streaming: true,
+      send: async () => ({
+        choices: [],
+        created: 0,
+        id: 'response-id',
+        model: 'openai/gpt-5.5',
+        object: 'chat.completion',
+        usage: null,
+      }),
+      error: /non-streaming response for a streaming request/,
+    },
+    {
+      name: 'rejects a streaming response on the non-streaming path',
+      streaming: false,
+      send: async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [] };
+        },
+      }),
+      error: /streaming response for a non-streaming request/,
+    },
+  ])('$name', async ({ streaming, send, error }) => {
     const handler = createHandler();
-    (handler as any).getStreamingConfig = () => true;
-
-    const client = {
-      chat: {
-        send: async () => ({
-          choices: [],
-          created: 0,
-          id: 'response-id',
-          model: 'openai/gpt-5.5',
-          object: 'chat.completion',
-          usage: null,
-        }),
-      },
-    };
+    (handler as any).getStreamingConfig = () => streaming;
+    const client = { chat: { send } };
 
     await assert.rejects(
       handler.createResponse({
@@ -294,30 +306,7 @@ describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
         messages: [{ role: 'user', content: 'hi' }],
         temperature: 0,
       }),
-      /non-streaming response for a streaming request/,
-    );
-  });
-
-  it('rejects a streaming response on the non-streaming path', async () => {
-    const handler = createHandler();
-
-    const client = {
-      chat: {
-        send: async () => ({
-          async *[Symbol.asyncIterator]() {
-            yield { choices: [] };
-          },
-        }),
-      },
-    };
-
-    await assert.rejects(
-      handler.createResponse({
-        client: client as any,
-        messages: [{ role: 'user', content: 'hi' }],
-        temperature: 0,
-      }),
-      /streaming response for a non-streaming request/,
+      error,
     );
   });
 });
@@ -475,16 +464,22 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
     vi.restoreAllMocks();
   });
 
-  it('retries a transient auxiliary compaction request twice', async () => {
-    vi.useFakeTimers();
-    const target = stubClientCompaction(
+  function createCompactionTarget(): CompactionInternals {
+    return stubClientCompaction(
       new ModelHandlerOpenRouterNative(
         buildTestModelConfig(OPENROUTER_TEST_CONFIG),
       ),
     );
-    const transient = Object.assign(new Error('provider unavailable'), {
-      status: 503,
-    });
+  }
+
+  function transientProviderError(): Error {
+    return Object.assign(new Error('provider unavailable'), { status: 503 });
+  }
+
+  it('retries a transient auxiliary compaction request twice', async () => {
+    vi.useFakeTimers();
+    const target = createCompactionTarget();
+    const transient = transientProviderError();
     const send = vi
       .fn()
       .mockRejectedValueOnce(transient)
@@ -508,11 +503,7 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
   });
 
   it('does not retry a compaction credential failure', async () => {
-    const target = stubClientCompaction(
-      new ModelHandlerOpenRouterNative(
-        buildTestModelConfig(OPENROUTER_TEST_CONFIG),
-      ),
-    );
+    const target = createCompactionTarget();
     const credentialFailure = Object.assign(new Error('invalid credential'), {
       status: 401,
     });
@@ -548,9 +539,7 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
     handler.requestCompaction();
     await handler.compactForTest(messages, compact);
 
-    const transient = Object.assign(new Error('provider unavailable'), {
-      status: 503,
-    });
+    const transient = transientProviderError();
     const send = vi
       .fn()
       .mockRejectedValueOnce(transient)

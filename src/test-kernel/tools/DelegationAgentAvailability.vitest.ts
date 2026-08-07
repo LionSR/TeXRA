@@ -49,6 +49,33 @@ const DELEGATE_WORKFLOW_DESCRIPTION = [
   'Pick the agent whose description matches the task.',
 ].join('\n');
 
+type ToolInput = {
+  name: string;
+  description?: ToolDefinition['description'];
+  availabilityCategory?: ToolDefinition['availabilityCategory'];
+};
+
+const DELEGATE_AGENT_TOOL: ToolInput = {
+  name: 'delegate_agent',
+  availabilityCategory: 'toolUse',
+  description: DELEGATE_AGENT_DESCRIPTION,
+};
+
+const RESEARCH_NUMERICS_AGENTS = [
+  { name: 'research', description: 'Derive and verify.' },
+  { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
+];
+
+function rewriteRoster(
+  rosterBlock: string,
+  tool: ToolDefinition = {
+    name: 'delegate_agent',
+    description: DELEGATE_AGENT_DESCRIPTION,
+  },
+) {
+  return withDelegationAgentAvailability(tool, rosterBlock);
+}
+
 function delegationRegistry(names: readonly string[]) {
   return new MapToolRegistry(
     Object.fromEntries(
@@ -63,19 +90,23 @@ function delegationRegistry(names: readonly string[]) {
   );
 }
 
-function resolveAgentToolsInput(
-  tools: {
-    name: string;
-    description?: string;
-    availabilityCategory?: 'workflow' | 'toolUse';
-  }[],
-) {
+function resolveAgentToolsInput(tools: ToolInput[]) {
   return {
     tools,
     registry: delegationRegistry(tools.map((t) => t.name)),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
   };
+}
+
+async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
+  const resolved = await resolveAgentTools(resolveAgentToolsInput(tools));
+  return resolved.tools;
+}
+
+async function resolveDelegateAgent(extraTools: ToolInput[] = []) {
+  const tools = await resolveToolList([DELEGATE_AGENT_TOOL, ...extraTools]);
+  return tools.find((t) => t.name === 'delegate_agent');
 }
 
 describe('delegation agent availability', () => {
@@ -95,13 +126,7 @@ describe('delegation agent availability', () => {
   });
 
   it('replaces the placeholder Available agents line with the live roster', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description: DELEGATE_AGENT_DESCRIPTION,
-    };
-
-    const rewritten = withDelegationAgentAvailability(
-      tool,
+    const rewritten = rewriteRoster(
       'Available agents:\n- research: Derive things.',
     );
 
@@ -121,22 +146,20 @@ describe('delegation agent availability', () => {
   });
 
   it('replaces an already-expanded multi-line roster block', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_workflow',
-      description: [
-        'Delegate to a workflow agent.',
-        '',
-        'Available agents:',
-        '- correct: Proofread.',
-        '- polish: Rewrite.',
-        '',
-        'Pick the agent whose description matches the task.',
-      ].join('\n'),
-    };
-
-    const rewritten = withDelegationAgentAvailability(
-      tool,
+    const rewritten = rewriteRoster(
       'Available agents:\n- apply: Apply review suggestions.',
+      {
+        name: 'delegate_workflow',
+        description: [
+          'Delegate to a workflow agent.',
+          '',
+          'Available agents:',
+          '- correct: Proofread.',
+          '- polish: Rewrite.',
+          '',
+          'Pick the agent whose description matches the task.',
+        ].join('\n'),
+      },
     );
 
     expect(rewritten.description).toContain(
@@ -150,14 +173,12 @@ describe('delegation agent availability', () => {
   });
 
   it('appends the roster block when the description has none', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description: 'Delegate a task to a tool-use agent.',
-    };
-
-    const rewritten = withDelegationAgentAvailability(
-      tool,
+    const rewritten = rewriteRoster(
       'Available agents:\n- review: Audit a change.',
+      {
+        name: 'delegate_agent',
+        description: 'Delegate a task to a tool-use agent.',
+      },
     );
 
     expect(rewritten.description).toBe(
@@ -166,13 +187,7 @@ describe('delegation agent availability', () => {
   });
 
   it('treats a $ in an agent description as a literal, not a replacement token', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description: DELEGATE_AGENT_DESCRIPTION,
-    };
-
-    const rewritten = withDelegationAgentAvailability(
-      tool,
+    const rewritten = rewriteRoster(
       'Available agents:\n- prover: Prove $\\forall x$ statements.',
     );
 
@@ -180,15 +195,13 @@ describe('delegation agent availability', () => {
   });
 
   it('replaces (not duplicates) a roster block that ends the description', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description:
-        'Delegate a task.\n\nAvailable agents: loaded from the active roster at runtime.',
-    };
-
-    const rewritten = withDelegationAgentAvailability(
-      tool,
+    const rewritten = rewriteRoster(
       'Available agents:\n- review: Audit a change.',
+      {
+        name: 'delegate_agent',
+        description:
+          'Delegate a task.\n\nAvailable agents: loaded from the active roster at runtime.',
+      },
     );
 
     expect(rewritten.description).toBe(
@@ -224,10 +237,7 @@ describe('visibleDelegationAgentsBlock', () => {
   });
 
   it('builds a roster block from the currently visible agents', () => {
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'research', description: 'Derive and verify.' },
-      { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
-    ]);
+    mocks.getVisibleAgents.mockReturnValue(RESEARCH_NUMERICS_AGENTS);
 
     expect(visibleDelegationAgentsBlock('toolUse')).toBe(
       [
@@ -263,22 +273,9 @@ describe('resolveAgentTools delegation roster annotation', () => {
   });
 
   it('refreshes the Available agents line of delegation tools per run', async () => {
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'research', description: 'Derive and verify.' },
-      { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
-    ]);
+    mocks.getVisibleAgents.mockReturnValue(RESEARCH_NUMERICS_AGENTS);
 
-    const { tools } = await resolveAgentTools(
-      resolveAgentToolsInput([
-        {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
-      ]),
-    );
-
-    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
+    const delegateAgent = await resolveDelegateAgent();
     expect(delegateAgent?.description).toContain(
       'Available agents:\n- research: Derive and verify.',
     );
@@ -298,16 +295,10 @@ describe('resolveAgentTools delegation roster annotation', () => {
       { name: 'research', description: 'Derive and verify.' },
     ]);
 
-    const { tools } = await resolveAgentTools(
-      resolveAgentToolsInput([
-        {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
-        { name: 'grep', description: 'Search files.' },
-      ]),
-    );
+    const tools = await resolveToolList([
+      DELEGATE_AGENT_TOOL,
+      { name: 'grep', description: 'Search files.' },
+    ]);
 
     const grep = tools.find((t) => t.name === 'grep');
     expect(grep?.description).toBe('Search files.');
@@ -320,34 +311,14 @@ describe('resolveAgentTools delegation roster annotation', () => {
       { name: 'research', description: 'Derive.' },
       { name: 'numerics', description: 'Simulate.' },
     ]);
-    const first = (
-      await resolveAgentTools(
-        resolveAgentToolsInput([
-          {
-            name: 'delegate_agent',
-            availabilityCategory: 'toolUse',
-            description: DELEGATE_AGENT_DESCRIPTION,
-          },
-        ]),
-      )
-    ).tools.find((t) => t.name === 'delegate_agent');
+    const first = await resolveDelegateAgent();
     expect(first?.description).toContain('- research:');
     expect(first?.description).toContain('- numerics:');
 
     mocks.getVisibleAgents.mockReturnValue([
       { name: 'coder', description: 'Write code.' },
     ]);
-    const second = (
-      await resolveAgentTools(
-        resolveAgentToolsInput([
-          {
-            name: 'delegate_agent',
-            availabilityCategory: 'toolUse',
-            description: DELEGATE_AGENT_DESCRIPTION,
-          },
-        ]),
-      )
-    ).tools.find((t) => t.name === 'delegate_agent');
+    const second = await resolveDelegateAgent();
     expect(second?.description).toContain('- coder:');
     expect(second?.description).not.toContain('- research:');
     expect(second?.description).not.toContain('- numerics:');
@@ -356,17 +327,7 @@ describe('resolveAgentTools delegation roster annotation', () => {
   it('emits the empty-roster directive end-to-end when nothing is visible', async () => {
     mocks.getVisibleAgents.mockReturnValue([]);
 
-    const { tools } = await resolveAgentTools(
-      resolveAgentToolsInput([
-        {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
-      ]),
-    );
-
-    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
+    const delegateAgent = await resolveDelegateAgent();
     expect(delegateAgent?.description).toContain(
       'none are currently in the active roster',
     );
@@ -383,20 +344,14 @@ describe('resolveAgentTools delegation roster annotation', () => {
         : [{ name: 'apply', description: 'Apply review suggestions.' }],
     );
 
-    const { tools } = await resolveAgentTools(
-      resolveAgentToolsInput([
-        {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
-        {
-          name: 'delegate_workflow',
-          availabilityCategory: 'workflow',
-          description: DELEGATE_WORKFLOW_DESCRIPTION,
-        },
-      ]),
-    );
+    const tools = await resolveToolList([
+      DELEGATE_AGENT_TOOL,
+      {
+        name: 'delegate_workflow',
+        availabilityCategory: 'workflow',
+        description: DELEGATE_WORKFLOW_DESCRIPTION,
+      },
+    ]);
 
     const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
     const delegateWorkflow = tools.find((t) => t.name === 'delegate_workflow');
@@ -414,17 +369,7 @@ describe('resolveAgentTools delegation roster annotation', () => {
       { name: 'numerics', description: 'Run simulations.' },
     ]);
 
-    const { tools } = await resolveAgentTools(
-      resolveAgentToolsInput([
-        {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
-      ]),
-    );
-
-    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
+    const delegateAgent = await resolveDelegateAgent();
     expect(delegateAgent?.description).toContain(
       '- prover: Prove $P=NP$ statements.',
     );

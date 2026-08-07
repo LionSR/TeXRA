@@ -1,5 +1,3 @@
-// Test support imports
-
 import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
@@ -78,6 +76,18 @@ const VALID_TOOL_USE_SHARED = {
   shouldSkipCycle: false,
   stateSlices: null,
 };
+
+// Stored shared state left by a run whose handler identity was persisted.
+function activeHandlerShared(): Record<string, unknown> {
+  return {
+    ...VALID_TOOL_USE_SHARED,
+    modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+  };
+}
+
+function createAbortError(): DOMException {
+  return new DOMException('This operation was aborted', 'AbortError');
+}
 type ToolUseSetupContext = Parameters<ToolUseFlowAttachment['attach']>[0];
 
 // A record parked on the wait node, as a resumable turn leaves it.
@@ -1332,20 +1342,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
-    const storedShared = {
-      ...VALID_TOOL_USE_SHARED,
-      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-    };
+    const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(
       executionId,
       streamId,
       storedShared,
     );
     await writeFlowRecord(executionId, storedShared);
-    const abortError = new DOMException(
-      'This operation was aborted',
-      'AbortError',
-    );
+    const abortError = createAbortError();
     const runSpy = vi
       .spyOn(PersistedFlow.prototype, 'run')
       .mockImplementationOnce(async () => {
@@ -1424,10 +1428,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-cancel-active-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
     const session = createTestSession();
-    const storedShared = {
-      ...VALID_TOOL_USE_SHARED,
-      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-    };
+    const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(
       executionId,
       streamId,
@@ -1441,10 +1442,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const recovery = session.followUps.claimRecovery(streamId, true);
     expect(recovery).toBeDefined();
     let flowContext: ToolUseSetupContext | undefined;
-    const abortError = new DOMException(
-      'This operation was aborted',
-      'AbortError',
-    );
+    const abortError = createAbortError();
     const runSpy = vi
       .spyOn(PersistedFlow.prototype, 'run')
       .mockImplementationOnce(async () => {
@@ -1482,10 +1480,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-cancel-child-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-child-followup' as StreamTabId;
     const session = createTestSession();
-    const storedShared = {
-      ...VALID_TOOL_USE_SHARED,
-      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-    };
+    const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(
       executionId,
       streamId,
@@ -1495,10 +1490,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const childLease = session.followUps.claimLive(streamId, 'child');
     expect(childLease).toBeDefined();
     let flowContext: ToolUseSetupContext | undefined;
-    const abortError = new DOMException(
-      'This operation was aborted',
-      'AbortError',
-    );
+    const abortError = createAbortError();
     const runSpy = vi
       .spyOn(PersistedFlow.prototype, 'run')
       .mockImplementationOnce(async () => {

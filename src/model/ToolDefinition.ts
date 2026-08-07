@@ -1,11 +1,6 @@
-// Third-party imports
 import { z, type ZodType } from 'zod';
 
 import { AgentCategorySchema } from '@shared/schemas/agent';
-
-// ============================================================================
-// Tool Definition Schema - Single Source of Truth
-// ============================================================================
 
 /**
  * Zod schema for validating tool definition structure.

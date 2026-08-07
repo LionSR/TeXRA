@@ -68,7 +68,6 @@ export async function maybeSaveDebugObject({
   const debugFileName = `${fileBase}${modelPart}${cont}.json`;
 
   try {
-    // Use appropriate file system based on whether we have an execution context
     const filePath = executionId
       ? path.join(RUNS_STORAGE_DIR, executionId, debugFileName)
       : debugFileName;

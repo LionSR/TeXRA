@@ -37,32 +37,36 @@ function installRemoteAgentListClient(result: {
   return selectedColumns;
 }
 
-describe('remote agent listing', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
+const canonicalReviewRow = {
+  id: 'agent-2',
+  name: 'review',
+  description: 'Canonical row',
+  visibility: ['public'],
+  tools: [],
+  agent_category: 'toolUse',
+};
 
+function invalidAgentRow(overrides: Record<string, unknown>) {
+  return {
+    id: 'agent-1',
+    name: 'review team',
+    description: 'Invalid row',
+    visibility: ['public'],
+    tools: [],
+    agent_category: 'toolUse',
+    ...overrides,
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe('remote agent listing', () => {
   it('drops remote rows with non-identifier agent names', async () => {
     installRemoteAgentListClient({
-      data: [
-        {
-          id: 'agent-1',
-          name: 'review team',
-          description: 'Invalid row',
-          visibility: ['public'],
-          tools: [],
-          agent_category: 'toolUse',
-        },
-        {
-          id: 'agent-2',
-          name: 'review',
-          description: 'Canonical row',
-          visibility: ['public'],
-          tools: [],
-          agent_category: 'toolUse',
-        },
-      ],
+      data: [invalidAgentRow({}), canonicalReviewRow],
       error: null,
     });
 
@@ -74,22 +78,8 @@ describe('remote agent listing', () => {
   it('drops remote rows without an agent category', async () => {
     installRemoteAgentListClient({
       data: [
-        {
-          id: 'agent-1',
-          name: 'uncategorized',
-          description: 'Invalid row',
-          visibility: ['public'],
-          tools: [],
-          agent_category: null,
-        },
-        {
-          id: 'agent-2',
-          name: 'review',
-          description: 'Canonical row',
-          visibility: ['public'],
-          tools: [],
-          agent_category: 'toolUse',
-        },
+        invalidAgentRow({ name: 'uncategorized', agent_category: null }),
+        canonicalReviewRow,
       ],
       error: null,
     });
@@ -118,11 +108,6 @@ describe('remote agent listing', () => {
 });
 
 describe('remote agent config parsing', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
   it('rejects with a wrapped error for malformed remote config YAML', async () => {
     vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
     vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue(

@@ -37,9 +37,9 @@ async function writeSkill(
 afterEach(async () => {
   setRuntimeSkillSources([]);
   await Promise.all(
-    tempRoots.splice(0).map((root) => {
-      return fs.rm(root, { recursive: true, force: true });
-    }),
+    tempRoots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true })),
   );
 });
 

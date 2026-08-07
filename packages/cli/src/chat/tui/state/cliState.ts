@@ -472,9 +472,7 @@ export function focusStream(
   options: { readonly onlyIfUnset?: boolean } = {},
 ): void {
   if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) return;
-  if (options.onlyIfUnset === true && activeStreamId.get() !== undefined) {
-    return;
-  }
+  if (options.onlyIfUnset && activeStreamId.get() !== undefined) return;
   activeStreamId.set(streamId);
 }
 
@@ -634,10 +632,9 @@ export function clearTransientNotice(): void {
 // ---------------------------------------------------------------------------
 
 // Bumped whenever an in-process subscription preference changes (ChatGPT/Grok)
-// so the
-// status bar re-reads it immediately instead of waiting for its periodic poll.
-// External changes (extension/desktop/config edits) are still picked up by that
-// poll.
+// so the status bar re-reads it immediately instead of waiting for its periodic
+// poll. External changes (extension/desktop/config edits) are still picked up by
+// that poll.
 
 export const codexPreferenceVersion = signal<number>(0);
 

@@ -209,32 +209,37 @@ export function formatCliModelAccessRouteInline(
     : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
-/** Format the ChatGPT preference independently of credential availability. */
-export function formatCliChatGptPreference(
-  status: CliModelAccessStatus,
+function formatCliSubscriptionPreference(
+  state: CliSubscriptionPreferenceState,
+  signedIn: boolean,
+  accountLabel: string | undefined,
 ): string {
-  if (status.preferences.chatGpt === 'on' && status.chatGptSignedIn) {
-    return `On · ${status.chatGptAccountLabel ?? 'your account'}`;
-  }
-  if (status.chatGptSignedIn) {
-    return `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
-  }
-  return status.preferences.chatGpt === 'on'
+  const account = accountLabel ?? 'your account';
+  if (state === 'on' && signedIn) return `On · ${account}`;
+  if (signedIn) return `Off · ${account}`;
+  return state === 'on'
     ? 'On · sign in required'
     : 'Off · sign in required to enable';
 }
 
+/** Format the ChatGPT preference independently of credential availability. */
+export function formatCliChatGptPreference(
+  status: CliModelAccessStatus,
+): string {
+  return formatCliSubscriptionPreference(
+    status.preferences.chatGpt,
+    status.chatGptSignedIn,
+    status.chatGptAccountLabel,
+  );
+}
+
 /** Format the Grok preference independently of credential availability. */
 export function formatCliGrokPreference(status: CliModelAccessStatus): string {
-  if (status.preferences.grok === 'on' && status.grokSignedIn) {
-    return `On · ${status.grokAccountLabel ?? 'your account'}`;
-  }
-  if (status.grokSignedIn) {
-    return `Off · ${status.grokAccountLabel ?? 'your account'}`;
-  }
-  return status.preferences.grok === 'on'
-    ? 'On · sign in required'
-    : 'Off · sign in required to enable';
+  return formatCliSubscriptionPreference(
+    status.preferences.grok,
+    status.grokSignedIn,
+    status.grokAccountLabel,
+  );
 }
 
 /** Format the Kimi preference independently of key availability. */

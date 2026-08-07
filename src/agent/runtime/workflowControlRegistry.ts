@@ -16,7 +16,6 @@
  * strategy (`src/tools/delegation`), consumption in a host (the CLI child list).
  */
 
-// Local imports - shared schemas
 import type { ExecutionId } from '@shared/schemas';
 
 /**

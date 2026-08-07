@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Verify that the setup assistant surfaces the OpenRouter-without-key
@@ -219,19 +219,9 @@ const { launchSetupAssistant } =
 
 describe('setup assistant routing check ordering', () => {
   beforeEach(() => {
-    agentHandles.mockReturnValue([]);
-    mocks.getUseOpenRouter.mockReset();
-    mocks.hasUsableApiKey.mockReset();
-    mocks.showWarningMessage.mockReset();
-    mocks.showQuickPick.mockReset();
-    mocks.showInformationMessage.mockReset();
-    mocks.showErrorMessage.mockReset();
-    mocks.executeCommand.mockReset();
-    mocks.selectSetupCredentialModelExcludingOpenRouter
-      .mockReset()
-      .mockResolvedValue(null);
-    mocks.logError.mockReset();
+    vi.resetAllMocks();
     // Default: no OpenRouter, no keys — safe baseline.
+    agentHandles.mockReturnValue([]);
     mocks.getUseOpenRouter.mockReturnValue(false);
     mocks.hasUsableApiKey.mockResolvedValue(false);
     mocks.showWarningMessage.mockResolvedValue(undefined);
@@ -239,10 +229,7 @@ describe('setup assistant routing check ordering', () => {
     mocks.showInformationMessage.mockResolvedValue(undefined);
     mocks.showErrorMessage.mockResolvedValue(undefined);
     mocks.executeCommand.mockResolvedValue(undefined);
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
+    mocks.selectSetupCredentialModelExcludingOpenRouter.mockResolvedValue(null);
   });
 
   it('shows routing warning before credential prompt when OpenRouter is on without a key', async () => {

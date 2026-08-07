@@ -30,6 +30,22 @@ function jsonResponse(data: unknown): Response {
   });
 }
 
+function spendingStatus(
+  currentSpend: number,
+  remaining: number,
+  percentUsed: number,
+): Record<string, unknown> {
+  return { currentSpend, limit: 300, remaining, percentUsed };
+}
+
+/** Stubs `fetch` to immediately resolve every call with `data` as JSON. */
+function stubFetchResponse(data: unknown): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(jsonResponse(data))),
+  );
+}
+
 /**
  * Stubs `fetch` so each call is captured (with its auth state) and resolves
  * only when the test resolves the matching {@link PendingFetch}.
@@ -68,16 +84,7 @@ describe('TierService', () => {
     expect(pending.map((request) => request.hasAuth)).toEqual([false, true]);
 
     pending[1].resolve(
-      jsonResponse(
-        tierConfig({
-          spendingStatus: {
-            currentSpend: 300,
-            limit: 300,
-            remaining: 0,
-            percentUsed: 100,
-          },
-        }),
-      ),
+      jsonResponse(tierConfig({ spendingStatus: spendingStatus(300, 0, 100) })),
     );
     await authenticatedConfig;
 
@@ -125,16 +132,7 @@ describe('TierService', () => {
 
     // Now resolve the in-flight request with spend data.
     pending[0].resolve(
-      jsonResponse(
-        tierConfig({
-          spendingStatus: {
-            currentSpend: 50,
-            limit: 300,
-            remaining: 250,
-            percentUsed: 16,
-          },
-        }),
-      ),
+      jsonResponse(tierConfig({ spendingStatus: spendingStatus(50, 250, 16) })),
     );
     await authPromise;
 
@@ -144,21 +142,9 @@ describe('TierService', () => {
   });
 
   it('clears the synchronous snapshots on clearCache', async () => {
-    const fetchMock = vi.fn((): Promise<Response> =>
-      Promise.resolve(
-        jsonResponse(
-          tierConfig({
-            spendingStatus: {
-              currentSpend: 100,
-              limit: 300,
-              remaining: 200,
-              percentUsed: 33,
-            },
-          }),
-        ),
-      ),
+    stubFetchResponse(
+      tierConfig({ spendingStatus: spendingStatus(100, 200, 33) }),
     );
-    vi.stubGlobal('fetch', fetchMock);
 
     const service = new TierService('https://example.test');
 
@@ -173,22 +159,15 @@ describe('TierService', () => {
   });
 
   it('parses and reports an authenticated spend-check failure', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve(
-          jsonResponse(
-            tierConfig({
-              spendingStatus: null,
-              spendingStatusError: {
-                spendCheckFailed: true,
-                failureReason: 'usage query unavailable',
-                limit: 300,
-              },
-            }),
-          ),
-        ),
-      ),
+    stubFetchResponse(
+      tierConfig({
+        spendingStatus: null,
+        spendingStatusError: {
+          spendCheckFailed: true,
+          failureReason: 'usage query unavailable',
+          limit: 300,
+        },
+      }),
     );
     const warn = vi.fn();
     const service = new TierService('https://example.test', { warn });

@@ -6,6 +6,8 @@ import {
   formatResumeCommand,
   formatResumeHint,
   formatResumeUsage,
+  type ResumeCommandOptions,
+  type ResumeTarget,
 } from '@cli/chat/tui/state/resumeHint';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { type TokenUsageStats } from '@shared/schemas';
@@ -47,6 +49,12 @@ function streamsOf(
 const EMPTY_CHILD_STREAM_ENTRIES = buildChildStreamEntries({
   parentStreamId: 'main@m#root' as StreamTabId,
 });
+
+/** Root plus one subagent — the shared fixture for multi-line hint cases. */
+const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
+  { executionId: 'root', label: 'main', isRoot: true },
+  { executionId: 'rev', label: 'reviewer', isRoot: false },
+];
 
 describe('collectResumeTargets', () => {
   it('returns just the main session when there are no subagents', () => {
@@ -137,60 +145,69 @@ describe('collectResumeTargets', () => {
 });
 
 describe('formatResumeHint', () => {
-  it('formats resume commands with a local launcher when provided', () => {
-    expect(formatResumeCommand(undefined, 'root')).toBe('texra resume root');
-    expect(formatResumeCommand('texra-local', 'root')).toBe(
-      'texra-local resume root',
-    );
-  });
-
-  it('adds a quoted cwd when the session workspace differs from the shell cwd', () => {
-    expect(
-      formatResumeCommand('texra-local', 'root', {
-        cwd: "/tmp/texra user's paper",
-        processCwd: '/tmp/launcher',
-      }),
-    ).toBe('texra-local resume root --cwd "/tmp/texra user\'s paper"');
-  });
-
-  it('omits cwd when the resume command is already printed from that workspace', () => {
-    expect(
-      formatResumeCommand('texra-local', 'root', {
-        cwd: '/tmp/paper',
-        processCwd: '/tmp/paper',
-      }),
-    ).toBe('texra-local resume root');
-  });
-
-  it('preserves non-default approval policies in resume commands', () => {
-    expect(
-      formatResumeCommand('texra-local', 'root', { approvalPolicy: 'ask' }),
-    ).toBe('texra-local resume root');
-    expect(
-      formatResumeCommand('texra-local', 'root', { approvalPolicy: 'never' }),
-    ).toBe('texra-local resume root --approval-policy never');
-    expect(
-      formatResumeCommand(undefined, 'root', { approvalPolicy: 'yolo' }),
-    ).toBe('texra resume root --approval-policy yolo');
-  });
-
-  it('includes both cwd and approval policy when both are needed', () => {
-    expect(
-      formatResumeCommand('texra-local', 'root', {
+  it.each<{
+    name: string;
+    commandName: string | undefined;
+    options?: ResumeCommandOptions;
+    expected: string;
+  }>([
+    {
+      name: 'falls back to the default texra command name',
+      commandName: undefined,
+      expected: 'texra resume root',
+    },
+    {
+      name: 'uses a local launcher when provided',
+      commandName: 'texra-local',
+      expected: 'texra-local resume root',
+    },
+    {
+      name: 'adds a quoted cwd when the session workspace differs from the shell cwd',
+      commandName: 'texra-local',
+      options: { cwd: "/tmp/texra user's paper", processCwd: '/tmp/launcher' },
+      expected: 'texra-local resume root --cwd "/tmp/texra user\'s paper"',
+    },
+    {
+      name: 'omits cwd when the resume command is already printed from that workspace',
+      commandName: 'texra-local',
+      options: { cwd: '/tmp/paper', processCwd: '/tmp/paper' },
+      expected: 'texra-local resume root',
+    },
+    {
+      name: 'omits the default approval policy',
+      commandName: 'texra-local',
+      options: { approvalPolicy: 'ask' },
+      expected: 'texra-local resume root',
+    },
+    {
+      name: 'preserves a non-default approval policy',
+      commandName: 'texra-local',
+      options: { approvalPolicy: 'never' },
+      expected: 'texra-local resume root --approval-policy never',
+    },
+    {
+      name: 'preserves a non-default approval policy with the default command name',
+      commandName: undefined,
+      options: { approvalPolicy: 'yolo' },
+      expected: 'texra resume root --approval-policy yolo',
+    },
+    {
+      name: 'includes both cwd and approval policy when both are needed',
+      commandName: 'texra-local',
+      options: {
         cwd: '/tmp/paper',
         processCwd: '/tmp/launcher',
         approvalPolicy: 'never',
-      }),
-    ).toBe('texra-local resume root --cwd /tmp/paper --approval-policy never');
+      },
+      expected:
+        'texra-local resume root --cwd /tmp/paper --approval-policy never',
+    },
+  ])('formats resume commands: $name', ({ commandName, options, expected }) => {
+    expect(formatResumeCommand(commandName, 'root', options)).toBe(expected);
   });
 
   it('renders one resume line per target', () => {
-    expect(
-      formatResumeHint([
-        { executionId: 'root', label: 'main', isRoot: true },
-        { executionId: 'rev', label: 'reviewer', isRoot: false },
-      ]),
-    ).toBe(
+    expect(formatResumeHint(TWO_RESUME_TARGETS)).toBe(
       [
         'Resume this session with:',
         '  texra resume root  (main)',
@@ -201,15 +218,9 @@ describe('formatResumeHint', () => {
 
   it('uses the provided command name for every resume target', () => {
     expect(
-      formatResumeHint(
-        [
-          { executionId: 'root', label: 'main', isRoot: true },
-          { executionId: 'rev', label: 'reviewer', isRoot: false },
-        ],
-        undefined,
-        'texra-local',
-        { approvalPolicy: 'never' },
-      ),
+      formatResumeHint(TWO_RESUME_TARGETS, undefined, 'texra-local', {
+        approvalPolicy: 'never',
+      }),
     ).toBe(
       [
         'Resume this session with:',
@@ -221,15 +232,10 @@ describe('formatResumeHint', () => {
 
   it('includes cwd on every resume target when needed', () => {
     expect(
-      formatResumeHint(
-        [
-          { executionId: 'root', label: 'main', isRoot: true },
-          { executionId: 'rev', label: 'reviewer', isRoot: false },
-        ],
-        undefined,
-        'texra-local',
-        { cwd: '/tmp/paper', processCwd: '/tmp/launcher' },
-      ),
+      formatResumeHint(TWO_RESUME_TARGETS, undefined, 'texra-local', {
+        cwd: '/tmp/paper',
+        processCwd: '/tmp/launcher',
+      }),
     ).toBe(
       [
         'Resume this session with:',

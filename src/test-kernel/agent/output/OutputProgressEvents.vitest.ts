@@ -20,7 +20,6 @@ import type {
   CompileResult,
   FileLocation,
   OutputFileInfo,
-  OutputXmlSummary,
   RoundOutput,
   StreamTabId,
 } from '@shared/schemas';
@@ -45,11 +44,36 @@ function createAgentLocation(path: string): AgentFileLocation {
   return createWorkspaceLocation(path, path);
 }
 
-const emptyXmlSummary: OutputXmlSummary = {
-  tagContents: {},
-  singleOutputFile: null,
-  sourceLocation: null,
+const defaultWorkflowOutputPolicy = {
+  shouldAutoOpenPdfOrLog: () => true,
+  shouldRejectOnCompileFailure: () => true,
 };
+
+function createRoundDataStore() {
+  const state = createOutputState();
+  function ensureRound(round: number): RoundOutput {
+    return ensureRoundData(state, round);
+  }
+  function setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
+    ensureRound(round).outputs = outputs;
+  }
+  return { rounds: state.rounds, ensureRound, setRoundOutputs };
+}
+
+function createProcessingContext(
+  logger: AgentTrace,
+  xmlManager: XmlOutputManager,
+  store: ReturnType<typeof createRoundDataStore>,
+): ProcessingContext {
+  return {
+    baseFiles: [],
+    streamId: 'stream:processor',
+    logger,
+    xmlManager,
+    setRoundOutputs: store.setRoundOutputs,
+    ensureRoundData: store.ensureRound,
+  };
+}
 
 function createCompileFailureFixture() {
   const outputLocation = createAgentLocation('/tmp/output.xml');
@@ -82,48 +106,6 @@ function createCompileFailureFixture() {
     compileFailure,
     compileResult,
     summary,
-  };
-}
-
-const defaultWorkflowOutputPolicy = {
-  shouldAutoOpenPdfOrLog: () => true,
-  shouldRejectOnCompileFailure: () => true,
-};
-
-function createRoundDataStore() {
-  const roundData = new Map<number, RoundOutput>();
-  function ensureRoundData(round: number): RoundOutput {
-    let data = roundData.get(round);
-    if (!data) {
-      data = {
-        round,
-        outputs: [],
-        compileFailures: [],
-        rawOutput: null,
-        xmlSummary: emptyXmlSummary,
-      };
-      roundData.set(round, data);
-    }
-    return data;
-  }
-  function setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
-    ensureRoundData(round).outputs = outputs;
-  }
-  return { roundData, ensureRoundData, setRoundOutputs };
-}
-
-function createProcessingContext(
-  logger: AgentTrace,
-  xmlManager: XmlOutputManager,
-  store: ReturnType<typeof createRoundDataStore>,
-): ProcessingContext {
-  return {
-    baseFiles: [],
-    streamId: 'stream:processor',
-    logger,
-    xmlManager,
-    setRoundOutputs: store.setRoundOutputs,
-    ensureRoundData: store.ensureRoundData,
   };
 }
 
@@ -161,6 +143,35 @@ function createRecordedRuntime(streamId: string) {
       recorded.detach();
       detachTrace();
     },
+  };
+}
+
+type OutputPostArgs = Parameters<OutputNode['post']>;
+
+async function runOutputPost(
+  outputNode: OutputNode,
+  shared: ReflectionFlowShared,
+  prepRes: OutputPostArgs[1],
+  execRes: OutputPostArgs[2],
+): Promise<void> {
+  await withTestRunContext(outputNode.services.runScope, () =>
+    outputNode.post(shared, prepRes, execRes),
+  );
+}
+
+function compileContextCase(
+  streamId: string,
+  workflowOutputPolicy = defaultWorkflowOutputPolicy,
+): {
+  outputNode: OutputNode;
+  fixture: ReturnType<typeof createCompileFailureFixture>;
+  shared: ReflectionFlowShared;
+} {
+  const { host } = createRecordingHost();
+  return {
+    outputNode: createOutputNode(streamId, host, workflowOutputPolicy),
+    fixture: createCompileFailureFixture(),
+    shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
   };
 }
 
@@ -239,31 +250,28 @@ describe('output progress events', () => {
   });
 
   it('stores compile failure context for the next reflection round', async () => {
-    const { host } = createRecordingHost();
-    const outputNode = createOutputNode('stream:compile-context', host);
-    const { outputLocation, compileFailure, compileResult, summary } =
-      createCompileFailureFixture();
-    const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
-
-    await withTestRunContext(outputNode.services.runScope, () =>
-      outputNode.post(
-        shared,
-        {
-          outputLocation,
-          currentRound: 0,
-          endTurn: false,
-        },
-        {
-          summary,
-          compileFailures: [compileFailure],
-          compileResult,
-          compiledArtifacts: [],
-          emitCompileFailures: false,
-        },
-      ),
+    const { outputNode, fixture, shared } = compileContextCase(
+      'stream:compile-context',
     );
 
-    expect(shared.lastCompileResult).toEqual(compileResult);
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 0,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileFailures: [fixture.compileFailure],
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastCompileResult).toEqual(fixture.compileResult);
     expect(shared.compileFailureContext).toContain(
       'previous workflow round was rejected',
     );
@@ -271,45 +279,39 @@ describe('output progress events', () => {
   });
 
   it('honors disabled compile-failure repair context setting', async () => {
-    const { host } = createRecordingHost();
-    const outputNode = createOutputNode(
+    const { outputNode, fixture, shared } = compileContextCase(
       'stream:compile-context-disabled',
-      host,
       {
         ...defaultWorkflowOutputPolicy,
         shouldRejectOnCompileFailure: () => false,
       },
     );
-    const { outputLocation, compileFailure, compileResult, summary } =
-      createCompileFailureFixture();
-    const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
-    await withTestRunContext(outputNode.services.runScope, () =>
-      outputNode.post(
-        shared,
-        {
-          outputLocation,
-          currentRound: 0,
-          endTurn: false,
-        },
-        {
-          summary,
-          compileFailures: [compileFailure],
-          compileResult,
-          compiledArtifacts: [],
-          emitCompileFailures: false,
-        },
-      ),
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 0,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileFailures: [fixture.compileFailure],
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
     );
 
-    expect(shared.lastCompileResult).toEqual(compileResult);
+    expect(shared.lastCompileResult).toEqual(fixture.compileResult);
     expect(shared.compileFailureContext).toBeUndefined();
   });
 
   it('clears stale compile failure context after a successful compile result', async () => {
-    const { host } = createRecordingHost();
-    const outputNode = createOutputNode('stream:compile-context-ok', host);
-    const { outputLocation, summary } = createCompileFailureFixture();
+    const { outputNode, fixture } = compileContextCase(
+      'stream:compile-context-ok',
+    );
     const compileResult: CompileResult = { status: 'ok', round: 1 };
     const shared = {
       roundOutputs: [],
@@ -322,22 +324,21 @@ describe('output progress events', () => {
       },
     } as unknown as ReflectionFlowShared;
 
-    await withTestRunContext(outputNode.services.runScope, () =>
-      outputNode.post(
-        shared,
-        {
-          outputLocation,
-          currentRound: 1,
-          endTurn: false,
-        },
-        {
-          summary: { ...summary, currRound: 1 },
-          compileFailures: [],
-          compileResult,
-          compiledArtifacts: [],
-          emitCompileFailures: false,
-        },
-      ),
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: { ...fixture.summary, currRound: 1 },
+        compileFailures: [],
+        compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
     );
 
     expect(shared.lastCompileResult).toEqual(compileResult);
@@ -382,7 +383,7 @@ describe('output progress events', () => {
           filesByRound: { [round]: [] },
         },
       ]);
-      expect(store.roundData.get(round)?.outputs).toEqual([]);
+      expect(store.rounds.get(round)?.outputs).toEqual([]);
     } finally {
       projected.dispose();
     }

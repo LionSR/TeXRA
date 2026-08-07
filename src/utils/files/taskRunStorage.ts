@@ -208,11 +208,10 @@ export class TaskRunFileService {
     location: FileLocation,
     options: { snapshot?: boolean } = {},
   ): Promise<FileLocation> {
-    if (location.kind !== 'workspace') {
-      return location;
-    }
-
-    if (shouldSkipRelocation(location.relativePath)) {
+    if (
+      location.kind !== 'workspace' ||
+      shouldSkipRelocation(location.relativePath)
+    ) {
       return location;
     }
 

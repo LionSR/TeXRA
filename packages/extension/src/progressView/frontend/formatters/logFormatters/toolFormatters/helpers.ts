@@ -164,9 +164,9 @@ export function buildToolSection(
   const displayText = toolDisplayText(text);
 
   // Determine language: tool config > content metadata > plaintext
-  const toolLanguage = TOOL_OUTPUT_LANGUAGES.get(toolName);
-  const language = toolLanguage || contentLanguage || 'plaintext';
-  const shouldHighlight = language && language !== 'plaintext';
+  const language =
+    TOOL_OUTPUT_LANGUAGES.get(toolName) || contentLanguage || 'plaintext';
+  const shouldHighlight = language !== 'plaintext';
 
   const content = shouldHighlight
     ? buildCodeBlock(displayText, {

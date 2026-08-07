@@ -255,7 +255,7 @@ export async function discoveredCopilotRoutes(): Promise<
   try {
     await refreshRuntimeModelRegistry();
   } catch {
-    return catalogue.entries;
+    // Tolerated: presentation keeps the retained last-known catalogue.
   }
   return catalogue.entries;
 }

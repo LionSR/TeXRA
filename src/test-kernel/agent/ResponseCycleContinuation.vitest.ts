@@ -2,6 +2,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 // Local imports - response cycle
+import type { BaseNode } from '@agent/node';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -55,15 +56,25 @@ function getContinuationNode() {
   return continuationNode;
 }
 
-async function runContinuationNode(
+async function runNodePhases(
+  node: BaseNode,
   shared: ResponseCycleShared,
-  services: ResponseCycleServices<unknown>,
-) {
-  const node = getContinuationNode().setServices(services);
+): Promise<{
+  prepResult: unknown;
+  execResult: unknown;
+  action: string | undefined;
+}> {
   const prepResult = await node.prep(shared);
   const execResult = await node.exec(prepResult);
   const action = await node.post(shared, prepResult, execResult);
   return { prepResult, execResult, action };
+}
+
+async function runContinuationNode(
+  shared: ResponseCycleShared,
+  services: ResponseCycleServices<unknown>,
+) {
+  return runNodePhases(getContinuationNode().setServices(services), shared);
 }
 
 /** Services for the process node, which reads only the extracted response. */
@@ -94,9 +105,7 @@ async function processEmptyResponse(stopReason: ProviderStopReason) {
   const node = getProcessNode().setServices(
     createProcessServices({ text: '', stopReason }),
   );
-  const prepResult = await node.prep(shared);
-  const execResult = await node.exec(prepResult);
-  const action = await node.post(shared, prepResult, execResult);
+  const { action } = await runNodePhases(node, shared);
   return { shared, action };
 }
 

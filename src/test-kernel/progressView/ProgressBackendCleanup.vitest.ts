@@ -45,31 +45,90 @@ import {
   writeExecutionConfig,
 } from './progressBackendHarness';
 
+type IsolatedBackend = ReturnType<
+  typeof createIsolatedRecordingBackend
+>['backend'];
+
+interface StreamExecution {
+  stream: StreamTabId;
+  executionId: ExecutionId;
+}
+
+function toolStreamAndExecution(id: string): StreamExecution {
+  return {
+    stream: `tool@deepseek#${id}` as StreamTabId,
+    executionId: id as ExecutionId,
+  };
+}
+
+/** Registers a stream with the run config the execution store also records. */
+function registerStream(
+  backend: IsolatedBackend,
+  { stream, executionId }: StreamExecution,
+): void {
+  backend.state.streamLogs.ensureStream(stream);
+  snapshotFacts(backend.state.snapshots).setRunConfig(
+    stream,
+    toolUseConfig('search', 'deepseekproT'),
+    executionId,
+  );
+}
+
+/** Registers a stream and persists its sidecar and execution config. */
+async function seedOwnedStream(
+  backend: IsolatedBackend,
+  ids: StreamExecution,
+  options: { load?: boolean; flush?: boolean } = {},
+): Promise<void> {
+  if (options.load) {
+    await backend.state.snapshots.load([ids.stream]);
+  }
+  registerStream(backend, ids);
+  await writeExecutionConfig(ids.executionId);
+  if (options.flush !== false) {
+    await backend.state.flush();
+  }
+}
+
+/** Persists sidecars and execution configs for orphaned streams on disk. */
+async function seedOrphanedSnapshots(
+  orphans: StreamExecution[],
+  options: { load?: StreamTabId[] } = {},
+): Promise<StreamSnapshotStore> {
+  const seed = new StreamSnapshotStore();
+  await seed.load(options.load ?? orphans.map((orphan) => orphan.stream));
+  for (const { stream, executionId } of orphans) {
+    snapshotFacts(seed).setRunConfig(
+      stream,
+      toolUseConfig('search', 'deepseekproT'),
+      executionId,
+    );
+    await writeExecutionConfig(executionId);
+  }
+  await seed.flush();
+  return seed;
+}
+
+async function expectStored(path: string, expected: boolean): Promise<void> {
+  expect(await StorageFS.exists(path)).toBe(expected);
+}
+
 describe('ProgressBackend', () => {
   it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966a' as StreamTabId;
-    const executionId = 'a6966a' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966a');
 
     try {
-      await backend.state.snapshots.load([stream]);
-      backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
-      await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await seedOwnedStream(backend, { stream, executionId }, { load: true });
       await GoalStore.start(stream, 'finish the cleanup');
 
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
+      await expectStored(`executions/${executionId}`, true);
+      await expectStored(streamDataDir(stream), true);
 
       await backend.state.clearStream(stream);
 
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+      await expectStored(`executions/${executionId}`, false);
+      await expectStored(streamDataDir(stream), false);
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
       await GoalStore.forget(stream);
@@ -79,21 +138,13 @@ describe('ProgressBackend', () => {
 
   it('retains stream state and execution config when adjacent cleanup fails', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966f' as StreamTabId;
-    const executionId = 'a6966f' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966f');
     const snapshotDeleteSpy = vi
       .spyOn(backend.state.snapshots, 'stageDeleteStream')
       .mockRejectedValueOnce(new Error('snapshot directory is locked'));
 
     try {
-      backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
-      await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await seedOwnedStream(backend, { stream, executionId });
 
       await expect(backend.state.clearStream(stream)).resolves.toBe('failed');
 
@@ -102,7 +153,7 @@ describe('ProgressBackend', () => {
       expect(backend.state.snapshots.getRunConfig(stream)).toEqual(
         toolUseConfig('search', 'deepseekproT'),
       );
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      await expectStored(`executions/${executionId}`, true);
     } finally {
       snapshotDeleteSpy.mockRestore();
       await backend.state.clearAll();
@@ -111,8 +162,7 @@ describe('ProgressBackend', () => {
 
   it('commits stream deletion when only final execution cleanup fails', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966e' as StreamTabId;
-    const executionId = 'a6966e' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966e');
     const deleteExecutionSpy = vi
       .spyOn(executionDeleter(backend), 'deleteExecution')
       .mockImplementation(async (_id, options) => {
@@ -121,20 +171,13 @@ describe('ProgressBackend', () => {
       });
 
     try {
-      backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
-      await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await seedOwnedStream(backend, { stream, executionId });
 
       await expect(backend.state.clearStream(stream)).resolves.toBe('deleted');
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
       expect(backend.state.snapshots.getRunConfig(stream)).toBeUndefined();
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      await expectStored(`executions/${executionId}`, true);
     } finally {
       deleteExecutionSpy.mockRestore();
       await getExecutionStore(executionId).clear();
@@ -144,27 +187,19 @@ describe('ProgressBackend', () => {
 
   it('does not retain a stream after the transcript commit point', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a69660' as StreamTabId;
-    const executionId = 'a69660' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a69660');
     const forgetSpy = vi
       .spyOn(GoalStore, 'forget')
       .mockRejectedValueOnce(new Error('goal state is locked'));
 
     try {
-      backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
-      await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await seedOwnedStream(backend, { stream, executionId });
 
       await expect(backend.state.clearStream(stream)).resolves.toBe('deleted');
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      await expectStored(streamDataDir(stream), false);
+      await expectStored(`executions/${executionId}`, false);
     } finally {
       forgetSpy.mockRestore();
       await backend.state.clearAll();
@@ -173,26 +208,17 @@ describe('ProgressBackend', () => {
 
   it('retains execution sidecars and goals for an externally active run', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966b' as StreamTabId;
-    const executionId = 'a6966b' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966b');
 
     try {
-      await backend.state.snapshots.load([stream]);
-      backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
-      await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await seedOwnedStream(backend, { stream, executionId }, { load: true });
       await GoalStore.start(stream, 'preserve the active execution');
       await writeForeignLease(executionId);
 
       await backend.state.clearStream(stream);
 
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
+      await expectStored(`executions/${executionId}`, true);
+      await expectStored(streamDataDir(stream), true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
@@ -204,8 +230,7 @@ describe('ProgressBackend', () => {
 
   it('never derives execution ownership from the stream id: stream state clears, execution survives', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966c' as StreamTabId;
-    const executionId = 'a6966c' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966c');
 
     try {
       await backend.state.snapshots.load([stream]);
@@ -220,8 +245,8 @@ describe('ProgressBackend', () => {
 
       // Name resemblance is not ownership: the stream's own state goes, the
       // execution directory it merely resembles is untouched.
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+      await expectStored(`executions/${executionId}`, true);
+      await expectStored(streamDataDir(stream), false);
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
@@ -233,8 +258,7 @@ describe('ProgressBackend', () => {
 
   it('clears a log-only stream during bulk cleanup without touching its unowned execution', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966d' as StreamTabId;
-    const executionId = 'a6966d' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966d');
 
     try {
       backend.state.streamLogs.ensureStream(stream);
@@ -248,7 +272,7 @@ describe('ProgressBackend', () => {
       // its stream state clears and the leased execution stays untouched.
       expect(retained).toEqual({ active: new Set(), failed: new Set() });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      await expectStored(`executions/${executionId}`, true);
     } finally {
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       await GoalStore.forget(stream);
@@ -259,22 +283,13 @@ describe('ProgressBackend', () => {
 
   it('serializes bulk cleanup behind an existing staged deletion', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const stream = 'tool@deepseek#a6966e' as StreamTabId;
-    const executionId = 'a6966e' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('a6966e');
     let stagedDeletion:
       | Awaited<ReturnType<typeof backend.state.snapshots.stageDeleteStream>>
       | undefined;
 
     try {
-      await backend.state.snapshots.load([stream]);
-      backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
-      await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await seedOwnedStream(backend, { stream, executionId }, { load: true });
       stagedDeletion = await backend.state.snapshots.stageDeleteStream(stream);
 
       const cleanup = backend.state.clearAll();
@@ -287,7 +302,7 @@ describe('ProgressBackend', () => {
         failed: new Set(),
       });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      await expectStored(`executions/${executionId}`, false);
     } finally {
       await stagedDeletion?.rollback();
       await getExecutionStore(executionId).clear();
@@ -296,39 +311,21 @@ describe('ProgressBackend', () => {
   });
 
   it('reconciles required cleanup and final execution cleanup independently', async () => {
-    const failedStream = 'tool@deepseek#fa11ed6966' as StreamTabId;
-    const incompleteStream = 'tool@deepseek#faded6966' as StreamTabId;
-    const deletedStream = 'tool@deepseek#de1e7ed6966' as StreamTabId;
-    const failedExecution = 'fa11ed6966' as ExecutionId;
-    const incompleteExecution = 'faded6966' as ExecutionId;
-    const deletedExecution = 'de1e7ed6966' as ExecutionId;
+    const failed = toolStreamAndExecution('fa11ed6966');
+    const incomplete = toolStreamAndExecution('faded6966');
+    const deleted = toolStreamAndExecution('de1e7ed6966');
     const { backend } = createIsolatedRecordingBackend();
-    backend.state.streamLogs.ensureStream(failedStream);
-    backend.state.streamLogs.ensureStream(incompleteStream);
-    backend.state.streamLogs.ensureStream(deletedStream);
-    snapshotFacts(backend.state.snapshots).setRunConfig(
-      failedStream,
-      toolUseConfig('search', 'deepseekproT'),
-      failedExecution,
-    );
-    snapshotFacts(backend.state.snapshots).setRunConfig(
-      incompleteStream,
-      toolUseConfig('search', 'deepseekproT'),
-      incompleteExecution,
-    );
-    snapshotFacts(backend.state.snapshots).setRunConfig(
-      deletedStream,
-      toolUseConfig('search', 'deepseekproT'),
-      deletedExecution,
-    );
+    for (const ids of [failed, incomplete, deleted]) {
+      registerStream(backend, ids);
+    }
     const deleteExecutionSpy = vi
       .spyOn(executionDeleter(backend), 'deleteExecution')
       .mockImplementation(async (executionId, options) => {
-        if (executionId === failedExecution) {
+        if (executionId === failed.executionId) {
           throw new Error('execution directory is locked');
         }
         await options?.beforeDelete?.();
-        if (executionId === incompleteExecution) {
+        if (executionId === incomplete.executionId) {
           throw new Error('execution directory is locked');
         }
         return { status: 'deleted', executionId };
@@ -339,11 +336,11 @@ describe('ProgressBackend', () => {
 
       expect(result).toEqual({
         active: new Set(),
-        failed: new Set([failedStream]),
+        failed: new Set([failed.stream]),
       });
-      expect(backend.state.streamLogs.has(failedStream)).toBe(true);
-      expect(backend.state.streamLogs.has(incompleteStream)).toBe(false);
-      expect(backend.state.streamLogs.has(deletedStream)).toBe(false);
+      expect(backend.state.streamLogs.has(failed.stream)).toBe(true);
+      expect(backend.state.streamLogs.has(incomplete.stream)).toBe(false);
+      expect(backend.state.streamLogs.has(deleted.stream)).toBe(false);
     } finally {
       deleteExecutionSpy.mockRestore();
       await backend.state.clearAll();
@@ -351,15 +348,9 @@ describe('ProgressBackend', () => {
   });
 
   it('does not retain bulk-deleted streams after the transcript commit point', async () => {
-    const stream = 'tool@deepseek#b69660' as StreamTabId;
-    const executionId = 'b69660' as ExecutionId;
+    const { stream, executionId } = toolStreamAndExecution('b69660');
     const { backend } = createIsolatedRecordingBackend();
-    backend.state.streamLogs.ensureStream(stream);
-    snapshotFacts(backend.state.snapshots).setRunConfig(
-      stream,
-      toolUseConfig('search', 'deepseekproT'),
-      executionId,
-    );
+    registerStream(backend, { stream, executionId });
     await writeExecutionConfig(executionId);
     const forgetManySpy = vi
       .spyOn(GoalStore, 'forgetMany')
@@ -372,8 +363,8 @@ describe('ProgressBackend', () => {
       });
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      await expectStored(streamDataDir(stream), false);
+      await expectStored(`executions/${executionId}`, false);
     } finally {
       forgetManySpy.mockRestore();
       await backend.state.clearAll();
@@ -385,18 +376,8 @@ describe('ProgressBackend', () => {
     const deletedStream = 'workflow@deepseek#f00baa6966' as StreamTabId;
     const executionId = 'f00baa6966' as ExecutionId;
     const { backend } = createIsolatedRecordingBackend();
-    backend.state.streamLogs.ensureStream(failedStream);
-    backend.state.streamLogs.ensureStream(deletedStream);
-    snapshotFacts(backend.state.snapshots).setRunConfig(
-      failedStream,
-      toolUseConfig('search', 'deepseekproT'),
-      executionId,
-    );
-    snapshotFacts(backend.state.snapshots).setRunConfig(
-      deletedStream,
-      toolUseConfig('search', 'deepseekproT'),
-      executionId,
-    );
+    registerStream(backend, { stream: failedStream, executionId });
+    registerStream(backend, { stream: deletedStream, executionId });
     await writeExecutionConfig(executionId);
     const deleteTranscript = backend.state.streamLogs.delete.bind(
       backend.state.streamLogs,
@@ -422,14 +403,14 @@ describe('ProgressBackend', () => {
       expect(backend.state.snapshots.getExecutionId(failedStream)).toBe(
         executionId,
       );
-      expect(await StorageFS.exists(streamDataDir(failedStream))).toBe(true);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      await expectStored(streamDataDir(failedStream), true);
+      await expectStored(`executions/${executionId}`, true);
 
       deleteTranscriptSpy.mockRestore();
       await expect(backend.state.clearStream(failedStream)).resolves.toBe(
         'deleted',
       );
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      await expectStored(`executions/${executionId}`, false);
     } finally {
       deleteTranscriptSpy.mockRestore();
       await backend.state.clearAll();
@@ -463,7 +444,7 @@ describe('ProgressBackend', () => {
       await backend.state.clearStream('.' as StreamTabId);
       await backend.state.clearStream('..' as StreamTabId);
 
-      expect(await StorageFS.exists(sentinel)).toBe(true);
+      await expectStored(sentinel, true);
     } finally {
       await backend.state.clearAll();
     }
@@ -487,67 +468,43 @@ describe('ProgressBackend', () => {
   });
 
   it('sweeps streamData orphans without deleting standalone execution history', async () => {
-    const orphanStream = 'tool@deepseek#b6966b' as StreamTabId;
-    const orphanExecution = 'b6966b' as ExecutionId;
+    const orphan = toolStreamAndExecution('b6966b');
     const historyExecution = 'c6966c' as ExecutionId;
 
     const { backend } = await createPersistentRecordingBackend();
     try {
-      const seed = new StreamSnapshotStore();
-      await seed.load([orphanStream]);
-      snapshotFacts(seed).setRunConfig(
-        orphanStream,
-        toolUseConfig('search', 'deepseekproT'),
-        orphanExecution,
-      );
-      await writeExecutionConfig(orphanExecution);
+      await seedOrphanedSnapshots([orphan]);
       await writeExecutionConfig(historyExecution);
-      await seed.flush();
-      await GoalStore.start(orphanStream, 'sweep this orphan');
+      await GoalStore.start(orphan.stream, 'sweep this orphan');
 
-      expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(true);
-      expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
-        true,
-      );
-      expect(await StorageFS.exists(`executions/${historyExecution}`)).toBe(
-        true,
-      );
+      await expectStored(streamDataDir(orphan.stream), true);
+      await expectStored(`executions/${orphan.executionId}`, true);
+      await expectStored(`executions/${historyExecution}`, true);
 
       await backend.state.load();
 
-      expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(false);
-      expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
-        false,
-      );
-      expect(await StorageFS.exists(`executions/${historyExecution}`)).toBe(
-        true,
-      );
-      expect(GoalStore.getForStream(orphanStream)).toBeNull();
+      await expectStored(streamDataDir(orphan.stream), false);
+      await expectStored(`executions/${orphan.executionId}`, false);
+      await expectStored(`executions/${historyExecution}`, true);
+      expect(GoalStore.getForStream(orphan.stream)).toBeNull();
     } finally {
-      await GoalStore.forget(orphanStream);
+      await GoalStore.forget(orphan.stream);
       await getExecutionStore(historyExecution).clear();
       await backend.state.clearAll();
     }
   });
 
   it('finishes a staged deletion whose transcript committed before a crash', async () => {
-    const stream = 'tool@deepseek#c69660' as StreamTabId;
-    const executionId = 'c69660' as ExecutionId;
-    const seed = new StreamSnapshotStore();
-    await seed.load([]);
-    snapshotFacts(seed).setRunConfig(
-      stream,
-      toolUseConfig('search', 'deepseekproT'),
-      executionId,
-    );
-    await writeExecutionConfig(executionId);
-    await seed.flush();
+    const { stream, executionId } = toolStreamAndExecution('c69660');
+    const seed = await seedOrphanedSnapshots([{ stream, executionId }], {
+      load: [],
+    });
     await GoalStore.start(stream, 'finish this interrupted deletion');
     await seed.stageDeleteStream(stream);
 
     const { backend } = await createPersistentRecordingBackend();
     try {
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+      await expectStored(streamDataDir(stream), false);
       expect(await seed.listStagedDeletions()).toContain(stream);
 
       await backend.state.load();
@@ -555,7 +512,7 @@ describe('ProgressBackend', () => {
       expect(await backend.state.snapshots.listStagedDeletions()).not.toContain(
         stream,
       );
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      await expectStored(`executions/${executionId}`, false);
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
       await GoalStore.forget(stream);
@@ -564,9 +521,8 @@ describe('ProgressBackend', () => {
   });
 
   it('finishes committed staged residue without requiring a reload', async () => {
-    const stream = 'tool@deepseek#c69661' as StreamTabId;
-    const executionId = 'c69661' as ExecutionId;
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { stream, executionId } = toolStreamAndExecution('c69661');
+    const { backend } = createIsolatedRecordingBackend();
     snapshotFacts(backend.state.snapshots).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
@@ -598,7 +554,7 @@ describe('ProgressBackend', () => {
       expect(await backend.state.snapshots.listStagedDeletions()).not.toContain(
         stream,
       );
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      await expectStored(`executions/${executionId}`, false);
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
       deleteSpy.mockRestore();
@@ -607,123 +563,79 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('continues sweeping streamData orphans when one orphan cleanup fails', async () => {
-    const failingStream = 'tool@deepseek#d6966d' as StreamTabId;
-    const sweptStream = 'tool@deepseek#e6966e' as StreamTabId;
-    const failingExecution = 'd6966d' as ExecutionId;
-    const sweptExecution = 'e6966e' as ExecutionId;
-    const seed = new StreamSnapshotStore();
-    await seed.load([failingStream, sweptStream]);
-    snapshotFacts(seed).setRunConfig(
-      failingStream,
-      toolUseConfig('search', 'deepseekproT'),
-      failingExecution,
-    );
-    snapshotFacts(seed).setRunConfig(
-      sweptStream,
-      toolUseConfig('search', 'deepseekproT'),
-      sweptExecution,
-    );
-    await writeExecutionConfig(failingExecution);
-    await writeExecutionConfig(sweptExecution);
-    await seed.flush();
+  const orphanSweepFailures: Array<{
+    case: string;
+    install: (
+      backend: IsolatedBackend,
+      failing: StreamExecution,
+    ) => { mockRestore(): void };
+  }> = [
+    {
+      case: 'one orphan cleanup fails',
+      install: (backend, failing) => {
+        const stageDeleteStream =
+          backend.state.snapshots.stageDeleteStream.bind(
+            backend.state.snapshots,
+          );
+        return vi
+          .spyOn(backend.state.snapshots, 'stageDeleteStream')
+          .mockImplementation(async (stream) => {
+            if (stream === failing.stream) {
+              throw new Error('locked stream sidecar');
+            }
+            return stageDeleteStream(stream);
+          });
+      },
+    },
+    {
+      case: 'one execution cleanup fails',
+      install: (backend, failing) => {
+        const stores = executionDeleter(backend);
+        const deleteExecution = stores.deleteExecution.bind(stores);
+        return vi
+          .spyOn(stores, 'deleteExecution')
+          .mockImplementation(async (executionId, options) => {
+            if (executionId === failing.executionId) {
+              throw new Error('locked execution dir');
+            }
+            return deleteExecution(executionId, options);
+          });
+      },
+    },
+  ];
 
-    const { backend } = await createPersistentRecordingBackend();
-    const originalStageDeleteStream =
-      backend.state.snapshots.stageDeleteStream.bind(backend.state.snapshots);
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const deleteSpy = vi
-      .spyOn(backend.state.snapshots, 'stageDeleteStream')
-      .mockImplementation(async (stream) => {
-        if (stream === failingStream) {
-          throw new Error('locked stream sidecar');
-        }
-        return originalStageDeleteStream(stream);
-      });
+  it.each(orphanSweepFailures)(
+    'continues sweeping streamData orphans when $case',
+    async ({ install }) => {
+      const failing = toolStreamAndExecution('d6966d');
+      const swept = toolStreamAndExecution('e6966e');
+      await seedOrphanedSnapshots([failing, swept]);
 
-    try {
-      await expect(backend.state.load()).resolves.toBeUndefined();
+      const { backend } = await createPersistentRecordingBackend();
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const failureSpy = install(backend, failing);
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        'SessionStores',
-        `Skipping orphaned execution cleanup for ${failingExecution}; startup will continue.`,
-        { data: expect.any(Error) },
-      );
-      expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(true);
-      expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
-        true,
-      );
-      expect(await StorageFS.exists(streamDataDir(sweptStream))).toBe(false);
-      expect(await StorageFS.exists(`executions/${sweptExecution}`)).toBe(
-        false,
-      );
-    } finally {
-      deleteSpy.mockRestore();
-      warnSpy.mockRestore();
-      await getExecutionStore(failingExecution).clear();
-      await getExecutionStore(sweptExecution).clear();
-      await backend.state.clearAll();
-    }
-  });
+      try {
+        await expect(backend.state.load()).resolves.toBeUndefined();
 
-  it('continues sweeping streamData orphans when one execution cleanup fails', async () => {
-    const failingStream = 'tool@deepseek#f6966f' as StreamTabId;
-    const sweptStream = 'tool@deepseek#a6966a' as StreamTabId;
-    const failingExecution = 'f6966f' as ExecutionId;
-    const sweptExecution = 'a6966a' as ExecutionId;
-    const seed = new StreamSnapshotStore();
-    await seed.load([failingStream, sweptStream]);
-    snapshotFacts(seed).setRunConfig(
-      failingStream,
-      toolUseConfig('search', 'deepseekproT'),
-      failingExecution,
-    );
-    snapshotFacts(seed).setRunConfig(
-      sweptStream,
-      toolUseConfig('search', 'deepseekproT'),
-      sweptExecution,
-    );
-    await writeExecutionConfig(failingExecution);
-    await writeExecutionConfig(sweptExecution);
-    await seed.flush();
-
-    const { backend } = await createPersistentRecordingBackend();
-    const stores = executionDeleter(backend);
-    const originalDeleteExecution = stores.deleteExecution.bind(stores);
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const deleteExecutionSpy = vi
-      .spyOn(stores, 'deleteExecution')
-      .mockImplementation(async (executionId, options) => {
-        if (executionId === failingExecution) {
-          throw new Error('locked execution dir');
-        }
-        return originalDeleteExecution(executionId, options);
-      });
-
-    try {
-      await expect(backend.state.load()).resolves.toBeUndefined();
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        'SessionStores',
-        `Skipping orphaned execution cleanup for ${failingExecution}; startup will continue.`,
-        { data: expect.any(Error) },
-      );
-      expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(true);
-      expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
-        true,
-      );
-      expect(await StorageFS.exists(streamDataDir(sweptStream))).toBe(false);
-      expect(await StorageFS.exists(`executions/${sweptExecution}`)).toBe(
-        false,
-      );
-    } finally {
-      deleteExecutionSpy.mockRestore();
-      warnSpy.mockRestore();
-      await getExecutionStore(failingExecution).clear();
-      await getExecutionStore(sweptExecution).clear();
-      await backend.state.clearAll();
-    }
-  });
+        expect(warnSpy).toHaveBeenCalledWith(
+          'SessionStores',
+          `Skipping orphaned execution cleanup for ${failing.executionId}; startup will continue.`,
+          { data: expect.any(Error) },
+        );
+        await expectStored(streamDataDir(failing.stream), true);
+        await expectStored(`executions/${failing.executionId}`, true);
+        await expectStored(streamDataDir(swept.stream), false);
+        await expectStored(`executions/${swept.executionId}`, false);
+      } finally {
+        failureSpy.mockRestore();
+        warnSpy.mockRestore();
+        await getExecutionStore(failing.executionId).clear();
+        await getExecutionStore(swept.executionId).clear();
+        await backend.state.clearAll();
+      }
+    },
+  );
 
   it('retains sidecar state for a durably registered empty stream', async () => {
     const stream = 'tool@deepseek#empty01' as StreamTabId;
@@ -731,12 +643,7 @@ describe('ProgressBackend', () => {
     const first = await createPersistentRecordingBackend();
 
     try {
-      first.backend.state.streamLogs.ensureStream(stream);
-      snapshotFacts(first.backend.state.snapshots).setRunConfig(
-        stream,
-        toolUseConfig('search', 'deepseekproT'),
-        executionId,
-      );
+      registerStream(first.backend, { stream, executionId });
       await writeExecutionConfig(executionId);
       await first.backend.state.flush();
     } finally {
@@ -755,8 +662,8 @@ describe('ProgressBackend', () => {
       expect(second.backend.state.snapshots.getExecutionId(stream)).toBe(
         executionId,
       );
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      await expectStored(streamDataDir(stream), true);
+      await expectStored(`executions/${executionId}`, true);
     } finally {
       await second.backend.state.clearAll();
     }

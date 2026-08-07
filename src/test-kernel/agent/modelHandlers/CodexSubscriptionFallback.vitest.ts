@@ -104,20 +104,25 @@ describe('ModelHandlerCodex subscription fallback', () => {
     resetCodexCoordinator();
   });
 
-  it('targets the Codex backend and zero-rates usage while the preference is on', async () => {
+  async function newSubscriptionHandler(
+    modelConfig: ModelConfig = config,
+    category: AgentCategory = AgentCategory.ToolUse,
+  ): Promise<ModelHandlerCodex> {
     await initFakePlatformWithSubscription();
+    const handler = new ModelHandlerCodex(modelConfig);
+    handler.setAgentCategory(category);
+    return handler;
+  }
 
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
+  it('targets the Codex backend and zero-rates usage while the preference is on', async () => {
+    const handler = await newSubscriptionHandler();
+
     expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
   });
 
   it('falls back to the OpenAI API-key path when the preference is turned off mid-run', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
+    const handler = await newSubscriptionHandler();
     expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
 
     // The "Use your own API key" switch flips this preference; the same handler
@@ -129,10 +134,8 @@ describe('ModelHandlerCodex subscription fallback', () => {
   });
 
   it('clamps the effective context window to the Codex ceiling while the preference is on', async () => {
-    await initFakePlatformWithSubscription();
+    const handler = await newSubscriptionHandler(largeWindowConfig);
 
-    const handler = new ModelHandlerCodex(largeWindowConfig);
-    handler.setAgentCategory(AgentCategory.ToolUse);
     // The model's own 1.05M API window must not leak through on the
     // subscription path, where the backend rejects requests past the ceiling.
     expect(handler.getEffectiveContextWindow()).toBe(
@@ -141,10 +144,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
   });
 
   it('restores the full model window after falling back to the API key', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(largeWindowConfig);
-    handler.setAgentCategory(AgentCategory.ToolUse);
+    const handler = await newSubscriptionHandler(largeWindowConfig);
     expect(handler.getEffectiveContextWindow()).toBe(
       CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
     );
@@ -157,11 +157,9 @@ describe('ModelHandlerCodex subscription fallback', () => {
   });
 
   it('leaves a model whose window is already below the ceiling untouched', async () => {
-    await initFakePlatformWithSubscription();
-
     // The clamp is a cap (Math.min), so a sub-ceiling window is unchanged.
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
+    const handler = await newSubscriptionHandler();
+
     expect(handler.getEffectiveContextWindow()).toBe(config.contextWindow);
   });
 
@@ -174,63 +172,43 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
   });
 
-  it('fails locally when a subscription request cannot fit the Codex cap without reducing output budget', async () => {
-    await initFakePlatformWithSubscription();
+  it.each([
+    { headroom: 10, error: /route input limit/ },
+    { headroom: 100, error: /safety buffer/ },
+  ])(
+    'rejects locally without sending when cumulative input leaves $headroom tokens of headroom',
+    async ({ headroom, error }) => {
+      const handler = await newSubscriptionHandler(largeWindowConfig);
+      const requestSpy = vi.fn();
+      setCumulativeInputTokens(
+        handler,
+        CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT - headroom,
+      );
 
-    const handler = new ModelHandlerCodex(largeWindowConfig);
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    const requestSpy = vi.fn();
-    setCumulativeInputTokens(
-      handler,
-      CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT - 10,
-    );
-
-    await expect(
-      handler.createResponse({
-        client: { responses: { create: requestSpy } } as never,
-        messages: [],
-        temperature: 0,
-      }),
-    ).rejects.toThrow(/route input limit/);
-    expect(requestSpy).not.toHaveBeenCalled();
-  });
-
-  it('preserves the fallback safety buffer before sending subscription requests', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(largeWindowConfig);
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    const requestSpy = vi.fn();
-    setCumulativeInputTokens(
-      handler,
-      CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT - 100,
-    );
-
-    await expect(
-      handler.createResponse({
-        client: { responses: { create: requestSpy } } as never,
-        messages: [],
-        temperature: 0,
-      }),
-    ).rejects.toThrow(/safety buffer/);
-    expect(requestSpy).not.toHaveBeenCalled();
-  });
+      await expect(
+        handler.createResponse({
+          client: { responses: { create: requestSpy } } as never,
+          messages: [],
+          temperature: 0,
+        }),
+      ).rejects.toThrow(error);
+      expect(requestSpy).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps workflow agents on the subscription', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.Workflow);
+    const handler = await newSubscriptionHandler(
+      config,
+      AgentCategory.Workflow,
+    );
 
     expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
   });
 
   it('tags normalized usage with the subscription route while the preference is on', async () => {
-    await initFakePlatformWithSubscription();
+    const handler = await newSubscriptionHandler();
 
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
     const usage = handler.normalizeUsage(RAW_USAGE, 1000);
 
     // Recorded (tokens present) but free and routed, so logging/UI can tell it
@@ -241,11 +219,9 @@ describe('ModelHandlerCodex subscription fallback', () => {
   });
 
   it('drops the free tag and bills normally after falling back to the API key', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
+    const handler = await newSubscriptionHandler();
     await setPreferCodexSubscription(false);
+
     const usage = handler.normalizeUsage(RAW_USAGE, 1000);
 
     expect(usage.usageRoute).toBeUndefined();
@@ -305,10 +281,8 @@ describe('ModelHandlerCodex subscription fallback', () => {
   });
 
   it('constructs a personal candidate without publishing the preference', async () => {
-    await initFakePlatformWithSubscription();
+    const handler = await newSubscriptionHandler();
 
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
     const candidate = await handler.getClient('personal');
 
     expect(candidate.baseURL).toBe('https://api.openai.com/v1');

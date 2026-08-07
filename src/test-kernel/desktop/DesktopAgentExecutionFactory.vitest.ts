@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -34,6 +38,29 @@ function prepareValidRequest(): (message: unknown) => unknown {
     valid: true,
     request: { agentName: 'default', filePath: 'main.tex', prompt: 'run' },
   }));
+}
+
+// The mock run bridges a trace into the process session's onResult channel
+// (matching AgentLaunchContext.attachRunTrace) and emits a terminal result —
+// exactly what the lifecycle does after persisting firstRunDone.
+function runAgentEmittingResult(result: {
+  outcome: RunOutcome;
+  executionId: string;
+  streamId: string;
+}): RunExecutionRequest {
+  return vi.fn(async (_request, options) => {
+    const trace = makeFakeTrace();
+    options.session.attachRunTrace(trace, result.streamId);
+    trace.emit({
+      type: 'result',
+      outcome: result.outcome,
+      executionId: result.executionId,
+      streamId: result.streamId,
+      agentName: 'proofreader',
+      category: 'workflow',
+      isSubagent: false,
+    });
+  });
 }
 
 async function createExecution(options: {
@@ -365,24 +392,12 @@ describe('createDesktopAgentExecution', () => {
 
   it('fires onRunCompleted when a run reaches a completed terminal result', async () => {
     const onRunCompleted = vi.fn();
-    // The mock run bridges a trace into the process session's onResult channel
-    // (matching AgentLaunchContext.attachRunTrace) and emits a completed
-    // result — exactly what the lifecycle does after persisting firstRunDone.
-    const runAgent = vi.fn(async (_request, options) => {
-      const trace = makeFakeTrace();
-      options.session.attachRunTrace(trace, 'stream-1');
-      trace.emit({
-        type: 'result',
+    const execution = await createExecution({
+      runAgent: runAgentEmittingResult({
         outcome: RUN_OUTCOME.COMPLETED,
         executionId: 'ec1001',
         streamId: 'stream-1',
-        agentName: 'proofreader',
-        category: 'workflow',
-        isSubagent: false,
-      });
-    });
-    const execution = await createExecution({
-      runAgent,
+      }),
       onRunCompleted,
       prepareMainViewExecutionRequest: prepareValidRequest(),
     });
@@ -393,21 +408,12 @@ describe('createDesktopAgentExecution', () => {
 
   it('does not fire onRunCompleted on a failed terminal result', async () => {
     const onRunCompleted = vi.fn();
-    const runAgent = vi.fn(async (_request, options) => {
-      const trace = makeFakeTrace();
-      options.session.attachRunTrace(trace, 'stream-2');
-      trace.emit({
-        type: 'result',
+    const execution = await createExecution({
+      runAgent: runAgentEmittingResult({
         outcome: RUN_OUTCOME.FAILED,
         executionId: 'exec-2',
         streamId: 'stream-2',
-        agentName: 'proofreader',
-        category: 'workflow',
-        isSubagent: false,
-      });
-    });
-    const execution = await createExecution({
-      runAgent,
+      }),
       onRunCompleted,
       prepareMainViewExecutionRequest: prepareValidRequest(),
     });

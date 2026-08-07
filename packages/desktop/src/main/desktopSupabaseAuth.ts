@@ -171,10 +171,7 @@ function readPendingOAuthState(
 ): DesktopPendingOAuthState | null {
   const persisted = store?.get<unknown>(DESKTOP_PENDING_OAUTH_STATE_KEY, null);
   const parsed = DesktopPendingOAuthStateSchema.safeParse(persisted);
-  if (!parsed.success) {
-    return null;
-  }
-  return parsed.data;
+  return parsed.success ? parsed.data : null;
 }
 
 function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
@@ -217,6 +214,15 @@ export function createDesktopSupabaseAuth(
     activeAttempt = undefined;
     superseded?.settle(false);
   };
+  const settleAttempt = (
+    attempt: DesktopAuthAttempt,
+    success: boolean,
+  ): void => {
+    attempt.settle(success);
+    if (ownsAttempt(attempt)) {
+      activeAttempt = undefined;
+    }
+  };
   const waitForCompletion = (attempt: DesktopAuthAttempt, timeoutMs: number) =>
     new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
@@ -253,15 +259,9 @@ export function createDesktopSupabaseAuth(
         () => ownsAttempt(queued.attempt),
         runAuthCommit,
       );
-      queued.attempt.settle(success);
-      if (ownsAttempt(queued.attempt)) {
-        activeAttempt = undefined;
-      }
+      settleAttempt(queued.attempt, success);
     } catch (error) {
-      queued.attempt.settle(false);
-      if (ownsAttempt(queued.attempt)) {
-        activeAttempt = undefined;
-      }
+      settleAttempt(queued.attempt, false);
       const message = toErrorMessage(error);
       log.error(`Desktop auth callback failed: ${message}`);
       try {

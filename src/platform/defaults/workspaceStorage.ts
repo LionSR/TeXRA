@@ -199,12 +199,16 @@ export class WorkspaceStorageProvider implements StorageProvider {
     return storagePath;
   }
 
+  private resolveTargetWorkspacePath(target?: {
+    workspacePath: string | undefined;
+  }): string | undefined {
+    return target ? target.workspacePath : this.getWorkspacePath();
+  }
+
   hasPendingWorkspaceStorageChange(target?: {
     workspacePath: string | undefined;
   }): boolean {
-    const targetWorkspacePath = target
-      ? target.workspacePath
-      : this.getWorkspacePath();
+    const targetWorkspacePath = this.resolveTargetWorkspacePath(target);
     return (
       this.storagePathFor(this.activeWorkspacePath) !==
       this.storagePathFor(targetWorkspacePath)
@@ -214,9 +218,7 @@ export class WorkspaceStorageProvider implements StorageProvider {
   commitWorkspaceStorageChange(target?: {
     workspacePath: string | undefined;
   }): boolean {
-    const targetWorkspacePath = target
-      ? target.workspacePath
-      : this.getWorkspacePath();
+    const targetWorkspacePath = this.resolveTargetWorkspacePath(target);
     if (
       this.storagePathFor(targetWorkspacePath) ===
       this.storagePathFor(this.activeWorkspacePath)

@@ -183,7 +183,10 @@ function runInBand(
  * One-shot executeAgent mock that reports a failed child via onRunError and
  * returns the same failed result, carrying the given subagent cost.
  */
-function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
+function mockExecuteAgentErrorOnce(
+  totalCostUsd: number,
+  extra: Record<string, unknown> = {},
+): void {
   mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
     const failed = {
       category: 'toolUse',
@@ -191,9 +194,21 @@ function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
       executionId: 'child-exec',
       streamId: 'child-stream',
       totalCostUsd,
+      ...extra,
     };
     await options.onRunError?.(new Error('review model failed'), failed);
     return failed;
+  });
+}
+
+/** The shared rejection shape when the child failed AND its manifest write failed. */
+async function expectDurabilityErrorPreservingChildFailure(
+  run: Promise<unknown>,
+): Promise<void> {
+  await expect(run).rejects.toMatchObject({
+    name: 'SubagentDurabilityError',
+    message: expect.stringContaining('review model failed'),
+    cause: expect.objectContaining({ name: 'AggregateError' }),
   });
 }
 
@@ -466,17 +481,9 @@ describe('headless delegation', () => {
 
   it('records a failed child cost once for durable in-band execution', async () => {
     const onCost = vi.fn();
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      const failed = {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: IN_BAND_LOGICAL_EXECUTION_ID,
-        streamId: 'child-stream',
-        response: 'Partial review.',
-        totalCostUsd: 0.61,
-      };
-      await options.onRunError?.(new Error('review model failed'), failed);
-      return failed;
+    mockExecuteAgentErrorOnce(0.61, {
+      executionId: IN_BAND_LOGICAL_EXECUTION_ID,
+      response: 'Partial review.',
     });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
@@ -792,13 +799,9 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
 
-    const run = runInBand(delegationOptions());
-
-    await expect(run).rejects.toMatchObject({
-      name: 'SubagentDurabilityError',
-      message: expect.stringContaining('review model failed'),
-      cause: expect.objectContaining({ name: 'AggregateError' }),
-    });
+    await expectDurabilityErrorPreservingChildFailure(
+      runInBand(delegationOptions()),
+    );
   });
 
   it('preserves the child failure when its failure result cannot be constructed', async () => {
@@ -816,11 +819,7 @@ describe('headless delegation', () => {
 
     const run = runInBand(delegationOptions());
 
-    await expect(run).rejects.toMatchObject({
-      name: 'SubagentDurabilityError',
-      message: expect.stringContaining('review model failed'),
-      cause: expect.objectContaining({ name: 'AggregateError' }),
-    });
+    await expectDurabilityErrorPreservingChildFailure(run);
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });
 

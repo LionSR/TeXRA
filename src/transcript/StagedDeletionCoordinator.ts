@@ -328,12 +328,10 @@ export class StagedDeletionCoordinator {
     stream: StreamTabId,
     state: DeletionState,
   ): Promise<void> {
-    while (true) {
+    do {
       await this.replayStagedWrites(stream, state);
-      if (state.writes.size > 0) continue;
-      this.releaseDeletionOwnership(stream, state);
-      return;
-    }
+    } while (state.writes.size > 0);
+    this.releaseDeletionOwnership(stream, state);
   }
 
   private releaseDeletionOwnership(
@@ -364,17 +362,16 @@ export class StagedDeletionCoordinator {
       kind: 'rollback-recovering',
       writes: current.writes,
       phase: current.phase,
-      recovery: deferred.promise,
+      recovery: deferred.promise.finally(() => {
+        if (this.deletionStates.get(stream) === recovering) {
+          this.deletionStates.set(stream, {
+            kind: 'rollback-idle',
+            writes: recovering.writes,
+            phase: recovering.phase,
+          });
+        }
+      }),
     };
-    recovering.recovery = deferred.promise.finally(() => {
-      if (this.deletionStates.get(stream) === recovering) {
-        this.deletionStates.set(stream, {
-          kind: 'rollback-idle',
-          writes: recovering.writes,
-          phase: recovering.phase,
-        });
-      }
-    });
     this.deletionStates.set(stream, recovering);
     void recover(recovering).then(deferred.resolve, deferred.reject);
     return recovering.recovery;
@@ -462,16 +459,13 @@ export class StagedDeletionCoordinator {
       if (current.kind === 'staging') await current.settled;
       else await this.recoverFailedRollback(stream, current);
     }
-    let resolveSettled = () => {};
-    const settlement = new Promise<void>((resolve) => {
-      resolveSettled = resolve;
-    });
+    const settlement = pDefer<void>();
     const state: StagedDeletionState = {
       kind: 'staging',
       writes: new Map(),
       phase: 'live',
-      settled: settlement,
-      resolveSettled,
+      settled: settlement.promise,
+      resolveSettled: settlement.resolve,
     };
     this.deletionStates.set(stream, state);
     let writesCancelled = false;

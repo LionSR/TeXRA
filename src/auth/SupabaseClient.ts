@@ -80,10 +80,11 @@ export class SupabaseClient {
    * Check if auth system is fully initialized and ready for use.
    */
   static async isReady(): Promise<boolean> {
-    if (this.instance === null || this.authProvider === null) {
-      return false;
-    }
-    if (this.initError !== null) {
+    if (
+      this.instance === null ||
+      this.authProvider === null ||
+      this.initError !== null
+    ) {
       return false;
     }
 

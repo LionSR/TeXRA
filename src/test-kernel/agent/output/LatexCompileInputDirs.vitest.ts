@@ -85,6 +85,32 @@ function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
   };
 }
 
+function diffDirectory(executionId: ExecutionId, round: number) {
+  return {
+    absolutePath: path.join(runDir(executionId), 'diff', `r${round}`),
+    relativePath: path.join('diff', `r${round}`),
+    executionId,
+  };
+}
+
+/** Compiles a successful main-diff.tex for `round` and returns the result. */
+async function compileDiff(
+  executionId: ExecutionId,
+  referenceLocation: FileLocation,
+  round: number,
+  sourceLocation: FileLocation,
+  trace: AgentTrace = spiedTrace(),
+): Promise<unknown> {
+  return createDiffCompiler(executionId, trace).compileDiffIfSuccessful(
+    { success: true, diffFileName: 'main-diff.tex' },
+    referenceLocation,
+    diffDirectory(executionId, round),
+    round,
+    sourceLocation,
+    '-diff',
+  );
+}
+
 describe('workflow LaTeX compile input directories', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf.mockClear();
@@ -207,27 +233,11 @@ describe('workflow LaTeX compile input directories', () => {
     const executionId = 'latexdiff-input-dir';
     await initLatexPlatform({});
 
-    const referenceLocation = runStorageFile(
+    await compileDiff(
       executionId,
-      path.join('r1', 'Draft', 'main.tex'),
-    );
-    const sourceLocation = runStorageFile(
-      executionId,
-      path.join('r2', 'Draft', 'main.tex'),
-    );
-    const compileDiff = createDiffCompiler(executionId, spiedTrace());
-
-    await compileDiff.compileDiffIfSuccessful(
-      { success: true, diffFileName: 'main-diff.tex' },
-      referenceLocation,
-      {
-        absolutePath: path.join(runDir(executionId), 'diff', 'r2'),
-        relativePath: path.join('diff', 'r2'),
-        executionId,
-      },
+      runStorageFile(executionId, path.join('r1', 'Draft', 'main.tex')),
       2,
-      sourceLocation,
-      '-diff',
+      runStorageFile(executionId, path.join('r2', 'Draft', 'main.tex')),
     );
 
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
@@ -251,24 +261,15 @@ describe('workflow LaTeX compile input directories', () => {
   it('keeps an external latexdiff reference in its own directory', async () => {
     const executionId = 'latexdiff-external-input-dir';
     await initLatexPlatform({});
-    const referenceLocation = createExternalLocation(
-      '/external/project/main.tex',
-    );
 
-    await createDiffCompiler(executionId, spiedTrace()).compileDiffIfSuccessful(
-      { success: true, diffFileName: 'main-diff.tex' },
-      referenceLocation,
-      {
-        absolutePath: path.join(runDir(executionId), 'diff', 'r1'),
-        relativePath: path.join('diff', 'r1'),
-        executionId,
-      },
+    await compileDiff(
+      executionId,
+      createExternalLocation('/external/project/main.tex'),
       1,
       createWorkspaceLocation(
         path.join(workspacePath, 'Draft', 'main.tex'),
         path.join('Draft', 'main.tex'),
       ),
-      '-diff',
     );
 
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
@@ -286,20 +287,12 @@ describe('workflow LaTeX compile input directories', () => {
     const publishError = new Error('artifact storage unavailable');
     mocks.publishCompiledPdfArtifact.mockRejectedValueOnce(publishError);
 
-    const result = await createDiffCompiler(
+    const result = await compileDiff(
       executionId,
-      trace,
-    ).compileDiffIfSuccessful(
-      { success: true, diffFileName: 'main-diff.tex' },
       runStorageFile(executionId, path.join('r1', 'main.tex')),
-      {
-        absolutePath: path.join(runDir(executionId), 'diff', 'r2'),
-        relativePath: path.join('diff', 'r2'),
-        executionId,
-      },
       2,
       runStorageFile(executionId, path.join('r2', 'main.tex')),
-      '-diff',
+      trace,
     );
 
     expect(result).toEqual(expect.objectContaining({ artifact: null }));
@@ -318,17 +311,12 @@ describe('workflow LaTeX compile input directories', () => {
     const logTail = 'LaTeX compiler transcript that should remain diagnostic';
     mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: false, logTail });
 
-    await createDiffCompiler(executionId, trace).compileDiffIfSuccessful(
-      { success: true, diffFileName: 'main-diff.tex' },
+    await compileDiff(
+      executionId,
       runStorageFile(executionId, path.join('r1', 'main.tex')),
-      {
-        absolutePath: path.join(runDir(executionId), 'diff', 'r2'),
-        relativePath: path.join('diff', 'r2'),
-        executionId,
-      },
       2,
       runStorageFile(executionId, path.join('r2', 'main.tex')),
-      '-diff',
+      trace,
     );
 
     expect(trace.warn).toHaveBeenCalledWith(

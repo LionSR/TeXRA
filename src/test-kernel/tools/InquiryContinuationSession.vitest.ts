@@ -235,37 +235,33 @@ describe('external inquiry continuation session routing', () => {
     }
   });
 
-  it('delegates queued wake decisions to the follow-up owner, threading the session', async () => {
-    const session = { tag: 'desktop-session' } as unknown as SessionHandle;
-    submitFollowUpMock.mockResolvedValueOnce({
-      status: 'queued',
-      reason: 'waiting',
-      continuation: 'resumed' as const,
-    });
+  it.each([
+    {
+      name: 'threads the provided session to the wake decision',
+      session: { tag: 'desktop-session' } as unknown as SessionHandle,
+    },
+    {
+      name: 'passes an undefined session when none was provided',
+      session: undefined,
+    },
+  ])(
+    'delegates queued wake decisions to the follow-up owner ($name)',
+    async ({ session }) => {
+      submitFollowUpMock.mockResolvedValueOnce({
+        status: 'queued',
+        reason: 'waiting',
+        continuation: 'resumed' as const,
+      });
 
-    const outcome = await injectContinuationForAnsweredThread(
-      THREAD,
-      answeredManifest(),
-      session,
-    );
+      const outcome = await injectContinuationForAnsweredThread(
+        THREAD,
+        answeredManifest(),
+        session,
+      );
 
-    expect(outcome).toBe('resumed');
-  });
-
-  it('passes an undefined session through to the wake decision when none was provided', async () => {
-    submitFollowUpMock.mockResolvedValueOnce({
-      status: 'queued',
-      reason: 'waiting',
-      continuation: 'resumed' as const,
-    });
-
-    const outcome = await injectContinuationForAnsweredThread(
-      THREAD,
-      answeredManifest(),
-    );
-
-    expect(outcome).toBe('resumed');
-  });
+      expect(outcome).toBe('resumed');
+    },
+  );
 
   it('archives inquiries when the follow-up owner drops a stale queue', async () => {
     submitFollowUpMock.mockResolvedValueOnce({

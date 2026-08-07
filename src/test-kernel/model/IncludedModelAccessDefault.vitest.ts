@@ -49,6 +49,18 @@ class ExposedHandler extends ModelHandlerOpenAI {
   }
 }
 
+/** Build a handler over the OpenAI test config and always dispose it. */
+async function withHandler(
+  run: (handler: ExposedHandler) => Promise<void>,
+): Promise<void> {
+  const handler = new ExposedHandler(buildTestModelConfig(OPENAI_CONFIG));
+  try {
+    await run(handler);
+  } finally {
+    handler.dispose();
+  }
+}
+
 describe('bring-your-own-key is the model layer default', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -69,9 +81,8 @@ describe('bring-your-own-key is the model layer default', () => {
     setIncludedModelAccess(null);
   });
 
-  it('resolves an explicit provider key without a Supabase client or relay call', async () => {
-    const handler = new ExposedHandler(buildTestModelConfig(OPENAI_CONFIG));
-    try {
+  it('resolves an explicit provider key without a Supabase client or relay call', () =>
+    withHandler(async (handler) => {
       const credential = await handler.exposeResolveClientCredential();
 
       assert.equal(credential.route, 'api-key');
@@ -80,16 +91,12 @@ describe('bring-your-own-key is the model layer default', () => {
       assert.equal(credential.baseUrl, null);
       // The relay is never contacted — not for a token, not for tier config.
       expect(fetchSpy).not.toHaveBeenCalled();
-    } finally {
-      handler.dispose();
-    }
-  });
+    }));
 
   it('names both remedies when no key is set and included access is off', async () => {
     await installPlatform({ secrets: {} });
     invalidateApiKeyCache();
-    const handler = new ExposedHandler(buildTestModelConfig(OPENAI_CONFIG));
-    try {
+    await withHandler(async (handler) => {
       await assert.rejects(handler.exposeResolveClientCredential(), (error) => {
         const message = String(error);
         assert.match(message, /Missing API key for openai/);
@@ -97,9 +104,7 @@ describe('bring-your-own-key is the model layer default', () => {
         assert.match(message, /enable included model access/);
         return true;
       });
-    } finally {
-      handler.dispose();
-    }
+    });
   });
 
   it('refuses to fabricate a relay URL when nothing is installed', () => {

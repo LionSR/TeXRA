@@ -9,8 +9,12 @@ import { ModelProvider } from 'llm-zoo';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+import {
+  type MediaAttachmentContext,
+  reportMediaAttachmentFailure,
+} from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import type { FileLocation } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files';
@@ -72,6 +76,41 @@ const GOOGLE_GENAI_TEST_CONFIG = Object.freeze({
 
 const MEDIA_FILES = [pathToLocation('/tmp/does-not-matter.png')];
 
+/** The subset of the ModelHandler surface these policy tests exercise. */
+type ThrowingMediaHandler = {
+  setLogger(logger: AgentTrace): void;
+  initializeMessages(
+    userPrefix: string,
+    userRequest: string,
+    mediaFiles?: FileLocation[],
+  ): Promise<unknown[]>;
+  createRoundMessages(
+    messages: never[],
+    userMessage: string,
+    mediaFiles?: FileLocation[],
+  ): Promise<unknown[]>;
+};
+
+const THROWING_MEDIA_HANDLERS: Array<{
+  name: string;
+  create: () => ThrowingMediaHandler;
+}> = [
+  {
+    name: 'OpenAIResponse',
+    create: () =>
+      new ThrowingMediaOpenAIResponseHandler(
+        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG),
+      ),
+  },
+  {
+    name: 'Google Interactions',
+    create: () =>
+      new ThrowingMediaGoogleInteractionsHandler(
+        buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
+      ),
+  },
+];
+
 /**
  * #7465 regression: media-attachment failure policy is now decided once
  * (`reportMediaAttachmentFailure` / `ModelHandler.createMediaForRound`)
@@ -85,71 +124,39 @@ const MEDIA_FILES = [pathToLocation('/tmp/does-not-matter.png')];
  * rounds warn and continue without the attachment.
  */
 describe('media attachment failure policy (#7465)', () => {
-  it('OpenAIResponse.initializeMessages now fails the round on a media error (previously silently warned)', async () => {
-    const handler = new ThrowingMediaOpenAIResponseHandler(
-      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG),
-    );
-    const { logger } = createFailureRecorder();
-    handler.setLogger(logger);
+  it.each(THROWING_MEDIA_HANDLERS)(
+    '$name initializeMessages fails the round on a media error',
+    async ({ create }) => {
+      const handler = create();
+      handler.setLogger(createFailureRecorder().logger);
 
-    await assert.rejects(
-      handler.initializeMessages('prefix', 'request', MEDIA_FILES),
-      (err: unknown) => err === MEDIA_FAILURE,
-    );
-  });
+      await assert.rejects(
+        handler.initializeMessages('prefix', 'request', MEDIA_FILES),
+        (err: unknown) => err === MEDIA_FAILURE,
+      );
+    },
+  );
 
-  it('OpenAIResponse.createRoundMessages still warns and continues without the attachment', async () => {
-    const handler = new ThrowingMediaOpenAIResponseHandler(
-      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG),
-    );
-    const { logger, errorMessages } = createFailureRecorder();
-    handler.setLogger(logger);
+  it.each(THROWING_MEDIA_HANDLERS)(
+    '$name createRoundMessages warns and continues without the attachment',
+    async ({ create }) => {
+      const handler = create();
+      const { logger, errorMessages } = createFailureRecorder();
+      handler.setLogger(logger);
 
-    const messages = await handler.createRoundMessages(
-      [],
-      'follow-up text',
-      MEDIA_FILES,
-    );
+      const messages = await handler.createRoundMessages(
+        [],
+        'follow-up text',
+        MEDIA_FILES,
+      );
 
-    assert.equal(messages.length, 1, 'round message should still be built');
-    assert.ok(
-      errorMessages.some((m) => m.includes('follow-up round')),
-      'should emit one error-level trace entry describing the dropped attachment',
-    );
-  });
-
-  it('Google Interactions createRoundMessages warns and continues on a media error', async () => {
-    const handler = new ThrowingMediaGoogleInteractionsHandler(
-      buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
-    );
-    const { logger, errorMessages } = createFailureRecorder();
-    handler.setLogger(logger);
-
-    const messages = await handler.createRoundMessages(
-      [],
-      'follow-up text',
-      MEDIA_FILES,
-    );
-
-    assert.equal(messages.length, 1, 'round message should still be built');
-    assert.ok(
-      errorMessages.some((m) => m.includes('follow-up round')),
-      'should emit one error-level trace entry describing the dropped attachment',
-    );
-  });
-
-  it('Google Interactions initializeMessages fails the round on a media error', async () => {
-    const handler = new ThrowingMediaGoogleInteractionsHandler(
-      buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
-    );
-    const { logger } = createFailureRecorder();
-    handler.setLogger(logger);
-
-    await assert.rejects(
-      handler.initializeMessages('prefix', 'request', MEDIA_FILES),
-      (err: unknown) => err === MEDIA_FAILURE,
-    );
-  });
+      assert.equal(messages.length, 1, 'round message should still be built');
+      assert.ok(
+        errorMessages.some((m) => m.includes('follow-up round')),
+        'should emit one error-level trace entry describing the dropped attachment',
+      );
+    },
+  );
 
   // Regression (Copilot review on #7499): centralizing the policy must not
   // silently escalate `toolAttachment` failures from warn to error. Prior
@@ -157,22 +164,31 @@ describe('media attachment failure policy (#7465)', () => {
   // `logger.warn` — a transient upload-service hiccup on one attachment is
   // common enough that it shouldn't render as a red error in the progress
   // view, unlike followUp/insert media failures which do stay error-level.
-  it('reports a toolAttachment failure as a warning, not an error', () => {
-    const { logger, errorMessages, warnMessages } = createFailureRecorder();
+  it.each<{
+    kind: MediaAttachmentContext;
+    warns: number;
+    errors: number;
+    excerpt?: string;
+  }>([
+    {
+      kind: 'toolAttachment',
+      warns: 1,
+      errors: 0,
+      excerpt: 'tool result attachment',
+    },
+    { kind: 'followUp', warns: 0, errors: 1 },
+  ])(
+    'reports a $kind failure at the preserved severity',
+    ({ kind, warns, errors, excerpt }) => {
+      const { logger, errorMessages, warnMessages } = createFailureRecorder();
 
-    reportMediaAttachmentFailure(logger, 'toolAttachment', MEDIA_FAILURE);
+      reportMediaAttachmentFailure(logger, kind, MEDIA_FAILURE);
 
-    assert.equal(errorMessages.length, 0);
-    assert.equal(warnMessages.length, 1);
-    assert.ok(warnMessages[0].includes('tool result attachment'));
-  });
-
-  it('still reports a followUp failure as an error', () => {
-    const { logger, errorMessages, warnMessages } = createFailureRecorder();
-
-    reportMediaAttachmentFailure(logger, 'followUp', MEDIA_FAILURE);
-
-    assert.equal(warnMessages.length, 0);
-    assert.equal(errorMessages.length, 1);
-  });
+      assert.equal(warnMessages.length, warns);
+      assert.equal(errorMessages.length, errors);
+      if (excerpt !== undefined) {
+        assert.ok(warnMessages[0].includes(excerpt));
+      }
+    },
+  );
 });

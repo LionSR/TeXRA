@@ -187,8 +187,7 @@ export async function clearTerminalExecutionState(
   executionId: ExecutionId,
 ): Promise<void> {
   const meta = await getExecutionStore(executionId).readMeta();
-  if (!meta) return;
-  if (meta.outcome === undefined) return;
+  if (meta?.outcome === undefined) return;
   await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
 }
 

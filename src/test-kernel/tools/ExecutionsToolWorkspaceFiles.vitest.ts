@@ -82,6 +82,11 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
+const toolUseMeta = {
+  timestamp: '2026-06-15T09:36:02.345Z',
+  category: 'toolUse',
+} as const;
+
 /** Creates a temp workspace dir for the test body, then always removes it. */
 async function withTempWorkspace(
   run: (workspace: string) => Promise<void>,
@@ -133,8 +138,7 @@ async function writeSidecarTodos(
 /** Mocks the storage reads for a completed, non-subagent toolUse execution. */
 function mockCompletedExecution(streamId?: StreamTabId): void {
   mocks.readMeta.mockResolvedValue({
-    timestamp: '2026-06-15T09:36:02.345Z',
-    category: 'toolUse',
+    ...toolUseMeta,
     ...(streamId ? { streamId } : {}),
   });
   mocks.readConfig.mockResolvedValue(config);
@@ -214,8 +218,7 @@ describe('ExecutionsTool', () => {
         phase: STREAM_PHASE.WAITING,
       });
       mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
+        ...toolUseMeta,
         parentExecutionId: 'parent123',
       });
       mocks.readReport.mockResolvedValue(
@@ -290,10 +293,7 @@ describe('ExecutionsTool', () => {
           },
         ]);
         await session.snapshots.flush();
-        mocks.readMeta.mockResolvedValue({
-          timestamp: '2026-06-15T09:36:02.345Z',
-          category: 'toolUse',
-        });
+        mocks.readMeta.mockResolvedValue(toolUseMeta);
 
         const [summary, todos] = await withRunContext(
           createRunContext({ streamId: parentStreamId, session }),
@@ -317,8 +317,7 @@ describe('ExecutionsTool', () => {
 
   it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', async () => {
     mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-06-15T09:36:02.345Z',
-      category: 'toolUse',
+      ...toolUseMeta,
       parentExecutionId: 'parent123',
     });
     mocks.readConfig.mockResolvedValue(config);
@@ -408,45 +407,30 @@ describe('ExecutionsTool', () => {
     expect(JSON.parse(result.output ?? '')).toEqual(record);
   });
 
-  it('reads completed summary todos from stream sidecars', async () => {
-    await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      const streamId = await writeSidecarTodos(executionId, [
-        {
-          content: 'Read the sidecar work plan',
-          status: 'in_progress',
-          activeForm: 'Reading the sidecar work plan',
-        },
-      ]);
-      mockCompletedExecution(streamId);
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}`,
-      });
-
-      expect(result.output).toContain('Read the sidecar work plan');
-    });
-  });
-
   // The advertised /executions/{id}/todos endpoint must resolve a task list
-  // exactly as the completed summary above does, sidecar first (#7300).
-  it('agrees with the completed summary when reading /executions/{id}/todos', async () => {
-    await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      const streamId = await writeSidecarTodos(executionId, [
-        {
-          content: 'Read the sidecar work plan',
-          status: 'in_progress',
-          activeForm: 'Reading the sidecar work plan',
-        },
-      ]);
-      mockCompletedExecution(streamId);
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}/todos`,
-      });
+  // exactly as the completed summary does, sidecar first (#7300).
+  it.each([
+    { label: 'completed summary', toolPath: '/executions/abc123' },
+    { label: 'todos endpoint', toolPath: '/executions/abc123/todos' },
+  ])(
+    'reads completed todos from stream sidecars via the $label',
+    async ({ toolPath }) => {
+      await withTempStorage(async () => {
+        const executionId = 'abc123' as ExecutionId;
+        const streamId = await writeSidecarTodos(executionId, [
+          {
+            content: 'Read the sidecar work plan',
+            status: 'in_progress',
+            activeForm: 'Reading the sidecar work plan',
+          },
+        ]);
+        mockCompletedExecution(streamId);
+        const result = await new ExecutionsTool().call({ path: toolPath });
 
-      expect(result.output).toContain('Read the sidecar work plan');
-    });
-  });
+        expect(result.output).toContain('Read the sidecar work plan');
+      });
+    },
+  );
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
     await withTempWorkspace(async (workspace) => {

@@ -81,6 +81,15 @@ function createTransport(): OpenAIResponseWebSocketTransport {
 
 const fakeClient = {} as unknown as OpenAI;
 
+async function connectTransport(): Promise<{
+  transport: OpenAIResponseWebSocketTransport;
+  ws: FakeResponsesWS;
+}> {
+  const transport = createTransport();
+  const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+  return { transport, ws };
+}
+
 describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   beforeEach(() => {
     createdSockets.length = 0;
@@ -102,8 +111,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   });
 
   it('does not crash the process when the pooled connection errors with no request in flight', async () => {
-    const transport = createTransport();
-    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const { ws } = await connectTransport();
 
     // Node throws synchronously on `emit('error', ...)` when the emitter has
     // zero 'error' listeners — this is exactly the unhandled-rejection crash
@@ -116,8 +124,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   });
 
   it('invalidates the connection so the next execute() reconnects', async () => {
-    const transport = createTransport();
-    const first = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const { transport, ws: first } = await connectTransport();
     expect(internals(transport).wsConnection).toBe(first);
 
     first.emit('error', new WebSocketError('connection limit reached', null));
@@ -131,8 +138,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   });
 
   it('keeps late errors on an orphan isolated from a later connection', async () => {
-    const transport = createTransport();
-    const first = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const { transport, ws: first } = await connectTransport();
 
     transport.dispose();
     const second = await internals(transport).getOrCreateWebSocket(fakeClient);
@@ -145,8 +151,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   });
 
   it('preserves the request error when closing emits synchronously', async () => {
-    const transport = createTransport();
-    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const { transport, ws } = await connectTransport();
     ws.close.mockImplementation(() => {
       ws.socket.emit('close', 1006, Buffer.from('closed'));
     });
@@ -164,8 +169,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     // keeps its own code (no connection kind, no route cooling), but the
     // server may refuse further service on this socket without closing it, so
     // the cached connection is dropped and the next execute() reconnects.
-    const transport = createTransport();
-    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const { transport, ws } = await connectTransport();
     const request = internals(transport).executeViaWebSocket(ws, {});
     const error = new WebSocketError('invalid request', {
       type: 'error',
@@ -184,8 +188,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   });
 
   it('tags an unexpected in-flight socket close as a connection failure', async () => {
-    const transport = createTransport();
-    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const { transport, ws } = await connectTransport();
     const request = internals(transport).executeViaWebSocket(ws, {});
 
     ws.socket.emit('close', 1006, Buffer.from('idle timeout'));

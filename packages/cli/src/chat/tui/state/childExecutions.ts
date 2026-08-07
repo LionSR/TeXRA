@@ -102,8 +102,7 @@ export const subagentExecutionLabels: Signal.Computed<
 function retainedParent(
   entry: LiveChildStreamEntry | undefined,
 ): RetainedParent | undefined {
-  if (!entry?.parent) return undefined;
-  return entry.parent.retained;
+  return entry?.parent?.retained;
 }
 
 function currentParent(
@@ -388,14 +387,9 @@ export function applyChildStreamRemoval(streamId: StreamTabId): void {
         };
       }
     }
-    const active = beforeParent === streamId ? false : entry.active;
-    const next: LiveChildStreamEntry = {
-      ...entry,
-      active,
-      parent,
-    };
+    const active = beforeParent !== streamId && entry.active;
     if (active !== entry.active || parent !== entry.parent) {
-      out.set(childStreamId, next);
+      out.set(childStreamId, { ...entry, active, parent });
     }
   }
 

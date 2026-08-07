@@ -55,6 +55,27 @@ const CONFIG = AgentConfigSchema.parse({
 const flushArtifacts = vi.fn();
 const SESSION = { flushArtifacts } as never;
 
+const EXECUTE_RESULT = {
+  category: 'toolUse',
+  executionId: EXECUTION_ID,
+  streamId: EXECUTION_ID,
+  outcome: 'COMPLETED',
+};
+const FINALIZE_RESULT = {
+  status: 'durable',
+  terminalStatusPersisted: true,
+  flowRecord: 'deleted',
+};
+
+type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'>;
+
+function launch(options: RunOptions = {}): ReturnType<typeof runAgent> {
+  return runAgent(
+    { config: CONFIG, executionId: EXECUTION_ID },
+    { session: SESSION, ...options },
+  );
+}
+
 describe('runAgent execution ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,24 +85,12 @@ describe('runAgent execution ownership', () => {
     mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.renewOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
-    mocks.finalizeExecution.mockResolvedValue({
-      status: 'durable',
-      terminalStatusPersisted: true,
-      flowRecord: 'deleted',
-    });
-    mocks.executeAgent.mockResolvedValue({
-      category: 'toolUse',
-      executionId: EXECUTION_ID,
-      streamId: EXECUTION_ID,
-      outcome: 'COMPLETED',
-    });
+    mocks.finalizeExecution.mockResolvedValue(FINALIZE_RESULT);
+    mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
   it('registers and releases an explicitly identified fresh run', async () => {
-    await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      { session: SESSION, registerExecution: true },
-    );
+    await launch({ registerExecution: true });
 
     expect(mocks.registerExecution).toHaveBeenCalledOnce();
     // #9590 obligation 1: registration carries the birth stream identity and
@@ -107,10 +116,7 @@ describe('runAgent execution ownership', () => {
   });
 
   it('acquires and releases ownership for an existing execution', async () => {
-    await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      { session: SESSION },
-    );
+    await launch();
 
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
@@ -132,18 +138,10 @@ describe('runAgent execution ownership', () => {
     });
     mocks.executeAgent.mockImplementationOnce(async () => {
       order.push('execute');
-      return {
-        category: 'toolUse',
-        executionId: EXECUTION_ID,
-        streamId: EXECUTION_ID,
-        outcome: 'COMPLETED',
-      };
+      return EXECUTE_RESULT;
     });
 
-    await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      { session: SESSION },
-    );
+    await launch();
 
     expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
       EXECUTION_ID,
@@ -152,10 +150,7 @@ describe('runAgent execution ownership', () => {
   });
 
   it('leaves a freshly registered run without a terminal-fact clear', async () => {
-    await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      { session: SESSION, registerExecution: true },
-    );
+    await launch({ registerExecution: true });
 
     expect(mocks.clearTerminalExecutionState).not.toHaveBeenCalled();
   });
@@ -170,13 +165,7 @@ describe('runAgent execution ownership', () => {
     );
 
     await expect(
-      runAgent(
-        { config: CONFIG, executionId: EXECUTION_ID },
-        {
-          session: SESSION,
-          canAcquireResumeLease: () => canonical,
-        },
-      ),
+      launch({ canAcquireResumeLease: () => canonical }),
     ).rejects.toThrow();
 
     expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
@@ -192,24 +181,12 @@ describe('runAgent execution ownership', () => {
     mocks.executeAgent.mockRejectedValueOnce(launchError);
     mocks.finalizeExecution.mockImplementationOnce(async () => {
       order.push('finalize');
-      return {
-        status: 'durable',
-        terminalStatusPersisted: true,
-        flowRecord: 'deleted',
-      };
+      return FINALIZE_RESULT;
     });
     mocks.completeOwnedExecutionLease.mockImplementationOnce(async () => {
       order.push('release');
     });
-    await expect(
-      runAgent(
-        { config: CONFIG, executionId: EXECUTION_ID },
-        {
-          session: SESSION,
-          registerExecution: true,
-        },
-      ),
-    ).rejects.toBe(launchError);
+    await expect(launch({ registerExecution: true })).rejects.toBe(launchError);
 
     expect(order).toEqual(['finalize', 'release']);
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
@@ -226,15 +203,7 @@ describe('runAgent execution ownership', () => {
       throw launchError;
     });
 
-    await expect(
-      runAgent(
-        { config: CONFIG, executionId: EXECUTION_ID },
-        {
-          session: SESSION,
-          registerExecution: true,
-        },
-      ),
-    ).rejects.toBe(launchError);
+    await expect(launch({ registerExecution: true })).rejects.toBe(launchError);
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
@@ -253,13 +222,9 @@ describe('runAgent execution ownership', () => {
       error: persistenceError,
     });
 
-    const failure = await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      {
-        session: SESSION,
-        registerExecution: true,
-      },
-    ).catch((error: unknown) => error);
+    const failure = await launch({ registerExecution: true }).catch(
+      (error: unknown) => error,
+    );
 
     expect(failure).toBeInstanceOf(AggregateError);
     expect(mocks.markOwnedExecutionLeaseUndurable).toHaveBeenCalledWith(
@@ -271,12 +236,7 @@ describe('runAgent execution ownership', () => {
     const order: string[] = [];
     mocks.executeAgent.mockImplementationOnce(async () => {
       order.push('execute');
-      return {
-        category: 'toolUse',
-        executionId: EXECUTION_ID,
-        streamId: EXECUTION_ID,
-        outcome: 'COMPLETED',
-      };
+      return EXECUTE_RESULT;
     });
     mocks.completeOwnedExecutionLease.mockImplementationOnce(async () => {
       order.push('release');
@@ -285,16 +245,12 @@ describe('runAgent execution ownership', () => {
       order.push('session-artifacts');
     });
 
-    await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      {
-        session: SESSION,
-        registerExecution: true,
-        beforeLeaseRelease: async () => {
-          order.push('artifacts');
-        },
+    await launch({
+      registerExecution: true,
+      beforeLeaseRelease: async () => {
+        order.push('artifacts');
       },
-    );
+    });
 
     expect(order).toEqual([
       'execute',
@@ -312,16 +268,12 @@ describe('runAgent execution ownership', () => {
       throw runError;
     });
 
-    const failure = await runAgent(
-      { config: CONFIG, executionId: EXECUTION_ID },
-      {
-        session: SESSION,
-        registerExecution: true,
-        beforeLeaseRelease: async () => {
-          throw artifactError;
-        },
+    const failure = await launch({
+      registerExecution: true,
+      beforeLeaseRelease: async () => {
+        throw artifactError;
       },
-    ).catch((error: unknown) => error);
+    }).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors).toEqual([

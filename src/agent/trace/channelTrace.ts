@@ -16,7 +16,10 @@ import type {
 import type { AgentEvent } from './events';
 
 /** Bind a functional logger call to one channel. */
-function toChannelLog(writer: ChannelWriter, level: LogLevel) {
+function toChannelLog(
+  writer: ChannelWriter,
+  level: LogLevel,
+): (message: string, options?: LogOptions) => void {
   return (message: string, options: LogOptions = {}): void => {
     if (options.messageType === MESSAGE_TYPES.INTERNAL) return;
     writer(level, message, options.data);
