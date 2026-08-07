@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **DeepSeek V4 Flash (Thinking) is the default DeepSeek model** — the model
+  picker now lists the thinking variant (`deepseekT`) instead of the
+  non-thinking `deepseek`, so DeepSeek V4 Flash users get reasoning support.
+
 #### Breaking Changes
 
 - **The multi-agent orchestration tool is now `delegate_multi_agents`** —
