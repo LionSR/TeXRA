@@ -6,8 +6,9 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  productionFilesUnder,
   REPO_ROOT,
-  sourceFilesUnder as sharedSourceFilesUnder,
+  stripComments,
 } from '../support/repoScan';
 
 const RETIRED_MODULE =
@@ -27,25 +28,6 @@ const SCAN_ROOTS = [
   'packages/extension/src',
   'src',
 ] as const;
-
-function sourceFilesUnder(root: string): string[] {
-  return sharedSourceFilesUnder(resolve(REPO_ROOT, root), {
-    missingDirReturnsEmpty: true,
-    repoRelative: true,
-    excludeTestKernel: true,
-  });
-}
-
-function stripComments(source: string): string {
-  return source
-    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => {
-      const commentStart = line.indexOf('//');
-      return commentStart === -1 ? line : line.slice(0, commentStart);
-    })
-    .join('\n');
-}
 
 function mentionsRetiredSymbol(file: string): boolean {
   const source = stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8'));
@@ -68,7 +50,7 @@ describe('ProgressEventHandler retirement boundary', () => {
   );
 
   it('removes the ProgressEventHandler class name from production sources', () => {
-    const offenders = SCAN_ROOTS.flatMap(sourceFilesUnder)
+    const offenders = SCAN_ROOTS.flatMap(productionFilesUnder)
       .filter(mentionsRetiredSymbol)
       .toSorted();
 
@@ -76,7 +58,7 @@ describe('ProgressEventHandler retirement boundary', () => {
   });
 
   it('removes retired desktop progress bridge vocabulary from production desktop sources', () => {
-    const offenders = sourceFilesUnder('packages/desktop/src')
+    const offenders = productionFilesUnder('packages/desktop/src')
       .filter(mentionsRetiredDesktopProgressBridgeTerm)
       .toSorted();
 
@@ -85,7 +67,7 @@ describe('ProgressEventHandler retirement boundary', () => {
 
   it('actually scans the production source roots', () => {
     const scanned = SCAN_ROOTS.reduce(
-      (total, root) => total + sourceFilesUnder(root).length,
+      (total, root) => total + productionFilesUnder(root).length,
       0,
     );
     expect(scanned).toBeGreaterThan(100);
