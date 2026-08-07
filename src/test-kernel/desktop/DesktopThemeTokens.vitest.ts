@@ -217,12 +217,9 @@ function collectDesktopTokenOffenders(): string[] {
 }
 
 function walk(dir: string, visit: (absPath: string) => void): void {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
+  // Let readdirSync throw: swallowing it would silently shrink the scanned
+  // tree and let the confinement test pass vacuously.
+  const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === 'dist') continue;
     const full = join(dir, entry.name);

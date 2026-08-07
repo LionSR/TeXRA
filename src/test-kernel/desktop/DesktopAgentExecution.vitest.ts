@@ -174,8 +174,32 @@ type BridgeInteractions = {
   }) => Promise<unknown>;
 };
 
+/** Test-side record of what each bridge was constructed with. Tests pass the
+ * session and snapshot store into the constructor themselves, so they assert
+ * on those references rather than reaching into the bridge's private fields. */
+type BridgeTestContext = {
+  session: SessionHandle;
+  snapshots: ProgressSnapshotStore;
+  ctor: DesktopAgentExecutionModule['DesktopProgressBridge'];
+  options: DesktopProgressBridgeOptions;
+};
+
+const bridgeContexts = new WeakMap<TestableBridge, BridgeTestContext>();
+
+function bridgeContext(bridge: TestableBridge): BridgeTestContext {
+  const context = bridgeContexts.get(bridge);
+  if (!context) {
+    throw new Error('Bridge was not created by this test file.');
+  }
+  return context;
+}
+
 function bridgeSession(bridge: TestableBridge): SessionHandle {
-  return (bridge as unknown as { session: SessionHandle }).session;
+  return bridgeContext(bridge).session;
+}
+
+function bridgeSnapshots(bridge: TestableBridge): ProgressSnapshotStore {
+  return bridgeContext(bridge).snapshots;
 }
 
 function bridgeInteractions(bridge: TestableBridge): BridgeInteractions {
@@ -445,31 +469,35 @@ async function createBridge(
   await options.configureSession?.(session);
   const sessionReady = session.waitUntilReady();
   if (!options.deferReady) await sessionReady;
-  const bridge = new bridgeModule.DesktopProgressBridge(
-    (message) => {
-      options.observeRendererMessage?.(message);
-      messages.push(message);
-    },
-    {
-      session,
-      sessionStores,
-      logger: options.loggerErrorSpy
-        ? { ...noopTrace, error: options.loggerErrorSpy }
-        : undefined,
-      host: createStubDesktopAgentExecutionHost({
-        ...(options.showErrorMessage
-          ? { showErrorMessage: options.showErrorMessage }
-          : {}),
-        ...(options.showInfoMessage
-          ? { showInfoMessage: options.showInfoMessage }
-          : {}),
-        ...(options.onRunCompleted
-          ? { onRunCompleted: options.onRunCompleted }
-          : {}),
-        ...(options.openPath ? { openPath: options.openPath } : {}),
-      }),
-    },
-  ) as unknown as TestableBridge;
+  const bridgeOptions: DesktopProgressBridgeOptions = {
+    session,
+    sessionStores,
+    ...(options.loggerErrorSpy
+      ? { logger: { ...noopTrace, error: options.loggerErrorSpy } }
+      : {}),
+    host: createStubDesktopAgentExecutionHost({
+      ...(options.showErrorMessage
+        ? { showErrorMessage: options.showErrorMessage }
+        : {}),
+      ...(options.showInfoMessage
+        ? { showInfoMessage: options.showInfoMessage }
+        : {}),
+      ...(options.onRunCompleted
+        ? { onRunCompleted: options.onRunCompleted }
+        : {}),
+      ...(options.openPath ? { openPath: options.openPath } : {}),
+    }),
+  };
+  const bridge = new bridgeModule.DesktopProgressBridge((message) => {
+    options.observeRendererMessage?.(message);
+    messages.push(message);
+  }, bridgeOptions) as unknown as TestableBridge;
+  bridgeContexts.set(bridge, {
+    session,
+    snapshots: progressSnapshotStore,
+    ctor: bridgeModule.DesktopProgressBridge,
+    options: bridgeOptions,
+  });
   const waitForPresentation = bridge.waitUntilReady.bind(bridge);
   bridge.waitUntilReady = async () => {
     await sessionReady;
@@ -1249,11 +1277,7 @@ describe('DesktopProgressBridge', () => {
     const kvStoreBacking = new Map<string, unknown>();
     const first = await createBridge([], { kvStoreBacking });
     const firstSession = bridgeSession(first);
-    const firstSnapshots = (
-      first as unknown as {
-        state: { snapshots: ProgressSnapshotStore };
-      }
-    ).state.snapshots;
+    const firstSnapshots = bridgeSnapshots(first);
     const runConfig = workflowConfig();
 
     appendRunningGroup(
@@ -1591,17 +1615,11 @@ describe('DesktopProgressBridge', () => {
     expect(interactions.attachments).toHaveLength(0);
     expect(firstInfo).not.toHaveBeenCalled();
 
-    const internal = bridge as unknown as {
-      constructor: new (
-        postToRenderer: (message: unknown) => boolean | void,
-        options: DesktopProgressBridgeOptions,
-      ) => TestableBridge;
-      options: DesktopProgressBridgeOptions;
-    };
+    const { ctor, options: firstBridgeOptions } = bridgeContext(bridge);
     const replacementInfo = vi.fn(async () => undefined);
     const replacement = disposeAfterTest(
-      new internal.constructor(() => undefined, {
-        ...internal.options,
+      new ctor(() => undefined, {
+        ...firstBridgeOptions,
         host: createStubDesktopAgentExecutionHost({
           showInfoMessage: replacementInfo,
         }),
@@ -2533,30 +2551,34 @@ describe('DesktopProgressBridge', () => {
       const errorsA: string[] = [];
       const infosA: string[] = [];
       const diffPathsA: Array<{ original: string; proposed: string }> = [];
-      const bridgeA = new bridgeModule.DesktopProgressBridge(
-        (message) => {
-          messages.push(message);
-        },
-        {
-          session: processSession,
-          sessionStores,
-          host: createStubDesktopAgentExecutionHost({
-            openDiff: async (original, proposed, title) => {
-              diffPathsA.push({
-                original: original.filePath,
-                proposed: proposed.filePath,
-              });
-              return { original, proposed, title };
-            },
-            showErrorMessage: async (message) => {
-              errorsA.push(message);
-            },
-            showInfoMessage: async (message) => {
-              infosA.push(message);
-            },
-          }),
-        },
-      ) as unknown as TestableBridge & { session: SessionHandle };
+      const bridgeAOptions: DesktopProgressBridgeOptions = {
+        session: processSession,
+        sessionStores,
+        host: createStubDesktopAgentExecutionHost({
+          openDiff: async (original, proposed, title) => {
+            diffPathsA.push({
+              original: original.filePath,
+              proposed: proposed.filePath,
+            });
+            return { original, proposed, title };
+          },
+          showErrorMessage: async (message) => {
+            errorsA.push(message);
+          },
+          showInfoMessage: async (message) => {
+            infosA.push(message);
+          },
+        }),
+      };
+      const bridgeA = new bridgeModule.DesktopProgressBridge((message) => {
+        messages.push(message);
+      }, bridgeAOptions) as unknown as TestableBridge;
+      bridgeContexts.set(bridgeA, {
+        session: processSession,
+        snapshots: progressSnapshotStore,
+        ctor: bridgeModule.DesktopProgressBridge,
+        options: bridgeAOptions,
+      });
       await bridgeA.waitUntilReady();
       const presentationBridges = new Set([bridgeA]);
       const createHandle = (
@@ -2606,26 +2628,28 @@ describe('DesktopProgressBridge', () => {
         close();
         const errorsB: string[] = [];
         const infosB: string[] = [];
-        const bridgeB = new bridgeModule.DesktopProgressBridge(
-          (message) => {
-            reopenedMessages.push(message);
-            observeRendererMessage?.(message);
-          },
-          {
-            session: processSession,
-            sessionStores,
-            host: createStubDesktopAgentExecutionHost({
-              showErrorMessage: async (message) => {
-                errorsB.push(message);
-              },
-              showInfoMessage: async (message) => {
-                infosB.push(message);
-              },
-            }),
-          },
-        ) as unknown as TestableBridge & {
-          session: SessionHandle;
+        const bridgeBOptions: DesktopProgressBridgeOptions = {
+          session: processSession,
+          sessionStores,
+          host: createStubDesktopAgentExecutionHost({
+            showErrorMessage: async (message) => {
+              errorsB.push(message);
+            },
+            showInfoMessage: async (message) => {
+              infosB.push(message);
+            },
+          }),
         };
+        const bridgeB = new bridgeModule.DesktopProgressBridge((message) => {
+          reopenedMessages.push(message);
+          observeRendererMessage?.(message);
+        }, bridgeBOptions) as unknown as TestableBridge;
+        bridgeContexts.set(bridgeB, {
+          session: processSession,
+          snapshots: progressSnapshotStore,
+          ctor: bridgeModule.DesktopProgressBridge,
+          options: bridgeBOptions,
+        });
         presentationBridges.add(bridgeB);
         await bridgeB.waitUntilReady();
         return { bridgeB, errorsB, infosB, progressSnapshotStore };
@@ -3075,15 +3099,15 @@ describe('DesktopProgressBridge', () => {
           kind: 'toolEdit',
         });
         expect(
-          isApprovalBypassedForStream(streamId, owner.bridgeA.session),
+          isApprovalBypassedForStream(streamId, owner.processSession),
         ).toBe(true);
         // Per-kind grant: an edit prompt leaves shell commands gated.
         expect(
-          isBashApprovalBypassedForStream(streamId, owner.bridgeA.session),
+          isBashApprovalBypassedForStream(streamId, owner.processSession),
         ).toBe(false);
-        expect(isApprovalBypassedForStream(streamId, bridgeB.session)).toBe(
-          true,
-        );
+        expect(
+          isApprovalBypassedForStream(streamId, bridgeSession(bridgeB)),
+        ).toBe(true);
 
         for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
           await waitForShownPermission(messagesB, { data: { approvalId } });
@@ -3232,10 +3256,10 @@ describe('DesktopProgressBridge', () => {
       try {
         bridgeB.syncFullView();
         // Both headless children and the child status remain in the one registry.
-        expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
-          childHandle,
-        );
-        expect(bridgeB.session.status.get(childStreamId)).toBe(
+        expect(
+          owner.processSession.executions.getHandle(childExecutionId),
+        ).toBe(childHandle);
+        expect(owner.processSession.status.get(childStreamId)).toBe(
           STREAM_PHASE.RUNNING,
         );
         expect(lastStreamSync(messagesB)).toMatchObject({
@@ -3260,9 +3284,9 @@ describe('DesktopProgressBridge', () => {
           interrupt: freshChildInterrupt,
         });
         owner.processSession.executions.track(freshChildHandle);
-        expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
-          freshChildHandle,
-        );
+        expect(
+          owner.processSession.executions.getHandle(childExecutionId),
+        ).toBe(freshChildHandle);
 
         // Stop cascades through root and the current child turn.
         const stopStream = assertSupported(
@@ -3292,10 +3316,10 @@ describe('DesktopProgressBridge', () => {
         await freshChildHandle.result;
         await settleProgressEvents();
         expect(
-          bridgeB.session.executions.getHandle(childExecutionId),
+          owner.processSession.executions.getHandle(childExecutionId),
         ).toBeUndefined();
         expect(
-          owner.bridgeA.session.executions.getHandle(childExecutionId),
+          owner.processSession.executions.getHandle(childExecutionId),
         ).toBeUndefined();
       } finally {
         bridgeB.dispose();
@@ -3480,45 +3504,53 @@ describe('DesktopProgressBridge', () => {
       });
       const { bridgeB, errorsB } = await owner.reopen();
       const resultsSeenByB: unknown[] = [];
-      const detachResult = bridgeB.session.onResult((event) => {
+      const detachResult = owner.processSession.onResult((event) => {
         resultsSeenByB.push(event);
       });
 
       try {
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+        expect(owner.processSession.status.get(streamId)).toBe(
+          STREAM_PHASE.RUNNING,
+        );
 
         // Window presentation does not split canonical lifecycle state.
         expect(
-          owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
             trace: owner.trace as unknown as AgentTrace,
           }),
         ).toBe(true);
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+        expect(owner.processSession.status.get(streamId)).toBe(
+          STREAM_PHASE.WAITING,
+        );
         expect(
-          owner.bridgeA.session.status.transition(
+          owner.processSession.status.transition(
             streamId,
             STREAM_PHASE.RUNNING,
             'resume',
             { trace: owner.trace as unknown as AgentTrace },
           ),
         ).toBe(true);
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+        expect(owner.processSession.status.get(streamId)).toBe(
+          STREAM_PHASE.RUNNING,
+        );
 
         // A later turn replaces both handle and trace in the same registry.
         const { handle: freshHandle, trace: freshTrace } = owner.createHandle();
-        owner.bridgeA.session.executions.track(freshHandle);
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+        owner.processSession.executions.track(freshHandle);
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
         expect(
-          owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
             trace: freshTrace as unknown as AgentTrace,
           }),
         ).toBe(true);
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+        expect(owner.processSession.status.get(streamId)).toBe(
+          STREAM_PHASE.WAITING,
+        );
 
         const resultEvent = {
           type: 'result' as const,
@@ -3543,12 +3575,14 @@ describe('DesktopProgressBridge', () => {
           ),
         ).toBe(true);
         expect(resultsSeenByB).toContainEqual(resultEvent);
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.FAILED);
+        expect(owner.processSession.status.get(streamId)).toBe(
+          STREAM_PHASE.FAILED,
+        );
         expect(errorsB).toEqual(['Failure after desktop reopen.']);
         expect(owner.errorsA).toEqual([]);
-        owner.bridgeA.session.executions.untrack(executionId);
+        owner.processSession.executions.untrack(executionId);
         expect(
-          bridgeB.session.executions.getHandle(executionId),
+          owner.processSession.executions.getHandle(executionId),
         ).toBeUndefined();
       } finally {
         detachResult();
@@ -3569,10 +3603,10 @@ describe('DesktopProgressBridge', () => {
         agentName: 'bash',
         category: AgentCategory.ToolUse,
       });
-      owner.bridgeA.session.executions.track(backgroundHandle);
-      expect(bridgeB.session.executions.getHandle(backgroundExecutionId)).toBe(
-        backgroundHandle,
-      );
+      owner.processSession.executions.track(backgroundHandle);
+      expect(
+        owner.processSession.executions.getHandle(backgroundExecutionId),
+      ).toBe(backgroundHandle);
 
       bridgeB.dispose();
       expect(owner.processSession.executions.getHandle(executionId)).toBe(
@@ -3586,12 +3620,11 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.executions.track(freshHandle);
       const { bridgeB: bridgeC } = await owner.reopen();
       try {
-        expect(bridgeC.session).toBe(owner.processSession);
-        expect(bridgeC.session.executions.getHandle(executionId)).toBe(
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
         expect(
-          bridgeC.session.executions.getHandle(backgroundExecutionId),
+          owner.processSession.executions.getHandle(backgroundExecutionId),
         ).toBe(backgroundHandle);
       } finally {
         bridgeC.dispose();
@@ -3612,33 +3645,33 @@ describe('DesktopProgressBridge', () => {
       owner.close();
       // Suspend while headless before reopening.
       expect(
-        owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+        owner.processSession.status.transitionToWaiting(streamId, 'wait', {
           trace: owner.trace as unknown as AgentTrace,
         }),
       ).toBe(true);
       const { bridgeB } = await owner.reopen();
 
       try {
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
 
         // Resume replaces the canonical handle under the same id.
         const { handle: freshHandle } = owner.createHandle();
-        bridgeB.session.executions.track(freshHandle);
+        owner.processSession.executions.track(freshHandle);
         expect(
-          bridgeB.session.status.transition(
+          owner.processSession.status.transition(
             streamId,
             STREAM_PHASE.RUNNING,
             'resume',
           ),
         ).toBe(true);
 
-        expect(owner.bridgeA.session.executions.getHandle(executionId)).toBe(
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
         // Identity-safe cleanup preserves the fresh handle.
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
 
@@ -3654,7 +3687,7 @@ describe('DesktopProgressBridge', () => {
         } as unknown as Parameters<typeof owner.handle.settleResult>[0]);
         await owner.handle.result;
         await settleProgressEvents();
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+        expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
       } finally {
@@ -3668,7 +3701,7 @@ describe('DesktopProgressBridge', () => {
       const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB } = await owner.reopen();
       const facts: SessionFact[] = [];
-      const detachFacts = bridgeB.session.events.subscribe(
+      const detachFacts = owner.processSession.events.subscribe(
         (event) => {
           if (event.scope === 'session') facts.push(event.event);
         },
@@ -3681,7 +3714,9 @@ describe('DesktopProgressBridge', () => {
         expect(
           owner.processSession.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+        expect(owner.processSession.status.get(streamId)).toBe(
+          STREAM_PHASE.WAITING,
+        );
         expect(facts).toContainEqual(
           expect.objectContaining({
             type: 'status',
@@ -3709,7 +3744,7 @@ describe('DesktopProgressBridge', () => {
       });
       const { bridgeB } = await owner.reopen();
       const facts: SessionFact[] = [];
-      const detachFacts = bridgeB.session.events.subscribe(
+      const detachFacts = owner.processSession.events.subscribe(
         (event) => {
           if (event.scope === 'session') facts.push(event.event);
         },
@@ -3717,27 +3752,27 @@ describe('DesktopProgressBridge', () => {
       );
 
       try {
-        owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
+        owner.processSession.executions.trackAgentExecution(childHandle, {
           status: STREAM_PHASE.RUNNING,
         });
-        expect(bridgeB.session.status.get(childStreamId)).toBe(
+        expect(owner.processSession.status.get(childStreamId)).toBe(
           STREAM_PHASE.RUNNING,
         );
 
         // Child finalization order (finalizeChildStream): untrack first,
         // terminal stream status second, and no `result` trace event at all.
-        owner.bridgeA.session.executions.untrack(childExecutionId);
+        owner.processSession.executions.untrack(childExecutionId);
         expect(
-          bridgeB.session.executions.getHandle(childExecutionId),
+          owner.processSession.executions.getHandle(childExecutionId),
         ).toBeUndefined();
         expect(
-          owner.bridgeA.session.status.transitionToTerminal(
+          owner.processSession.status.transitionToTerminal(
             childStreamId,
             STREAM_PHASE.COMPLETED,
             STREAM_TRANSITION_CAUSE.LIFECYCLE,
           ),
         ).toBe(true);
-        expect(bridgeB.session.status.get(childStreamId)).toBe(
+        expect(owner.processSession.status.get(childStreamId)).toBe(
           STREAM_PHASE.COMPLETED,
         );
         expect(facts).toContainEqual(
@@ -3762,17 +3797,17 @@ describe('DesktopProgressBridge', () => {
       try {
         // Finalization untracks first, then performs WAITING -> terminal.
         expect(
-          bridgeB.session.status.transitionToWaiting(streamId, 'wait'),
+          owner.processSession.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
-        owner.bridgeA.session.executions.untrack(executionId);
+        owner.processSession.executions.untrack(executionId);
         expect(
-          owner.bridgeA.session.status.transitionToTerminal(
+          owner.processSession.status.transitionToTerminal(
             streamId,
             STREAM_PHASE.COMPLETED,
             STREAM_TRANSITION_CAUSE.LIFECYCLE,
           ),
         ).toBe(true);
-        expect(bridgeB.session.status.get(streamId)).toBe(
+        expect(owner.processSession.status.get(streamId)).toBe(
           STREAM_PHASE.COMPLETED,
         );
       } finally {

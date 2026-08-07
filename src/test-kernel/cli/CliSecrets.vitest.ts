@@ -24,6 +24,10 @@ async function withSecretsRoot(
 }
 
 describe('CLI secrets', () => {
+  // POSIX file modes don't exist on Windows. skipIf (rather than an early
+  // return) so the skip is visible in reports instead of a zero-assertion pass.
+  const itPosix = it.skipIf(process.platform === 'win32');
+
   it('stores secrets under the configured storage root', async () => {
     await withSecretsRoot(async ({ storageRoot, secretsPath }) => {
       const secrets = new CliSecrets(secretsPath);
@@ -101,47 +105,51 @@ describe('CLI secrets', () => {
     });
   });
 
-  it('serves env-provided secrets when the storage directory cannot be created', async () => {
-    if (process.platform === 'win32') return; // POSIX modes don't apply.
-    await withSecretsRoot(async ({ root, secretsPath }) => {
-      // `storage/` does not exist and its parent is unwritable, so any
-      // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
-      // degrade to "nothing stored" and let env vars keep working.
-      await fs.chmod(root, 0o500);
-      vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
+  itPosix(
+    'serves env-provided secrets when the storage directory cannot be created',
+    async () => {
+      await withSecretsRoot(async ({ root, secretsPath }) => {
+        // `storage/` does not exist and its parent is unwritable, so any
+        // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
+        // degrade to "nothing stored" and let env vars keep working.
+        await fs.chmod(root, 0o500);
+        vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
 
-      try {
+        try {
+          const secrets = new CliSecrets(secretsPath);
+
+          await expect(
+            secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+          ).resolves.toBe('env-value');
+          await expect(
+            secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+          ).resolves.toBeUndefined();
+          await expect(
+            secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
+          ).resolves.toBeUndefined();
+          await expect(secrets.listStoredKeys()).resolves.toEqual([]);
+        } finally {
+          vi.unstubAllEnvs();
+          await fs.chmod(root, 0o700);
+        }
+      });
+    },
+  );
+
+  itPosix(
+    'restricts the secrets file and its directory to the owner',
+    async () => {
+      await withSecretsRoot(async ({ secretsPath }) => {
         const secrets = new CliSecrets(secretsPath);
+        await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
 
-        await expect(
-          secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
-        ).resolves.toBe('env-value');
-        await expect(
-          secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
-        ).resolves.toBeUndefined();
-        await expect(
-          secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
-        ).resolves.toBeUndefined();
-        await expect(secrets.listStoredKeys()).resolves.toEqual([]);
-      } finally {
-        vi.unstubAllEnvs();
-        await fs.chmod(root, 0o700);
-      }
-    });
-  });
-
-  it('restricts the secrets file and its directory to the owner', async () => {
-    if (process.platform === 'win32') return; // POSIX modes don't apply.
-    await withSecretsRoot(async ({ secretsPath }) => {
-      const secrets = new CliSecrets(secretsPath);
-      await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
-
-      const fileStat = await fs.stat(secretsPath);
-      const dirStat = await fs.stat(path.dirname(secretsPath));
-      expect(fileStat.mode & 0o777).toBe(0o600);
-      expect(dirStat.mode & 0o777).toBe(0o700);
-    });
-  });
+        const fileStat = await fs.stat(secretsPath);
+        const dirStat = await fs.stat(path.dirname(secretsPath));
+        expect(fileStat.mode & 0o777).toBe(0o600);
+        expect(dirStat.mode & 0o777).toBe(0o700);
+      });
+    },
+  );
 
   it('keeps one process-wide secrets store after the first root is selected', async () => {
     vi.resetModules();

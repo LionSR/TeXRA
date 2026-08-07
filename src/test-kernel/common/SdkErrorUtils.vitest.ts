@@ -988,97 +988,12 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     expect(reconstructed.partialText).toBe('Here is the analysis of the');
   });
 
-  it('leaves isRelayError undefined when absent from RetryErrorInfo', () => {
-    const minimalInfo: RetryErrorInfo = {
-      message: 'Connection timed out',
-      userRetryable: true,
-      statusCode: undefined,
-      provider: 'openai',
-    };
-
-    const reconstructed: ProviderError = minimalInfo;
-
-    // isRelayError was not in the RetryErrorInfo — it should stay
-    // undefined so normalizeProviderError won't cache a wrong verdict.
-    expect(reconstructed.isRelayError).toBeUndefined();
-    expect(reconstructed.provider).toBe('openai');
-    expect(reconstructed.userRetryable).toBe(true);
-    expect(reconstructed.statusCode).toBeUndefined();
-  });
-
   it('omits rawErrorBody from the RetryErrorInfo record', () => {
     const info = toRetryErrorInfo(fullProviderError);
 
     // rawErrorBody is intentionally excluded from RetryErrorInfo (large,
     // not worth persisting). Verify the schema doesn't carry it.
     expect('rawErrorBody' in info).toBe(false);
-  });
-
-  it('serves as a usable ProviderError from minimal retry info', () => {
-    // Simulates the common failure path: a model error surfaced through
-    // the retry state, written to shared.lastError, then attached as-is
-    // at the flow rethrow.
-    const minimalInfo: RetryErrorInfo = {
-      message: 'HTTP 500 Internal Server Error – upstream failure',
-      userRetryable: true,
-      statusCode: 500,
-      provider: 'anthropic',
-    };
-
-    const reconstructed: ProviderError = minimalInfo;
-
-    // Downstream error formatters need at least these two fields to
-    // produce a useful error surface.
-    expect(reconstructed.statusCode).toBe(500);
-    expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.message).toBe(
-      'HTTP 500 Internal Server Error – upstream failure',
-    );
-    expect(reconstructed.userRetryable).toBe(true);
-  });
-
-  it('carries statusCode and provider from a tool-use model failure shape', () => {
-    // Simulate the shape that ToolUseCycleNode.post writes to
-    // shared.lastError after this PR: the full RetryErrorInfo from the
-    // round-level shared state, including statusCode and provider.
-    const toolUseFailureInfo: RetryErrorInfo = {
-      message: 'HTTP 429 Too Many Requests – rate limited',
-      userRetryable: true,
-      statusCode: 429,
-      statusText: 'Too Many Requests',
-      provider: 'openai',
-      isRelayError: false,
-      requestId: 'req_tooluse_123',
-    };
-
-    const reconstructed: ProviderError = toolUseFailureInfo;
-
-    expect(reconstructed.statusCode).toBe(429);
-    expect(reconstructed.provider).toBe('openai');
-    expect(reconstructed.requestId).toBe('req_tooluse_123');
-    expect(reconstructed.isRelayError).toBe(false);
-    expect(reconstructed.userRetryable).toBe(true);
-  });
-
-  it('carries statusCode and provider from a reflection model failure shape', () => {
-    // Simulate the shape that ResponseCycleNode.post writes to
-    // shared.lastError after this PR: the full RetryErrorInfo from the
-    // cycle-level shared state, including statusCode and provider.
-    const reflectionFailureInfo: RetryErrorInfo = {
-      message: 'HTTP 503 Service Unavailable – server overloaded',
-      userRetryable: true,
-      statusCode: 503,
-      statusText: 'Service Unavailable',
-      provider: 'anthropic',
-      isRelayError: false,
-    };
-
-    const reconstructed: ProviderError = reflectionFailureInfo;
-
-    expect(reconstructed.statusCode).toBe(503);
-    expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.statusText).toBe('Service Unavailable');
-    expect(reconstructed.userRetryable).toBe(true);
   });
 });
 

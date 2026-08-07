@@ -1,6 +1,4 @@
-import * as assert from 'node:assert';
-
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   acceptEditedFileReplace,
@@ -46,10 +44,10 @@ describe('diffFileLocation', () => {
 
     const loc = diffFileLocation(base, '/ws/chapters/paper_correct.tex');
 
-    assert.strictEqual(loc.kind, 'workspace');
-    assert.strictEqual(loc.absolutePath, '/ws/chapters/paper_correct_diff.tex');
+    expect(loc.kind).toBe('workspace');
+    expect(loc.absolutePath).toBe('/ws/chapters/paper_correct_diff.tex');
     if (loc.kind === 'workspace') {
-      assert.strictEqual(loc.relativePath, 'chapters/paper_correct_diff.tex');
+      expect(loc.relativePath).toBe('chapters/paper_correct_diff.tex');
     }
   });
 });
@@ -61,8 +59,8 @@ describe('cleanupStaleDiffFile', () => {
 
     await cleanupStaleDiffFile(base, '/ws/paper_correct.tex', base, deleteFile);
 
-    assert.strictEqual(deleted.length, 1);
-    assert.strictEqual(deleted[0].absolutePath, '/ws/paper_correct_diff.tex');
+    expect(deleted.length).toBe(1);
+    expect(deleted[0].absolutePath).toBe('/ws/paper_correct_diff.tex');
   });
 
   it('skips deletion when the derived diff location is the accept target', async () => {
@@ -74,7 +72,7 @@ describe('cleanupStaleDiffFile', () => {
 
     await cleanupStaleDiffFile(base, '/ws/paper.tex', base, deleteFile);
 
-    assert.strictEqual(deleted.length, 0);
+    expect(deleted.length).toBe(0);
   });
 
   it('skips deletion when the target is not the base itself (copy/sibling write)', async () => {
@@ -92,7 +90,7 @@ describe('cleanupStaleDiffFile', () => {
       deleteFile,
     );
 
-    assert.strictEqual(deleted.length, 0);
+    expect(deleted.length).toBe(0);
   });
 });
 
@@ -120,12 +118,9 @@ describe('acceptEditedFileReplace', () => {
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
-    assert.strictEqual(accepted, true);
-    assert.strictEqual(ports.deleted.length, 1);
-    assert.strictEqual(
-      ports.deleted[0].absolutePath,
-      '/ws/paper_correct_diff.tex',
-    );
+    expect(accepted).toBe(true);
+    expect(ports.deleted.length).toBe(1);
+    expect(ports.deleted[0].absolutePath).toBe('/ws/paper_correct_diff.tex');
   });
 
   it('does not clean up when the user declines the confirmation', async () => {
@@ -134,8 +129,8 @@ describe('acceptEditedFileReplace', () => {
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
-    assert.strictEqual(accepted, false);
-    assert.strictEqual(ports.deleted.length, 0);
+    expect(accepted).toBe(false);
+    expect(ports.deleted.length).toBe(0);
   });
 
   it('does not delete the just-accepted file when it collides with the derived diff name', async () => {
@@ -151,8 +146,8 @@ describe('acceptEditedFileReplace', () => {
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
-    assert.strictEqual(accepted, true);
-    assert.strictEqual(ports.deleted.length, 0);
+    expect(accepted).toBe(true);
+    expect(ports.deleted.length).toBe(0);
   });
 
   it('does not clean up the base diff when accepting into a new sibling (extension mismatch)', async () => {
@@ -164,8 +159,8 @@ describe('acceptEditedFileReplace', () => {
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
-    assert.strictEqual(accepted, true);
-    assert.strictEqual(ports.deleted.length, 0);
+    expect(accepted).toBe(true);
+    expect(ports.deleted.length).toBe(0);
   });
 });
 
@@ -217,14 +212,11 @@ describe('commitAcceptedFile', () => {
       ports,
     );
 
-    assert.strictEqual(ports.written.length, 1);
-    assert.strictEqual(
-      ports.written[0].location.absolutePath,
-      copy.absolutePath,
-    );
-    assert.strictEqual(ports.written[0].content, 'edited content');
-    assert.strictEqual(ports.infoMessages.length, 1);
-    assert.match(ports.infoMessages[0], /created/);
+    expect(ports.written.length).toBe(1);
+    expect(ports.written[0].location.absolutePath).toBe(copy.absolutePath);
+    expect(ports.written[0].content).toBe('edited content');
+    expect(ports.infoMessages.length).toBe(1);
+    expect(ports.infoMessages[0]).toMatch(/created/);
   });
 
   it('reports "replaced" when the caller says the target already existed', async () => {
@@ -239,7 +231,7 @@ describe('commitAcceptedFile', () => {
       ports,
     );
 
-    assert.match(ports.infoMessages[0], /replaced/);
+    expect(ports.infoMessages[0]).toMatch(/replaced/);
   });
 
   it('leaves the copy target untouched by diff cleanup (save-as-copy leaves base intact)', async () => {
@@ -255,6 +247,6 @@ describe('commitAcceptedFile', () => {
       ports,
     );
 
-    assert.strictEqual(deleted.length, 0);
+    expect(deleted.length).toBe(0);
   });
 });

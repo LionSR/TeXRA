@@ -15,9 +15,6 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => {
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
-import { RUN_OUTCOME } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 describe('warnApprovalDenied', () => {
@@ -59,18 +56,6 @@ describe('warnApprovalDenied', () => {
 
     expect(writeTextStderrMock).toHaveBeenCalledWith(
       '[warn] [cli-approval] Tool or edit approval denied under policy "never".',
-    );
-  });
-
-  it('does not change the exit code of any outcome', () => {
-    const context = createTestCliContext({ approvalPolicy: 'never' });
-    warnApprovalDenied(context, 'Tool or edit approval');
-
-    // A denial is feedback to the model, never a process-level failure mode.
-    expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED)).toBe(CliExitCode.Success);
-    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(CliExitCode.AgentError);
-    expect(runOutcomeExitCode(RUN_OUTCOME.CANCELLED)).toBe(
-      CliExitCode.Interrupted,
     );
   });
 });

@@ -1350,6 +1350,7 @@ Appendix.
   });
 
   it('reports input files left unmatched by content-similarity recovery', async () => {
+    const logger = spiedTrace();
     await AbsoluteFS.write(
       '/tmp/run/cost.tex',
       '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
@@ -1367,10 +1368,16 @@ Appendix.
         '```',
       ],
       ['cost.tex', 'arch.tex'],
-      { baseFiles: ['cost.tex', 'arch.tex'] },
+      { logger, baseFiles: ['cost.tex', 'arch.tex'] },
     );
 
     expectSources(outputs, ['cost.tex']);
+    expect(logger.domain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'missingOutputs',
+        data: expect.objectContaining({ missing: ['arch.tex'] }),
+      }),
+    );
   });
 
   it('reports expected files left unmatched by filename-header recovery', async () => {

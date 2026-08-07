@@ -690,14 +690,17 @@ return await parallel([
     });
   });
 
-  it('caps concurrent agent() calls to the concurrency limit over a large fan-out', async () => {
+  it('caps concurrent agent() calls to the p-queue concurrency limit over a large fan-out', async () => {
     let inFlight = 0;
     let maxInFlight = 0;
     let completed = 0;
     const runner = async (invocation: WorkflowAgentInvocation) => {
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      await delay(1);
+      // Wide margin over the queue-add loop: the first `concurrency` runners
+      // must all start before any of them settles, so saturation is
+      // deterministic even under CI scheduler pressure.
+      await delay(10);
       inFlight -= 1;
       completed += 1;
       return invocation.prompt;
@@ -709,28 +712,11 @@ const out = await parallel(items.map((n) => () => agent('call-' + n)))
 return out.length`,
       { runAgent: runner, concurrency: 4 },
     );
-    expect(maxInFlight).toBeLessThanOrEqual(4);
+    // The queue saturates the limit without exceeding it.
+    expect(maxInFlight).toBe(4);
     expect(completed).toBe(100);
     expect(run.result).toBe(100);
     expect(run.agentCalls).toBe(100);
-  });
-
-  it('bounds concurrent agent() calls with the p-queue concurrency limit', async () => {
-    let inFlight = 0;
-    let maxInFlight = 0;
-    const runner = async (invocation: WorkflowAgentInvocation) => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await delay(10);
-      inFlight -= 1;
-      return invocation.prompt;
-    };
-    await runScript(
-      `
-return await parallel([1, 2, 3, 4, 5, 6].map((n) => () => agent('call-' + n)))`,
-      { runAgent: runner, concurrency: 2 },
-    );
-    expect(maxInFlight).toBe(2);
   });
 
   it('replays matching journal entries and re-runs edited calls', async () => {

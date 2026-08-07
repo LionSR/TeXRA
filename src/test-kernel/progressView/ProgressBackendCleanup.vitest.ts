@@ -113,7 +113,7 @@ async function expectStored(path: string, expected: boolean): Promise<void> {
   expect(await StorageFS.exists(path)).toBe(expected);
 }
 
-describe('ProgressBackend', () => {
+describe('ProgressBackend cleanup', () => {
   it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
     const { backend } = createIsolatedRecordingBackend();
     const { stream, executionId } = toolStreamAndExecution('a6966a');

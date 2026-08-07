@@ -1,6 +1,5 @@
 // Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - utils
 import {
@@ -30,51 +29,50 @@ function oversizedText(): { head: string; tail: string; text: string } {
 describe('checkToolResultTextLimit', () => {
   it('returns null for text within limit', () => {
     const text = 'a'.repeat(1000);
-    assert.equal(checkToolResultTextLimit(text), null);
+    expect(checkToolResultTextLimit(text)).toBeNull();
   });
 
   it('returns null for text exactly at limit', () => {
     const text = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH);
-    assert.equal(checkToolResultTextLimit(text), null);
+    expect(checkToolResultTextLimit(text)).toBeNull();
   });
 
   it('keeps head and tail with an elision marker for text exceeding limit', () => {
     const { head, tail, text } = oversizedText();
 
     const result = checkToolResultTextLimit(text);
-    assert.ok(result !== null);
-    assert.ok(result.includes('Tool result too large'));
-    assert.ok(result.includes('characters elided'));
+    expect(result).not.toBeNull();
+    const truncated = result!;
+    expect(truncated).toContain('Tool result too large');
+    expect(truncated).toContain('characters elided');
     // Head/tail content survives; the elided middle does not.
-    assert.ok(result.startsWith('Tool result too large'));
-    assert.ok(
-      result.includes(head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS)),
+    expect(truncated.startsWith('Tool result too large')).toBe(true);
+    expect(truncated).toContain(
+      head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS),
     );
-    assert.ok(result.includes(tail.slice(-TOOL_RESULT_TRUNCATION_TAIL_CHARS)));
-    assert.ok(!result.includes('x'.repeat(1000)));
+    expect(truncated).toContain(tail.slice(-TOOL_RESULT_TRUNCATION_TAIL_CHARS));
+    expect(truncated).not.toContain('x'.repeat(1000));
   });
 
   it('respects custom max length', () => {
     const text = 'a'.repeat(150);
-    assert.equal(checkToolResultTextLimit(text, 200), null);
+    expect(checkToolResultTextLimit(text, 200)).toBeNull();
     const error = checkToolResultTextLimit(text, 100);
-    assert.ok(error !== null);
-    assert.ok(error.includes('Tool result too large'));
+    expect(error).not.toBeNull();
+    const replacement = error!;
+    expect(replacement).toContain('Tool result too large');
     // The whole point of maxLength is to bound context size — the replacement
     // itself must never exceed the requested limit, even though the default
     // head/tail budgets (4,000 / 50,000 chars) are far larger than 100.
-    assert.ok(
-      error.length <= 100,
-      `expected replacement length ${error.length} <= 100`,
-    );
+    expect(replacement.length).toBeLessThanOrEqual(100);
   });
 
   it('bounds the replacement by maxLength even when default head/tail budgets would overshoot it', () => {
     const text = 'a'.repeat(10_000);
     const maxLength = 500;
     const error = checkToolResultTextLimit(text, maxLength);
-    assert.ok(error !== null);
-    assert.ok(error.length <= maxLength);
+    expect(error).not.toBeNull();
+    expect(error!.length).toBeLessThanOrEqual(maxLength);
   });
 
   it('always elides a positive count when the head budget alone would cover the whole text', () => {
@@ -85,9 +83,9 @@ describe('checkToolResultTextLimit', () => {
     const text = 'a'.repeat(1500);
     const maxLength = 1000;
     const error = checkToolResultTextLimit(text, maxLength);
-    assert.ok(error !== null);
-    assert.ok(error.length <= maxLength);
-    assert.ok(!error.includes('[... 0 characters elided'));
+    expect(error).not.toBeNull();
+    expect(error!.length).toBeLessThanOrEqual(maxLength);
+    expect(error!).not.toContain('[... 0 characters elided');
   });
 });
 
@@ -110,7 +108,7 @@ describe('formatToolResultAsText', () => {
     ],
     ['returns OK when all fields empty', { status: 'executed' }, 'OK'],
   ] as const)('%s', (_scenario, result, expected) => {
-    assert.equal(formatToolResultAsText(result), expected);
+    expect(formatToolResultAsText(result)).toBe(expected);
   });
 
   it('includes user feedback', () => {
@@ -119,7 +117,7 @@ describe('formatToolResultAsText', () => {
       output: 'test',
       userInstruction: 'do this instead',
     });
-    assert.ok(result.includes('User feedback: do this instead'));
+    expect(result).toContain('User feedback: do this instead');
   });
 
   it('includes user patch', () => {
@@ -128,8 +126,8 @@ describe('formatToolResultAsText', () => {
       output: 'test',
       userPatch: '+added line',
     });
-    assert.ok(result.includes('User modifications:'));
-    assert.ok(result.includes('+added line'));
+    expect(result).toContain('User modifications:');
+    expect(result).toContain('+added line');
   });
 
   it('appends attachment summary', () => {
@@ -137,7 +135,7 @@ describe('formatToolResultAsText', () => {
       { status: 'executed', output: 'test' },
       'Attachments: file.pdf',
     );
-    assert.ok(result.includes('Attachments: file.pdf'));
+    expect(result).toContain('Attachments: file.pdf');
   });
 
   it('keeps head and tail when result exceeds limit, not a discard stub', () => {
@@ -146,12 +144,12 @@ describe('formatToolResultAsText', () => {
       status: 'executed',
       output: text,
     });
-    assert.ok(result.includes('Tool result too large'));
-    assert.ok(result.includes('characters elided'));
-    assert.ok(!result.includes('was not included'));
-    assert.ok(result.includes('HEAD_MARKER_'));
-    assert.ok(result.includes('TAIL_MARKER_'));
-    assert.ok(!result.includes('x'.repeat(1000)));
+    expect(result).toContain('Tool result too large');
+    expect(result).toContain('characters elided');
+    expect(result).not.toContain('was not included');
+    expect(result).toContain('HEAD_MARKER_');
+    expect(result).toContain('TAIL_MARKER_');
+    expect(result).not.toContain('x'.repeat(1000));
   });
 
   it('returns normal result when within limit', () => {
@@ -160,7 +158,7 @@ describe('formatToolResultAsText', () => {
       status: 'executed',
       output: normalOutput,
     });
-    assert.equal(result, normalOutput);
+    expect(result).toBe(normalOutput);
   });
 });
 
@@ -175,8 +173,8 @@ describe('formatToolResultTextWithAttachments', () => {
       attachments,
       true,
     );
-    assert.ok(result.includes('done'));
-    assert.ok(result.includes('chart.png (image/png)'));
+    expect(result).toContain('done');
+    expect(result).toContain('chart.png (image/png)');
   });
 
   it('omits the summary when the handler cannot process attachments', () => {
@@ -185,7 +183,7 @@ describe('formatToolResultTextWithAttachments', () => {
       attachments,
       false,
     );
-    assert.equal(result, 'done');
+    expect(result).toBe('done');
   });
 
   it('omits the summary when there are no attachments', () => {
@@ -194,7 +192,7 @@ describe('formatToolResultTextWithAttachments', () => {
       [],
       true,
     );
-    assert.equal(result, 'done');
+    expect(result).toBe('done');
   });
 });
 
@@ -205,9 +203,9 @@ describe('extractToolAttachments', () => {
       error: 'kill failed',
     });
 
-    assert.equal(sanitizedResult.status, 'error');
-    assert.equal(sanitizedResult.error, 'kill failed');
-    assert.equal(Object.hasOwn(sanitizedResult, 'output'), false);
+    expect(sanitizedResult.status).toBe('error');
+    expect(sanitizedResult.error).toBe('kill failed');
+    expect(Object.hasOwn(sanitizedResult, 'output')).toBe(false);
   });
 
   it.each([
@@ -240,7 +238,7 @@ describe('extractToolAttachments', () => {
       },
     ],
   ])('rejects %s', (_scenario, payload) => {
-    assert.throws(() => extractToolAttachments(payload as never));
+    expect(() => extractToolAttachments(payload as never)).toThrow();
   });
 
   it('projects executed payloads directly from their source status', () => {
@@ -249,8 +247,8 @@ describe('extractToolAttachments', () => {
       output: 'done',
     });
 
-    assert.equal(sanitizedResult.status, 'executed');
-    assert.equal(sanitizedResult.output, 'done');
+    expect(sanitizedResult.status).toBe('executed');
+    expect(sanitizedResult.output).toBe('done');
   });
 
   it('keeps error summaries out of model payloads', () => {
@@ -260,11 +258,10 @@ describe('extractToolAttachments', () => {
       summary: 'The operation failed before producing output.',
     });
 
-    assert.equal(sanitizedResult.status, 'error');
-    assert.equal(
-      sanitizedResult.error,
+    expect(sanitizedResult.status).toBe('error');
+    expect(sanitizedResult.error).toBe(
       'The operation failed before producing output.',
     );
-    assert.equal(Object.hasOwn(sanitizedResult, 'summary'), false);
+    expect(Object.hasOwn(sanitizedResult, 'summary')).toBe(false);
   });
 });
