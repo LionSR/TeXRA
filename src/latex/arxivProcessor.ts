@@ -11,8 +11,8 @@ import pTimeout from 'p-timeout';
 import * as tar from 'tar';
 
 import * as logger from '@logger/logUtils';
-import { isTransientHttpStatus } from '@tools/timeouts';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';

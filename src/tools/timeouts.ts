@@ -11,6 +11,7 @@ import { HTTPError, TimeoutError } from 'ky';
 import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
 
 import { ToolError } from '@shared/schemas/toolResult';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -49,20 +50,6 @@ export function isTimeoutError(error: unknown): boolean {
     return true;
   }
   return false;
-}
-
-/**
- * Whether an HTTP status code is transient (worth retrying): 408 request
- * timeout, 429 rate limit, or 5xx server error. Other 4xx statuses are
- * permanent and won't change on retry.
- *
- * Shared by {@link isTransientHttpError} (ky's `HTTPError`) and by callers
- * built on raw `fetch()` that classify `response.status` directly, so the
- * transient/permanent policy has one source of truth regardless of HTTP
- * client.
- */
-export function isTransientHttpStatus(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500;
 }
 
 /**

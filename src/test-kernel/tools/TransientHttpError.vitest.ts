@@ -3,7 +3,8 @@ import { HTTPError, TimeoutError } from 'ky';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - tools
-import { isTransientHttpError, isTransientHttpStatus } from '@tools/timeouts';
+import { isTransientHttpError } from '@tools/timeouts';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 
 function kyErrorWithStatus(status: number): HTTPError {
   return new HTTPError(
@@ -78,20 +79,8 @@ describe('isTransientHttpError', () => {
   );
 });
 
-describe('isTransientHttpStatus', () => {
-  it('treats request timeouts, rate limits, and 5xx as transient', () => {
-    expect(isTransientHttpStatus(408)).toBe(true);
-    expect(isTransientHttpStatus(429)).toBe(true);
-    expect(isTransientHttpStatus(500)).toBe(true);
-    expect(isTransientHttpStatus(503)).toBe(true);
-  });
-
-  it('treats other 4xx statuses as permanent', () => {
-    expect(isTransientHttpStatus(400)).toBe(false);
-    expect(isTransientHttpStatus(404)).toBe(false);
-  });
-
-  it('agrees with isTransientHttpError for ky HTTPError status codes', () => {
+describe('isTransientHttpError / isTransientHttpStatus parity', () => {
+  it('agrees on ky HTTPError status codes', () => {
     for (const status of [400, 404, 408, 429, 500, 503]) {
       expect(isTransientHttpStatus(status)).toBe(
         isTransientHttpError(kyErrorWithStatus(status)),
