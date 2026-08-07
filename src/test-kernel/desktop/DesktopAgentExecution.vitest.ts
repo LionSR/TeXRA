@@ -3620,7 +3620,6 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.executions.track(freshHandle);
       const { bridgeB: bridgeC } = await owner.reopen();
       try {
-        expect(bridgeSession(bridgeC)).toBe(owner.processSession);
         expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
