@@ -10,15 +10,6 @@ import type { AgentSource } from '@shared/schemas/agent';
 
 const CHANNEL = 'AgentRegister';
 
-export type AgentRegistrationSkipReason = 'alreadyRegistered';
-
-export function getAgentRegistrationSkipReason(
-  agentName: string,
-  configuredAgents: string[],
-): AgentRegistrationSkipReason | undefined {
-  return configuredAgents.includes(agentName) ? 'alreadyRegistered' : undefined;
-}
-
 export async function promptToAddAgentToConfig(
   agentName: string,
   source: AgentSource,
@@ -28,8 +19,7 @@ export async function promptToAddAgentToConfig(
   const roster = createWorkspaceAgentRosterController();
   const current = roster.getVisibleAgents(category).map((entry) => entry.name);
 
-  const skipReason = getAgentRegistrationSkipReason(agentName, current);
-  if (skipReason) {
+  if (current.includes(agentName)) {
     logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
     return;
   }

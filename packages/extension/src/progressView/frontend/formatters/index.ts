@@ -37,8 +37,6 @@ import {
 } from './logFormatters/toolFormatters/webFormatters';
 import { formatWorkflowCallTemplate } from './logFormatters/workflowCallFormatter';
 
-export { isStreamingTextLogMessage } from './baseLogFormatter';
-
 type TemplateFormatterFn = (
   message: LogMessageData,
   options?: FormatOptions & { isRunning?: boolean },

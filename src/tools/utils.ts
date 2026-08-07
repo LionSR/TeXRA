@@ -3,21 +3,6 @@ import { ToolError } from '@shared/schemas/toolResult';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
- * Count non-overlapping occurrences of `needle` in `haystack`.
- * Returns 0 for empty needles.
- */
-export function countOccurrences(haystack: string, needle: string): number {
-  if (needle.length === 0) return 0;
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count++;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
-}
-
-/**
  * Trim a string and throw a ToolError if the result is empty.
  * Centralizes the common pattern of validating non-empty input strings.
  */

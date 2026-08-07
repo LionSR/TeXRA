@@ -97,6 +97,7 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 }));
 
 // Imported after vi.mock so the mocked dependencies are in place.
+import { getExecutionStore } from '@agent/storage';
 import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -118,7 +119,6 @@ import {
   listCliHistoryEntries,
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
-  readCliHistoryConfig,
   readCliHistoryDetails,
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
@@ -568,9 +568,9 @@ describe('CLI history runtime', () => {
   });
 
   it('loads the stored config used by resume', async () => {
-    await expect(readCliHistoryConfig('a1' as ExecutionId)).resolves.toEqual(
-      config,
-    );
+    await expect(
+      getExecutionStore('a1' as ExecutionId).readConfig(),
+    ).resolves.toEqual(config);
   });
 
   it('shows the current resumable model without losing the startup model', async () => {

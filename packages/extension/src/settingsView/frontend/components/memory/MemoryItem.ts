@@ -23,15 +23,12 @@ import type { MemoryViewItem } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { markdownStyles } from '@shared/styles/markdownStyles';
-import {
-  formatBytes,
-  formatLineCount,
-  formatUpdatedDate,
-} from '@shared/utils/string';
+import { formatBytes, formatShortDateTime } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
@@ -158,9 +155,10 @@ export class MemoryItem extends LitElement {
     }
     parts.push(formatBytes(item.size ?? 0));
     if (typeof item.lineCount === 'number') {
-      parts.push(formatLineCount(item.lineCount));
+      parts.push(formatResultCount(item.lineCount, 'line'));
     }
-    parts.push(formatUpdatedDate(item.mtime));
+    const updated = formatShortDateTime(item.mtime);
+    parts.push(updated ? `Updated ${updated}` : 'Updated: unknown');
     if (item.modifiedBy) {
       parts.push(`by ${item.modifiedBy}`);
     }

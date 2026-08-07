@@ -4,7 +4,6 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
-export const WOLFRAM_FILE_TIMEOUT_MS = 60_000; // 60 s
 
 const WOLFRAM_NOT_INSTALLED_ERROR =
   '"wolframscript" is not installed or not in your PATH. ' +
@@ -77,20 +76,5 @@ export async function executeWolframCode(
   return runWolfram(
     ['-code', code],
     options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS,
-  );
-}
-
-/**
- * Execute a Wolfram Language script file.
- * @param filePath Path to the Wolfram Language script file
- * @param options.timeout Execution timeout in milliseconds (default: 60 s)
- */
-export async function executeWolframScriptFile(
-  filePath: string,
-  options: { timeout?: number } = {},
-): Promise<WolframScriptResult> {
-  return runWolfram(
-    ['-file', filePath],
-    options.timeout ?? WOLFRAM_FILE_TIMEOUT_MS,
   );
 }

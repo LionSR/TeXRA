@@ -20,11 +20,11 @@ import {
 import {
   buildHunks,
   COMPACT_DIFF_DISPLAY_LINES,
-  diffVisualRowCount,
   DiffView,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
   statsFromHunks,
+  wrappedDiffDisplayLines,
 } from '../render/DiffView';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
@@ -114,7 +114,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   );
   const stats = useMemo(() => statsFromHunks(hunks), [hunks]);
   const diffRows = useMemo(
-    () => diffVisualRowCount(hunks, diffWidth),
+    () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],
   );
   const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);

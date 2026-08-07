@@ -14,10 +14,7 @@ import {
   WolframTool,
 } from '@tools/wolfram/WolframTool';
 import * as wolframScriptUtils from '@tools/wolfram/wolframScriptUtils';
-import {
-  executeWolframCode,
-  executeWolframScriptFile,
-} from '@tools/wolfram/wolframScriptUtils';
+import { executeWolframCode } from '@tools/wolfram/wolframScriptUtils';
 import * as toolUtils from '@utils/system/toolUtils';
 import * as execUtils from '@utils/system/execUtils';
 import {
@@ -159,34 +156,19 @@ describe('wolframScriptUtils', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    {
-      name: 'executeWolframCode delegates to runWolfram with code args',
-      run: () => executeWolframCode('1+1'),
-      stdout: '2',
-      expectedArgs: ['wolframscript', '-code', '1+1'],
-      expectedTimeout: 30000,
-    },
-    {
-      name: 'executeWolframScriptFile delegates to runWolfram with file args',
-      run: () => executeWolframScriptFile('/tmp/test.wls'),
-      stdout: 'done',
-      expectedArgs: ['wolframscript', '-file', '/tmp/test.wls'],
-      expectedTimeout: 60000,
-    },
-  ])('$name', async ({ run, stdout, expectedArgs, expectedTimeout }) => {
+  it('executeWolframCode delegates to runWolfram with code args', async () => {
     vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
     const executeCommand = vi
       .spyOn(execUtils, 'executeCommand')
-      .mockResolvedValue({ success: true, stdout, stderr: '' });
+      .mockResolvedValue({ success: true, stdout: '2', stderr: '' });
 
-    const result = await run();
+    const result = await executeWolframCode('1+1');
 
     expect(executeCommand).toHaveBeenCalledWith(
-      expectedArgs,
-      expect.objectContaining({ timeout: expectedTimeout }),
+      ['wolframscript', '-code', '1+1'],
+      expect.objectContaining({ timeout: 30000 }),
     );
     expect(result.success).toBe(true);
-    expect(result.output).toBe(stdout);
+    expect(result.output).toBe('2');
   });
 });

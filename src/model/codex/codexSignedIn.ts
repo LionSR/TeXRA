@@ -5,16 +5,13 @@
  */
 import { createSignedInProbe, type SignedInProbe } from '../signedInProbe';
 
-/** Reads the current ChatGPT sign-in state. Never throws; never hits the network. */
-export type CodexSignedInProbe = SignedInProbe;
-
 const signedIn = createSignedInProbe();
 
 /**
  * Install the app's ChatGPT sign-in probe, or pass `null` to restore the
  * signed-out default. Called once per process from the host composition root.
  */
-export function setCodexSignedInProbe(next: CodexSignedInProbe | null): void {
+export function setCodexSignedInProbe(next: SignedInProbe | null): void {
   signedIn.setProbe(next);
 }
 

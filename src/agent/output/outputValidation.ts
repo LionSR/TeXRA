@@ -10,7 +10,7 @@ import {
   emitRunFact,
   reportMissingOutputs,
 } from '@agent/runtime/runFactEvents';
-import type { FileLocation, StorageKey } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 
 import {
@@ -19,18 +19,6 @@ import {
   type OutputState,
   type OutputDependencies,
 } from './outputState';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Result of output validation. */
-export interface ValidationResult {
-  storageKey: StorageKey;
-  currRound: number;
-  missing: string[];
-  xmlExists: boolean;
-}
 
 // ============================================================================
 // Public API
@@ -43,12 +31,12 @@ export async function checkExpectedOutputs(
   outputLocation: FileLocation,
   currRound: number,
   stage?: StageHandle,
-): Promise<ValidationResult> {
+): Promise<{ missing: string[] }> {
   return withOutputStage(
     deps,
     `Validate expected r${currRound}`,
     stage,
-    async (): Promise<ValidationResult> => {
+    async (): Promise<{ missing: string[] }> => {
       const storageKey = getStorageKey(state);
       const expected = deps.config.outputFiles;
       if (!expected?.length) {
@@ -60,7 +48,7 @@ export async function checkExpectedOutputs(
           streamId: deps.streamId,
           filesByRound: { [currRound]: [] },
         });
-        return { storageKey, currRound, missing: [], xmlExists: false };
+        return { missing: [] };
       }
 
       const results = await Promise.all(
@@ -94,7 +82,7 @@ export async function checkExpectedOutputs(
         );
       }
 
-      return { storageKey, currRound, missing, xmlExists };
+      return { missing };
     },
   );
 }

@@ -197,26 +197,16 @@ export function attachCliSessionProgressProjection(
     });
   }
 
-  const detachSessionFacts = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'session') return;
-      const projected = projectCliSessionFact(sessionEvent.event);
+  const detachSessionFacts = events.subscribeSessionFacts((fact) => {
+    const projected = projectCliSessionFact(fact);
+    if (projected) emitProjected(projected);
+  });
+  const detachRunFacts = events.subscribeRunFacts(
+    (runFact) => {
+      const projected = projectCliRunFact(runFact.streamId, runFact.event);
       if (projected) emitProjected(projected);
     },
-    { scope: 'session' },
-  );
-  const detachRunFacts = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'run') return;
-      const projected = projectCliRunFact(
-        sessionEvent.streamId,
-        // Narrowed by the subscription filter below, which admits only
-        // `RUN_FACT_EVENT_TYPES`.
-        sessionEvent.event as CliRunFactEvent,
-      );
-      if (projected) emitProjected(projected);
-    },
-    { scope: 'run', types: RUN_FACT_EVENT_TYPES },
+    { types: RUN_FACT_EVENT_TYPES },
   );
 
   return () => {

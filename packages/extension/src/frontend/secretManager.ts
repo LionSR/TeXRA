@@ -16,7 +16,7 @@ import type * as vscode from 'vscode';
 
 export type { ApiProvider };
 
-interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
+export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
   provider: ApiProvider;
 }
 

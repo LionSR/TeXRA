@@ -7,7 +7,6 @@ import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
   type RestartRepairOptions,
-  type RestartRepairResult,
 } from '@agent/runtime/restartRepair';
 import {
   RUN_OUTCOME,
@@ -45,7 +44,7 @@ function runRepair(
   setup: StreamSetup,
   overrides: Partial<RestartRepairOptions> &
     Pick<RestartRepairOptions, 'closeRunningGroups'>,
-): Promise<RestartRepairResult> {
+) {
   return repairRestartedStreams({
     streamStatus: setup.streamStatus,
     waitingStreams: new Set(),
@@ -158,14 +157,7 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.RUNNING);
-    expect(result).toEqual({
-      waitingStreams: [],
-      failedStreams: [],
-      closedWaitingGroups: [],
-      closedFailedGroups: [],
-      outcomeUpdated: [],
-      nextLeaseCheckAt: 120_124,
-    });
+    expect(result).toEqual({ nextLeaseCheckAt: 120_124 });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
@@ -182,7 +174,7 @@ describe('repairRestartedStreams', () => {
     const finalizeExecution = createDurableFinalizer();
 
     try {
-      const result = await runRepair(setup, {
+      await runRepair(setup, {
         closeRunningGroups,
         finalizeExecution,
         runWithInactiveExecutionLease: performInactiveLease,
@@ -192,7 +184,6 @@ describe('repairRestartedStreams', () => {
       await expect(store.readMeta()).resolves.toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
       });
-      expect(result.failedStreams).toEqual([]);
       expect(closeRunningGroups).toHaveBeenCalledWith(
         [streamId],
         RUN_OUTCOME.COMPLETED,
@@ -232,7 +223,7 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       waitingStreams: new Set([streamId]),
       closeRunningGroups,
       finalizeExecution,
@@ -240,13 +231,6 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-    expect(result).toMatchObject({
-      waitingStreams: [streamId],
-      failedStreams: [],
-      closedWaitingGroups: [streamId],
-      closedFailedGroups: [],
-      outcomeUpdated: [],
-    });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.CANCELLED,
@@ -261,7 +245,7 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       waitingStreams: new Set([streamId]),
       repairStreams: [streamId],
       closeRunningGroups,
@@ -270,7 +254,6 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-    expect(result.closedWaitingGroups).toEqual([streamId]);
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.CANCELLED,
@@ -285,7 +268,7 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
@@ -293,13 +276,6 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(streamStatus.get(streamId)).toBeUndefined();
-    expect(result).toMatchObject({
-      waitingStreams: [],
-      failedStreams: [],
-      closedWaitingGroups: [],
-      closedFailedGroups: [streamId],
-      outcomeUpdated: [],
-    });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.FAILED,
@@ -319,7 +295,7 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       waitingStreams: new Set([streamId]),
       repairStreams: [streamId],
       closeRunningGroups,
@@ -328,13 +304,6 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-    expect(result).toMatchObject({
-      waitingStreams: [],
-      failedStreams: [],
-      closedWaitingGroups: [streamId],
-      closedFailedGroups: [],
-      outcomeUpdated: [],
-    });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.CANCELLED,
@@ -349,20 +318,13 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
       now: 456,
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-    expect(result).toMatchObject({
-      waitingStreams: [],
-      failedStreams: [streamId],
-      closedWaitingGroups: [],
-      closedFailedGroups: [streamId],
-      outcomeUpdated: [executionId],
-    });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.FAILED,
@@ -405,7 +367,7 @@ describe('repairRestartedStreams', () => {
     });
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
+    await repairRestartedStreams({
       streamStatus,
       waitingStreams: new Set(),
       executionIds: new Map([
@@ -425,7 +387,6 @@ describe('repairRestartedStreams', () => {
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
-    expect(result.failedStreams).toEqual([firstStream]);
     expect(streamStatus.get(secondStream)).toBe(STREAM_PHASE.RUNNING);
     expect(finalizeExecution).toHaveBeenCalledOnce();
   });
@@ -446,7 +407,7 @@ describe('repairRestartedStreams', () => {
 
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       repairStreams: [streamId],
       retryFailedStreams: true,
       closeRunningGroups,
@@ -454,11 +415,6 @@ describe('repairRestartedStreams', () => {
       now: 567,
     });
 
-    expect(result).toMatchObject({
-      failedStreams: [streamId],
-      closedFailedGroups: [streamId],
-      outcomeUpdated: [executionId],
-    });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.FAILED,
@@ -482,18 +438,13 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = vi.fn(closeAllGroups);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-    expect(result).toMatchObject({
-      failedStreams: [],
-      closedFailedGroups: [],
-      outcomeUpdated: [],
-    });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
@@ -510,14 +461,13 @@ describe('repairRestartedStreams', () => {
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
       finalizeExecution,
       logger,
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-    expect(result.outcomeUpdated).toEqual([]);
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       'Failed to finalize restart-repair execution',
       {
@@ -544,13 +494,12 @@ describe('repairRestartedStreams', () => {
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
       finalizeExecution,
       logger,
     });
 
-    expect(result.outcomeUpdated).toEqual([executionId]);
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       'Failed to finalize restart-repair execution',
       {
@@ -599,7 +548,7 @@ describe('repairRestartedStreams', () => {
       },
     });
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       closeRunningGroups: async () => [],
     });
 
@@ -614,6 +563,5 @@ describe('repairRestartedStreams', () => {
         response: 'interim response',
       },
     });
-    expect(result.outcomeUpdated).toEqual([executionId]);
   });
 });

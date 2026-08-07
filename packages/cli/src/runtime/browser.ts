@@ -5,7 +5,6 @@ import { extractErrorMessage } from '@utils/errors/errorMessage';
 export interface BrowserLaunchCommand {
   readonly command: string;
   readonly args: string[];
-  readonly windowsVerbatimArguments: boolean;
 }
 
 interface BrowserLog {
@@ -21,7 +20,6 @@ export function resolveBrowserLaunch(
       return {
         command: 'open',
         args: [url],
-        windowsVerbatimArguments: false,
       };
     case 'win32':
       // Avoid `cmd /c start` so percent-encoded OAuth and compare URLs are not
@@ -29,13 +27,11 @@ export function resolveBrowserLaunch(
       return {
         command: 'rundll32',
         args: ['url.dll,FileProtocolHandler', url],
-        windowsVerbatimArguments: false,
       };
     default:
       return {
         command: 'xdg-open',
         args: [url],
-        windowsVerbatimArguments: false,
       };
   }
 }
@@ -47,7 +43,6 @@ function launchBrowser(url: string): Promise<void> {
     try {
       child = spawn(launch.command, launch.args, {
         stdio: 'ignore',
-        windowsVerbatimArguments: launch.windowsVerbatimArguments,
       });
     } catch (error) {
       rejectBrowserLaunch(error);

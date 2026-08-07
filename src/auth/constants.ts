@@ -1,7 +1,7 @@
 /**
- * Auth-related constants.
- * Separated from authCommands.ts to avoid circular dependencies.
- * SettingsViewMessageHandler needs AUTH_COMMANDS but authCommands needs settings.
+ * Auth-related constants shared across hosts and tools: the VS Code
+ * authentication provider ID plus the command IDs that webviews, the setup
+ * agent, and host entry points dispatch via vscode.commands.executeCommand.
  */
 
 /** VS Code authentication provider ID for TeXRA. */

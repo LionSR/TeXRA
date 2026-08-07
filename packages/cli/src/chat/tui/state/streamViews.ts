@@ -9,7 +9,6 @@ import { groupBy } from '@utils/core';
 
 // Local imports - CLI state
 import {
-  childExecutionKey,
   childExecutionLabel,
   focusOrderDescendants,
   visibleSubagentRows,
@@ -112,7 +111,7 @@ function childStreamReferenceLabel(
     parentStreamId,
     childStreamEntries,
     streams,
-  ).find((entry) => childExecutionKey(entry) === streamId);
+  ).find((entry) => entry.childStreamId === streamId);
   return child ? childExecutionLabel(child) : streamId;
 }
 
