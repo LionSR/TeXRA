@@ -9,7 +9,6 @@ import {
 } from '@agent/implementations/flows/reflection/RoundPersistedFlow';
 import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
-import type { RoundStage } from '@shared/schemas';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
@@ -119,17 +118,12 @@ describe('repair-round progress badge (PR #7290 follow-up)', () => {
       // The repair round as opened by the fixed createRoundStage callback:
       // index 2 (0-based, the round past the configured totalRounds: 2),
       // total widened to 3 via Math.max(totalRounds, roundIndex + 1).
-      const repairRoundStage: RoundStage = { index: 2, total: 3 };
-
-      const stage = { kind: 'round', ...repairRoundStage } as const;
+      const stage = { kind: 'round', index: 2, total: 3 } as const;
 
       const container = document.createElement('div');
       render(renderProgressBadgeContent(undefined, stage), container);
       expect(container.textContent).toBe('r3/3');
-      expect(container.textContent).not.toBe('r3/2');
-
       expect(getProgressBadgeTitle(undefined, stage)).toBe('Round 3 of 3');
-      expect(getProgressBadgeTitle(undefined, stage)).not.toBe('Round 3 of 2');
     });
   });
 });

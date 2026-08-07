@@ -32,6 +32,12 @@ vi.mock('@cli/runtime/chatgptLogin', async (importOriginal) => {
 
 const { runCli } = await import('@cli/commands/root');
 
+const SIGNED_IN_PROFILE = {
+  authenticated: true,
+  accountLabel: 'user@example.edu',
+  tier: 'Max',
+};
+
 describe('CLI auth command', () => {
   let stdout = '';
   let stderr = '';
@@ -88,11 +94,7 @@ describe('CLI auth command', () => {
   });
 
   it('honors structured output on bare auth status', async () => {
-    mocks.getCliAuthProfile.mockResolvedValueOnce({
-      authenticated: true,
-      accountLabel: 'user@example.edu',
-      tier: 'Max',
-    });
+    mocks.getCliAuthProfile.mockResolvedValueOnce(SIGNED_IN_PROFILE);
 
     const result = await runCli([
       'auth',
@@ -102,29 +104,17 @@ describe('CLI auth command', () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(stdout)).toEqual({
-      authenticated: true,
-      accountLabel: 'user@example.edu',
-      tier: 'Max',
-    });
+    expect(JSON.parse(stdout)).toEqual(SIGNED_IN_PROFILE);
     expect(stderr).toBe('');
   });
 
   it('forwards group-level global flags to explicit auth subcommands', async () => {
-    mocks.getCliAuthProfile.mockResolvedValueOnce({
-      authenticated: true,
-      accountLabel: 'user@example.edu',
-      tier: 'Max',
-    });
+    mocks.getCliAuthProfile.mockResolvedValueOnce(SIGNED_IN_PROFILE);
 
     const result = await runCli(['auth', '--output-format', 'json', 'status']);
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(stdout)).toEqual({
-      authenticated: true,
-      accountLabel: 'user@example.edu',
-      tier: 'Max',
-    });
+    expect(JSON.parse(stdout)).toEqual(SIGNED_IN_PROFILE);
     expect(stderr).toBe('');
   });
 

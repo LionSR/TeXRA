@@ -52,6 +52,22 @@ async function acquire(executionId: ExecutionId): Promise<void> {
   await acquireResumedExecutionLease(executionId);
 }
 
+async function writeStaleForeignLease(
+  executionId: ExecutionId,
+  ownerToken?: string,
+): Promise<void> {
+  await writeForeignLease(
+    executionId,
+    Date.now() - EXECUTION_LEASE_STALE_MS - 1,
+    ownerToken,
+  );
+}
+
+function bindRunExclusive() {
+  const fileLocks = platform().fileLocks;
+  return fileLocks.runExclusive.bind(fileLocks);
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all([...ownedExecutionIds].map(releaseOwnedExecutionLease));
@@ -308,11 +324,9 @@ describe('cross-process execution leases', () => {
         '00000000-0000-4000-8000-000000000004',
       );
 
-      await expect(
-        getExecutionStore(executionId).writeMeta({
-          timestamp: '2026-07-16T12:00:00.000Z',
-        }),
-      ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+      await expect(writeExecution(executionId)).rejects.toBeInstanceOf(
+        ExecutionLeaseLostError,
+      );
 
       expect(onLeaseLost).toHaveBeenCalledOnce();
       expect(ownsExecutionLease(executionId)).toBe(false);
@@ -339,14 +353,11 @@ describe('cross-process execution leases', () => {
         expect(() =>
           runWithOwnedExecutionLease(executionId, () => undefined),
         ).toThrow(ExecutionLeaseLostError);
-        await getExecutionStore(executionId).writeMeta({
-          timestamp: '2026-07-16T12:00:00.000Z',
-        });
+        await writeExecution(executionId);
       }),
     );
-    await writeForeignLease(
+    await writeStaleForeignLease(
       executionId,
-      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
       '00000000-0000-4000-8000-000000000006',
     );
     await acquireResumedExecutionLease(executionId);
@@ -377,9 +388,8 @@ describe('cross-process execution leases', () => {
         return captureOwnedExecutionLeaseIfPresent(executionId);
       }),
     );
-    await writeForeignLease(
+    await writeStaleForeignLease(
       executionId,
-      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
       '00000000-0000-4000-8000-000000000007',
     );
     await acquireResumedExecutionLease(executionId);
@@ -395,11 +405,9 @@ describe('cross-process execution leases', () => {
     const executionId = 'e86446' as ExecutionId;
     await writeForeignLease(executionId, Date.now());
 
-    await expect(
-      getExecutionStore(executionId).writeMeta({
-        timestamp: '2026-07-16T12:00:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    await expect(writeExecution(executionId)).rejects.toBeInstanceOf(
+      ExecutionLeaseLostError,
+    );
   });
 
   it('never overlaps heartbeat work for the same execution', async () => {
@@ -408,9 +416,7 @@ describe('cross-process execution leases', () => {
     const heartbeatGate = createDeferred();
     try {
       await acquire(executionId);
-      const originalRunExclusive = platform().fileLocks.runExclusive.bind(
-        platform().fileLocks,
-      );
+      const originalRunExclusive = bindRunExclusive();
       const runExclusive = vi
         .spyOn(platform().fileLocks, 'runExclusive')
         .mockImplementation(async (lockPath, operation) => {
@@ -446,9 +452,7 @@ describe('cross-process execution leases', () => {
   it('rejects renewal when release starts during its heartbeat', async () => {
     const executionId = 'e86443' as ExecutionId;
     await acquire(executionId);
-    const originalRunExclusive = platform().fileLocks.runExclusive.bind(
-      platform().fileLocks,
-    );
+    const originalRunExclusive = bindRunExclusive();
     const heartbeatStarted = createDeferred();
     const heartbeatGate = createDeferred();
     vi.spyOn(platform().fileLocks, 'runExclusive').mockImplementationOnce(
@@ -501,11 +505,7 @@ describe('cross-process execution leases', () => {
     const persisted = JSON.parse(
       await StorageFS.read(executionLeasePath(executionId)),
     ) as { ownerToken: string };
-    await writeForeignLease(
-      executionId,
-      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
-      persisted.ownerToken,
-    );
+    await writeStaleForeignLease(executionId, persisted.ownerToken);
     const operation = vi.fn(async () => 'removed');
 
     await expect(
@@ -518,9 +518,8 @@ describe('cross-process execution leases', () => {
     const executionId = 'f86441' as ExecutionId;
     await writeExecution(executionId);
     await acquire(executionId);
-    await writeForeignLease(
+    await writeStaleForeignLease(
       executionId,
-      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
       '00000000-0000-4000-8000-000000000005',
     );
 
@@ -569,24 +568,19 @@ describe('cross-process execution leases', () => {
     await writeExecution(failedId);
     const fs = platform().fs;
     const originalDelete = fs.delete.bind(fs);
-    const deleteSpy = vi
-      .spyOn(fs, 'delete')
-      .mockImplementation((target, options) => {
-        if (target.includes(`executions/${failedId}`)) {
-          return Promise.reject(new Error('permission denied'));
-        }
-        return originalDelete(target, options);
-      });
+    // Restored by the afterEach vi.restoreAllMocks().
+    vi.spyOn(fs, 'delete').mockImplementation((target, options) => {
+      if (target.includes(`executions/${failedId}`)) {
+        return Promise.reject(new Error('permission denied'));
+      }
+      return originalDelete(target, options);
+    });
 
-    try {
-      await expect(deleteAllExecutions()).resolves.toEqual({
-        deleted: [deletedId],
-        notFound: [],
-        active: [],
-        failed: [{ executionId: failedId, message: 'permission denied' }],
-      });
-    } finally {
-      deleteSpy.mockRestore();
-    }
+    await expect(deleteAllExecutions()).resolves.toEqual({
+      deleted: [deletedId],
+      notFound: [],
+      active: [],
+      failed: [{ executionId: failedId, message: 'permission denied' }],
+    });
   });
 });

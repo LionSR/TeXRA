@@ -48,16 +48,20 @@ function tokens(overrides: Partial<XaiTokenResponse> = {}): XaiTokenResponse {
   };
 }
 
+function makeCoordinator(options: {
+  storage: XaiSessionStorage;
+  client?: XaiOAuthClient;
+}): XaiSessionCoordinator {
+  return new XaiSessionCoordinator({ ...options, now: () => NOW });
+}
+
 describe('XaiSessionCoordinator', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('buildAuthorizeRequest includes pinned redirect, plan, and referrer', () => {
-    const coordinator = new XaiSessionCoordinator({
-      storage: memoryStorage(),
-      now: () => NOW,
-    });
+    const coordinator = makeCoordinator({ storage: memoryStorage() });
     const auth = coordinator.buildAuthorizeRequest();
     const url = new URL(auth.url);
     expect(auth.redirectUri).toBe('http://127.0.0.1:56121/callback');
@@ -74,53 +78,39 @@ describe('XaiSessionCoordinator', () => {
     expect(auth.state.length).toBeGreaterThan(20);
   });
 
-  it('warns and treats corrupt stored sessions as signed out', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const storage: XaiSessionStorage = {
-      get: async () => '{not-json',
-      store: async () => {},
-      delete: async () => {},
-    };
-    const coordinator = new XaiSessionCoordinator({
-      storage,
-      now: () => NOW,
-    });
-    expect(await coordinator.loadSession()).toBeNull();
-    expect(await coordinator.getStatus()).toEqual({ signedIn: false });
-    expect(warn).toHaveBeenCalledWith(
-      'SubscriptionOAuth',
-      expect.stringContaining('not valid JSON'),
-    );
-  });
-
-  it('warns and treats schema-invalid stored sessions as signed out', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const storage: XaiSessionStorage = {
-      get: async () => JSON.stringify({ accessToken: 'only' }),
-      store: async () => {},
-      delete: async () => {},
-    };
-    const coordinator = new XaiSessionCoordinator({
-      storage,
-      now: () => NOW,
-    });
-    expect(await coordinator.loadSession()).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      'SubscriptionOAuth',
-      expect.stringContaining('schema validation'),
-    );
-  });
+  it.each([
+    { stored: '{not-json', warning: 'not valid JSON' },
+    {
+      stored: JSON.stringify({ accessToken: 'only' }),
+      warning: 'schema validation',
+    },
+  ])(
+    'warns and treats an unreadable stored session ($warning) as signed out',
+    async ({ stored, warning }) => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const storage: XaiSessionStorage = {
+        get: async () => stored,
+        store: async () => {},
+        delete: async () => {},
+      };
+      const coordinator = makeCoordinator({ storage });
+      expect(await coordinator.loadSession()).toBeNull();
+      expect(await coordinator.getStatus()).toEqual({ signedIn: false });
+      expect(warn).toHaveBeenCalledWith(
+        'SubscriptionOAuth',
+        expect.stringContaining(warning),
+      );
+    },
+  );
 
   it('stores a session after code exchange', async () => {
     const storage = memoryStorage();
-    const client: XaiOAuthClient = {
-      exchangeAuthorizationCode: vi.fn(async () => tokens()),
-      refreshTokens: vi.fn(),
-    };
-    const coordinator = new XaiSessionCoordinator({
+    const coordinator = makeCoordinator({
       storage,
-      client,
-      now: () => NOW,
+      client: {
+        exchangeAuthorizationCode: vi.fn(async () => tokens()),
+        refreshTokens: vi.fn(),
+      },
     });
     const stored = await coordinator.completeLoginWithCode({
       code: 'code',
@@ -139,13 +129,12 @@ describe('XaiSessionCoordinator', () => {
       resolveRefresh = resolve;
     });
     const refreshTokens = vi.fn(() => refreshPromise);
-    const coordinator = new XaiSessionCoordinator({
+    const coordinator = makeCoordinator({
       storage,
       client: {
         exchangeAuthorizationCode: vi.fn(),
         refreshTokens,
       },
-      now: () => NOW,
     });
 
     const a = coordinator.getFreshAccessToken();
@@ -161,7 +150,7 @@ describe('XaiSessionCoordinator', () => {
 
   it('clears the session on fatal refresh and throws', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW + FIVE_MIN - 1 }));
-    const coordinator = new XaiSessionCoordinator({
+    const coordinator = makeCoordinator({
       storage,
       client: {
         exchangeAuthorizationCode: vi.fn(),
@@ -169,7 +158,6 @@ describe('XaiSessionCoordinator', () => {
           throw new XaiAuthError('revoked', 'fatal', 400);
         }),
       },
-      now: () => NOW,
     });
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
       kind: 'fatal',
@@ -178,10 +166,7 @@ describe('XaiSessionCoordinator', () => {
   });
 
   it('throws expired when not signed in', async () => {
-    const coordinator = new XaiSessionCoordinator({
-      storage: memoryStorage(),
-      now: () => NOW,
-    });
+    const coordinator = makeCoordinator({ storage: memoryStorage() });
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
       kind: 'expired',
     });

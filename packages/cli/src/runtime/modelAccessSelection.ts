@@ -142,14 +142,8 @@ export async function updateCliModelAccess(
     let accountLabel = xaiAccountLabel(status);
     if (!status.signedIn) {
       const init = { device: false, noBrowser: false };
-      const session = await signInCliGrok(
-        {
-          ...init,
-          device:
-            context == null ? false : shouldUseGrokDeviceCode(context, init),
-        },
-        options,
-      );
+      const device = context != null && shouldUseGrokDeviceCode(context, init);
+      const session = await signInCliGrok({ ...init, device }, options);
       accountLabel = xaiAccountLabel(session);
     }
 
@@ -179,14 +173,8 @@ export async function updateCliModelAccess(
   let accountLabel = codexAccountLabel(status);
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
-    const session = await signInCliChatGpt(
-      {
-        ...init,
-        device:
-          context == null ? false : shouldUseChatGptDeviceCode(context, init),
-      },
-      options,
-    );
+    const device = context != null && shouldUseChatGptDeviceCode(context, init);
+    const session = await signInCliChatGpt({ ...init, device }, options);
     accountLabel = codexAccountLabel(session);
   }
 

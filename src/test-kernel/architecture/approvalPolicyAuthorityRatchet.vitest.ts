@@ -91,49 +91,36 @@ function offendersMatching(
     .toSorted();
 }
 
+function expectNoOffenders(offenders: string[], guidance: string): void {
+  expect(
+    offenders,
+    offenders.length === 0 ? undefined : `${offenders.join(', ')} ${guidance}`,
+  ).toEqual([]);
+}
+
 describe('approval policy authority ratchet', () => {
   it('keeps the three-value TeXRA policy vocabulary in one shared module', () => {
-    const offenders = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter((file) => file !== VOCABULARY_OWNER)
-      .filter((file) =>
-        POLICY_VOCABULARY_DEFINITION.test(readProductionSource(file)),
-      )
-      .toSorted();
-
-    expect(
-      offenders,
-      offenders.length === 0
-        ? undefined
-        : `${offenders.join(', ')} redefine TeXRA approval-policy vocabulary; if intentional, move the definition into ${VOCABULARY_OWNER} or extend this allowlist in the same PR`,
-    ).toEqual([]);
+    expectNoOffenders(
+      offendersMatching(
+        POLICY_VOCABULARY_DEFINITION,
+        new Set([VOCABULARY_OWNER]),
+      ),
+      `redefine TeXRA approval-policy vocabulary; if intentional, move the definition into ${VOCABULARY_OWNER} or extend this allowlist in the same PR`,
+    );
   });
 
   it('restricts evaluator call sites to the shared boundaries and CLI adapters', () => {
-    const offenders = offendersMatching(
-      EVALUATOR_CALL,
-      EVALUATOR_CALL_ALLOWLIST,
+    expectNoOffenders(
+      offendersMatching(EVALUATOR_CALL, EVALUATOR_CALL_ALLOWLIST),
+      'call the shared TeXRA approval evaluator; if intentional, extend EVALUATOR_CALL_ALLOWLIST in this PR',
     );
-
-    expect(
-      offenders,
-      offenders.length === 0
-        ? undefined
-        : `${offenders.join(', ')} call the shared TeXRA approval evaluator; if intentional, extend EVALUATOR_CALL_ALLOWLIST in this PR`,
-    ).toEqual([]);
   });
 
   it('restricts setApprovalPolicy call sites to composition and settings seeds', () => {
-    const offenders = offendersMatching(
-      SET_APPROVAL_POLICY_CALL,
-      SEED_CALL_ALLOWLIST,
+    expectNoOffenders(
+      offendersMatching(SET_APPROVAL_POLICY_CALL, SEED_CALL_ALLOWLIST),
+      'call setApprovalPolicy; if intentional, extend SEED_CALL_ALLOWLIST in this PR',
     );
-
-    expect(
-      offenders,
-      offenders.length === 0
-        ? undefined
-        : `${offenders.join(', ')} call setApprovalPolicy; if intentional, extend SEED_CALL_ALLOWLIST in this PR`,
-    ).toEqual([]);
   });
 
   it('actually scans the production source roots', () => {

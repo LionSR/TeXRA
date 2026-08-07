@@ -62,6 +62,23 @@ function setTextareaValue(textarea: HTMLElement, value: string): void {
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+function answerInputOf(element: ExternalInquiryPanel): HTMLElement {
+  return element.shadowRoot!.querySelector(
+    '.external-inquiry-request__answer-input',
+  ) as HTMLElement;
+}
+
+function expectDraftPosted(threadId: string, draft: unknown): void {
+  expect(posted).toEqual([
+    {
+      command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
+      action: 'draft',
+      threadId,
+      draft,
+    },
+  ]);
+}
+
 describe('external-inquiry-panel answer/session-link inputs', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/ExternalInquiryPanel'),
@@ -98,9 +115,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);
 
-    const answerInput = element.shadowRoot!.querySelector(
-      '.external-inquiry-request__answer-input',
-    ) as HTMLElement;
+    const answerInput = answerInputOf(element);
     const submitButton = element.shadowRoot!.querySelector(
       'wa-button[data-action="submit"]',
     ) as HTMLElement & { disabled?: boolean };
@@ -139,9 +154,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
         threadId: 'thread-debounce',
       }),
     );
-    const answerInput = element.shadowRoot!.querySelector(
-      '.external-inquiry-request__answer-input',
-    ) as HTMLElement;
+    const answerInput = answerInputOf(element);
     vi.useFakeTimers();
 
     setTextareaValue(answerInput, 'first answer');
@@ -153,14 +166,10 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
 
     vi.advanceTimersByTime(1);
 
-    expect(posted).toEqual([
-      {
-        command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
-        action: 'draft',
-        threadId: 'thread-debounce',
-        draft: { answer: 'latest answer', sessionLinks: '' },
-      },
-    ]);
+    expectDraftPosted('thread-debounce', {
+      answer: 'latest answer',
+      sessionLinks: '',
+    });
   });
 
   it('flushes a pending draft once when disconnected', async () => {
@@ -170,22 +179,16 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
         threadId: 'thread-disconnect',
       }),
     );
-    const answerInput = element.shadowRoot!.querySelector(
-      '.external-inquiry-request__answer-input',
-    ) as HTMLElement;
+    const answerInput = answerInputOf(element);
     vi.useFakeTimers();
 
     setTextareaValue(answerInput, 'saved on disconnect');
     element.remove();
 
-    expect(posted).toEqual([
-      {
-        command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
-        action: 'draft',
-        threadId: 'thread-disconnect',
-        draft: { answer: 'saved on disconnect', sessionLinks: '' },
-      },
-    ]);
+    expectDraftPosted('thread-disconnect', {
+      answer: 'saved on disconnect',
+      sessionLinks: '',
+    });
 
     vi.advanceTimersByTime(400);
     expect(posted).toHaveLength(1);
@@ -195,9 +198,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     const element = await mountPanel(
       createPermission({ requestId: 'replace-1', threadId: 'thread-old' }),
     );
-    const answerInput = element.shadowRoot!.querySelector(
-      '.external-inquiry-request__answer-input',
-    ) as HTMLElement;
+    const answerInput = answerInputOf(element);
     vi.useFakeTimers();
 
     setTextareaValue(answerInput, 'answer for old permission');
@@ -207,14 +208,10 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     });
     await element.updateComplete;
 
-    expect(posted).toEqual([
-      {
-        command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
-        action: 'draft',
-        threadId: 'thread-old',
-        draft: { answer: 'answer for old permission', sessionLinks: '' },
-      },
-    ]);
+    expectDraftPosted('thread-old', {
+      answer: 'answer for old permission',
+      sessionLinks: '',
+    });
 
     vi.advanceTimersByTime(400);
     expect(posted).toHaveLength(1);

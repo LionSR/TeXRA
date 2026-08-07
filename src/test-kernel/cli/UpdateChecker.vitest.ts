@@ -160,28 +160,33 @@ describe('fetchLatestCliVersion', () => {
     } as unknown as Response;
   }
 
-  it('returns the version field from the latest dist-tag', async () => {
-    const fetchImpl = (async () =>
-      jsonResponse({ version: '9.9.9' })) as typeof fetch;
-    await expect(fetchLatestCliVersion({ fetchImpl })).resolves.toBe('9.9.9');
-  });
-
-  it('returns undefined on non-ok responses', async () => {
-    const fetchImpl = (async () =>
-      jsonResponse({ version: '9.9.9' }, false)) as typeof fetch;
-    await expect(fetchLatestCliVersion({ fetchImpl })).resolves.toBeUndefined();
-  });
-
-  it('returns undefined when the fetch throws (offline)', async () => {
-    const fetchImpl = (async () => {
-      throw new Error('offline');
-    }) as typeof fetch;
-    await expect(fetchLatestCliVersion({ fetchImpl })).resolves.toBeUndefined();
-  });
-
-  it('returns undefined when the body lacks a version', async () => {
-    const fetchImpl = (async () => jsonResponse({})) as typeof fetch;
-    await expect(fetchLatestCliVersion({ fetchImpl })).resolves.toBeUndefined();
+  it.each([
+    {
+      name: 'returns the version field from the latest dist-tag',
+      fetchImpl: async () => jsonResponse({ version: '9.9.9' }),
+      expected: '9.9.9',
+    },
+    {
+      name: 'returns undefined on non-ok responses',
+      fetchImpl: async () => jsonResponse({ version: '9.9.9' }, false),
+      expected: undefined,
+    },
+    {
+      name: 'returns undefined when the fetch throws (offline)',
+      fetchImpl: async () => {
+        throw new Error('offline');
+      },
+      expected: undefined,
+    },
+    {
+      name: 'returns undefined when the body lacks a version',
+      fetchImpl: async () => jsonResponse({}),
+      expected: undefined,
+    },
+  ])('$name', async ({ fetchImpl, expected }) => {
+    await expect(
+      fetchLatestCliVersion({ fetchImpl: fetchImpl as typeof fetch }),
+    ).resolves.toBe(expected);
   });
 });
 
@@ -310,21 +315,49 @@ describe('checkCliUpdateAvailable', () => {
   const latestVersion = '0.40.0';
   const noopNotify = async () => {};
 
+  function lastCheckedAt(globalState: FakeStateStore): unknown {
+    return globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT);
+  }
+
+  function recordingNotify(notified: string[]) {
+    return async (version: string) => {
+      notified.push(version);
+    };
+  }
+
+  function checkAvailable(options: {
+    globalState: FakeStateStore;
+    currentVersion?: string;
+    now?: () => number;
+    fetchLatest?: () => Promise<{
+      version: string | undefined;
+      refreshed: boolean;
+    }>;
+    notify?: (version: string) => Promise<void>;
+  }): Promise<string | undefined> {
+    return checkCliUpdateAvailable({
+      currentVersion: options.currentVersion ?? currentVersion,
+      globalState: options.globalState,
+      now: options.now,
+      fetchLatest:
+        options.fetchLatest ??
+        (async () => ({ version: latestVersion, refreshed: true })),
+      notify: options.notify ?? noopNotify,
+    });
+  }
+
   it('checks on a first launch (no prior lastCheckedAt) and reports a newer version', async () => {
     const globalState = new FakeStateStore();
     let fetchCalls = 0;
     const notified: string[] = [];
 
-    const latest = await checkCliUpdateAvailable({
-      currentVersion,
+    const latest = await checkAvailable({
       globalState,
       fetchLatest: async () => {
         fetchCalls += 1;
         return { version: latestVersion, refreshed: true };
       },
-      notify: async (v) => {
-        notified.push(v);
-      },
+      notify: recordingNotify(notified),
     });
 
     expect(fetchCalls).toBe(1);
@@ -336,21 +369,16 @@ describe('checkCliUpdateAvailable', () => {
     const globalState = new FakeStateStore();
     const notified: string[] = [];
 
-    const latest = await checkCliUpdateAvailable({
-      currentVersion: latestVersion,
+    const latest = await checkAvailable({
       globalState,
-      fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
-      notify: async (v) => {
-        notified.push(v);
-      },
+      currentVersion: latestVersion,
+      notify: recordingNotify(notified),
     });
 
     expect(latest).toBeUndefined();
     expect(notified).toEqual([]);
     // The check itself completed, so the day's stamp is still persisted.
-    expect(
-      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
-    ).toBeDefined();
+    expect(lastCheckedAt(globalState)).toBeDefined();
   });
 
   it('throttles repeated checks within the same day', async () => {
@@ -362,15 +390,13 @@ describe('checkCliUpdateAvailable', () => {
     let nowMs = Date.UTC(2026, 0, 1);
 
     const run = () =>
-      checkCliUpdateAvailable({
-        currentVersion,
+      checkAvailable({
         globalState,
         now: () => nowMs,
         fetchLatest: async () => {
           fetchCalls += 1;
           return { version: latestVersion, refreshed: true };
         },
-        notify: noopNotify,
       });
 
     await run();
@@ -392,8 +418,7 @@ describe('checkCliUpdateAvailable', () => {
     let fetchCalls = 0;
     const nowMs = Date.UTC(2026, 0, 1);
 
-    await checkCliUpdateAvailable({
-      currentVersion,
+    await checkAvailable({
       globalState,
       now: () => nowMs,
       fetchLatest: async () => {
@@ -401,31 +426,24 @@ describe('checkCliUpdateAvailable', () => {
         // simulates a network/registry failure
         return { version: undefined, refreshed: false };
       },
-      notify: noopNotify,
     });
 
     expect(fetchCalls).toBe(1);
-    expect(
-      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
-    ).toBeUndefined();
+    expect(lastCheckedAt(globalState)).toBeUndefined();
 
     // Immediately "relaunching" (same day) must retry rather than being
     // throttled for a full 24h off the back of the earlier failure.
-    await checkCliUpdateAvailable({
-      currentVersion,
+    await checkAvailable({
       globalState,
       now: () => nowMs + 1000,
       fetchLatest: async () => {
         fetchCalls += 1;
         return { version: latestVersion, refreshed: true };
       },
-      notify: noopNotify,
     });
 
     expect(fetchCalls).toBe(2);
-    expect(
-      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
-    ).toBe(nowMs + 1000);
+    expect(lastCheckedAt(globalState)).toBe(nowMs + 1000);
   });
 
   it('does not persist the throttle stamp on a stale (unrefreshed) version, but still offers it', async () => {
@@ -436,21 +454,16 @@ describe('checkCliUpdateAvailable', () => {
     const nowMs = Date.UTC(2026, 0, 1);
     const notified: string[] = [];
 
-    const latest = await checkCliUpdateAvailable({
-      currentVersion,
+    const latest = await checkAvailable({
       globalState,
       now: () => nowMs,
       fetchLatest: async () => ({ version: latestVersion, refreshed: false }),
-      notify: async (v) => {
-        notified.push(v);
-      },
+      notify: recordingNotify(notified),
     });
 
     expect(latest).toBe(latestVersion);
     expect(notified).toEqual([latestVersion]);
-    expect(
-      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
-    ).toBeUndefined();
+    expect(lastCheckedAt(globalState)).toBeUndefined();
   });
 
   it('does not persist the throttle stamp when the notify prompt throws', async () => {
@@ -461,20 +474,16 @@ describe('checkCliUpdateAvailable', () => {
     const nowMs = Date.UTC(2026, 0, 1);
 
     await expect(
-      checkCliUpdateAvailable({
-        currentVersion,
+      checkAvailable({
         globalState,
         now: () => nowMs,
-        fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
         notify: async () => {
           throw new Error('stdin closed');
         },
       }),
     ).rejects.toThrow('stdin closed');
 
-    expect(
-      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
-    ).toBeUndefined();
+    expect(lastCheckedAt(globalState)).toBeUndefined();
   });
 
   it('still reports the update when the throttle stamp write fails', async () => {
@@ -489,13 +498,9 @@ describe('checkCliUpdateAvailable', () => {
     );
     const notified: string[] = [];
 
-    const latest = await checkCliUpdateAvailable({
-      currentVersion,
+    const latest = await checkAvailable({
       globalState,
-      fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
-      notify: async (v) => {
-        notified.push(v);
-      },
+      notify: recordingNotify(notified),
     });
 
     expect(latest).toBe(latestVersion);
@@ -507,21 +512,15 @@ describe('checkCliUpdateAvailable', () => {
     const nowMs = Date.UTC(2026, 0, 1);
     let stampAtNotifyTime: unknown = 'unread';
 
-    await checkCliUpdateAvailable({
-      currentVersion,
+    await checkAvailable({
       globalState,
       now: () => nowMs,
-      fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
       notify: async () => {
-        stampAtNotifyTime = globalState.get(
-          GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-        );
+        stampAtNotifyTime = lastCheckedAt(globalState);
       },
     });
 
     expect(stampAtNotifyTime).toBeUndefined();
-    expect(
-      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
-    ).toBe(nowMs);
+    expect(lastCheckedAt(globalState)).toBe(nowMs);
   });
 });

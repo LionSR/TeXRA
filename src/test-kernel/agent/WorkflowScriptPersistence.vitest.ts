@@ -17,6 +17,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { delay } from '@utils/core';
 
 const executionId = 'aaaaaa111111' as ExecutionId;
+const EMPTY_FILES = { inputFiles: [], contextFiles: [], mediaFiles: [] };
 const script = `export const meta = {
   name: 'durable-flow',
   description: 'tests durable workflow checkpoints',
@@ -112,7 +113,7 @@ describe('workflow-script persistence', () => {
       writeWorkflowScriptCheckpoint(store, 'invalid-write', {
         script,
         args: undefined,
-        files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+        files: EMPTY_FILES,
         journal: [
           {
             index: 0,
@@ -190,7 +191,7 @@ return await agent('none')`;
     await writeWorkflowScriptCheckpoint(store, ' call-with-space ', {
       script,
       args: undefined,
-      files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+      files: EMPTY_FILES,
       journal: [],
     });
 
@@ -213,7 +214,7 @@ return await agent('none')`;
     await writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args: undefined,
-      files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+      files: EMPTY_FILES,
       journal: [],
     });
     await expect(

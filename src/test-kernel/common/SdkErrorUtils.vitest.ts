@@ -60,6 +60,35 @@ function withHeaders<T extends Error>(
   return Object.assign(error, { headers: new Headers(headers) });
 }
 
+function rawBodyError(
+  message: string,
+  body: unknown,
+): Error & { error: unknown } {
+  const error = new Error(message) as Error & { error: unknown };
+  error.error = body;
+  return error;
+}
+
+function taggedRawBodyError(
+  message: string,
+  body: unknown,
+  metadata: Parameters<typeof attachSdkErrorMetadata>[1],
+): Error {
+  const error = rawBodyError(message, body);
+  attachSdkErrorMetadata(error, metadata);
+  return error;
+}
+
+function providerAttributedError(body: unknown): Error {
+  const error = new Error('background response failed') as Error & {
+    error: unknown;
+    provider: string;
+  };
+  error.error = body;
+  error.provider = 'openai';
+  return error;
+}
+
 describe('formatProviderHttpError', () => {
   it('matches generic SDK API errors through the prototype chain', () => {
     const formatted = formatProviderHttpError(
@@ -118,22 +147,39 @@ describe('formatProviderHttpError', () => {
     expect(formatted.statusCode).toBe(401);
   });
 
-  it('preserves provider context for native OpenAI connection errors without response headers', () => {
-    const connectionError = formatProviderHttpError(
-      new OpenAIAPIConnectionError({
-        message: 'network unavailable',
-        cause: new Error('socket closed'),
-      }),
-    );
-    const timeoutError = formatProviderHttpError(
-      new OpenAIAPIConnectionTimeoutError({ message: 'timed out' }),
-    );
+  it.each([
+    {
+      provider: 'openai',
+      connection: () =>
+        new OpenAIAPIConnectionError({
+          message: 'network unavailable',
+          cause: new Error('socket closed'),
+        }),
+      timeout: () =>
+        new OpenAIAPIConnectionTimeoutError({ message: 'timed out' }),
+    },
+    {
+      provider: 'anthropic',
+      connection: () =>
+        new AnthropicAPIConnectionError({
+          message: 'network unavailable',
+          cause: new Error('socket closed'),
+        }),
+      timeout: () =>
+        new AnthropicAPIConnectionTimeoutError({ message: 'timed out' }),
+    },
+  ])(
+    'preserves provider context for native $provider connection errors without response headers',
+    ({ provider, connection, timeout }) => {
+      const connectionError = formatProviderHttpError(connection());
+      const timeoutError = formatProviderHttpError(timeout());
 
-    expect(connectionError.provider).toBe('openai');
-    expect(connectionError.userRetryable).toBe(true);
-    expect(timeoutError.provider).toBe('openai');
-    expect(timeoutError.userRetryable).toBe(true);
-  });
+      expect(connectionError.provider).toBe(provider);
+      expect(connectionError.userRetryable).toBe(true);
+      expect(timeoutError.provider).toBe(provider);
+      expect(timeoutError.userRetryable).toBe(true);
+    },
+  );
 
   it('preserves provider context for native Anthropic HTTP errors', () => {
     const formatted = formatProviderHttpError(
@@ -217,39 +263,43 @@ describe('formatProviderHttpError', () => {
     expect(formatted.requestId).toBe('req-kimi');
   });
 
-  it('detects OpenAI provider from Windows pnpm stack paths', () => {
-    const err = new BadRequestError('invalid request');
-    err.stack = String.raw`BadRequestError: invalid request
-    at request (C:\repo\node_modules\.pnpm\openai@5.0.0\node_modules\openai\core\error.mjs:12:10)`;
+  it.each([
+    {
+      provider: 'openai',
+      makeError: () => new BadRequestError('invalid request'),
+      stack: String.raw`BadRequestError: invalid request
+    at request (C:\repo\node_modules\.pnpm\openai@5.0.0\node_modules\openai\core\error.mjs:12:10)`,
+      statusCode: 400,
+    },
+    {
+      provider: 'anthropic',
+      makeError: () => new APIError('provider failed'),
+      stack: String.raw`APIError: provider failed
+    at request (C:\repo\node_modules\.pnpm\@anthropic-ai+sdk@1.0.0\node_modules\@anthropic-ai\sdk\index.mjs:12:10)`,
+      statusCode: undefined,
+    },
+    {
+      provider: 'google',
+      makeError: () => new APIError('provider failed'),
+      stack: String.raw`APIError: provider failed
+    at request (C:\repo\node_modules\.pnpm\@google+genai@1.0.0\node_modules\@google\genai\dist\index.mjs:12:10)`,
+      statusCode: undefined,
+    },
+  ])(
+    'detects $provider provider from Windows pnpm stack paths',
+    ({ provider, makeError, stack, statusCode }) => {
+      const err = makeError();
+      err.stack = stack;
 
-    const formatted = formatProviderHttpError(err);
+      const formatted = formatProviderHttpError(err);
 
-    expect(formatted.provider).toBe('openai');
-    expect(formatted.statusCode).toBe(400);
-    expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('detects Anthropic provider from Windows pnpm stack paths', () => {
-    const err = new APIError('provider failed');
-    err.stack = String.raw`APIError: provider failed
-    at request (C:\repo\node_modules\.pnpm\@anthropic-ai+sdk@1.0.0\node_modules\@anthropic-ai\sdk\index.mjs:12:10)`;
-
-    const formatted = formatProviderHttpError(err);
-
-    expect(formatted.provider).toBe('anthropic');
-    expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('detects Google provider from Windows pnpm stack paths', () => {
-    const err = new APIError('provider failed');
-    err.stack = String.raw`APIError: provider failed
-    at request (C:\repo\node_modules\.pnpm\@google+genai@1.0.0\node_modules\@google\genai\dist\index.mjs:12:10)`;
-
-    const formatted = formatProviderHttpError(err);
-
-    expect(formatted.provider).toBe('google');
-    expect(formatted.userRetryable).toBe(false);
-  });
+      expect(formatted.provider).toBe(provider);
+      if (statusCode !== undefined) {
+        expect(formatted.statusCode).toBe(statusCode);
+      }
+      expect(formatted.userRetryable).toBe(false);
+    },
+  );
 
   it('keeps SDK user aborts non-retryable while preserving provider attribution', () => {
     const err = new APIUserAbortError('aborted by user');
@@ -415,15 +465,15 @@ describe('formatProviderHttpError', () => {
       authorization: body.authorization,
       request: body.request,
     };
-    const error = new Error(
+    const error = taggedRawBodyError(
       `400 ${JSON.stringify(reorderedBody, null, 2)}`,
-    ) as Error & { error: unknown };
-    error.error = body;
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
+      body,
+      {
+        provider: 'openai',
+        kind: 'bad_request',
+        statusCode: 400,
+      },
+    );
 
     const formatted = formatProviderHttpError(error);
 
@@ -434,15 +484,15 @@ describe('formatProviderHttpError', () => {
   });
 
   it('retains a useful wrapper explanation when the raw body is plain text', () => {
-    const error = new Error(
+    const error = taggedRawBodyError(
       'The provider rejected this request because the model is unavailable.',
-    ) as Error & { error: unknown };
-    error.error = 'upstream plain-text response';
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
+      'upstream plain-text response',
+      {
+        provider: 'openai',
+        kind: 'bad_request',
+        statusCode: 400,
+      },
+    );
 
     const formatted = formatProviderHttpError(error);
 
@@ -472,15 +522,15 @@ describe('formatProviderHttpError', () => {
   it('formats cyclic diagnostic bodies without throwing', () => {
     const body: { kind: string; self?: unknown } = { kind: 'provider-error' };
     body.self = body;
-    const error = new Error(
+    const error = taggedRawBodyError(
       'The provider failed while reporting {"kind":"provider-error"}.',
-    ) as Error & { error: unknown };
-    error.error = body;
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
+      body,
+      {
+        provider: 'openai',
+        kind: 'bad_request',
+        statusCode: 400,
+      },
+    );
 
     const formatted = formatProviderHttpError(error);
 
@@ -492,15 +542,15 @@ describe('formatProviderHttpError', () => {
 
   it('retains a wrapper explanation that does not serialize its response body', () => {
     const body = { code: 'unsupported_response_format' };
-    const error = new Error(
+    const error = taggedRawBodyError(
       'The selected model does not support this response format.',
-    ) as Error & { error: unknown };
-    error.error = body;
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
+      body,
+      {
+        provider: 'openai',
+        kind: 'bad_request',
+        statusCode: 400,
+      },
+    );
 
     const formatted = formatProviderHttpError(error);
 
@@ -511,17 +561,19 @@ describe('formatProviderHttpError', () => {
   });
 
   it('classifies OpenAI insufficient_quota bodies as credential exhaustion', () => {
-    const error = new Error('quota exhausted') as Error & { error: unknown };
-    error.error = {
-      message: 'You exceeded your current quota.',
-      type: 'insufficient_quota',
-      code: 'insufficient_quota',
-    };
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'rate_limit',
-      statusCode: 429,
-    });
+    const error = taggedRawBodyError(
+      'quota exhausted',
+      {
+        message: 'You exceeded your current quota.',
+        type: 'insufficient_quota',
+        code: 'insufficient_quota',
+      },
+      {
+        provider: 'openai',
+        kind: 'rate_limit',
+        statusCode: 429,
+      },
+    );
 
     const formatted = formatProviderHttpError(error);
 
@@ -531,16 +583,18 @@ describe('formatProviderHttpError', () => {
   });
 
   it('classifies OpenAI quota messages without code as credential exhaustion', () => {
-    const error = new Error('quota exhausted') as Error & { error: unknown };
-    error.error = {
-      message:
-        'You exceeded your current quota, please check your plan and billing details.',
-    };
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'rate_limit',
-      statusCode: 429,
-    });
+    const error = taggedRawBodyError(
+      'quota exhausted',
+      {
+        message:
+          'You exceeded your current quota, please check your plan and billing details.',
+      },
+      {
+        provider: 'openai',
+        kind: 'rate_limit',
+        statusCode: 429,
+      },
+    );
 
     const formatted = formatProviderHttpError(error);
 
@@ -550,16 +604,11 @@ describe('formatProviderHttpError', () => {
   });
 
   it('classifies provider-attributed OpenAI quota bodies without SDK metadata', () => {
-    const error = new Error('background response failed') as Error & {
-      error: unknown;
-      provider: string;
-    };
-    error.provider = 'openai';
-    error.error = {
+    const error = providerAttributedError({
       message: 'You exceeded your current quota.',
       type: 'insufficient_quota',
       code: 'insufficient_quota',
-    };
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -570,15 +619,10 @@ describe('formatProviderHttpError', () => {
   });
 
   it('infers a retryable status for provider-attributed background server errors', () => {
-    const error = new Error('background response failed') as Error & {
-      error: unknown;
-      provider: string;
-    };
-    error.provider = 'openai';
-    error.error = {
+    const error = providerAttributedError({
       message: 'The background response ended before completion.',
       type: 'server_error',
-    };
+    });
 
     const formatted = formatProviderHttpError(error);
 

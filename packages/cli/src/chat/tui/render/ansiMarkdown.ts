@@ -422,10 +422,10 @@ function configureAnsi(
             break;
           case 'th_open':
           case 'td_open': {
-            const style = token.attrGet('style');
+            const alignAttr = token.attrGet('style');
             if (inHeader)
               aligns[col] = columnAlign(
-                typeof style === 'string' ? style : null,
+                typeof alignAttr === 'string' ? alignAttr : null,
               );
             col++;
             break;

@@ -80,7 +80,7 @@ export function parseDesktopProtocolCallback(
   return {
     rawUrl,
     path,
-    query: url.search.length > 0 ? url.search.slice(1) : '',
+    query: url.search.slice(1),
   };
 }
 

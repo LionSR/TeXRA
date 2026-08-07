@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 
 // Third-party imports
 import { JSDOM } from 'jsdom';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - desktop test paths
 import { repoPath } from './desktopTestPaths.ts';
@@ -28,6 +28,27 @@ function readRootStyle(): CSSStyleDeclaration {
   );
 }
 
+// Assembled rather than written literally: this file lives under src/, and
+// the confinement test below forbids any consumer source from naming a
+// palette token outright.
+function paletteToken(entry: string): string {
+  return ['--desktop', 'color', entry].join('-');
+}
+
+let rootStyle: CSSStyleDeclaration;
+
+beforeAll(() => {
+  rootStyle = readRootStyle();
+});
+
+function tokenValue(name: string): string {
+  return rootStyle.getPropertyValue(name).trim();
+}
+
+function tokenPx(name: string): number {
+  return Number.parseFloat(tokenValue(name));
+}
+
 describe('desktop theme tokens', () => {
   it('defines textarea and text input colors via the WA form-control tokens', () => {
     // Per #3741, consumer code references --wa-* tokens directly and the
@@ -40,22 +61,15 @@ describe('desktop theme tokens', () => {
     // through the --desktop-color-input-* palette entries so the input skin
     // changes in one place — assert the indirection, not the color values,
     // which are a design choice and free to change.
-    const rootStyle = readRootStyle();
-    // Assembled rather than written literally: this file lives under src/, and
-    // the confinement test below forbids any consumer source from naming a
-    // palette token outright.
-    const paletteRef = (entry: string): string =>
-      `var(${['--desktop', 'color', entry].join('-')})`;
-
-    expect(
-      rootStyle.getPropertyValue('--wa-form-control-background-color').trim(),
-    ).toBe(paletteRef('input-background'));
-    expect(
-      rootStyle.getPropertyValue('--wa-form-control-text-color').trim(),
-    ).toBe(paletteRef('input-foreground'));
-    expect(
-      rootStyle.getPropertyValue('--wa-form-control-border-color').trim(),
-    ).toBe(paletteRef('input-border'));
+    expect(tokenValue('--wa-form-control-background-color')).toBe(
+      `var(${paletteToken('input-background')})`,
+    );
+    expect(tokenValue('--wa-form-control-text-color')).toBe(
+      `var(${paletteToken('input-foreground')})`,
+    );
+    expect(tokenValue('--wa-form-control-border-color')).toBe(
+      `var(${paletteToken('input-border')})`,
+    );
   });
 
   it('keeps light and dark palettes in one semantic token layer', () => {
@@ -72,38 +86,28 @@ describe('desktop theme tokens', () => {
 
   it('uses neutral surfaces and achromatic primary actions', () => {
     const css = readThemeTokens();
-    const rootStyle = readRootStyle();
     const compact = (name: string): string =>
-      rootStyle.getPropertyValue(name).trim().replaceAll(/\s+/g, ' ');
-    const paletteName = (entry: string): string =>
-      ['--desktop', 'color', entry].join('-');
+      tokenValue(name).replaceAll(/\s+/g, ' ');
 
-    expect(compact(paletteName('background'))).toBe(
+    expect(compact(paletteToken('background'))).toBe(
       'light-dark(#ffffff,#212121)',
     );
-    expect(compact(paletteName('accent'))).toBe('light-dark(#0d0d0d,#f4f4f4)');
+    expect(compact(paletteToken('accent'))).toBe('light-dark(#0d0d0d,#f4f4f4)');
     expect(compact('--wa-color-brand-on-loud')).toBe(
       'light-dark(#ffffff,#0d0d0d)',
     );
     expect(css).not.toContain('radial-gradient(');
-    expect(compact(paletteName('info'))).not.toBe(
-      compact(paletteName('accent')),
+    expect(compact(paletteToken('info'))).not.toBe(
+      compact(paletteToken('accent')),
     );
   });
 
   it('defines one focus and reduced-motion contract', () => {
     const css = readThemeTokens();
-    const rootStyle = readRootStyle();
 
-    expect(rootStyle.getPropertyValue('--wa-focus-ring-width').trim()).toBe(
-      '2px',
-    );
-    expect(rootStyle.getPropertyValue('--wa-focus-ring-offset').trim()).toBe(
-      '2px',
-    );
-    expect(rootStyle.getPropertyValue('--wa-transition-normal').trim()).toBe(
-      '160ms',
-    );
+    expect(tokenValue('--wa-focus-ring-width')).toBe('2px');
+    expect(tokenValue('--wa-focus-ring-offset')).toBe('2px');
+    expect(tokenValue('--wa-transition-normal')).toBe('160ms');
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*--wa-transition-normal:\s*0ms/,
     );
@@ -119,11 +123,7 @@ describe('desktop theme tokens', () => {
     );
     expect(css).toMatch(
       new RegExp(
-        `body\\.vscode-high-contrast[\\s\\S]*${[
-          '--desktop',
-          'color',
-          'focus',
-        ].join('-')}:\\s*Highlight`,
+        `body\\.vscode-high-contrast[\\s\\S]*${paletteToken('focus')}:\\s*Highlight`,
       ),
     );
   });
@@ -134,38 +134,26 @@ describe('desktop theme tokens', () => {
     // language, so the contract is now structural: the scale ascends, and no
     // step is small enough to read as a hard rectangle. Exact values stay a
     // design choice.
-    const rootStyle = readRootStyle();
-    const px = (name: string): number =>
-      Number.parseFloat(rootStyle.getPropertyValue(name).trim());
-
-    const s = px('--wa-border-radius-s');
-    const m = px('--wa-border-radius-m');
-    const l = px('--wa-border-radius-l');
-    const xl = px('--wa-border-radius-xl');
+    const s = tokenPx('--wa-border-radius-s');
+    const m = tokenPx('--wa-border-radius-m');
+    const l = tokenPx('--wa-border-radius-l');
+    const xl = tokenPx('--wa-border-radius-xl');
 
     expect(s).toBeGreaterThanOrEqual(4);
     expect(m).toBeGreaterThan(s);
     expect(l).toBeGreaterThan(m);
     expect(xl).toBeGreaterThan(l);
-    expect(rootStyle.getPropertyValue('--wa-border-radius-pill').trim()).toBe(
-      '9999px',
-    );
-    expect(rootStyle.getPropertyValue('--wa-border-radius-circle').trim()).toBe(
-      '50%',
-    );
+    expect(tokenValue('--wa-border-radius-pill')).toBe('9999px');
+    expect(tokenValue('--wa-border-radius-circle')).toBe('50%');
   });
 
   it('sizes shared Lit controls for a window rather than a sidebar', () => {
     // litStyles.ts reads these with the extension's compact values as
     // fallbacks, so the desktop host must actually supply the roomier metrics
     // or the shared components silently stay at editor-panel density.
-    const rootStyle = readRootStyle();
-    const px = (name: string): number =>
-      Number.parseFloat(rootStyle.getPropertyValue(name).trim());
-
-    expect(px('--wa-height-control')).toBeGreaterThan(24);
-    expect(px('--wa-height-header')).toBeGreaterThan(34);
-    expect(px('--wa-height-button')).toBeGreaterThan(30);
+    expect(tokenPx('--wa-height-control')).toBeGreaterThan(24);
+    expect(tokenPx('--wa-height-header')).toBeGreaterThan(34);
+    expect(tokenPx('--wa-height-button')).toBeGreaterThan(30);
   });
 
   it('keeps the --desktop-color-* palette layer confined to themeTokens.css (no consumer references)', () => {

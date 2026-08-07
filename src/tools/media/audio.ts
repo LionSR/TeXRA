@@ -113,14 +113,14 @@ export async function startRecording(): Promise<{
         const intentional =
           result.signal === 'SIGTERM' || result.signal === 'SIGKILL';
         if (intentional) {
-          logger.info(CHANNEL, `Recording stopped intentionally`);
+          logger.info(CHANNEL, 'Recording stopped intentionally');
         } else if (result.exitCode !== 0) {
           logger.error(
             CHANNEL,
             `Sox process exited with code ${result.exitCode}`,
           );
         } else {
-          logger.info(CHANNEL, `Recording process completed successfully`);
+          logger.info(CHANNEL, 'Recording process completed successfully');
         }
         resetRecordingState();
       })
@@ -135,12 +135,10 @@ export async function startRecording(): Promise<{
 
     return { success: true, recordingPath: absPath };
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in startRecording: ${getSdkErrorMessage(err)}`,
-    );
+    const message = getSdkErrorMessage(err);
+    logger.error(CHANNEL, `Error in startRecording: ${message}`);
     resetRecordingState();
-    return { success: false, error: getSdkErrorMessage(err) };
+    return { success: false, error: message };
   }
 }
 
@@ -191,11 +189,9 @@ export async function stopRecordingAndTranscribe(): Promise<{
 
     return { success: true, text: result.text };
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in stopRecordingAndTranscribe: ${getSdkErrorMessage(err)}`,
-    );
+    const message = getSdkErrorMessage(err);
+    logger.error(CHANNEL, `Error in stopRecordingAndTranscribe: ${message}`);
     resetRecordingState();
-    return { success: false, text: '', error: getSdkErrorMessage(err) };
+    return { success: false, text: '', error: message };
   }
 }

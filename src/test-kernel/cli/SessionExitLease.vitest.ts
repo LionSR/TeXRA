@@ -91,17 +91,20 @@ describe('CLI session exit lease ownership', () => {
     });
   }
 
+  /** Returns an async stub that appends `label` to `order` when invoked. */
+  function pushes(order: string[], label: string): () => Promise<void> {
+    return async () => {
+      order.push(label);
+    };
+  }
+
   it('flushes before releasing a resumable idle execution lease', async () => {
     const order: string[] = [];
     const exitController = controller({
       resumableIdle: true,
-      flushArtifacts: async () => {
-        order.push('flush');
-      },
+      flushArtifacts: pushes(order, 'flush'),
     });
-    completeLeaseSpy.mockImplementation(async () => {
-      order.push('release');
-    });
+    completeLeaseSpy.mockImplementation(pushes(order, 'release'));
 
     await expect(exitController.gracefulTeardown()).rejects.toThrow(
       'process.exit',
@@ -122,16 +125,12 @@ describe('CLI session exit lease ownership', () => {
     const order: string[] = [];
     const exitController = controller({
       resumableIdle: true,
-      flushArtifacts: async () => {
-        order.push('flush');
-      },
+      flushArtifacts: pushes(order, 'flush'),
     });
-    completeLeaseSpy.mockImplementation(async () => {
-      order.push('release');
-    });
-    mocks.runCliPlatformShutdownSequence.mockImplementation(async () => {
-      order.push('shutdown');
-    });
+    completeLeaseSpy.mockImplementation(pushes(order, 'release'));
+    mocks.runCliPlatformShutdownSequence.mockImplementation(
+      pushes(order, 'shutdown'),
+    );
     exitSpy.mockImplementation((() => undefined) as typeof process.exit);
 
     exitController.handleSigint();
@@ -151,9 +150,9 @@ describe('CLI session exit lease ownership', () => {
         throw new Error('flush failed');
       },
     });
-    mocks.runCliPlatformShutdownSequence.mockImplementation(async () => {
-      order.push('shutdown');
-    });
+    mocks.runCliPlatformShutdownSequence.mockImplementation(
+      pushes(order, 'shutdown'),
+    );
     exitSpy.mockImplementation((() => undefined) as typeof process.exit);
 
     exitController.handleSigint();

@@ -34,43 +34,48 @@ function child(executionId: string): Child {
 }
 
 describe('diffActiveChildren', () => {
-  it('reports no vanished ids when previous is empty', () => {
-    const vanishedIds = diffActiveChildren([], [child('a')]);
+  const cases: Array<{
+    name: string;
+    previous: string[];
+    next: string[];
+    vanished: string[];
+  }> = [
+    {
+      name: 'reports no vanished ids when previous is empty',
+      previous: [],
+      next: ['a'],
+      vanished: [],
+    },
+    {
+      name: 'reports all previous ids as vanished when next is empty',
+      previous: ['a', 'b'],
+      next: [],
+      vanished: ['a', 'b'],
+    },
+    {
+      name: 'reports only the ids that dropped out on partial overlap',
+      previous: ['a', 'b', 'c'],
+      next: ['b', 'c', 'd'],
+      vanished: ['a'],
+    },
+    {
+      name: 'is unaffected by duplicate ids in either input',
+      previous: ['a', 'a', 'b'],
+      next: ['a'],
+      vanished: ['b'],
+    },
+    {
+      name: 'reports nothing vanished when previous and next are identical',
+      previous: ['a', 'b'],
+      next: ['a', 'b'],
+      vanished: [],
+    },
+  ];
 
-    expect(vanishedIds.size).toBe(0);
-  });
-
-  it('reports all previous ids as vanished when next is empty', () => {
-    const vanishedIds = diffActiveChildren([child('a'), child('b')], []);
-
-    expect(vanishedIds).toEqual(new Set(['a', 'b']));
-  });
-
-  it('reports only the ids that dropped out on partial overlap', () => {
-    const vanishedIds = diffActiveChildren(
-      [child('a'), child('b'), child('c')],
-      [child('b'), child('c'), child('d')],
+  it.each(cases)('$name', ({ previous, next, vanished }) => {
+    expect(diffActiveChildren(previous.map(child), next.map(child))).toEqual(
+      new Set(vanished),
     );
-
-    expect(vanishedIds).toEqual(new Set(['a']));
-  });
-
-  it('is unaffected by duplicate ids in either input', () => {
-    const vanishedIds = diffActiveChildren(
-      [child('a'), child('a'), child('b')],
-      [child('a')],
-    );
-
-    expect(vanishedIds).toEqual(new Set(['b']));
-  });
-
-  it('reports nothing vanished when previous and next are identical', () => {
-    const vanishedIds = diffActiveChildren(
-      [child('a'), child('b')],
-      [child('a'), child('b')],
-    );
-
-    expect(vanishedIds.size).toBe(0);
   });
 });
 

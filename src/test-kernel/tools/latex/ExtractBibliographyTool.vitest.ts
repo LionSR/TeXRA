@@ -9,8 +9,37 @@ import * as bibliographyModule from '@latex/extractBibliography';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractBibliographyTool } from '@tools/latex';
 
+type BibliographyContext = Awaited<
+  ReturnType<typeof bibliographyModule.extractBibliographyContext>
+>;
+type BibliographyEntries = Awaited<
+  ReturnType<typeof bibliographyModule.loadBibliographyEntries>
+>;
+
 function installPlatform(files: Record<string, string>) {
   return installFakePlatform({ workspacePath: '/workspace', files });
+}
+
+/** Stub the three bibliography helpers the tool composes. */
+function mockBibliography(options: {
+  context?: Partial<BibliographyContext>;
+  entries?: Partial<BibliographyEntries>;
+  summary?: string[];
+}): void {
+  vi.spyOn(bibliographyModule, 'extractBibliographyContext').mockResolvedValue({
+    citationKeys: [],
+    bibliographyFiles: [],
+    missingBibliographyFiles: [],
+    ...options.context,
+  });
+  vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockResolvedValue({
+    entries: new Map(),
+    missingKeys: [],
+    ...options.entries,
+  });
+  vi.spyOn(bibliographyModule, 'summarizeBibliographyEntries').mockReturnValue(
+    options.summary ?? [],
+  );
 }
 
 describe('ExtractBibliographyTool', () => {
@@ -22,25 +51,19 @@ describe('ExtractBibliographyTool', () => {
     await installPlatform({
       '/workspace/main.tex': '\\documentclass{article}',
     });
-    vi.spyOn(
-      bibliographyModule,
-      'extractBibliographyContext',
-    ).mockResolvedValue({
-      citationKeys: ['alpha', 'beta'],
-      bibliographyFiles: ['references.bib'],
-      missingBibliographyFiles: [],
+    mockBibliography({
+      context: {
+        citationKeys: ['alpha', 'beta'],
+        bibliographyFiles: ['references.bib'],
+      },
+      entries: {
+        entries: new Map([
+          ['alpha', '@article{alpha,...}'],
+          ['beta', '@book{beta,...}'],
+        ]),
+      },
+      summary: ['@article{alpha,...}', '@book{beta,...}'],
     });
-    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockResolvedValue({
-      entries: new Map([
-        ['alpha', '@article{alpha,...}'],
-        ['beta', '@book{beta,...}'],
-      ]),
-      missingKeys: [],
-    });
-    vi.spyOn(
-      bibliographyModule,
-      'summarizeBibliographyEntries',
-    ).mockReturnValue(['@article{alpha,...}', '@book{beta,...}']);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({ texPath: 'main.tex' });
@@ -59,22 +82,13 @@ describe('ExtractBibliographyTool', () => {
     await installPlatform({
       '/workspace/paper.tex': '\\documentclass{article}',
     });
-    vi.spyOn(
-      bibliographyModule,
-      'extractBibliographyContext',
-    ).mockResolvedValue({
-      citationKeys: ['alpha'],
-      bibliographyFiles: [],
-      missingBibliographyFiles: ['references.bib'],
+    mockBibliography({
+      context: {
+        citationKeys: ['alpha'],
+        missingBibliographyFiles: ['references.bib'],
+      },
+      entries: { missingKeys: ['alpha'] },
     });
-    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockResolvedValue({
-      entries: new Map(),
-      missingKeys: ['alpha'],
-    });
-    vi.spyOn(
-      bibliographyModule,
-      'summarizeBibliographyEntries',
-    ).mockReturnValue([]);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({ texPath: 'paper.tex' });
@@ -106,15 +120,11 @@ describe('ExtractBibliographyTool', () => {
       '/workspace/thesis.tex': '\\documentclass{article}',
       '/workspace/extra.bib': '@article{alpha,...}',
     });
-    vi.spyOn(
-      bibliographyModule,
-      'extractBibliographyContext',
-    ).mockResolvedValue({
-      citationKeys: ['alpha'],
-      bibliographyFiles: [],
-      missingBibliographyFiles: [],
+    mockBibliography({
+      context: { citationKeys: ['alpha'] },
+      summary: ['@article{alpha,...}'],
     });
-    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockImplementation(
+    vi.mocked(bibliographyModule.loadBibliographyEntries).mockImplementation(
       async (paths, keys) => {
         calls.push({ paths, keys });
         return {
@@ -123,10 +133,6 @@ describe('ExtractBibliographyTool', () => {
         };
       },
     );
-    vi.spyOn(
-      bibliographyModule,
-      'summarizeBibliographyEntries',
-    ).mockReturnValue(['@article{alpha,...}']);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({
@@ -147,15 +153,8 @@ describe('ExtractBibliographyTool', () => {
       '/workspace/standalone.tex': '\\documentclass{article}',
       '/workspace/refs.bib': '@article{alpha,...}',
     });
-    vi.spyOn(
-      bibliographyModule,
-      'extractBibliographyContext',
-    ).mockResolvedValue({
-      citationKeys: [],
-      bibliographyFiles: [],
-      missingBibliographyFiles: [],
-    });
-    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockImplementation(
+    mockBibliography({});
+    vi.mocked(bibliographyModule.loadBibliographyEntries).mockImplementation(
       async (paths, keys) => {
         calls.push({ paths, keys });
         return {
@@ -164,10 +163,6 @@ describe('ExtractBibliographyTool', () => {
         };
       },
     );
-    vi.spyOn(
-      bibliographyModule,
-      'summarizeBibliographyEntries',
-    ).mockReturnValue([]);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({

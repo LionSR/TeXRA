@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
-import { logLatexdiff, type AgentTrace } from '@agent/trace';
-import type { StageHandle } from '@agent/trace';
+import { logLatexdiff, type AgentTrace, type StageHandle } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -70,7 +69,7 @@ export class LatexDiffManager {
 
   private logLatexdiffResult(
     result: LaTeXdiffResult,
-    operation: string = 'latexdiff',
+    operation = 'latexdiff',
   ): void {
     if (result.success) {
       this.logger.debug('Successfully generated diff file', {

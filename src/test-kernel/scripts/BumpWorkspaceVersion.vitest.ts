@@ -34,6 +34,9 @@ function runVersionBump(args: readonly string[], cwd = repoRoot) {
   });
 }
 
+const TAG_FORMAT_ERROR =
+  'Release tag must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.';
+
 describe('bump-workspace-version script', () => {
   it('accepts CLI release tags when computing the next workspace version', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'texra-version-bump-'));
@@ -54,9 +57,7 @@ describe('bump-workspace-version script', () => {
     const result = runVersionBump(['--from', 'v0.8.5-frontend', '--check']);
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Release tag must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.',
-    );
+    expect(result.stderr).toContain(TAG_FORMAT_ERROR);
     expect(result.stderr).toContain(
       'node scripts/bump-workspace-version.mjs --from cli-v0.37.10',
     );
@@ -66,9 +67,7 @@ describe('bump-workspace-version script', () => {
     const result = runVersionBump(['--from', 'cli-0.38.9', '--check']);
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Release tag must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.',
-    );
+    expect(result.stderr).toContain(TAG_FORMAT_ERROR);
   });
 });
 

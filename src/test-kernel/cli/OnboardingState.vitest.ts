@@ -38,6 +38,9 @@ describe('onboarding decline flag', () => {
 });
 
 describe('saved key summary', () => {
+  const SAVED_KEY_PREFIX =
+    'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). ';
+
   it('names the exact secret entry and env-var fallback', () => {
     const message = describeSavedKeyLocation('anthropic');
     expect(message).toContain('apiKey.anthropic');
@@ -53,10 +56,7 @@ describe('saved key summary', () => {
         apiMode: 'personal',
         message: warning,
       }),
-    ).toBe(
-      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). ' +
-        warning,
-    );
+    ).toBe(SAVED_KEY_PREFIX + warning);
   });
 
   it('confirms the normal personal-key access route', () => {
@@ -65,9 +65,7 @@ describe('saved key summary', () => {
         apiMode: 'personal',
         message: 'Model access: Your own API keys.',
       }),
-    ).toBe(
-      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). Model access: Your own API keys.',
-    );
+    ).toBe(SAVED_KEY_PREFIX + 'Model access: Your own API keys.');
   });
 });
 

@@ -47,6 +47,10 @@ function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
   };
 }
 
+function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
+  return prepareMainViewExecutionLaunch(teamMessage(teamId), host);
+}
+
 describe('main-view execution launch controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,9 +70,10 @@ describe('main-view execution launch controller', () => {
   it('rejects a team launch without a selected team', async () => {
     const host = createHost();
 
-    await expect(
-      prepareMainViewExecutionLaunch(teamMessage(''), host),
-    ).resolves.toEqual({ status: 'error', message: 'Select a team' });
+    await expect(launchTeam(host, '')).resolves.toEqual({
+      status: 'error',
+      message: 'Select a team',
+    });
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
 
@@ -94,9 +99,10 @@ describe('main-view execution launch controller', () => {
       const host = createHost();
       mocks.resolveTeamLaunch.mockResolvedValue(resolution);
 
-      await expect(
-        prepareMainViewExecutionLaunch(teamMessage(), host),
-      ).resolves.toEqual({ status: 'error', message: expected });
+      await expect(launchTeam(host)).resolves.toEqual({
+        status: 'error',
+        message: expected,
+      });
       expect(mocks.prepareMainViewTeamExecutionRequest).not.toHaveBeenCalled();
     },
   );
@@ -105,9 +111,7 @@ describe('main-view execution launch controller', () => {
     const host = createHost();
     mocks.resolveTeamLaunch.mockResolvedValue({ status: 'cancelled' });
 
-    await expect(
-      prepareMainViewExecutionLaunch(teamMessage(), host),
-    ).resolves.toEqual({ status: 'cancelled' });
+    await expect(launchTeam(host)).resolves.toEqual({ status: 'cancelled' });
   });
 
   it('returns partial membership and prepares the resolved team fields', async () => {
@@ -160,9 +164,7 @@ describe('main-view execution launch controller', () => {
     const host = createHost();
     mocks.resolveTeamLaunch.mockRejectedValue(new Error('catalog unavailable'));
 
-    await expect(
-      prepareMainViewExecutionLaunch(teamMessage(), host),
-    ).resolves.toEqual({
+    await expect(launchTeam(host)).resolves.toEqual({
       status: 'error',
       message: 'Team launch failed: catalog unavailable',
     });

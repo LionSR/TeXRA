@@ -38,11 +38,13 @@ describe('isTransientHttpError', () => {
     expect(isTransientHttpError(err)).toBe(true);
   });
 
-  it('treats network failures (no response) as transient', () => {
-    // fetch throws TypeError for connection reset, DNS failure, socket hang-up
-    expect(isTransientHttpError(new TypeError('Failed to fetch'))).toBe(true);
-    expect(isTransientHttpError(new TypeError('fetch failed'))).toBe(true);
-  });
+  it.each(['Failed to fetch', 'fetch failed'])(
+    'treats network failures (no response) as transient: %s',
+    (message) => {
+      // fetch throws TypeError for connection reset, DNS failure, socket hang-up
+      expect(isTransientHttpError(new TypeError(message))).toBe(true);
+    },
+  );
 
   it('treats programmer TypeErrors as permanent (not every TypeError is a network error)', () => {
     // A bug in the wrapped call (reading a property of undefined) must surface,
@@ -54,21 +56,24 @@ describe('isTransientHttpError', () => {
     ).toBe(false);
   });
 
-  it('treats request timeouts, rate limits, and 5xx errors as transient', () => {
-    expect(isTransientHttpError(kyErrorWithStatus(408))).toBe(true);
-    expect(isTransientHttpError(kyErrorWithStatus(429))).toBe(true);
-    expect(isTransientHttpError(kyErrorWithStatus(500))).toBe(true);
-    expect(isTransientHttpError(kyErrorWithStatus(503))).toBe(true);
-  });
+  it.each([408, 429, 500, 503])(
+    'treats request timeouts, rate limits, and 5xx errors as transient: HTTP %i',
+    (status) => {
+      expect(isTransientHttpError(kyErrorWithStatus(status))).toBe(true);
+    },
+  );
 
-  it('treats 4xx responses as permanent', () => {
-    expect(isTransientHttpError(kyErrorWithStatus(400))).toBe(false);
-    expect(isTransientHttpError(kyErrorWithStatus(404))).toBe(false);
-  });
+  it.each([400, 404])(
+    'treats 4xx responses as permanent: HTTP %i',
+    (status) => {
+      expect(isTransientHttpError(kyErrorWithStatus(status))).toBe(false);
+    },
+  );
 
-  it('treats non-http errors as permanent', () => {
-    expect(isTransientHttpError(new Error('boom'))).toBe(false);
-    expect(isTransientHttpError('nope')).toBe(false);
-    expect(isTransientHttpError(undefined)).toBe(false);
-  });
+  it.each([new Error('boom'), 'nope', undefined])(
+    'treats non-http errors as permanent: %s',
+    (value) => {
+      expect(isTransientHttpError(value)).toBe(false);
+    },
+  );
 });

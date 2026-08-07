@@ -324,27 +324,25 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     return { createResponse, services };
   }
 
-  it('passes systemPrompt to createResponse when the handler requires it per-call', async () => {
-    const { createResponse, services } = createSystemPromptServices(true);
-    const shared = createShared([], 'You are a helpful assistant.');
+  it.each([
+    {
+      requiresPerCallSystemPrompt: true,
+      expectedSystemPrompt: 'You are a helpful assistant.',
+    },
+    { requiresPerCallSystemPrompt: false, expectedSystemPrompt: undefined },
+  ])(
+    'passes systemPrompt to createResponse per-call only when the handler requires it (requiresPerCallSystemPrompt=$requiresPerCallSystemPrompt)',
+    async ({ requiresPerCallSystemPrompt, expectedSystemPrompt }) => {
+      const { createResponse, services } = createSystemPromptServices(
+        requiresPerCallSystemPrompt,
+      );
+      const shared = createShared([], 'You are a helpful assistant.');
 
-    await runRound(services, shared);
+      await runRound(services, shared);
 
-    expect(createResponse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        systemPrompt: 'You are a helpful assistant.',
-      }),
-    );
-  });
-
-  it('omits systemPrompt from createResponse when the handler embeds it in messages', async () => {
-    const { createResponse, services } = createSystemPromptServices(false);
-    const shared = createShared([], 'You are a helpful assistant.');
-
-    await runRound(services, shared);
-
-    expect(createResponse).toHaveBeenCalledWith(
-      expect.objectContaining({ systemPrompt: undefined }),
-    );
-  });
+      expect(createResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ systemPrompt: expectedSystemPrompt }),
+      );
+    },
+  );
 });

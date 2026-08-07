@@ -89,12 +89,14 @@ import {
   TODO_STATUS,
   type ActiveChildInfo,
   type ExecutionId,
+  type ExtendedTokenUsageStats,
   type Plan,
   type StorageKey,
   type StreamPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import {
   createRunTrace,
@@ -144,6 +146,196 @@ function runTrace(
   streamId: StreamTabId,
 ): ReturnType<typeof createRunTrace>['trace'] {
   return createRunTrace(streamId, defaultSession().transcripts).trace;
+}
+
+/** The run-trace logger returned by {@link runTrace}. */
+type TraceLogger = ReturnType<typeof runTrace>;
+
+/** Drive a stream to a phase through the production fact-application path. */
+function setStatus(streamId: StreamTabId, status: StreamPhase): void {
+  setStreamStatusInCliState({ streamId, status });
+}
+
+function transitionStatus(
+  streamId: StreamTabId,
+  phase: StreamPhase,
+  reason: StreamTransitionCause,
+): boolean {
+  return defaultSession().status.transition(streamId, phase, reason);
+}
+
+/** Mint a stream slice without a status of its own (activation step "A"). */
+function mintSlice(streamId: StreamTabId): void {
+  patchStream(streamId, (slice) => ({ ...slice }));
+}
+
+/** Roster row for a child agent whose identity mirrors its agent name. */
+function childRosterRow(
+  agentName: string,
+  childStreamId: StreamTabId,
+  status?: StreamPhase,
+  executionId = 'child-exec-1',
+) {
+  return {
+    executionId,
+    agentName,
+    identity: { kind: 'agent' as const, agent: agentName },
+    childStreamId,
+    status,
+  };
+}
+
+function emitStageStart(
+  hub: SessionEventHub,
+  streamId: StreamTabId,
+  stage: {
+    id: string;
+    label: string;
+    kind: 'phase' | 'round';
+    index?: number;
+    total?: number;
+  },
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId,
+    event: { type: 'stage.start', ...stage },
+  });
+}
+
+function emitRunConfig(
+  hub: SessionEventHub,
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  files: { input: string[]; context: string[]; output: string[] } = {
+    input: [],
+    context: [],
+    output: [],
+  },
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'run.config',
+      streamId,
+      executionId,
+      config: {
+        agent: 'search',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'kimi26T',
+        instruction: 'Check the enumeration independently.',
+        inputFiles: files.input,
+        contextFiles: files.context,
+        mediaFiles: [],
+        outputFiles: files.output,
+        editedFile: null,
+        editedFiles: [],
+        toolConfig: DEFAULT_TOOL_CONFIG,
+        memories: [],
+        workingDirectory: undefined,
+      },
+    },
+  });
+}
+
+function emitUsage(
+  hub: SessionEventHub,
+  streamId: StreamTabId,
+  storageKey: StorageKey,
+  usage: ExtendedTokenUsageStats,
+  executionId?: ExecutionId,
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'usage',
+      payload: {
+        streamId,
+        storageKey,
+        ...(executionId === undefined ? {} : { executionId }),
+        usage,
+      },
+    },
+  });
+}
+
+function logUserMessage(trace: TraceLogger, text: string): void {
+  trace.info(text, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+}
+
+function logModelResponse(trace: TraceLogger, text: string): void {
+  trace.info(text, { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+}
+
+function logModelError(trace: TraceLogger, text: string, data?: unknown): void {
+  trace.error(text, {
+    messageType: MESSAGE_TYPES.ERROR,
+    ...(data === undefined ? {} : { data }),
+  });
+}
+
+function logToolUse(
+  trace: TraceLogger,
+  data: unknown,
+  text = 'tool activity',
+): void {
+  trace.info(text, { messageType: MESSAGE_TYPES.TOOL_USE, data });
+}
+
+/** Synthetic local-transcript entry as written by the local echo path. */
+function localSyntheticEntry(
+  id: string,
+  role: 'user' | 'assistant' | 'error',
+  text: string,
+  syntheticAfterSeq: number,
+  syntheticAfterSettlementSeqNo: number,
+) {
+  return {
+    id,
+    role,
+    text,
+    finalized: true,
+    synthetic: true,
+    syntheticKind: 'local',
+    syntheticAfterSeq,
+    syntheticAfterSettlementSeqNo,
+  } as const;
+}
+
+/** Mark a stream slice as workflow-category. */
+function markWorkflow(streamId: StreamTabId): void {
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    category: AgentCategory.Workflow,
+  }));
+}
+
+/** Unfinalized tool-row entry with empty render text fields. */
+function toolEntry(
+  id: string,
+  toolName: string,
+  input: Record<string, unknown>,
+  options: { outputText?: string; status?: 'in_progress' | 'completed' } = {},
+) {
+  return {
+    id,
+    role: 'tool',
+    text: '',
+    finalized: false,
+    toolUse: {
+      toolName,
+      errorText: '',
+      outputText: options.outputText ?? '',
+      userInstructionText: '',
+      input,
+      isError: false,
+      isUserFeedback: false,
+      headerSummary: '',
+      status: options.status ?? 'completed',
+    },
+  } as const;
 }
 
 /** Run `body` with a TUI run-fact subscription attached to a fresh hub. The
@@ -227,10 +419,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('initialises every new slice with empty subagent/todo/plan/bypass defaults', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: 'running',
-    });
+    setStatus(root, STREAM_PHASE.RUNNING);
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
     expect(activeRows(root)).toEqual([]);
@@ -250,28 +439,19 @@ describe('cliState stream, focus, and child-edge fields', () => {
     expect(parentStream.get().get(child2)).toBe(root);
 
     // Removing a child drops its own edge but leaves siblings intact.
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: 'running',
-    });
+    setStatus(child1, STREAM_PHASE.RUNNING);
     removeStream(child1);
     expect(parentStream.get().has(child1)).toBe(false);
     expect(parentStream.get().get(child2)).toBe(root);
 
     // Removing the parent prunes every edge that pointed at it.
-    setStreamStatusInCliState({
-      streamId: root,
-      status: 'running',
-    });
+    setStatus(root, STREAM_PHASE.RUNNING);
     removeStream(root);
     expect(parentStream.get().has(child2)).toBe(false);
   });
 
   it('refuses focus for a removed stream identity', () => {
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(child1, STREAM_PHASE.RUNNING);
     focusStream(child1);
     expect(activeStreamId.get()).toBe(child1);
 
@@ -287,10 +467,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('refuses focus for a stream retired by a session reset', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(root, STREAM_PHASE.RUNNING);
     resetCliState();
 
     focusStream(root, { onlyIfUnset: true });
@@ -298,20 +475,14 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
     // The next state lifetime owns the identity again once a patch
     // re-registers the row.
-    patchStream(root, (s) => ({ ...s }));
+    mintSlice(root);
     focusStream(root);
     expect(activeStreamId.get()).toBe(root);
   });
 
   it('keeps the current focus when a later stream only claims an unset slot', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.RUNNING,
-    });
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(root, STREAM_PHASE.RUNNING);
+    setStatus(child1, STREAM_PHASE.RUNNING);
     focusStream(root);
     focusStream(child1, { onlyIfUnset: true });
     expect(activeStreamId.get()).toBe(root);
@@ -322,19 +493,10 @@ describe('cliState stream, focus, and child-edge fields', () => {
     // Roster-first (rule 3): registers both the retained history row and
     // active membership, then the explicit edge arrives.
     projectChildRoster(root, [
-      {
-        executionId: 'agent-1',
-        agentName: 'critic',
-        identity: { kind: 'agent' as const, agent: 'critic' },
-        childStreamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      },
+      childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
     ]);
     setParentStream(child1, root);
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.WAITING,
-    });
+    setStatus(child1, STREAM_PHASE.WAITING);
 
     expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
@@ -350,13 +512,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
   it('updates retained child rows when a failed subagent leaves the active list', () => {
     withStreamStatus(() => {
       projectChildRoster(root, [
-        {
-          executionId: 'agent-1',
-          agentName: 'codex',
-          identity: { kind: 'agent' as const, agent: 'codex' },
-          childStreamId: child1,
-          status: STREAM_PHASE.RUNNING,
-        },
+        childRosterRow('codex', child1, STREAM_PHASE.RUNNING, 'agent-1'),
       ]);
       // A later, empty roster clears active membership; the retained row
       // survives and its status is read live from the child's own slice.
@@ -364,11 +520,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
       expect(subagentExecutionLabels.get().get('agent-1')).toBe('codex');
 
-      defaultSession().status.transition(
-        child1,
-        STREAM_PHASE.FAILED,
-        'restart-repair',
-      );
+      transitionStatus(child1, STREAM_PHASE.FAILED, 'restart-repair');
 
       expect(activeRows(root)).toEqual([]);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
@@ -393,17 +545,12 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
   it('projects phase stages onto the run slice and leaves rounds alone', () => {
     withRunFacts((hub) => {
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'stage.start',
-          id: 'phase-2',
-          label: 'Reduce',
-          kind: 'phase',
-          index: 1,
-          total: 3,
-        },
+      emitStageStart(hub, child1, {
+        id: 'phase-2',
+        label: 'Reduce',
+        kind: 'phase',
+        index: 1,
+        total: 3,
       });
 
       expect(streams.get().get(child1)?.stage).toEqual({
@@ -413,17 +560,12 @@ describe('cliState stream, focus, and child-edge fields', () => {
         total: 3,
       });
 
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'stage.start',
-          id: 'round-2',
-          label: 'round 2',
-          kind: 'round',
-          index: 1,
-          total: 4,
-        },
+      emitStageStart(hub, root, {
+        id: 'round-2',
+        label: 'round 2',
+        kind: 'round',
+        index: 1,
+        total: 4,
       });
 
       expect(streams.get().get(root)?.stage).toEqual({
@@ -436,15 +578,10 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
   it('keeps a dynamically opened phase positionless', () => {
     withRunFacts((hub) => {
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'stage.start',
-          id: 'phase-x',
-          label: 'Cleanup',
-          kind: 'phase',
-        },
+      emitStageStart(hub, child1, {
+        id: 'phase-x',
+        label: 'Cleanup',
+        kind: 'phase',
       });
 
       expect(streams.get().get(child1)?.stage).toEqual({
@@ -457,10 +594,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
   it('registers subagent parent edges when active child rows arrive', () => {
     withRunFacts((hub) => {
       activeStreamId.set(root);
-      setStreamStatusInCliState({
-        streamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      });
+      setStatus(child1, STREAM_PHASE.RUNNING);
 
       hub.emit({
         scope: 'run',
@@ -469,13 +603,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
           type: 'child.activity',
           parentStreamId: root,
           items: [
-            {
-              executionId: 'agent-1',
-              agentName: 'critic',
-              identity: { kind: 'agent' as const, agent: 'critic' },
-              childStreamId: child1,
-              status: STREAM_PHASE.RUNNING,
-            },
+            childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
           ],
         },
       });
@@ -1183,14 +1311,8 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('selects the focused child stream as a follow-up target', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.WAITING,
-    });
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.WAITING,
-    });
+    setStatus(root, STREAM_PHASE.WAITING);
+    setStatus(child1, STREAM_PHASE.WAITING);
     setParentStream(child1, root);
 
     activeStreamId.set(root);
@@ -1204,23 +1326,11 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('ignores stale child row status when routing focused child follow-ups', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.WAITING,
-    });
+    setStatus(root, STREAM_PHASE.WAITING);
     projectChildRoster(root, [
-      {
-        executionId: 'child-exec-1',
-        agentName: 'critic',
-        identity: { kind: 'agent' as const, agent: 'critic' },
-        childStreamId: child1,
-        status: STREAM_PHASE.COMPLETED,
-      },
+      childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
     ]);
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(child1, STREAM_PHASE.RUNNING);
     setParentStream(child1, root);
 
     activeStreamId.set(child1);
@@ -1234,23 +1344,11 @@ describe('CLI TUI row allocation', () => {
   // child row's status from the stream status map, so a roster snapshot that
   // still says RUNNING cannot keep a stopped child accepting follow-ups.
   it('routes focused child follow-ups from the stream status, not the roster row', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.WAITING,
-    });
+    setStatus(root, STREAM_PHASE.WAITING);
     projectChildRoster(root, [
-      {
-        executionId: 'child-exec-1',
-        agentName: 'critic',
-        identity: { kind: 'agent' as const, agent: 'critic' },
-        childStreamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      },
+      childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
     ]);
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.CANCELLED,
-    });
+    setStatus(child1, STREAM_PHASE.CANCELLED);
     setParentStream(child1, root);
 
     activeStreamId.set(child1);
@@ -1300,30 +1398,14 @@ describe('CLI TUI row allocation', () => {
 
   it('mirrors running child status events into focused child routing', () => {
     withStreamStatus(() => {
-      setStreamStatusInCliState({
-        streamId: root,
-        status: STREAM_PHASE.WAITING,
-      });
+      setStatus(root, STREAM_PHASE.WAITING);
       projectChildRoster(root, [
-        {
-          executionId: 'child-exec-1',
-          agentName: 'critic',
-          identity: { kind: 'agent' as const, agent: 'critic' },
-          childStreamId: child1,
-          status: STREAM_PHASE.COMPLETED,
-        },
+        childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
       ]);
-      setStreamStatusInCliState({
-        streamId: child1,
-        status: STREAM_PHASE.CANCELLED,
-      });
+      setStatus(child1, STREAM_PHASE.CANCELLED);
       setParentStream(child1, root);
 
-      defaultSession().status.transition(
-        child1,
-        STREAM_PHASE.RUNNING,
-        'restart-repair',
-      );
+      transitionStatus(child1, STREAM_PHASE.RUNNING, 'restart-repair');
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.RUNNING);
@@ -1337,30 +1419,14 @@ describe('CLI TUI row allocation', () => {
 
   it('mirrors stopped child status events into focused child routing', () => {
     withStreamStatus(() => {
-      setStreamStatusInCliState({
-        streamId: root,
-        status: STREAM_PHASE.WAITING,
-      });
+      setStatus(root, STREAM_PHASE.WAITING);
       projectChildRoster(root, [
-        {
-          executionId: 'child-exec-1',
-          agentName: 'critic',
-          identity: { kind: 'agent' as const, agent: 'critic' },
-          childStreamId: child1,
-          status: STREAM_PHASE.RUNNING,
-        },
+        childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
       ]);
-      setStreamStatusInCliState({
-        streamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      });
+      setStatus(child1, STREAM_PHASE.RUNNING);
       setParentStream(child1, root);
 
-      defaultSession().status.transition(
-        child1,
-        STREAM_PHASE.CANCELLED,
-        'restart-repair',
-      );
+      transitionStatus(child1, STREAM_PHASE.CANCELLED, 'restart-repair');
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
@@ -1376,26 +1442,15 @@ describe('CLI TUI row allocation', () => {
     withStreamStatus(() => {
       // The owner must be a row of the current state lifetime: focus never
       // lands on a stream identity retired by an earlier `resetCliState`.
-      setStreamStatusInCliState({
-        streamId: root,
-        status: STREAM_PHASE.RUNNING,
-      });
+      setStatus(root, STREAM_PHASE.RUNNING);
       setParentStream(child1, root);
       activeStreamId.set(child1);
 
+      expect(transitionStatus(child1, STREAM_PHASE.RUNNING, 'lifecycle')).toBe(
+        true,
+      );
       expect(
-        defaultSession().status.transition(
-          child1,
-          STREAM_PHASE.RUNNING,
-          'lifecycle',
-        ),
-      ).toBe(true);
-      expect(
-        defaultSession().status.transition(
-          child1,
-          STREAM_PHASE.COMPLETED,
-          'lifecycle',
-        ),
+        transitionStatus(child1, STREAM_PHASE.COMPLETED, 'lifecycle'),
       ).toBe(true);
       expect(activeStreamId.get()).toBe(root);
     });
@@ -1403,26 +1458,15 @@ describe('CLI TUI row allocation', () => {
 
   it('returns a user-stopped focused child to its immediate owner', () => {
     withStreamStatus(() => {
-      setStreamStatusInCliState({
-        streamId: root,
-        status: STREAM_PHASE.RUNNING,
-      });
+      setStatus(root, STREAM_PHASE.RUNNING);
       setParentStream(child1, root);
       activeStreamId.set(child1);
 
+      expect(transitionStatus(child1, STREAM_PHASE.RUNNING, 'lifecycle')).toBe(
+        true,
+      );
       expect(
-        defaultSession().status.transition(
-          child1,
-          STREAM_PHASE.RUNNING,
-          'lifecycle',
-        ),
-      ).toBe(true);
-      expect(
-        defaultSession().status.transition(
-          child1,
-          STREAM_PHASE.CANCELLED,
-          'user-stop',
-        ),
+        transitionStatus(child1, STREAM_PHASE.CANCELLED, 'user-stop'),
       ).toBe(true);
       expect(activeStreamId.get()).toBe(root);
     });
@@ -1433,45 +1477,21 @@ describe('CLI TUI row allocation', () => {
       const detachedChild = 'detached-child' as StreamTabId;
       setParentStream(child1, root);
 
-      defaultSession().status.transition(
-        child1,
-        STREAM_PHASE.RUNNING,
-        'lifecycle',
-      );
+      transitionStatus(child1, STREAM_PHASE.RUNNING, 'lifecycle');
       activeStreamId.set(child1);
-      defaultSession().status.transition(child1, STREAM_PHASE.WAITING, 'wait');
+      transitionStatus(child1, STREAM_PHASE.WAITING, 'wait');
       expect(activeStreamId.get()).toBe(child1);
 
-      defaultSession().status.transition(
-        child2,
-        STREAM_PHASE.RUNNING,
-        'lifecycle',
-      );
-      defaultSession().status.transition(
-        child2,
-        STREAM_PHASE.FAILED,
-        'lifecycle',
-      );
+      transitionStatus(child2, STREAM_PHASE.RUNNING, 'lifecycle');
+      transitionStatus(child2, STREAM_PHASE.FAILED, 'lifecycle');
       expect(activeStreamId.get()).toBe(child1);
 
-      defaultSession().status.transition(
-        child1,
-        STREAM_PHASE.FAILED,
-        'restart-repair',
-      );
+      transitionStatus(child1, STREAM_PHASE.FAILED, 'restart-repair');
       expect(activeStreamId.get()).toBe(child1);
 
-      defaultSession().status.transition(
-        detachedChild,
-        STREAM_PHASE.RUNNING,
-        'lifecycle',
-      );
+      transitionStatus(detachedChild, STREAM_PHASE.RUNNING, 'lifecycle');
       activeStreamId.set(detachedChild);
-      defaultSession().status.transition(
-        detachedChild,
-        STREAM_PHASE.COMPLETED,
-        'lifecycle',
-      );
+      transitionStatus(detachedChild, STREAM_PHASE.COMPLETED, 'lifecycle');
       expect(activeStreamId.get()).toBe(detachedChild);
     });
   });
@@ -1500,23 +1520,7 @@ describe('CLI TUI row allocation', () => {
 
 describe('finalizeSettledPrefix', () => {
   function tool(id: string, status: 'in_progress' | 'completed') {
-    return {
-      id,
-      role: 'tool',
-      text: '',
-      finalized: false,
-      toolUse: {
-        toolName: 'Bash',
-        errorText: '',
-        outputText: '',
-        userInstructionText: '',
-        input: {},
-        isError: false,
-        isUserFeedback: false,
-        headerSummary: '',
-        status,
-      },
-    } as const;
+    return toolEntry(id, 'Bash', {}, { status });
   }
 
   function assistant(id: string, pendingEmbeddedSubagentFollowup = false) {
@@ -1677,18 +1681,15 @@ describe('CLI transcript state', () => {
 
   it('summarizes subagent protocol continuations in the visible transcript', () => {
     const logger = runTrace(root);
-    logger.info('Please solve the problem.', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    logger.info(
+    logUserMessage(logger, 'Please solve the problem.');
+    logUserMessage(
+      logger,
       '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
-      { messageType: MESSAGE_TYPES.USER_MESSAGE },
     );
 
     syncStreamLog(root);
 
-    const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
+    expect(entryTexts(root)).toEqual([
       'Please solve the problem.',
       '✓ review completed',
     ]);
@@ -1696,7 +1697,8 @@ describe('CLI transcript state', () => {
 
   it('summarizes embedded subagent progress blocks in assistant transcript text', () => {
     const logger = runTrace(root);
-    logger.info(
+    logModelResponse(
+      logger,
       [
         'Waiting for the child.',
         '<subagent-progress id="abc" agent="prover" type="todos">',
@@ -1704,13 +1706,12 @@ describe('CLI transcript state', () => {
         '</subagent-progress>',
         '<subagent-progress id="abc" agent="prover" type="activity">Subagent prover is proving completeness.</subagent-progress>',
       ].join('\n'),
-      { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
     );
 
     syncStreamLog(root);
 
     const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
+    expect(entryTexts(root)).toEqual([
       [
         'Waiting for the child.',
         '⟳ prover · todos · 1 done, 1 active, 0 pending',
@@ -1722,15 +1723,15 @@ describe('CLI transcript state', () => {
 
   it('normalizes common HTML before assistant text reaches the live transcript', () => {
     const logger = runTrace(root);
-    logger.info(
+    logModelResponse(
+      logger,
       '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
-      { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
     );
 
     syncStreamLog(root);
 
     const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
+    expect(entryTexts(root)).toEqual([
       '### Verification Report\n\nThe proof is **fully verified**.',
     ]);
     expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -1744,7 +1745,8 @@ describe('CLI transcript state', () => {
       { length: 20 },
       (_, index) => `proof line ${index + 1}`,
     ).join('\n');
-    logger.info(
+    logUserMessage(
+      logger,
       [
         '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
         '<wall-time>2m</wall-time>',
@@ -1753,7 +1755,6 @@ describe('CLI transcript state', () => {
         '</response>',
         '</subagent-result>',
       ].join('\n'),
-      { messageType: MESSAGE_TYPES.USER_MESSAGE },
     );
 
     syncStreamLog(root);
@@ -1771,9 +1772,7 @@ describe('CLI transcript state', () => {
 
   it('mirrors error log entries into the transcript', () => {
     const logger = runTrace(root);
-    logger.error('Model request failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-    });
+    logModelError(logger, 'Model request failed');
 
     syncStreamLog(root);
 
@@ -1788,14 +1787,11 @@ describe('CLI transcript state', () => {
 
   it('shows the canonical safe reason below a model-request failure', () => {
     const logger = runTrace(root);
-    logger.error('Model request failed (no retry available)', {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: 'HTTP 400 Bad Request – status code without a body',
-        provider: 'openai',
-        userRetryable: false,
-        rawErrorBody: { apiKey: 'secret-must-not-render' },
-      },
+    logModelError(logger, 'Model request failed (no retry available)', {
+      message: 'HTTP 400 Bad Request – status code without a body',
+      provider: 'openai',
+      userRetryable: false,
+      rawErrorBody: { apiKey: 'secret-must-not-render' },
     });
 
     syncStreamLog(root);
@@ -1819,13 +1815,10 @@ describe('CLI transcript state', () => {
 
   it('keeps the error summary when structured error data is malformed', () => {
     const logger = runTrace(root);
-    logger.error('Model request failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: { nested: 'not a canonical message' },
-        rawErrorBody: { apiKey: 'secret-must-not-render' },
-        userRetryable: 'sometimes',
-      },
+    logModelError(logger, 'Model request failed', {
+      message: { nested: 'not a canonical message' },
+      rawErrorBody: { apiKey: 'secret-must-not-render' },
+      userRetryable: 'sometimes',
     });
 
     syncStreamLog(root);
@@ -1836,13 +1829,9 @@ describe('CLI transcript state', () => {
 
   it('removes terminal control sequences from model-error reasons', () => {
     const logger = runTrace(root);
-    logger.error('Model request failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message:
-          '\u001b[31mProvider failed\u001b[0m\u0007 \n retry later\u0085',
-        userRetryable: false,
-      },
+    logModelError(logger, 'Model request failed', {
+      message: '\u001b[31mProvider failed\u001b[0m\u0007 \n retry later\u0085',
+      userRetryable: false,
     });
 
     syncStreamLog(root);
@@ -1858,13 +1847,14 @@ describe('CLI transcript state', () => {
     const logger = runTrace(root);
     const secret = 'sk-provider-redaction-example-1234567890abcdef';
     const ansiSplitSecret = `${secret.slice(0, 12)}\u001b[31m${secret.slice(12)}\u001b[0m`;
-    logger.error(`Model request failed with Bearer ${ansiSplitSecret}`, {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
+    logModelError(
+      logger,
+      `Model request failed with Bearer ${ansiSplitSecret}`,
+      {
         message: `Connection failed with API_KEY=${ansiSplitSecret} and Bearer ${ansiSplitSecret}`,
         userRetryable: false,
       },
-    });
+    );
 
     syncStreamLog(root);
 
@@ -1877,12 +1867,9 @@ describe('CLI transcript state', () => {
 
   it('collapses and bounds long multiline model-error reasons', () => {
     const logger = runTrace(root);
-    logger.error('Model request failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: `First line\n  second line\t${'x'.repeat(300)}`,
-        userRetryable: false,
-      },
+    logModelError(logger, 'Model request failed', {
+      message: `First line\n  second line\t${'x'.repeat(300)}`,
+      userRetryable: false,
     });
 
     syncStreamLog(root);
@@ -1896,13 +1883,10 @@ describe('CLI transcript state', () => {
 
   it('adds the personal-API hint once from structured relay-limit data', () => {
     const logger = runTrace(root);
-    logger.error('Model request failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: `${'x'.repeat(300)} Monthly spending limit reached.`,
-        exhaustionReason: 'relay-limit',
-        userRetryable: false,
-      },
+    logModelError(logger, 'Model request failed', {
+      message: `${'x'.repeat(300)} Monthly spending limit reached.`,
+      exhaustionReason: 'relay-limit',
+      userRetryable: false,
     });
 
     syncStreamLog(root);
@@ -1983,61 +1967,42 @@ describe('CLI transcript state', () => {
   });
 
   it('projects workflow tools and errors while excluding thinking and raw model prose', () => {
-    patchStream(root, (slice) => ({
-      ...slice,
-      category: AgentCategory.Workflow,
-    }));
+    markWorkflow(root);
     const logger = runTrace(root);
     const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
     thinking.append('private workflow reasoning');
-    logger.info('raw workflow model response', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    logModelResponse(logger, 'raw workflow model response');
+    logToolUse(logger, {
+      toolName: 'bash',
+      input: { command: 'true' },
+      output: 'done',
+      status: 'completed',
     });
-    logger.info('tool activity', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: {
-        toolName: 'bash',
-        input: { command: 'true' },
-        output: 'done',
-        status: 'completed',
-      },
-    });
-    logger.error('workflow provider failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-    });
+    logModelError(logger, 'workflow provider failed');
     patchStream(root, (slice) => ({
       ...slice,
       entries: [
-        {
-          id: 'synthetic-workflow-user',
-          role: 'user',
-          text: 'synthetic workflow prompt',
-          finalized: true,
-          synthetic: true,
-          syntheticKind: 'local',
-          syntheticAfterSeq: 4,
-          syntheticAfterSettlementSeqNo: 3,
-        },
-        {
-          id: 'synthetic-workflow-assistant',
-          role: 'assistant',
-          text: 'synthetic workflow response',
-          finalized: true,
-          synthetic: true,
-          syntheticKind: 'local',
-          syntheticAfterSeq: 4,
-          syntheticAfterSettlementSeqNo: 3,
-        },
-        {
-          id: 'synthetic-workflow-error',
-          role: 'error',
-          text: 'synthetic workflow error',
-          finalized: true,
-          synthetic: true,
-          syntheticKind: 'local',
-          syntheticAfterSeq: 4,
-          syntheticAfterSettlementSeqNo: 3,
-        },
+        localSyntheticEntry(
+          'synthetic-workflow-user',
+          'user',
+          'synthetic workflow prompt',
+          4,
+          3,
+        ),
+        localSyntheticEntry(
+          'synthetic-workflow-assistant',
+          'assistant',
+          'synthetic workflow response',
+          4,
+          3,
+        ),
+        localSyntheticEntry(
+          'synthetic-workflow-error',
+          'error',
+          'synthetic workflow error',
+          4,
+          3,
+        ),
       ],
     }));
 
@@ -2059,23 +2024,16 @@ describe('CLI transcript state', () => {
   });
 
   it('admits ordinary workflow logs without exposing unsafe terminal text', () => {
-    patchStream(child1, (slice) => ({
-      ...slice,
-      category: AgentCategory.Workflow,
-    }));
+    markWorkflow(child1);
     const logger = runTrace(child1);
     const secret = 'sk-workflow-summary-1234567890abcdef';
     const ansiSplitSecret = `${secret.slice(0, 12)}\u001b[31m${secret.slice(12)}\u001b[0m`;
-    logger.info('workflow prompt', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
+    logUserMessage(logger, 'workflow prompt');
     logger.info(
       `Preparing \u001b[32mproof\u001b[0m audit\u0007 API_KEY=${ansiSplitSecret}`,
       { messageType: MESSAGE_TYPES.DEFAULT },
     );
-    logger.info('raw workflow model response', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    logModelResponse(logger, 'raw workflow model response');
 
     syncStreamLog(child1);
 
@@ -2095,15 +2053,12 @@ describe('CLI transcript state', () => {
       'raw workflow model response',
     );
 
-    logger.info('tool activity', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: {
-        toolName: 'bash',
-        input: { command: 'true' },
-        output: 'done',
-        summary: `Checking with Bearer ${ansiSplitSecret}\u0085`,
-        status: 'completed',
-      },
+    logToolUse(logger, {
+      toolName: 'bash',
+      input: { command: 'true' },
+      output: 'done',
+      summary: `Checking with Bearer ${ansiSplitSecret}\u0085`,
+      status: 'completed',
     });
     syncStreamLog(child1);
     const toolDescription = streams.get().get(child1)?.latestLine;
@@ -2112,15 +2067,12 @@ describe('CLI transcript state', () => {
     expect(toolDescription).not.toContain('\u001b');
     expect(toolDescription).not.toContain('\u0085');
 
-    logger.info('tool activity', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: {
-        toolName: 'read_file',
-        input: { path: 'proof.tex' },
-        output: 'done',
-        summary: '\u001b[31m\u001b[0m\u0007',
-        status: 'completed',
-      },
+    logToolUse(logger, {
+      toolName: 'read_file',
+      input: { path: 'proof.tex' },
+      output: 'done',
+      summary: '\u001b[31m\u001b[0m\u0007',
+      status: 'completed',
     });
     syncStreamLog(child1);
     expect(streams.get().get(child1)?.latestLine).toBe('read_file');
@@ -2134,9 +2086,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
     expect(streams.get().get(child1)?.latestLine).toBe('Review lemmas');
 
-    logger.error('Proof audit failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-    });
+    logModelError(logger, 'Proof audit failed');
     syncStreamLog(child1);
 
     slice = streams.get().get(child1);
@@ -2158,14 +2108,9 @@ describe('CLI transcript state', () => {
 
   it('updates dormant workflow summaries while retaining only dashboard rows', () => {
     activeStreamId.set(root);
-    patchStream(child1, (slice) => ({
-      ...slice,
-      category: AgentCategory.Workflow,
-    }));
+    markWorkflow(child1);
     const logger = runTrace(child1);
-    logger.info('raw dormant workflow prose', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    logModelResponse(logger, 'raw dormant workflow prose');
     logger.info('Preparing dormant audit', {
       messageType: MESSAGE_TYPES.DEFAULT,
     });
@@ -2177,15 +2122,12 @@ describe('CLI transcript state', () => {
       entries: [],
     });
 
-    logger.info('tool activity', {
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: {
-        toolName: 'grep',
-        input: { pattern: 'lemma' },
-        output: 'done',
-        summary: 'Scanning proof obligations',
-        status: 'completed',
-      },
+    logToolUse(logger, {
+      toolName: 'grep',
+      input: { pattern: 'lemma' },
+      output: 'done',
+      summary: 'Scanning proof obligations',
+      status: 'completed',
     });
     syncStreamLog(child1);
 
@@ -2211,9 +2153,7 @@ describe('CLI transcript state', () => {
       ],
     });
 
-    logger.error('Dormant audit failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-    });
+    logModelError(logger, 'Dormant audit failed');
     syncStreamLog(child1);
 
     const slice = streams.get().get(child1);
@@ -2235,16 +2175,13 @@ describe('CLI transcript state', () => {
       ...slice,
       category: AgentCategory.Workflow,
       entries: [
-        {
-          id: 'synthetic-compact-workflow-error',
-          role: 'error',
-          text: 'Synthetic compact workflow error',
-          finalized: true,
-          synthetic: true,
-          syntheticKind: 'local',
-          syntheticAfterSeq: 0,
-          syntheticAfterSettlementSeqNo: 0,
-        },
+        localSyntheticEntry(
+          'synthetic-compact-workflow-error',
+          'error',
+          'Synthetic compact workflow error',
+          0,
+          0,
+        ),
       ],
     }));
     const logger = runTrace(child1);
@@ -2266,19 +2203,18 @@ describe('CLI transcript state', () => {
         logger.info('Compact operational prose', {
           messageType: MESSAGE_TYPES.DEFAULT,
         });
-        logger.info('Compact tool activity', {
-          messageType: MESSAGE_TYPES.TOOL_USE,
-          data: {
+        logToolUse(
+          logger,
+          {
             toolName: 'grep',
             input: { pattern: 'boundary' },
             output: 'done',
             summary: 'Compact operational tool summary',
             status: 'completed',
           },
-        });
-        logger.error('Compact operational failure', {
-          messageType: MESSAGE_TYPES.ERROR,
-        });
+          'Compact tool activity',
+        );
+        logModelError(logger, 'Compact operational failure');
       }
     }
     logger.openStage('New phase', {
@@ -2333,12 +2269,8 @@ describe('CLI transcript state', () => {
         },
       });
       const logger = runTrace(child1);
-      logger.info('Check the second lemma.', {
-        messageType: MESSAGE_TYPES.USER_MESSAGE,
-      });
-      logger.info('The second lemma is valid.', {
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      });
+      logUserMessage(logger, 'Check the second lemma.');
+      logModelResponse(logger, 'The second lemma is valid.');
 
       syncStreamLog(child1);
 
@@ -2374,9 +2306,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
     expect(streams.get().get(root)?.compactingActive).toBe(true);
 
-    logger.info('A later turn started.', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
+    logUserMessage(logger, 'A later turn started.');
     syncStreamLog(root);
 
     expect(streams.get().get(root)?.compactingActive).toBe(false);
@@ -2384,16 +2314,14 @@ describe('CLI transcript state', () => {
 
   it('does not project empty assistant responses into transcript rows', () => {
     const logger = runTrace(root);
-    logger.info('', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+    logModelResponse(logger, '');
 
     syncStreamLog(root);
 
     let slice = streams.get().get(root);
     expect(slice?.entries ?? []).toEqual([]);
 
-    logger.info('Visible answer.', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    logModelResponse(logger, 'Visible answer.');
 
     syncStreamLog(root);
 
@@ -2405,18 +2333,12 @@ describe('CLI transcript state', () => {
 
   it('trims leading blank assistant rows at turn start', () => {
     const logger = runTrace(root);
-    logger.info('Why?', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-    logger.info('\n\n  The answer starts here.', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    logUserMessage(logger, 'Why?');
+    logModelResponse(logger, '\n\n  The answer starts here.');
 
     syncStreamLog(root);
 
-    const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'Why?',
-      '  The answer starts here.',
-    ]);
+    expect(entryTexts(root)).toEqual(['Why?', '  The answer starts here.']);
   });
 
   // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
@@ -2426,9 +2348,7 @@ describe('CLI transcript state', () => {
   // disappears from the transcript.
   it('preserves the finalized flag through a post-finalize sync tick', () => {
     const logger = runTrace(root);
-    logger.info('streaming assistant chunk', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    logModelResponse(logger, 'streaming assistant chunk');
     syncStreamLog(root);
 
     // Stream-level finalize promotes the deferred-finalization entries.
@@ -2494,16 +2414,9 @@ describe('CLI transcript state', () => {
   it('keeps only a summary for an unfocused dormant transcript', () => {
     activeStreamId.set(root);
     const logger = runTrace(child1);
-    logger.info('Check the second lemma.', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    logger.info('The second lemma is valid.', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.WAITING,
-    });
+    logUserMessage(logger, 'Check the second lemma.');
+    logModelResponse(logger, 'The second lemma is valid.');
+    setStatus(child1, STREAM_PHASE.WAITING);
 
     syncStreamLog(child1);
 
@@ -2517,16 +2430,9 @@ describe('CLI transcript state', () => {
   it('restores an exact dormant transcript when it is requested', () => {
     activeStreamId.set(root);
     const logger = runTrace(child1);
-    logger.info('Check the second lemma.', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    logger.info('The second lemma is valid.', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.WAITING,
-    });
+    logUserMessage(logger, 'Check the second lemma.');
+    logModelResponse(logger, 'The second lemma is valid.');
+    setStatus(child1, STREAM_PHASE.WAITING);
     syncStreamLog(child1);
 
     syncStreamLog(child1, { forceFull: true });
@@ -2565,10 +2471,8 @@ describe('CLI transcript state', () => {
 
   it('projects a turn boundary from the store alone, with zero synthetic entries', () => {
     const logger = runTrace(root);
-    logger.info('What is 1 + 1?', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    logger.info('2', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+    logUserMessage(logger, 'What is 1 + 1?');
+    logModelResponse(logger, '2');
 
     projectStreamTranscript(root, { finalize: true });
 
@@ -2584,8 +2488,7 @@ describe('CLI transcript state', () => {
     appendLocalAssistantTranscript('Available commands: /help');
     appendLocalAssistantTranscript('Available commands: /help');
 
-    const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
+    expect(entryTexts(root)).toEqual([
       'Available commands: /help',
       'Available commands: /help',
     ]);
@@ -2700,13 +2603,8 @@ describe('CLI transcript state', () => {
 
   it('finalizes a delayed first model-response sync after the stream is idle', () => {
     const logger = runTrace(root);
-    logger.info('A delayed final answer.', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.WAITING,
-    });
+    logModelResponse(logger, 'A delayed final answer.');
+    setStatus(root, STREAM_PHASE.WAITING);
 
     syncStreamLog(root);
 
@@ -2724,14 +2622,12 @@ describe('CLI transcript state', () => {
 
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
     const logger = runTrace(root);
-    logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logUserMessage(logger, 'prompt');
     syncStreamLog(root);
     activeStreamId.set(root);
 
     appendLocalAssistantTranscript('Available commands: /help');
-    logger.info('partial response', {
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    });
+    logModelResponse(logger, 'partial response');
     syncStreamLog(root);
 
     appendLocalAssistantTranscript('Available commands: /help');
@@ -2754,16 +2650,13 @@ describe('CLI transcript state', () => {
           text: 'partial',
           finalized: false,
         },
-        {
-          id: 'local-help',
-          role: 'assistant',
-          text: 'Available commands: /help',
-          finalized: true,
-          synthetic: true,
-          syntheticKind: 'local',
-          syntheticAfterSeq: 1,
-          syntheticAfterSettlementSeqNo: 0,
-        },
+        localSyntheticEntry(
+          'local-help',
+          'assistant',
+          'Available commands: /help',
+          1,
+          0,
+        ),
       ],
       STREAM_PHASE.RUNNING,
     );
@@ -2787,23 +2680,9 @@ describe('CLI transcript state', () => {
   });
 
   it('does not reserve spacer rows for compact one-line tool calls', () => {
-    const entry = {
-      id: 'empty-tool',
-      role: 'tool',
-      text: '',
-      finalized: false,
-      toolUse: {
-        toolName: 'executions',
-        errorText: '',
-        outputText: '',
-        userInstructionText: '',
-        input: { path: '/executions/3a780a389327/report' },
-        isError: false,
-        isUserFeedback: false,
-        headerSummary: '',
-        status: 'completed',
-      },
-    } as const;
+    const entry = toolEntry('empty-tool', 'executions', {
+      path: '/executions/3a780a389327/report',
+    });
 
     expect(estimateTranscriptEntryRows(entry, 80)).toBe(1);
   });
@@ -2816,23 +2695,12 @@ describe('CLI transcript state', () => {
         text: 'streaming reply',
         finalized: false,
       },
-      {
-        id: 'tool',
-        role: 'tool',
-        text: '',
-        finalized: false,
-        toolUse: {
-          toolName: 'Bash',
-          errorText: '',
-          outputText: 'one\ntwo\nthree',
-          userInstructionText: '',
-          input: { command: 'ls' },
-          isError: false,
-          isUserFeedback: false,
-          headerSummary: '',
-          status: 'completed',
-        },
-      },
+      toolEntry(
+        'tool',
+        'Bash',
+        { command: 'ls' },
+        { outputText: 'one\ntwo\nthree' },
+      ),
     ] as const;
 
     const selected = selectTranscriptEntriesForViewport(pending, 3, 80);
@@ -2884,15 +2752,14 @@ describe('CLI transcript state', () => {
 
   it('preserves the finalized response across later log syncs', () => {
     const logger = runTrace(root);
-    logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logUserMessage(logger, '1+1');
     syncStreamLog(root);
     logger.responseFinalized('The answer is 2.');
 
-    logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logUserMessage(logger, 'next prompt');
     syncStreamLog(root);
 
-    const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
+    expect(entryTexts(root)).toEqual([
       '1+1',
       'The answer is 2.',
       'next prompt',
@@ -2901,21 +2768,19 @@ describe('CLI transcript state', () => {
 
   it('orders multiple finalized responses relative to the turns around them', () => {
     const logger = runTrace(root);
-    logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logUserMessage(logger, 'first prompt');
     syncStreamLog(root);
     logger.responseFinalized('first answer');
 
-    logger.info('second prompt', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
+    logUserMessage(logger, 'second prompt');
     syncStreamLog(root);
     logger.responseFinalized('second answer');
 
-    logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+    logUserMessage(logger, 'third prompt');
     syncStreamLog(root);
 
     const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
+    expect(entryTexts(root)).toEqual([
       'first prompt',
       'first answer',
       'second prompt',
@@ -3061,17 +2926,12 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct stage.start(kind: round) events without host emission', () => {
     withRunFacts((hub) => {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'stage.start',
-          id: 'round-2',
-          label: 'Round 2',
-          kind: 'round',
-          index: 1,
-          total: 3,
-        },
+      emitStageStart(hub, root, {
+        id: 'round-2',
+        label: 'Round 2',
+        kind: 'round',
+        index: 1,
+        total: 3,
       });
 
       expect(streams.get().get(root)?.stage).toEqual({
@@ -3084,16 +2944,11 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct non-round stage.start events to the phase slot, not the round slot', () => {
     withRunFacts((hub) => {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'stage.start',
-          id: 'phase-1',
-          label: 'Compile phase',
-          kind: 'phase',
-          index: 0,
-        },
+      emitStageStart(hub, root, {
+        id: 'phase-1',
+        label: 'Compile phase',
+        kind: 'phase',
+        index: 0,
       });
 
       expect(streams.get().get(root)?.stage).toEqual({
@@ -3106,20 +2961,16 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct child activity and parent-link facts without host emission', () => {
     withRunFacts((hub) => {
-      const child: ActiveChildInfo = {
-        executionId: 'agent-1',
-        agentName: 'critic',
-        identity: { kind: 'agent' as const, agent: 'critic' },
-        childStreamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      };
+      const child: ActiveChildInfo = childRosterRow(
+        'critic',
+        child1,
+        STREAM_PHASE.RUNNING,
+        'agent-1',
+      );
 
       // The child's own status is the single owner the roster selectors read
       // from (rule 8: the roster's copied status is discarded).
-      setStreamStatusInCliState({
-        streamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      });
+      setStatus(child1, STREAM_PHASE.RUNNING);
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3160,19 +3011,7 @@ describe('sessionSignalsAdapter run facts', () => {
         reasoningTokens: 7,
       };
 
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId: root,
-            storageKey,
-            executionId: 'exec-direct',
-            usage,
-          },
-        },
-      });
+      emitUsage(hub, root, storageKey, usage, 'exec-direct');
 
       expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
@@ -3234,29 +3073,10 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct run config and conversation progress without host emission', () => {
     withRunFacts((hub) => {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'run.config',
-          streamId: root,
-          executionId: 'exec-config' as ExecutionId,
-          config: {
-            agent: 'search',
-            agentCategory: AgentCategory.ToolUse,
-            model: 'kimi26T',
-            instruction: 'Check the enumeration independently.',
-            inputFiles: ['src/Main.lean'],
-            contextFiles: ['notes/proof.md'],
-            mediaFiles: [],
-            outputFiles: ['build/Main.olean'],
-            editedFile: null,
-            editedFiles: [],
-            toolConfig: DEFAULT_TOOL_CONFIG,
-            memories: [],
-            workingDirectory: undefined,
-          },
-        },
+      emitRunConfig(hub, root, 'exec-config', {
+        input: ['src/Main.lean'],
+        context: ['notes/proof.md'],
+        output: ['build/Main.olean'],
       });
       hub.emit({
         scope: 'run',
@@ -3441,53 +3261,29 @@ describe('sessionSignalsAdapter run facts', () => {
   it('applies direct usage sequences exactly once', () => {
     withRunFacts((hub) => {
       const storageKey = 'root-direct-sequence-run' as StorageKey;
-      const payload = {
-        streamId: root,
-        storageKey,
-        executionId: 'exec-direct-sequence',
-        usage: {
-          inputTokens: 100,
-          outputTokens: 20,
-          cost: 1,
-          cacheReadInputTokens: 30,
-          elapsedTime: 1.5,
-          percentageCached: 25,
-          reasoningTokens: 7,
-        },
+      const firstUsage = {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        elapsedTime: 1.5,
+        percentageCached: 25,
+        reasoningTokens: 7,
       };
-      const secondPayload = {
-        streamId: root,
-        storageKey,
-        executionId: 'exec-direct-sequence',
-        usage: {
-          inputTokens: 50,
-          outputTokens: 10,
-          cost: 0.5,
-          cacheReadInputTokens: 5,
-          elapsedTime: 0.8,
-          percentageCached: 10,
-          reasoningTokens: 3,
-        },
+      const secondUsage = {
+        inputTokens: 50,
+        outputTokens: 10,
+        cost: 0.5,
+        cacheReadInputTokens: 5,
+        elapsedTime: 0.8,
+        percentageCached: 10,
+        reasoningTokens: 3,
       };
 
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          payload,
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          payload: secondPayload,
-        },
-      });
+      emitUsage(hub, root, storageKey, firstUsage, 'exec-direct-sequence');
+      emitUsage(hub, root, storageKey, secondUsage, 'exec-direct-sequence');
 
-      expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
+      expect(streams.get().get(root)?.usage).toEqual(secondUsage);
       // Summed from the store's per-run map — the one accumulator, which
       // carries reasoningTokens — not a second running sum in the slice.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
@@ -3524,30 +3320,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('captures per-stream model identity from task state', () => {
     withRunFacts((hub) => {
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'run.config',
-          streamId: child1,
-          executionId: 'exec-search' as ExecutionId,
-          config: {
-            agent: 'search',
-            agentCategory: AgentCategory.ToolUse,
-            model: 'kimi26T',
-            instruction: 'Check the enumeration independently.',
-            inputFiles: [],
-            contextFiles: [],
-            mediaFiles: [],
-            outputFiles: [],
-            editedFile: null,
-            editedFiles: [],
-            toolConfig: DEFAULT_TOOL_CONFIG,
-            memories: [],
-            workingDirectory: undefined,
-          },
-        },
-      });
+      emitRunConfig(hub, child1, 'exec-search');
 
       expect(streams.get().get(child1)).toMatchObject({
         model: 'kimi26T',
@@ -3557,10 +3330,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(root, STREAM_PHASE.RUNNING);
     withRunFacts((hub, session) => {
       const lease = session.followUps.claimLive(root, 'flow')!;
       const queue = session.followUps.queue(lease);
@@ -3600,40 +3370,18 @@ describe('sessionSignalsAdapter run facts', () => {
     withRunFacts((hub) => {
       const storageKey = 'root-run' as StorageKey;
 
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId: root,
-            storageKey,
-            usage: {
-              inputTokens: 100,
-              outputTokens: 20,
-              cost: 1,
-              cacheReadInputTokens: 30,
-            },
-          },
-        },
+      emitUsage(hub, root, storageKey, {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
       });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId: root,
-            storageKey,
-            usage: {
-              inputTokens: 40,
-              outputTokens: 10,
-              cost: 2,
-              cacheReadInputTokens: 5,
-              cacheCreationInputTokens: 7,
-            },
-          },
-        },
+      emitUsage(hub, root, storageKey, {
+        inputTokens: 40,
+        outputTokens: 10,
+        cost: 2,
+        cacheReadInputTokens: 5,
+        cacheCreationInputTokens: 7,
       });
 
       expect(streams.get().get(root)?.usage).toEqual({
@@ -3659,42 +3407,20 @@ describe('sessionSignalsAdapter run facts', () => {
 describe('session tree order', () => {
   it('orders retained sibling sessions', () => {
     projectChildRoster(root, [
-      {
-        executionId: 'e1',
-        agentName: 'a',
-        identity: { kind: 'agent' as const, agent: 'a' },
-        childStreamId: child1,
-      },
-      {
-        executionId: 'e2',
-        agentName: 'b',
-        identity: { kind: 'agent' as const, agent: 'b' },
-        childStreamId: child2,
-      },
+      childRosterRow('a', child1, undefined, 'e1'),
+      childRosterRow('b', child2, undefined, 'e2'),
     ]);
     setParentStream(child1, root);
     setParentStream(child2, root);
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.RUNNING,
-    });
-    setStreamStatusInCliState({
-      streamId: child2,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(child1, STREAM_PHASE.RUNNING);
+    setStatus(child2, STREAM_PHASE.RUNNING);
     expect(orderedSessionDescendants(root)).toEqual([child1, child2]);
   });
 
   it('retains an inactive child session with history', () => {
     setParentStream(child1, root);
-    setStreamStatusInCliState({
-      streamId: root,
-      status: STREAM_PHASE.WAITING,
-    });
-    setStreamStatusInCliState({
-      streamId: child1,
-      status: STREAM_PHASE.WAITING,
-    });
+    setStatus(root, STREAM_PHASE.WAITING);
+    setStatus(child1, STREAM_PHASE.WAITING);
 
     expect(orderedSessionDescendants(root)).toEqual([child1]);
   });
@@ -3733,11 +3459,8 @@ describe('child-stream ordered transition matrix', () => {
 
   it('1. canonical order: A, S(running), R_P+, E_P+', () => {
     // A: the child's slice exists with no status of its own yet.
-    patchStream(kid, (s) => ({ ...s }));
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    mintSlice(kid);
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
@@ -3753,11 +3476,8 @@ describe('child-stream ordered transition matrix', () => {
   it('2. roster first: R_P+, A, S(running), E_P+', () => {
     projectChildRoster(parentP, [rosterRow()]);
     // A: the child's slice exists with no status of its own yet.
-    patchStream(kid, (s) => ({ ...s }));
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    mintSlice(kid);
+    setStatus(kid, STREAM_PHASE.RUNNING);
     setParentStream(kid, parentP);
 
     expect(parentStream.get().get(kid)).toBe(parentP);
@@ -3771,13 +3491,10 @@ describe('child-stream ordered transition matrix', () => {
     // child reachable from the focus cycle once its slice exists (invariant
     // 6: an edge-only child is focusable once its StreamSlice exists).
     // A: the child's slice exists with no status of its own yet.
-    patchStream(kid, (s) => ({ ...s }));
+    mintSlice(kid);
     expect(parentStream.get().get(kid)).toBe(parentP);
 
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow()]);
 
     expect(activeRows(parentP)).toHaveLength(1);
@@ -3785,10 +3502,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('4. status first: S(running), A, E_P+, R_P+', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     setParentStream(kid, parentP);
     projectChildRoster(parentP, [rosterRow()]);
 
@@ -3799,10 +3513,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('5. completion: A, S(running), R_P+, E_P+, R_P-, S(terminal)', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
@@ -3811,10 +3522,7 @@ describe('child-stream ordered transition matrix', () => {
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toHaveLength(1);
 
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.COMPLETED,
-    });
+    setStatus(kid, STREAM_PHASE.COMPLETED);
 
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toMatchObject([
@@ -3833,10 +3541,7 @@ describe('child-stream ordered transition matrix', () => {
     // (typically the very first one) instead of the last live value before
     // removal - the value the retained row and `formatPostCompactionContext`
     // read verbatim once the child is gone from the roster.
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
     setParentStream(kid, parentP);
 
@@ -3846,19 +3551,13 @@ describe('child-stream ordered transition matrix', () => {
     // The child is untracked (dropped from the roster) with its last-known
     // elapsed already captured; the terminal status lands separately.
     projectChildRoster(parentP, []);
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.COMPLETED,
-    });
+    setStatus(kid, STREAM_PHASE.COMPLETED);
 
     expect(retainedRows(parentP)).toMatchObject([{ elapsed: '41s' }]);
   });
 
   it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
 
@@ -3876,10 +3575,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('7. explicit reattachment: (6) then E_Q+, R_Q+, R_P+', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
     setParentStream(kid, null);
@@ -3899,17 +3595,11 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('8. child removal with late facts: (5) then X(child), R_P+, E_P+, A, S(terminal)', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     projectChildRoster(parentP, []);
-    setStreamStatusInCliState({
-      status: STREAM_PHASE.COMPLETED,
-      streamId: kid,
-    });
+    setStatus(kid, STREAM_PHASE.COMPLETED);
 
     removeStream(kid);
     expect(isChildStreamRemoved(kid)).toBe(true);
@@ -3921,7 +3611,7 @@ describe('child-stream ordered transition matrix', () => {
     // shortcut) intentionally has no such guard.
     projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
-    setStreamStatusInCliState({ status: STREAM_PHASE.RUNNING, streamId: kid });
+    setStatus(kid, STREAM_PHASE.RUNNING);
 
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toEqual([]);
@@ -3930,28 +3620,16 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('9. fresh activation after removal uses a distinct id, not the removed one', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     removeStream(kid);
 
     const freshKid = 'kid-2' as StreamTabId;
-    setStreamStatusInCliState({
-      streamId: freshKid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(freshKid, STREAM_PHASE.RUNNING);
     setParentStream(freshKid, parentP);
     projectChildRoster(parentP, [
-      {
-        executionId: 'kid-2-exec',
-        agentName: 'kid-agent',
-        identity: { kind: 'agent' as const, agent: 'kid-agent' },
-        childStreamId: freshKid,
-        status: STREAM_PHASE.RUNNING,
-      },
+      childRosterRow('kid-agent', freshKid, STREAM_PHASE.RUNNING, 'kid-2-exec'),
     ]);
 
     expect(isChildStreamRemoved(kid)).toBe(true);
@@ -3962,28 +3640,12 @@ describe('child-stream ordered transition matrix', () => {
   it('10. two-child retention keeps stable order across reordering and shrinking rosters', () => {
     const kidA = 'kid-a' as StreamTabId;
     const kidB = 'kid-b' as StreamTabId;
-    const rowA = (status?: StreamPhase) => ({
-      executionId: 'exec-a',
-      agentName: 'a',
-      identity: { kind: 'agent' as const, agent: 'a' },
-      childStreamId: kidA,
-      status,
-    });
-    const rowB = (status?: StreamPhase) => ({
-      executionId: 'exec-b',
-      agentName: 'b',
-      identity: { kind: 'agent' as const, agent: 'b' },
-      childStreamId: kidB,
-      status,
-    });
-    setStreamStatusInCliState({
-      streamId: kidA,
-      status: STREAM_PHASE.RUNNING,
-    });
-    setStreamStatusInCliState({
-      streamId: kidB,
-      status: STREAM_PHASE.RUNNING,
-    });
+    const rowA = (status?: StreamPhase) =>
+      childRosterRow('a', kidA, status, 'exec-a');
+    const rowB = (status?: StreamPhase) =>
+      childRosterRow('b', kidB, status, 'exec-b');
+    setStatus(kidA, STREAM_PHASE.RUNNING);
+    setStatus(kidB, STREAM_PHASE.RUNNING);
 
     // First-seen order: A then B.
     projectChildRoster(parentP, [rowA(), rowB()]);
@@ -4001,10 +3663,7 @@ describe('child-stream ordered transition matrix', () => {
 
     // Shrink to just B; A completes.
     projectChildRoster(parentP, [rowB()]);
-    setStreamStatusInCliState({
-      streamId: kidA,
-      status: STREAM_PHASE.COMPLETED,
-    });
+    setStatus(kidA, STREAM_PHASE.COMPLETED);
 
     expect(activeRows(parentP).map((r) => r.childStreamId)).toEqual([kidB]);
     // Retained order is still stable and A's historical row survives.
@@ -4019,16 +3678,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('11. parent removal with late facts: P -> child, X(P), R_P+, E_P+', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
-    setStreamStatusInCliState({
-      streamId: parentP,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(parentP, STREAM_PHASE.RUNNING);
 
     removeStream(parentP);
     expect(isChildStreamRemoved(parentP)).toBe(true);
@@ -4044,10 +3697,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('12. identical roster snapshot applied twice is a no-op (no store write)', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     const entriesAfterFirst = childStreamEntries.get();
 
@@ -4060,10 +3710,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('13. first roster parent rejects a conflicting roster until an explicit edge arrives', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     projectChildRoster(parentQ, [
@@ -4076,10 +3723,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('14. tombstones stay bounded: oldest removals are evicted, live entries kept', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     for (let index = 0; index < 250; index += 1) {
@@ -4100,10 +3744,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('15. a removed parent survives eviction while an orphaned child is still live', () => {
-    setStreamStatusInCliState({
-      streamId: kid,
-      status: STREAM_PHASE.RUNNING,
-    });
+    setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
 

@@ -30,6 +30,17 @@ function completedResponse(id: string): Response {
   } as unknown as Response;
 }
 
+/** Assert a poll rejects with the max-duration timeout and its error metadata. */
+async function expectPollingTimeout(promise: Promise<unknown>): Promise<void> {
+  const timeout = await promise.catch((error: unknown) => error);
+  expect(timeout).toBeInstanceOf(Error);
+  expect((timeout as Error).message).toContain(
+    'exceeded maximum polling duration',
+  );
+  expect(normalizeProviderError(timeout).userRetryable).toBe(true);
+  expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
+}
+
 const MAX_BACKGROUND_DURATION_MS = 3 * 60 * 60 * 1000;
 
 afterEach(() => {
@@ -37,17 +48,15 @@ afterEach(() => {
 });
 
 describe('BackgroundRunLifecycle.isPending / pending-id bookkeeping', () => {
-  it('treats queued and in_progress as pending, everything else as terminal', () => {
+  it.each([
+    { status: 'queued', pending: true },
+    { status: 'in_progress', pending: true },
+    { status: 'completed', pending: false },
+    { status: 'failed', pending: false },
+  ])('treats $status as pending=$pending', ({ status, pending }) => {
     const lifecycle = createLifecycle();
 
-    expect(lifecycle.isPending({ status: 'queued' } as Response)).toBe(true);
-    expect(lifecycle.isPending({ status: 'in_progress' } as Response)).toBe(
-      true,
-    );
-    expect(lifecycle.isPending({ status: 'completed' } as Response)).toBe(
-      false,
-    );
-    expect(lifecycle.isPending({ status: 'failed' } as Response)).toBe(false);
+    expect(lifecycle.isPending({ status } as Response)).toBe(pending);
   });
 
   it('reports no pending resume until a poll remembers one', () => {
@@ -148,13 +157,7 @@ describe('BackgroundRunLifecycle.tryResume', () => {
     retrieve.mockClear();
     vi.advanceTimersByTime(MAX_BACKGROUND_DURATION_MS);
 
-    const timeout = await lifecycle.tryResume(client).catch((error) => error);
-    expect(timeout).toBeInstanceOf(Error);
-    expect((timeout as Error).message).toContain(
-      'exceeded maximum polling duration',
-    );
-    expect(normalizeProviderError(timeout).userRetryable).toBe(true);
-    expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
+    await expectPollingTimeout(lifecycle.tryResume(client));
     expect(retrieve).not.toHaveBeenCalled();
     expect(lifecycle.getPendingId()).toBeNull();
   });
@@ -218,13 +221,7 @@ describe('BackgroundRunLifecycle.retrieveAndRemember', () => {
     ).rejects.toThrow('socket hang up');
     vi.advanceTimersByTime(MAX_BACKGROUND_DURATION_MS - 1);
 
-    const timeout = await lifecycle.tryResume(client).catch((error) => error);
-    expect(timeout).toBeInstanceOf(Error);
-    expect((timeout as Error).message).toContain(
-      'exceeded maximum polling duration',
-    );
-    expect(normalizeProviderError(timeout).userRetryable).toBe(true);
-    expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
+    await expectPollingTimeout(lifecycle.tryResume(client));
     expect(retrieve).toHaveBeenCalledTimes(2);
     expect(lifecycle.hasPendingResume()).toBe(false);
   });

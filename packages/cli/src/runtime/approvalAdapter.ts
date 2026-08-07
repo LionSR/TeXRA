@@ -156,14 +156,15 @@ async function askHeadlessUserQuestion(
   try {
     for (const question of payload.questions) {
       hooks.beforePrompt?.();
+      const formatted = formatUserQuestionPrompt({
+        ...payload,
+        questions: [question],
+      });
       const answer = await queueCliApprovalQuestion(context, {
         kind: 'approval',
         summary: payload.context
-          ? `${payload.context}\n\n${formatUserQuestionPrompt({
-              ...payload,
-              questions: [question],
-            })}`
-          : formatUserQuestionPrompt({ ...payload, questions: [question] }),
+          ? `${payload.context}\n\n${formatted}`
+          : formatted,
         prompt: 'Answer (blank to skip): ',
       });
       const parsed = parseUserQuestionAnswer(answer, question);

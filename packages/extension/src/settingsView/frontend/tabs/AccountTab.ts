@@ -128,10 +128,9 @@ export class AccountTab extends LitElement {
     const expired = this.sessionProblem === 'expired';
     const unavailable = this.sessionProblem === 'unavailable';
     // Unavailable and expired sessions retain the stored account label.
+    const hasStoredAccount = this.authenticated || expired || unavailable;
     const title =
-      this.authenticated || expired || unavailable
-        ? this.userEmail || 'TeXRA account'
-        : 'TeXRA account';
+      hasStoredAccount && this.userEmail ? this.userEmail : 'TeXRA account';
     let description: TemplateResult | string =
       `Sign in to use ${INCLUDED_ACCESS.inline} and track your usage.`;
     if (expired) {

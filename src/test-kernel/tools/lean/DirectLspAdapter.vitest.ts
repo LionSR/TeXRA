@@ -116,7 +116,7 @@ async function countStarts(): Promise<number> {
 }
 
 describe('createDirectLspLeanAdapter', () => {
-  const fakeLakeIt = process.platform === 'win32' ? it.skip : it;
+  const fakeLakeIt = it.skipIf(process.platform === 'win32');
 
   it('decodes file URIs with platform path semantics', () => {
     const spacedPath = path.join(projectRoot, 'File With Space.lean');

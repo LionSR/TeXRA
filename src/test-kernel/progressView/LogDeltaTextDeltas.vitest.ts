@@ -21,6 +21,7 @@ import {
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
   type StreamLogEntry,
+  type StreamLogTextDelta,
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -47,6 +48,22 @@ function dispatch(message: ProgressViewOutboundMessage) {
   const handler = handlers[message.command];
   expect(handler).toBeDefined();
   assertSupported(handler!)(message as never);
+}
+
+function dispatchLogDelta(
+  entries: StreamLogEntry[],
+  options: {
+    updates?: StreamLogEntry[];
+    textDeltas?: StreamLogTextDelta[];
+  } = {},
+) {
+  dispatch({
+    command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+    streamId: STREAM_ID,
+    entries,
+    updates: options.updates ?? [],
+    textDeltas: options.textDeltas ?? [],
+  });
 }
 
 function modelResponseEntry(
@@ -86,19 +103,9 @@ describe('LOG_DELTA text deltas', () => {
   it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
     const getState = seedWorkflowStream();
 
-    dispatch({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: STREAM_ID,
-      entries: [modelResponseEntry('hello', 'running')],
-      updates: [],
-      textDeltas: [],
-    });
+    dispatchLogDelta([modelResponseEntry('hello', 'running')]);
 
-    dispatch({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: STREAM_ID,
-      entries: [],
-      updates: [],
+    dispatchLogDelta([], {
       textDeltas: [{ id: 'model-response', appendText: ' world' }],
     });
 
@@ -108,12 +115,8 @@ describe('LOG_DELTA text deltas', () => {
     expect(streamedLogs?.updatedMessageIndices).toEqual([0]);
     expect(streamed && isStreamingTextLogMessage(streamed)).toBe(true);
 
-    dispatch({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: STREAM_ID,
-      entries: [],
+    dispatchLogDelta([], {
       updates: [modelResponseEntry('hello world', 'completed')],
-      textDeltas: [],
     });
 
     const finalizedLogs = getState().streamLogs.get(STREAM_ID);
@@ -142,27 +145,21 @@ describe('LOG_DELTA text deltas', () => {
       },
     });
 
-    dispatch({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: STREAM_ID,
-      entries: [
-        activityEntry('compaction-start', 'started'),
-        {
-          seqNo: 2,
-          id: 'internal-diagnostic',
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: LOG_LEVELS.INFO,
-          timestamp: 100,
-          messageType: MESSAGE_TYPES.INTERNAL,
-          text: 'hidden diagnostic',
-          verbose: false,
-        },
-        modelResponseEntry('visible', 'completed'),
-        activityEntry('compaction-finish', 'finished'),
-      ],
-      updates: [],
-      textDeltas: [],
-    });
+    dispatchLogDelta([
+      activityEntry('compaction-start', 'started'),
+      {
+        seqNo: 2,
+        id: 'internal-diagnostic',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.INTERNAL,
+        text: 'hidden diagnostic',
+        verbose: false,
+      },
+      modelResponseEntry('visible', 'completed'),
+      activityEntry('compaction-finish', 'finished'),
+    ]);
 
     const streamLogs = getState().streamLogs.get(STREAM_ID);
     expect(streamLogs?.logs.map(({ id }) => id)).toEqual(['model-response']);
@@ -174,23 +171,17 @@ describe('LOG_DELTA text deltas', () => {
   it('keeps valid group-start fields when status is unrecognized', () => {
     const getState = seedWorkflowStream();
 
-    dispatch({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: STREAM_ID,
-      entries: [
-        {
-          seqNo: 1,
-          id: 'group-1',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: LOG_LEVELS.INFO,
-          timestamp: 100,
-          text: 'Round 1',
-          data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
-        },
-      ],
-      updates: [],
-      textDeltas: [],
-    });
+    dispatchLogDelta([
+      {
+        seqNo: 1,
+        id: 'group-1',
+        type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        text: 'Round 1',
+        data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
+      },
+    ]);
 
     const group = getState().streamStates.get(STREAM_ID)?.taskGroups[0];
     expect(group?.status).toBe(STREAM_PHASE.RUNNING);
@@ -265,13 +256,10 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
     (wireStatus, expectedStatus) => {
       const getState = seedWorkflowStream();
 
-      dispatch({
-        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId: STREAM_ID,
-        entries: [groupStartEntry('run-0'), groupEndEntry('run-0', wireStatus)],
-        updates: [],
-        textDeltas: [],
-      });
+      dispatchLogDelta([
+        groupStartEntry('run-0'),
+        groupEndEntry('run-0', wireStatus),
+      ]);
 
       const taskGroups = getState().streamStates.get(STREAM_ID)?.taskGroups;
       expect(taskGroups?.[0]?.status).toBe(expectedStatus);
@@ -285,13 +273,7 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
       text: 'Round 2',
     };
 
-    dispatch({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: STREAM_ID,
-      entries: [legacyRound],
-      updates: [],
-      textDeltas: [],
-    });
+    dispatchLogDelta([legacyRound]);
 
     const extensionTaskGroups =
       getState().streamStates.get(STREAM_ID)?.taskGroups;

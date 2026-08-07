@@ -258,18 +258,15 @@ async function decidePresentedApproval<
   P,
 >(context: CliContext, kind: K, payload: P): Promise<ApprovalDecision> {
   try {
-    const queuePayload = { kind, payload } as Extract<
+    return await enqueueTuiApproval({ kind, payload } as Extract<
       ApprovalPayload,
       { kind: K }
-    >;
-    const decision = await enqueueTuiApproval(queuePayload);
-    return decision;
+    >);
   } catch {
-    const decision: ApprovalDecision = {
+    return {
       accepted: false,
       userMessage: 'CLI approval prompt failed.',
     };
-    return decision;
   }
 }
 

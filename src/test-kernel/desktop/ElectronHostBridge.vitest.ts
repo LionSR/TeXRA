@@ -65,6 +65,33 @@ async function loadMainHostBridgeModule(ipcMain: {
   ) as Promise<MainHostBridgeModule>;
 }
 
+interface FakeMainWindow {
+  isDestroyed(): boolean;
+  once(event: 'closed', listener: () => void): void;
+  webContents: {
+    isDestroyed(): boolean;
+    send(channel: string, message: unknown): void;
+  };
+}
+
+function fakeMainWindow(sends: Array<{ channel: string; message: unknown }>) {
+  const closedListeners: Array<() => void> = [];
+  const webContents = {
+    isDestroyed: () => false,
+    send: vi.fn((channel: string, message: unknown) =>
+      sends.push({ channel, message }),
+    ),
+  };
+  const window: FakeMainWindow = {
+    isDestroyed: () => false,
+    once: vi.fn((_event: 'closed', listener: () => void) => {
+      closedListeners.push(listener);
+    }),
+    webContents,
+  };
+  return { closedListeners, webContents, window };
+}
+
 describe('desktop Electron host bridge', () => {
   it('exposes only the shared synchronous host bridge surface', async () => {
     const { installElectronHostBridge } = await loadHostBridgeModule();
@@ -146,18 +173,7 @@ describe('desktop Electron host bridge', () => {
     const { installDesktopHostBridge } =
       await loadMainHostBridgeModule(ipcMain);
     const sends: Array<{ channel: string; message: unknown }> = [];
-    const webContents = {
-      isDestroyed: () => false,
-      send: vi.fn((channel, message) => sends.push({ channel, message })),
-    };
-    const closedListeners: Array<() => void> = [];
-    const window = {
-      isDestroyed: () => false,
-      once: vi.fn((_event: 'closed', listener: () => void) => {
-        closedListeners.push(listener);
-      }),
-      webContents,
-    };
+    const { closedListeners, webContents, window } = fakeMainWindow(sends);
     const rendererMessages: unknown[] = [];
     const bridge = installDesktopHostBridge(window, {
       onRendererMessage: (message) => rendererMessages.push(message),
@@ -198,18 +214,10 @@ describe('desktop Electron host bridge', () => {
       const { installDesktopHostBridge } =
         await loadMainHostBridgeModule(ipcMain);
       const sends: Array<{ channel: string; message: unknown }> = [];
-      const window = {
-        isDestroyed: () => false,
-        once: vi.fn(),
-        webContents: {
-          isDestroyed: () => false,
-          send: vi.fn((channel, message) => sends.push({ channel, message })),
-        },
-      };
+      const { window } = fakeMainWindow(sends);
       return {
         bridge: installDesktopHostBridge(window),
         sends,
-        pushChannel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
       };
     }
 
@@ -225,25 +233,29 @@ describe('desktop Electron host bridge', () => {
     });
 
     it('forwards a well-formed MainView outbound message unchanged', async () => {
-      const { bridge, sends, pushChannel } = await createBridge();
+      const { bridge, sends } = await createBridge();
       const message = {
         command: 'setCurrentFile',
         filePath: 'paper.tex',
         fileType: 'input',
       };
       expect(() => bridge.postToRenderer(message)).not.toThrow();
-      expect(sends).toEqual([{ channel: pushChannel, message }]);
+      expect(sends).toEqual([
+        { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },
+      ]);
     });
 
     it('passes a desktop-only command unrecognized by either outbound schema through unchecked', async () => {
-      const { bridge, sends, pushChannel } = await createBridge();
+      const { bridge, sends } = await createBridge();
       // `desktop:showPdf` (and settings/history/onboarding commands) aren't
       // modeled by MainViewMessageSchema or ProgressViewOutboundMessageSchema
       // — out of scope for this change, so no schema claims the command and
       // it must not throw.
       const message = { command: 'desktop:showPdf', title: 't' };
       expect(() => bridge.postToRenderer(message)).not.toThrow();
-      expect(sends).toEqual([{ channel: pushChannel, message }]);
+      expect(sends).toEqual([
+        { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },
+      ]);
     });
   });
 });

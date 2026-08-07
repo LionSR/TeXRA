@@ -268,14 +268,11 @@ export class ToolsTab extends LitElement {
   ): TemplateResult | typeof nothing {
     if (items.length === 0) return nothing;
 
-    let available = 0;
-    for (const item of items) {
-      if (item.status === 'available') available++;
-    }
-
-    const total = items.length;
+    const available = items.filter(
+      (item) => item.status === 'available',
+    ).length;
     return html`<div class="tools-summary">
-      ${waIcon('check')} ${available}/${total} available
+      ${waIcon('check')} ${available}/${items.length} available
     </div>`;
   }
 

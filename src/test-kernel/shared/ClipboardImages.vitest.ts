@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { getExtensionFromMimeType } from '@shared/utils/clipboardImages';
 
 describe('clipboard image helpers', () => {
-  it('keeps legacy pasted-image MIME aliases', () => {
-    expect(getExtensionFromMimeType('image/x-jng')).toBe('jng');
-    expect(getExtensionFromMimeType('image/x-mng')).toBe('mng');
-    expect(getExtensionFromMimeType('image/vnd.adobe.photoshop')).toBe('psd');
-    expect(getExtensionFromMimeType('image/x-photoshop')).toBe('psd');
-    expect(getExtensionFromMimeType('image/x-psd')).toBe('psd');
+  it.each([
+    ['image/x-jng', 'jng'],
+    ['image/x-mng', 'mng'],
+    ['image/vnd.adobe.photoshop', 'psd'],
+    ['image/x-photoshop', 'psd'],
+    ['image/x-psd', 'psd'],
+  ])('keeps legacy pasted-image MIME alias %s', (mimeType, extension) => {
+    expect(getExtensionFromMimeType(mimeType)).toBe(extension);
   });
 });

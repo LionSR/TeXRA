@@ -100,6 +100,27 @@ function image(fileName: string): ExtractedClipboardImage {
   };
 }
 
+/** Give a stream one pending pasted image and hand the image back. */
+function seedPendingImage(
+  streamId: string,
+  fileName: string,
+): ExtractedClipboardImage {
+  const pendingImage = image(fileName);
+  getFollowUpInputTransientState(streamId).pendingImages = [pendingImage];
+  return pendingImage;
+}
+
+/** Emit a send and assert it carried exactly these images for the stream. */
+function expectSend(
+  element: FollowUpInputInternals,
+  streamId: string,
+  images: readonly ExtractedClipboardImage[],
+): void {
+  const getSent = captureSend(element);
+  element.emitSend();
+  expect(getSent()).toEqual({ streamId, images });
+}
+
 describe('follow-up-input layout', () => {
   // The composer sizes from its own content rather than reserving a fixed
   // block for an empty draft, and keeps the manual drag affordance. Not Web
@@ -136,11 +157,9 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     const element = createFollowUpInput('stream-a');
     await element.updateComplete;
 
-    const streamA = getFollowUpInputTransientState('stream-a');
     const streamB = getFollowUpInputTransientState('stream-b');
-    const imageA = image('pasted-a.png');
+    const imageA = seedPendingImage('stream-a', 'pasted-a.png');
     const imageB = image('pasted-b.png');
-    streamA.pendingImages = [imageA];
 
     bindStream(element, 'stream-b');
     streamB.pendingImages = [imageB];
@@ -149,10 +168,7 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     bindStream(element, 'stream-a');
     await element.updateComplete;
 
-    const getSent = captureSend(element);
-    element.emitSend();
-
-    expect(getSent()).toEqual({ streamId: 'stream-a', images: [imageA] });
+    expectSend(element, 'stream-a', [imageA]);
     expect(streamB.pendingImages).toEqual([imageB]);
   });
 
@@ -161,9 +177,8 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     await element.updateComplete;
 
     const streamA = getFollowUpInputTransientState('stream-a');
-    const imageA = image('pasted-a.png');
+    const imageA = seedPendingImage('stream-a', 'pasted-a.png');
     const pendingPaste = new Promise<void>(() => {});
-    streamA.pendingImages = [imageA];
     streamA.pendingImagePastes.add(pendingPaste);
 
     const getSent = captureSend(element);
@@ -185,17 +200,12 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     const element = createFollowUpInput('stream-a');
     await element.updateComplete;
 
-    const streamA = getFollowUpInputTransientState('stream-a');
-    const imageA = image('pasted-a.png');
-    streamA.pendingImages = [imageA];
+    const imageA = seedPendingImage('stream-a', 'pasted-a.png');
 
     element.value = 'follow-up text';
     await element.updateComplete;
 
-    const getSent = captureSend(element);
-    element.emitSend();
-
-    expect(getSent()).toEqual({ streamId: 'stream-a', images: [imageA] });
+    expectSend(element, 'stream-a', [imageA]);
   });
 
   it('delivers a completed paste and deferred send after unmount', async () => {

@@ -24,22 +24,25 @@ import {
 } from '@shared/streams/streamStatus';
 
 describe('run outcome algebra', () => {
-  it('derives outcomes with failed > cancelled > completed priority', () => {
-    expect(deriveRunOutcome({ failed: false, cancelled: false })).toBe(
-      RUN_OUTCOME.COMPLETED,
-    );
-    expect(deriveRunOutcome({ failed: false, cancelled: true })).toBe(
-      RUN_OUTCOME.CANCELLED,
-    );
-    expect(deriveRunOutcome({ failed: true, cancelled: false })).toBe(
-      RUN_OUTCOME.FAILED,
-    );
+  it.each([
+    {
+      flags: { failed: false, cancelled: false },
+      expected: RUN_OUTCOME.COMPLETED,
+    },
+    {
+      flags: { failed: false, cancelled: true },
+      expected: RUN_OUTCOME.CANCELLED,
+    },
+    { flags: { failed: true, cancelled: false }, expected: RUN_OUTCOME.FAILED },
     // Failure wins over a concurrent interrupt — a run that failed and was
     // then stopped is still a failure.
-    expect(deriveRunOutcome({ failed: true, cancelled: true })).toBe(
-      RUN_OUTCOME.FAILED,
-    );
-  });
+    { flags: { failed: true, cancelled: true }, expected: RUN_OUTCOME.FAILED },
+  ])(
+    'derives outcomes with failed > cancelled > completed priority ($flags)',
+    ({ flags, expected }) => {
+      expect(deriveRunOutcome(flags)).toBe(expected);
+    },
+  );
 
   it('projects each outcome into the injective legacy execution vocabulary', () => {
     expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.COMPLETED]).toEqual({
@@ -68,10 +71,20 @@ describe('stream phase transition table', () => {
     STREAM_TRANSITION_CAUSE,
   ) as StreamTransitionCause[];
 
-  const allowed: Record<
-    StreamPhase,
-    Record<StreamTransitionCause, readonly StreamPhase[]>
-  > = {
+  type CauseRow = Record<StreamTransitionCause, readonly StreamPhase[]>;
+
+  const NO_TRANSITIONS = Object.fromEntries(
+    causes.map((cause): [StreamTransitionCause, readonly StreamPhase[]] => [
+      cause,
+      [],
+    ]),
+  ) as CauseRow;
+  const RESUME_ONLY: CauseRow = {
+    ...NO_TRANSITIONS,
+    [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+  };
+
+  const allowed: Record<StreamPhase, CauseRow> = {
     [STREAM_PHASE.RUNNING]: {
       [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [
         STREAM_PHASE.COMPLETED,
@@ -94,37 +107,14 @@ describe('stream phase transition table', () => {
       ],
     },
     [STREAM_PHASE.WAITING]: {
-      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
-      [STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK]: [],
-      [STREAM_TRANSITION_CAUSE.WAIT]: [],
+      ...NO_TRANSITIONS,
       [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
       [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
       [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [STREAM_PHASE.WAITING],
     },
-    [STREAM_PHASE.COMPLETED]: {
-      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
-      [STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK]: [],
-      [STREAM_TRANSITION_CAUSE.WAIT]: [],
-      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.USER_STOP]: [],
-      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
-    },
-    [STREAM_PHASE.CANCELLED]: {
-      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
-      [STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK]: [],
-      [STREAM_TRANSITION_CAUSE.WAIT]: [],
-      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.USER_STOP]: [],
-      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
-    },
-    [STREAM_PHASE.FAILED]: {
-      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [],
-      [STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK]: [],
-      [STREAM_TRANSITION_CAUSE.WAIT]: [],
-      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.USER_STOP]: [],
-      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [],
-    },
+    [STREAM_PHASE.COMPLETED]: RESUME_ONLY,
+    [STREAM_PHASE.CANCELLED]: RESUME_ONLY,
+    [STREAM_PHASE.FAILED]: RESUME_ONLY,
   };
 
   it('is exhaustive over every phase, cause, and destination phase', () => {
@@ -140,16 +130,19 @@ describe('stream phase transition table', () => {
   });
 
   it('admits only named start causes from idle', () => {
+    const fromIdle: CauseRow = {
+      ...NO_TRANSITIONS,
+      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [STREAM_PHASE.RUNNING],
+      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+      [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
+      // Restart repair may land on any phase.
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: phases,
+    };
+
     for (const cause of causes) {
       for (const to of phases) {
         expect(canTransitionStreamPhase(undefined, to, cause)).toBe(
-          (cause === STREAM_TRANSITION_CAUSE.LIFECYCLE &&
-            to === STREAM_PHASE.RUNNING) ||
-            (cause === STREAM_TRANSITION_CAUSE.RESUME &&
-              to === STREAM_PHASE.RUNNING) ||
-            (cause === STREAM_TRANSITION_CAUSE.USER_STOP &&
-              to === STREAM_PHASE.CANCELLED) ||
-            cause === STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+          fromIdle[cause].includes(to),
         );
       }
     }

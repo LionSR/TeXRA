@@ -194,7 +194,7 @@ export abstract class BaseFS {
     target: string,
   ): Promise<boolean> {
     const stats = await this.statIfExists(target);
-    return stats ? isFile(stats.type) : false;
+    return stats !== undefined && isFile(stats.type);
   }
 
   public static async isSymbolicLink(
@@ -202,9 +202,10 @@ export abstract class BaseFS {
     target: string,
   ): Promise<boolean> {
     const stats = await this.statIfExists(target);
-    return stats
-      ? (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink
-      : false;
+    return (
+      stats !== undefined &&
+      (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink
+    );
   }
 
   // ===== Sync Methods =====

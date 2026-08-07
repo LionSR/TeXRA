@@ -43,15 +43,26 @@ describe('OpenPdfTool', () => {
     return openPdf;
   }
 
+  function expectOpenError(result: unknown, fragment: string): void {
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining(fragment),
+    });
+  }
+
+  function expectOpened(result: unknown, label: string): void {
+    expect(result).toMatchObject({
+      summary: `Opened PDF: ${label}`,
+      output: `Opened PDF: ${label}`,
+    });
+  }
+
   it('reports that PDF opening is unavailable when no host serves it', async () => {
     const tool = new OpenPdfTool();
 
     const result = await tool.call({ path: 'paper.tex' });
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('open_pdf is not available'),
-    });
+    expectOpenError(result, 'open_pdf is not available');
   });
 
   it('opens an existing PDF through the registered host callback', async () => {
@@ -63,10 +74,7 @@ describe('OpenPdfTool', () => {
       preserve_focus: true,
     });
 
-    expect(result).toMatchObject({
-      summary: 'Opened PDF: figures/result.pdf',
-      output: 'Opened PDF: figures/result.pdf',
-    });
+    expectOpened(result, 'figures/result.pdf');
     expect(openPdf).toHaveBeenCalledWith({
       location: {
         kind: 'workspace',
@@ -92,10 +100,7 @@ describe('OpenPdfTool', () => {
         }),
     );
 
-    expect(result).toMatchObject({
-      summary: 'Opened PDF: output.pdf',
-      output: 'Opened PDF: output.pdf',
-    });
+    expectOpened(result, 'output.pdf');
     expect(openPdf).toHaveBeenCalledWith({
       location: {
         kind: 'runStorage',
@@ -119,10 +124,7 @@ describe('OpenPdfTool', () => {
       () => tool.call({ path: '/storage/executions/run-1/output.pdf' }),
     );
 
-    expect(result).toMatchObject({
-      summary: 'Opened PDF: output.pdf',
-      output: 'Opened PDF: output.pdf',
-    });
+    expectOpened(result, 'output.pdf');
     expect(openPdf).toHaveBeenCalledOnce();
   });
 
@@ -137,12 +139,7 @@ describe('OpenPdfTool', () => {
       () => tool.call({ path: '/run/paper.pdf' }),
     );
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(
-        'Path must stay within the working directory',
-      ),
-    });
+    expectOpenError(result, 'Path must stay within the working directory');
     expect(openPdf).not.toHaveBeenCalled();
   });
 
@@ -152,10 +149,7 @@ describe('OpenPdfTool', () => {
 
     const result = await tool.call({ path: 'paper.tex' });
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('open_pdf only opens PDF files'),
-    });
+    expectOpenError(result, 'open_pdf only opens PDF files');
     expect(openPdf).not.toHaveBeenCalled();
   });
 });

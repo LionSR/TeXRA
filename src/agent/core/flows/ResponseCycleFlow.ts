@@ -10,7 +10,7 @@ import {
   extractModelResponse,
   resetCycleState,
   saveCycleDebug,
-  SkippableNodeResult,
+  type SkippableNodeResult,
   type CycleDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import {

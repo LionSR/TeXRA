@@ -22,6 +22,19 @@ function errno(code: string, message = code): NodeJS.ErrnoException {
   return Object.assign(new Error(message), { code });
 }
 
+// Every probe case below starts from a stat that reports the target missing.
+function probeDeps(
+  mkdir: (candidate: string) => Promise<string | undefined>,
+): Parameters<typeof probeOutputPathForTests>[2] {
+  return {
+    dirname: win32.dirname,
+    stat: async () => {
+      throw errno('ENOENT');
+    },
+    mkdir,
+  };
+}
+
 describe('probeOutputPath', () => {
   const windowsCases = [
     {
@@ -45,16 +58,14 @@ describe('probeOutputPath', () => {
     async ({ target, outputParent, mkdirCode }) => {
       const mkdirVisited: string[] = [];
       await expect(
-        probeOutputPathForTests(target, '--output', {
-          dirname: win32.dirname,
-          stat: async () => {
-            throw errno('ENOENT');
-          },
-          mkdir: async (candidate) => {
+        probeOutputPathForTests(
+          target,
+          '--output',
+          probeDeps(async (candidate) => {
             mkdirVisited.push(candidate);
             throw errno(mkdirCode);
-          },
-        }),
+          }),
+        ),
       ).rejects.toThrow(
         `--output: a parent path component is a file: ${target}`,
       );
@@ -66,16 +77,14 @@ describe('probeOutputPath', () => {
     const target = String.raw`C:\workspace\missing\output`;
     const mkdirVisited: string[] = [];
     await expect(
-      probeOutputPathForTests(target, '--output-dir', {
-        dirname: win32.dirname,
-        stat: async () => {
-          throw errno('ENOENT');
-        },
-        mkdir: async (candidate) => {
+      probeOutputPathForTests(
+        target,
+        '--output-dir',
+        probeDeps(async (candidate) => {
           mkdirVisited.push(candidate);
           return candidate;
-        },
-      }),
+        }),
+      ),
     ).resolves.toBeNull();
     expect(mkdirVisited).toEqual([target]);
   });
@@ -97,16 +106,14 @@ describe('probeOutputPath', () => {
     async ({ flagLabel, expectedDirectory, expectedMessage }) => {
       const mkdirVisited: string[] = [];
       await expect(
-        probeOutputPathForTests('/missing/output.tex', flagLabel, {
-          dirname: win32.dirname,
-          stat: async () => {
-            throw errno('ENOENT');
-          },
-          mkdir: async (candidate) => {
+        probeOutputPathForTests(
+          '/missing/output.tex',
+          flagLabel,
+          probeDeps(async (candidate) => {
             mkdirVisited.push(candidate);
             throw errno('ENOENT');
-          },
-        }),
+          }),
+        ),
       ).rejects.toThrow(expectedMessage);
       expect(mkdirVisited).toEqual([expectedDirectory]);
     },
@@ -115,15 +122,13 @@ describe('probeOutputPath', () => {
   it('preserves unexpected mkdir failures', async () => {
     const denied = errno('EACCES', 'denied');
     await expect(
-      probeOutputPathForTests('/missing/output.tex', '--output', {
-        dirname: win32.dirname,
-        stat: async () => {
-          throw errno('ENOENT');
-        },
-        mkdir: async () => {
+      probeOutputPathForTests(
+        '/missing/output.tex',
+        '--output',
+        probeDeps(async () => {
           throw denied;
-        },
-      }),
+        }),
+      ),
     ).rejects.toBe(denied);
   });
 });
@@ -143,10 +148,7 @@ describe('dangling output symlinks', () => {
         process.platform === 'win32' ? 'junction' : 'dir',
       );
     } catch (error: unknown) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error
-          ? error.code
-          : undefined;
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
       if (
         typeof code === 'string' &&
         ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)

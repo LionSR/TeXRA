@@ -49,8 +49,9 @@ export class SettingsAgentVisibilityController {
     );
     const targetKeys = new Set(sourceAgents.map((entry) => agentKeyOf(entry)));
 
-    const raw = this.deps.state.getEnabledAgentKeys(input.category);
-    const current = raw ?? allAgents.map((entry) => agentKeyOf(entry));
+    const current =
+      this.deps.state.getEnabledAgentKeys(input.category) ??
+      allAgents.map((entry) => agentKeyOf(entry));
 
     let updated: string[];
     if (input.enabled) {

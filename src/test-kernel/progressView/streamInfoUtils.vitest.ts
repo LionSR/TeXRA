@@ -7,6 +7,8 @@ import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
+const CHILD_STREAM_ID = 'bash@tool#exec:child-stream';
+
 function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
   return {
     name,
@@ -40,7 +42,7 @@ describe('compareByNewestCreationTime', () => {
 describe('buildStreamTabInfo', () => {
   it('labels a process stream from its identity and surfaces the command', () => {
     const info = buildStreamTabInfo({
-      streamId: 'bash@tool#exec:child-stream',
+      streamId: CHILD_STREAM_ID,
       metadata: {
         identity: { kind: 'process', tool: 'bash' },
         config: { instruction: 'ls -la' },
@@ -57,13 +59,13 @@ describe('buildStreamTabInfo', () => {
 
   it('renders a pending tab when the identity has not resolved yet', () => {
     const info = buildStreamTabInfo({
-      streamId: 'bash@tool#exec:child-stream',
+      streamId: CHILD_STREAM_ID,
       metadata: {
         creationTimestamp: 1,
       },
     });
 
-    expect(info.label).toBe('bash@tool#exec:child-stream');
+    expect(info.label).toBe(CHILD_STREAM_ID);
     expect(info.identity).toBeUndefined();
     expect(info.agentCategory).toBeUndefined();
   });

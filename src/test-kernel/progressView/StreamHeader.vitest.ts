@@ -41,6 +41,23 @@ function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
   });
 }
 
+/** Themed-tooltip contract: anchor carries an id, no native title, sibling wa-tooltip[for=id]. */
+function expectAnchoredTooltip(
+  element: StreamHeader,
+  anchorId: string,
+  text: string,
+): void {
+  const anchor = element.shadowRoot?.querySelector(`#${anchorId}`);
+  expect(anchor).toBeTruthy();
+  expect(anchor?.hasAttribute('title')).toBe(false);
+
+  const tooltip = element.shadowRoot?.querySelector(
+    `wa-tooltip[for="${anchorId}"]`,
+  );
+  expect(tooltip).toBeTruthy();
+  expect(tooltip?.textContent?.trim()).toBe(text);
+}
+
 // Single shared DOM/customElements registration for the whole file: each
 // `useLitComponentTestDom` call tears down its jsdom window (and the
 // customElements registry defined against it) in `afterAll`, and the
@@ -116,16 +133,11 @@ describe('stream-header', () => {
   describe('tooltips', () => {
     it('anchors the truncated stream label via wa-tooltip[for]', async () => {
       const element = await mount();
-      const name = element.shadowRoot?.querySelector(
-        `#${ELEMENT_IDS.ACTIVE_STREAM_NAME}`,
+      expectAnchoredTooltip(
+        element,
+        ELEMENT_IDS.ACTIVE_STREAM_NAME,
+        'Stream A',
       );
-
-      expect(name?.hasAttribute('title')).toBe(false);
-      expect(
-        element.shadowRoot
-          ?.querySelector(`wa-tooltip[for="${ELEMENT_IDS.ACTIVE_STREAM_NAME}"]`)
-          ?.textContent?.trim(),
-      ).toBe('Stream A');
     });
 
     it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
@@ -135,15 +147,7 @@ describe('stream-header', () => {
         goalObjective: 'ship the fix',
       });
 
-      const chip = element.shadowRoot?.querySelector('#goalChip');
-      expect(chip).toBeTruthy();
-      expect(chip?.hasAttribute('title')).toBe(false);
-
-      const tooltip = element.shadowRoot?.querySelector(
-        'wa-tooltip[for="goalChip"]',
-      );
-      expect(tooltip).toBeTruthy();
-      expect(tooltip?.textContent?.trim()).toBe('Goal: ship the fix');
+      expectAnchoredTooltip(element, 'goalChip', 'Goal: ship the fix');
     });
 
     it('anchors the progress badge tooltip via wa-tooltip[for], not a native title', async () => {
@@ -151,15 +155,7 @@ describe('stream-header', () => {
         stage: { kind: 'round', index: 0, total: 2 },
       });
 
-      const badge = element.shadowRoot?.querySelector('#progressBadge');
-      expect(badge).toBeTruthy();
-      expect(badge?.hasAttribute('title')).toBe(false);
-
-      const tooltip = element.shadowRoot?.querySelector(
-        'wa-tooltip[for="progressBadge"]',
-      );
-      expect(tooltip).toBeTruthy();
-      expect(tooltip?.textContent?.trim()).toBe('Round 1 of 2');
+      expectAnchoredTooltip(element, 'progressBadge', 'Round 1 of 2');
     });
 
     it('omits the progress badge tooltip entirely when there is no title text', async () => {
@@ -190,32 +186,40 @@ describe('stream-header', () => {
         ?.textContent?.trim();
     }
 
-    it('renders the phase label when the stream has one', async () => {
-      const element = await mount({
-        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-      });
+    it.each<{
+      name: string;
+      props: Partial<StreamHeader>;
+      text: string;
+      tooltip: string;
+    }>([
+      {
+        name: 'renders the phase label when the stream has one',
+        props: {
+          stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+        },
+        text: 'Reduce 2/3',
+        tooltip: 'Phase 2 of 3: Reduce',
+      },
+      {
+        name: 'renders a dynamically opened phase with no declared position',
+        props: { stage: { kind: 'phase', label: 'Cleanup' } },
+        text: 'Cleanup',
+        tooltip: 'Phase: Cleanup',
+      },
+      {
+        name: 'keeps the tool-call count alongside the phase',
+        props: {
+          stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+          progress: { toolCallCount: 4 },
+        },
+        text: 'Reduce 2/3, 4 tool calls',
+        tooltip: 'Phase 2 of 3: Reduce, Tool calls: 4',
+      },
+    ])('$name', async ({ props, text, tooltip }) => {
+      const element = await mount(props);
 
-      expect(badgeText(element)).toBe('Reduce 2/3');
-      expect(badgeTooltip(element)).toBe('Phase 2 of 3: Reduce');
-    });
-
-    it('renders a dynamically opened phase with no declared position', async () => {
-      const element = await mount({
-        stage: { kind: 'phase', label: 'Cleanup' },
-      });
-
-      expect(badgeText(element)).toBe('Cleanup');
-      expect(badgeTooltip(element)).toBe('Phase: Cleanup');
-    });
-
-    it('keeps the tool-call count alongside the phase', async () => {
-      const element = await mount({
-        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-        progress: { toolCallCount: 4 },
-      });
-
-      expect(badgeText(element)).toBe('Reduce 2/3, 4 tool calls');
-      expect(badgeTooltip(element)).toBe('Phase 2 of 3: Reduce, Tool calls: 4');
+      expect(badgeText(element)).toBe(text);
+      expect(badgeTooltip(element)).toBe(tooltip);
     });
   });
 

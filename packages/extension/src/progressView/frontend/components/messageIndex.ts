@@ -329,10 +329,7 @@ export class MessageIndex {
   ): void {
     for (let i = startIndex; i < messages.length; i++) {
       const m = messages[i];
-      const inGroupNode = m.groupId
-        ? this.groupNodeIndex.has(m.groupId)
-        : false;
-      if (inGroupNode) continue;
+      if (m.groupId && this.groupNodeIndex.has(m.groupId)) continue;
       const entry: MessageTimelineEntry = {
         key: m.id,
         time: messageTime(m),
@@ -396,8 +393,7 @@ export class MessageIndex {
 
     for (let i = this.timeline.length - 1; i >= 0; i--) {
       const item = this.timeline[i];
-      if (!item) continue;
-      if (!('msg' in item)) continue;
+      if (!item || !('msg' in item)) continue;
       const ungroupedIndex = this.messageLocations.get(
         item.key,
       )?.ungroupedIndex;

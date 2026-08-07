@@ -158,7 +158,7 @@ function row(spans: readonly ToolDisplaySpan[]): ToolDisplayLine {
 
 function previewInput(toolName: string, input: unknown): string {
   if (typeof input === 'string') return input;
-  if (input === undefined || input === null) return '';
+  if (input == null) return '';
   const namedPreview = deriveToolInputPreview(toolName, input);
   if (namedPreview) return namedPreview;
   if (isObject(input)) {
@@ -384,13 +384,12 @@ function buildStyledLines(
     executionSummary,
   );
 
-  const showOutput = opts.showOutput;
-  const output = showOutput ? outputRows(toolUse, elide) : [];
+  const output = opts.showOutput ? outputRows(toolUse, elide) : [];
   const exitCode =
     opts.showExitCode && toolUse.isError ? extractExitCode(toolUse) : undefined;
   const errorText = errorTextForDisplay(toolUse);
   const showNoOutput =
-    showOutput &&
+    opts.showOutput &&
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     output.length === 0 &&
     !patchGroups &&

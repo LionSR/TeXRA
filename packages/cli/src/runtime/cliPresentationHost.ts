@@ -101,10 +101,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     return logger;
   }
 
-  const logDebugEvent = (event: RuntimePresentationEvent): void => {
+  function logDebugEvent(event: RuntimePresentationEvent): void {
     if (context.quietLogs) return;
     ensureLogger().debug(`Runtime event: ${String(event)}`);
-  };
+  }
 
   /**
    * Text-mode (non-NDJSON) handler map. `requestOpenFile`,

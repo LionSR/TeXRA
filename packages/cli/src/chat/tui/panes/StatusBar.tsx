@@ -109,15 +109,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     subscriptionResolution?.model === accessTarget.model &&
     subscriptionResolution.category === accessTarget.category &&
     subscriptionResolution.preferenceVersion === codexPreferenceVersion;
-  const subscriptionActive = resolutionCurrent
-    ? (subscriptionResolution?.active ?? false)
-    : false;
-  const grokSubscriptionActive = resolutionCurrent
-    ? (subscriptionResolution?.grokActive ?? false)
-    : false;
-  const kimiCodeActive = resolutionCurrent
-    ? (subscriptionResolution?.kimiCodeActive ?? false)
-    : false;
+  const resolution = resolutionCurrent ? subscriptionResolution : undefined;
+  const subscriptionActive = resolution?.active ?? false;
+  const grokSubscriptionActive = resolution?.grokActive ?? false;
+  const kimiCodeActive = resolution?.kimiCodeActive ?? false;
   const modelAccess = resolveCliModelAccessRoute({
     apiMode: sessionMeta.apiMode,
     subscriptionActive,

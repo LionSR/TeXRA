@@ -52,9 +52,10 @@ export class ExtractTikzFiguresTool extends defineTool({
       );
     }
 
-    const formattedEntries = tikzFigures.map(([label, pictures]) => {
-      return `- ${label ?? '(unlabeled)'}: ${formatResultCount(pictures.length, 'picture')}`;
-    });
+    const formattedEntries = tikzFigures.map(
+      ([label, pictures]) =>
+        `- ${label ?? '(unlabeled)'}: ${formatResultCount(pictures.length, 'picture')}`,
+    );
     const outputs: string[] = [
       formatToolOutput(`TikZ figures in ${display}`, formattedEntries),
     ];

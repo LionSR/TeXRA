@@ -75,6 +75,10 @@ const proposal: AgentProposal = {
   instruction: 'Review the change.',
   memories: [],
 };
+
+/** Result a per-stream cancel produces for every approval it settles. */
+const INTERRUPTED = { action: 'reject', feedback: 'Session interrupted.' };
+
 afterEach(() => {
   clearApprovals();
 });
@@ -111,10 +115,7 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(planResult).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Session interrupted.',
-    });
+    await expect(planResult).resolves.toEqual(INTERRUPTED);
 
     // stream-b's request was never touched and now becomes the foreground
     // modal instead of being left permanently pending.
@@ -166,10 +167,7 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(proposalResult).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Session interrupted.',
-    });
+    await expect(proposalResult).resolves.toEqual(INTERRUPTED);
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -184,10 +182,7 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(bashResult).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Session interrupted.',
-    });
+    await expect(bashResult).resolves.toEqual(INTERRUPTED);
     expect(currentApproval.get()).toBeUndefined();
   });
 

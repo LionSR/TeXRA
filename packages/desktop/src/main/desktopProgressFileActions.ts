@@ -140,10 +140,7 @@ export class DesktopProgressFileActions {
     runContext: DesktopLatexdiffRunContext,
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
-    const opened = outcome
-      ? await this.openSharedLatexdiffResults(outcome)
-      : false;
-    if (opened) return;
+    if (outcome && (await this.openSharedLatexdiffResults(outcome))) return;
 
     // No round-aware diff was produced (no rounds resolved, the shared core
     // threw, or every operation failed) — fall back to a single-file diff so
@@ -174,8 +171,7 @@ export class DesktopProgressFileActions {
       return;
     }
 
-    const opened = await this.openSharedLatexdiffResults(outcome);
-    if (opened) return;
+    if (await this.openSharedLatexdiffResults(outcome)) return;
 
     await this.ui.showErrorMessage(
       `All LaTeX diff operations failed (math markup: "${DEFAULT_MATH_MARKUP}").`,
@@ -209,9 +205,7 @@ export class DesktopProgressFileActions {
       label,
       candidates,
       (file) => readFile(file, 'utf8'),
-      async (file) => {
-        await this.ui.openPath(file);
-      },
+      (file) => this.ui.openPath(file),
     );
   }
 

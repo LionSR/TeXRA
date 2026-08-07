@@ -13,6 +13,13 @@ vi.mock('node:child_process', () => ({
 
 const { pageStdout, resolvePagerCommand } = await import('@cli/runtime/pager');
 
+function lastSpawnCall(): [string, childProcess.SpawnSyncOptions] {
+  return spawnSyncMock.mock.calls[0] as unknown as [
+    string,
+    childProcess.SpawnSyncOptions,
+  ];
+}
+
 describe('resolvePagerCommand', () => {
   it('defaults to less -FIRX when $PAGER is unset', () => {
     expect(resolvePagerCommand({})).toBe('less -FIRX');
@@ -75,10 +82,7 @@ describe('pageStdout', () => {
         env: { PAGER: 'less -R' },
       });
       expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-      const [command, opts] = spawnSyncMock.mock.calls[0] as unknown as [
-        string,
-        childProcess.SpawnSyncOptions,
-      ];
+      const [command, opts] = lastSpawnCall();
       expect(command).toBe('less -R');
       expect(opts.input).toBe('row1\nrow2\n');
       expect(opts.shell).toBe(true);
@@ -99,10 +103,7 @@ describe('pageStdout', () => {
     try {
       pageStdout('row', { stdoutIsTty: true });
       expect(spawnSyncMock).toHaveBeenCalledTimes(1);
-      const [command, opts] = spawnSyncMock.mock.calls[0] as unknown as [
-        string,
-        childProcess.SpawnSyncOptions,
-      ];
+      const [command, opts] = lastSpawnCall();
       expect(command).toBe('less -R');
       expect(opts.env).toBeUndefined();
       expect(stdout).toBe('');

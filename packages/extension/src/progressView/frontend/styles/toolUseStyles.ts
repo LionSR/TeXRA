@@ -70,11 +70,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-in-progress > .details-summary :is(.tool-use-title, wa-icon),
-  .tool-use-in-progress > .details-summary wa-spinner {
-    color: var(--color-pending);
-  }
-
-  .tool-use-in-progress > .details-summary tool-timer {
+  .tool-use-in-progress > .details-summary :is(wa-spinner, tool-timer) {
     color: var(--color-pending);
   }
 

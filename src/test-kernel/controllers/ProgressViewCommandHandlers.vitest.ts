@@ -176,6 +176,12 @@ function expectDispatched(
   expect(dispatchProgressViewInbound(message, handlers)).toBe(true);
 }
 
+function expectMessageParses(message: unknown, valid: boolean): void {
+  expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
+    valid,
+  );
+}
+
 describe('createProgressViewCommandHandlers', () => {
   it('routes lifecycle commands to host actions', () => {
     const actions = createActions();
@@ -454,61 +460,52 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     session.dispose();
   });
 
-  it('grants only tool-edit bypass from an edit prompt', async () => {
-    const stream = 'stream:edit-prompt-grant';
-    const showInfo = vi.fn();
-    const handlers = createProgressViewCommandHandlers(
-      createActions({ bypass: { showInfo } }),
-    );
+  it.each([
+    {
+      kind: 'toolEdit' as const,
+      editBypassed: true,
+      bashBypassed: false,
+      notice: 'File edits will be auto-approved for this run.',
+    },
+    {
+      kind: 'bash' as const,
+      editBypassed: false,
+      bashBypassed: true,
+      notice: 'Shell commands will be auto-approved for this run.',
+    },
+  ])(
+    'grants only $kind bypass from its prompt',
+    async ({ kind, editBypassed, bashBypassed, notice }) => {
+      const stream = `stream:${kind}-prompt-grant`;
+      const showInfo = vi.fn();
+      const handlers = createProgressViewCommandHandlers(
+        createActions({ bypass: { showInfo } }),
+      );
 
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-        stream,
-        kind: 'toolEdit',
-      },
-      handlers,
-    );
-    await Promise.resolve();
+      expectDispatched(
+        {
+          command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+          stream,
+          kind,
+        },
+        handlers,
+      );
+      await Promise.resolve();
 
-    expect(isApprovalBypassedForStream(stream)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
-    expect(showInfo).toHaveBeenCalledWith(
-      'File edits will be auto-approved for this run.',
-    );
-  });
-
-  it('grants only bash bypass from a command prompt', async () => {
-    const stream = 'stream:bash-prompt-grant';
-    const showInfo = vi.fn();
-    const handlers = createProgressViewCommandHandlers(
-      createActions({ bypass: { showInfo } }),
-    );
-
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-        stream,
-        kind: 'bash',
-      },
-      handlers,
-    );
-    await Promise.resolve();
-
-    expect(isApprovalBypassedForStream(stream)).toBe(false);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
-    expect(showInfo).toHaveBeenCalledWith(
-      'Shell commands will be auto-approved for this run.',
-    );
-  });
+      expect(isApprovalBypassedForStream(stream)).toBe(editBypassed);
+      expect(isBashApprovalBypassedForStream(stream)).toBe(bashBypassed);
+      expect(showInfo).toHaveBeenCalledWith(notice);
+    },
+  );
 
   it('rejects a bypass enable that does not name its kind', () => {
-    expect(
-      ProgressViewInboundMessageSchema.safeParse({
+    expectMessageParses(
+      {
         command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
         stream: 'stream:no-kind',
-      }).success,
-    ).toBe(false);
+      },
+      false,
+    );
   });
 
   it('leaves an existing grant of its own kind untouched', async () => {
@@ -789,9 +786,7 @@ describe('permission action schemas', () => {
     ],
     ['plan unknown field', { ...plan, action: 'reject', extra: true }, false],
   ])('%s parses as %s', (_name, message, valid) => {
-    expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
-      valid,
-    );
+    expectMessageParses(message, valid);
   });
 });
 
@@ -823,9 +818,7 @@ describe('external inquiry action schema', () => {
     ],
     ['draft without a draft', { command, action: 'draft', threadId }, false],
   ])('%s parses as %s', (_name, message, valid) => {
-    expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
-      valid,
-    );
+    expectMessageParses(message, valid);
   });
 
   it.each([
@@ -1170,8 +1163,6 @@ describe('user question action schema', () => {
       valid: false,
     },
   ])('$name is $valid', ({ message, valid }) => {
-    expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
-      valid,
-    );
+    expectMessageParses(message, valid);
   });
 });

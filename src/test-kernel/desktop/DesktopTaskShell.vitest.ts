@@ -49,6 +49,12 @@ function open(
   );
 }
 
+function shellWith(
+  ...requests: readonly OpenWorkbenchTabRequest[]
+): DesktopTaskShellState {
+  return open(initialDesktopTaskShellState(), ...requests);
+}
+
 function active(
   state: DesktopTaskShellState,
   placement: WorkbenchPlacement = 'right',
@@ -87,8 +93,7 @@ describe('desktop task shell model', () => {
   });
 
   it('keys editors by path and derives cross-platform basenames', () => {
-    const state = open(
-      initialDesktopTaskShellState(),
+    const state = shellWith(
       { kind: 'editor', target: '/papers/first.tex' },
       { kind: 'editor', target: String.raw`C:\papers\second.tex` },
     );
@@ -136,8 +141,7 @@ describe('desktop task shell model', () => {
   });
 
   it('focuses existing singleton and editor tabs without duplicating them', () => {
-    let state = open(
-      initialDesktopTaskShellState(),
+    let state = shellWith(
       { kind: 'settings' },
       { kind: 'editor', target: 'paper.tex' },
       { kind: 'logs' },
@@ -160,8 +164,7 @@ describe('desktop task shell model', () => {
   });
 
   it('opens a fresh numbered terminal for every request', () => {
-    const state = open(
-      initialDesktopTaskShellState(),
+    const state = shellWith(
       { kind: 'terminal', target: '/work' },
       { kind: 'terminal', target: '/work', title: 'Build shell' },
     );
@@ -187,11 +190,7 @@ describe('desktop task shell model', () => {
   });
 
   it('focuses known tabs and ignores unknown ids', () => {
-    const state = open(
-      initialDesktopTaskShellState(),
-      { kind: 'settings' },
-      { kind: 'logs' },
-    );
+    const state = shellWith({ kind: 'settings' }, { kind: 'logs' });
     const focused = focusWorkbenchTab(state, 'workbench:settings');
 
     expect(active(focused)?.kind).toBe('settings');
@@ -200,8 +199,7 @@ describe('desktop task shell model', () => {
   });
 
   it('closes active tabs toward the left, then the right', () => {
-    let state = open(
-      initialDesktopTaskShellState(),
+    let state = shellWith(
       { kind: 'settings' },
       { kind: 'logs' },
       { kind: 'editor', target: 'paper.tex' },
@@ -219,11 +217,7 @@ describe('desktop task shell model', () => {
   });
 
   it('preserves focus when closing a background tab and ignores unknown ids', () => {
-    const state = open(
-      initialDesktopTaskShellState(),
-      { kind: 'settings' },
-      { kind: 'logs' },
-    );
+    const state = shellWith({ kind: 'settings' }, { kind: 'logs' });
     const withoutSettings = closeWorkbenchTab(state, 'workbench:settings');
 
     expect(active(withoutSettings)?.kind).toBe('logs');
@@ -231,11 +225,7 @@ describe('desktop task shell model', () => {
   });
 
   it('hides the workbench without discarding tabs and reopens the latest tab', () => {
-    const openState = open(
-      initialDesktopTaskShellState(),
-      { kind: 'settings' },
-      { kind: 'logs' },
-    );
+    const openState = shellWith({ kind: 'settings' }, { kind: 'logs' });
     const closed = closeWorkbench(openState, 'right');
 
     expect(closed.workbenchTabs).toEqual(openState.workbenchTabs);
@@ -250,8 +240,7 @@ describe('desktop task shell model', () => {
   });
 
   it('places terminal tabs at the bottom and moves any tab between panes', () => {
-    let state = open(
-      initialDesktopTaskShellState(),
+    let state = shellWith(
       { kind: 'editor', target: 'paper.tex' },
       { kind: 'terminal', target: '/work' },
     );

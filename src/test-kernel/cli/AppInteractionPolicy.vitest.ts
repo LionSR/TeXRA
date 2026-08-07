@@ -108,34 +108,44 @@ function foregroundInput(
 }
 
 describe('app interaction policy', () => {
-  it('clears a non-empty draft without interrupting an active response', () => {
-    const fixture = ctrlCFixture({ active: true, draft: 'unfinished' });
+  it.each([
+    {
+      scenario:
+        'clears a non-empty draft without interrupting an active response',
+      active: true,
+      draft: 'unfinished',
+      expected: 'clear-draft',
+      events: ['clear'],
+    },
+    {
+      scenario: 'clears a non-empty draft without exiting while idle',
+      active: false,
+      draft: 'unfinished',
+      expected: 'clear-draft',
+      events: ['clear'],
+    },
+    {
+      scenario: 'interrupts an active response when the draft is empty',
+      active: true,
+      draft: '',
+      expected: 'interrupt',
+      events: ['interrupt'],
+    },
+    {
+      scenario: 'exits an idle chat when the draft is empty',
+      active: false,
+      draft: '',
+      expected: 'exit',
+      events: ['exit'],
+    },
+  ])('$scenario', ({ active, draft, expected, events }) => {
+    const fixture = ctrlCFixture({ active, draft });
 
-    expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
-    expect(fixture.readDraft()).toBe('');
-    expect(fixture.events).toEqual(['clear']);
-  });
-
-  it('clears a non-empty draft without exiting while idle', () => {
-    const fixture = ctrlCFixture({ active: false, draft: 'unfinished' });
-
-    expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
-    expect(fixture.readDraft()).toBe('');
-    expect(fixture.events).toEqual(['clear']);
-  });
-
-  it('interrupts an active response when the draft is empty', () => {
-    const fixture = ctrlCFixture({ active: true, draft: '' });
-
-    expect(triggerAppCtrlC(fixture.state)).toBe('interrupt');
-    expect(fixture.events).toEqual(['interrupt']);
-  });
-
-  it('exits an idle chat when the draft is empty', () => {
-    const fixture = ctrlCFixture({ active: false, draft: '' });
-
-    expect(triggerAppCtrlC(fixture.state)).toBe('exit');
-    expect(fixture.events).toEqual(['exit']);
+    expect(triggerAppCtrlC(fixture.state)).toBe(expected);
+    if (draft.length > 0) {
+      expect(fixture.readDraft()).toBe('');
+    }
+    expect(fixture.events).toEqual(events);
   });
 
   it('delegates the second Ctrl+C after clearing to existing signal policy', () => {

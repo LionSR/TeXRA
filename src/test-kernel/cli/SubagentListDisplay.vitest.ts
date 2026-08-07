@@ -25,6 +25,7 @@ import {
   activeStreamId,
   emptySlice,
   streams as streamsSignal,
+  type ConversationEntry,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -37,7 +38,12 @@ import {
   visibleSelectRange,
   type SelectItem,
 } from '@cli/tui/ui/Select';
-import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  STREAM_PHASE,
+  type StreamTabId,
+  type WorkflowCallProgress,
+} from '@shared/schemas';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import {
   loadInk,
@@ -65,6 +71,42 @@ function workflowAgentSlice(
   };
 }
 
+function files(
+  input: string[],
+  context: string[] = [],
+  output: string[] = [],
+): NonNullable<StreamSlice['files']> {
+  return { input, context, media: [], output };
+}
+
+function phaseEntry(
+  id: string,
+  label: string,
+  overrides: {
+    readonly finalized?: boolean;
+    readonly phaseIndex?: number;
+    readonly phaseTotal?: number;
+  } = {},
+): ConversationEntry {
+  return {
+    id,
+    role: 'phase',
+    text: label,
+    finalized: true,
+    phaseLabel: label,
+    ...overrides,
+  };
+}
+
+function workflowTaskEntry(
+  id: string,
+  text: string,
+  task: WorkflowCallProgress,
+  finalized = false,
+): ConversationEntry {
+  return { id, role: 'workflowTask', text, finalized, task };
+}
+
 async function renderSubagentList(
   props: SubagentListProps,
   columns: number,
@@ -89,30 +131,19 @@ describe('CLI child list display model', () => {
       ['b-3', 'B'],
       ['b-4', 'B'],
       ['b-5', 'B'],
-    ].map(([id, phase]) => ({
-      id: `task-${id}`,
-      role: 'workflowTask' as const,
-      text: `Planned: ${id}`,
-      finalized: false,
-      task: { id, label: id, phase, status: 'planned' as const },
-    }));
+    ].map(([id, phase]) =>
+      workflowTaskEntry(`task-${id}`, `Planned: ${id}`, {
+        id,
+        label: id,
+        phase,
+        status: 'planned',
+      }),
+    );
     const root = workflowAgentSlice('budget-root', {
       entries: [
-        {
-          id: 'phase-a',
-          role: 'phase',
-          text: 'A',
-          finalized: false,
-          phaseLabel: 'A',
-        },
+        phaseEntry('phase-a', 'A', { finalized: false }),
         ...tasks.slice(0, 2),
-        {
-          id: 'phase-b',
-          role: 'phase',
-          text: 'B',
-          finalized: false,
-          phaseLabel: 'B',
-        },
+        phaseEntry('phase-b', 'B', { finalized: false }),
         ...tasks.slice(2),
       ],
     });
@@ -142,24 +173,18 @@ describe('CLI child list display model', () => {
 
   it('omits static input and context counts from the live workflow band', () => {
     const workflow = workflowAgentSlice('devise', {
-      files: {
-        input: ['src/Main.lean', 'src/Lemma.lean'],
-        context: ['notes/proof.md'],
-        media: [],
-        output: ['out/Main.lean'],
-      },
+      files: files(
+        ['src/Main.lean', 'src/Lemma.lean'],
+        ['notes/proof.md'],
+        ['out/Main.lean'],
+      ),
     });
     const toolUse = workflowAgentSlice('review', {
       category: AgentCategory.ToolUse,
-      files: {
-        input: ['paper.tex'],
-        context: ['notes.md'],
-        media: [],
-        output: ['review.md'],
-      },
+      files: files(['paper.tex'], ['notes.md'], ['review.md']),
     });
     const workflowWithoutInputs = workflowAgentSlice('empty', {
-      files: { input: [], context: [], media: [], output: [] },
+      files: files([]),
     });
 
     expect(workflowRunStatusSummary(workflow)).toBeUndefined();
@@ -170,54 +195,33 @@ describe('CLI child list display model', () => {
 
   it('leads the workflow status band with the current phase and its task fold', () => {
     const slice = workflowAgentSlice('itemized', {
-      files: { input: ['paper.tex'], context: [], media: [], output: [] },
+      files: files(['paper.tex']),
       entries: [
-        {
-          id: 'phase-map',
-          role: 'phase',
-          text: 'Map',
-          finalized: true,
-          phaseLabel: 'Map',
-          phaseIndex: 0,
-          phaseTotal: 3,
-        },
-        {
-          id: 'task-a',
-          role: 'workflowTask',
-          text: 'Finished: Map the seams',
-          finalized: true,
-          task: {
+        phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 3 }),
+        workflowTaskEntry(
+          'task-a',
+          'Finished: Map the seams',
+          {
             id: 'seams',
             label: 'Map the seams',
             phase: 'Map',
             status: 'completed',
             durationMs: 1_000,
           },
-        },
-        {
-          id: 'task-b',
-          role: 'workflowTask',
-          text: 'Running: Read the contracts',
-          finalized: false,
-          task: {
-            id: 'contracts',
-            label: 'Read the contracts',
-            phase: 'Map',
-            status: 'running',
-          },
-        },
-        {
-          id: 'task-c',
-          role: 'workflowTask',
-          text: 'Planned: Draft the section',
-          finalized: false,
-          task: {
-            id: 'draft',
-            label: 'Draft the section',
-            phase: 'Write',
-            status: 'planned',
-          },
-        },
+          true,
+        ),
+        workflowTaskEntry('task-b', 'Running: Read the contracts', {
+          id: 'contracts',
+          label: 'Read the contracts',
+          phase: 'Map',
+          status: 'running',
+        }),
+        workflowTaskEntry('task-c', 'Planned: Draft the section', {
+          id: 'draft',
+          label: 'Draft the section',
+          phase: 'Write',
+          status: 'planned',
+        }),
       ],
     });
 
@@ -229,18 +233,17 @@ describe('CLI child list display model', () => {
   it('does not invent a phase fold for phase-less tasks', () => {
     const slice = workflowAgentSlice('phase-less-only', {
       entries: [
-        {
-          id: 'task-loose',
-          role: 'workflowTask',
-          text: 'Finished: Loose task',
-          finalized: true,
-          task: {
+        workflowTaskEntry(
+          'task-loose',
+          'Finished: Loose task',
+          {
             id: 'loose',
             label: 'Loose task',
             status: 'completed',
             durationMs: 1_000,
           },
-        },
+          true,
+        ),
       ],
     });
 
@@ -254,41 +257,26 @@ describe('CLI child list display model', () => {
     // and stamps both, so the count here can never name a phase the card is
     // not in.
     const slice = workflowAgentSlice('loose', {
-      files: { input: ['paper.tex'], context: [], media: [], output: [] },
+      files: files(['paper.tex']),
       entries: [
-        {
-          id: 'phase-map',
-          role: 'phase',
-          text: 'Map',
-          finalized: true,
-          phaseLabel: 'Map',
-          phaseIndex: 0,
-          phaseTotal: 2,
-        },
-        {
-          id: 'task-in-phase',
-          role: 'workflowTask',
-          text: 'Running: Map the seams',
-          finalized: false,
-          task: {
-            id: 'seams',
-            label: 'Map the seams',
-            phase: 'Map',
-            status: 'running',
-          },
-        },
-        {
-          id: 'task-loose',
-          role: 'workflowTask',
-          text: 'Finished: Loose task',
-          finalized: true,
-          task: {
+        phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 2 }),
+        workflowTaskEntry('task-in-phase', 'Running: Map the seams', {
+          id: 'seams',
+          label: 'Map the seams',
+          phase: 'Map',
+          status: 'running',
+        }),
+        workflowTaskEntry(
+          'task-loose',
+          'Finished: Loose task',
+          {
             id: 'loose',
             label: 'Loose task',
             status: 'completed',
             durationMs: 1_000,
           },
-        },
+          true,
+        ),
       ],
     });
 
@@ -300,12 +288,7 @@ describe('CLI child list display model', () => {
     const streamId = 'devise' as StreamTabId;
     const slice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
-      files: {
-        input: ['paper.tex'],
-        context: ['notes.md'],
-        media: [],
-        output: [],
-      },
+      files: files(['paper.tex'], ['notes.md']),
       entries: [
         {
           id: 'live-tool',
@@ -392,15 +375,13 @@ describe('CLI child list display model', () => {
       const streamId = 'devise' as StreamTabId;
       const slice = workflowAgentSlice(streamId, {
         status: STREAM_PHASE.RUNNING,
-        files: {
-          input: ['inputs/a-very-long-workflow-input-filename.tex'],
-          context: Array.from(
+        files: files(
+          ['inputs/a-very-long-workflow-input-filename.tex'],
+          Array.from(
             { length: 12 },
             (_, index) => `context/a-very-long-context-filename-${index}.md`,
           ),
-          media: [],
-          output: [],
-        },
+        ),
         entries: [activity],
       });
       activeStreamId.set(streamId);
@@ -668,12 +649,7 @@ describe('CLI child list display model', () => {
             label: 'devise',
             active: true,
             slice: workflowAgentSlice('run', {
-              files: {
-                input: ['Main.lean', 'Lemma.lean'],
-                context: ['notes.md'],
-                media: [],
-                output: [],
-              },
+              files: files(['Main.lean', 'Lemma.lean'], ['notes.md']),
             }),
           },
         ],
@@ -951,55 +927,25 @@ describe('CLI child list display model', () => {
       },
       status: STREAM_PHASE.RUNNING,
       entries: [
-        {
-          id: 'phase-map',
-          role: 'phase',
-          text: 'Map',
-          finalized: true,
-          phaseLabel: 'Map',
-          phaseIndex: 0,
-          phaseTotal: 2,
-        },
-        {
-          id: 'task-planned',
-          role: 'workflowTask',
-          text: 'Planned: Duplicate',
-          finalized: false,
-          task: {
-            id: 'planned',
-            label: 'Duplicate',
-            phase: 'Map',
-            status: 'planned',
-          },
-        },
-        {
-          id: 'task-running',
-          role: 'workflowTask',
-          text: 'Running: Duplicate',
-          finalized: false,
-          task: {
-            id: 'running',
-            label: 'Duplicate',
-            phase: 'Map',
-            status: 'running',
-            childStreamId: exactChild,
-          },
-        },
-        {
-          id: 'phase-write',
-          role: 'phase',
-          text: 'Write',
-          finalized: true,
-          phaseLabel: 'Write',
-          phaseIndex: 1,
-          phaseTotal: 2,
-        },
-        {
-          id: 'task-finished',
-          role: 'workflowTask',
-          text: 'Finished: Duplicate',
-          finalized: true,
-          task: {
+        phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 2 }),
+        workflowTaskEntry('task-planned', 'Planned: Duplicate', {
+          id: 'planned',
+          label: 'Duplicate',
+          phase: 'Map',
+          status: 'planned',
+        }),
+        workflowTaskEntry('task-running', 'Running: Duplicate', {
+          id: 'running',
+          label: 'Duplicate',
+          phase: 'Map',
+          status: 'running',
+          childStreamId: exactChild,
+        }),
+        phaseEntry('phase-write', 'Write', { phaseIndex: 1, phaseTotal: 2 }),
+        workflowTaskEntry(
+          'task-finished',
+          'Finished: Duplicate',
+          {
             id: 'finished',
             label: 'Duplicate',
             phase: 'Write',
@@ -1009,19 +955,19 @@ describe('CLI child list display model', () => {
             durationMs: 2_000,
             totalCostUsd: 0.125,
           },
-        },
-        {
-          id: 'task-cached',
-          role: 'workflowTask',
-          text: 'Saved result: Cached without child',
-          finalized: true,
-          task: {
+          true,
+        ),
+        workflowTaskEntry(
+          'task-cached',
+          'Saved result: Cached without child',
+          {
             id: 'cached',
             label: 'Cached without child',
             phase: 'Write',
             status: 'cached',
           },
-        },
+          true,
+        ),
       ],
     });
     const streams = new Map<StreamTabId, StreamSlice>([
@@ -1121,71 +1067,37 @@ describe('CLI child list display model', () => {
       },
       status: STREAM_PHASE.RUNNING,
       entries: [
-        {
-          id: 'phase-map-a',
-          role: 'phase',
-          text: 'Map',
-          finalized: true,
-          phaseLabel: 'Map',
-          phaseIndex: 0,
-          phaseTotal: 2,
-        },
-        {
-          id: 'phase-map-b',
-          role: 'phase',
-          text: 'Map',
-          finalized: true,
-          phaseLabel: 'Map',
-        },
-        {
-          id: 'task-map',
-          role: 'workflowTask',
-          text: 'Planned: Audit',
-          finalized: false,
-          task: {
-            id: 'audit',
-            label: 'Audit',
-            phase: 'Map',
-            status: 'planned',
-          },
-        },
-        {
-          id: 'task-orphan',
-          role: 'workflowTask',
-          text: 'Planned: Synthesize',
-          finalized: false,
-          task: {
-            id: 'synthesize',
-            label: 'Synthesize',
-            phase: 'Synthesis',
-            status: 'planned',
-          },
-        },
-        {
-          id: 'task-loose',
-          role: 'workflowTask',
-          text: 'Planned: Loose',
-          finalized: false,
-          task: { id: 'loose', label: 'Loose', status: 'planned' },
-        },
-        ...['first', 'second'].map((id) => ({
-          id: `task-reused-${id}`,
-          role: 'workflowTask' as const,
-          text: `Running: Reused ${id}`,
-          finalized: false,
-          task: {
+        phaseEntry('phase-map-a', 'Map', { phaseIndex: 0, phaseTotal: 2 }),
+        phaseEntry('phase-map-b', 'Map'),
+        workflowTaskEntry('task-map', 'Planned: Audit', {
+          id: 'audit',
+          label: 'Audit',
+          phase: 'Map',
+          status: 'planned',
+        }),
+        workflowTaskEntry('task-orphan', 'Planned: Synthesize', {
+          id: 'synthesize',
+          label: 'Synthesize',
+          phase: 'Synthesis',
+          status: 'planned',
+        }),
+        workflowTaskEntry('task-loose', 'Planned: Loose', {
+          id: 'loose',
+          label: 'Loose',
+          status: 'planned',
+        }),
+        ...['first', 'second'].map((id) =>
+          workflowTaskEntry(`task-reused-${id}`, `Running: Reused ${id}`, {
             id: `reused-${id}`,
             label: `Reused ${id}`,
-            status: 'running' as const,
+            status: 'running',
             childStreamId: shared,
-          },
-        })),
-        {
-          id: 'task-reused-terminal',
-          role: 'workflowTask',
-          text: 'Finished: Reused terminal',
-          finalized: true,
-          task: {
+          }),
+        ),
+        workflowTaskEntry(
+          'task-reused-terminal',
+          'Finished: Reused terminal',
+          {
             id: 'reused-terminal',
             label: 'Reused terminal',
             status: 'completed',
@@ -1194,31 +1106,25 @@ describe('CLI child list display model', () => {
             durationMs: 1_000,
             totalCostUsd: 0.5,
           },
-        },
-        {
-          id: 'task-missing',
-          role: 'workflowTask',
-          text: 'Running: Missing',
-          finalized: false,
-          task: {
-            id: 'missing',
-            label: 'Missing',
-            status: 'running',
-            childStreamId: missing,
-          },
-        },
-        {
-          id: 'task-fallback',
-          role: 'workflowTask',
-          text: 'Finished: Fallback',
-          finalized: true,
-          task: {
+          true,
+        ),
+        workflowTaskEntry('task-missing', 'Running: Missing', {
+          id: 'missing',
+          label: 'Missing',
+          status: 'running',
+          childStreamId: missing,
+        }),
+        workflowTaskEntry(
+          'task-fallback',
+          'Finished: Fallback',
+          {
             id: 'fallback',
             label: 'Fallback',
             status: 'completed',
             childStreamId: fallback,
           },
-        },
+          true,
+        ),
       ],
     });
     const streams = new Map<StreamTabId, StreamSlice>([

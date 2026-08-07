@@ -44,17 +44,26 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function estimate(
+  client: OpenAI,
+  content: string,
+  signal?: AbortSignal,
+): Promise<number> {
+  return buildHandler().estimateTokenCount([{ role: 'user', content }], {
+    client,
+    signal,
+  });
+}
+
 describe('Kimi token estimation', () => {
   it('uses the authenticated SDK client with bounded native retries', async () => {
     const controller = new AbortController();
     const post = vi.fn(async () => ({ data: { total_tokens: 37 } }));
 
-    const total = await buildHandler().estimateTokenCount(
-      [{ role: 'user', content: 'count this' }],
-      {
-        client: { post } as unknown as OpenAI,
-        signal: controller.signal,
-      },
+    const total = await estimate(
+      { post } as unknown as OpenAI,
+      'count this',
+      controller.signal,
     );
 
     assert.equal(total, 37);
@@ -76,15 +85,8 @@ describe('Kimi token estimation', () => {
       jsonResponse({ data: { total_tokens: 41 } }),
     ];
     const fetchMock = vi.fn<typeof fetch>(async () => responses.shift()!);
-    const client = buildClient(fetchMock);
 
-    assert.equal(
-      await buildHandler().estimateTokenCount(
-        [{ role: 'user', content: 'retry' }],
-        { client },
-      ),
-      41,
-    );
+    assert.equal(await estimate(buildClient(fetchMock), 'retry'), 41);
     assert.equal(fetchMock.mock.calls.length, 3);
   });
 
@@ -92,14 +94,8 @@ describe('Kimi token estimation', () => {
     const fetchMock = vi.fn<typeof fetch>(async () =>
       jsonResponse({ error: 'bad request' }, 400),
     );
-    const client = buildClient(fetchMock);
 
-    await assert.rejects(
-      buildHandler().estimateTokenCount(
-        [{ role: 'user', content: 'invalid' }],
-        { client },
-      ),
-    );
+    await assert.rejects(estimate(buildClient(fetchMock), 'invalid'));
     assert.equal(fetchMock.mock.calls.length, 1);
   });
 
@@ -107,10 +103,7 @@ describe('Kimi token estimation', () => {
     const post = vi.fn(async () => ({ data: { tokens: 37 } }));
 
     await assert.rejects(
-      buildHandler().estimateTokenCount(
-        [{ role: 'user', content: 'malformed' }],
-        { client: { post } as unknown as OpenAI },
-      ),
+      estimate({ post } as unknown as OpenAI, 'malformed'),
       /unexpected response shape/,
     );
     assert.equal(post.mock.calls.length, 1);
@@ -128,10 +121,10 @@ describe('Kimi token estimation', () => {
           );
         }),
     );
-    const client = buildClient(fetchMock);
-    const pending = buildHandler().estimateTokenCount(
-      [{ role: 'user', content: 'cancel' }],
-      { client, signal: controller.signal },
+    const pending = estimate(
+      buildClient(fetchMock),
+      'cancel',
+      controller.signal,
     );
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());

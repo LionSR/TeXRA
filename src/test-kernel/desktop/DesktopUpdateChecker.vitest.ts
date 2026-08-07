@@ -35,12 +35,14 @@ describe('desktop update checker', () => {
     const DAY_MS = 24 * 60 * 60 * 1000;
     let checkForDesktopUpdate: DesktopUpdateCheckerModule['checkForDesktopUpdate'];
     let globalState: FakeStateStore;
+    let nowMs: number;
 
     beforeEach(async () => {
       ({ checkForDesktopUpdate } = await loadSourceModule(
         '@desktop/main/desktopUpdateChecker',
       ));
       globalState = new FakeStateStore();
+      nowMs = Date.UTC(2026, 0, 1);
     });
 
     /** One check with the packaged, update-enabled defaults these cases share. */
@@ -108,7 +110,6 @@ describe('desktop update checker', () => {
       // A realistic epoch timestamp: on the very first check ever,
       // `lastCheckedAt` defaults to 0, and this must be far enough past that
       // default to *not* be throttled (matching a real first launch).
-      let nowMs = Date.UTC(2026, 0, 1);
       const run = () => runCheck({ now: () => nowMs, fetchRelease });
 
       await run();
@@ -127,7 +128,6 @@ describe('desktop update checker', () => {
 
     it('does not re-notify for a release version already notified', async () => {
       const notify = vi.fn();
-      let nowMs = Date.UTC(2026, 0, 1);
       const run = () => runCheck({ now: () => nowMs, notify });
 
       await run();
@@ -141,7 +141,6 @@ describe('desktop update checker', () => {
     });
 
     it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
-      const nowMs = Date.UTC(2026, 0, 1);
       // `undefined` is how a network or API failure reaches the checker.
       const failingFetch = vi.fn(async () => undefined);
 
@@ -176,7 +175,6 @@ describe('desktop update checker', () => {
     });
 
     it('does not persist the throttle stamp when notification fails', async () => {
-      const nowMs = Date.UTC(2026, 0, 1);
       let dialogFails = true;
       const notify = vi.fn(() => {
         if (dialogFails) throw new Error('dialog failed');

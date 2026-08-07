@@ -83,6 +83,12 @@ function createPanel() {
   return panel;
 }
 
+function createdPanel(): ReturnType<typeof createPanel> {
+  return mocks.createWebviewPanel.mock.results[0]?.value as ReturnType<
+    typeof createPanel
+  >;
+}
+
 /**
  * Provider with only the collaborators the placement paths touch. The
  * constructor stands up the whole progress backend, which none of these
@@ -139,9 +145,7 @@ describe('progress target ownership', () => {
     expect(mocks.replayApprovalRequestHandlers).toHaveBeenCalledTimes(1);
 
     await provider.popOutToEditor();
-    const panel = mocks.createWebviewPanel.mock.results[0]?.value as ReturnType<
-      typeof createPanel
-    >;
+    const panel = createdPanel();
 
     // The sidebar was swapped back to the launcher; its late handshake
     // describes content that is no longer the progress target.
@@ -156,9 +160,7 @@ describe('progress target ownership', () => {
     const { provider } = createProvider();
 
     await provider.popOutToEditor();
-    const panel = mocks.createWebviewPanel.mock.results[0]?.value as ReturnType<
-      typeof createPanel
-    >;
+    const panel = createdPanel();
     await provider.markWebviewReady(panel as unknown as vscode.WebviewPanel);
     expect(provider.isViewVisible()).toBe(true);
 
@@ -176,9 +178,7 @@ describe('progress target ownership', () => {
     const { provider, mainViewProvider, sidebarView } = createProvider();
 
     await provider.popOutToEditor();
-    const panel = mocks.createWebviewPanel.mock.results[0]?.value as ReturnType<
-      typeof createPanel
-    >;
+    const panel = createdPanel();
     expect(getActiveSidebarView()).toBe(SIDEBAR_VIEWS.MAIN);
 
     await provider.showInSidebar();
@@ -201,9 +201,7 @@ describe('progress target ownership', () => {
     await provider.popOutToEditor();
     await provider.popOutToEditor();
 
-    const panel = mocks.createWebviewPanel.mock.results[0]?.value as ReturnType<
-      typeof createPanel
-    >;
+    const panel = createdPanel();
     expect(mocks.createWebviewPanel).toHaveBeenCalledTimes(1);
     expect(panel.reveal).toHaveBeenCalledTimes(1);
   });

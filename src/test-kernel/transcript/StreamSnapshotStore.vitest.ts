@@ -207,11 +207,7 @@ describe('StreamSnapshotStore', () => {
     expect(snap.todos).toEqual([TODO]);
     expect(snap.plan).toEqual(PLAN);
     expect(snap.planSummary).toBe(PLAN_SUMMARY);
-    expect(snap.runUsage[RUN]).toMatchObject({
-      inputTokens: 150,
-      outputTokens: 30,
-      cost: 0.75,
-    });
+    expect(snap.runUsage[RUN]).toMatchObject(usage(150, 30, 0.75));
 
     // Liveness is never persisted — a resumed stream shows nothing stale.
     expect(snap.subagents).toEqual([]);
@@ -241,17 +237,12 @@ describe('StreamSnapshotStore', () => {
 
     const reader = new StreamSnapshotStore();
     const snap = await reader.read(STREAM);
-    expect(snap.runUsage[RUN]).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.5,
-    });
+    expect(snap.runUsage[RUN]).toMatchObject(usage(100, 20, 0.5));
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
       expect.stringContaining('Discarding malformed usage delta'),
       expect.anything(),
     );
-    warnSpy.mockRestore();
   });
 
   it('persists durable run facts directly from session events and ignores goalPaused', async () => {
@@ -396,11 +387,7 @@ describe('StreamSnapshotStore', () => {
     expect(snap.outputFilesByRound).toEqual({ '1': [output] });
     expect(snap.missingOutputsByRound).toEqual({ '1': ['paper.pdf'] });
     expect(snap.compileFailuresByRound).toEqual({ '1': [failure] });
-    expect(snap.runUsage[RUN]).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.5,
-    });
+    expect(snap.runUsage[RUN]).toMatchObject(usage(100, 20, 0.5));
     expect(snap.runUsage[RUN]).not.toHaveProperty('elapsedTime');
     expect(snap.runUsage[RUN]).not.toHaveProperty('percentageCached');
     // reasoningTokens is part of the accumulated vocabulary and persists.
@@ -498,7 +485,6 @@ describe('StreamSnapshotStore', () => {
       expect.stringContaining('unreadable persisted work plan'),
       expect.anything(),
     );
-    warnSpy.mockRestore();
   });
 
   it('seeds existing disk data before an unloaded usage mutation, so it is not erased', async () => {
@@ -509,18 +495,14 @@ describe('StreamSnapshotStore', () => {
 
     // A fresh store (NOT load()ed) handles a delta for a NEW run.
     const store = new StreamSnapshotStore();
-    void snapshotFacts(store).addUsage(
-      STREAM,
-      'run-2' as StorageKey,
-      usage(50, 10, 0.25),
-    );
+    void snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
     await store.flush();
 
     // run-1 (prior) survives — the unseeded write did not clobber it.
     const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      'run-1': { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-      'run-2': { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
     });
   });
 
@@ -551,8 +533,8 @@ describe('StreamSnapshotStore', () => {
 
     const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
       'run-corrupt': 'this-is-not-a-usage-object',
     });
 
@@ -568,17 +550,15 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
-    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 50,
-      outputTokens: 10,
-      cost: 0.25,
-    });
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
     await store.flush();
 
     const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
     });
   });
 
@@ -591,17 +571,15 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     snapshotFacts(store).addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 50,
-      outputTokens: 10,
-      cost: 0.25,
-    });
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN_2)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
     await store.flush();
 
     const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
     });
   });
 
@@ -614,24 +592,18 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     snapshotFacts(store).addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject({
-      inputTokens: 50,
-      outputTokens: 10,
-      cost: 0.25,
-    });
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
     await store.flush();
 
     // After the seed merges the disk baseline, the typed view shows the sum.
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject({
-      inputTokens: 150,
-      outputTokens: 30,
-      cost: 0.75,
-    });
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
+      usage(150, 30, 0.75),
+    );
 
     const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
-    expect(raw).toMatchObject({
-      [RUN]: { inputTokens: 150, outputTokens: 30, cost: 0.75 },
-    });
+    expect(raw).toMatchObject({ [RUN]: usage(150, 30, 0.75) });
   });
 
   it('returns output files immediately for streams outside a partial preload without erasing disk outputs', async () => {
@@ -850,19 +822,17 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunConfig(STREAM)).toEqual(runConfig);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
     snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
-    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 50,
-      outputTokens: 10,
-      cost: 0.25,
-    });
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
     await store.flush();
 
     expect(store.getRunConfig(STREAM)).toEqual(runConfig);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
     const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
     });
   });
 
@@ -1136,9 +1106,7 @@ describe('StreamSnapshotStore', () => {
     const newExecutionId = 'def456' as ExecutionId;
     const oldConfig = toolUseConfig('old-search');
     const newConfig = toolUseConfig('new-search');
-    await writeMetaFile(STREAM, {
-      executionId: oldExecutionId,
-    });
+    await writeMetaFile(STREAM, { executionId: oldExecutionId });
     await getExecutionStore(oldExecutionId).writeRunRecord(oldConfig);
 
     const store = new StreamSnapshotStore();
@@ -1167,9 +1135,7 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'abc123' as ExecutionId;
     const persisted = toolUseConfig('search', 'deepseekproT');
     const switched = toolUseConfig('search', 'kimi26T');
-    await writeMetaFile(STREAM, {
-      executionId,
-    });
+    await writeMetaFile(STREAM, { executionId });
     await getExecutionStore(executionId).writeRunRecord(persisted);
 
     const store = new StreamSnapshotStore();
@@ -1210,9 +1176,7 @@ describe('StreamSnapshotStore', () => {
     // Disk meta names the same execution but carries no identity of its own.
     // Re-seeding may read it, but may not synthesize a competing identity
     // from the execution config over the one run.start emitted.
-    await writeMetaFile(STREAM, {
-      executionId,
-    });
+    await writeMetaFile(STREAM, { executionId });
     await store.load([STREAM]);
 
     expect(store.getRunIdentity(STREAM)).toEqual(workflowIdentity);
@@ -1238,9 +1202,7 @@ describe('StreamSnapshotStore', () => {
       timestamp: new Date(0).toISOString(),
       identity: { kind: 'agent', agent: 'foreign-search' },
     });
-    await writeMetaFile(STREAM, {
-      executionId: foreignExecutionId,
-    });
+    await writeMetaFile(STREAM, { executionId: foreignExecutionId });
     await store.load([STREAM]);
 
     expect(store.getExecutionId(STREAM)).toBe(foreignExecutionId);
@@ -1254,9 +1216,7 @@ describe('StreamSnapshotStore', () => {
   it('refreshes the run config from disk when another host switched the model', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    await writeMetaFile(STREAM, {
-      executionId,
-    });
+    await writeMetaFile(STREAM, { executionId });
     await getExecutionStore(executionId).writeRunRecord(
       toolUseConfig('search', 'deepseekproT'),
     );
@@ -1279,9 +1239,7 @@ describe('StreamSnapshotStore', () => {
   it('drops run identity when disk meta no longer names an execution', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    await writeMetaFile(STREAM, {
-      executionId,
-    });
+    await writeMetaFile(STREAM, { executionId });
     await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
 
     const store = new StreamSnapshotStore();
@@ -1302,9 +1260,7 @@ describe('StreamSnapshotStore', () => {
     const oldExecutionId = 'abc123' as ExecutionId;
     const newExecutionId = 'def456' as ExecutionId;
     const oldConfig = toolUseConfig('old-search');
-    await writeMetaFile(STREAM, {
-      executionId: oldExecutionId,
-    });
+    await writeMetaFile(STREAM, { executionId: oldExecutionId });
     await getExecutionStore(oldExecutionId).writeRunRecord(oldConfig);
 
     const store = new StreamSnapshotStore();
@@ -1338,9 +1294,7 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const executionId = 'c0ffee' as ExecutionId;
     await Promise.all([
-      writeMetaFile(STREAM, {
-        executionId,
-      }),
+      writeMetaFile(STREAM, { executionId }),
       writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
       getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
@@ -1374,9 +1328,7 @@ describe('StreamSnapshotStore', () => {
     const dir = streamDataDir(STREAM);
     const executionId = 'deadbeef' as ExecutionId;
     await Promise.all([
-      writeMetaFile(STREAM, {
-        executionId,
-      }),
+      writeMetaFile(STREAM, { executionId }),
       writeStreamFile(STREAM, 'missingOutputs.json', {
         '0': ['current.tex'],
       }),
@@ -1408,22 +1360,16 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.5,
-    });
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(
+      usage(100, 20, 0.5),
+    );
 
     await writeStreamFile(STREAM, 'usageStats.json', {
       [RUN]: usage(3, 4, 0.01),
     });
     await store.load([STREAM]);
 
-    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
-      inputTokens: 3,
-      outputTokens: 4,
-      cost: 0.01,
-    });
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(usage(3, 4, 0.01));
   });
 
   it('treats streams created after load as new so direct mutators stay synchronous', async () => {
@@ -1962,11 +1908,7 @@ describe('StreamSnapshotStore', () => {
     });
     const reloaded = await new StreamSnapshotStore().read(STREAM);
     expect(reloaded.plan).toBeNull();
-    expect(reloaded.runUsage[RUN]).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.5,
-    });
+    expect(reloaded.runUsage[RUN]).toMatchObject(usage(100, 20, 0.5));
     await store.deleteStream(STREAM);
   });
 
@@ -2006,11 +1948,7 @@ describe('StreamSnapshotStore', () => {
 
     const reloaded = await new StreamSnapshotStore().read(STREAM);
     expect(reloaded.plan).toBeNull();
-    expect(reloaded.runUsage[RUN]).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.5,
-    });
+    expect(reloaded.runUsage[RUN]).toMatchObject(usage(100, 20, 0.5));
     expect(await StorageFS.exists(stagedDir)).toBe(false);
     await store.deleteStream(STREAM);
   });
@@ -2279,12 +2217,8 @@ describe('StreamSnapshotStore', () => {
     const dir = streamDataDir(STREAM);
     const executionId = 'dead01' as ExecutionId;
     await Promise.all([
-      writeMetaFile(STREAM, {
-        executionId,
-      }),
-      writeStreamFile(STREAM, 'missingOutputs.json', {
-        '0': ['stale.tex'],
-      }),
+      writeMetaFile(STREAM, { executionId }),
+      writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
       getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
@@ -2481,18 +2415,16 @@ describe('StreamSnapshotStore', () => {
       releaseFirstWrite = resolve;
     });
     let writeCount = 0;
-    const writeAtomicSpy = vi
-      .spyOn(StorageFS, 'writeAtomic')
-      .mockImplementation(async () => {
-        writeCount += 1;
-        if (writeCount === 1) {
-          order.push('first-start');
-          await firstWriteGate;
-          order.push('first-end');
-        } else {
-          order.push('second-start');
-        }
-      });
+    vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(async () => {
+      writeCount += 1;
+      if (writeCount === 1) {
+        order.push('first-start');
+        await firstWriteGate;
+        order.push('first-end');
+      } else {
+        order.push('second-start');
+      }
+    });
 
     // Both land on the same `${stream}::workPlan` write lock.
     snapshotFacts(store).setTodos(STREAM, [TODO]);
@@ -2508,7 +2440,6 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     expect(order).toEqual(['first-start', 'first-end', 'second-start']);
-    writeAtomicSpy.mockRestore();
   });
 
   it('deleteStream refuses reserved stream ids before sidecar directory removal', async () => {

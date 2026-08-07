@@ -109,7 +109,6 @@ describe('CLI clipboard text writer', () => {
         ].join('\n'),
         stderr: '',
       });
-      execFileMock.mockResolvedValue({ stdout: '', stderr: '' });
 
       await expectWriteToTimeOut('darwin');
 

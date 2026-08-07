@@ -178,13 +178,36 @@ function createHandlers(): RecordingApprovalHandlerSet {
   };
 }
 
-/** Reads the `requestId` passed to a handler's first `.show()` call. */
-function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
-  const requestId = (
-    show.mock.calls[0]?.[0] as { requestId?: string } | undefined
-  )?.requestId;
+/** Reads the `requestId` passed to a handler's `.show()`, optionally for one stream. */
+function shownRequestId(
+  show: ReturnType<typeof vi.fn>,
+  streamId?: string,
+): string {
+  const call = streamId
+    ? show.mock.calls.find(([request]) => request.streamId === streamId)
+    : show.mock.calls[0];
+  const requestId = (call?.[0] as { requestId?: string } | undefined)
+    ?.requestId;
   if (!requestId) throw new Error('Expected a captured requestId.');
   return requestId;
+}
+
+/** Asserts the stream was registered without yanking the active tab (#8246). */
+function expectStreamRegistered(
+  sessionEvents: SessionEvent[],
+  streamId: StreamTabId,
+): void {
+  expect(sessionEvents).toContainEqual({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: {
+        streamId,
+        suppressViewSwitch: true,
+        ensureVisible: true,
+      },
+    },
+  });
 }
 
 async function createInteractions(handlers = createHandlers()) {
@@ -275,14 +298,12 @@ describe('createDesktopHostInteractions', () => {
         action: 'approve',
       }),
     ).toBe(true);
-    const streamBRequestId = (
-      handlers.transport.bash.show.mock.calls.find(
-        ([request]) => request.streamId === 'stream-b',
-      )?.[0] as { requestId?: string } | undefined
-    )?.requestId;
-    expect(streamBRequestId).toBeDefined();
+    const streamBRequestId = shownRequestId(
+      handlers.transport.bash.show,
+      'stream-b',
+    );
     expect(
-      interactions.submitBashDecision(streamBRequestId!, {
+      interactions.submitBashDecision(streamBRequestId, {
         action: 'reject',
       }),
     ).toBe(true);
@@ -320,7 +341,7 @@ describe('createDesktopHostInteractions', () => {
       command: 'echo hi',
       streamId: 'stream-a' as StreamTabId,
     });
-    const requestId = firstShowRequestId(handlers.transport.bash.show);
+    const requestId = shownRequestId(handlers.transport.bash.show);
 
     expect(
       interactions.submitPlanDecision(requestId, { action: 'approve' }),
@@ -338,19 +359,7 @@ describe('createDesktopHostInteractions', () => {
       'setActiveStream',
       expect.anything(),
     );
-    // Interaction requests register the stream without yanking the active
-    // tab away from what the user is viewing (#8246).
-    expect(sessionEvents).toContainEqual({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: 'stream-a',
-          suppressViewSwitch: true,
-          ensureVisible: true,
-        },
-      },
-    });
+    expectStreamRegistered(sessionEvents, 'stream-a' as StreamTabId);
   });
 
   it('forwards a cancellation cause as bash reject feedback', async () => {
@@ -435,17 +444,7 @@ describe('createDesktopHostInteractions', () => {
       'requestEnsureProgressView',
       {},
     );
-    expect(sessionEvents).toContainEqual({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: 'stream-a',
-          suppressViewSwitch: true,
-          ensureVisible: true,
-        },
-      },
-    });
+    expectStreamRegistered(sessionEvents, 'stream-a' as StreamTabId);
   });
 
   it('preserves typed proposal approval overrides', async () => {

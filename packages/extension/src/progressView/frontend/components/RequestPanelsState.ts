@@ -25,7 +25,7 @@ export function isTextInput(el: Element | null): boolean {
   }
   if ((el as HTMLElement).isContentEditable) return true;
 
-  const tagName = el.tagName?.toLowerCase() ?? '';
+  const tagName = el.tagName.toLowerCase();
   if (tagName.includes('textarea') || tagName.includes('input')) return true;
 
   return isTextInput(el.shadowRoot?.activeElement ?? null);

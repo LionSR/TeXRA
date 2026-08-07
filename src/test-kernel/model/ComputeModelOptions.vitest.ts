@@ -30,7 +30,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
-function createServerSideKeyService(options: {
+interface ServerAccessOptions {
   useIncludedAccess: boolean;
   readonly authenticated?: boolean;
   readonly canUseServerSideKeys?: boolean;
@@ -39,7 +39,11 @@ function createServerSideKeyService(options: {
   readonly quotaAutoSwitched?: boolean;
   readonly autoSwitchDuringAccessCheck?: boolean;
   readonly onAccessCheck?: () => void;
-}): ModelOptionsServerAccess {
+}
+
+function createServerSideKeyService(
+  options: ServerAccessOptions,
+): ModelOptionsServerAccess {
   return {
     canUseServerSideKeys: async () => {
       options.onAccessCheck?.();
@@ -57,16 +61,14 @@ function createServerSideKeyService(options: {
   };
 }
 
-function installServerSideKeyService(
-  options: Parameters<typeof createServerSideKeyService>[0],
-): void {
+function installServerSideKeyService(options: ServerAccessOptions): void {
   setServerSideKeyService(
     createServerSideKeyService(options) as unknown as ServerSideKeyService,
   );
 }
 
 function createModelOptionsAccess(
-  options: Parameters<typeof createServerSideKeyService>[0],
+  options: ServerAccessOptions,
   secrets: Record<string, string> = {
     [apiKeySecretName('openai')]: 'sk-openai',
   },
@@ -88,14 +90,19 @@ function codexSession(): CodexSession {
   };
 }
 
+function codexSessionSecrets(): Record<string, string> {
+  return { [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()) };
+}
+
 function initSubscriptionPlatform(
   secrets: Record<string, string> = {},
+  enabledModels: string[] = ['gpt55'],
 ): Promise<void> {
   return installPlatform({
     config: {
       'texra.chatgptCodex.preferSubscription': true,
     },
-    globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+    globalState: { [GlobalStateKey.ENABLED_MODELS]: enabledModels },
     secrets,
   });
 }
@@ -315,9 +322,7 @@ describe('computeModelOptionsData relay quota state', () => {
       config: {
         'texra.chatgptCodex.preferSubscription': true,
       },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-      },
+      secrets: codexSessionSecrets(),
     });
     const access = {
       ...createModelOptionsAccess({ useIncludedAccess: false }, {}),
@@ -372,15 +377,7 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
-    await installPlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-      },
-      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-      },
-    });
+    await initSubscriptionPlatform(codexSessionSecrets());
     const access = createModelOptionsAccess(
       {
         useIncludedAccess: true,
@@ -404,15 +401,7 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('automatically lists every active model served by ChatGPT', async () => {
-    await installPlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-      },
-      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gemini31p'] },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-      },
-    });
+    await initSubscriptionPlatform(codexSessionSecrets(), ['gemini31p']);
     const access = {
       ...createModelOptionsAccess({ useIncludedAccess: false }, {}),
       visibleModels: ['gemini31p'],
@@ -443,9 +432,7 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('shows subscription access for tool-use, workflow, and untagged availability', async () => {
-    await initSubscriptionPlatform({
-      [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-    });
+    await initSubscriptionPlatform(codexSessionSecrets());
     const access = createModelOptionsAccess({ useIncludedAccess: false });
 
     const [toolUseModel] = await computeModelOptionsData(['gpt55'], access, {
@@ -516,14 +503,24 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
     return model;
   }
 
-  it('routes to Moonshot by default (Prefer Kimi Code off)', async () => {
-    const model = await kimi3Option(
-      {},
-      {
+  it.each([
+    {
+      name: 'routes to Moonshot by default (Prefer Kimi Code off)',
+      globalState: {},
+      secrets: {
         [apiKeySecretName('kimiCode')]: 'sk-kimi-code',
         [apiKeySecretName('moonshot')]: 'sk-moonshot',
       },
-    );
+    },
+    {
+      name: 'stays on Moonshot when preferred but no Kimi Code key exists',
+      globalState: { [GlobalStateKey.KIMI_CODE_PREFER]: true },
+      secrets: {
+        [apiKeySecretName('moonshot')]: 'sk-moonshot',
+      },
+    },
+  ])('$name', async ({ globalState, secrets }) => {
+    const model = await kimi3Option(globalState, secrets);
     expect(model).toMatchObject({
       provider: 'moonshot',
       routeLabel: 'Via Moonshot',
@@ -547,19 +544,6 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
       disabled: false,
       cost: '$0.000/$0.000',
       context: '262K',
-    });
-  });
-
-  it('stays on Moonshot when preferred but no Kimi Code key exists', async () => {
-    const model = await kimi3Option(
-      { [GlobalStateKey.KIMI_CODE_PREFER]: true },
-      { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
-    );
-    expect(model).toMatchObject({
-      provider: 'moonshot',
-      routeLabel: 'Via Moonshot',
-      availability: 'provider-key',
-      disabled: false,
     });
   });
 

@@ -106,7 +106,7 @@ export function buildOptionalFlowResultFields(
   totalCostUsd: number | undefined,
 ): { memoryMisses?: AgentFlowResult['memoryMisses']; totalCostUsd?: number } {
   return {
-    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+    ...(memoryMisses?.length ? { memoryMisses } : {}),
     ...(totalCostUsd != null && totalCostUsd > 0 ? { totalCostUsd } : {}),
   };
 }

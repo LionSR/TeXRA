@@ -143,15 +143,19 @@ describe('setup credential reporting', () => {
     );
   });
 
-  it('settles authentication before the environment credential probe', async () => {
-    await assertAuthPrecedesCredentialProbe(() =>
-      new ProbeEnvironmentTool().call({}),
-    );
-  });
-
-  it('settles authentication before the setup credential probe', async () => {
-    await assertAuthPrecedesCredentialProbe(() =>
-      new VerifySetupTool().call({}),
-    );
-  });
+  it.each([
+    {
+      probe: 'environment',
+      run: () => new ProbeEnvironmentTool().call({}),
+    },
+    {
+      probe: 'setup',
+      run: () => new VerifySetupTool().call({}),
+    },
+  ])(
+    'settles authentication before the $probe credential probe',
+    async ({ run }) => {
+      await assertAuthPrecedesCredentialProbe(run);
+    },
+  );
 });

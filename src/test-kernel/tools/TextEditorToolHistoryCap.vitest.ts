@@ -54,6 +54,46 @@ async function callTextEditor(
   );
 }
 
+/** Apply a str_replace edit and assert it went through. */
+async function strReplace(
+  tool: TextEditorTool,
+  path: string,
+  oldStr: string,
+  newStr: string,
+  options: { executionId?: string; session?: SessionHandle } = {},
+): Promise<void> {
+  const result = await callTextEditor(
+    tool,
+    { command: 'str_replace', path, old_str: oldStr, new_str: newStr },
+    options,
+  );
+  assert.strictEqual(result.status, 'executed');
+}
+
+/** Undo the most recent edit on a path and assert it went through. */
+async function undoEdit(
+  tool: TextEditorTool,
+  path: string,
+  options: { executionId?: string; session?: SessionHandle } = {},
+): Promise<void> {
+  const result = await callTextEditor(
+    tool,
+    { command: 'undo_edit', path },
+    options,
+  );
+  assert.strictEqual(result.status, 'executed');
+}
+
+function trackOrchestratorExecution(session: SessionHandle): void {
+  session.executions.track(
+    testExecutionHandle({
+      executionId: EXECUTION_ID,
+      parentStreamId: `stream:${EXECUTION_ID}` as StreamTabId,
+      agent: 'orchestrator',
+    }),
+  );
+}
+
 interface TextEditorToolInternals {
   fileHistory: {
     hasExecution(executionId: string): boolean;
@@ -61,6 +101,12 @@ interface TextEditorToolInternals {
       executionId: string,
     ): ReadonlyMap<string, readonly string[]> | undefined;
   };
+}
+
+function historyOf(
+  tool: TextEditorTool,
+): TextEditorToolInternals['fileHistory'] {
+  return (tool as unknown as TextEditorToolInternals).fileHistory;
 }
 
 describe('TextEditorTool undo history lifecycle', () => {
@@ -81,19 +127,12 @@ describe('TextEditorTool undo history lifecycle', () => {
 
     const EDIT_COUNT = 60; // comfortably past MAX_HISTORY_PER_FILE (50)
     for (let n = 0; n < EDIT_COUNT; n += 1) {
-      const result = await callTextEditor(tool, {
-        command: 'str_replace',
-        path: 'loop.tex',
-        old_str: `${n}`,
-        new_str: `${n + 1}`,
-      });
-      assert.strictEqual(result.status, 'executed');
+      await strReplace(tool, 'loop.tex', `${n}`, `${n + 1}`);
     }
     assert.strictEqual(await WorkspaceFS.read('loop.tex'), `${EDIT_COUNT}\n`);
 
-    const internals = tool as unknown as TextEditorToolInternals;
     const history = [
-      ...(internals.fileHistory.filesFor(EXECUTION_ID)?.values() ?? []),
+      ...(historyOf(tool).filesFor(EXECUTION_ID)?.values() ?? []),
     ].at(0);
     assert.ok(history, 'expected an undo-history entry for loop.tex');
     assert.ok(
@@ -103,11 +142,7 @@ describe('TextEditorTool undo history lifecycle', () => {
 
     // The cap must never affect the one documented behavior: undoing the
     // most recently applied edit.
-    const undo = await callTextEditor(tool, {
-      command: 'undo_edit',
-      path: 'loop.tex',
-    });
-    assert.strictEqual(undo.status, 'executed');
+    await undoEdit(tool, 'loop.tex');
     assert.strictEqual(
       await WorkspaceFS.read('loop.tex'),
       `${EDIT_COUNT - 1}\n`,
@@ -118,40 +153,19 @@ describe('TextEditorTool undo history lifecycle', () => {
     await installPlatform({ '/workspace/lifecycle.tex': 'before\n' });
     const tool = new TextEditorTool();
     const session = defaultSession();
-    const streamId = `stream:${EXECUTION_ID}` as StreamTabId;
-    const handle = testExecutionHandle({
-      executionId: EXECUTION_ID,
-      parentStreamId: streamId,
-      agent: 'orchestrator',
-    });
-    session.executions.track(handle);
+    trackOrchestratorExecution(session);
 
     try {
-      const result = await callTextEditor(
-        tool,
-        {
-          command: 'str_replace',
-          path: 'lifecycle.tex',
-          old_str: 'before',
-          new_str: 'after',
-        },
-        { session },
-      );
-      assert.strictEqual(result.status, 'executed');
+      await strReplace(tool, 'lifecycle.tex', 'before', 'after', { session });
 
-      const internals = tool as unknown as TextEditorToolInternals;
       assert.strictEqual(
-        [...(internals.fileHistory.filesFor(EXECUTION_ID)?.values() ?? [])].at(
-          0,
-        )?.length,
+        [...(historyOf(tool).filesFor(EXECUTION_ID)?.values() ?? [])].at(0)
+          ?.length,
         1,
       );
 
       session.executions.untrack(EXECUTION_ID);
-      assert.strictEqual(
-        internals.fileHistory.hasExecution(EXECUTION_ID),
-        false,
-      );
+      assert.strictEqual(historyOf(tool).hasExecution(EXECUTION_ID), false);
     } finally {
       session.executions.untrack(EXECUTION_ID);
     }
@@ -161,48 +175,17 @@ describe('TextEditorTool undo history lifecycle', () => {
     await installPlatform({ '/workspace/relisten.tex': 'one\n' });
     const tool = new TextEditorTool();
     const session = defaultSession();
-    const streamId = `stream:${EXECUTION_ID}` as StreamTabId;
-    const handle = testExecutionHandle({
-      executionId: EXECUTION_ID,
-      parentStreamId: streamId,
-      agent: 'orchestrator',
-    });
-    session.executions.track(handle);
+    trackOrchestratorExecution(session);
     const addListener = vi.spyOn(session.executions, 'addListener');
 
     try {
-      const firstEdit = await callTextEditor(
-        tool,
-        {
-          command: 'str_replace',
-          path: 'relisten.tex',
-          old_str: 'one',
-          new_str: 'two',
-        },
-        { session },
-      );
-      assert.strictEqual(firstEdit.status, 'executed');
+      await strReplace(tool, 'relisten.tex', 'one', 'two', { session });
 
       // Undo pops the only snapshot for the only edited file, leaving the
       // execution with an empty snapshot set.
-      const undo = await callTextEditor(
-        tool,
-        { command: 'undo_edit', path: 'relisten.tex' },
-        { session },
-      );
-      assert.strictEqual(undo.status, 'executed');
+      await undoEdit(tool, 'relisten.tex', { session });
 
-      const secondEdit = await callTextEditor(
-        tool,
-        {
-          command: 'str_replace',
-          path: 'relisten.tex',
-          old_str: 'one',
-          new_str: 'three',
-        },
-        { session },
-      );
-      assert.strictEqual(secondEdit.status, 'executed');
+      await strReplace(tool, 'relisten.tex', 'one', 'three', { session });
 
       assert.strictEqual(
         addListener.mock.calls.filter((call) => call[0] === EXECUTION_ID)
@@ -219,46 +202,20 @@ describe('TextEditorTool undo history lifecycle', () => {
     await installPlatform({ '/workspace/shared.tex': 'alpha\n' });
     const tool = new TextEditorTool();
 
-    const parentEdit = await callTextEditor(
-      tool,
-      {
-        command: 'str_replace',
-        path: 'shared.tex',
-        old_str: 'alpha',
-        new_str: 'parent',
-      },
-      { executionId: 'aaaaaa' },
-    );
-    assert.strictEqual(parentEdit.status, 'executed');
+    await strReplace(tool, 'shared.tex', 'alpha', 'parent', {
+      executionId: 'aaaaaa',
+    });
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
 
-    const childEdit = await callTextEditor(
-      tool,
-      {
-        command: 'str_replace',
-        path: 'shared.tex',
-        old_str: 'parent',
-        new_str: 'child',
-      },
-      { executionId: 'bbbbbb' },
-    );
-    assert.strictEqual(childEdit.status, 'executed');
+    await strReplace(tool, 'shared.tex', 'parent', 'child', {
+      executionId: 'bbbbbb',
+    });
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'child\n');
 
-    const parentUndo = await callTextEditor(
-      tool,
-      { command: 'undo_edit', path: 'shared.tex' },
-      { executionId: 'aaaaaa' },
-    );
-    assert.strictEqual(parentUndo.status, 'executed');
+    await undoEdit(tool, 'shared.tex', { executionId: 'aaaaaa' });
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
 
-    const childUndo = await callTextEditor(
-      tool,
-      { command: 'undo_edit', path: 'shared.tex' },
-      { executionId: 'bbbbbb' },
-    );
-    assert.strictEqual(childUndo.status, 'executed');
+    await undoEdit(tool, 'shared.tex', { executionId: 'bbbbbb' });
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
   });
 });

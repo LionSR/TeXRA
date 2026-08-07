@@ -30,7 +30,7 @@ const resolveModelOptions = async (
   }));
 
 function createState(
-  overrides: Partial<{
+  initial: Partial<{
     enabledModels: readonly string[];
     helperModel: string;
     reasoningLevelOverrides: Record<string, string>;
@@ -38,10 +38,10 @@ function createState(
   }> = {},
 ): SettingsModelSelectionState {
   const state = {
-    enabledModels: overrides.enabledModels,
-    helperModel: overrides.helperModel,
-    reasoningLevelOverrides: overrides.reasoningLevelOverrides,
-    preferShortModelNames: overrides.preferShortModelNames,
+    enabledModels: initial.enabledModels,
+    helperModel: initial.helperModel,
+    reasoningLevelOverrides: initial.reasoningLevelOverrides,
+    preferShortModelNames: initial.preferShortModelNames,
   };
   return {
     getEnabledModels: () => state.enabledModels,
@@ -73,6 +73,30 @@ function createController(
     getPreferredCopilotRouteModels: () => [],
     ...overrides,
   });
+}
+
+// A discovered sonnet46 Copilot route with the editor's context ceiling and
+// subscription pricing, optionally with capabilities overridden.
+function sonnet46CopilotRoutes(
+  access: CopilotModelRoute['access'],
+  capabilities?: CopilotModelRoute['effectiveConfig']['capabilities'],
+): ReadonlyMap<string, CopilotModelRoute> {
+  return new Map<string, CopilotModelRoute>([
+    [
+      'sonnet46',
+      {
+        access,
+        reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+        effectiveConfig: {
+          ...MODEL_CONFIGS.sonnet46,
+          ...(capabilities === undefined ? {} : { capabilities }),
+          contextWindow: 200_000,
+          inputPrice: 0,
+          outputPrice: 0,
+        },
+      },
+    ],
+  ]);
 }
 
 describe('SettingsModelSelectionController', () => {
@@ -198,27 +222,12 @@ describe('SettingsModelSelectionController', () => {
     const controller = createController({
       getPreferredCopilotRouteModels: () => ['sonnet46'],
       getCopilotRoutes: async () =>
-        new Map<string, CopilotModelRoute>([
-          [
-            'sonnet46',
-            {
-              access: 'allowed',
-              reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
-              effectiveConfig: {
-                ...MODEL_CONFIGS.sonnet46,
-                capabilities: {
-                  ...MODEL_CONFIGS.sonnet46.capabilities,
-                  supportsReasoningEffort: false,
-                  maxReasoningEffort: undefined,
-                  supportedReasoningEfforts: undefined,
-                },
-                contextWindow: 200_000,
-                inputPrice: 0,
-                outputPrice: 0,
-              },
-            },
-          ],
-        ]),
+        sonnet46CopilotRoutes('allowed', {
+          ...MODEL_CONFIGS.sonnet46.capabilities,
+          supportsReasoningEffort: false,
+          maxReasoningEffort: undefined,
+          supportedReasoningEfforts: undefined,
+        }),
     });
 
     const sonnet = (await controller.buildSelectionData()).models.find(
@@ -233,22 +242,7 @@ describe('SettingsModelSelectionController', () => {
 
   it('surfaces discovered Copilot routes as route status, never as picker rows', async () => {
     const controller = createController({
-      getCopilotRoutes: async () =>
-        new Map<string, CopilotModelRoute>([
-          [
-            'sonnet46',
-            {
-              access: 'consent-required',
-              reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
-              effectiveConfig: {
-                ...MODEL_CONFIGS.sonnet46,
-                contextWindow: 200_000,
-                inputPrice: 0,
-                outputPrice: 0,
-              },
-            },
-          ],
-        ]),
+      getCopilotRoutes: async () => sonnet46CopilotRoutes('consent-required'),
     });
 
     const { models, copilotModels } = await controller.buildSelectionData();

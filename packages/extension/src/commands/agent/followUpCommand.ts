@@ -52,7 +52,9 @@ async function handleFollowUpResult(
   }
 }
 
-export function registerFollowUpCommand(context: vscode.ExtensionContext) {
+export function registerFollowUpCommand(
+  context: vscode.ExtensionContext,
+): void {
   registerCommands(context, [
     {
       id: 'texra.sendFollowUp',

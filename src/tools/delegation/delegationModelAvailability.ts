@@ -29,7 +29,7 @@ function formatAvailableModelsLine(
 
 function normalizeModelName(model: string | null | undefined): string | null {
   const trimmed = model?.trim();
-  return trimmed ? trimmed : null;
+  return trimmed || null;
 }
 
 export function selectDelegationModelFromAvailableNames(input: {

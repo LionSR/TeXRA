@@ -273,11 +273,10 @@ pause/complete only affect autonomous goals; with no goal running they return gu
       ? `\nUser feedback: ${feedback}`
       : '\nNo specific feedback was provided.';
 
-    if (feedback) {
-      logger.info('Plan rejected by user', { data: feedback });
-    } else {
-      logger.info('Plan rejected by user');
-    }
+    logger.info(
+      'Plan rejected by user',
+      feedback ? { data: feedback } : undefined,
+    );
 
     return errorResult(
       `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,

@@ -36,16 +36,23 @@ function buildShared(): ToolUseRoundShared {
 }
 
 describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 pattern on a round)', () => {
+  function rejectFollowUpAppend(
+    services: ToolUseRoundServices<unknown>,
+    message: string,
+  ): void {
+    (
+      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
+        typeof vi.fn
+      >
+    ).mockRejectedValue(new Error(message));
+  }
+
   it('logs a follow-up transcript row even when appendFollowUpAsUserMessage throws', async () => {
     // A failed follow-up append mid-round (corrupt/oversized media, provider
     // validation error, ...) must still leave a record of what the user
     // asked for — otherwise that turn's transcript row silently vanishes.
     const services = buildServices();
-    (
-      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
-        typeof vi.fn
-      >
-    ).mockRejectedValue(new Error('follow-up append failed'));
+    rejectFollowUpAppend(services, 'follow-up append failed');
     const node = new ToolUseRoundPrepNode().setServices(services);
     const shared = buildShared();
 
@@ -93,11 +100,7 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
 
   it('does not log synthetic follow-ups', async () => {
     const services = buildServices();
-    (
-      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
-        typeof vi.fn
-      >
-    ).mockRejectedValue(new Error('boom'));
+    rejectFollowUpAppend(services, 'boom');
     const node = new ToolUseRoundPrepNode().setServices(services);
     const shared = buildShared();
 

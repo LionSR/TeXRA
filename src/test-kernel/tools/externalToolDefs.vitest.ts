@@ -13,6 +13,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function installToolAvailability(isTexraCliEntrypoint: boolean) {
+  return installPlatform(
+    {},
+    {
+      toolAvailability: {
+        isVscodeExtensionInstalled: () => false,
+        isTexraCliEntrypoint: () => isTexraCliEntrypoint,
+      },
+    },
+  );
+}
+
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
     const zotero = findExternalToolDef('zotero');
@@ -54,15 +66,7 @@ describe('external tool definitions', () => {
   it('detects the current TeXRA CLI process through the host checker', async () => {
     const texraCli = findExternalToolDef('texra-cli');
     assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
-    await installPlatform(
-      {},
-      {
-        toolAvailability: {
-          isVscodeExtensionInstalled: () => false,
-          isTexraCliEntrypoint: () => true,
-        },
-      },
-    );
+    await installToolAvailability(true);
 
     try {
       const probeResult = await texraCli.probe?.();
@@ -84,15 +88,7 @@ describe('external tool definitions', () => {
     const findPath = vi
       .spyOn(BinaryResolver, 'findPath')
       .mockReturnValue('/usr/local/bin/lake');
-    await installPlatform(
-      {},
-      {
-        toolAvailability: {
-          isVscodeExtensionInstalled: () => false,
-          isTexraCliEntrypoint: () => false,
-        },
-      },
-    );
+    await installToolAvailability(false);
 
     try {
       const probeResult = await lean.probe?.();

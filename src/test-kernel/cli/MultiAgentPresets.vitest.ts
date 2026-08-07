@@ -89,6 +89,20 @@ function degradedPhysicistToolUse(): AgentEntry[] {
   ];
 }
 
+// The physicist team with two workflows and the root-plus-review tool pair.
+function partialPhysicistPlan(): CliMultiAgentPresetRunPlan {
+  return planRun(findPreset('physicist'), {
+    workflow: [
+      agent('correct', AgentCategory.Workflow),
+      agent('polish', AgentCategory.Workflow),
+    ],
+    toolUse: [
+      agent('review', AgentCategory.ToolUse),
+      agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+    ],
+  });
+}
+
 describe('CLI multi-agent presets', () => {
   it('includes critical review in the mathematician team', () => {
     const preset = findPreset('mathematician');
@@ -437,20 +451,11 @@ describe('CLI multi-agent presets', () => {
     ];
     const customPresets = (raw: unknown) =>
       teamPresets(raw).filter((preset) => preset.source === 'custom');
+    const expectedCustom = { ...valid[0], icon: 'bookmark', source: 'custom' };
 
-    expect(customPresets(valid)).toEqual([
-      {
-        ...valid[0],
-        icon: 'bookmark',
-        source: 'custom',
-      },
-    ]);
+    expect(customPresets(valid)).toEqual([expectedCustom]);
     expect(customPresets([{ id: 'broken' }, ...valid])).toEqual([
-      {
-        ...valid[0],
-        icon: 'bookmark',
-        source: 'custom',
-      },
+      expectedCustom,
     ]);
 
     // An unrecognized icon is cosmetic and must NOT cost the user the team:
@@ -474,11 +479,7 @@ describe('CLI multi-agent presets', () => {
         },
       ]),
     ).toEqual([
-      {
-        ...valid[0],
-        icon: 'bookmark',
-        source: 'custom',
-      },
+      expectedCustom,
       {
         id: 'custom-broken-icon',
         name: 'Broken Icon',
@@ -509,18 +510,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats an inspection plan with root and missing members', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      workflow: [
-        agent('correct', AgentCategory.Workflow),
-        agent('polish', AgentCategory.Workflow),
-      ],
-      toolUse: [
-        agent('review', AgentCategory.ToolUse),
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
-    });
-    const details = formatCliMultiAgentPresetInspection(plan);
+    const details = formatCliMultiAgentPresetInspection(partialPhysicistPlan());
 
     expect(details).toContain('Team root agent:\n  orchestrator');
     expect(details).toContain(
@@ -563,17 +553,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('plans a preset run with canonical visibility keys and an orchestrator root', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      workflow: [
-        agent('correct', AgentCategory.Workflow),
-        agent('polish', AgentCategory.Workflow),
-      ],
-      toolUse: [
-        agent('review', AgentCategory.ToolUse),
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
-    });
+    const plan = partialPhysicistPlan();
 
     expect(plan.rootAgent?.name).toBe('orchestrator');
     expect(plan.agentKeys.workflow).toEqual([
@@ -718,18 +698,13 @@ describe('CLI multi-agent presets', () => {
 
   it('adds an explicit root override to the visible tool-use team', () => {
     const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUse: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
-      agentOverride: 'review',
-    });
+    const toolUse = [
+      agent('lean', AgentCategory.ToolUse),
+      agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+    ];
+    const plan = planRun(preset, { toolUse, agentOverride: 'review' });
     const sourceQualifiedPlan = planRun(preset, {
-      toolUse: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
+      toolUse,
       agentOverride: 'builtInToolUse:review',
     });
 

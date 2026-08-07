@@ -17,10 +17,10 @@ export function inspectVscodeHostConfig<T>(key: string) {
 /** Whether a VS Code setting has an explicit value at any user scope. */
 export function isVscodeHostConfigExplicitlySet(key: string): boolean {
   const inspection = inspectVscodeHostConfig(key);
-  return Boolean(
+  return (
     inspection?.globalValue !== undefined ||
     inspection?.workspaceValue !== undefined ||
-    inspection?.workspaceFolderValue !== undefined,
+    inspection?.workspaceFolderValue !== undefined
   );
 }
 

@@ -49,14 +49,16 @@ const outputLocation: AgentFileLocation = {
   relativePath: 'output.xml',
 };
 
-function makeNode(options: {
+interface NodeOptions {
   signal?: AbortSignal;
   logger?: {
     error: ReturnType<typeof vi.fn>;
     debug: ReturnType<typeof vi.fn>;
   };
   clearCompactionRequest?: () => void;
-}): ResponseCycleNode {
+}
+
+function makeNode(options: NodeOptions): ResponseCycleNode {
   return new ResponseCycleNode().setServices({
     getOutputFileLocation: async () => outputLocation,
     runScope: testRunScope('response-cycle', { signal: options.signal }),
@@ -70,21 +72,30 @@ function makeNode(options: {
   } as unknown as ReflectionServices);
 }
 
+async function runNode(options: NodeOptions = {}) {
+  const node = makeNode(options);
+  const shared = reflectionFlowShared();
+  const prep = await node.prep(shared);
+  const result = await node.exec(prep);
+  return { node, shared, prep, result };
+}
+
 async function runCycle(interrupted: boolean) {
-  const node = makeNode({
+  const { result } = await runNode({
     signal: interrupted ? AbortSignal.abort() : undefined,
   });
-  const prep = await node.prep(reflectionFlowShared());
-  return node.exec(prep);
+  return result;
 }
 
 describe('ResponseCycleNode outcome classification', () => {
   beforeEach(() => {
-    flowState.shouldStop = false;
-    flowState.endTurn = false;
-    flowState.lastError = undefined;
-    flowState.contextWindowRecoveryAttempted = false;
-    flowState.contextWindowRecoveryRequestId = undefined;
+    Object.assign(flowState, {
+      shouldStop: false,
+      endTurn: false,
+      lastError: undefined,
+      contextWindowRecoveryAttempted: false,
+      contextWindowRecoveryRequestId: undefined,
+    });
   });
 
   it('does NOT cancel a stop-without-end-of-turn when the run is not interrupted', async () => {
@@ -127,13 +138,10 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.contextWindowRecoveryRequestId = 7;
     const clearCompactionRequest = vi.fn();
 
-    const node = makeNode({
+    const { result } = await runNode({
       signal: AbortSignal.abort(),
       clearCompactionRequest,
     });
-    const prep = await node.prep(reflectionFlowShared());
-
-    const result = await node.exec(prep);
 
     expect(result.outcome).toBe('cancelled');
     expect(clearCompactionRequest).toHaveBeenCalledWith(7);
@@ -148,12 +156,8 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: true,
     };
     const clearCompactionRequest = vi.fn();
-    const node = makeNode({
-      clearCompactionRequest,
-    });
-    const prep = await node.prep(reflectionFlowShared());
 
-    const result = await node.exec(prep);
+    const { result } = await runNode({ clearCompactionRequest });
 
     expect(result.outcome).toBe('failed');
     expect(clearCompactionRequest).toHaveBeenCalledWith(7);
@@ -166,11 +170,8 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: true,
     };
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode({ logger });
-    const shared = reflectionFlowShared();
-    const prep = await node.prep(shared);
+    const { node, shared, prep, result } = await runNode({ logger });
 
-    const result = await node.exec(prep);
     await node.post(shared, prep, result);
 
     expect(result).toMatchObject({
@@ -187,11 +188,8 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: false,
     };
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode({ logger });
-    const shared = reflectionFlowShared();
-    const prep = await node.prep(shared);
+    const { node, shared, prep, result } = await runNode({ logger });
 
-    const result = await node.exec(prep);
     await node.post(shared, prep, result);
 
     expect(logger.error).not.toHaveBeenCalled();

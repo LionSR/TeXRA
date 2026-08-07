@@ -10,6 +10,38 @@ import {
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
 
+// Incomplete-delivery fixtures shared by the summarize/detect pairs below.
+const PROVER_STREAMING_TEXT = [
+  'before',
+  '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+  'The response is still streaming.',
+].join('\n');
+const CODEX_STREAMING_TEXT = [
+  'before',
+  '<codex-result id="abc" thread-id="t1">',
+  'The response is still streaming.',
+].join('\n');
+
+// XML-escaped workflow-summary JSON for the workflow-script-result/error tests.
+function workflowSummary(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    name: 'proofread-pipeline',
+    outcome: 'completed',
+    phaseCount: 2,
+    taskDone: 4,
+    taskTotal: 4,
+    costUsd: 0.19,
+    durationMs: 724_000,
+    files: [
+      { path: 'paper_A.tex', added: 120, removed: 80 },
+      { path: 'notes.txt', added: null, removed: null },
+    ],
+    scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+    errorCause: null,
+    ...overrides,
+  }).replaceAll('"', '&quot;');
+}
+
 describe('deliveryTagOf', () => {
   it('recognizes every envelope opening a render surface can receive', () => {
     expect(
@@ -26,10 +58,10 @@ describe('deliveryTagOf', () => {
     expect(deliveryTagOf('hello world')).toBeUndefined();
     expect(
       deliveryTagOf('<codex-result-partial>x</codex-result-partial>'),
-    ).toBe(undefined);
+    ).toBeUndefined();
     expect(
       deliveryTagOf('prose then <subagent-result>x</subagent-result>'),
-    ).toBe(undefined);
+    ).toBeUndefined();
   });
 });
 
@@ -135,27 +167,15 @@ describe('summarizeSubagentFollowup', () => {
   });
 
   it('summarizes incomplete embedded subagent blocks while streaming', () => {
-    const text = [
-      'before',
-      '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
-      'The response is still streaming.',
-    ].join('\n');
-
-    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+    expect(summarizeEmbeddedSubagentFollowups(PROVER_STREAMING_TEXT)).toBe(
       ['before', '✓ prover completed'].join('\n'),
     );
   });
 
   it('detects incomplete embedded subagent blocks', () => {
-    expect(
-      hasIncompleteEmbeddedSubagentFollowup(
-        [
-          'before',
-          '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
-          'The response is still streaming.',
-        ].join('\n'),
-      ),
-    ).toBe(true);
+    expect(hasIncompleteEmbeddedSubagentFollowup(PROVER_STREAMING_TEXT)).toBe(
+      true,
+    );
     expect(
       hasIncompleteEmbeddedSubagentFollowup(
         [
@@ -197,27 +217,15 @@ describe('summarizeSubagentFollowup', () => {
   });
 
   it('summarizes an incomplete embedded codex-result block while streaming', () => {
-    const text = [
-      'before',
-      '<codex-result id="abc" thread-id="t1">',
-      'The response is still streaming.',
-    ].join('\n');
-
-    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+    expect(summarizeEmbeddedSubagentFollowups(CODEX_STREAMING_TEXT)).toBe(
       ['before', '✓ codex completed'].join('\n'),
     );
   });
 
   it('detects incomplete embedded codex-result blocks', () => {
-    expect(
-      hasIncompleteEmbeddedSubagentFollowup(
-        [
-          'before',
-          '<codex-result id="abc" thread-id="t1">',
-          'The response is still streaming.',
-        ].join('\n'),
-      ),
-    ).toBe(true);
+    expect(hasIncompleteEmbeddedSubagentFollowup(CODEX_STREAMING_TEXT)).toBe(
+      true,
+    );
     expect(
       hasIncompleteEmbeddedSubagentFollowup(
         [
@@ -256,27 +264,12 @@ describe('summarizeSubagentFollowup', () => {
   });
 
   it('renders the typed workflow summary instead of its raw run-log tail', () => {
-    const summary = JSON.stringify({
-      name: 'proofread-pipeline',
-      outcome: 'completed',
-      phaseCount: 2,
-      taskDone: 4,
-      taskTotal: 4,
-      costUsd: 0.19,
-      durationMs: 724_000,
-      files: [
-        { path: 'paper_A.tex', added: 120, removed: 80 },
-        { path: 'notes.txt', added: null, removed: null },
-      ],
-      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
-      errorCause: null,
-    }).replaceAll('"', '&quot;');
     const xml = [
       '<workflow-script-result id="abc">',
       '<response>result',
       '=== Run log ===',
       'many duplicate lines</response>',
-      `<workflow-summary>${summary}</workflow-summary>`,
+      `<workflow-summary>${workflowSummary()}</workflow-summary>`,
       '</workflow-script-result>',
     ].join('\n');
 
@@ -292,21 +285,16 @@ describe('summarizeSubagentFollowup', () => {
   });
 
   it('keeps the workflow failure cause but omits its duplicate run log', () => {
-    const summary = JSON.stringify({
-      name: 'proofread-pipeline',
-      outcome: 'failed',
-      phaseCount: 2,
-      taskDone: 1,
-      taskTotal: 4,
-      costUsd: 0.03,
-      durationMs: 5_000,
-      files: [],
-      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
-      errorCause: 'Model request failed: quota exhausted',
-    }).replaceAll('"', '&quot;');
     const xml = [
       '<workflow-script-error id="abc">',
-      `<workflow-summary>${summary}</workflow-summary>`,
+      `<workflow-summary>${workflowSummary({
+        outcome: 'failed',
+        taskDone: 1,
+        costUsd: 0.03,
+        durationMs: 5_000,
+        files: [],
+        errorCause: 'Model request failed: quota exhausted',
+      })}</workflow-summary>`,
       '<message>Model request failed: quota exhausted',
       '',
       '=== Run log ===',
@@ -324,22 +312,19 @@ describe('summarizeSubagentFollowup', () => {
   });
 
   it('preserves structured failure text without parsing generated suffixes', () => {
-    const summary = JSON.stringify({
-      name: 'proofread-pipeline',
-      outcome: 'failed',
-      phaseCount: 0,
-      taskDone: 0,
-      taskTotal: 0,
-      costUsd: 0,
-      durationMs: 100,
-      files: [],
-      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
-      errorCause:
-        'Literal &amp;lt;tag&amp;gt;\n\n=== Run log belongs to the error\nScript file: user note',
-    }).replaceAll('"', '&quot;');
     const xml = [
       '<workflow-script-error id="abc">',
-      `<workflow-summary>${summary}</workflow-summary>`,
+      `<workflow-summary>${workflowSummary({
+        outcome: 'failed',
+        phaseCount: 0,
+        taskDone: 0,
+        taskTotal: 0,
+        costUsd: 0,
+        durationMs: 100,
+        files: [],
+        errorCause:
+          'Literal &amp;lt;tag&amp;gt;\n\n=== Run log belongs to the error\nScript file: user note',
+      })}</workflow-summary>`,
       '<message>=== Run log ===',
       'generated entry',
       '',

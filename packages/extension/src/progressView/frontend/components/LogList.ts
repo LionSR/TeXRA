@@ -256,7 +256,7 @@ export class LogList extends LitElement {
     );
     if (copyButton) {
       event.stopPropagation();
-      const copyId = copyButton.dataset.copyId ?? '';
+      const copyId = copyButton.dataset.copyId;
       const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
       if (!textToCopy.trim()) return;
 

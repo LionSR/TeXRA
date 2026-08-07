@@ -33,6 +33,17 @@ function makeRepo(): string {
   return repo;
 }
 
+function runInstall(repo: string, ...args: readonly string[]) {
+  return runCli([
+    '--cwd',
+    repo,
+    'install-github-action',
+    ...args,
+    '--no-pr',
+    '--no-color',
+  ]);
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   for (const repo of repos.splice(0)) {
@@ -51,13 +62,7 @@ describe('install-github-action command', () => {
     writeFileSync(path.join(repo, 'already-staged.txt'), 'keep staged\n');
     git(repo, 'add', 'already-staged.txt');
 
-    const result = await runCli([
-      '--cwd',
-      repo,
-      'install-github-action',
-      '--no-pr',
-      '--no-color',
-    ]);
+    const result = await runInstall(repo);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
     expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
@@ -75,17 +80,13 @@ describe('install-github-action command', () => {
     git(repo, 'add', 'feature.txt');
     git(repo, 'commit', '-m', 'feature work');
 
-    const result = await runCli([
-      '--cwd',
+    const result = await runInstall(
       repo,
-      'install-github-action',
       '--branch',
       'texra/install-from-main',
       '--base',
       'main',
-      '--no-pr',
-      '--no-color',
-    ]);
+    );
 
     expect(result.exitCode).toBe(CliExitCode.Success);
     expect(git(repo, 'diff', '--name-only', 'main...HEAD')).toBe(
@@ -95,9 +96,9 @@ describe('install-github-action command', () => {
 
   it('reuses an existing branch under --force without resetting its commits', async () => {
     const repo = makeRepo();
-    await expect(
-      runCli(['--cwd', repo, 'install-github-action', '--no-pr', '--no-color']),
-    ).resolves.toEqual({ exitCode: CliExitCode.Success });
+    await expect(runInstall(repo)).resolves.toEqual({
+      exitCode: CliExitCode.Success,
+    });
 
     writeFileSync(path.join(repo, 'custom.txt'), 'keep me\n');
     git(repo, 'add', 'custom.txt');
@@ -106,16 +107,9 @@ describe('install-github-action command', () => {
 
     git(repo, 'checkout', 'main');
 
-    await expect(
-      runCli([
-        '--cwd',
-        repo,
-        'install-github-action',
-        '--force',
-        '--no-pr',
-        '--no-color',
-      ]),
-    ).resolves.toEqual({ exitCode: CliExitCode.Success });
+    await expect(runInstall(repo, '--force')).resolves.toEqual({
+      exitCode: CliExitCode.Success,
+    });
 
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
     expect(git(repo, 'log', '--format=%s', '-1')).toBe('custom branch edit');

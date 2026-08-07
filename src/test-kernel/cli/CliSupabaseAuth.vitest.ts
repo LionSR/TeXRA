@@ -134,6 +134,16 @@ function stubBrowserSignIn(
   return callbackServer;
 }
 
+/** Arm both transports (browser and device code) to complete with `session`. */
+function stubSuccessfulSignIns(session: {
+  access_token: string;
+}): FakeCallbackServer {
+  const callbackServer = stubBrowserSignIn(async () => session);
+  mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
+  mocks.pollForDeviceSession.mockResolvedValue(session);
+  return callbackServer;
+}
+
 describe('CLI Supabase auth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -191,13 +201,9 @@ describe('CLI Supabase auth', () => {
 
   it('forwards interactive cancellation to both TeXRA transports', async () => {
     const controller = new AbortController();
-    const session = { access_token: 'token' };
-    const callbackServer = stubBrowserSignIn(async () => session);
-    mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
-    mocks.pollForDeviceSession.mockResolvedValue(session);
+    const callbackServer = stubSuccessfulSignIns({ access_token: 'token' });
     const { signInCliSupabase, signInCliSupabaseDeviceCode } =
       await loadSupabaseAuth();
-
     await signInCliSupabase({
       openBrowser: false,
       signal: controller.signal,
@@ -270,10 +276,7 @@ describe('CLI Supabase auth', () => {
   });
 
   it('leaves the included-access preference to the user on sign-in', async () => {
-    const session = { access_token: 'token' };
-    stubBrowserSignIn(async () => session);
-    mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
-    mocks.pollForDeviceSession.mockResolvedValue(session);
+    stubSuccessfulSignIns({ access_token: 'token' });
     const { signInCliSupabase, signInCliSupabaseDeviceCode } =
       await loadSupabaseAuth();
 
@@ -297,23 +300,22 @@ describe('CLI Supabase auth', () => {
     expect(mocks.setUseIncludedModelAccess).not.toHaveBeenCalled();
   });
 
-  it('reports a service outage instead of a signed-out session', async () => {
-    mocks.getStoredSessionState.mockResolvedValue('transient');
-    const { getCliAuthProfile } = await loadSupabaseAuth();
-
-    await expect(getCliAuthProfile()).resolves.toEqual({
-      authenticated: false,
+  it.each([
+    {
+      name: 'reports a service outage instead of a signed-out session',
       sessionState: 'transient',
-    });
-  });
-
-  it('reports a rejected refresh credential as signed out', async () => {
-    mocks.getStoredSessionState.mockResolvedValue('invalid');
+    },
+    {
+      name: 'reports a rejected refresh credential as signed out',
+      sessionState: 'invalid',
+    },
+  ])('$name', async ({ sessionState }) => {
+    mocks.getStoredSessionState.mockResolvedValue(sessionState);
     const { getCliAuthProfile } = await loadSupabaseAuth();
 
     await expect(getCliAuthProfile()).resolves.toEqual({
       authenticated: false,
-      sessionState: 'invalid',
+      sessionState,
     });
   });
 

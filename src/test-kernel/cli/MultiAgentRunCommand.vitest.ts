@@ -186,6 +186,37 @@ function runPreset(
   });
 }
 
+async function expectBlockedLaunch(options: {
+  readonly plan: TeamPlan;
+  readonly message: string;
+  readonly followUpAdvice: string;
+  readonly unexpectedWarning: string;
+}): Promise<void> {
+  mocks.canLaunchTeam.mockReturnValueOnce(false);
+  mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
+    options.message,
+  );
+  mocks.planTeamRun.mockReturnValue(options.plan);
+
+  const exitCode = await runPreset({
+    instruction: 'Solve a short math problem.',
+  });
+
+  expect(exitCode).toBe(2);
+  expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
+  expect(mocks.writeTextStderr).toHaveBeenCalledWith(options.message);
+  expect(mocks.formatCliMultiAgentTeamLaunchBlockMessage).toHaveBeenCalledWith(
+    options.plan,
+    {
+      requestedPreset: 'mathematician',
+      followUpAdvice: options.followUpAdvice,
+    },
+  );
+  expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+    expect.stringContaining(options.unexpectedWarning),
+  );
+}
+
 function mockExpandedRunInputs(inputs: {
   readonly inputFiles: string[];
   readonly contextFiles: string[];
@@ -528,39 +559,21 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('refuses built-in presets without a runnable root agent', async () => {
-    const plan = teamPlan({
-      rootAgent: undefined,
-      missingAgents: {
-        workflow: ['generic', 'devise', 'apply'],
-        toolUse: ['simplifier', 'progressCheck', 'orchestrator'],
-      },
-      agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
-    });
-    const message =
-      'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.';
-    mocks.canLaunchTeam.mockReturnValueOnce(false);
-    mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
-      message,
-    );
-    mocks.planTeamRun.mockReturnValue(plan);
-
-    const exitCode = await runPreset({
-      instruction: 'Solve a short math problem.',
-    });
-
-    expect(exitCode).toBe(2);
-    expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(message);
-    expect(
-      mocks.formatCliMultiAgentTeamLaunchBlockMessage,
-    ).toHaveBeenCalledWith(plan, {
-      requestedPreset: 'mathematician',
+    await expectBlockedLaunch({
+      plan: teamPlan({
+        rootAgent: undefined,
+        missingAgents: {
+          workflow: ['generic', 'devise', 'apply'],
+          toolUse: ['simplifier', 'progressCheck', 'orchestrator'],
+        },
+        agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
+      }),
+      message:
+        'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
       followUpAdvice:
         'Install or sign in for a runnable team root before launching this preset.',
+      unexpectedWarning: 'WARN team delegation unavailable',
     });
-    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('WARN team delegation unavailable'),
-    );
   });
 
   it('keeps degraded-team wording when the root can delegate', async () => {
@@ -589,36 +602,18 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('refuses a delegating root with no available team members', async () => {
-    const plan = teamPlan({
-      missingAgents: {
-        workflow: ['generic'],
-        toolUse: ['simplifier'],
-      },
-    });
-    const message =
-      'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.';
-    mocks.canLaunchTeam.mockReturnValueOnce(false);
-    mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
-      message,
-    );
-    mocks.planTeamRun.mockReturnValue(plan);
-
-    const exitCode = await runPreset({
-      instruction: 'Solve a short math problem.',
-    });
-
-    expect(exitCode).toBe(2);
-    expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(message);
-    expect(
-      mocks.formatCliMultiAgentTeamLaunchBlockMessage,
-    ).toHaveBeenCalledWith(plan, {
-      requestedPreset: 'mathematician',
+    await expectBlockedLaunch({
+      plan: teamPlan({
+        missingAgents: {
+          workflow: ['generic'],
+          toolUse: ['simplifier'],
+        },
+      }),
+      message:
+        'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
       followUpAdvice:
         'Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
+      unexpectedWarning: 'Enable a delegating team root',
     });
-    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('Enable a delegating team root'),
-    );
   });
 });

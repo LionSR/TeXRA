@@ -31,37 +31,37 @@ const objectivePlan = {
 };
 
 describe('agent workspace work-plan state', () => {
-  it('rejects a retired structured plan', () => {
-    expect(() =>
-      AgentWorkspaceState.fromSnapshot({
-        todos: { todos: [todo] },
-        plan: { plan: legacyPlan },
-      }),
-    ).toThrow();
-  });
-
-  it('does not hide a retired structured plan behind a null workPlan', () => {
-    expect(() =>
-      AgentWorkspaceState.fromSnapshot({
+  it.each([
+    {
+      name: 'a retired structured plan',
+      snapshot: { todos: { todos: [todo] }, plan: { plan: legacyPlan } },
+    },
+    {
+      name: 'a retired structured plan hidden behind a null workPlan',
+      snapshot: {
         workPlan: null,
         todos: { todos: [todo] },
         plan: { plan: legacyPlan },
-      }),
-    ).toThrow();
-  });
-
-  it('rejects invalid legacy todo entries instead of clearing them', () => {
-    expect(() =>
-      AgentWorkspaceState.fromSnapshot({
-        todos: {
-          todos: [
-            {
-              content: 'Missing status and active form',
-            },
-          ],
-        },
-      }),
-    ).toThrow();
+      },
+    },
+    {
+      name: 'invalid legacy todo entries instead of clearing them',
+      snapshot: {
+        todos: { todos: [{ content: 'Missing status and active form' }] },
+      },
+    },
+    {
+      name: 'a bare legacy todo object without a wrapper key',
+      snapshot: { todos: { content: 'Missing wrapper key' } },
+    },
+    {
+      name: 'invalid current workPlan entries instead of falling back to legacy fields',
+      snapshot: {
+        workPlan: { todos: [{ content: 'Missing status and active form' }] },
+      },
+    },
+  ])('rejects $name', ({ snapshot }) => {
+    expect(() => AgentWorkspaceState.fromSnapshot(snapshot)).toThrow();
   });
 
   it('treats legacy null todos as absent', () => {
@@ -79,30 +79,6 @@ describe('agent workspace work-plan state', () => {
 
     expect(state.workPlan.plan).toEqual(objectivePlan);
     expect(state.workPlan.planSummary).toBe(objectivePlan.objective);
-  });
-
-  it('rejects a bare legacy todo object without a wrapper key', () => {
-    expect(() =>
-      AgentWorkspaceState.fromSnapshot({
-        todos: {
-          content: 'Missing wrapper key',
-        },
-      }),
-    ).toThrow();
-  });
-
-  it('rejects invalid current workPlan entries instead of falling back to legacy fields', () => {
-    expect(() =>
-      AgentWorkspaceState.fromSnapshot({
-        workPlan: {
-          todos: [
-            {
-              content: 'Missing status and active form',
-            },
-          ],
-        },
-      }),
-    ).toThrow();
   });
 
   it('confines legacy todo/plan migration to the boundary hydration path', () => {

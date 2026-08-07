@@ -1224,8 +1224,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       // classification is 'image' or 'pdf' - for backward compatibility,
       // always ensure media_type exists
-      const originalMediaType = media.media_type;
-      let resolvedMediaType = originalMediaType;
+      let resolvedMediaType = media.media_type;
       if (!resolvedMediaType) {
         // Default to image/png since PDFs from TikZ are converted to PNG
         this.logger.warn(

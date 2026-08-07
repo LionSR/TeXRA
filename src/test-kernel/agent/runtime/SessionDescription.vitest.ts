@@ -40,6 +40,20 @@ function configFor(category: AgentCategory) {
   });
 }
 
+function runDescription(
+  executionId: string,
+  streamId: string,
+  session: ReturnType<typeof createTestSession>,
+  category: AgentCategory = AgentCategory.ToolUse,
+): Promise<void> {
+  return generateSessionDescription(
+    executionId as ExecutionId,
+    streamId as StreamTabId,
+    configFor(category),
+    session,
+  );
+}
+
 describe('session description helpers', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -72,11 +86,11 @@ describe('session description helpers', () => {
       scope: 'session',
     });
 
-    await generateSessionDescription(
-      'exec-workflow' as ExecutionId,
-      'stream-workflow' as StreamTabId,
-      configFor(AgentCategory.Workflow),
+    await runDescription(
+      'exec-workflow',
+      'stream-workflow',
       session,
+      AgentCategory.Workflow,
     );
     detach();
 
@@ -93,12 +107,7 @@ describe('session description helpers', () => {
     mocks.createHelperModelKit.mockRejectedValueOnce(helperError);
 
     await expect(
-      generateSessionDescription(
-        'exec-failure' as ExecutionId,
-        'stream-failure' as StreamTabId,
-        configFor(AgentCategory.ToolUse),
-        session,
-      ),
+      runDescription('exec-failure', 'stream-failure', session),
     ).resolves.toBeUndefined();
 
     expect(warn).toHaveBeenCalledOnce();
@@ -119,12 +128,7 @@ describe('session description helpers', () => {
     });
 
     await expect(
-      generateSessionDescription(
-        'exec-log-failure' as ExecutionId,
-        'stream-log-failure' as StreamTabId,
-        configFor(AgentCategory.ToolUse),
-        session,
-      ),
+      runDescription('exec-log-failure', 'stream-log-failure', session),
     ).resolves.toBeUndefined();
   });
 
@@ -144,12 +148,7 @@ describe('session description helpers', () => {
       kit: { client: {}, handler },
     });
 
-    await generateSessionDescription(
-      'exec-tool' as ExecutionId,
-      'stream-tool' as StreamTabId,
-      configFor(AgentCategory.ToolUse),
-      session,
-    );
+    await runDescription('exec-tool', 'stream-tool', session);
     detach();
 
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(

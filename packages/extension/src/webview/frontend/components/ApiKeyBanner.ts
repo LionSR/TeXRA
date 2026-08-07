@@ -25,7 +25,6 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
 
   override render(): TemplateResult {
     const provider = this.state.provider ?? '';
-    const providerLabel = provider ? capitalize(provider) : '';
 
     return renderWarningBanner({
       id: 'apiKeyBanner',
@@ -34,7 +33,7 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
         <span>
           ${
             provider
-              ? html`<strong>${providerLabel}</strong> API key missing.`
+              ? html`<strong>${capitalize(provider)}</strong> API key missing.`
               : 'TeXRA requires an API key to run.'
           }
         </span>

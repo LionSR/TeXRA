@@ -14,7 +14,6 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import {
-  EXECUTION_STATUS,
   LOG_LEVELS,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -35,12 +34,27 @@ setupPlatform({ workspacePath: '/workspace/session-restart-repair' });
 
 const executionId = 'abc123' as ExecutionId;
 const streamId = `crashed#${executionId}` as StreamTabId;
+const META_TIMESTAMP = '2026-07-26T00:00:00.000Z';
 const validFlowRecord = {
   flowName: 'texra',
   shared: { messages: [] },
-  createdAt: '2026-07-26T00:00:00.000Z',
+  createdAt: META_TIMESTAMP,
   nodes: [],
 };
+
+/** Sessions opened by a test, disposed in afterEach (dispose is idempotent). */
+const sessions: SessionHandle[] = [];
+
+function trackSession(session: SessionHandle): SessionHandle {
+  sessions.push(session);
+  return session;
+}
+
+function openDeferredSession(transcripts: StreamLogStore): SessionHandle {
+  return trackSession(
+    new SessionHandle({ transcripts, restartRepair: 'deferred' }),
+  );
+}
 
 function appendRunningGroup(
   transcripts: StreamLogStore,
@@ -57,8 +71,15 @@ function appendRunningGroup(
   });
 }
 
-function openDeferredSession(transcripts: StreamLogStore): SessionHandle {
-  return new SessionHandle({ transcripts, restartRepair: 'deferred' });
+function expectClosedWith(
+  transcripts: StreamLogStore,
+  stream: StreamTabId,
+  status: string,
+): void {
+  expect(transcripts.get(stream)?.getRange(0).at(-1)).toMatchObject({
+    type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+    data: { status },
+  });
 }
 
 /**
@@ -84,6 +105,10 @@ async function seedSidecarFk(
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  for (const session of sessions) {
+    session.dispose();
+  }
+  sessions.length = 0;
   for (const directory of [
     WORKSPACE_STORAGE_LAYOUT.executionLeases,
     'executions',
@@ -135,9 +160,7 @@ describe('SessionHandle restart repair', () => {
     await seedSidecarFk(streamId, executionId);
 
     const executionStore = getExecutionStore(executionId);
-    await executionStore.writeMeta({
-      timestamp: '2026-07-26T00:00:00.000Z',
-    });
+    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
     await executionStore.write(flowKey(executionId), { invalid: true });
 
     await writeForeignLease(
@@ -146,23 +169,16 @@ describe('SessionHandle restart repair', () => {
     );
 
     const session = openDeferredSession(transcripts);
-    try {
-      await session.waitUntilReady();
+    await session.waitUntilReady();
 
-      expect(session.status.get(streamId)).toBe(STREAM_PHASE.FAILED);
-      await expect(executionStore.readMeta()).resolves.toMatchObject({
-        outcome: RUN_OUTCOME.FAILED,
-      });
-      await expect(
-        executionStore.read(flowKey(executionId)),
-      ).resolves.toBeUndefined();
-      expect(transcripts.get(streamId)?.getRange(0).at(-1)).toMatchObject({
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        data: { status: 'failed' },
-      });
-    } finally {
-      session.dispose();
-    }
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    await expect(executionStore.readMeta()).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.FAILED,
+    });
+    await expect(
+      executionStore.read(flowKey(executionId)),
+    ).resolves.toBeUndefined();
+    expectClosedWith(transcripts, streamId, RUN_OUTCOME.FAILED);
   });
 
   // The CLI and the VS Code extension open the process session without
@@ -176,26 +192,19 @@ describe('SessionHandle restart repair', () => {
     await transcripts.flush();
 
     const executionStore = getExecutionStore(eagerExecutionId);
-    await executionStore.writeMeta({ timestamp: '2026-07-26T00:00:00.000Z' });
+    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
     await executionStore.write(flowKey(eagerExecutionId), validFlowRecord);
     const detectWaiting = vi
       .spyOn(waitingDetection, 'detectWaitingStreams')
       .mockResolvedValue(new Set());
 
-    const session = new SessionHandle({ transcripts });
-    try {
-      await vi.waitFor(() => expect(detectWaiting).toHaveBeenCalledOnce());
-      await session.waitUntilReady();
+    const session = trackSession(new SessionHandle({ transcripts }));
+    await vi.waitFor(() => expect(detectWaiting).toHaveBeenCalledOnce());
+    await session.waitUntilReady();
 
-      expect(detectWaiting).toHaveBeenCalledOnce();
-      expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.FAILED);
-      expect(transcripts.get(eagerStreamId)?.getRange(0).at(-1)).toMatchObject({
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        data: { status: RUN_OUTCOME.FAILED },
-      });
-    } finally {
-      session.dispose();
-    }
+    expect(detectWaiting).toHaveBeenCalledOnce();
+    expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.FAILED);
+    expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.FAILED);
   });
 
   it('preserves recovery state when present execution metadata is malformed', async () => {
@@ -210,17 +219,13 @@ describe('SessionHandle restart repair', () => {
     await executionStore.write(flowKey(executionId), validFlowRecord);
 
     const session = openDeferredSession(transcripts);
-    try {
-      await expect(session.waitUntilReady()).rejects.toThrow();
+    await expect(session.waitUntilReady()).rejects.toThrow();
 
-      await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
-      await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(
-        validFlowRecord,
-      );
-      expect(transcripts.get(streamId)?.getRange(0)).toHaveLength(1);
-    } finally {
-      session.dispose();
-    }
+    await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
+    await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(
+      validFlowRecord,
+    );
+    expect(transcripts.get(streamId)?.getRange(0)).toHaveLength(1);
   });
 
   it('ignores malformed metadata for settled historical streams', async () => {
@@ -237,12 +242,8 @@ describe('SessionHandle restart repair', () => {
     await executionStore.write('meta', malformedMeta);
 
     const session = openDeferredSession(transcripts);
-    try {
-      await expect(session.waitUntilReady()).resolves.toBeUndefined();
-      await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
-    } finally {
-      session.dispose();
-    }
+    await expect(session.waitUntilReady()).resolves.toBeUndefined();
+    await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
   });
 
   it('closes an orphaned group without rewriting its completed execution', async () => {
@@ -260,29 +261,18 @@ describe('SessionHandle restart repair', () => {
 
     const executionStore = getExecutionStore(completedExecutionId);
     await executionStore.writeMeta({
-      timestamp: '2026-07-26T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.COMPLETED,
     });
 
     const session = openDeferredSession(transcripts);
-    try {
-      await session.waitUntilReady();
+    await session.waitUntilReady();
 
-      expect(session.status.get(completedStreamId)).toBe(
-        STREAM_PHASE.COMPLETED,
-      );
-      await expect(executionStore.readMeta()).resolves.toMatchObject({
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-      expect(
-        transcripts.get(completedStreamId)?.getRange(0).at(-1),
-      ).toMatchObject({
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        data: { status: RUN_OUTCOME.COMPLETED },
-      });
-    } finally {
-      session.dispose();
-    }
+    expect(session.status.get(completedStreamId)).toBe(STREAM_PHASE.COMPLETED);
+    await expect(executionStore.readMeta()).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+    expectClosedWith(transcripts, completedStreamId, RUN_OUTCOME.COMPLETED);
   });
 
   it('detects a resumable run from its persisted sidecar FK', async () => {
@@ -300,31 +290,22 @@ describe('SessionHandle restart repair', () => {
 
     const executionStore = getExecutionStore(resumableExecutionId);
     await executionStore.writeMeta({
-      timestamp: '2026-07-26T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.CANCELLED,
     });
     await executionStore.write(flowKey(resumableExecutionId), validFlowRecord);
 
     const session = openDeferredSession(transcripts);
-    try {
-      await session.waitUntilReady();
+    await session.waitUntilReady();
 
-      expect(session.snapshots.getExecutionId(resumableStreamId)).toBe(
-        resumableExecutionId,
-      );
-      expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.WAITING);
-      await expect(
-        executionStore.read(flowKey(resumableExecutionId)),
-      ).resolves.toEqual(validFlowRecord);
-      expect(
-        transcripts.get(resumableStreamId)?.getRange(0).at(-1),
-      ).toMatchObject({
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        data: { status: RUN_OUTCOME.CANCELLED },
-      });
-    } finally {
-      session.dispose();
-    }
+    expect(session.snapshots.getExecutionId(resumableStreamId)).toBe(
+      resumableExecutionId,
+    );
+    expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.WAITING);
+    await expect(
+      executionStore.read(flowKey(resumableExecutionId)),
+    ).resolves.toEqual(validFlowRecord);
+    expectClosedWith(transcripts, resumableStreamId, RUN_OUTCOME.CANCELLED);
   });
 
   it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {
@@ -338,40 +319,29 @@ describe('SessionHandle restart repair', () => {
     await seedSidecarFk(degradedStreamId, degradedExecutionId);
 
     const executionStore = getExecutionStore(degradedExecutionId);
-    await executionStore.writeMeta({
-      timestamp: '2026-07-26T00:00:00.000Z',
-    });
+    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
     await executionStore.write(flowKey(degradedExecutionId), validFlowRecord);
     vi.spyOn(waitingDetection, 'detectWaitingStreams').mockRejectedValueOnce(
       new Error('resumability read failed'),
     );
 
     const session = openDeferredSession(transcripts);
-    try {
-      await session.waitUntilReady();
+    await session.waitUntilReady();
 
-      // A mapped stream keeps its recovery state: failing it blindly could
-      // destroy a flow record that is in fact resumable.
-      expect(session.snapshots.getExecutionId(degradedStreamId)).toBe(
-        degradedExecutionId,
-      );
-      expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.RUNNING);
-      await expect(
-        executionStore.read(flowKey(degradedExecutionId)),
-      ).resolves.toEqual(validFlowRecord);
+    // A mapped stream keeps its recovery state: failing it blindly could
+    // destroy a flow record that is in fact resumable.
+    expect(session.snapshots.getExecutionId(degradedStreamId)).toBe(
+      degradedExecutionId,
+    );
+    expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.RUNNING);
+    await expect(
+      executionStore.read(flowKey(degradedExecutionId)),
+    ).resolves.toEqual(validFlowRecord);
 
-      // An unmapped stream owns no execution: it is failed in-transcript
-      // only, with no execution-store writes.
-      expect(session.status.get(unmappedStreamId)).toBe(STREAM_PHASE.FAILED);
-      expect(
-        transcripts.get(unmappedStreamId)?.getRange(0).at(-1),
-      ).toMatchObject({
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        data: { status: RUN_OUTCOME.FAILED },
-      });
-    } finally {
-      session.dispose();
-    }
+    // An unmapped stream owns no execution: it is failed in-transcript
+    // only, with no execution-store writes.
+    expect(session.status.get(unmappedStreamId)).toBe(STREAM_PHASE.FAILED);
+    expectClosedWith(transcripts, unmappedStreamId, RUN_OUTCOME.FAILED);
   });
 
   it('replaces stores and status only at the workspace-root boundary', async () => {
@@ -385,17 +355,13 @@ describe('SessionHandle restart repair', () => {
       'lifecycle',
     );
 
-    try {
-      await session.reloadAfterStorageRootChange();
+    await session.reloadAfterStorageRootChange();
 
-      expect(reload).toHaveBeenCalledOnce();
-      expect(loadSnapshots).toHaveBeenCalledWith(transcripts.keys());
-      expect(
-        session.status.get('previous-workspace' as StreamTabId),
-      ).toBeUndefined();
-    } finally {
-      session.dispose();
-    }
+    expect(reload).toHaveBeenCalledOnce();
+    expect(loadSnapshots).toHaveBeenCalledWith(transcripts.keys());
+    expect(
+      session.status.get('previous-workspace' as StreamTabId),
+    ).toBeUndefined();
   });
 
   it('waits for execution artifacts before replacing workspace stores', async () => {
@@ -416,7 +382,6 @@ describe('SessionHandle restart repair', () => {
       expect(reload).toHaveBeenCalledOnce();
     } finally {
       await completeOwnedExecutionLease(liveExecutionId);
-      session.dispose();
     }
   });
 
@@ -451,7 +416,6 @@ describe('SessionHandle restart repair', () => {
       expect(reload).toHaveBeenCalledOnce();
     } finally {
       await completeOwnedExecutionLease(liveExecutionId);
-      session.dispose();
     }
   });
 
@@ -477,21 +441,17 @@ describe('SessionHandle restart repair', () => {
       order.push('transcripts.reload');
     });
 
-    try {
-      await session.reloadAfterStorageRootChange();
+    await session.reloadAfterStorageRootChange();
 
-      expect(order.indexOf('transcripts.flush')).toBeLessThan(
-        order.indexOf('commit'),
-      );
-      expect(order.indexOf('snapshots.flush')).toBeLessThan(
-        order.indexOf('commit'),
-      );
-      expect(order.indexOf('commit')).toBeLessThan(
-        order.indexOf('transcripts.reload'),
-      );
-    } finally {
-      session.dispose();
-    }
+    expect(order.indexOf('transcripts.flush')).toBeLessThan(
+      order.indexOf('commit'),
+    );
+    expect(order.indexOf('snapshots.flush')).toBeLessThan(
+      order.indexOf('commit'),
+    );
+    expect(order.indexOf('commit')).toBeLessThan(
+      order.indexOf('transcripts.reload'),
+    );
   });
 
   it('does not commit a new root when the old transcript flush fails', async () => {
@@ -507,16 +467,12 @@ describe('SessionHandle restart repair', () => {
     vi.spyOn(transcripts, 'flush').mockRejectedValue(flushError);
     const reload = vi.spyOn(transcripts, 'reload');
 
-    try {
-      await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
-        flushError,
-      );
+    await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
+      flushError,
+    );
 
-      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-      expect(reload).not.toHaveBeenCalled();
-    } finally {
-      session.dispose();
-    }
+    expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('does not commit a new root after disposal during the old-root flush', async () => {
@@ -533,20 +489,16 @@ describe('SessionHandle restart repair', () => {
     });
     vi.spyOn(transcripts, 'flush').mockReturnValue(flushBlocked);
 
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await vi.waitFor(() => {
-        expect(transcripts.flush).toHaveBeenCalledOnce();
-      });
+    const replacement = session.reloadAfterStorageRootChange();
+    await vi.waitFor(() => {
+      expect(transcripts.flush).toHaveBeenCalledOnce();
+    });
 
-      session.dispose();
-      finishFlush?.();
+    session.dispose();
+    finishFlush?.();
 
-      await expect(replacement).resolves.toBe(false);
-      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-    } finally {
-      session.dispose();
-    }
+    await expect(replacement).resolves.toBe(false);
+    expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
   });
 
   it('rolls back a failed new-root load and permits retry', async () => {
@@ -588,36 +540,32 @@ describe('SessionHandle restart repair', () => {
       afterStorageFinalize: vi.fn(),
     };
 
-    try {
-      await expect(
-        session.reloadAfterStorageRootChange(transitionHooks),
-      ).rejects.toBe(reloadError);
+    await expect(
+      session.reloadAfterStorageRootChange(transitionHooks),
+    ).rejects.toBe(reloadError);
 
-      expect(activeRoot).toBe('/workspace/old-storage');
-      expect(rollbackWorkspaceStorageChange).toHaveBeenCalledOnce();
-      expect(transitionHooks.afterStorageCommit).toHaveBeenCalledOnce();
-      expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
-      expect(transitionHooks.afterStorageFinalize).not.toHaveBeenCalled();
-      expect(reload).toHaveBeenCalledTimes(2);
-      expect(evictSnapshots).toHaveBeenCalledOnce();
-      expect(reload).toHaveBeenNthCalledWith(2, {
-        discardPendingWrites: true,
-      });
-      expect(session.status.get('old-workspace-running' as StreamTabId)).toBe(
-        STREAM_PHASE.RUNNING,
-      );
+    expect(activeRoot).toBe('/workspace/old-storage');
+    expect(rollbackWorkspaceStorageChange).toHaveBeenCalledOnce();
+    expect(transitionHooks.afterStorageCommit).toHaveBeenCalledOnce();
+    expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
+    expect(transitionHooks.afterStorageFinalize).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(evictSnapshots).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenNthCalledWith(2, {
+      discardPendingWrites: true,
+    });
+    expect(session.status.get('old-workspace-running' as StreamTabId)).toBe(
+      STREAM_PHASE.RUNNING,
+    );
 
-      await expect(
-        session.reloadAfterStorageRootChange(transitionHooks),
-      ).resolves.toBe(true);
-      expect(activeRoot).toBe('/workspace/new-storage');
-      expect(finalizeWorkspaceStorageChange).toHaveBeenCalledOnce();
-      expect(transitionHooks.afterStorageCommit).toHaveBeenCalledTimes(2);
-      expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
-      expect(transitionHooks.afterStorageFinalize).toHaveBeenCalledOnce();
-    } finally {
-      session.dispose();
-    }
+    await expect(
+      session.reloadAfterStorageRootChange(transitionHooks),
+    ).resolves.toBe(true);
+    expect(activeRoot).toBe('/workspace/new-storage');
+    expect(finalizeWorkspaceStorageChange).toHaveBeenCalledOnce();
+    expect(transitionHooks.afterStorageCommit).toHaveBeenCalledTimes(2);
+    expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
+    expect(transitionHooks.afterStorageFinalize).toHaveBeenCalledOnce();
   });
 
   it('restores delayed lease repair after a root replacement rolls back', async () => {
@@ -683,12 +631,7 @@ describe('SessionHandle restart repair', () => {
       await expect(executionStore.readMeta()).resolves.toMatchObject({
         outcome: RUN_OUTCOME.FAILED,
       });
-      expect(
-        transcripts.get(rollbackStreamId)?.getRange(0).at(-1),
-      ).toMatchObject({
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        data: { status: RUN_OUTCOME.FAILED },
-      });
+      expectClosedWith(transcripts, rollbackStreamId, RUN_OUTCOME.FAILED);
     } finally {
       session.dispose();
       vi.useRealTimers();
@@ -706,14 +649,10 @@ describe('SessionHandle restart repair', () => {
     });
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
 
-    try {
-      await session.reloadAfterStorageRootChange();
+    await session.reloadAfterStorageRootChange();
 
-      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-      expect(reload).not.toHaveBeenCalled();
-    } finally {
-      session.dispose();
-    }
+    expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('does not resume a root replacement after session disposal', async () => {
@@ -739,7 +678,6 @@ describe('SessionHandle restart repair', () => {
       expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
     } finally {
       await completeOwnedExecutionLease(liveExecutionId);
-      session.dispose();
     }
   });
 
@@ -771,7 +709,6 @@ describe('SessionHandle restart repair', () => {
       expect(acquired).toBe(true);
     } finally {
       await completeOwnedExecutionLease(queuedExecutionId);
-      session.dispose();
     }
   });
 
@@ -784,10 +721,6 @@ describe('SessionHandle restart repair', () => {
     );
 
     const session = openDeferredSession(transcripts);
-    try {
-      await expect(session.waitUntilReady()).rejects.toBe(repairError);
-    } finally {
-      session.dispose();
-    }
+    await expect(session.waitUntilReady()).rejects.toBe(repairError);
   });
 });

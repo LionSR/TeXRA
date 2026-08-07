@@ -19,6 +19,18 @@ import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
 
+/** Runs `run` against a plain (non-git) temp directory, then removes it. */
+async function withPlainDir(
+  run: (dir: string) => Promise<void>,
+): Promise<void> {
+  const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
+  try {
+    await run(plain);
+  } finally {
+    await rm(plain, { recursive: true, force: true });
+  }
+}
+
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
     const changed = ['src/x.ts', 'vendor'];
@@ -59,7 +71,6 @@ describe('collectReviewDiff (real git repository)', () => {
     await rm(repo, { recursive: true, force: true });
   });
 
-  /** Runs `collectReviewDiff` against the fixture repo. */
   async function collectDiff(options: Partial<CollectReviewDiffOptions> = {}) {
     return collectReviewDiff({
       cwd: repo,
@@ -232,16 +243,13 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   it('fails with a reason outside a git repository', async () => {
-    const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
-    try {
+    await withPlainDir(async (plain) => {
       const result = await collectDiff({ cwd: plain });
       expect(result).toEqual({
         ok: false,
         reason: 'The workspace is not a git repository.',
       });
-    } finally {
-      await rm(plain, { recursive: true, force: true });
-    }
+    });
   });
 
   it('lists local and origin branches for the picker, flagging the current one', async () => {
@@ -262,11 +270,8 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   it('returns no branch candidates outside a git repository', async () => {
-    const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
-    try {
+    await withPlainDir(async (plain) => {
       expect(await listBaseBranchCandidates(plain)).toEqual([]);
-    } finally {
-      await rm(plain, { recursive: true, force: true });
-    }
+    });
   });
 });

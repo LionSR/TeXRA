@@ -19,6 +19,15 @@ function runValidator(
   });
 }
 
+/** --list-selected runs that must succeed with an exact ordered name list. */
+function expectSelectedScenarios(args: string[], expected: string[]): void {
+  const result = runValidator(args);
+
+  expect(result.status).toBe(0);
+  expect(result.stdout.trim().split('\n')).toEqual(expected);
+  expect(result.stderr).toBe('');
+}
+
 describe('TUI validator args', () => {
   it('prints help without building the harness', () => {
     const result = runValidator(['--help']);
@@ -95,29 +104,20 @@ describe('TUI validator args', () => {
     expect(result.stderr).not.toContain('building tui-harness bundle');
   });
 
-  it('parses explicit missing-dependency skip mode before selected scenarios', () => {
-    const result = runValidator([
-      '--skip-if-missing-deps',
-      '--list-selected',
-      'compact-user-question',
-    ]);
+  it.each(['--skip-if-missing-deps', '--no-build'])(
+    'parses %s before selected scenarios',
+    (flag) => {
+      const result = runValidator([
+        flag,
+        '--list-selected',
+        'compact-user-question',
+      ]);
 
-    expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe('compact-user-question');
-    expect(result.stderr).toBe('');
-  });
-
-  it('parses no-build mode before selected scenarios', () => {
-    const result = runValidator([
-      '--no-build',
-      '--list-selected',
-      'compact-user-question',
-    ]);
-
-    expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe('compact-user-question');
-    expect(result.stderr).toBe('');
-  });
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe('compact-user-question');
+      expect(result.stderr).toBe('');
+    },
+  );
 
   it('fails early when no-build selects a missing custom harness', () => {
     const missingHarness = path.join(
@@ -138,53 +138,38 @@ describe('TUI validator args', () => {
   });
 
   it('preserves repeated selected scenarios for snapshot order checks', () => {
-    const result = runValidator([
-      '--list-selected',
-      'slash-palette',
-      'compact-user-question',
-      'slash-palette',
-    ]);
-
-    expect(result.status).toBe(0);
-    expect(result.stdout.trim().split('\n')).toEqual([
-      'slash-palette',
-      'compact-user-question',
-      'slash-palette',
-    ]);
-    expect(result.stderr).toBe('');
+    expectSelectedScenarios(
+      [
+        '--list-selected',
+        'slash-palette',
+        'compact-user-question',
+        'slash-palette',
+      ],
+      ['slash-palette', 'compact-user-question', 'slash-palette'],
+    );
   });
 
   it('inserts a frame oracle once without deduplicating explicit scenarios', () => {
-    const result = runValidator([
-      '--list-selected',
-      'child-event-order-roster-first',
-      'compact-user-question',
-      'child-event-order-roster-first',
-    ]);
-
-    expect(result.status).toBe(0);
-    expect(result.stdout.trim().split('\n')).toEqual([
-      'child-event-order-canonical',
-      'child-event-order-roster-first',
-      'compact-user-question',
-      'child-event-order-roster-first',
-    ]);
-    expect(result.stderr).toBe('');
+    expectSelectedScenarios(
+      [
+        '--list-selected',
+        'child-event-order-roster-first',
+        'compact-user-question',
+        'child-event-order-roster-first',
+      ],
+      [
+        'child-event-order-canonical',
+        'child-event-order-roster-first',
+        'compact-user-question',
+        'child-event-order-roster-first',
+      ],
+    );
   });
 
   it('treats a leading package-manager separator as transparent for selected scenarios', () => {
-    const result = runValidator([
-      '--',
-      '--list-selected',
-      'plan-approval-goal',
-      'compact-user-question',
-    ]);
-
-    expect(result.status).toBe(0);
-    expect(result.stdout.trim().split('\n')).toEqual([
-      'plan-approval-goal',
-      'compact-user-question',
-    ]);
-    expect(result.stderr).toBe('');
+    expectSelectedScenarios(
+      ['--', '--list-selected', 'plan-approval-goal', 'compact-user-question'],
+      ['plan-approval-goal', 'compact-user-question'],
+    );
   });
 });

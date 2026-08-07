@@ -40,8 +40,10 @@ import {
   CodexSandboxModeSchema,
 } from '@shared/schemas/agentCliSettings';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
-import { CoreSettingsShape } from '@shared/schemas/coreSettings';
-import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
+import {
+  CoreSettingsShape,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+} from '@shared/schemas/coreSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ============================================================================

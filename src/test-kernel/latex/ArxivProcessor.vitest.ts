@@ -17,21 +17,28 @@ afterEach(async () => {
 });
 
 describe('arXiv processor paths', () => {
-  it('keeps custom arxiv destinations id-specific', () => {
-    expect(
-      resolveArxivPaperDirectoryRelative('2404.12175', {
-        into: 'papers',
-      }),
-    ).toBe('papers/2404.12175');
-    expect(
-      resolveArxivPaperDirectoryRelative('math/0501234', {
-        into: 'papers/',
-      }),
-    ).toBe('papers/math_0501234');
-    expect(resolveArxivPaperDirectoryRelative('2404.12175')).toBe(
-      'References/2404.12175',
-    );
-  });
+  it.each<{
+    id: string;
+    options?: Parameters<typeof resolveArxivPaperDirectoryRelative>[1];
+    expected: string;
+  }>([
+    {
+      id: '2404.12175',
+      options: { into: 'papers' },
+      expected: 'papers/2404.12175',
+    },
+    {
+      id: 'math/0501234',
+      options: { into: 'papers/' },
+      expected: 'papers/math_0501234',
+    },
+    { id: '2404.12175', expected: 'References/2404.12175' },
+  ])(
+    'keeps arxiv destinations id-specific ($id → $expected)',
+    ({ id, options, expected }) => {
+      expect(resolveArxivPaperDirectoryRelative(id, options)).toBe(expected);
+    },
+  );
 });
 
 describe('arXiv processor logger channel', () => {

@@ -153,6 +153,19 @@ describe('getFileStem', () => {
 // Async
 // ---------------------------------------------------------------------------
 
+interface Deferred {
+  readonly promise: Promise<void>;
+  readonly release: () => void;
+}
+
+function deferred(): Deferred {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
 describe('async utilities', () => {
   it('resolves after the requested delay', async () => {
     await expect(delay(0)).resolves.toBeUndefined();
@@ -182,14 +195,11 @@ describe('KeyedMutex', () => {
   it('serializes operations that use the same key', async () => {
     const mutex = new KeyedMutex<string>();
     const order: string[] = [];
-    let releaseFirst!: () => void;
-    const firstBlocked = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
+    const firstBlocked = deferred();
 
     const first = mutex.runExclusive('shared', async () => {
       order.push('first:start');
-      await firstBlocked;
+      await firstBlocked.promise;
       order.push('first:end');
     });
     const second = mutex.runExclusive('shared', async () => {
@@ -197,7 +207,7 @@ describe('KeyedMutex', () => {
     });
 
     await vi.waitFor(() => expect(order).toEqual(['first:start']));
-    releaseFirst();
+    firstBlocked.release();
     await Promise.all([first, second]);
 
     expect(order).toEqual(['first:start', 'first:end', 'second']);
@@ -206,21 +216,18 @@ describe('KeyedMutex', () => {
   it('allows independent keys to run concurrently', async () => {
     const mutex = new KeyedMutex<string>();
     const started: string[] = [];
-    let release!: () => void;
-    const blocked = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const blocked = deferred();
 
     const first = mutex.runExclusive('first', async () => {
       started.push('first');
-      await blocked;
+      await blocked.promise;
     });
     const second = mutex.runExclusive('second', async () => {
       started.push('second');
     });
 
     await vi.waitFor(() => expect(started).toEqual(['first', 'second']));
-    release();
+    blocked.release();
     await Promise.all([first, second]);
   });
 
@@ -243,19 +250,16 @@ describe('coalesceAsync', () => {
     const resolved = new Map<string, string>();
     const pending = new Map<string, Promise<string>>();
     let computeCount = 0;
-    let releaseCompute!: () => void;
-    const blocked = new Promise<void>((resolve) => {
-      releaseCompute = resolve;
-    });
+    const blocked = deferred();
     const compute = async () => {
       computeCount++;
-      await blocked;
+      await blocked.promise;
       return 'value';
     };
 
     const first = coalesceAsync(resolved, pending, 'key', compute);
     const second = coalesceAsync(resolved, pending, 'key', compute);
-    releaseCompute();
+    blocked.release();
 
     await expect(Promise.all([first, second])).resolves.toEqual([
       'value',
@@ -282,18 +286,15 @@ describe('coalesceAsync', () => {
   it('does not cache a result if the pending entry was invalidated mid-flight', async () => {
     const resolved = new Map<string, string>();
     const pending = new Map<string, Promise<string>>();
-    let releaseCompute!: () => void;
-    const blocked = new Promise<void>((resolve) => {
-      releaseCompute = resolve;
-    });
+    const blocked = deferred();
     const compute = async () => {
-      await blocked;
+      await blocked.promise;
       return 'stale-value';
     };
 
     const request = coalesceAsync(resolved, pending, 'key', compute);
     pending.clear(); // simulate an external invalidation racing the in-flight compute
-    releaseCompute();
+    blocked.release();
     await request;
 
     expect(resolved.get('key')).toBeUndefined();

@@ -6,6 +6,8 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
+  type RestartRepairOptions,
+  type RestartRepairResult,
 } from '@agent/runtime/restartRepair';
 import {
   RUN_OUTCOME,
@@ -18,6 +20,39 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
+
+interface StreamSetup {
+  streamId: StreamTabId;
+  executionId: ExecutionId;
+  streamStatus: StreamStatusMachine;
+}
+
+function setupStream(name: string): StreamSetup {
+  return {
+    streamId: `stream-${name}` as StreamTabId,
+    executionId: `execution-${name}` as ExecutionId,
+    streamStatus: new StreamStatusMachine(new SessionEventHub()),
+  };
+}
+
+function setupRunningStream(name: string): StreamSetup {
+  const setup = setupStream(name);
+  seedRunning(setup.streamStatus, setup.streamId);
+  return setup;
+}
+
+function runRepair(
+  setup: StreamSetup,
+  overrides: Partial<RestartRepairOptions> &
+    Pick<RestartRepairOptions, 'closeRunningGroups'>,
+): Promise<RestartRepairResult> {
+  return repairRestartedStreams({
+    streamStatus: setup.streamStatus,
+    waitingStreams: new Set(),
+    executionIds: new Map([[setup.streamId, setup.executionId]]),
+    ...overrides,
+  });
+}
 
 function seedRunning(
   streamStatus: StreamStatusMachine,
@@ -65,6 +100,16 @@ function closeGroupsOn(expected: RunOutcome) {
   );
 }
 
+async function closeAllGroups(
+  streamIds: readonly StreamTabId[],
+): Promise<StreamTabId[]> {
+  return [...streamIds];
+}
+
+async function failGroupClose(): Promise<StreamTabId[]> {
+  throw new Error('group close failed');
+}
+
 describe('repairRestartedStreams', () => {
   it('keeps only one delayed lease retry and cancels it on disposal', () => {
     vi.useFakeTimers();
@@ -99,17 +144,11 @@ describe('repairRestartedStreams', () => {
   });
 
   it('skips every repair mutation for a fresh foreign lease', async () => {
-    const streamId = 'stream-foreign-active' as StreamTabId;
-    const executionId = 'execution-foreign-active' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('foreign-active');
     const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
+    const result = await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
       runWithInactiveExecutionLease: vi.fn(async () => ({
@@ -118,7 +157,7 @@ describe('repairRestartedStreams', () => {
       })),
     });
 
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.RUNNING);
     expect(result).toEqual({
       waitingStreams: [],
       failedStreams: [],
@@ -132,23 +171,18 @@ describe('repairRestartedStreams', () => {
   });
 
   it('preserves an execution that completed before a delayed lease retry', async () => {
-    const streamId = 'stream-completed-before-retry' as StreamTabId;
-    const executionId = 'execution-completed-before-retry' as ExecutionId;
+    const setup = setupRunningStream('completed-before-retry');
+    const { streamId, executionId, streamStatus } = setup;
     const store = getExecutionStore(executionId);
     await store.writeMeta({
       timestamp: '2026-07-26T00:00:00.000Z',
       outcome: RUN_OUTCOME.COMPLETED,
     });
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
     const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
     const finalizeExecution = createDurableFinalizer();
 
     try {
-      const result = await repairRestartedStreams({
-        streamStatus,
-        waitingStreams: new Set(),
-        executionIds: new Map([[streamId, executionId]]),
+      const result = await runRepair(setup, {
         closeRunningGroups,
         finalizeExecution,
         runWithInactiveExecutionLease: performInactiveLease,
@@ -171,27 +205,21 @@ describe('repairRestartedStreams', () => {
   });
 
   it('propagates settlement metadata read failures', async () => {
-    const streamId = 'stream-unreadable-settlement' as StreamTabId;
-    const executionId = 'execution-unreadable-settlement' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('unreadable-settlement');
+    const store = getExecutionStore(setup.executionId);
     const readMetaStrict = vi
       .spyOn(store, 'readMetaStrict')
       .mockRejectedValue(new Error('metadata temporarily unreadable'));
 
     try {
       await expect(
-        repairRestartedStreams({
-          streamStatus,
-          waitingStreams: new Set(),
-          executionIds: new Map([[streamId, executionId]]),
-          closeRunningGroups: vi.fn(async () => []),
+        runRepair(setup, {
+          closeRunningGroups: closeAllGroups,
           runWithInactiveExecutionLease: performInactiveLease,
         }),
       ).rejects.toThrow('metadata temporarily unreadable');
       expect(readMetaStrict).toHaveBeenCalledOnce();
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.RUNNING);
     } finally {
       readMetaStrict.mockRestore();
       await store.clear();
@@ -199,17 +227,13 @@ describe('repairRestartedStreams', () => {
   });
 
   it('repairs resumable running streams to WAITING with neutral group closure', async () => {
-    const streamId = 'stream-waiting' as StreamTabId;
-    const executionId = 'execution-waiting' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('waiting');
+    const { streamId, streamStatus } = setup;
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
+    const result = await runRepair(setup, {
       waitingStreams: new Set([streamId]),
-      executionIds: new Map([[streamId, executionId]]),
       closeRunningGroups,
       finalizeExecution,
       now: 123,
@@ -232,16 +256,13 @@ describe('repairRestartedStreams', () => {
   });
 
   it('repairs resumable streams without an in-memory phase and closes their groups', async () => {
-    const streamId = 'stream-waiting-without-phase' as StreamTabId;
-    const executionId = 'execution-waiting-without-phase' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
+    const setup = setupStream('waiting-without-phase');
+    const { streamId, streamStatus } = setup;
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
+    const result = await runRepair(setup, {
       waitingStreams: new Set([streamId]),
-      executionIds: new Map([[streamId, executionId]]),
       repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
@@ -259,16 +280,12 @@ describe('repairRestartedStreams', () => {
   });
 
   it('closes non-waiting candidates without an in-memory phase without terminalizing them', async () => {
-    const streamId = 'stream-without-phase' as StreamTabId;
-    const executionId = 'execution-without-phase' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
+    const setup = setupStream('without-phase');
+    const { streamId, streamStatus } = setup;
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
+    const result = await runRepair(setup, {
       repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
@@ -292,10 +309,8 @@ describe('repairRestartedStreams', () => {
   });
 
   it('closes waiting groups even when the current phase is not repairable', async () => {
-    const streamId = 'stream-terminal-waiting' as StreamTabId;
-    const executionId = 'execution-terminal-waiting' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('terminal-waiting');
+    const { streamId, streamStatus } = setup;
     streamStatus.transition(
       streamId,
       STREAM_PHASE.CANCELLED,
@@ -304,10 +319,8 @@ describe('repairRestartedStreams', () => {
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
+    const result = await runRepair(setup, {
       waitingStreams: new Set([streamId]),
-      executionIds: new Map([[streamId, executionId]]),
       repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
@@ -331,17 +344,12 @@ describe('repairRestartedStreams', () => {
   });
 
   it('repairs non-resumable running streams to FAILED and writes terminal meta', async () => {
-    const streamId = 'stream-failed' as StreamTabId;
-    const executionId = 'execution-failed' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('failed');
+    const { streamId, executionId, streamStatus } = setup;
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
+    const result = await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
       now: 456,
@@ -368,25 +376,17 @@ describe('repairRestartedStreams', () => {
   });
 
   it('does not write failed terminal meta before failed groups close', async () => {
-    const streamId = 'stream-failed-close-error' as StreamTabId;
-    const executionId = 'execution-failed-close-error' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('failed-close-error');
     const finalizeExecution = createDurableFinalizer();
 
     await expect(
-      repairRestartedStreams({
-        streamStatus,
-        waitingStreams: new Set(),
-        executionIds: new Map([[streamId, executionId]]),
-        closeRunningGroups: async () => {
-          throw new Error('group close failed');
-        },
+      runRepair(setup, {
+        closeRunningGroups: failGroupClose,
         finalizeExecution,
       }),
     ).rejects.toThrow('group close failed');
 
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.FAILED);
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
@@ -431,20 +431,13 @@ describe('repairRestartedStreams', () => {
   });
 
   it('writes failed terminal meta when retrying an already failed repair', async () => {
-    const streamId = 'stream-failed-retry' as StreamTabId;
-    const executionId = 'execution-failed-retry' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('failed-retry');
+    const { streamId, executionId, streamStatus } = setup;
     const finalizeExecution = createDurableFinalizer();
 
     await expect(
-      repairRestartedStreams({
-        streamStatus,
-        waitingStreams: new Set(),
-        executionIds: new Map([[streamId, executionId]]),
-        closeRunningGroups: async () => {
-          throw new Error('group close failed');
-        },
+      runRepair(setup, {
+        closeRunningGroups: failGroupClose,
         finalizeExecution,
       }),
     ).rejects.toThrow('group close failed');
@@ -453,10 +446,7 @@ describe('repairRestartedStreams', () => {
 
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
+    const result = await runRepair(setup, {
       repairStreams: [streamId],
       retryFailedStreams: true,
       closeRunningGroups,
@@ -482,24 +472,17 @@ describe('repairRestartedStreams', () => {
   });
 
   it('does not retry historical failed streams unless retry is requested', async () => {
-    const streamId = 'stream-historical-failed' as StreamTabId;
-    const executionId = 'execution-historical-failed' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('historical-failed');
+    const { streamId, streamStatus } = setup;
     streamStatus.transition(
       streamId,
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[]) => [...streamIds],
-    );
+    const closeRunningGroups = vi.fn(closeAllGroups);
     const finalizeExecution = createDurableFinalizer();
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
+    const result = await runRepair(setup, {
       repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
@@ -516,10 +499,8 @@ describe('repairRestartedStreams', () => {
   });
 
   it('does not report terminal status when metadata persistence fails', async () => {
-    const streamId = 'stream-metadata-failure' as StreamTabId;
-    const executionId = 'execution-metadata-failure' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('metadata-failure');
+    const { streamId, executionId, streamStatus } = setup;
     const durabilityError = new Error('metadata disk write failed');
     const finalizeExecution = vi.fn(async () => ({
       status: 'failed' as const,
@@ -529,11 +510,8 @@ describe('repairRestartedStreams', () => {
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
-      closeRunningGroups: async (streamIds) => [...streamIds],
+    const result = await runRepair(setup, {
+      closeRunningGroups: closeAllGroups,
       finalizeExecution,
       logger,
     });
@@ -555,10 +533,8 @@ describe('repairRestartedStreams', () => {
   });
 
   it('reports flow cleanup failure but keeps durable terminal metadata', async () => {
-    const streamId = 'stream-flow-delete-failure' as StreamTabId;
-    const executionId = 'execution-flow-delete-failure' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
+    const setup = setupRunningStream('flow-delete-failure');
+    const { streamId, executionId } = setup;
     const cleanupError = new Error('flow delete failed');
     const finalizeExecution = vi.fn(async () => ({
       status: 'failed' as const,
@@ -568,11 +544,8 @@ describe('repairRestartedStreams', () => {
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
-      closeRunningGroups: async (streamIds) => [...streamIds],
+    const result = await runRepair(setup, {
+      closeRunningGroups: closeAllGroups,
       finalizeExecution,
       logger,
     });
@@ -593,26 +566,21 @@ describe('repairRestartedStreams', () => {
   });
 
   it('can terminalize stale WAITING streams through the resume choreography', async () => {
-    const streamId = 'stream-stale-waiting' as StreamTabId;
-    const executionId = 'execution-stale-waiting' as ExecutionId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedWaiting(streamStatus, streamId);
+    const setup = setupStream('stale-waiting');
+    seedWaiting(setup.streamStatus, setup.streamId);
 
-    await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
-      repairStreams: [streamId],
-      closeRunningGroups: async (streamIds) => [...streamIds],
+    await runRepair(setup, {
+      repairStreams: [setup.streamId],
+      closeRunningGroups: closeAllGroups,
       finalizeExecution: createDurableFinalizer(),
     });
 
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.FAILED);
   });
 
   it('writes failed execution metadata that supersedes an interim result', async () => {
-    const streamId = 'stream-real-meta' as StreamTabId;
-    const executionId = 'execution-real-meta' as ExecutionId;
+    const setup = setupRunningStream('real-meta');
+    const { executionId } = setup;
     const store = getExecutionStore(executionId);
     await store.writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
@@ -630,13 +598,8 @@ describe('repairRestartedStreams', () => {
         cost: 0,
       },
     });
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
 
-    const result = await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([[streamId, executionId]]),
+    const result = await runRepair(setup, {
       closeRunningGroups: async () => [],
     });
 

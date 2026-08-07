@@ -37,13 +37,15 @@ function createPorts(
   };
 }
 
+function clone(ports: OverleafCloneWorkflowPorts) {
+  return cloneOverleafProject(REMOTE, '/workspace', ports);
+}
+
 describe('cloneOverleafProject', () => {
   it('clones with a stored token and returns success', async () => {
     const ports = createPorts();
 
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', ports),
-    ).resolves.toEqual({ status: 'success' });
+    await expect(clone(ports)).resolves.toEqual({ status: 'success' });
 
     expect(ports.runClone).toHaveBeenCalledWith(
       `https://git:olp_saved@git.overleaf.com${REMOTE.path}`,
@@ -59,9 +61,7 @@ describe('cloneOverleafProject', () => {
       promptToken: vi.fn(async () => 'olp_replacement'),
     });
 
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', ports),
-    ).resolves.toEqual({ status: 'success' });
+    await expect(clone(ports)).resolves.toEqual({ status: 'success' });
 
     expect(ports.deleteStoredToken).toHaveBeenCalledWith('overleaf.gitToken');
     expect(ports.storeToken).toHaveBeenCalledWith(
@@ -76,9 +76,7 @@ describe('cloneOverleafProject', () => {
       promptToken: vi.fn(async () => 'not-an-overleaf-token'),
     });
 
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', ports),
-    ).resolves.toEqual({ status: 'invalidToken' });
+    await expect(clone(ports)).resolves.toEqual({ status: 'invalidToken' });
 
     expect(ports.showInvalidToken).toHaveBeenCalledWith(
       expect.objectContaining({ tokenKey: 'overleaf.gitToken' }),
@@ -91,18 +89,16 @@ describe('cloneOverleafProject', () => {
     const allowedPorts = createPorts({
       listWorkspaceEntries: vi.fn(async () => ['.DS_Store', 'Thumbs.db']),
     });
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', allowedPorts),
-    ).resolves.toEqual({ status: 'success' });
+    await expect(clone(allowedPorts)).resolves.toEqual({ status: 'success' });
 
     const blockedPorts = createPorts({
       getStoredToken: vi.fn(async () => undefined),
       listWorkspaceEntries: vi.fn(async () => ['paper.tex']),
       promptToken: vi.fn(async () => 'olp_prompted'),
     });
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', blockedPorts),
-    ).resolves.toEqual({ status: 'workspaceNotEmpty' });
+    await expect(clone(blockedPorts)).resolves.toEqual({
+      status: 'workspaceNotEmpty',
+    });
     expect(blockedPorts.showWorkspaceNotEmpty).toHaveBeenCalledOnce();
     expect(blockedPorts.promptToken).not.toHaveBeenCalled();
     expect(blockedPorts.storeToken).not.toHaveBeenCalled();
@@ -115,9 +111,9 @@ describe('cloneOverleafProject', () => {
       isGitAvailable: vi.fn(() => false),
       promptToken: vi.fn(async () => 'olp_prompted'),
     });
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', gitMissingPorts),
-    ).resolves.toEqual({ status: 'gitMissing' });
+    await expect(clone(gitMissingPorts)).resolves.toEqual({
+      status: 'gitMissing',
+    });
     expect(gitMissingPorts.promptToken).not.toHaveBeenCalled();
     expect(gitMissingPorts.storeToken).not.toHaveBeenCalled();
 
@@ -128,9 +124,9 @@ describe('cloneOverleafProject', () => {
       }),
       promptToken: vi.fn(async () => 'olp_prompted'),
     });
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', unreadablePorts),
-    ).resolves.toEqual({ status: 'workspaceUnreadable' });
+    await expect(clone(unreadablePorts)).resolves.toEqual({
+      status: 'workspaceUnreadable',
+    });
     expect(unreadablePorts.promptToken).not.toHaveBeenCalled();
     expect(unreadablePorts.storeToken).not.toHaveBeenCalled();
     expect(unreadablePorts.showWorkspaceUnreadable).toHaveBeenCalledWith(
@@ -148,9 +144,7 @@ describe('cloneOverleafProject', () => {
       }),
     });
 
-    await expect(
-      cloneOverleafProject(REMOTE, '/workspace', ports),
-    ).resolves.toEqual({ status: 'authFailure' });
+    await expect(clone(ports)).resolves.toEqual({ status: 'authFailure' });
 
     expect(ports.deleteStoredToken).toHaveBeenCalledWith('overleaf.gitToken');
     expect(ports.showAuthFailure).toHaveBeenCalledWith(REMOTE);

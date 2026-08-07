@@ -107,6 +107,24 @@ function runAccept(
   );
 }
 
+async function acceptAll(
+  request: ToolEditApprovalRequest,
+): Promise<ToolEditApprovalResult> {
+  return { accepted: true, appliedContent: request.proposedContent };
+}
+
+/** Collects workspaceFilesWritten payloads until disposed. */
+function recordWrittenFiles(): { written: string[][]; dispose: () => void } {
+  const written: string[][] = [];
+  const dispose = appSignals.on(
+    'workspaceFilesWritten',
+    ({ absolutePaths }) => {
+      written.push(absolutePaths);
+    },
+  );
+  return { written, dispose };
+}
+
 describe('accept_run_files progress events', () => {
   beforeEach(async () => {
     testApprovalHandler = undefined;
@@ -137,24 +155,14 @@ describe('accept_run_files progress events', () => {
     const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     const tracker = new FileInteractionState();
-    const written: string[][] = [];
-    const dispose = appSignals.on(
-      'workspaceFilesWritten',
-      ({ absolutePaths }) => {
-        written.push(absolutePaths);
-      },
-    );
+    const { written, dispose } = recordWrittenFiles();
 
     setRunStorageEntries({
       [`executions/${executionId}/output.tex`]: FileType.File,
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
-
-    testApprovalHandler = async (request) => ({
-      accepted: true,
-      appliedContent: request.proposedContent,
-    });
+    testApprovalHandler = acceptAll;
 
     const result = await runAccept(
       tool,
@@ -171,23 +179,14 @@ describe('accept_run_files progress events', () => {
 
   it('does not require a runtime host to publish accepted workspace files', async () => {
     const tool = new AcceptRunFilesTool();
-    const written: string[][] = [];
-    const dispose = appSignals.on(
-      'workspaceFilesWritten',
-      ({ absolutePaths }) => {
-        written.push(absolutePaths);
-      },
-    );
+    const { written, dispose } = recordWrittenFiles();
 
     setRunStorageEntries({
       [`executions/${executionId}/output.tex`]: FileType.File,
     });
     const write = stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
-    testApprovalHandler = async (request) => ({
-      accepted: true,
-      appliedContent: request.proposedContent,
-    });
+    testApprovalHandler = acceptAll;
 
     const result = await tool.call({
       execution_id: executionId,

@@ -16,6 +16,17 @@ import {
 } from '@agent/modelHandlers/contextManagementConstants';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
+/** Head and tail well over their truncation budgets, with an elidable middle. */
+function oversizedText(): { head: string; tail: string; text: string } {
+  const head = 'HEAD_MARKER_'.repeat(500);
+  const tail = 'TAIL_MARKER_'.repeat(5000);
+  return {
+    head,
+    tail,
+    text: head + 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) + tail,
+  };
+}
+
 describe('checkToolResultTextLimit', () => {
   it('returns null for text within limit', () => {
     const text = 'a'.repeat(1000);
@@ -28,10 +39,7 @@ describe('checkToolResultTextLimit', () => {
   });
 
   it('keeps head and tail with an elision marker for text exceeding limit', () => {
-    const head = 'HEAD_MARKER_'.repeat(500); // well over the head budget
-    const tail = 'TAIL_MARKER_'.repeat(5000); // well over the tail budget
-    const middle = 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH);
-    const text = head + middle + tail;
+    const { head, tail, text } = oversizedText();
 
     const result = checkToolResultTextLimit(text);
     assert.ok(result !== null);
@@ -84,33 +92,25 @@ describe('checkToolResultTextLimit', () => {
 });
 
 describe('formatToolResultAsText', () => {
-  it('returns output when present', () => {
-    const result = formatToolResultAsText({
-      status: 'executed',
-      output: 'test output',
-    });
-    assert.equal(result, 'test output');
-  });
-
-  it('returns summary when no output', () => {
-    const result = formatToolResultAsText({
-      status: 'executed',
-      summary: 'test summary',
-    });
-    assert.equal(result, 'test summary');
-  });
-
-  it('returns error when no output', () => {
-    const result = formatToolResultAsText({
-      status: 'error',
-      error: 'test error',
-    });
-    assert.equal(result, 'test error');
-  });
-
-  it('returns OK when all fields empty', () => {
-    const result = formatToolResultAsText({ status: 'executed' });
-    assert.equal(result, 'OK');
+  it.each([
+    [
+      'returns output when present',
+      { status: 'executed', output: 'test output' },
+      'test output',
+    ],
+    [
+      'returns summary when no output',
+      { status: 'executed', summary: 'test summary' },
+      'test summary',
+    ],
+    [
+      'returns error when no output',
+      { status: 'error', error: 'test error' },
+      'test error',
+    ],
+    ['returns OK when all fields empty', { status: 'executed' }, 'OK'],
+  ] as const)('%s', (_scenario, result, expected) => {
+    assert.equal(formatToolResultAsText(result), expected);
   });
 
   it('includes user feedback', () => {
@@ -141,12 +141,10 @@ describe('formatToolResultAsText', () => {
   });
 
   it('keeps head and tail when result exceeds limit, not a discard stub', () => {
-    const head = 'HEAD_MARKER_'.repeat(500);
-    const tail = 'TAIL_MARKER_'.repeat(5000);
-    const largeOutput = head + 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) + tail;
+    const { text } = oversizedText();
     const result = formatToolResultAsText({
       status: 'executed',
-      output: largeOutput,
+      output: text,
     });
     assert.ok(result.includes('Tool result too large'));
     assert.ok(result.includes('characters elided'));
@@ -212,21 +210,37 @@ describe('extractToolAttachments', () => {
     assert.equal(Object.hasOwn(sanitizedResult, 'output'), false);
   });
 
-  it('rejects legacy results without a source status', () => {
-    assert.throws(() =>
-      extractToolAttachments({
-        output: 'done',
-      } as never),
-    );
-  });
-
-  it('rejects raw status values outside the source contract', () => {
-    assert.throws(() =>
-      extractToolAttachments({
-        status: 'completed',
-        output: 'done',
-      } as never),
-    );
+  it.each([
+    ['legacy results without a source status', { output: 'done' }],
+    [
+      'raw status values outside the source contract',
+      { status: 'completed', output: 'done' },
+    ],
+    [
+      'executed payloads with error fields',
+      {
+        status: 'executed',
+        output: 'usable output',
+        error: 'secondary warning',
+      },
+    ],
+    ['empty source error text', { status: 'error', error: '' }],
+    [
+      'error payloads with file attachments',
+      {
+        status: 'error',
+        error: 'The operation failed.',
+        files: [
+          {
+            path: 'plot.png',
+            mimeType: 'image/png',
+            base64Data: 'aW1hZ2U=',
+          },
+        ],
+      },
+    ],
+  ])('rejects %s', (_scenario, payload) => {
+    assert.throws(() => extractToolAttachments(payload as never));
   });
 
   it('projects executed payloads directly from their source status', () => {
@@ -237,25 +251,6 @@ describe('extractToolAttachments', () => {
 
     assert.equal(sanitizedResult.status, 'executed');
     assert.equal(sanitizedResult.output, 'done');
-  });
-
-  it('rejects executed payloads with error fields', () => {
-    assert.throws(() =>
-      extractToolAttachments({
-        status: 'executed',
-        output: 'usable output',
-        error: 'secondary warning',
-      } as never),
-    );
-  });
-
-  it('rejects empty source error text', () => {
-    assert.throws(() =>
-      extractToolAttachments({
-        status: 'error',
-        error: '',
-      } as never),
-    );
   });
 
   it('keeps error summaries out of model payloads', () => {
@@ -271,21 +266,5 @@ describe('extractToolAttachments', () => {
       'The operation failed before producing output.',
     );
     assert.equal(Object.hasOwn(sanitizedResult, 'summary'), false);
-  });
-
-  it('rejects error payloads with file attachments', () => {
-    assert.throws(() =>
-      extractToolAttachments({
-        status: 'error',
-        error: 'The operation failed.',
-        files: [
-          {
-            path: 'plot.png',
-            mimeType: 'image/png',
-            base64Data: 'aW1hZ2U=',
-          },
-        ],
-      } as never),
-    );
   });
 });

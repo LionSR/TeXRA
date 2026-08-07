@@ -51,9 +51,11 @@ describe('terminal text width limits', () => {
 
   describe('truncateToWidth', () => {
     it('uses the default Unicode ellipsis when truncating', () => {
-      expect(truncateToWidth('abc', 0)).toBe('');
-      expect(truncateToWidth('abc', 1)).toBe('…');
-      expect(truncateToWidth('abc', 2)).toBe('a…');
+      expect([
+        truncateToWidth('abc', 0),
+        truncateToWidth('abc', 1),
+        truncateToWidth('abc', 2),
+      ]).toEqual(['', '…', 'a…']);
     });
 
     it('returns fitting text unchanged', () => {

@@ -41,6 +41,17 @@ function nodesOfKind<K extends ExportNode['kind']>(
   );
 }
 
+/** Asserts exactly one node of `kind` exists and matches `expected`. */
+function expectSingleNode<K extends ExportNode['kind']>(
+  nodes: ExportNode[],
+  kind: K,
+  expected: Record<string, unknown>,
+): void {
+  const matches = nodesOfKind(nodes, kind);
+  expect(matches).toHaveLength(1);
+  expect(matches[0]).toMatchObject({ kind, ...expected });
+}
+
 // ---------------------------------------------------------------------------
 // OpenAI Response API — function calls
 // ---------------------------------------------------------------------------
@@ -56,10 +67,7 @@ describe('OpenAI Responses API', () => {
       },
     ]);
 
-    const calls = nodesOfKind(nodes, 'tool-call');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      kind: 'tool-call',
+    expectSingleNode(nodes, 'tool-call', {
       name: 'search_docs',
       input: '{"query":"TypeScript generics"}',
     });
@@ -75,14 +83,12 @@ describe('OpenAI Responses API', () => {
       },
     ]);
 
-    const calls = nodesOfKind(nodes, 'tool-call');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      kind: 'tool-call',
-      name: 'run',
-    });
+    expectSingleNode(nodes, 'tool-call', { name: 'run' });
     // Object arguments should be serialised.
-    expect(JSON.parse(calls[0].input)).toEqual({ x: 1, y: 2 });
+    expect(JSON.parse(nodesOfKind(nodes, 'tool-call')[0].input)).toEqual({
+      x: 1,
+      y: 2,
+    });
   });
 
   it('handles function_call with missing name (falls back to "unknown")', () => {
@@ -128,10 +134,7 @@ describe('OpenAI Responses API', () => {
     ]);
 
     // First node is the tool call, second is the tool result.
-    const results = nodesOfKind(nodes, 'tool-result');
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      kind: 'tool-result',
+    expectSingleNode(nodes, 'tool-result', {
       text: 'first line\n\n[image attachment]\n[file attachment]',
     });
   });
@@ -145,12 +148,7 @@ describe('OpenAI Responses API', () => {
       },
     ]);
 
-    const results = nodesOfKind(nodes, 'tool-result');
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      kind: 'tool-result',
-      text: 'plain string',
-    });
+    expectSingleNode(nodes, 'tool-result', { text: 'plain string' });
   });
 
   it('handles function_call_output with object output', () => {
@@ -244,12 +242,7 @@ describe('Google GenAI', () => {
     ]);
 
     // Only the non-thought text should produce an assistant-text node.
-    const texts = nodesOfKind(nodes, 'assistant-text');
-    expect(texts).toHaveLength(1);
-    expect(texts[0]).toMatchObject({
-      kind: 'assistant-text',
-      text: 'Here is the answer.',
-    });
+    expectSingleNode(nodes, 'assistant-text', { text: 'Here is the answer.' });
   });
 
   it('handles thought-only model messages (no visible output)', () => {
@@ -282,12 +275,7 @@ describe('Google GenAI', () => {
       },
     ]);
 
-    const calls = nodesOfKind(nodes, 'tool-call');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      kind: 'tool-call',
-      name: 'get_weather',
-    });
+    expectSingleNode(nodes, 'tool-call', { name: 'get_weather' });
   });
 
   it('handles functionResponse parts in Google GenAI messages', () => {
@@ -381,9 +369,7 @@ describe('Anthropic-style messages', () => {
       },
     ]);
 
-    const calls = nodesOfKind(nodes, 'tool-call');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ kind: 'tool-call', name: 'read_file' });
+    expectSingleNode(nodes, 'tool-call', { name: 'read_file' });
   });
 
   it('handles tool_result user message (converted to tool-result node)', () => {
@@ -411,12 +397,7 @@ describe('Anthropic-style messages', () => {
       },
     ]);
 
-    const results = nodesOfKind(nodes, 'tool-result');
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      kind: 'tool-result',
-      text: 'file contents',
-    });
+    expectSingleNode(nodes, 'tool-result', { text: 'file contents' });
   });
 
   it('handles web_search_tool_result blocks', () => {
@@ -438,10 +419,7 @@ describe('Anthropic-style messages', () => {
       },
     ]);
 
-    const wsResults = nodesOfKind(nodes, 'web-search-results');
-    expect(wsResults).toHaveLength(1);
-    expect(wsResults[0]).toMatchObject({
-      kind: 'web-search-results',
+    expectSingleNode(nodes, 'web-search-results', {
       results: [{ title: 'Example Page', url: 'https://example.com/page' }],
     });
   });
@@ -570,12 +548,7 @@ describe('Anthropic-style messages', () => {
       },
     ]);
 
-    const searches = nodesOfKind(nodes, 'web-search');
-    expect(searches).toHaveLength(1);
-    expect(searches[0]).toMatchObject({
-      kind: 'web-search',
-      query: 'TypeScript generics',
-    });
+    expectSingleNode(nodes, 'web-search', { query: 'TypeScript generics' });
   });
 });
 
@@ -598,10 +571,7 @@ describe('OpenAI Chat Completions', () => {
       },
     ]);
 
-    const calls = nodesOfKind(nodes, 'tool-call');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      kind: 'tool-call',
+    expectSingleNode(nodes, 'tool-call', {
       name: 'get_weather',
       input: '{"city":"NYC"}',
     });
@@ -626,9 +596,7 @@ describe('OpenAI Chat Completions', () => {
       },
     ]);
 
-    const calls = nodesOfKind(nodes, 'tool-call');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ name: 'valid_tool' });
+    expectSingleNode(nodes, 'tool-call', { name: 'valid_tool' });
   });
 
   it('handles tool role messages', () => {
@@ -636,12 +604,7 @@ describe('OpenAI Chat Completions', () => {
       { role: 'tool', tool_call_id: 'call_1', content: 'result text' },
     ]);
 
-    const results = nodesOfKind(nodes, 'tool-result');
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      kind: 'tool-result',
-      text: 'result text',
-    });
+    expectSingleNode(nodes, 'tool-result', { text: 'result text' });
   });
 
   it('handles system messages (ignored — no visible node)', () => {

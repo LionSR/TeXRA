@@ -57,6 +57,15 @@ function encryptedRecordStore(): JsonStore {
   });
 }
 
+/** A store with no persisted records. */
+function emptyRecordStore(): JsonStore {
+  return stubStore({
+    get<T>(_key: string): T | undefined {
+      return undefined;
+    },
+  });
+}
+
 /** An ElectronSecrets over one encrypted record, with its warnings captured. */
 async function secretsWithWarningLog(): Promise<{
   secrets: ElectronSecretsInstance;
@@ -194,13 +203,7 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     process.env.SOME_TEST_KEY = 'from-env';
 
     const { ElectronSecrets } = await loadElectronSecrets();
-    const secrets = new ElectronSecrets(
-      stubStore({
-        get<T>(_key: string): T | undefined {
-          return undefined;
-        },
-      }),
-    );
+    const secrets = new ElectronSecrets(emptyRecordStore());
 
     expect(await secrets.get('SOME_TEST_KEY')).toBe('from-env');
     delete process.env.SOME_TEST_KEY;

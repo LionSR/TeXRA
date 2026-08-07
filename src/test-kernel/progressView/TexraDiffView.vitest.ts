@@ -21,19 +21,27 @@ const workerModuleIds = [
  */
 const GRAMMAR_MODULE_ID = 'monaco-editor/languages/register.all.js';
 
-const originalGlobals = {
-  document: globalThis.document,
-  window: globalThis.window,
-  customElements: globalThis.customElements,
-  HTMLElement: globalThis.HTMLElement,
-  Element: globalThis.Element,
-  Document: globalThis.Document,
-  ShadowRoot: globalThis.ShadowRoot,
-  CSSStyleSheet: globalThis.CSSStyleSheet,
-  MutationObserver: globalThis.MutationObserver,
-  ResizeObserver: globalThis.ResizeObserver,
-  self: globalThis.self,
-};
+/** Globals the component (and Monaco) read off `globalThis`. */
+const DOM_GLOBAL_NAMES = [
+  'window',
+  'document',
+  'customElements',
+  'HTMLElement',
+  'Element',
+  'Document',
+  'ShadowRoot',
+  'CSSStyleSheet',
+  'MutationObserver',
+  'ResizeObserver',
+  'self',
+] as const;
+
+const originalGlobals = Object.fromEntries(
+  DOM_GLOBAL_NAMES.map((name) => [
+    name,
+    (globalThis as Record<string, unknown>)[name],
+  ]),
+);
 
 class MockResizeObserver {
   observe = vi.fn();
@@ -56,32 +64,18 @@ function installDom(): void {
   const dom = new JSDOM('<!doctype html><body class="vscode-dark"></body>', {
     url: 'http://localhost',
   });
-  globalThis.window = dom.window as unknown as Window & typeof globalThis;
-  globalThis.document = dom.window.document;
-  globalThis.customElements = dom.window.customElements;
-  globalThis.HTMLElement = dom.window.HTMLElement;
-  globalThis.Element = dom.window.Element;
-  globalThis.Document = dom.window.Document;
-  globalThis.ShadowRoot = dom.window.ShadowRoot;
-  globalThis.CSSStyleSheet = dom.window.CSSStyleSheet;
-  globalThis.MutationObserver = dom.window.MutationObserver;
-  globalThis.ResizeObserver =
-    MockResizeObserver as unknown as typeof ResizeObserver;
-  globalThis.self = dom.window as unknown as Window & typeof globalThis;
+  const globals = globalThis as Record<string, unknown>;
+  for (const name of DOM_GLOBAL_NAMES) {
+    globals[name] = dom.window[name as keyof typeof dom.window];
+  }
+  globals.ResizeObserver = MockResizeObserver;
 }
 
 function restoreDom(): void {
-  globalThis.document = originalGlobals.document;
-  globalThis.window = originalGlobals.window;
-  globalThis.customElements = originalGlobals.customElements;
-  globalThis.HTMLElement = originalGlobals.HTMLElement;
-  globalThis.Element = originalGlobals.Element;
-  globalThis.Document = originalGlobals.Document;
-  globalThis.ShadowRoot = originalGlobals.ShadowRoot;
-  globalThis.CSSStyleSheet = originalGlobals.CSSStyleSheet;
-  globalThis.MutationObserver = originalGlobals.MutationObserver;
-  globalThis.ResizeObserver = originalGlobals.ResizeObserver;
-  globalThis.self = originalGlobals.self;
+  const globals = globalThis as Record<string, unknown>;
+  for (const name of DOM_GLOBAL_NAMES) {
+    globals[name] = originalGlobals[name];
+  }
 }
 
 afterEach(() => {
@@ -153,13 +147,15 @@ describe('texra-diff-view', () => {
     });
     expect(setTheme).toHaveBeenCalledWith('vs-dark');
 
-    element.hostTheme = DESKTOP_THEME_KIND.LIGHT;
-    await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs'));
-
-    element.hostTheme = DESKTOP_THEME_KIND.HIGH_CONTRAST;
-    await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-black'));
-
-    element.hostTheme = DESKTOP_THEME_KIND.DARK;
-    await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs-dark'));
+    for (const [hostTheme, monacoTheme] of [
+      [DESKTOP_THEME_KIND.LIGHT, 'vs'],
+      [DESKTOP_THEME_KIND.HIGH_CONTRAST, 'hc-black'],
+      [DESKTOP_THEME_KIND.DARK, 'vs-dark'],
+    ] as const) {
+      element.hostTheme = hostTheme;
+      await vi.waitFor(() =>
+        expect(setTheme).toHaveBeenCalledWith(monacoTheme),
+      );
+    }
   });
 });

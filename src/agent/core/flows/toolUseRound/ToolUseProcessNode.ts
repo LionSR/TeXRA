@@ -103,6 +103,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const services = this.services;
+    const modelHandler = services.modelCell.handler;
 
     const { text, stopReason, thinking, useStreaming, normalizedUsage } =
       extractModelResponse(
@@ -121,12 +122,8 @@ export class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    const toolCalls = services.modelCell.handler.extractToolUse(
-      prepRes.response,
-    );
-    const serverToolData = services.modelCell.handler.extractServerToolData(
-      prepRes.response,
-    );
+    const toolCalls = modelHandler.extractToolUse(prepRes.response);
+    const serverToolData = modelHandler.extractServerToolData(prepRes.response);
 
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
@@ -137,8 +134,9 @@ export class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    const lastAssistantContent =
-      services.modelCell.handler.extractAssistantContent(prepRes.response);
+    const lastAssistantContent = modelHandler.extractAssistantContent(
+      prepRes.response,
+    );
 
     if (text) {
       services.logger.debug(`Model response: ${text.slice(0, 100)}`);
@@ -151,8 +149,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const endTurn =
-      services.modelCell.handler.isEndTurnStop(stopReason) ||
-      !toolCalls?.length;
+      modelHandler.isEndTurnStop(stopReason) || !toolCalls?.length;
 
     return {
       kind: 'success',

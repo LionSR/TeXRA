@@ -131,8 +131,9 @@ describe('PRPollingSource CI-started events', () => {
     const { ghGet, source } = await createHarness();
     const events: string[] = [];
     const state = createState(events);
+    const runs = [checkRun(1, 'lint'), checkRun(2, 'test')];
 
-    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint'), checkRun(2, 'test')]);
+    queuePollResponses(ghGet, SHA, runs);
 
     await source.pollOne('owner/repo/pulls/7', state);
 
@@ -142,7 +143,7 @@ describe('PRPollingSource CI-started events', () => {
     expect(events[0]).not.toContain('workflow');
     expect(state.currentShaState?.ciStarted).toBe(true);
 
-    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint'), checkRun(2, 'test')]);
+    queuePollResponses(ghGet, SHA, runs);
 
     await source.pollOne('owner/repo/pulls/7', state);
 

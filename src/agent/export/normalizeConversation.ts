@@ -354,10 +354,8 @@ export function normalizeConversationForExport(
   let lastAssistantHadToolUse = false;
 
   for (const raw of messages) {
-    const item = isObject(raw) ? raw : undefined;
-    if (!item) {
-      continue;
-    }
+    if (!isObject(raw)) continue;
+    const item = raw;
 
     // OpenAI Response API: top-level function_call items (not wrapped in a message)
     if (isResponseFunctionToolCallItem(item)) {

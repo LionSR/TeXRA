@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 
 // One shared interval for every live-elapsed display. StatusBar and the
-// subagent panel can tick at once; with
-// per-component intervals each would fire at its own phase, producing up to
-// one render burst per component per second. Subscribers of the shared
-// ticker fire in the same callback, so React batches them into one pass.
+// subagent panel can tick at once; with per-component intervals each would
+// fire at its own phase, producing up to one render burst per component per
+// second. Subscribers of the shared ticker fire in the same callback, so
+// React batches them into one pass.
 type SharedTickSubscriber = () => void;
 const tickSubscribers = new Set<SharedTickSubscriber>();
 let tickTimer: ReturnType<typeof setInterval> | undefined;

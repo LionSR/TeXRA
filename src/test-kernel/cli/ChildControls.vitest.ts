@@ -11,8 +11,15 @@ import {
   streamTreeEntries,
   streamTreeViews,
 } from '@cli/chat/tui/state/streamViews';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
-import { buildChildStreamEntries } from '@test/support/childStreamEntries';
+import {
+  STREAM_PHASE,
+  type StreamPhase,
+  type StreamTabId,
+} from '@shared/schemas';
+import {
+  buildChildStreamEntries,
+  type ChildStreamEntryRow,
+} from '@test/support/childStreamEntries';
 
 const root = 'root' as StreamTabId;
 const child = 'child' as StreamTabId;
@@ -20,6 +27,32 @@ const leaf = 'leaf' as StreamTabId;
 
 function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
   return { ...emptySlice(root), ...overrides };
+}
+
+/** A running retained agent row whose execution id follows its name. */
+function retainedChild(
+  agentName: string,
+  childStreamId: StreamTabId,
+  overrides: Partial<ChildStreamEntryRow> = {},
+): ChildStreamEntryRow {
+  return {
+    executionId: `${agentName}-exec`,
+    agentName,
+    identity: { kind: 'agent' as const, agent: agentName },
+    childStreamId,
+    status: STREAM_PHASE.RUNNING,
+    ...overrides,
+  };
+}
+
+function streamMap(
+  ...entries: ReadonlyArray<readonly [StreamTabId, StreamPhase?]>
+): Map<StreamTabId, StreamSlice> {
+  return new Map(
+    entries.map(
+      ([streamId, status]) => [streamId, slice({ streamId, status })] as const,
+    ),
+  );
 }
 
 describe('CLI child controls', () => {
@@ -47,20 +80,10 @@ describe('CLI child controls', () => {
     const entries = buildChildStreamEntries({
       parentStreamId: root,
       retained: [
-        {
-          executionId: 'child-exec',
-          agentName: 'critic',
-          identity: { kind: 'agent' as const, agent: 'critic' },
-          childStreamId: child,
-          status: STREAM_PHASE.COMPLETED,
-        },
+        retainedChild('critic', child, { status: STREAM_PHASE.COMPLETED }),
       ],
     });
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice({ streamId: root })],
-      [child, slice({ streamId: child, status: STREAM_PHASE.COMPLETED })],
-      [leaf, slice({ streamId: leaf })],
-    ]);
+    const streams = streamMap([root], [child, STREAM_PHASE.COMPLETED], [leaf]);
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [child, root],
       [leaf, child],
@@ -83,34 +106,18 @@ describe('CLI child controls', () => {
     const entries = new Map([
       ...buildChildStreamEntries({
         parentStreamId: root,
-        retained: [
-          {
-            executionId: 'child-exec',
-            agentName: 'child',
-            identity: { kind: 'agent' as const, agent: 'child' },
-            childStreamId: child,
-            status: STREAM_PHASE.RUNNING,
-          },
-        ],
+        retained: [retainedChild('child', child)],
       }),
       ...buildChildStreamEntries({
         parentStreamId: child,
-        retained: [
-          {
-            executionId: 'leaf-exec',
-            agentName: 'leaf',
-            identity: { kind: 'agent' as const, agent: 'leaf' },
-            childStreamId: leaf,
-            status: STREAM_PHASE.RUNNING,
-          },
-        ],
+        retained: [retainedChild('leaf', leaf)],
       }),
     ]);
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice({ streamId: root })],
-      [child, slice({ streamId: child, status: STREAM_PHASE.RUNNING })],
-      [leaf, slice({ streamId: leaf, status: STREAM_PHASE.RUNNING })],
-    ]);
+    const streams = streamMap(
+      [root],
+      [child, STREAM_PHASE.RUNNING],
+      [leaf, STREAM_PHASE.RUNNING],
+    );
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [child, root],
       [leaf, child],
@@ -179,55 +186,20 @@ describe('CLI child controls', () => {
     const entries = buildChildStreamEntries({
       parentStreamId: root,
       retained: [
-        {
-          executionId: 'a-exec',
-          agentName: 'a',
-          identity: { kind: 'agent' as const, agent: 'a' },
-          childStreamId: a,
-          status: STREAM_PHASE.RUNNING,
-          workflowPhase: 'Reduce',
-        },
-        {
-          executionId: 'b-exec',
-          agentName: 'b',
-          identity: { kind: 'agent' as const, agent: 'b' },
-          childStreamId: b,
-          status: STREAM_PHASE.RUNNING,
+        retainedChild('a', a, { workflowPhase: 'Reduce' }),
+        retainedChild('b', b, {
           workflowPhase: 'Map',
           edgeParentStreamId: null,
-        },
-        {
-          executionId: 'c-exec',
-          agentName: 'c',
-          identity: { kind: 'agent' as const, agent: 'c' },
-          childStreamId: c,
-          status: STREAM_PHASE.RUNNING,
-          workflowPhase: 'Reduce',
-        },
-        {
-          executionId: 'd-exec',
-          agentName: 'd',
-          identity: { kind: 'agent' as const, agent: 'd' },
-          childStreamId: d,
-          status: STREAM_PHASE.RUNNING,
-        },
-        {
-          executionId: 'e-exec',
-          agentName: 'e',
-          identity: { kind: 'agent' as const, agent: 'e' },
-          childStreamId: e,
-          status: STREAM_PHASE.RUNNING,
-          workflowPhase: 'Map',
-        },
+        }),
+        retainedChild('c', c, { workflowPhase: 'Reduce' }),
+        retainedChild('d', d),
+        retainedChild('e', e, { workflowPhase: 'Map' }),
       ],
     });
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice({ streamId: root })],
-      ...ids.map(
-        (id) =>
-          [id, slice({ streamId: id, status: STREAM_PHASE.RUNNING })] as const,
-      ),
-    ]);
+    const streams = streamMap(
+      [root],
+      ...ids.map((id) => [id, STREAM_PHASE.RUNNING] as const),
+    );
     const parentStream = new Map(
       ids.filter((id) => id !== b).map((id) => [id, root] as const),
     );
@@ -277,20 +249,9 @@ describe('CLI child controls', () => {
   it('preserves Alt/Esc-number stream focus order', () => {
     const entries = buildChildStreamEntries({
       parentStreamId: root,
-      retained: [
-        {
-          executionId: 'child-exec',
-          agentName: 'critic',
-          identity: { kind: 'agent' as const, agent: 'critic' },
-          childStreamId: child,
-          status: STREAM_PHASE.RUNNING,
-        },
-      ],
+      retained: [retainedChild('critic', child)],
     });
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice({ streamId: root })],
-      [child, slice({ streamId: child, status: STREAM_PHASE.RUNNING })],
-    ]);
+    const streams = streamMap([root], [child, STREAM_PHASE.RUNNING]);
 
     expect(
       numericFocusTargetForActiveStream({

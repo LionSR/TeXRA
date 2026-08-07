@@ -11,6 +11,15 @@ import { runToolWithCheck } from '@utils/system/toolUtils';
 
 const CHANNEL = 'LaTeXCommands';
 
+const CHINESE_PACKAGES = [
+  'xeCJK',
+  'ctexart',
+  'ctex',
+  'CJK',
+  'ctexrep',
+  'ctexbook',
+];
+
 /**
  * Check if a LaTeX file contains Chinese-related packages
  * @param filePath Path to the LaTeX file
@@ -21,15 +30,7 @@ async function hasChinesePackages(
 ): Promise<boolean> {
   try {
     const content = await AbsoluteFS.read(fileLocation.absolutePath);
-    const chinesePackages = [
-      'xeCJK',
-      'ctexart',
-      'ctex',
-      'CJK',
-      'ctexrep',
-      'ctexbook',
-    ];
-    return chinesePackages.some(
+    return CHINESE_PACKAGES.some(
       (pkg) =>
         content.includes(`\\usepackage{${pkg}}`) ||
         content.includes(`\\documentclass{${pkg}}`),

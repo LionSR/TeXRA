@@ -234,7 +234,6 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('serializes calls against the same workspace when `serialize: true`', async () => {
-    const startedAt = performance.now();
     const [first, second] = await Promise.all([
       runLakeCommand({
         workspaceRoot: workspaceA,
@@ -256,49 +255,42 @@ describe('runLakeCommand mutex', () => {
     expect(second.result.stdout).toContain('b:start');
     expect(second.result.stdout).toContain('b:end');
     expect(second.finishedAt).toBeGreaterThanOrEqual(first.finishedAt);
-    expect(second.finishedAt - startedAt).toBeGreaterThanOrEqual(
-      first.finishedAt - startedAt,
-    );
   });
 
-  it('runs calls in parallel across different workspaces', async () => {
+  it.each<{
+    name: string;
+    secondWorkspace: () => string;
+    serialize: boolean;
+  }>([
+    {
+      name: 'across different workspaces',
+      secondWorkspace: () => workspaceB,
+      serialize: true,
+    },
+    {
+      name: 'when `serialize: false`',
+      secondWorkspace: () => workspaceA,
+      serialize: false,
+    },
+  ])('runs calls in parallel $name', async ({ secondWorkspace, serialize }) => {
     const start = Date.now();
     await Promise.all([
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
         args: nodeSleep(SLEEP_PER_CALL_MS, 'a'),
-        serialize: true,
+        serialize,
       }),
       runLakeCommand({
-        workspaceRoot: workspaceB,
+        workspaceRoot: secondWorkspace(),
         lakeCommand: NODE,
         args: nodeSleep(SLEEP_PER_CALL_MS, 'b'),
-        serialize: true,
+        serialize,
       }),
     ]);
     // Serialized, the two sleeps would take >= 2*SLEEP_PER_CALL_MS. In
     // parallel they finish in roughly SLEEP_PER_CALL_MS plus startup. The
     // budget allows comfortable headroom while still distinguishing the two.
-    expect(Date.now() - start).toBeLessThan(PARALLEL_BUDGET_MS);
-  });
-
-  it('does not serialize when `serialize: false`', async () => {
-    const start = Date.now();
-    await Promise.all([
-      runLakeCommand({
-        workspaceRoot: workspaceA,
-        lakeCommand: NODE,
-        args: nodeSleep(SLEEP_PER_CALL_MS, 'a'),
-        serialize: false,
-      }),
-      runLakeCommand({
-        workspaceRoot: workspaceA,
-        lakeCommand: NODE,
-        args: nodeSleep(SLEEP_PER_CALL_MS, 'b'),
-        serialize: false,
-      }),
-    ]);
     expect(Date.now() - start).toBeLessThan(PARALLEL_BUDGET_MS);
   });
 });

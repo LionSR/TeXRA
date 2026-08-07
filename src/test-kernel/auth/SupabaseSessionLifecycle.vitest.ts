@@ -1,5 +1,7 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
 // Local imports - auth
@@ -13,8 +15,6 @@ import {
 } from '@auth/SupabaseSession';
 import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import { createDeferred } from '@test/support/asyncTestUtils';
-
-// Third-party imports
 import type {
   Session as SupabaseNativeSession,
   SupabaseClient as Client,
@@ -84,6 +84,17 @@ function expiredCustomSession(): SupabaseSession {
     refreshToken: 'old-refresh',
     expiresAt: Date.now() - 1_000,
     useCustomRefresh: true,
+  });
+}
+
+function soonExpiringSession(): SupabaseSession {
+  return makeSession({ expiresAt: Date.now() + 30_000 });
+}
+
+function replacementSession(): SupabaseSession {
+  return makeSession({
+    accessToken: 'replacement-access',
+    refreshToken: 'replacement-refresh',
   });
 }
 
@@ -165,6 +176,47 @@ function createCoordinator(options?: {
     read,
     getReadCount,
   };
+}
+
+// A coordinator whose storage triggers a session clear during its first read,
+// to exercise races between loading a session and clearing it.
+function createClearingStorageCoordinator(options: {
+  initialSession: SupabaseSession;
+  onFirstRead: (
+    coordinator: SupabaseSessionCoordinator,
+  ) => void | Promise<void>;
+  onDelete?: () => Promise<void>;
+}): {
+  coordinator: SupabaseSessionCoordinator;
+  getReadCount: () => number;
+} {
+  let value: string | undefined = JSON.stringify(options.initialSession);
+  let readCount = 0;
+  let clearDuringFirstRead = true;
+  const storage: SupabaseSessionStorage = {
+    get: async () => {
+      readCount += 1;
+      const snapshot = value;
+      if (clearDuringFirstRead) {
+        clearDuringFirstRead = false;
+        await options.onFirstRead(coordinator);
+      }
+      return snapshot;
+    },
+    store: async (sessionData) => {
+      value = sessionData;
+    },
+    delete: async () => {
+      await options.onDelete?.();
+      value = undefined;
+    },
+  };
+  const coordinator = new SupabaseSessionCoordinator({
+    ...COORDINATOR_CONFIG,
+    storage,
+    getClient: () => createClient(),
+  });
+  return { coordinator, getReadCount: () => readCount };
 }
 
 describe('SupabaseSession', () => {
@@ -318,7 +370,7 @@ describe('SupabaseSession', () => {
 
     it('reports no expiry pressure before any session is observed', () => {
       const { coordinator } = createCoordinator({
-        initialSession: makeSession({ expiresAt: Date.now() + 30_000 }),
+        initialSession: soonExpiringSession(),
       });
 
       assert.equal(coordinator.isTokenExpiringSoon(), false);
@@ -326,7 +378,7 @@ describe('SupabaseSession', () => {
 
     it('answers expiry pressure from a session loaded cold', async () => {
       const { coordinator } = createCoordinator({
-        initialSession: makeSession({ expiresAt: Date.now() + 30_000 }),
+        initialSession: soonExpiringSession(),
       });
 
       await coordinator.loadSession();
@@ -336,7 +388,7 @@ describe('SupabaseSession', () => {
 
     it('drops expiry pressure once the session is cleared', async () => {
       const { coordinator } = createCoordinator({
-        initialSession: makeSession({ expiresAt: Date.now() + 30_000 }),
+        initialSession: soonExpiringSession(),
       });
 
       await coordinator.loadSession();
@@ -346,7 +398,7 @@ describe('SupabaseSession', () => {
     });
 
     it('drops expiry pressure when a matched session is cleared', async () => {
-      const session = makeSession({ expiresAt: Date.now() + 30_000 });
+      const session = soonExpiringSession();
       const { coordinator } = createCoordinator({ initialSession: session });
 
       await coordinator.loadSession();
@@ -510,79 +562,35 @@ describe('SupabaseSession', () => {
     });
 
     it('does not return tokens cleared while loading the session', async () => {
-      const initialSession = makeSession();
-      let value: string | undefined = JSON.stringify(initialSession);
-      let readCount = 0;
-      let clearDuringFirstRead = true;
-      const coordinatorRef: { current?: SupabaseSessionCoordinator } = {};
-      const storage: SupabaseSessionStorage = {
-        get: async () => {
-          readCount += 1;
-          const snapshot = value;
-          if (clearDuringFirstRead) {
-            clearDuringFirstRead = false;
-            await coordinatorRef.current?.clearSession();
-          }
-          return snapshot;
-        },
-        store: async (sessionData) => {
-          value = sessionData;
-        },
-        delete: async () => {
-          value = undefined;
-        },
-      };
-      const coordinator = new SupabaseSessionCoordinator({
-        ...COORDINATOR_CONFIG,
-        storage,
-        getClient: () => createClient(),
+      const { coordinator, getReadCount } = createClearingStorageCoordinator({
+        initialSession: makeSession(),
+        onFirstRead: (c) => c.clearSession(),
       });
-      coordinatorRef.current = coordinator;
 
       assert.equal(await coordinator.getSessionTokens(), null);
-      assert.equal(readCount, 2);
+      assert.equal(getReadCount(), 2);
     });
 
     it('does not return tokens when a clear is still pending after load', async () => {
-      const initialSession = makeSession();
-      let value: string | undefined = JSON.stringify(initialSession);
-      let readCount = 0;
-      let clearDuringFirstRead = true;
       const deleteStarted = createDeferred();
       const allowDelete = createDeferred();
-      const coordinatorRef: { current?: SupabaseSessionCoordinator } = {};
-      const storage: SupabaseSessionStorage = {
-        get: async () => {
-          readCount += 1;
-          const snapshot = value;
-          if (clearDuringFirstRead) {
-            clearDuringFirstRead = false;
-            void coordinatorRef.current?.clearSession();
-          }
-          return snapshot;
+      const { coordinator, getReadCount } = createClearingStorageCoordinator({
+        initialSession: makeSession(),
+        onFirstRead: (c) => {
+          void c.clearSession();
         },
-        store: async (sessionData) => {
-          value = sessionData;
-        },
-        delete: async () => {
+        onDelete: async () => {
           deleteStarted.resolve();
           await allowDelete.promise;
-          value = undefined;
         },
-      };
-      const coordinator = new SupabaseSessionCoordinator({
-        ...COORDINATOR_CONFIG,
-        storage,
-        getClient: () => createClient(),
       });
-      coordinatorRef.current = coordinator;
 
       const tokensPromise = coordinator.getSessionTokens();
       await deleteStarted.promise;
       allowDelete.resolve();
 
       assert.equal(await tokensPromise, null);
-      assert.equal(readCount, 2);
+      assert.equal(getReadCount(), 2);
     });
 
     it('does not resurrect a cleared session when refresh finishes later', async () => {
@@ -623,10 +631,7 @@ describe('SupabaseSession', () => {
 
       const statePromise = coordinator.getStoredSessionState();
       await refreshStarted.promise;
-      const replacement = makeSession({
-        accessToken: 'replacement-access',
-        refreshToken: 'replacement-refresh',
-      });
+      const replacement = replacementSession();
       await coordinator.storeSession(replacement);
       allowRefreshFailure.resolve();
 
@@ -640,10 +645,7 @@ describe('SupabaseSession', () => {
         refreshToken: 'old-refresh',
       });
       const { coordinator, read } = createCoordinator({ initialSession });
-      const replacement = makeSession({
-        accessToken: 'replacement-access',
-        refreshToken: 'replacement-refresh',
-      });
+      const replacement = replacementSession();
 
       await coordinator.storeSession(replacement);
 
@@ -656,31 +658,34 @@ describe('SupabaseSession', () => {
       assert.equal(read(), null);
     });
 
-    it('does not return expired session tokens when refresh fails', async () => {
-      const { coordinator } = createCoordinator({
-        initialSession: expiredCustomSession(),
-        fetch: async () =>
-          new Response(JSON.stringify({ error: 'invalid refresh token' }), {
-            status: 401,
-          }),
-      });
+    it.each([
+      {
+        status: 401,
+        failure: 'invalid',
+        request: (coordinator: SupabaseSessionCoordinator) =>
+          coordinator.getSessionTokens(),
+      },
+      {
+        status: 503,
+        failure: 'transient',
+        request: (coordinator: SupabaseSessionCoordinator) =>
+          coordinator.ensureFreshToken(),
+      },
+    ])(
+      'classifies custom refresh HTTP $status as $failure and returns no token',
+      async ({ status, failure, request }) => {
+        const { coordinator } = createCoordinator({
+          initialSession: expiredCustomSession(),
+          fetch: async () =>
+            new Response(JSON.stringify({ error: 'refresh rejected' }), {
+              status,
+            }),
+        });
 
-      assert.equal(await coordinator.getSessionTokens(), null);
-      assert.equal(coordinator.getLastRefreshFailure(), 'invalid');
-    });
-
-    it('classifies custom refresh HTTP 503 as transient', async () => {
-      const { coordinator } = createCoordinator({
-        initialSession: expiredCustomSession(),
-        fetch: async () =>
-          new Response(JSON.stringify({ error: 'try again later' }), {
-            status: 503,
-          }),
-      });
-
-      assert.equal(await coordinator.ensureFreshToken(), null);
-      assert.equal(coordinator.getLastRefreshFailure(), 'transient');
-    });
+        assert.equal(await request(coordinator), null);
+        assert.equal(coordinator.getLastRefreshFailure(), failure);
+      },
+    );
 
     it('preserves upstream abort signals when adding a timeout', async () => {
       const upstream = new AbortController();

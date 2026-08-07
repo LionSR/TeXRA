@@ -25,22 +25,22 @@ afterEach(() => {
 const APPROACH_SCHEMA = z.enum(['quick', 'thorough']);
 const SETTING_PATH = 'agentReview.approach';
 
+function readApproach(): 'quick' | 'thorough' {
+  return getValidatedConfig(SETTING_PATH, APPROACH_SCHEMA, 'quick');
+}
+
 describe('getValidatedConfig', () => {
   it('returns the stored value when it matches the schema', async () => {
     await installPlatform({ config: { [SETTING_PATH]: 'thorough' } });
 
-    expect(getValidatedConfig(SETTING_PATH, APPROACH_SCHEMA, 'quick')).toBe(
-      'thorough',
-    );
+    expect(readApproach()).toBe('thorough');
   });
 
   it('falls back to the default without warning when the setting is unset', async () => {
     await installPlatform({});
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    expect(getValidatedConfig(SETTING_PATH, APPROACH_SCHEMA, 'quick')).toBe(
-      'quick',
-    );
+    expect(readApproach()).toBe('quick');
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
@@ -53,9 +53,7 @@ describe('getValidatedConfig', () => {
     });
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    expect(getValidatedConfig(SETTING_PATH, APPROACH_SCHEMA, 'quick')).toBe(
-      'quick',
-    );
+    expect(readApproach()).toBe('quick');
     expect(warnSpy).toHaveBeenCalledWith(
       'configUtils',
       expect.stringContaining(SETTING_PATH),

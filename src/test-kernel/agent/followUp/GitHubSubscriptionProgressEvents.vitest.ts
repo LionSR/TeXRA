@@ -133,35 +133,16 @@ describe('GitHub subscription app signals and follow-ups', () => {
     submitFollowUpMock.mockResolvedValue({ status: 'sent' as const });
   });
 
-  it('publishes binding changes through app signals', () => {
-    const signal = recordAppSignal('repoSubscriptionBindingsChanged');
+  it.each([
+    'repoSubscriptionBindingsChanged',
+    'issueSubscriptionBindingsChanged',
+  ] as const)('publishes %s through app signals', (event) => {
+    const signal = recordAppSignal(event);
 
     try {
-      emitGitHubSubscriptionChanged(
-        'repoSubscriptionBindingsChanged',
-        undefined,
-      );
+      emitGitHubSubscriptionChanged(event, undefined);
 
-      expect(signal.events).toEqual([
-        { event: 'repoSubscriptionBindingsChanged', payload: undefined },
-      ]);
-    } finally {
-      signal.dispose();
-    }
-  });
-
-  it('publishes issue binding changes without a runtime host', () => {
-    const signal = recordAppSignal('issueSubscriptionBindingsChanged');
-
-    try {
-      emitGitHubSubscriptionChanged(
-        'issueSubscriptionBindingsChanged',
-        undefined,
-      );
-
-      expect(signal.events).toEqual([
-        { event: 'issueSubscriptionBindingsChanged', payload: undefined },
-      ]);
+      expect(signal.events).toEqual([{ event, payload: undefined }]);
     } finally {
       signal.dispose();
     }
@@ -256,7 +237,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
       keyOf: (input) => input,
       bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
-    submitFollowUpMock.mockClear();
 
     try {
       withRunContext(

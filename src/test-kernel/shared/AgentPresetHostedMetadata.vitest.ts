@@ -58,33 +58,39 @@ describe('parseAgentModePresets icon degradation', () => {
     vi.restoreAllMocks();
   });
 
-  const customPreset = (icon: string, id = 'custom-1'): unknown => ({
-    id,
-    name: 'My Team',
-    description: 'Hand-saved roster',
-    icon,
-    agents: {
-      workflow: ['polish'],
-      toolUse: ['assistant'],
-    },
-  });
+  function mockConsoleWarn() {
+    return vi.spyOn(console, 'warn').mockImplementation(() => {});
+  }
+
+  function customPreset(icon: string, id = 'custom-1'): unknown {
+    return {
+      id,
+      name: 'My Team',
+      description: 'Hand-saved roster',
+      icon,
+      agents: {
+        workflow: ['polish'],
+        toolUse: ['assistant'],
+      },
+    };
+  }
 
   it('treats an absent custom-preset value as an empty list', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = mockConsoleWarn();
 
     expect(parseAgentModePresets(undefined)).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
   });
 
   it('warns when the custom-preset value is malformed', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = mockConsoleWarn();
 
     expect(parseAgentModePresets('not-an-array')).toEqual([]);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('not an array'));
   });
 
   it('warns about a malformed record without dropping valid siblings', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = mockConsoleWarn();
 
     const presets = parseAgentModePresets([
       customPreset('rocket'),
@@ -96,7 +102,7 @@ describe('parseAgentModePresets icon degradation', () => {
   });
 
   it('keeps a preset whose icon is unknown, degrading to bookmark loudly', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = mockConsoleWarn();
 
     const presets = parseAgentModePresets([customPreset('nonexistent-icon')]);
 
@@ -113,7 +119,7 @@ describe('parseAgentModePresets icon degradation', () => {
   });
 
   it('does not drop sibling presets when one icon is unknown', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockConsoleWarn();
 
     const presets = parseAgentModePresets([
       customPreset('rocket'),
@@ -131,7 +137,7 @@ describe('parseAgentModePresets icon degradation', () => {
   });
 
   it('degrades codicon-prefixed obsolete icons with a warning', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = mockConsoleWarn();
 
     const presets = parseAgentModePresets([customPreset('codicon-tools')]);
 

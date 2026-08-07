@@ -12,9 +12,9 @@ import { createKatexHtmlProcessor } from '@shared/markdown/katexHtmlProcessor';
 let cachedProcess: ((content: string) => string) | null = null;
 
 /** Process markdown content with LaTeX reference protection. */
-export const processMarkdownContent = (content: string): string => {
+export function processMarkdownContent(content: string): string {
   cachedProcess ??= createKatexHtmlProcessor({
     errorColor: 'var(--color-error)',
   });
   return cachedProcess(content);
-};
+}

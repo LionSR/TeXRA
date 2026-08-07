@@ -60,40 +60,22 @@ describe('desktop workspace path', () => {
   });
 
   it('does not treat option-like positional workspace values as paths', () => {
-    expect(
-      getWorkspacePathInput({
-        argv: ['--texra-workspace-path', '--inspect'],
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveWorkspacePath({
-        argv: ['--texra-workspace-path', '--inspect'],
-      }),
-    ).toBeUndefined();
+    const argv = ['--texra-workspace-path', '--inspect'];
+
+    expect(getWorkspacePathInput({ argv })).toBeUndefined();
+    expect(resolveWorkspacePath({ argv })).toBeUndefined();
   });
 
-  it('does not treat desktop protocol callback URLs as workspace paths', () => {
-    expect(
-      getWorkspacePathInput({
-        argv: ['--texra-workspace-path', 'texra://auth-callback?code=1'],
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveWorkspacePath({
-        argv: ['--texra-workspace-path', 'texra://auth-callback?code=1'],
-      }),
-    ).toBeUndefined();
-    expect(
-      getWorkspacePathInput({
-        argv: ['--texra-workspace-path=texra://auth-callback?code=1'],
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveWorkspacePath({
-        argv: ['--texra-workspace-path=texra://auth-callback?code=1'],
-      }),
-    ).toBeUndefined();
-  });
+  it.each([
+    { argv: ['--texra-workspace-path', 'texra://auth-callback?code=1'] },
+    { argv: ['--texra-workspace-path=texra://auth-callback?code=1'] },
+  ])(
+    'does not treat desktop protocol callback args $argv as workspace paths',
+    ({ argv }) => {
+      expect(getWorkspacePathInput({ argv })).toBeUndefined();
+      expect(resolveWorkspacePath({ argv })).toBeUndefined();
+    },
+  );
 
   it('uses main-process workspace resolution when exposing renderer state', () => {
     expect(

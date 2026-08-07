@@ -14,6 +14,19 @@ import {
   type LeanServerInfo,
 } from '@tools/lean/leanServerRegistry';
 
+const NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
+
+function makeServer(partial: Partial<LeanServerInfo>): LeanServerInfo {
+  return {
+    id: 'direct:/work/proj',
+    workspaceRoot: '/work/proj',
+    mode: 'direct-lsp',
+    status: 'running',
+    startedAt: NOW - 65_000,
+    ...partial,
+  };
+}
+
 afterEach(() => {
   clearLeanServerRegistry();
 });
@@ -68,39 +81,15 @@ describe('leanServerRegistry', () => {
   });
 
   it('counts only starting and running servers as active', () => {
+    const statuses = ['starting', 'running', 'error', 'stopped'] as const;
+
     expect(
-      [
-        { status: 'starting' },
-        { status: 'running' },
-        { status: 'error' },
-        { status: 'stopped' },
-      ].filter((partial) =>
-        isLeanServerActive({
-          id: `direct:${partial.status}`,
-          workspaceRoot: '/work/proj',
-          mode: 'direct-lsp',
-          startedAt: Date.now(),
-          ...partial,
-        } as LeanServerInfo),
-      ),
-    ).toHaveLength(2);
+      statuses.map((status) => isLeanServerActive(makeServer({ status }))),
+    ).toEqual([true, true, false, false]);
   });
 });
 
 describe('summarizeLeanServers', () => {
-  const NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
-
-  function makeServer(partial: Partial<LeanServerInfo>): LeanServerInfo {
-    return {
-      id: 'direct:/work/proj',
-      workspaceRoot: '/work/proj',
-      mode: 'direct-lsp',
-      status: 'running',
-      startedAt: NOW - 65_000,
-      ...partial,
-    };
-  }
-
   it('handles the empty case', () => {
     expect(summarizeLeanServers([], NOW)).toBe('No Lean servers registered.');
   });

@@ -22,7 +22,6 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type ExecutionId,
-  type FileLocation,
   type OutputFileInfo,
   type Plan,
   type ProgressViewOutboundMessage,
@@ -82,13 +81,52 @@ function fullSyncFrom(
   return fullSync;
 }
 
+/** True when a full-view sync was recorded among the outbound messages. */
+function hasFullSync(messages: ProgressViewOutboundMessage[]): boolean {
+  return messages.some(
+    (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+  );
+}
+
+/** An isolated recording backend already wired to its session events. */
+function createListeningBackend(): ReturnType<
+  typeof createIsolatedRecordingBackend
+> {
+  const target = createIsolatedRecordingBackend();
+  target.backend.setupEventListeners();
+  return target;
+}
+
+/** Backfill history tabs so later patches must not degrade into full syncs. */
+function seedHistoryStreams(
+  backend: ReturnType<typeof createRecordingBackend>['backend'],
+  count: number,
+): void {
+  for (let i = 0; i < count; i += 1) {
+    backend.state.streamLogs.ensureStream(`history-${i}`);
+  }
+}
+
+/** The paper.tex workspace output file shared by the session-fact tests. */
+function paperOutputFile(): OutputFileInfo {
+  return {
+    source: 'paper.tex',
+    location: {
+      kind: 'workspace',
+      absolutePath: '/workspace/paper.tex',
+      relativePath: 'paper.tex',
+    },
+    round: 1,
+    lineage: null,
+    diff: null,
+  };
+}
+
 describe('ProgressBackend', () => {
   it('sends the full metadata set once for full-view sync', () => {
     const { backend, messages } = createRecordingBackend();
 
-    for (let i = 0; i < 20; i += 1) {
-      backend.state.streamLogs.ensureStream(`history-${i}`);
-    }
+    seedHistoryStreams(backend, 20);
 
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
@@ -111,9 +149,8 @@ describe('ProgressBackend', () => {
   });
 
   it('registers a suppressed interaction stream without switching to it', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend, messages } = target;
-    backend.setupEventListeners();
 
     emitActiveStream(target, {
       streamId: 'root',
@@ -144,9 +181,8 @@ describe('ProgressBackend', () => {
   });
 
   it('projects a workflow-script phase onto a non-active run stream', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend, messages } = target;
-    backend.setupEventListeners();
     const run = 'workflow-run' as StreamTabId;
 
     emitActiveStream(target, {
@@ -187,13 +223,10 @@ describe('ProgressBackend', () => {
   });
 
   it('patches one stream for subagent registration and run-start metadata', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend, messages } = target;
-    backend.setupEventListeners();
 
-    for (let i = 0; i < 20; i += 1) {
-      backend.state.streamLogs.ensureStream(`history-${i}`);
-    }
+    seedHistoryStreams(backend, 20);
 
     emitActiveStream(target, {
       streamId: 'root',
@@ -223,11 +256,7 @@ describe('ProgressBackend', () => {
         ),
       ).toBeDefined(),
     );
-    expect(
-      messages.some(
-        (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      ),
-    ).toBe(false);
+    expect(hasFullSync(messages)).toBe(false);
     messages.length = 0;
 
     emitRunEvent(target, 'child' as StreamTabId, {
@@ -259,11 +288,7 @@ describe('ProgressBackend', () => {
         },
       }),
     );
-    expect(
-      messages.some(
-        (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      ),
-    ).toBe(false);
+    expect(hasFullSync(messages)).toBe(false);
 
     // The run.start patch precedes the run.config one; compare the full sync
     // against the final (config-carrying) patch.
@@ -283,10 +308,8 @@ describe('ProgressBackend', () => {
   });
 
   it('scopes direct session events to each backend session', async () => {
-    const first = createIsolatedRecordingBackend();
-    const second = createIsolatedRecordingBackend();
-    first.backend.setupEventListeners();
-    second.backend.setupEventListeners();
+    const first = createListeningBackend();
+    const second = createListeningBackend();
     const firstStream = 'session:first' as StreamTabId;
     const secondStream = 'session:second' as StreamTabId;
 
@@ -314,10 +337,8 @@ describe('ProgressBackend', () => {
   });
 
   it('isolates same-stream run facts across simultaneous backend sessions', async () => {
-    const first = createIsolatedRecordingBackend();
-    const second = createIsolatedRecordingBackend();
-    first.backend.setupEventListeners();
-    second.backend.setupEventListeners();
+    const first = createListeningBackend();
+    const second = createListeningBackend();
     const streamId = 'window:shared-stream-id' as StreamTabId;
     const firstTodo: TodoItem = {
       content: 'from first window',
@@ -384,10 +405,8 @@ describe('ProgressBackend', () => {
   });
 
   it('isolates simultaneous window sessions across view state, status, snapshots, and transcripts', async () => {
-    const first = createIsolatedRecordingBackend();
-    const second = createIsolatedRecordingBackend();
-    first.backend.setupEventListeners();
-    second.backend.setupEventListeners();
+    const first = createListeningBackend();
+    const second = createListeningBackend();
     const firstStream = 'window:first' as StreamTabId;
     const secondStream = 'window:second' as StreamTabId;
     const firstExecution = 'f41111' as ExecutionId;
@@ -503,9 +522,8 @@ describe('ProgressBackend', () => {
   });
 
   it('applies session run facts through the fact-native handler', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend } = target;
-    backend.setupEventListeners();
     const handleRunFact = vi.spyOn(
       SessionFactApplier.prototype,
       'handleRunFact',
@@ -524,18 +542,7 @@ describe('ProgressBackend', () => {
     const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
     const streamId = 'session:output-files' as StreamTabId;
     const storageKey = 'run:session-usage' as StorageKey;
-    const location: FileLocation = {
-      kind: 'workspace',
-      absolutePath: '/workspace/paper.tex',
-      relativePath: 'paper.tex',
-    };
-    const outputFile: OutputFileInfo = {
-      source: 'paper.tex',
-      location,
-      round: 1,
-      lineage: null,
-      diff: null,
-    };
+    const outputFile = paperOutputFile();
     const compileFailure: CompileFailure = {
       round: 1,
       displayName: 'paper.tex',
@@ -561,214 +568,184 @@ describe('ProgressBackend', () => {
     const plan: Plan = {
       objective: 'Route session facts directly through ProgressBackend.',
     };
+    const expectedUsage = {
+      inputTokens: 10,
+      outputTokens: 5,
+      cost: 0.01,
+      reasoningTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheMissInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    };
 
-    try {
-      await backend.state.snapshots.load([]);
-      emitActiveStream(target, {
-        streamId,
-        agentCategory: AgentCategory.Workflow,
-      });
-      handleRunFact.mockClear();
-      updateFiles.mockClear();
-      updateMissingOutputs.mockClear();
-      updateCompileFailures.mockClear();
-      updateRunUsage.mockClear();
-      updateTodos.mockClear();
-      updatePlan.mockClear();
-
-      emitRunEvent(target, streamId, {
-        type: 'addOutputFiles',
-        streamId,
-        filesByRound: { 1: [outputFile] },
-      });
-      emitRunEvent(target, streamId, {
-        type: 'updateMissingOutputs',
-        streamId,
-        filesByRound: { 1: ['paper.pdf'] },
-      });
-      emitRunEvent(target, streamId, {
-        type: 'updateCompileFailures',
-        streamId,
-        filesByRound: { 1: [compileFailure] },
-      });
-      emitRunEvent(target, streamId, {
-        type: 'updateTodos',
-        streamId,
-        todos,
-      });
-      emitRunEvent(target, streamId, {
-        type: 'updatePlan',
-        streamId,
-        plan,
-      });
-      emitRunEvent(target, streamId, {
-        type: 'usage',
-        payload: {
-          streamId,
-          storageKey,
-          usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
-        },
-        recordTranscript: false,
-      });
-      emitRunEvent(target, streamId, {
-        type: 'goalPaused',
-        streamId,
-      });
-
-      expect(handleRunFact).toHaveBeenCalledTimes(7);
-      expect(updateFiles).toHaveBeenCalledTimes(1);
-      expect(updateFiles).toHaveBeenCalledWith(streamId, {
-        rounds: { 1: [outputFile] },
-      });
-      expect(updateMissingOutputs).toHaveBeenCalledWith(streamId, {
-        rounds: { 1: ['paper.pdf'] },
-      });
-      expect(updateCompileFailures).toHaveBeenCalledWith(streamId, {
-        rounds: { 1: [compileFailure] },
-        reset: true,
-      });
-      expect(updateTodos).toHaveBeenCalledWith(streamId, todos);
-      expect(updatePlan).toHaveBeenCalledWith(streamId, plan);
-      await vi.waitFor(() =>
-        expect(updateRunUsage).toHaveBeenCalledWith(streamId, storageKey, {
-          inputTokens: 10,
-          outputTokens: 5,
-          cost: 0.01,
-          reasoningTokens: 0,
-          cacheReadInputTokens: 0,
-          cacheMissInputTokens: 0,
-          cacheCreationInputTokens: 0,
-        }),
-      );
-      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
-        1: [outputFile],
-      });
-      expect(backend.state.snapshots.getMissingOutputs(streamId)).toEqual({
-        1: ['paper.pdf'],
-      });
-      expect(backend.state.snapshots.getCompileFailures(streamId)).toEqual({
-        1: [compileFailure],
-      });
-      expect(backend.state.snapshots.getWorkPlan(streamId)).toMatchObject({
-        todos,
-        plan,
-      });
-      expect(backend.state.snapshots.getRunUsage(streamId)).toEqual(
-        new Map([
-          [
-            storageKey,
-            {
-              inputTokens: 10,
-              outputTokens: 5,
-              cost: 0.01,
-              reasoningTokens: 0,
-              cacheReadInputTokens: 0,
-              cacheMissInputTokens: 0,
-              cacheCreationInputTokens: 0,
-            },
-          ],
-        ]),
-      );
-    } finally {
-      await backend.state.clearAll();
+    await backend.state.snapshots.load([]);
+    emitActiveStream(target, {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+    });
+    for (const spy of [
+      handleRunFact,
+      updateFiles,
+      updateMissingOutputs,
+      updateCompileFailures,
+      updateRunUsage,
+      updateTodos,
+      updatePlan,
+    ]) {
+      spy.mockClear();
     }
+
+    emitRunEvent(target, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 1: [outputFile] },
+    });
+    emitRunEvent(target, streamId, {
+      type: 'updateMissingOutputs',
+      streamId,
+      filesByRound: { 1: ['paper.pdf'] },
+    });
+    emitRunEvent(target, streamId, {
+      type: 'updateCompileFailures',
+      streamId,
+      filesByRound: { 1: [compileFailure] },
+    });
+    emitRunEvent(target, streamId, {
+      type: 'updateTodos',
+      streamId,
+      todos,
+    });
+    emitRunEvent(target, streamId, {
+      type: 'updatePlan',
+      streamId,
+      plan,
+    });
+    emitRunEvent(target, streamId, {
+      type: 'usage',
+      payload: {
+        streamId,
+        storageKey,
+        usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
+      },
+      recordTranscript: false,
+    });
+    emitRunEvent(target, streamId, {
+      type: 'goalPaused',
+      streamId,
+    });
+
+    expect(handleRunFact).toHaveBeenCalledTimes(7);
+    expect(updateFiles).toHaveBeenCalledTimes(1);
+    expect(updateFiles).toHaveBeenCalledWith(streamId, {
+      rounds: { 1: [outputFile] },
+    });
+    expect(updateMissingOutputs).toHaveBeenCalledWith(streamId, {
+      rounds: { 1: ['paper.pdf'] },
+    });
+    expect(updateCompileFailures).toHaveBeenCalledWith(streamId, {
+      rounds: { 1: [compileFailure] },
+      reset: true,
+    });
+    expect(updateTodos).toHaveBeenCalledWith(streamId, todos);
+    expect(updatePlan).toHaveBeenCalledWith(streamId, plan);
+    await vi.waitFor(() =>
+      expect(updateRunUsage).toHaveBeenCalledWith(
+        streamId,
+        storageKey,
+        expectedUsage,
+      ),
+    );
+    expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
+      1: [outputFile],
+    });
+    expect(backend.state.snapshots.getMissingOutputs(streamId)).toEqual({
+      1: ['paper.pdf'],
+    });
+    expect(backend.state.snapshots.getCompileFailures(streamId)).toEqual({
+      1: [compileFailure],
+    });
+    expect(backend.state.snapshots.getWorkPlan(streamId)).toMatchObject({
+      todos,
+      plan,
+    });
+    expect(backend.state.snapshots.getRunUsage(streamId)).toEqual(
+      new Map([[storageKey, expectedUsage]]),
+    );
   });
 
   it('drops malformed updateTodos/updatePlan run facts instead of forwarding them unchecked (#7562)', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend } = target;
-    backend.setupEventListeners();
     const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
     const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
     const streamId = 'session:malformed-todos-plan' as StreamTabId;
 
-    try {
-      await backend.state.snapshots.load([]);
-      emitActiveStream(target, {
-        streamId,
-        agentCategory: AgentCategory.Workflow,
-      });
-      updateTodos.mockClear();
-      updatePlan.mockClear();
+    await backend.state.snapshots.load([]);
+    emitActiveStream(target, {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+    });
+    updateTodos.mockClear();
+    updatePlan.mockClear();
 
-      emitRunEvent(target, streamId, {
-        type: 'domain',
-        key: 'runFact.updateTodos',
-        data: { streamId, todos: 'not-an-array' },
-      });
-      emitRunEvent(target, streamId, {
-        type: 'domain',
-        key: 'runFact.updatePlan',
-        data: { streamId, plan: { steps: ['legacy shape'] } },
-      });
+    emitRunEvent(target, streamId, {
+      type: 'domain',
+      key: 'runFact.updateTodos',
+      data: { streamId, todos: 'not-an-array' },
+    });
+    emitRunEvent(target, streamId, {
+      type: 'domain',
+      key: 'runFact.updatePlan',
+      data: { streamId, plan: { steps: ['legacy shape'] } },
+    });
 
-      expect(updateTodos).not.toHaveBeenCalled();
-      expect(updatePlan).not.toHaveBeenCalled();
-    } finally {
-      await backend.state.clearAll();
-    }
+    expect(updateTodos).not.toHaveBeenCalled();
+    expect(updatePlan).not.toHaveBeenCalled();
   });
 
   it('no-ops session output-file run facts after dispose', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend } = target;
-    backend.setupEventListeners();
     const handleRunFact = vi.spyOn(
       SessionFactApplier.prototype,
       'handleRunFact',
     );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const streamId = 'session:output-files-after-dispose' as StreamTabId;
-    const location: FileLocation = {
-      kind: 'workspace',
-      absolutePath: '/workspace/paper.tex',
-      relativePath: 'paper.tex',
-    };
-    const outputFile: OutputFileInfo = {
-      source: 'paper.tex',
-      location,
-      round: 1,
-      lineage: null,
-      diff: null,
-    };
+    const outputFile = paperOutputFile();
 
-    try {
-      await backend.state.snapshots.load([]);
-      emitActiveStream(target, {
-        streamId,
-        agentCategory: AgentCategory.Workflow,
-      });
-      handleRunFact.mockClear();
-      updateFiles.mockClear();
-      backend.dispose();
+    await backend.state.snapshots.load([]);
+    emitActiveStream(target, {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+    });
+    handleRunFact.mockClear();
+    updateFiles.mockClear();
+    backend.dispose();
 
-      emitRunEvent(target, streamId, {
-        type: 'addOutputFiles',
-        streamId,
-        filesByRound: { 1: [outputFile] },
-      });
+    emitRunEvent(target, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 1: [outputFile] },
+    });
 
-      expect(handleRunFact).not.toHaveBeenCalled();
-      expect(updateFiles).not.toHaveBeenCalled();
-      // The presentation no-ops, but the sidecar store is session-owned, so it
-      // keeps recording: disposing one window/webview must not stop the runtime
-      // persisting an in-flight run's outputs. The desktop already behaved this
-      // way (its `stateOwnership: 'session'` backend never detached the store);
-      // the extension now matches it.
-      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
-        1: [outputFile],
-      });
-    } finally {
-      await backend.state.clearAll();
-    }
+    expect(handleRunFact).not.toHaveBeenCalled();
+    expect(updateFiles).not.toHaveBeenCalled();
+    // The presentation no-ops, but the sidecar store is session-owned, so it
+    // keeps recording: disposing one window/webview must not stop the runtime
+    // persisting an in-flight run's outputs. The desktop already behaved this
+    // way (its `stateOwnership: 'session'` backend never detached the store);
+    // the extension now matches it.
+    expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
+      1: [outputFile],
+    });
   });
 
   it('handles session facts directly', async () => {
-    const target = createIsolatedRecordingBackend();
-    target.backend.setupEventListeners();
+    const target = createListeningBackend();
+    const { backend, messages } = target;
     const parentStreamId = 'session:parent' as StreamTabId;
     const childStreamId = 'session:child' as StreamTabId;
-    const executionId = 'exec:direct-session' as ExecutionId;
     const child: ActiveChildInfo = {
       executionId: 'exec:child' as ExecutionId,
       childStreamId,
@@ -788,104 +765,98 @@ describe('ProgressBackend', () => {
       resumeOutcome: null,
     } satisfies InquiryThreadUpdatedEvent;
 
-    try {
-      await target.backend.state.snapshots.load([]);
-      emitActiveStream(target, {
-        streamId: parentStreamId,
-        agentCategory: AgentCategory.ToolUse,
-      });
-      emitRunEvent(target, parentStreamId, {
-        type: 'status',
-        streamId: parentStreamId,
-        phase: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      });
-      const followUpLease = target.session.followUps.claimLive(
-        parentStreamId,
-        'flow',
-      )!;
-      target.session.followUps.queue(followUpLease).enqueue({
-        text: 'continue with the local calculation',
-      });
-      emitRunEvent(target, parentStreamId, {
-        type: 'updateMissingOutputs',
-        streamId: parentStreamId,
-        filesByRound: { 0: ['missing-output.tex'] },
-      });
+    await backend.state.snapshots.load([]);
+    emitActiveStream(target, {
+      streamId: parentStreamId,
+      agentCategory: AgentCategory.ToolUse,
+    });
+    emitRunEvent(target, parentStreamId, {
+      type: 'status',
+      streamId: parentStreamId,
+      phase: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    });
+    const followUpLease = target.session.followUps.claimLive(
+      parentStreamId,
+      'flow',
+    )!;
+    target.session.followUps.queue(followUpLease).enqueue({
+      text: 'continue with the local calculation',
+    });
+    emitRunEvent(target, parentStreamId, {
+      type: 'updateMissingOutputs',
+      streamId: parentStreamId,
+      filesByRound: { 0: ['missing-output.tex'] },
+    });
 
-      await vi.waitFor(() =>
-        expect(target.backend.state.activeStream).toBe(parentStreamId),
-      );
-      target.messages.length = 0;
+    await vi.waitFor(() =>
+      expect(backend.state.activeStream).toBe(parentStreamId),
+    );
+    messages.length = 0;
 
-      emitRunEvent(target, parentStreamId, {
-        type: 'stage.start',
-        id: 'round-2',
-        label: 'round 2',
-        kind: 'round',
-        index: 2,
-        total: 4,
-      });
+    emitRunEvent(target, parentStreamId, {
+      type: 'stage.start',
+      id: 'round-2',
+      label: 'round 2',
+      kind: 'round',
+      index: 2,
+      total: 4,
+    });
 
-      emitRunEvent(target, parentStreamId, {
-        type: 'child.activity',
-        parentStreamId,
-        items: [child],
-      });
+    emitRunEvent(target, parentStreamId, {
+      type: 'child.activity',
+      parentStreamId,
+      items: [child],
+    });
 
-      target.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: {
-            childStreamId,
-            parentStreamId,
-          },
+    target.session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'setParentStream',
+        payload: {
+          childStreamId,
+          parentStreamId,
         },
-      });
+      },
+    });
 
-      target.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId: parentStreamId },
-        },
-      });
+    target.session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateQueuedFollowUps',
+        payload: { streamId: parentStreamId },
+      },
+    });
 
-      target.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: { streamId: parentStreamId },
-        },
-      });
+    target.session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'clearMissingOutputs',
+        payload: { streamId: parentStreamId },
+      },
+    });
 
-      target.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'inquiryThreadUpdated',
-          payload: inquiryThread,
-        },
-      });
+    target.session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'inquiryThreadUpdated',
+        payload: inquiryThread,
+      },
+    });
 
-      expect(target.backend.state.getStreamState(parentStreamId)).toMatchObject(
-        {
-          stage: { kind: 'round', index: 2, total: 4 },
-          subagents: [child],
-        },
-      );
-      expect(
-        target.backend.state.snapshots.getMissingOutputs(parentStreamId),
-      ).toEqual({});
-      expect(
-        target.messages.some(
-          (message) =>
-            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
-        ),
-      ).toBe(true);
-    } finally {
-      await target.backend.state.clearAll();
-    }
+    expect(backend.state.getStreamState(parentStreamId)).toMatchObject({
+      stage: { kind: 'round', index: 2, total: 4 },
+      subagents: [child],
+    });
+    expect(backend.state.snapshots.getMissingOutputs(parentStreamId)).toEqual(
+      {},
+    );
+    expect(
+      messages.some(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
+      ),
+    ).toBe(true);
   });
 
   it('keeps the selection when an unknown stream reaches running', async () => {
@@ -1141,9 +1112,8 @@ describe('ProgressBackend', () => {
   });
 
   it('models a workflow-script container from the extension event subscription', async () => {
-    const target = createIsolatedRecordingBackend();
+    const target = createListeningBackend();
     const { backend } = target;
-    backend.setupEventListeners();
     const stream = 'workflow-script#f10a11' as StreamTabId;
     const executionId = 'f10a11' as ExecutionId;
     backend.state.streamLogs.ensureStream(stream);

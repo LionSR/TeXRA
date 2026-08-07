@@ -60,13 +60,9 @@ export class WorkspaceFS extends RelativeFS {
 
     // Absolute paths: platform's asRelativePath for symlink handling
     if (path.isAbsolute(inputPath)) {
-      const relative = this.relativePath(inputPath);
-      if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
-        return {
-          kind: 'workspace',
-          absolutePath: inputPath,
-          relativePath: relative,
-        };
+      const relativePath = this.relativePath(inputPath);
+      if (!path.isAbsolute(relativePath) && !relativePath.startsWith('..')) {
+        return { kind: 'workspace', absolutePath: inputPath, relativePath };
       }
       return annotateExternal({ kind: 'external', absolutePath: inputPath });
     }

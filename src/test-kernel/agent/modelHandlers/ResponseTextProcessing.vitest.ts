@@ -68,17 +68,20 @@ describe('response text processing', () => {
     expect(result.text).toBe('  indented text\n');
   });
 
-  it('joins continuation text deterministically without a helper model', async () => {
-    const processing = createNeutralResponseTextProcessing();
+  it.each([
+    { left: 'left', right: 'right', expected: ' ' },
+    { left: 'left ', right: 'right', expected: '' },
+    { left: '', right: 'right', expected: '' },
+  ])(
+    'joins continuation text deterministically without a helper model ($left + $right)',
+    async ({ left, right, expected }) => {
+      const processing = createNeutralResponseTextProcessing();
 
-    await expect(processing.connectResponseText('left', 'right')).resolves.toBe(
-      ' ',
-    );
-    await expect(
-      processing.connectResponseText('left ', 'right'),
-    ).resolves.toBe('');
-    await expect(processing.connectResponseText('', 'right')).resolves.toBe('');
-  });
+      await expect(processing.connectResponseText(left, right)).resolves.toBe(
+        expected,
+      );
+    },
+  );
 
   it('keeps TeXRA replacement behavior in the application adapter', () => {
     expect(Object.isFrozen(texraResponseTextProcessing)).toBe(true);

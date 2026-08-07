@@ -81,9 +81,9 @@ function exportedMetaDeclaration(
   ) {
     return undefined;
   }
-  const [meta, ...extraDeclarations] = declaration.declarations;
+  const [meta] = declaration.declarations;
   if (
-    extraDeclarations.length > 0 ||
+    declaration.declarations.length !== 1 ||
     meta?.id.type !== 'Identifier' ||
     meta.id.name !== 'meta' ||
     meta.init?.type !== 'ObjectExpression'

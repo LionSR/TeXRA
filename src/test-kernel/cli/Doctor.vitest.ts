@@ -68,6 +68,8 @@ const healthyNodeReport: DoctorReport = {
   ],
 };
 
+const NDJSON_TS = '2026-05-18T00:00:00.000Z';
+
 function captureDoctorStdout(
   writeContext: CliContext,
   report: DoctorReport,
@@ -127,6 +129,54 @@ function checkById(
 ): DoctorReport['checks'][number] | undefined {
   return report.checks.find((check) => check.id === id);
 }
+
+const accountLabelCases: Array<{
+  profile: { authenticated: boolean; accountLabel: string; tier?: string };
+  expected: string;
+}> = [
+  {
+    profile: {
+      authenticated: true,
+      accountLabel: 'user@example.edu',
+      tier: 'Max',
+    },
+    expected: 'Signed in as user@example.edu, Max.',
+  },
+  {
+    profile: { authenticated: true, accountLabel: 'team@internal' },
+    expected: 'Signed in as team@internal.',
+  },
+];
+
+const colorCases: Array<{
+  name: string;
+  output: Pick<
+    CliContext,
+    'stdoutIsTty' | 'stderrIsTty' | 'stdoutColorEnabled' | 'stderrColorEnabled'
+  >;
+  colored: boolean;
+}> = [
+  {
+    name: 'does not color successful text output when stdout is piped',
+    output: {
+      stdoutIsTty: false,
+      stderrIsTty: true,
+      stdoutColorEnabled: false,
+      stderrColorEnabled: true,
+    },
+    colored: false,
+  },
+  {
+    name: 'keeps successful text output colored when only stderr is redirected',
+    output: {
+      stdoutIsTty: true,
+      stderrIsTty: false,
+      stdoutColorEnabled: true,
+      stderrColorEnabled: false,
+    },
+    colored: true,
+  },
+];
 
 describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
@@ -195,26 +245,23 @@ describe('CLI doctor', () => {
     expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
   });
 
-  it('shows email account labels plainly in text output', async () => {
-    const report = await buildReadyReport(async () => ({
-      authenticated: true,
-      accountLabel: 'user@example.edu',
-      tier: 'Max',
-    }));
+  it.each(accountLabelCases)(
+    'shows account labels plainly in text output ($expected)',
+    async ({ profile, expected }) => {
+      const report = await buildReadyReport(async () => profile);
 
-    const text = formatDoctorText(report);
-    const authCheck = checkById(report, 'auth');
-    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
+      const text = formatDoctorText(report);
+      const records = doctorNdjsonRecords(report, NDJSON_TS);
 
-    expect(authCheck?.message).toContain('user@example.edu');
-    expect(text).toContain('Signed in as user@example.edu, Max.');
-    expect(records).toContainEqual(
-      expect.objectContaining({
-        id: 'auth',
-        message: 'Signed in as user@example.edu, Max.',
-      }),
-    );
-  });
+      expect(checkById(report, 'auth')?.message).toContain(
+        profile.accountLabel,
+      );
+      expect(text).toContain(expected);
+      expect(records).toContainEqual(
+        expect.objectContaining({ id: 'auth', message: expected }),
+      );
+    },
+  );
 
   it('redacts email-like values outside the auth account message', () => {
     const report: DoctorReport = {
@@ -237,7 +284,7 @@ describe('CLI doctor', () => {
     };
 
     const text = formatDoctorText(report);
-    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
+    const records = doctorNdjsonRecords(report, NDJSON_TS);
 
     expect(text).toContain('Signed in as user@example.edu.');
     expect(text).toContain('Workspace config references o***@e***.edu.');
@@ -249,24 +296,6 @@ describe('CLI doctor', () => {
         id: 'config',
         message: 'Workspace config references owner@example.edu.',
         hint: 'Ask admin@example.edu to update it.',
-      }),
-    );
-  });
-
-  it('keeps non-email account labels readable in text output', async () => {
-    const report = await buildReadyReport(async () => ({
-      authenticated: true,
-      accountLabel: 'team@internal',
-    }));
-
-    const text = formatDoctorText(report);
-    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
-
-    expect(text).toContain('Signed in as team@internal.');
-    expect(records).toContainEqual(
-      expect.objectContaining({
-        id: 'auth',
-        message: 'Signed in as team@internal.',
       }),
     );
   });
@@ -287,50 +316,32 @@ describe('CLI doctor', () => {
       tier: 'pro',
     }));
 
-    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
+    const records = doctorNdjsonRecords(report, NDJSON_TS);
 
     expect(records.at(0)).toMatchObject({
       kind: 'doctor-check',
-      ts: '2026-05-18T00:00:00.000Z',
+      ts: NDJSON_TS,
       id: 'node',
     });
     expect(records.at(-1)).toEqual({
       kind: 'doctor-summary',
-      ts: '2026-05-18T00:00:00.000Z',
+      ts: NDJSON_TS,
       ok: true,
     });
     expect(doctorExitCode(report)).toBe(CliExitCode.Success);
   });
 
-  it('does not color successful text output when stdout is piped', () => {
+  it.each(colorCases)('$name', ({ output, colored }) => {
     const stdout = captureDoctorStdout(
-      {
-        ...context,
-        stdoutIsTty: false,
-        stderrIsTty: true,
-        stdoutColorEnabled: false,
-        stderrColorEnabled: true,
-      },
-      healthyNodeReport,
-    );
-
-    expect(stdout).toContain('PASS Node.js: Node 24.15.0');
-    expect(stdout).toBe(stripAnsi(stdout));
-  });
-
-  it('keeps successful text output colored when only stderr is redirected', () => {
-    const stdout = captureDoctorStdout(
-      {
-        ...context,
-        stdoutIsTty: true,
-        stderrIsTty: false,
-        stdoutColorEnabled: true,
-        stderrColorEnabled: false,
-      },
+      { ...context, ...output },
       healthyNodeReport,
     );
 
     expect(stripAnsi(stdout)).toContain('PASS Node.js: Node 24.15.0');
-    expect(stdout).not.toBe(stripAnsi(stdout));
+    if (colored) {
+      expect(stdout).not.toBe(stripAnsi(stdout));
+    } else {
+      expect(stdout).toBe(stripAnsi(stdout));
+    }
   });
 });

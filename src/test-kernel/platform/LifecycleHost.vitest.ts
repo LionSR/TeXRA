@@ -6,30 +6,26 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 
 describe('createLifecycleHost registrations', () => {
-  it('keeps duplicate registrations of one callback independent', async () => {
-    const lifecycle = createLifecycleHost();
-    const callback = vi.fn();
+  it.each([
+    // Disposing one of two registrations must leave the other live.
+    { phase: SHUTDOWN_PHASE.BEFORE, disposes: 1 },
+    // A repeated dispose must not drop the surviving registration either.
+    { phase: SHUTDOWN_PHASE.ON, disposes: 2 },
+  ])(
+    'keeps duplicate registrations of one callback independent ($phase, disposed $disposes time(s))',
+    async ({ phase, disposes }) => {
+      const lifecycle = createLifecycleHost();
+      const callback = vi.fn();
 
-    const first = lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, callback);
-    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, callback);
+      const first = lifecycle.onShutdown(phase, callback);
+      lifecycle.onShutdown(phase, callback);
 
-    first.dispose();
-    await lifecycle.runShutdown();
+      for (let i = 0; i < disposes; i++) {
+        first.dispose();
+      }
+      await lifecycle.runShutdown();
 
-    expect(callback).toHaveBeenCalledOnce();
-  });
-
-  it('ignores a repeated dispose instead of dropping another registration', async () => {
-    const lifecycle = createLifecycleHost();
-    const callback = vi.fn();
-
-    const first = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, callback);
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, callback);
-
-    first.dispose();
-    first.dispose();
-    await lifecycle.runShutdown();
-
-    expect(callback).toHaveBeenCalledOnce();
-  });
+      expect(callback).toHaveBeenCalledOnce();
+    },
+  );
 });

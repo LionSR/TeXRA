@@ -386,7 +386,7 @@ describe('attachCliSessionProgressProjection', () => {
     const cases = Object.entries(PROGRESS_PROJECTION_CASES);
 
     withProjection(({ events, writeRecord }) => {
-      for (const projection of Object.values(PROGRESS_PROJECTION_CASES)) {
+      for (const [, projection] of cases) {
         events.emit(projection.source);
       }
 

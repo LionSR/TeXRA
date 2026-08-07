@@ -90,56 +90,49 @@ describe('CLI session status formatter', () => {
     expect(status).toContain('resume later with: texra resume abc123');
   });
 
-  it('uses the provided command name in the resume status line', () => {
-    const status = sessionStatus({
-      sessionId: 'abc123',
-      commandName: 'texra-local',
-    });
+  it.each([
+    {
+      name: 'uses the provided command name',
+      overrides: { commandName: 'texra-local' },
+      expected: 'resume later with: texra-local resume abc123',
+    },
+    {
+      name: 'includes cwd when the session uses another workspace',
+      overrides: {
+        commandName: 'texra-local',
+        cwd: '/tmp/paper',
+        processCwd: '/tmp/launcher',
+      },
+      expected: 'resume later with: texra-local resume abc123 --cwd /tmp/paper',
+    },
+    {
+      name: 'includes the active non-default approval policy',
+      overrides: {
+        approval: 'deny privileged actions',
+        approvalPolicy: 'never' as const,
+        status: 'waiting' as const,
+        commandName: 'texra-local',
+      },
+      expected:
+        'resume later with: texra-local resume abc123 --approval-policy never',
+    },
+    {
+      name: 'includes cwd and approval policy when both apply',
+      overrides: {
+        approval: 'deny privileged actions',
+        approvalPolicy: 'never' as const,
+        status: 'waiting' as const,
+        commandName: 'texra-local',
+        cwd: '/tmp/paper',
+        processCwd: '/tmp/launcher',
+      },
+      expected:
+        'resume later with: texra-local resume abc123 --cwd /tmp/paper --approval-policy never',
+    },
+  ])('resume status line $name', ({ overrides, expected }) => {
+    const status = sessionStatus({ sessionId: 'abc123', ...overrides });
 
-    expect(status).toContain('resume later with: texra-local resume abc123');
-  });
-
-  it('includes cwd in the resume status line when the session uses another workspace', () => {
-    const status = sessionStatus({
-      sessionId: 'abc123',
-      commandName: 'texra-local',
-      cwd: '/tmp/paper',
-      processCwd: '/tmp/launcher',
-    });
-
-    expect(status).toContain(
-      'resume later with: texra-local resume abc123 --cwd /tmp/paper',
-    );
-  });
-
-  it('includes the active non-default approval policy in the resume status line', () => {
-    const status = sessionStatus({
-      approval: 'deny privileged actions',
-      approvalPolicy: 'never',
-      status: 'waiting',
-      sessionId: 'abc123',
-      commandName: 'texra-local',
-    });
-
-    expect(status).toContain(
-      'resume later with: texra-local resume abc123 --approval-policy never',
-    );
-  });
-
-  it('includes cwd and approval policy when both affect the resume status line', () => {
-    const status = sessionStatus({
-      approval: 'deny privileged actions',
-      approvalPolicy: 'never',
-      status: 'waiting',
-      sessionId: 'abc123',
-      commandName: 'texra-local',
-      cwd: '/tmp/paper',
-      processCwd: '/tmp/launcher',
-    });
-
-    expect(status).toContain(
-      'resume later with: texra-local resume abc123 --cwd /tmp/paper --approval-policy never',
-    );
+    expect(status).toContain(expected);
   });
 
   it('omits session lines before the first run starts', () => {

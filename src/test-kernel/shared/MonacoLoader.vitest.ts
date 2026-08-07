@@ -57,12 +57,17 @@ describe('shared Monaco loader', () => {
     (globalThis as { self?: unknown }).self = globalThis;
   });
 
+  async function loadMockedMonaco() {
+    const mock = mockMonaco();
+    const loader = await import('@shared/monaco/monacoLoader');
+    return { ...mock, ...loader };
+  }
+
   it('contributes the bundled grammars, which editor.api alone does not', async () => {
     // editor.api.js is the bare editor core and registers no languages: without
     // this import every file renders as undifferentiated plain text no matter
     // what language id its model carries.
-    const { grammarsLoaded } = mockMonaco();
-    const { loadMonaco } = await import('@shared/monaco/monacoLoader');
+    const { grammarsLoaded, loadMonaco } = await loadMockedMonaco();
 
     await loadMonaco();
 
@@ -72,8 +77,7 @@ describe('shared Monaco loader', () => {
   it('registers latex and bibtex, which Monaco does not ship', async () => {
     // .tex is the most common file type in this app, and it is precisely the one
     // language Monaco has no grammar for.
-    const { languages } = mockMonaco();
-    const { loadMonaco } = await import('@shared/monaco/monacoLoader');
+    const { languages, loadMonaco } = await loadMockedMonaco();
 
     await loadMonaco();
 
@@ -94,8 +98,7 @@ describe('shared Monaco loader', () => {
   });
 
   it('caches the load so concurrent callers share one download', async () => {
-    const { grammarsLoaded } = mockMonaco();
-    const { loadMonaco } = await import('@shared/monaco/monacoLoader');
+    const { grammarsLoaded, loadMonaco } = await loadMockedMonaco();
 
     const [first, second] = await Promise.all([loadMonaco(), loadMonaco()]);
 
@@ -106,8 +109,7 @@ describe('shared Monaco loader', () => {
   it('registers the TeX grammars only once across repeated loads', async () => {
     // Monarch registration is global. Re-registering on every load would stack
     // duplicate providers for the same language id.
-    const { languages } = mockMonaco();
-    const { loadMonaco } = await import('@shared/monaco/monacoLoader');
+    const { languages, loadMonaco } = await loadMockedMonaco();
 
     await loadMonaco();
     await loadMonaco();
@@ -119,9 +121,7 @@ describe('shared Monaco loader', () => {
   });
 
   it('maps file extensions to the language ids it registered', async () => {
-    mockMonaco();
-    const { monacoLanguageForPath } =
-      await import('@shared/monaco/monacoLoader');
+    const { monacoLanguageForPath } = await loadMockedMonaco();
 
     expect(monacoLanguageForPath('paper/main.tex')).toBe('latex');
     expect(monacoLanguageForPath('refs.bib')).toBe('bibtex');

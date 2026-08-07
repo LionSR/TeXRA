@@ -40,11 +40,12 @@ describe('buildCodexConfig', () => {
 });
 
 describe('toCodexCliReasoningEffort', () => {
-  it('passes CLI-compatible tiers through unchanged', () => {
-    assert.equal(toCodexCliReasoningEffort('low'), 'low');
-    assert.equal(toCodexCliReasoningEffort('medium'), 'medium');
-    assert.equal(toCodexCliReasoningEffort('high'), 'high');
-  });
+  it.each(['low', 'medium', 'high'] as const)(
+    'passes the CLI-compatible %s tier through unchanged',
+    (tier) => {
+      assert.equal(toCodexCliReasoningEffort(tier), tier);
+    },
+  );
 
   it("caps 'xhigh' to 'high' so the Codex CLI config deserializer accepts it", () => {
     // Regression: the Codex CLI's Rust-side config deserializer rejects
@@ -265,63 +266,52 @@ describe('buildCodexTodoToolLog', () => {
 });
 
 describe('buildCodexTurnToolLog', () => {
-  it('builds a structured Codex turn summary entry', () => {
-    const log = buildCodexTurnToolLog({
-      state: 'completed',
-      wallTimeMs: 518_000,
-    });
-
-    assert.deepEqual(log, {
-      toolName: CODEX_TURN_TOOL,
-      summary: 'Completed',
-      input: {
-        state: 'completed',
-        wallTimeMs: 518_000,
+  it.each([
+    {
+      name: 'builds a structured Codex turn summary entry',
+      options: { state: 'completed', wallTimeMs: 518_000 },
+      expected: {
+        toolName: CODEX_TURN_TOOL,
+        summary: 'Completed',
+        input: { state: 'completed', wallTimeMs: 518_000 },
+        status: 'completed',
       },
-      status: 'completed',
-    });
-  });
-
-  it('builds a running Codex turn entry', () => {
-    const log = buildCodexTurnToolLog({ state: 'running' });
-
-    assert.deepEqual(log, {
-      toolName: CODEX_TURN_TOOL,
-      summary: 'Running',
-      input: {
-        state: 'running',
+    },
+    {
+      name: 'builds a running Codex turn entry',
+      options: { state: 'running' },
+      expected: {
+        toolName: CODEX_TURN_TOOL,
+        summary: 'Running',
+        input: { state: 'running' },
+        status: 'in_progress',
       },
-      status: 'in_progress',
-    });
-  });
-
-  it('marks a failed turn as an error even without an error message', () => {
-    const log = buildCodexTurnToolLog({ state: 'failed' });
-
-    assert.deepEqual(log, {
-      toolName: CODEX_TURN_TOOL,
-      summary: 'Failed',
-      input: {
-        state: 'failed',
+    },
+    {
+      name: 'marks a failed turn as an error even without an error message',
+      options: { state: 'failed' },
+      expected: {
+        toolName: CODEX_TURN_TOOL,
+        summary: 'Failed',
+        input: { state: 'failed' },
+        isError: true,
+        status: 'completed',
       },
-      isError: true,
-      status: 'completed',
-    });
-  });
-
-  it('attaches the error message when a failed turn has one', () => {
-    const log = buildCodexTurnToolLog({ state: 'failed', error: 'boom' });
-
-    assert.deepEqual(log, {
-      toolName: CODEX_TURN_TOOL,
-      summary: 'Failed',
-      input: {
-        state: 'failed',
+    },
+    {
+      name: 'attaches the error message when a failed turn has one',
+      options: { state: 'failed', error: 'boom' },
+      expected: {
+        toolName: CODEX_TURN_TOOL,
+        summary: 'Failed',
+        input: { state: 'failed' },
+        error: 'boom',
+        isError: true,
+        status: 'completed',
       },
-      error: 'boom',
-      isError: true,
-      status: 'completed',
-    });
+    },
+  ] as const)('$name', ({ options, expected }) => {
+    assert.deepEqual(buildCodexTurnToolLog(options), expected);
   });
 });
 

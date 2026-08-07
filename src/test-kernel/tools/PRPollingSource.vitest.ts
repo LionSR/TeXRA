@@ -133,15 +133,9 @@ describe('PRPollingSource annotation drain', () => {
     expect(
       vi.mocked(source.fetchAnnotations).mock.calls.map((call) => call[2]),
     ).toEqual([1, 4, 7, 2, 5, 8, 3, 6, 9]);
-    expect(
-      firstState.currentShaState?.pendingAnnotationRuns.map((run) => run.id),
-    ).toEqual([]);
-    expect(
-      secondState.currentShaState?.pendingAnnotationRuns.map((run) => run.id),
-    ).toEqual([]);
-    expect(
-      thirdState.currentShaState?.pendingAnnotationRuns.map((run) => run.id),
-    ).toEqual([]);
+    for (const state of [firstState, secondState, thirdState]) {
+      expect(state.currentShaState?.pendingAnnotationRuns).toEqual([]);
+    }
   });
 
   it('filters check annotations by each listener minimum level', async () => {
@@ -196,7 +190,6 @@ describe('PRPollingSource annotation drain', () => {
     const disposable = source.subscribe(pr, listener);
     const key = prKeyToString(pr);
     const state = source.getSubscriptionState(key);
-    expect(state).toBeTruthy();
     if (!state) throw new Error('Expected subscription state');
     source.fetchAnnotations = vi
       .fn()

@@ -14,11 +14,16 @@ describe('CLI AgentListForm row budget', () => {
     { value: 'remote:lean', label: 'lean' },
   ];
 
-  it('clamps the regular form width to the terminal columns', () => {
-    expect(formFrameWidth(120)).toBe(80);
-    expect(formFrameWidth(80)).toBe(80);
-    expect(formFrameWidth(60)).toBe(60);
-  });
+  it.each([
+    [120, 80],
+    [80, 80],
+    [60, 60],
+  ])(
+    'clamps the regular form width %i to the terminal columns',
+    (columns, expected) => {
+      expect(formFrameWidth(columns)).toBe(expected);
+    },
+  );
 
   it('resolves the current visible agent from bare names or canonical keys', () => {
     expect(currentVisibleAgent(visibleAgents, 'chat')?.label).toBe('chat');
@@ -72,84 +77,74 @@ describe('CLI AgentListForm row budget', () => {
     expect(hiddenCurrentAgentHint(visibleAgents, 'chat')).toBeUndefined();
   });
 
-  it('labels the primary agent section from the visible row kinds', () => {
-    expect(agentPickerPrimarySectionTitle([])).toBe('Tool-use agents');
-    expect(agentPickerPrimarySectionTitle([{ isOrchestrator: false }])).toBe(
-      'Tool-use agents',
-    );
-    expect(
-      agentPickerPrimarySectionTitle([{ isOrchestrator: undefined }]),
-    ).toBe('Tool-use agents');
-    expect(agentPickerPrimarySectionTitle([{ isOrchestrator: true }])).toBe(
-      'Delegating agents',
-    );
-    expect(
-      agentPickerPrimarySectionTitle([
-        { isOrchestrator: false },
-        { isOrchestrator: true },
-      ]),
-    ).toBe('Tool-use and delegating agents');
-  });
+  it.each([
+    { rows: [], expected: 'Tool-use agents' },
+    { rows: [{ isOrchestrator: false }], expected: 'Tool-use agents' },
+    { rows: [{ isOrchestrator: undefined }], expected: 'Tool-use agents' },
+    { rows: [{ isOrchestrator: true }], expected: 'Delegating agents' },
+    {
+      rows: [{ isOrchestrator: false }, { isOrchestrator: true }],
+      expected: 'Tool-use and delegating agents',
+    },
+  ])(
+    'labels the primary agent section "$expected" from the visible row kinds',
+    ({ rows, expected }) => {
+      expect(agentPickerPrimarySectionTitle(rows)).toBe(expected);
+    },
+  );
 
-  it('windows long agent lists inside the available foreground rows', () => {
-    expect(
-      agentSelectWindow({
-        availableRows: 12,
-        itemCount: 12,
-        workflowCount: 10,
-      }),
-    ).toEqual({
-      maxVisibleItems: 2,
-      showOverflow: true,
-      maxVisibleWorkflows: 0,
-      showWorkflowOverflow: false,
-    });
-  });
-
-  it('accounts for the hidden-current hint in the row budget', () => {
-    expect(
-      agentSelectWindow({
+  it.each([
+    {
+      name: 'windows long agent lists inside the available foreground rows',
+      input: { availableRows: 12, itemCount: 12, workflowCount: 10 },
+      expected: {
+        maxVisibleItems: 2,
+        showOverflow: true,
+        maxVisibleWorkflows: 0,
+        showWorkflowOverflow: false,
+      },
+    },
+    {
+      name: 'accounts for the hidden-current hint in the row budget',
+      input: {
         availableRows: 12,
         extraRows: 1,
         itemCount: 12,
         workflowCount: 10,
-      }),
-    ).toEqual({
-      maxVisibleItems: 1,
-      showOverflow: true,
-      maxVisibleWorkflows: 0,
-      showWorkflowOverflow: false,
-    });
-  });
-
-  it('shows the full default workflow roster in the normal picker budget', () => {
-    expect(
-      agentSelectWindow({
+      },
+      expected: {
+        maxVisibleItems: 1,
+        showOverflow: true,
+        maxVisibleWorkflows: 0,
+        showWorkflowOverflow: false,
+      },
+    },
+    {
+      name: 'shows the full default workflow roster in the normal picker budget',
+      input: {
         availableRows: 18,
         extraRows: 1,
         itemCount: 5,
         workflowCount: 2,
-      }),
-    ).toEqual({
-      maxVisibleItems: 5,
-      showOverflow: false,
-      maxVisibleWorkflows: 2,
-      showWorkflowOverflow: false,
-    });
-  });
-
-  it('shows workflows only when the row budget has room for them', () => {
-    expect(
-      agentSelectWindow({
-        availableRows: 24,
-        itemCount: 6,
-        workflowCount: 3,
-      }),
-    ).toEqual({
-      maxVisibleItems: 6,
-      showOverflow: false,
-      maxVisibleWorkflows: 3,
-      showWorkflowOverflow: false,
-    });
+      },
+      expected: {
+        maxVisibleItems: 5,
+        showOverflow: false,
+        maxVisibleWorkflows: 2,
+        showWorkflowOverflow: false,
+      },
+    },
+    {
+      name: 'shows workflows only when the row budget has room for them',
+      input: { availableRows: 24, itemCount: 6, workflowCount: 3 },
+      expected: {
+        maxVisibleItems: 6,
+        showOverflow: false,
+        maxVisibleWorkflows: 3,
+        showWorkflowOverflow: false,
+      },
+    },
+  ])('$name', ({ input, expected }) => {
+    expect(agentSelectWindow(input)).toEqual(expected);
   });
 });

@@ -25,6 +25,10 @@ function mountAccountTab(): Promise<AccountTabElement> {
   });
 }
 
+function shadowText(element: AccountTabElement): string {
+  return element.shadowRoot?.textContent ?? '';
+}
+
 describe('account usage status', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/AccountTab'),
@@ -39,7 +43,7 @@ describe('account usage status', () => {
     };
     await element.updateComplete;
 
-    const text = element.shadowRoot?.textContent ?? '';
+    const text = shadowText(element);
     expect(text).toContain('TeXRA could not check your usage right now');
     expect(text).toContain('Included access is temporarily');
     expect(text).toContain('Switch to your own API keys');
@@ -57,7 +61,7 @@ describe('account usage status', () => {
     };
     await element.updateComplete;
 
-    const text = element.shadowRoot?.textContent ?? '';
+    const text = shadowText(element);
     expect(text).toContain(
       "Usage data can't load because your session has expired.",
     );
@@ -71,11 +75,11 @@ describe('account usage status', () => {
     element.userEmail = 'researcher@example.com';
     await element.updateComplete;
 
-    const text = element.shadowRoot?.textContent ?? '';
+    const text = shadowText(element);
     expect(text).toContain('authentication service is temporarily unavailable');
     expect(text).toContain('researcher@example.com');
     expect(text).not.toContain('session has expired');
     expect(text).not.toContain('Connected');
-    expect(element.shadowRoot?.textContent).not.toContain('Sign in');
+    expect(text).not.toContain('Sign in');
   });
 });

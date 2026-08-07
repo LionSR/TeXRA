@@ -88,8 +88,7 @@ export async function initializeElectronPlatform(
   const storedWorkspacePath = globalStateStore.get<string>(
     DESKTOP_WORKSPACE_PATH_STATE_KEY,
   );
-  const workspaceOptions = { storedWorkspacePath };
-  const workspacePath = resolveWorkspacePath(workspaceOptions);
+  const workspacePath = resolveWorkspacePath({ storedWorkspacePath });
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.

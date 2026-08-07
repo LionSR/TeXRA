@@ -65,8 +65,8 @@ function isDiffContent(text: string): boolean {
   const diffMarkers = lines.filter(
     (line) =>
       line.startsWith('@@') || line.startsWith('+++') || line.startsWith('---'),
-  ).length;
-  return diffMarkers >= DIFF_MARKER_THRESHOLD;
+  );
+  return diffMarkers.length >= DIFF_MARKER_THRESHOLD;
 }
 
 /** Wrap text in a pre element with optional class and diff highlighting. */

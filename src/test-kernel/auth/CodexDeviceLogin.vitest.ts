@@ -15,14 +15,19 @@ vi.mock('@auth/codex/codexOAuthClient', async (importOriginal) => ({
 
 const { loginWithDeviceCode } = await import('@auth/codex/codexDeviceLogin');
 
+function stubDeviceUserCode(overrides: Record<string, unknown> = {}): void {
+  mocks.requestDeviceUserCode.mockResolvedValue({
+    device_auth_id: 'device-auth-id',
+    user_code: 'ABCD-EFGH',
+    interval: 0,
+    ...overrides,
+  });
+}
+
 describe('Codex device login', () => {
   it('does not exchange a token when cancellation follows polling', async () => {
     const controller = new AbortController();
-    mocks.requestDeviceUserCode.mockResolvedValue({
-      device_auth_id: 'device-auth-id',
-      user_code: 'ABCD-EFGH',
-      interval: 0,
-    });
+    stubDeviceUserCode();
     mocks.pollDeviceToken.mockImplementation(async () => {
       controller.abort();
       return {
@@ -47,9 +52,7 @@ describe('Codex device login', () => {
   });
 
   it('gives up at the expiry the server reported, not the local fallback', async () => {
-    mocks.requestDeviceUserCode.mockResolvedValue({
-      device_auth_id: 'device-auth-id',
-      user_code: 'ABCD-EFGH',
+    stubDeviceUserCode({
       interval: 0.01,
       // 1 ms: already elapsed by the time the first poll returns.
       expires_in: 0.001,
