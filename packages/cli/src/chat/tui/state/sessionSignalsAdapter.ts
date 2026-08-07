@@ -183,9 +183,9 @@ class TuiSessionRenderer implements SessionRendererPort {
       streamId,
       status,
       substate,
-      // Use the backend's transition timestamp (when the phase change actually
-      // occurred) rather than Date.now() at render time, so `runStartedAt`
-      // reflects the real transition instead of when the TUI received it.
+      // Use the backend's last-known timestamp for the stream (from its log
+      // entries) rather than Date.now() at render time, so `runStartedAt`
+      // reflects a backend timestamp instead of when the TUI received it.
       ...(lastTimestamp !== undefined ? { nowMs: lastTimestamp } : {}),
     });
   }
