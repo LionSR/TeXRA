@@ -491,6 +491,66 @@ describe('native subagent production delivery path', () => {
     expect(parentTurns).toHaveLength(0);
   }, 30_000);
 
+  it('combines concurrent distinct follow-ups into one ordered batch turn, not an overwritten result', async () => {
+    // Two child turns: the initial launch plus one batch turn that drains both
+    // concurrent follow-ups together.
+    const parentTurns = [
+      { text: 'Parent ready.' },
+      { text: 'Parent received result A.' },
+      { text: 'Parent received result B.' },
+    ];
+    const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
+    const { executionId, parentContext, runAsParentOwner } =
+      await launchWaitingChild({ parentTurns, childTurns });
+
+    await waitForPersistedResult(executionId, 'Result A.');
+    await waitForCompletedResumes(1);
+
+    // Submit two follow-ups concurrently, before the child drains the queue.
+    // The loop drains the follow-up batch (waitAndDrainAll) and runs one turn
+    // with the combined batch, so both instructions reach the child in one
+    // ordered turn rather than sharing/overwriting one turn result.
+    const submitFollowUp = (instruction: string) =>
+      runAsParentOwner(() =>
+        withRunContext(parentContext, () =>
+          new DelegateAgentTool().call({
+            agent: null,
+            model: null,
+            instruction,
+            memories: [],
+            working_directory: null,
+            execution_id: executionId,
+          }),
+        ),
+      );
+    const [first, second] = await Promise.all([
+      submitFollowUp('Now prove the second assertion.'),
+      submitFollowUp('Now prove the third assertion.'),
+    ]);
+    expect(first.status).toBe('executed');
+    expect(second.status).toBe('executed');
+
+    await waitForPersistedResult(executionId, 'Result B.');
+    await waitForCompletedResumes(2);
+
+    // The child transcript has turn 1 (Result A) and the batch turn (Result B).
+    await session.transcripts.flush();
+    const archivedChild = await readCompletedRunConversation(executionId);
+    const childText = JSON.stringify(archivedChild.conversation);
+    expect(childText.match(/Result A\./g)).toHaveLength(1);
+    expect(childText.match(/Result B\./g)).toHaveLength(1);
+
+    // The parent received each distinct result exactly once.
+    const archivedParent =
+      await readCompletedRunConversation(PARENT_EXECUTION_ID);
+    const parentText = JSON.stringify(archivedParent.conversation);
+    expect(parentText.match(/Result A\./g)).toHaveLength(1);
+    expect(parentText.match(/Result B\./g)).toHaveLength(1);
+    expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(parentTurns).toHaveLength(0);
+  }, 30_000);
+
   it('suppresses replays of one logical child delivery at the real admission boundary', async () => {
     const { executionId } = await launchWaitingChild({
       parentTurns: [

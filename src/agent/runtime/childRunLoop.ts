@@ -396,6 +396,40 @@ function mintChildTurnRef(
 }
 
 /**
+ * Structured turn-lifecycle diagnostic (#9531): ties the execution, the turn's
+ * logical identity, the follow-up queue owner/generation, and the interruption
+ * cause into one event so a resumed/interrupted child's state is auditable.
+ * Emitted at turn acceptance, delivery, and loop termination.
+ */
+function emitTurnDiagnostic(
+  logger: AgentTrace,
+  event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
+  params: {
+    executionId: ExecutionId;
+    turnRef?: ChildTurnRef;
+    queueOwner?: FollowUpConsumerLease;
+    interruptionCause?: string;
+  },
+): void {
+  const { executionId, turnRef, queueOwner, interruptionCause } = params;
+  logger.info(`childRunLoop ${event}`, {
+    data: {
+      executionId,
+      ...(turnRef
+        ? { turnToken: turnRef.token, deliveryId: turnRef.deliveryId }
+        : {}),
+      ...(queueOwner
+        ? {
+            queueGeneration: queueOwner.generation,
+            queueOwner: queueOwner.kind,
+          }
+        : {}),
+      ...(interruptionCause ? { interruptionCause } : {}),
+    },
+  });
+}
+
+/**
  * Persist turn attribution for the report/result slots, swallowing storage
  * errors. Best-effort: a failure degrades /report//result turn labeling, not
  * the delivered result.
@@ -713,6 +747,11 @@ export function startChildRunLoop<TTurn>(
       while (!loop.isInterrupted()) {
         turnIndex += 1;
         const turnRef = mintChildTurnRef(executionId, turnIndex);
+        emitTurnDiagnostic(logger, 'turn.accepted', {
+          executionId,
+          turnRef,
+          queueOwner: queueLease,
+        });
         // Acceptance creates the pending-turn record: until this turn's
         // result is persisted, /report and /result keep attributing the
         // latest-value slots to the last completed turn. Fire-and-forget —
@@ -775,6 +814,11 @@ export function startChildRunLoop<TTurn>(
           },
         });
         lastCompletedTurn = turnRef;
+        emitTurnDiagnostic(logger, 'turn.delivered', {
+          executionId,
+          turnRef,
+          queueOwner: queueLease,
+        });
 
         if (turnFailed) {
           sawTurnFailure = true;
@@ -816,6 +860,15 @@ export function startChildRunLoop<TTurn>(
       }
     } finally {
       detachLoopInterrupt?.();
+      emitTurnDiagnostic(logger, 'loop.terminated', {
+        executionId,
+        queueOwner: queueLease,
+        interruptionCause: loop.isInterrupted()
+          ? 'interrupted'
+          : sawTurnFailure
+            ? 'turn_failed'
+            : 'terminal',
+      });
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
       releaseSessionOwnershipOnce();
       try {
