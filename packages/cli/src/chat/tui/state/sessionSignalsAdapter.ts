@@ -175,11 +175,19 @@ class TuiSessionRenderer implements SessionRendererPort {
   onStreamStatusChanged(
     streamId: StreamTabId,
     status: StreamPhase,
-    _lastTimestamp?: number,
+    lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
     if (this.isStaleDispatch(streamId)) return;
-    setStreamStatusInCliState({ streamId, status, substate });
+    setStreamStatusInCliState({
+      streamId,
+      status,
+      substate,
+      // Use the backend's last-known timestamp for the stream (from its log
+      // entries) rather than Date.now() at render time, so `runStartedAt`
+      // reflects a backend timestamp instead of when the TUI received it.
+      ...(lastTimestamp !== undefined ? { nowMs: lastTimestamp } : {}),
+    });
   }
 
   onActiveStreamChanged(streamId: ActiveStreamId): void {
