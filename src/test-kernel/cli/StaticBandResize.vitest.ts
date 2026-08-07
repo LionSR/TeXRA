@@ -90,6 +90,32 @@ function occurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
 
+/**
+ * Shared dynamic imports — every case must load Ink and the transcript pane
+ * only after FORCE_COLOR is set above, so the patched workspace Ink (not a
+ * hoisted copy) is the one under test.
+ */
+async function loadTranscriptStack() {
+  const inkStack = await loadInk();
+  const { StaticConversationTranscript } =
+    await import('@cli/chat/tui/panes/StaticConversationTranscript');
+  const cliState = await import('@cli/chat/tui/state/cliState');
+  const { clearTerminal } = inkStack.requireFromInk('ansi-escapes') as {
+    readonly clearTerminal: string;
+  };
+  return { ...inkStack, cliState, clearTerminal, StaticConversationTranscript };
+}
+
+function seedTranscript(
+  cliState: typeof import('@cli/chat/tui/state/cliState'),
+  streamId: StreamTabId,
+  cwd: string,
+  entries: ConversationEntry[],
+): void {
+  cliState.resetCliState({ ...TRANSCRIPT_SESSION, cwd });
+  cliState.patchStream(streamId, (slice) => ({ ...slice, entries }));
+}
+
 /** A completed tool row; only the fields each case varies are parameters. */
 function completedToolEntry(fields: {
   id: string;
@@ -119,19 +145,16 @@ function completedToolEntry(fields: {
 
 describe('Static band resize', () => {
   it('replaces finalized transcript geometry at the new width', async () => {
-    // Dynamic import so FORCE_COLOR is set first and the patched workspace Ink
-    // (not a hoisted copy) is loaded.
-    const { ink, React, requireFromInk } = await loadInk();
+    const {
+      ink,
+      React,
+      cliState,
+      clearTerminal,
+      StaticConversationTranscript,
+    } = await loadTranscriptStack();
     const { createElement } = React;
-    const { StaticConversationTranscript } =
-      await import('@cli/chat/tui/panes/StaticConversationTranscript');
-    const { patchStream, resetCliState, streams } =
-      await import('@cli/chat/tui/state/cliState');
     const { createTranscriptPrintRequest } =
       await import('@cli/chat/tui/state/transcriptLines');
-    const { clearTerminal } = requireFromInk('ansi-escapes') as {
-      readonly clearTerminal: string;
-    };
     const streamId = 'resize-static-stream' as StreamTabId;
     const prompt = 'resize geometry prompt';
     const finalizedUser: ConversationEntry = {
@@ -157,16 +180,16 @@ describe('Static band resize', () => {
       finalized: false,
     });
 
-    resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/resize-proof' });
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      entries: [finalizedUser, liveAssistant, tool],
-    }));
+    seedTranscript(cliState, streamId, '/tmp/resize-proof', [
+      finalizedUser,
+      liveAssistant,
+      tool,
+    ]);
     const printRequest = createTranscriptPrintRequest({
       afterEntryId: finalizedUser.id,
       id: 'printed-transcript:resize',
       ownerKey: 'resize-owner',
-      slice: streams.get().get(streamId),
+      slice: cliState.streams.get().get(streamId),
       title: 'assistant',
     });
 
@@ -219,20 +242,19 @@ describe('Static band resize', () => {
       expect(occurrences(visibleFrame, '[Full output: assistant]')).toBe(1);
     } finally {
       inst.unmount();
-      resetCliState();
+      cliState.resetCliState();
     }
   });
 
   it('replaces finalized execution rows when subagent labels arrive', async () => {
-    const { ink, React, requireFromInk } = await loadInk();
+    const {
+      ink,
+      React,
+      cliState,
+      clearTerminal,
+      StaticConversationTranscript,
+    } = await loadTranscriptStack();
     const { createElement } = React;
-    const { StaticConversationTranscript } =
-      await import('@cli/chat/tui/panes/StaticConversationTranscript');
-    const { patchStream, resetCliState } =
-      await import('@cli/chat/tui/state/cliState');
-    const { clearTerminal } = requireFromInk('ansi-escapes') as {
-      readonly clearTerminal: string;
-    };
     const streamId = 'execution-label-stream' as StreamTabId;
     const executionId = 'late-subagent-id';
     const executionPath = `/executions/${executionId}/report`;
@@ -244,11 +266,9 @@ describe('Static band resize', () => {
       finalized: true,
     });
 
-    resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/execution-label-proof' });
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      entries: [executionEntry],
-    }));
+    seedTranscript(cliState, streamId, '/tmp/execution-label-proof', [
+      executionEntry,
+    ]);
 
     const inkRef: {
       current?: { repaint(options: TuiRepaintOptions): void };
@@ -295,17 +315,14 @@ describe('Static band resize', () => {
       expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
     } finally {
       inst.unmount();
-      resetCliState();
+      cliState.resetCliState();
     }
   });
 
   it('keeps resize subscriptions constant as tool history grows', async () => {
-    const { ink, React } = await loadInk();
+    const { ink, React, cliState, StaticConversationTranscript } =
+      await loadTranscriptStack();
     const { createElement } = React;
-    const { StaticConversationTranscript } =
-      await import('@cli/chat/tui/panes/StaticConversationTranscript');
-    const { patchStream, resetCliState } =
-      await import('@cli/chat/tui/state/cliState');
     const streamId = 'listener-count-stream' as StreamTabId;
     const toolEntries: ConversationEntry[] = Array.from(
       { length: 70 },
@@ -319,8 +336,7 @@ describe('Static band resize', () => {
         }),
     );
 
-    resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/listener-proof' });
-    patchStream(streamId, (slice) => ({ ...slice, entries: toolEntries }));
+    seedTranscript(cliState, streamId, '/tmp/listener-proof', toolEntries);
 
     function App(): unknown {
       const { columns } = ink.useWindowSize();
@@ -353,7 +369,7 @@ describe('Static band resize', () => {
       expect(peakResizeListeners).toBe(2);
     } finally {
       inst.unmount();
-      resetCliState();
+      cliState.resetCliState();
     }
     expect(out.listenerCount('resize')).toBe(0);
   });

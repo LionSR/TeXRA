@@ -75,7 +75,7 @@ export function readPersistedTexraApprovalPolicy(
     TEXRA_APPROVAL_POLICY_DEFAULT,
   );
   if (typeof raw !== 'string') {
-    if (raw !== undefined && raw !== null) {
+    if (raw != null) {
       warn(
         'approval-policy',
         `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value ${JSON.stringify(raw)}; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,

@@ -124,6 +124,33 @@ function stepText(step: Step): string | undefined {
   return (step as { content?: { text?: string }[] }).content?.[0]?.text;
 }
 
+/** Error the SDK raises for an expired previous_interaction_id. */
+function staleChainError(): Error {
+  return Object.assign(new Error('previous_interaction_id not found'), {
+    status: 404,
+  });
+}
+
+/**
+ * Standard per-test rig: a handler, its recorded calls, the capturing client,
+ * and a live transcript seeded with user steps. Tests mutate `messages`
+ * between rounds to mimic the flow appending new steps.
+ */
+function setupChained(
+  eventsFor: (callIndex: number) => SSEEvent[],
+  initialUserTexts: readonly string[] = ['a'],
+): {
+  handler: ModelHandlerGoogleInteractions;
+  calls: RecordedCall[];
+  client: unknown;
+  messages: Step[];
+} {
+  const handler = createHandler();
+  const calls: RecordedCall[] = [];
+  const client = capturingClient(calls, eventsFor);
+  return { handler, calls, client, messages: initialUserTexts.map(userStep) };
+}
+
 const originalGetConfig = configModule.getConfig;
 
 /** Force the server-state setting to a fixed value (default in code is true). */
@@ -144,11 +171,11 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   });
 
   it('T1: first request is a full resend with store:true and no previous_interaction_id', async () => {
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, () => completedEvents('int_1'));
+    const { handler, calls, client, messages } = setupChained(
+      () => completedEvents('int_1'),
+      ['a', 'b'],
+    );
 
-    const messages = [userStep('a'), userStep('b')];
     await respond(handler, client, messages);
 
     expect(calls).toHaveLength(1);
@@ -158,14 +185,12 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   });
 
   it('T2/T3: continuation sends only the delta with previous_interaction_id, reusing the captured id', async () => {
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, (i) =>
-      completedEvents(i === 0 ? 'int_abc' : 'int_def'),
+    const { handler, calls, client, messages } = setupChained(
+      (i) => completedEvents(i === 0 ? 'int_abc' : 'int_def'),
+      ['a', 'b'],
     );
 
     // Round 1: two steps sent in full, id captured.
-    const messages: Step[] = [userStep('a'), userStep('b')];
     await respond(handler, client, messages);
 
     // Round 2: the flow appends two new steps to the same array.
@@ -187,13 +212,10 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   it('T2c: chained delta sends only client-input steps; server-held model steps are filtered out', async () => {
     // Verified live: echoing a server-held function_call on a chained tool round
     // returns HTTP 400; only the function_result must be sent.
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, (i) =>
+    const { handler, calls, client, messages } = setupChained((i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2'),
     );
 
-    const messages: Step[] = [userStep('a')];
     await respond(handler, client, messages);
 
     // Mimic the flow appending the model-generated turn (server-held) + a tool
@@ -224,15 +246,12 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   });
 
   it('T4: an incomplete response does not chain; next round is a full resend', async () => {
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, (i) =>
+    const { handler, calls, client, messages } = setupChained((i) =>
       i === 0
         ? completedEvents('int_1', 'incomplete')
         : completedEvents('int_2', 'completed'),
     );
 
-    const messages: Step[] = [userStep('a')];
     await respond(handler, client, messages);
 
     messages.push(userStep('b'));
@@ -248,13 +267,10 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     // call, awaiting results). The interaction is retained and continuable, so
     // the handler must chain onto it (mirrors OpenAI, whose tool responses are
     // `completed`). Without this, tool-using agents drop the chain every round.
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, (i) =>
+    const { handler, calls, client, messages } = setupChained((i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2', 'requires_action'),
     );
 
-    const messages: Step[] = [userStep('a')];
     await respond(handler, client, messages);
 
     // The flow appends the model-generated steps; round 2 continues the chain.
@@ -266,22 +282,13 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   });
 
   it('T5: an expired previous_interaction_id triggers exactly one full-resend retry', async () => {
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, (i) => {
+    const { handler, calls, client, messages } = setupChained((i) => {
       // Call 0: establish a chain. Call 1: chained request rejected as stale.
       // Call 2: the retry (full resend) succeeds.
-      if (i === 1) {
-        const err = Object.assign(
-          new Error('previous_interaction_id not found'),
-          { status: 404 },
-        );
-        throw err;
-      }
+      if (i === 1) throw staleChainError();
       return completedEvents(i === 0 ? 'int_1' : 'int_3');
     });
 
-    const messages: Step[] = [userStep('a')];
     await respond(handler, client, messages);
 
     messages.push(userStep('b'));
@@ -297,20 +304,13 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   });
 
   it('T5b: the stale-id retry is bounded — a second failure is not retried again', async () => {
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const staleError = () =>
-      Object.assign(new Error('previous_interaction_id not found'), {
-        status: 404,
-      });
-    const client = capturingClient(calls, (i) => {
+    const { handler, calls, client, messages } = setupChained((i) => {
       // Call 0: establish a chain. Call 1: chained request rejected as stale.
       // Call 2 (the one full-resend retry): ALSO rejected — must NOT retry again.
-      if (i >= 1) throw staleError();
+      if (i >= 1) throw staleChainError();
       return completedEvents('int_1');
     });
 
-    const messages: Step[] = [userStep('a')];
     await respond(handler, client, messages);
 
     messages.push(userStep('b'));
@@ -390,11 +390,10 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
 
   it('T7: with the setting OFF the handler stays stateless (store:false, full input, no chaining)', async () => {
     mockServerState(false);
-    const handler = createHandler();
-    const calls: RecordedCall[] = [];
-    const client = capturingClient(calls, () => completedEvents('int_1'));
+    const { handler, calls, client, messages } = setupChained(() =>
+      completedEvents('int_1'),
+    );
 
-    const messages: Step[] = [userStep('a')];
     await respond(handler, client, messages);
 
     messages.push(userStep('b'));

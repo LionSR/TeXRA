@@ -98,11 +98,9 @@ const ManifestBaseShape = {
 /**
  * New canonical manifest form: explicit `status` + `parentStreamId`.
  */
-const CanonicalManifestSchema = z.looseObject(ManifestBaseShape);
-
-const ExternalInquiryThreadManifestSchema = CanonicalManifestSchema;
+const ExternalInquiryThreadManifestSchema = z.looseObject(ManifestBaseShape);
 export type ExternalInquiryThreadManifest = z.infer<
-  typeof CanonicalManifestSchema
+  typeof ExternalInquiryThreadManifestSchema
 >;
 
 // ============================================================================
@@ -623,7 +621,7 @@ export function manifestToTranscript(
     answer: turn.kind === 'answered' ? turn.answer : undefined,
     answeredAt: turn.kind === 'answered' ? turn.answeredAt : undefined,
     sessionLinks:
-      turn.kind !== 'open' ? (turn.sessionLinks ?? undefined) : undefined,
+      turn.kind === 'answered' ? (turn.sessionLinks ?? undefined) : undefined,
   }));
 }
 

@@ -93,11 +93,8 @@ export function filterCommandPaletteEntries<
     // reserve `meta` for an accelerator/reason can still surface by
     // category-name match. Empty/undefined fields collapse to '' and don't
     // affect matching.
-    const category = entry.category ?? '';
-    const description = entry.description ?? '';
-    const meta = entry.meta ?? '';
     const haystack =
-      `${entry.label} ${description} ${category} ${meta} ${entry.id}`
+      `${entry.label} ${entry.description ?? ''} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`
         .replaceAll('.', ' ')
         .toLowerCase();
     return queryParts.every((part) => haystack.includes(part));

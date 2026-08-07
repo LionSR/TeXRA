@@ -15,6 +15,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import {
@@ -62,6 +63,28 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   });
 }
 
+/** Persist a run record plus a meta row for an execution. */
+async function writeExecution(
+  executionId: ExecutionId,
+  meta: { outcome?: RunOutcome; streamId?: StreamTabId } = {},
+  executionConfig: AgentConfig = config(),
+): Promise<void> {
+  const store = getExecutionStore(executionId);
+  await store.writeRunRecord(executionConfig);
+  await store.writeMeta({ timestamp: '2026-07-05T00:00:00.000Z', ...meta });
+}
+
+type AssembleTraceResult = Awaited<ReturnType<typeof assembleTrace>>;
+
+/** Assert the ok branch and hand back the trace, narrowing for the caller. */
+function unwrapOkTrace(result: AssembleTraceResult) {
+  expect(result.status).toBe('ok');
+  if (result.status !== 'ok') {
+    throw new Error(`expected an ok trace, got ${result.status}`);
+  }
+  return result.trace;
+}
+
 describe('assembleTrace', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
@@ -88,11 +111,9 @@ describe('assembleTrace', () => {
       'listPersistedStreams',
     );
 
-    const result = await assembleTrace(executionId);
+    const trace = unwrapOkTrace(await assembleTrace(executionId));
 
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
-    expect(result.trace.streamId).toBe(registeredId);
+    expect(trace.streamId).toBe(registeredId);
     expect(scan).not.toHaveBeenCalled();
   });
 
@@ -101,30 +122,27 @@ describe('assembleTrace', () => {
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
     const streamId = getStreamTabId('review', { executionId });
 
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      outcome: 'completed',
-      streamId,
-    });
+    await writeExecution(
+      executionId,
+      { outcome: 'completed', streamId },
+      executionConfig,
+    );
     await appendLogEntry(streamId, 'hello');
 
-    const result = await assembleTrace(executionId);
+    const trace = unwrapOkTrace(await assembleTrace(executionId));
 
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
-    expect(result.trace.streamId).toBe(streamId);
-    expect(result.trace.config).toMatchObject({
+    expect(trace.streamId).toBe(streamId);
+    expect(trace.config).toMatchObject({
       agent: 'review',
       model: 'sonnet46T',
     });
-    expect(result.trace.entries).toHaveLength(1);
-    expect(result.trace.entries[0]).toMatchObject({
+    expect(trace.entries).toHaveLength(1);
+    expect(trace.entries[0]).toMatchObject({
       id: 'entry-1',
       text: 'hello',
     });
-    expect(result.trace.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
-    expect(result.trace.snapshot.streamId).toBe(streamId);
+    expect(trace.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
+    expect(trace.snapshot.streamId).toBe(streamId);
   });
 
   it('returns config_missing when no config was ever written', async () => {
@@ -144,11 +162,7 @@ describe('assembleTrace', () => {
   it('returns streamLogs_missing when the stamped stream has no persisted log', async () => {
     const executionId = 'exec-empty-stream' as ExecutionId;
     const streamId = getStreamTabId('orchestrator', { executionId });
-    await getExecutionStore(executionId).writeRunRecord(config());
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      streamId,
-    });
+    await writeExecution(executionId, { streamId });
 
     const result = await assembleTrace(executionId);
 
@@ -158,10 +172,7 @@ describe('assembleTrace', () => {
   it('never resolves a stream from sidecar candidates when metadata has no stamp', async () => {
     const executionId = 'aaa444aaa444' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-    });
+    await writeExecution(executionId, {}, executionConfig);
 
     // Sidecar candidates that the deleted legacy resolver would have found —
     // and a stream whose name embeds the execution id: neither may resolve.
@@ -193,39 +204,30 @@ describe('assembleTrace', () => {
     expect(actualChildStreamId).not.toBe(
       getStreamTabId('orchestrator', { executionId }),
     );
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      outcome: 'completed',
-      streamId: actualChildStreamId,
-    });
+    await writeExecution(
+      executionId,
+      { outcome: 'completed', streamId: actualChildStreamId },
+      executionConfig,
+    );
 
     await appendLogEntry(actualChildStreamId, 'child stream output');
 
-    const result = await assembleTrace(executionId);
+    const trace = unwrapOkTrace(await assembleTrace(executionId));
 
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
-    expect(result.trace.streamId).toBe(actualChildStreamId);
-    expect(result.trace.entries).toHaveLength(1);
+    expect(trace.streamId).toBe(actualChildStreamId);
+    expect(trace.entries).toHaveLength(1);
   });
 
   it('returns a null terminalStatus when meta has no recorded outcome', async () => {
     const executionId = 'exec-no-outcome' as ExecutionId;
     const executionConfig = config();
     const streamId = getStreamTabId(executionConfig.agent, { executionId });
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      streamId,
-    });
+    await writeExecution(executionId, { streamId }, executionConfig);
     await appendLogEntry(streamId, 'hello');
 
-    const result = await assembleTrace(executionId);
+    const trace = unwrapOkTrace(await assembleTrace(executionId));
 
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
-    expect(result.trace.meta).not.toBeNull();
-    expect(result.trace.terminalStatus).toBeNull();
+    expect(trace.meta).not.toBeNull();
+    expect(trace.terminalStatus).toBeNull();
   });
 });

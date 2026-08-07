@@ -12,6 +12,18 @@ import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBud
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
+function compactBudget(
+  availableRows: number,
+  columns: number,
+  goalEnabled: boolean,
+): number | undefined {
+  return planApprovalCompactBodyRowsBudget({
+    availableRows,
+    columns,
+    goalEnabled,
+  });
+}
+
 describe('CLI plan approval layout', () => {
   it('switches to compact rendering before the bordered card clips plan text', () => {
     expect(COMPACT_PLAN_APPROVAL_MAX_ROWS).toBe(7);
@@ -21,96 +33,48 @@ describe('CLI plan approval layout', () => {
     expect(isCompactPlanApprovalRows(10, true)).toBe(false);
   });
 
-  it('reserves compact rows when goal approval hints stack below the title', () => {
-    expect(
-      planApprovalCompactBodyRowsBudget({
-        availableRows: 9,
-        columns: 60,
-        goalEnabled: true,
-      }),
-    ).toBe(7);
-    expect(
-      planApprovalCompactBodyRowsBudget({
-        availableRows: 9,
-        columns: 100,
-        goalEnabled: true,
-      }),
-    ).toBe(8);
-    expect(
-      planApprovalCompactBodyRowsBudget({
-        availableRows: 2,
-        columns: 60,
-        goalEnabled: true,
-      }),
-    ).toBe(0);
-    expect(
-      planApprovalCompactBodyRowsBudget({
-        availableRows: 2,
-        columns: 60,
-        goalEnabled: false,
-      }),
-    ).toBe(1);
-  });
+  it.each([
+    { availableRows: 9, columns: 60, goalEnabled: true, expected: 7 },
+    { availableRows: 9, columns: 100, goalEnabled: true, expected: 8 },
+    { availableRows: 2, columns: 60, goalEnabled: true, expected: 0 },
+    { availableRows: 2, columns: 60, goalEnabled: false, expected: 1 },
+  ])(
+    'reserves compact rows when goal approval hints stack below the title ($availableRows rows, $columns cols, goal=$goalEnabled)',
+    ({ availableRows, columns, goalEnabled, expected }) => {
+      expect(compactBudget(availableRows, columns, goalEnabled)).toBe(expected);
+    },
+  );
 
-  it('includes the pulse prefix at compact chrome boundaries', () => {
-    for (const columns of [49, 50]) {
-      expect(
-        planApprovalCompactBodyRowsBudget({
-          availableRows: 9,
-          columns,
-          goalEnabled: false,
-        }),
-      ).toBe(7);
-    }
-    expect(
-      planApprovalCompactBodyRowsBudget({
-        availableRows: 9,
-        columns: 51,
-        goalEnabled: false,
-      }),
-    ).toBe(8);
+  it.each([
+    { columns: 49, goalEnabled: false, expected: 7 },
+    { columns: 50, goalEnabled: false, expected: 7 },
+    { columns: 51, goalEnabled: false, expected: 8 },
+    { columns: 65, goalEnabled: true, expected: 7 },
+    { columns: 66, goalEnabled: true, expected: 7 },
+    { columns: 67, goalEnabled: true, expected: 8 },
+  ])(
+    'includes the pulse prefix at compact chrome boundaries ($columns cols, goal=$goalEnabled)',
+    ({ columns, goalEnabled, expected }) => {
+      expect(compactBudget(9, columns, goalEnabled)).toBe(expected);
+    },
+  );
 
-    for (const columns of [65, 66]) {
+  it.each([
+    { visibleBodyRows: 0, expected: false },
+    { visibleBodyRows: 1, expected: false },
+    { visibleBodyRows: 2, expected: true },
+  ])(
+    'hides run-as-goal when compact mode cannot show its scope notice ($visibleBodyRows rows)',
+    ({ visibleBodyRows, expected }) => {
       expect(
-        planApprovalCompactBodyRowsBudget({
-          availableRows: 9,
-          columns,
+        isPlanApprovalGoalActionVisible({
+          compact: true,
           goalEnabled: true,
+          visibleBodyRows,
         }),
-      ).toBe(7);
-    }
-    expect(
-      planApprovalCompactBodyRowsBudget({
-        availableRows: 9,
-        columns: 67,
-        goalEnabled: true,
-      }),
-    ).toBe(8);
-  });
-
-  it('hides run-as-goal when compact mode cannot show its scope notice', () => {
-    expect(
-      isPlanApprovalGoalActionVisible({
-        compact: true,
-        goalEnabled: true,
-        visibleBodyRows: 0,
-      }),
-    ).toBe(false);
-    expect(
-      isPlanApprovalGoalActionVisible({
-        compact: true,
-        goalEnabled: true,
-        visibleBodyRows: 1,
-      }),
-    ).toBe(false);
-    expect(
-      isPlanApprovalGoalActionVisible({
-        compact: true,
-        goalEnabled: true,
-        visibleBodyRows: 2,
-      }),
-    ).toBe(true);
-  });
+      ).toBe(expected);
+    },
+  );
 
   it('budgets feedback input rows by visible input width', () => {
     expect(

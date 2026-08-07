@@ -340,20 +340,15 @@ export class TextEditorTool extends defineTool({
       const lines = splitContentLines(fileContent);
       const totalLines = lines.length;
 
-      let viewStartLine = 1;
-      let viewEndLine = totalLines;
+      let range: [number, number] | null = null;
 
       if (viewRange) {
-        if (
-          !Number.isInteger(viewRange[0]) ||
-          !Number.isInteger(viewRange[1])
-        ) {
+        const [startLine, endLine] = viewRange;
+        if (!Number.isInteger(startLine) || !Number.isInteger(endLine)) {
           throw new ToolError(
             'Invalid `view_range`. It should be a list of two integers.',
           );
         }
-
-        const [startLine, endLine] = viewRange;
 
         // Only validate bounds when the file is non-empty; empty files
         // skip validation and formatFileView returns "file is empty".
@@ -378,8 +373,7 @@ export class TextEditorTool extends defineTool({
           }
         }
 
-        viewStartLine = startLine;
-        viewEndLine = endLine === -1 ? totalLines : endLine;
+        range = [startLine, endLine === -1 ? totalLines : endLine];
       }
 
       recordToolFileRead(filePath);
@@ -387,7 +381,7 @@ export class TextEditorTool extends defineTool({
       return formatFileView({
         path: displayPath,
         lines,
-        viewRange: viewRange ? [viewStartLine, viewEndLine] : null,
+        viewRange: range,
         maxLines: Infinity,
       });
     } catch (error) {
@@ -460,8 +454,6 @@ export class TextEditorTool extends defineTool({
           `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines ${lineNumbers.join(', ')}. Please ensure it is unique`,
       });
 
-      const newFileContent = replacement.content;
-
       const replacementLine = replacement.firstMatchLine;
       const startLine = Math.max(1, replacementLine - SNIPPET_LINES);
       const endLine =
@@ -471,7 +463,7 @@ export class TextEditorTool extends defineTool({
         path: filePath,
         displayPath,
         originalContent: fileContent,
-        proposedContent: newFileContent,
+        proposedContent: replacement.content,
         sourceTool: 'text_editor:str_replace',
         afterWrite: this.undoHistoryAfterWrite(filePath),
         present: ({ appliedContent }) => {

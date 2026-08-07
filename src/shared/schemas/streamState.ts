@@ -22,7 +22,7 @@ import { RunUsageMapSchema } from './usage';
 // verbatim; renderers key icons and clickability on `identity.kind` instead
 // of tool-name sniffing or a roster-side kind union.
 
-const ActiveChildInfoSchemaBase = z.object({
+export const ActiveChildInfoSchema = z.object({
   executionId: z.string(),
   /** Stream tab ID — every child stream owns a tab. */
   childStreamId: z.string(),
@@ -57,8 +57,6 @@ const ActiveChildInfoSchemaBase = z.object({
    */
   workflowPhase: z.string().optional(),
 });
-
-export const ActiveChildInfoSchema = ActiveChildInfoSchemaBase;
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 

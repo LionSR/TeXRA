@@ -201,10 +201,10 @@ async function turnAttributionNote(
     store.readMeta(),
   ]);
   const active = turnState?.activeTurn;
-  if (!active || active.token === turnState?.lastCompletedTurn?.token) {
+  const completed = turnState?.lastCompletedTurn?.token;
+  if (!active || active.token === completed) {
     return null;
   }
-  const completed = turnState?.lastCompletedTurn?.token;
   const fate =
     meta?.outcome === undefined
       ? `turn ${active.token} is still running`
@@ -743,9 +743,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    // Only block subagent kills when the toggle is disabled; process kills are always allowed.
+    // Only block kills when the toggle is disabled (the guard above has
+    // already narrowed `target` to an owned AgentExecutionHandle).
     if (
-      target instanceof AgentExecutionHandle &&
       !platform().workspaceState.get<boolean>(
         WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
         true,
@@ -872,7 +872,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
-    const record = await getExecutionStore(executionId).readRunRecord();
+    const store = getExecutionStore(executionId);
+    const record = await store.readRunRecord();
 
     if (!record) {
       throw new ToolError(`Config not found for execution: ${executionId}.`);
@@ -881,7 +882,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     // Filter out fields irrelevant to this agent's category. Identity comes
     // only from the stamped execution row; a pre-identity row (reader retired
     // per #9590 Stage 7) degrades to the config-derived category, loudly.
-    const meta = await getExecutionStore(executionId).readMeta();
+    const meta = await store.readMeta();
     const identity = meta?.identity;
     if (meta && !identity) {
       logger.warn(
@@ -1008,9 +1009,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Default to the tail, where a live build's news is; a view_range window
     // is clamped so a wide request still can't return an unbounded log.
-    const first = viewRange
-      ? viewRange[0]
-      : Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
+    const first =
+      viewRange?.[0] ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
     const requestedLast = Math.min(
       viewRange?.[1] ?? lines.length,
       lines.length,

@@ -18,6 +18,32 @@ import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { releaseStreamResources } from '@tools/approval';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
+/** Records the stream's execution ownership through the sidecar FK. */
+function ownExecution(
+  snapshots: StreamSnapshotStore,
+  stream: StreamTabId,
+  executionId: ExecutionId,
+): void {
+  snapshotFacts(snapshots).setRunConfig(
+    stream,
+    AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'deepseekT',
+      agentCategory: 'toolUse',
+    }),
+    executionId,
+  );
+}
+
+function deletionSpy() {
+  return vi.fn(
+    async (executionId: ExecutionId, options?: DeleteExecutionOptions) => {
+      await options?.beforeDelete?.();
+      return { status: 'deleted' as const, executionId };
+    },
+  );
+}
+
 describe('SessionStores deletion coordination', () => {
   it('tracks lease-gated deletion without blocking its artifact flush', async () => {
     const session = createTestSession();
@@ -80,15 +106,7 @@ describe('SessionStores deletion coordination', () => {
     session.followUps.onRelease((released) => releases.push(released));
     const snapshots = new StreamSnapshotStore();
     // Ownership is the sidecar FK, never the stream-name suffix.
-    snapshotFacts(snapshots).setRunConfig(
-      stream,
-      AgentConfigSchema.parse({
-        agent: 'chat',
-        model: 'deepseekT',
-        agentCategory: 'toolUse',
-      }),
-      'abc001' as ExecutionId,
-    );
+    ownExecution(snapshots, stream, 'abc001' as ExecutionId);
     const stores = new SessionStores({
       streamLogs: session.transcripts,
       snapshots,
@@ -124,15 +142,7 @@ describe('SessionStores deletion coordination', () => {
     const snapshots = new StreamSnapshotStore();
     // The retained stream owns its execution through the sidecar FK; the
     // deleted stream has none and only its adjacent state is removed.
-    snapshotFacts(snapshots).setRunConfig(
-      retained,
-      AgentConfigSchema.parse({
-        agent: 'chat',
-        model: 'deepseekT',
-        agentCategory: 'toolUse',
-      }),
-      'ac71e1' as ExecutionId,
-    );
+    ownExecution(snapshots, retained, 'ac71e1' as ExecutionId);
     const stores = new SessionStores({
       streamLogs: session.transcripts,
       snapshots,
@@ -158,15 +168,6 @@ describe('SessionStores deletion coordination', () => {
 });
 
 describe('SessionStores deletion admission (#9590 A2)', () => {
-  function deletionSpy() {
-    return vi.fn(
-      async (executionId: ExecutionId, options?: DeleteExecutionOptions) => {
-        await options?.beforeDelete?.();
-        return { status: 'deleted' as const, executionId };
-      },
-    );
-  }
-
   it('never lets suffix resemblance authorize deleting an execution registered to another stream', async () => {
     const session = createTestSession();
     const executionId = 'abc777' as ExecutionId;
@@ -236,15 +237,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     const snapshots = new StreamSnapshotStore();
     // The good stream owns its execution through the sidecar FK; the flaky
     // stream's persisted FK is unreadable.
-    snapshotFacts(snapshots).setRunConfig(
-      goodStream,
-      AgentConfigSchema.parse({
-        agent: 'chat',
-        model: 'deepseekT',
-        agentCategory: 'toolUse',
-      }),
-      goodExecutionId,
-    );
+    ownExecution(snapshots, goodStream, goodExecutionId);
     vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([
       flakyStream,
     ]);

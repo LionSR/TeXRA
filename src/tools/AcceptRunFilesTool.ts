@@ -109,13 +109,13 @@ Parameters map directly to subagent-result delivery attributes:
     const { execution_id: executionId, files, strip_criticize } = input;
 
     // Verify execution exists — run dir may not exist in workspace storage mode
-    if ((await findExistingRunStoragePath(executionId)) === undefined) {
-      const exists = await getExecutionStore(executionId).exists('meta');
-      if (!exists) {
-        throw new ToolError(
-          `Run not found: ${executionId}. Use /executions to list available executions.`,
-        );
-      }
+    if (
+      (await findExistingRunStoragePath(executionId)) === undefined &&
+      !(await getExecutionStore(executionId).exists('meta'))
+    ) {
+      throw new ToolError(
+        `Run not found: ${executionId}. Use /executions to list available executions.`,
+      );
     }
 
     // Phase 1: Validate all source paths and read content before any approvals
@@ -252,13 +252,15 @@ Parameters map directly to subagent-result delivery attributes:
     }
 
     const changed = files.length - unchanged;
+    const detailedOutput = (summary: string): string =>
+      `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`;
 
     if (changed === 0) {
       const summary = `No changes to accept from run ${executionId}`;
       return {
         status: 'executed',
         summary,
-        output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
+        output: detailedOutput(summary),
         edits,
       };
     }
@@ -291,7 +293,7 @@ Parameters map directly to subagent-result delivery attributes:
     return {
       status: 'executed',
       summary,
-      output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
+      output: detailedOutput(summary),
       edits,
     };
   }

@@ -149,9 +149,9 @@ export async function uploadGoogleMediaEntries<T>(
       );
     }
 
-    const canUseSourcePath =
-      entry.source_path && entry.bytes_match_source !== false;
-    if (!canUseSourcePath) {
+    const uploadPath =
+      entry.bytes_match_source !== false ? entry.source_path : undefined;
+    if (!uploadPath) {
       logger.error(
         `Skipping media entry ${fileName} due to missing upload source`,
       );
@@ -160,7 +160,6 @@ export async function uploadGoogleMediaEntries<T>(
     }
 
     try {
-      const uploadPath = entry.source_path as string;
       logger.debug(
         `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
       );

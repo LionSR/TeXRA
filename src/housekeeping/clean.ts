@@ -62,11 +62,9 @@ export async function runCleanSingle(
     logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
     return { status: 'success' };
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error during cleanup of ${inputFile}: ${toErrorMessage(err)}`,
-    );
-    return { status: 'error', error: toErrorMessage(err) };
+    const message = toErrorMessage(err);
+    logger.error(CHANNEL, `Error during cleanup of ${inputFile}: ${message}`);
+    return { status: 'error', error: message };
   }
 }
 

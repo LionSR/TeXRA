@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { ReportReviewIssueSink } from '@agent/runtime/HostInteractions';
@@ -28,6 +28,16 @@ function useReviewSink(sink: ReportReviewIssueSink): void {
   });
 }
 
+/** Attach an accepting sink and build the tool that should reach it. */
+function useAcceptingSink(): {
+  sink: Mock<ReportReviewIssueSink>;
+  tool: ReportReviewIssueTool;
+} {
+  const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
+  useReviewSink(sink);
+  return { sink, tool: new ReportReviewIssueTool() };
+}
+
 describe('ReportReviewIssueTool', () => {
   afterEach(() => {
     detachHostInteractions();
@@ -35,9 +45,7 @@ describe('ReportReviewIssueTool', () => {
   });
 
   it('hands the report to the sink and confirms acceptance', async () => {
-    const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    useReviewSink(sink);
-    const tool = new ReportReviewIssueTool();
+    const { sink, tool } = useAcceptingSink();
 
     const result = await tool.call({
       ...REPORT,
@@ -60,9 +68,7 @@ describe('ReportReviewIssueTool', () => {
   });
 
   it('streams each finding to the sink immediately and unchanged', async () => {
-    const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    useReviewSink(sink);
-    const tool = new ReportReviewIssueTool();
+    const { sink, tool } = useAcceptingSink();
     const first = { ...REPORT, endLine: 7 };
     const second = {
       ...REPORT,
@@ -90,9 +96,7 @@ describe('ReportReviewIssueTool', () => {
   });
 
   it('normalizes null optional fields to undefined for the sink', async () => {
-    const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    useReviewSink(sink);
-    const tool = new ReportReviewIssueTool();
+    const { sink, tool } = useAcceptingSink();
 
     await tool.call({ ...REPORT, endLine: null, suggestion: null });
 
@@ -128,9 +132,7 @@ describe('ReportReviewIssueTool', () => {
   });
 
   it('rejects invalid input before reaching the sink', async () => {
-    const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    useReviewSink(sink);
-    const tool = new ReportReviewIssueTool();
+    const { sink, tool } = useAcceptingSink();
 
     const result = await tool.call({ ...REPORT, severity: 'fatal' });
 

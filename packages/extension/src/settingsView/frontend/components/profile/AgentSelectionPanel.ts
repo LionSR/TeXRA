@@ -133,8 +133,8 @@ export class AgentSelectionPanel extends LitElement {
         (a) => agentKey(a) === this.selectedKey,
       );
       if (!stillValid) {
-        this.selectedKey =
-          this.displayOrder.length > 0 ? agentKey(this.displayOrder[0]) : null;
+        const first = this.displayOrder[0];
+        this.selectedKey = first ? agentKey(first) : null;
       }
     }
   }
@@ -499,7 +499,7 @@ export class AgentSelectionPanel extends LitElement {
           </span>
 
           ${
-            agent.tools && agent.tools.length > 0
+            agent.tools?.length
               ? html`
                   <span class="agent-detail-meta-label">Tools</span>
                   <div class="agent-detail-meta-value">

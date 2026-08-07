@@ -213,27 +213,26 @@ describe('SessionHandle', () => {
 
   it('a fresh session shares no member with the default session', () => {
     const fresh = createTestSession();
+    const fallback = defaultSession();
     try {
-      expect(fresh.executions).not.toBe(defaultSession().executions);
-      expect(fresh.subscriptions).not.toBe(defaultSession().subscriptions);
-      expect(fresh.interactions).not.toBe(defaultSession().interactions);
-      expect(fresh.status).not.toBe(defaultSession().status);
-      expect(fresh.events).not.toBe(defaultSession().events);
-      expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
-      expect(fresh.snapshots).not.toBe(defaultSession().snapshots);
-      expect(fresh.followUps).not.toBe(defaultSession().followUps);
-      expect(fresh.approvals).not.toBe(defaultSession().approvals);
-      expect(fresh.modelRetries).not.toBe(defaultSession().modelRetries);
+      expect(fresh.executions).not.toBe(fallback.executions);
+      expect(fresh.subscriptions).not.toBe(fallback.subscriptions);
+      expect(fresh.interactions).not.toBe(fallback.interactions);
+      expect(fresh.status).not.toBe(fallback.status);
+      expect(fresh.events).not.toBe(fallback.events);
+      expect(fresh.transcripts).not.toBe(fallback.transcripts);
+      expect(fresh.snapshots).not.toBe(fallback.snapshots);
+      expect(fresh.followUps).not.toBe(fallback.followUps);
+      expect(fresh.approvals).not.toBe(fallback.approvals);
+      expect(fresh.modelRetries).not.toBe(fallback.modelRetries);
       expect(fresh.responseTextProcessing).not.toBe(
-        defaultSession().responseTextProcessing,
+        fallback.responseTextProcessing,
       );
-      expect(fresh.workflowControls).not.toBe(
-        defaultSession().workflowControls,
-      );
-      expect(fresh.flushers).not.toBe(defaultSession().flushers);
+      expect(fresh.workflowControls).not.toBe(fallback.workflowControls);
+      expect(fresh.flushers).not.toBe(fallback.flushers);
       fresh.setApprovalPolicy('yolo');
       expect(fresh.approvalPolicy).toBe('yolo');
-      expect(defaultSession().approvalPolicy).toBe('ask');
+      expect(fallback.approvalPolicy).toBe('ask');
     } finally {
       fresh.dispose();
     }

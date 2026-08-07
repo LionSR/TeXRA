@@ -41,6 +41,10 @@ function createControllers(
   });
 }
 
+function rosterSelection(workspaceState: StateStore): unknown {
+  return workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION);
+}
+
 describe('createSettingsAgentControllers', () => {
   it('preserves a symbolic roster when an individual toggle is a no-op', async () => {
     const workspaceState = new FakeStateStore({
@@ -55,9 +59,7 @@ describe('createSettingsAgentControllers', () => {
       enabled: true,
     });
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'all' });
+    expect(rosterSelection(workspaceState)).toEqual({ kind: 'all' });
   });
 
   it('writes visibility changes through the canonical roster controller', async () => {
@@ -68,9 +70,7 @@ describe('createSettingsAgentControllers', () => {
       'builtInToolUse:assistant',
     ]);
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
+    expect(rosterSelection(workspaceState)).toEqual({
       kind: 'custom',
       agentKeys: { workflow: 'all', toolUse: ['builtInToolUse:assistant'] },
     });
@@ -95,9 +95,7 @@ describe('createSettingsAgentControllers', () => {
       enabled: false,
     });
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
+    expect(rosterSelection(workspaceState)).toEqual({
       kind: 'custom',
       agentKeys: { workflow: 'all', toolUse: ['future-assistant'] },
     });

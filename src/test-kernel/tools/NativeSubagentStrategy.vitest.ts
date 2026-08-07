@@ -68,8 +68,25 @@ import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentSt
 
 const ownedSessions = new Set<SessionHandle>();
 
+const CHILD_STREAM_ID = 'child-stream' as StreamTabId;
+
 function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
+}
+
+/** A tool-use turn result on the shared child stream, for launch/resume mocks. */
+function toolUseTurnResult(
+  outcome: string,
+  executionId: ExecutionId,
+  extras: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    category: 'toolUse',
+    outcome,
+    executionId,
+    streamId: CHILD_STREAM_ID,
+    ...extras,
+  };
 }
 
 /**
@@ -85,12 +102,7 @@ function mockLaunchPublishing(
   mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
     options.onRun?.(handle);
     afterRun?.();
-    return {
-      category: 'toolUse',
-      outcome,
-      executionId: 'exec-1',
-      streamId: 'child-stream',
-    };
+    return toolUseTurnResult(outcome, 'exec-1' as ExecutionId);
   });
 }
 
@@ -113,6 +125,28 @@ function baseParams(
     startedAt: Date.now(),
     onStreamResolved: vi.fn(),
   };
+}
+
+type BaseParams = ReturnType<typeof baseParams>;
+type Strategy = ReturnType<typeof createNativeSubagentStrategy>;
+
+/**
+ * Launch a WAITING turn, then publish the live handle by hand: `launch()` only
+ * resolves the turn — the `deliveryTargetStreamId`/`childStreamId` handle shape
+ * the strategy reads arrives through the `onRun` callback.
+ */
+async function launchWaitingTurn(
+  params: BaseParams,
+  strategy: Strategy,
+): Promise<void> {
+  mocks.executeAgent.mockResolvedValueOnce(
+    toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId),
+  );
+  await strategy.launch(fakePorts(), new AbortController());
+  mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
+    childStreamId: CHILD_STREAM_ID,
+    deliveryTargetStreamId: params.orchestratorStreamId,
+  });
 }
 
 describe('NativeSubagentStrategy', () => {
@@ -143,19 +177,12 @@ describe('NativeSubagentStrategy', () => {
       params.orchestratorStreamId,
     );
 
-    let capturedOnRun: ((handle: unknown) => void) | undefined;
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      capturedOnRun = options.onRun;
-      capturedOnRun?.({
-        childStreamId: 'child-stream' as StreamTabId,
+      options.onRun?.({
+        childStreamId: CHILD_STREAM_ID,
         deliveryTargetStreamId: params.orchestratorStreamId,
       });
-      return {
-        category: 'toolUse',
-        outcome: STREAM_PHASE.WAITING,
-        executionId: params.executionId,
-        streamId: 'child-stream' as StreamTabId,
-      };
+      return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
 
     await strategy.launch(fakePorts(), new AbortController());
@@ -172,18 +199,13 @@ describe('NativeSubagentStrategy', () => {
     // undefined (AgentExecutionHandle.detach) — the strategy must track the
     // LIVE handle, not a stale copy, so it observes this without a new turn.
     const liveHandle = {
-      childStreamId: 'child-stream',
+      childStreamId: CHILD_STREAM_ID,
       deliveryTargetStreamId: params.orchestratorStreamId as
         StreamTabId | undefined,
     };
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRun?.(liveHandle);
-      return {
-        category: 'toolUse',
-        outcome: STREAM_PHASE.WAITING,
-        executionId: params.executionId,
-        streamId: 'child-stream' as StreamTabId,
-      };
+      return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
     await strategy.launch(fakePorts(), new AbortController());
     expect(strategy.resolveDeliveryTarget?.()).toBe(
@@ -206,13 +228,9 @@ describe('NativeSubagentStrategy', () => {
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onStreamResolved?.('child-stream');
       options.onProgress?.(progress);
-      return {
-        category: 'toolUse',
-        outcome: 'completed',
-        executionId: params.executionId,
-        streamId: 'child-stream' as StreamTabId,
+      return toolUseTurnResult('completed', params.executionId, {
         totalCostUsd: 0.17,
-      };
+      });
     });
 
     await strategy.launch(ports, new AbortController());
@@ -236,14 +254,12 @@ describe('NativeSubagentStrategy', () => {
   it('records a failed turn cost once through interactive loop settlement', async () => {
     const params = baseParams();
     const recordCost = vi.fn();
-    mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
-      outcome: 'failed',
-      executionId: params.executionId,
-      streamId: 'child-stream',
-      totalCostUsd: 0.29,
-      error: { message: 'provider failed', userRetryable: false },
-    });
+    mocks.executeAgent.mockResolvedValueOnce(
+      toolUseTurnResult('failed', params.executionId, {
+        totalCostUsd: 0.29,
+        error: { message: 'provider failed', userRetryable: false },
+      }),
+    );
 
     const { completion } = startChildRunLoop({
       childStreamId: 'child-stream',
@@ -320,7 +336,7 @@ describe('NativeSubagentStrategy', () => {
 
   it('binds resumed-turn cancellation to the replacement run handle', async () => {
     const params = baseParams();
-    const childStreamId = 'child-stream' as StreamTabId;
+    const childStreamId = CHILD_STREAM_ID;
     const initialHandle = {
       childStreamId,
       deliveryTargetStreamId: params.orchestratorStreamId,
@@ -328,12 +344,7 @@ describe('NativeSubagentStrategy', () => {
     };
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRun?.(initialHandle as never);
-      return {
-        category: 'toolUse',
-        outcome: STREAM_PHASE.WAITING,
-        executionId: params.executionId,
-        streamId: childStreamId,
-      };
+      return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
     const strategy = createNativeSubagentStrategy(params);
     await strategy.launch(fakePorts(), new AbortController());
@@ -361,12 +372,7 @@ describe('NativeSubagentStrategy', () => {
             once: true,
           }),
         );
-        return {
-          category: 'toolUse',
-          outcome: 'cancelled',
-          executionId: params.executionId,
-          streamId: childStreamId,
-        };
+        return toolUseTurnResult('cancelled', params.executionId);
       },
     );
 
@@ -389,7 +395,7 @@ describe('NativeSubagentStrategy', () => {
       response: 'The proof holds.',
       files: ['main.tex'],
       executionId: params.executionId,
-      streamId: 'child-stream' as StreamTabId,
+      streamId: CHILD_STREAM_ID,
     };
 
     const msg = await strategy.formatDelivery(waitingTurn, 1000);
@@ -405,12 +411,7 @@ describe('NativeSubagentStrategy', () => {
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRunError?.(failure);
-      return {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: params.executionId,
-        streamId: 'child-stream' as StreamTabId,
-      };
+      return toolUseTurnResult('failed', params.executionId);
     });
 
     const turn = await strategy.launch(fakePorts(), new AbortController());
@@ -456,7 +457,7 @@ describe('NativeSubagentStrategy', () => {
           outcome: 'completed',
           response: 'done',
           executionId: params.executionId,
-          streamId: 'child-stream' as StreamTabId,
+          streamId: CHILD_STREAM_ID,
         },
         false,
         10,
@@ -471,21 +472,9 @@ describe('NativeSubagentStrategy', () => {
       runtimeUnavailableTools: ['ask_user'],
     };
     const strategy = createNativeSubagentStrategy(params);
-    const childStreamId = 'child-stream' as StreamTabId;
+    const childStreamId = CHILD_STREAM_ID;
 
-    mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
-      outcome: STREAM_PHASE.WAITING,
-      executionId: params.executionId,
-      streamId: childStreamId,
-    });
-    await strategy.launch(fakePorts(), new AbortController());
-    // launch() only carries `deliveryTargetStreamId`/`childStreamId` on the
-    // handle shape the strategy actually reads.
-    mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
-      childStreamId,
-      deliveryTargetStreamId: params.orchestratorStreamId,
-    });
+    await launchWaitingTurn(params, strategy);
 
     const config = { agentCategory: 'toolUse' };
     const snapshot = createToolUseResumeData({
@@ -494,13 +483,9 @@ describe('NativeSubagentStrategy', () => {
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(snapshot);
-    mocks.resumeToolUseFromResumeData.mockResolvedValueOnce({
-      category: 'toolUse',
-      outcome: 'completed',
-      response: 'done',
-      executionId: params.executionId,
-      streamId: childStreamId,
-    });
+    mocks.resumeToolUseFromResumeData.mockResolvedValueOnce(
+      toolUseTurnResult('completed', params.executionId, { response: 'done' }),
+    );
 
     const turn = await strategy.runTurn!(
       [{ text: 'keep going', origin: 'user' }],
@@ -536,19 +521,8 @@ describe('NativeSubagentStrategy', () => {
   it('preserves #7491: a failed direct resume throws for child-loop error delivery', async () => {
     const params = baseParams();
     const strategy = createNativeSubagentStrategy(params);
-    const childStreamId = 'child-stream' as StreamTabId;
 
-    mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
-      outcome: STREAM_PHASE.WAITING,
-      executionId: params.executionId,
-      streamId: childStreamId,
-    });
-    await strategy.launch(fakePorts(), new AbortController());
-    mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
-      childStreamId,
-      deliveryTargetStreamId: params.orchestratorStreamId,
-    });
+    await launchWaitingTurn(params, strategy);
 
     mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
     mocks.retrieveSessionResumeData.mockResolvedValue(
@@ -702,13 +676,11 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(params);
     const ports = fakePorts();
 
-    mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
-      outcome: STREAM_PHASE.WAITING,
-      executionId: params.executionId,
-      streamId: 'child-stream' as StreamTabId,
-      totalCostUsd: 0.42,
-    });
+    mocks.executeAgent.mockResolvedValueOnce(
+      toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId, {
+        totalCostUsd: 0.42,
+      }),
+    );
 
     await strategy.launch(ports, new AbortController());
     expect(ports.recordCost).toHaveBeenCalledWith(0.42);
@@ -726,7 +698,7 @@ describe('NativeSubagentStrategy', () => {
       outputs: [],
       compileFailures: [],
       executionId: params.executionId,
-      streamId: 'child-stream' as StreamTabId,
+      streamId: CHILD_STREAM_ID,
     };
     // A workflow flow never produces a WAITING result, so every turn is
     // terminal — `isWaitingFlowResult` requires `category === 'toolUse'`.

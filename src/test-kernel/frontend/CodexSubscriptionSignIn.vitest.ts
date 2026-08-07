@@ -68,6 +68,17 @@ async function loginByOpeningBrowser({
   return loopbackSession();
 }
 
+function mockLoopbackSuccess(): void {
+  mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
+}
+
+function mockPreferenceEnabled(): void {
+  mocks.setPreferCodexSubscription.mockResolvedValue({
+    effective: true,
+    target: 'global',
+  });
+}
+
 describe('signInWithChatGptSubscription', () => {
   beforeEach(() => {
     mocks.withProgress.mockImplementation((_options, task) => task());
@@ -92,7 +103,7 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('does not treat a completed OAuth sign-in as a sign-in failure when preference update fails', async () => {
-    mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
+    mockLoopbackSuccess();
     mocks.setPreferCodexSubscription.mockRejectedValue(
       new Error('config write failed'),
     );
@@ -113,7 +124,7 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('warns when a more specific setting keeps subscription preference disabled', async () => {
-    mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
+    mockLoopbackSuccess();
     mocks.setPreferCodexSubscription.mockResolvedValue({
       effective: false,
       target: 'global',
@@ -130,10 +141,7 @@ describe('signInWithChatGptSubscription', () => {
   it('opens the default browser when the user chooses it', async () => {
     mocks.openExternal.mockResolvedValue(true);
     mocks.showInformationMessage.mockResolvedValue('Open in Default Browser');
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: true,
-      target: 'global',
-    });
+    mockPreferenceEnabled();
     mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 
     await signInWithChatGptSubscription('TestChannel');
@@ -150,10 +158,7 @@ describe('signInWithChatGptSubscription', () => {
 
   it('copies the sign-in link instead of opening the browser when chosen', async () => {
     mocks.showInformationMessage.mockResolvedValue('Copy Sign-in Link');
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: true,
-      target: 'global',
-    });
+    mockPreferenceEnabled();
     mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 
     await signInWithChatGptSubscription('TestChannel');
@@ -178,11 +183,8 @@ describe('signInWithChatGptSubscription', () => {
   });
 
   it('returns true when OAuth and preference enablement both succeed', async () => {
-    mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: true,
-      target: 'global',
-    });
+    mockLoopbackSuccess();
+    mockPreferenceEnabled();
 
     const signedIn = await signInWithChatGptSubscription('TestChannel');
 

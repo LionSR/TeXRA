@@ -59,10 +59,7 @@ const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {
-    mocks.initCliPlatform.mockReset();
-    mocks.getCliApiMode.mockReset();
-    mocks.selectCliRunnableModel.mockReset();
-    mocks.writeTextStderr.mockReset();
+    vi.resetAllMocks();
     mocks.initCliPlatform.mockResolvedValue(undefined);
     mocks.getCliApiMode.mockReturnValue('personal');
     selectCliRunnableModelMock.mockImplementation(async (request) => ({

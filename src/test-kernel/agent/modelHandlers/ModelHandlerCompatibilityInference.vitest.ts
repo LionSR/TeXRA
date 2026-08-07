@@ -10,54 +10,63 @@ import {
 const info = vi.fn<AgentTrace['info']>();
 const logger: Pick<AgentTrace, 'info'> = { info };
 
+const GOOGLE_KEYLESS_ERROR =
+  'Persisted Google sessions without a model-handler identity cannot be resumed.';
+
+/** Keyless flow state whose only model hint is the MODEL channel variable. */
+function keylessFlowState(modelVariable: string) {
+  return {
+    messages: [
+      {
+        type: 'user_input',
+        content: [{ type: 'text', text: 'continue' }],
+      },
+    ],
+    stateSlices: {
+      userChannels: {
+        input: {},
+        transient: { MODEL: modelVariable },
+      },
+    },
+  };
+}
+
 describe('model handler compatibility inference', () => {
   beforeEach(() => {
     info.mockClear();
   });
 
-  it.each([
-    {
-      name: 'keeps keyless legacy Copilot transcripts on OpenRouter',
-      model: 'copilot4o',
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: 'continue' }],
-      },
-      expected: 'ModelHandlerOpenRouterNative',
-    },
-  ])('$name', ({ model, message, expected }) => {
+  it('keeps keyless legacy Copilot transcripts on OpenRouter', () => {
+    const message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'continue' }],
+    };
+
     expect(
       inferAndLogPersistedModelHandlerCompatibilityKey(
-        model,
+        'copilot4o',
         [message as ProviderMessage],
         logger,
       ),
-    ).toBe(expected);
+    ).toBe('ModelHandlerOpenRouterNative');
     expect(info).toHaveBeenCalledWith(
       'Inferred model-handler compatibility for keyless persisted run',
-      { data: { model, compatibilityKey: expected } },
+      {
+        data: {
+          model: 'copilot4o',
+          compatibilityKey: 'ModelHandlerOpenRouterNative',
+        },
+      },
     );
   });
 
   it('rejects keyless Google transcripts without inspecting their format', () => {
     expect(() =>
-      inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
-        messages: [
-          {
-            type: 'user_input',
-            content: [{ type: 'text', text: 'continue' }],
-          },
-        ],
-        stateSlices: {
-          userChannels: {
-            input: {},
-            transient: { MODEL: 'gemini35f' },
-          },
-        },
-      }),
-    ).toThrow(
-      'Persisted Google sessions without a model-handler identity cannot be resumed.',
-    );
+      inferPersistedFlowModelHandlerCompatibilityKey(
+        'gpt54',
+        keylessFlowState('gemini35f'),
+      ),
+    ).toThrow(GOOGLE_KEYLESS_ERROR);
     expect(info).not.toHaveBeenCalled();
   });
 
@@ -65,22 +74,9 @@ describe('model handler compatibility inference', () => {
     expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         modelId: 'gemini35f',
-        messages: [
-          {
-            type: 'user_input',
-            content: [{ type: 'text', text: 'continue' }],
-          },
-        ],
-        stateSlices: {
-          userChannels: {
-            input: {},
-            transient: { MODEL: 'gpt54' },
-          },
-        },
+        ...keylessFlowState('gpt54'),
       }),
-    ).toThrow(
-      'Persisted Google sessions without a model-handler identity cannot be resumed.',
-    );
+    ).toThrow(GOOGLE_KEYLESS_ERROR);
     expect(info).not.toHaveBeenCalled();
   });
 

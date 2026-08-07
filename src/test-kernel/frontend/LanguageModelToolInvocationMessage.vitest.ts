@@ -2,52 +2,54 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - extension frontend
-import { buildLanguageModelToolInvocationMessage } from '@frontend/lm/languageModelToolInvocationMessage';
+import {
+  buildLanguageModelToolInvocationMessage,
+  type LanguageModelResearchToolName,
+} from '@frontend/lm/languageModelToolInvocationMessage';
 
 describe('buildLanguageModelToolInvocationMessage', () => {
-  it('adds validated context and falls back safely for unexpected input', () => {
-    expect(
-      buildLanguageModelToolInvocationMessage('arxiv_search', {
-        query: '  quantum\n  error correction  ',
-      }),
-    ).toBe('Searching arXiv for “quantum error correction”');
-    expect(
-      buildLanguageModelToolInvocationMessage('crossref_search', {
-        query: 'attention is all you need',
-      }),
-    ).toBe('Searching Crossref for “attention is all you need”');
-    expect(
-      buildLanguageModelToolInvocationMessage('crossref_search', {
-        command: 'doi',
-        doi: '10.1038/nature12373',
-      }),
-    ).toBe('Looking up DOI “10.1038/nature12373”');
-    expect(
-      buildLanguageModelToolInvocationMessage('web_fetch', {
-        url: 'https://example.com:8443/papers/1',
-      }),
-    ).toBe('Fetching example.com:8443');
-
-    expect(buildLanguageModelToolInvocationMessage('arxiv_search', null)).toBe(
-      'Searching arXiv',
+  it.each<[LanguageModelResearchToolName, unknown, string]>([
+    [
+      'arxiv_search',
+      { query: '  quantum\n  error correction  ' },
+      'Searching arXiv for “quantum error correction”',
+    ],
+    [
+      'crossref_search',
+      { query: 'attention is all you need' },
+      'Searching Crossref for “attention is all you need”',
+    ],
+    [
+      'crossref_search',
+      { command: 'doi', doi: '10.1038/nature12373' },
+      'Looking up DOI “10.1038/nature12373”',
+    ],
+    [
+      'web_fetch',
+      { url: 'https://example.com:8443/papers/1' },
+      'Fetching example.com:8443',
+    ],
+    // Unexpected input falls back to the bare action label.
+    ['arxiv_search', null, 'Searching arXiv'],
+    ['crossref_search', { query: 42 }, 'Searching Crossref'],
+    ['web_fetch', { url: 'not a valid URL' }, 'Fetching web content'],
+  ])('%s -> %s', (toolName, args, expected) => {
+    expect(buildLanguageModelToolInvocationMessage(toolName, args)).toBe(
+      expected,
     );
+  });
+
+  it('falls back safely when reading the input itself throws', () => {
+    // Kept out of the table above: it.each serializes rows at collection
+    // time, which would trip this getter outside the tested call.
+    const boobyTrapped = Object.defineProperty({}, 'query', {
+      get: () => {
+        throw new Error('unexpected getter');
+      },
+    });
+
     expect(
-      buildLanguageModelToolInvocationMessage('crossref_search', { query: 42 }),
-    ).toBe('Searching Crossref');
-    expect(
-      buildLanguageModelToolInvocationMessage('web_fetch', {
-        url: 'not a valid URL',
-      }),
-    ).toBe('Fetching web content');
-    expect(
-      buildLanguageModelToolInvocationMessage(
-        'crossref_search',
-        Object.defineProperty({}, 'query', {
-          get: () => {
-            throw new Error('unexpected getter');
-          },
-        }),
-      ),
+      buildLanguageModelToolInvocationMessage('crossref_search', boobyTrapped),
     ).toBe('Searching Crossref');
   });
 });

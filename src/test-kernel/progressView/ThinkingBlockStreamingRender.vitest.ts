@@ -19,6 +19,19 @@ function renderEntry(message: LogMessageData): Element {
   return container;
 }
 
+/** A streaming thinking entry, overridable per test. */
+function logMessage(overrides: Partial<LogMessageData>): LogMessageData {
+  return {
+    id: 'msg-1',
+    text: 'text',
+    level: LOG_LEVELS.INFO,
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.THINKING,
+    data: { status: 'running' },
+    ...overrides,
+  };
+}
+
 /**
  * Regression coverage for #7276: a thinking/scratchpad/model-response entry
  * that's still streaming in (`data.status: 'running'`) must render through
@@ -33,16 +46,9 @@ describe('progress view live activity rendering', () => {
   });
 
   it('renders a banner-details shell, not a plain log line, while the stream is running', () => {
-    const message: LogMessageData = {
-      id: 'think-1',
-      text: '**bold** reasoning in progress',
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.THINKING,
-      data: { status: 'running' },
-    };
-
-    const container = renderEntry(message);
+    const container = renderEntry(
+      logMessage({ id: 'think-1', text: '**bold** reasoning in progress' }),
+    );
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
@@ -60,51 +66,39 @@ describe('progress view live activity rendering', () => {
   });
 
   it('does not render ephemeral context-compaction activity', () => {
-    const message: LogMessageData = {
-      id: 'compaction-1',
-      text: 'Compacting conversation context',
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-      data: {
-        activity: 'context_compaction',
-        state: 'started',
-      },
-    };
-
-    const container = renderEntry(message);
+    const container = renderEntry(
+      logMessage({
+        id: 'compaction-1',
+        text: 'Compacting conversation context',
+        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+        data: {
+          activity: 'context_compaction',
+          state: 'started',
+        },
+      }),
+    );
 
     expect(container.textContent).toBe('');
     expect(container.childElementCount).toBe(0);
   });
 
   it('preserves newlines in raw text while streaming', () => {
-    const message: LogMessageData = {
-      id: 'think-multiline',
-      text: 'line one\nline two',
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.THINKING,
-      data: { status: 'running' },
-    };
-
-    const container = renderEntry(message);
+    const container = renderEntry(
+      logMessage({ id: 'think-multiline', text: 'line one\nline two' }),
+    );
 
     const content = container.querySelector('.banner-content--streaming');
     expect(content?.textContent).toBe('line one\nline two');
   });
 
   it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', () => {
-    const message: LogMessageData = {
-      id: 'think-1',
-      text: '**bold** reasoning done',
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.THINKING,
-      data: { status: 'completed' },
-    };
-
-    const container = renderEntry(message);
+    const container = renderEntry(
+      logMessage({
+        id: 'think-1',
+        text: '**bold** reasoning done',
+        data: { status: 'completed' },
+      }),
+    );
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
@@ -115,16 +109,13 @@ describe('progress view live activity rendering', () => {
   });
 
   it('applies the same running/finalized behavior to model-response entries', () => {
-    const runningMessage: LogMessageData = {
-      id: 'resp-1',
-      text: '**bold** answer in progress',
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      data: { status: 'running' },
-    };
-
-    const runningContainer = renderEntry(runningMessage);
+    const runningContainer = renderEntry(
+      logMessage({
+        id: 'resp-1',
+        text: '**bold** answer in progress',
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      }),
+    );
 
     const runningDetails = runningContainer.querySelector(
       'wa-details.banner-details',
@@ -136,16 +127,13 @@ describe('progress view live activity rendering', () => {
   });
 
   it('resolves the scratchpad banner config (pencil icon, "Scratchpad" label), not the thinking default', () => {
-    const message: LogMessageData = {
-      id: 'scratch-1',
-      text: 'jotting down a formula',
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.SCRATCHPAD,
-      data: { status: 'running' },
-    };
-
-    const container = renderEntry(message);
+    const container = renderEntry(
+      logMessage({
+        id: 'scratch-1',
+        text: 'jotting down a formula',
+        messageType: MESSAGE_TYPES.SCRATCHPAD,
+      }),
+    );
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();

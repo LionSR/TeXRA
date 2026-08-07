@@ -52,6 +52,16 @@ async function installTempWorkspace(prefix: string): Promise<string> {
   return workspaceDir;
 }
 
+async function expectSymlinkTargeting(
+  filePath: string,
+  expectedTarget: string,
+): Promise<void> {
+  const linkStat = await lstat(filePath);
+  expect(linkStat.isSymbolicLink()).toBe(true);
+  const linkTarget = await readlink(filePath);
+  expect(path.resolve(path.dirname(filePath), linkTarget)).toBe(expectedTarget);
+}
+
 describe('round-dir ownership and editable .tex inheritance', () => {
   afterEach(async () => {
     await cleanupTempDirs(tempDirs);
@@ -87,12 +97,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       'Draft.tex',
     );
 
-    const linkStat = await lstat(roundFilePath);
-    expect(linkStat.isSymbolicLink()).toBe(true);
-    const linkTarget = await readlink(roundFilePath);
-    expect(path.resolve(path.dirname(roundFilePath), linkTarget)).toBe(
-      snapshotPath,
-    );
+    await expectSymlinkTargeting(roundFilePath, snapshotPath);
 
     // Inline the writeRoundOutput contract so the test is host-neutral
     // (no platform wiring needed) and the ownership handoff is visible.
@@ -136,10 +141,8 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await fileService.ensureMirroredInRoundDir(1);
 
     const roundFilePath = path.join(getRunDir('run-2'), 'r1', 'macros.sty');
-    const linkStat = await lstat(roundFilePath);
-    expect(linkStat.isSymbolicLink()).toBe(true);
-    const linkTarget = await readlink(roundFilePath);
-    expect(path.resolve(path.dirname(roundFilePath), linkTarget)).toBe(
+    await expectSymlinkTargeting(
+      roundFilePath,
       path.join(getRunDir('run-2'), 'macros.sty'),
     );
   });

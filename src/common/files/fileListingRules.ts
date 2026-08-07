@@ -35,11 +35,14 @@ function getPathSegments(filePath: string): string[] {
   return normalizeFilePath(filePath).split('/');
 }
 
-function normalizeList(values: readonly string[]): string[] {
+function trimNonEmpty(values: readonly string[]): string[] {
   return values
     .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-    .map((value) => value.toLowerCase());
+    .filter((value) => value.length > 0);
+}
+
+function normalizeList(values: readonly string[]): string[] {
+  return trimNonEmpty(values).map((value) => value.toLowerCase());
 }
 
 export function loadFileListSettings(): FileListSettings {
@@ -105,10 +108,9 @@ export function getEditedFileListConfig(
 }
 
 function sanitizeDirectories(directories: readonly string[]): string[] {
-  return directories
-    .map((dir) => dir.trim())
-    .filter((dir) => dir.length > 0)
-    .map((dir) => normalizeFilePath(dir).replace(/^\//, '').replace(/\/$/, ''));
+  return trimNonEmpty(directories).map((dir) =>
+    normalizeFilePath(dir).replace(/^\//, '').replace(/\/$/, ''),
+  );
 }
 
 export function prepareFileFilters(

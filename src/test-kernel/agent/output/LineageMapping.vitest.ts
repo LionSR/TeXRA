@@ -42,13 +42,11 @@ describe('workflow output lineage mapping', () => {
 
     const mapping = traceFileLineage(state, [chapter1, chapter2], 0);
 
-    expect(mapping.get(getComparablePath(chapter1Output))?.origin).toBe(
-      chapter1,
-    );
-    expect(mapping.get(getComparablePath(chapter2Output))?.origin).toBe(
-      chapter2,
-    );
-    expect(mapping.get(getComparablePath(chapter1Output))?.base).toBe(chapter1);
-    expect(mapping.get(getComparablePath(chapter2Output))?.base).toBe(chapter2);
+    const chapter1Entry = mapping.get(getComparablePath(chapter1Output));
+    expect(chapter1Entry?.origin).toBe(chapter1);
+    expect(chapter1Entry?.base).toBe(chapter1);
+    const chapter2Entry = mapping.get(getComparablePath(chapter2Output));
+    expect(chapter2Entry?.origin).toBe(chapter2);
+    expect(chapter2Entry?.base).toBe(chapter2);
   });
 });

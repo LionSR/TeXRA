@@ -32,7 +32,7 @@ function createController(options?: {
   writes: string[][];
   toggles: AgentToggle[];
 } {
-  const enabled = { ...(options?.enabled ?? {}) };
+  const enabled = { ...options?.enabled };
   const writes: string[][] = [];
   const toggles: AgentToggle[] = [];
   return {

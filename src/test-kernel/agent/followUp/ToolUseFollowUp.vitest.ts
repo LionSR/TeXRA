@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import {
   presentFollowUpResult,
@@ -16,6 +16,10 @@ function deferred<T>() {
     resolve = done;
   });
   return { promise, resolve };
+}
+
+function mockTryResume(): Mock<() => Promise<boolean>> {
+  return vi.fn(async () => true);
 }
 
 function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
@@ -49,7 +53,7 @@ describe('submitFollowUp', () => {
     const streamId = id('stream:live-child');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
     const child = session.followUps.claimLive(streamId, 'child')!;
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     for (const text of ['while waiting', 'between turns', 'during turn']) {
       await expect(
@@ -74,7 +78,7 @@ describe('submitFollowUp', () => {
     const appendFollowUp = vi.fn();
     const session = fakeSession(activeTarget(appendFollowUp));
     const flow = session.followUps.claimLive(streamId, 'flow')!;
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     await expect(
       submitFollowUp(streamId, 'during active turn', {
@@ -122,7 +126,7 @@ describe('submitFollowUp', () => {
   it('enqueues live notifications for a waiting parent without child owner', async () => {
     const streamId = id('stream:waiting-notification');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     // Create a child-owned entry (simulates a running child loop), then
     // release the lease so the entry exists but has no owner — the exact
@@ -186,7 +190,7 @@ describe('submitFollowUp', () => {
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
     const child = session.followUps.claimLive(streamId, 'child')!;
     session.followUps.release(child, 'recoverable');
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     await expect(
       submitFollowUp(streamId, 'continue', {
@@ -220,7 +224,7 @@ describe('submitFollowUp', () => {
     const child = session.followUps.claimLive(streamId, 'child')!;
     // Release the child so the queue stays but loses its owner.
     session.followUps.release(child, 'recoverable');
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     const result = await submitFollowUp(streamId, 'child update', {
       session,
@@ -240,7 +244,7 @@ describe('submitFollowUp', () => {
   it('keeps children-running explicitly recoverable after child untracking', async () => {
     const streamId = id('stream:children-running');
     const session = fakeSession({ kind: 'queue', reason: 'children_running' });
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     await submitFollowUp(streamId, 'child result', {
       session,
@@ -258,7 +262,7 @@ describe('submitFollowUp', () => {
     });
     const parentFlow = session.followUps.claimLive(streamId, 'flow')!;
     session.followUps.release(parentFlow, 'recoverable');
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     await expect(
       submitFollowUp(
@@ -286,7 +290,7 @@ describe('submitFollowUp', () => {
       kind: 'no_session',
       streamStatus: 'completed',
     });
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     await expect(
       submitFollowUp(
@@ -305,7 +309,7 @@ describe('submitFollowUp', () => {
   it('admits a replayed child delivery at most once and wakes at most once', async () => {
     const streamId = id('stream:replay-child-delivery');
     const session = fakeSession({ kind: 'queue', reason: 'children_running' });
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
     const delivery = {
       text: 'child result',
       origin: 'subagent_result' as const,
@@ -341,7 +345,7 @@ describe('submitFollowUp', () => {
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
     const lease = session.followUps.claimLive(streamId, 'flow')!;
     session.followUps.release(lease, 'terminal');
-    const tryResumeStream = vi.fn(async () => true);
+    const tryResumeStream = mockTryResume();
 
     await expect(
       submitFollowUp(streamId, 'late', {

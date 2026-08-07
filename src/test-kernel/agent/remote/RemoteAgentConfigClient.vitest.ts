@@ -1,6 +1,4 @@
-import { strict as assert } from 'node:assert';
-
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SUPABASE_CONFIG } from '@auth/config';
@@ -22,38 +20,31 @@ describe('fetchRemoteAgentConfigYaml', () => {
 
     const config = await fetchRemoteAgentConfigYaml('remoteWriter', 'token');
 
-    assert.equal(config, 'settings: {}\nprompts: {}\n');
-    assert.equal(fetchMock.mock.calls.length, 1);
+    expect(config).toBe('settings: {}\nprompts: {}\n');
+    expect(fetchMock).toHaveBeenCalledOnce();
     // ky passes a Request object; inspect properties rather than raw fetch args
     const request = fetchMock.mock.calls[0][0];
-    assert.equal(request.url, SUPABASE_CONFIG.edgeFunctionUrl);
-    assert.equal(request.method, 'POST');
-    assert.equal(request.headers.get('Authorization'), 'Bearer token');
-    assert.equal(request.headers.get('Content-Type'), 'application/json');
-    assert.deepEqual(requestBody, { agentName: 'remoteWriter' });
+    expect(request.url).toBe(SUPABASE_CONFIG.edgeFunctionUrl);
+    expect(request.method).toBe('POST');
+    expect(request.headers.get('Authorization')).toBe('Bearer token');
+    expect(request.headers.get('Content-Type')).toBe('application/json');
+    expect(requestBody).toEqual({ agentName: 'remoteWriter' });
   });
 
-  it('maps missing agents to the existing user-facing error text', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('not found', { status: 404 })),
-    );
+  it.each([
+    [404, /Agent "remoteWriter" not found or access denied/],
+    [403, /Your account does not have permission to access this remote agent/],
+  ])(
+    'maps a %i response to the user-facing error text',
+    async (status, pattern) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('rejected', { status })),
+      );
 
-    await assert.rejects(
-      () => fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
-      /Agent "remoteWriter" not found or access denied/,
-    );
-  });
-
-  it('maps forbidden agents to a permission-specific error text', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('forbidden', { status: 403 })),
-    );
-
-    await assert.rejects(
-      () => fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
-      /Your account does not have permission to access this remote agent/,
-    );
-  });
+      await expect(
+        fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
+      ).rejects.toThrow(pattern);
+    },
+  );
 });

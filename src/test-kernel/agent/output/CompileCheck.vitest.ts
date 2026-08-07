@@ -50,12 +50,30 @@ function seedMainTexOutput(executionId: ExecutionId) {
   return outputState;
 }
 
+const COMPILABLE_TEX =
+  '\\documentclass{article}\\begin{document}Hi\\end{document}';
+
+/** Seeds a compilable round-0 `main.tex` on the fake FS. */
+async function seedCompilableMainTex(executionId: ExecutionId): Promise<void> {
+  await initLatexPlatform({
+    [path.join(runDir(executionId), 'r0', 'main.tex')]: COMPILABLE_TEX,
+  });
+}
+
+type CompileCheckResult = Awaited<ReturnType<typeof runCompileCheck>>;
+
+/** Requires a failed compile result and returns its combined log excerpt. */
+function failedExcerpt(result: CompileCheckResult): string {
+  if (result.compileResult?.status !== 'failed') {
+    expect.unreachable('expected a failed compile result');
+  }
+  return result.compileResult.logExcerpt;
+}
+
 describe('runCompileCheck', () => {
   beforeEach(() => {
-    mocks.compileLatex2Pdf.mockReset();
-    mocks.compileLatex2Pdf.mockResolvedValue({ ok: true });
-    mocks.hasLatexCompiler.mockReset();
-    mocks.hasLatexCompiler.mockResolvedValue(true);
+    mocks.compileLatex2Pdf.mockReset().mockResolvedValue({ ok: true });
+    mocks.hasLatexCompiler.mockReset().mockResolvedValue(true);
   });
 
   it('counts a per-file exception as a failure, never a silent skip', async () => {
@@ -75,11 +93,9 @@ describe('runCompileCheck', () => {
     expect(result.compileResult?.status).toBe('failed');
     expect(result.failures).toHaveLength(1);
     expect(result.failures[0].displayName).toBe('main.tex');
-    if (result.compileResult?.status === 'failed') {
-      expect(result.compileResult.logExcerpt).toContain(
-        'Compile check errored for main.tex',
-      );
-    }
+    expect(failedExcerpt(result)).toContain(
+      'Compile check errored for main.tex',
+    );
 
     // The synthetic excerpt is persisted like a real failure so it stays
     // discoverable on disk, not just in-memory.
@@ -119,10 +135,7 @@ describe('runCompileCheck', () => {
   // read from disk a second time.
   it('sources the failing log tail from compileLatex2Pdf, not a separate disk read', async () => {
     const executionId = 'compile-tail-passthrough';
-    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
-    await initLatexPlatform({
-      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
-    });
+    await seedCompilableMainTex(executionId);
 
     // Zero-padded so containment checks below can't be fooled by numeric
     // substrings (e.g. "L0001" would otherwise match inside "L00010").
@@ -132,18 +145,12 @@ describe('runCompileCheck', () => {
     ).join('\n');
     mocks.compileLatex2Pdf.mockResolvedValue({ ok: false, logTail });
 
-    const outputState = seedMainTexOutput(executionId);
-
     const result = await runCompileCheck(
-      compileContext(executionId, outputState),
+      compileContext(executionId, seedMainTexOutput(executionId)),
       0,
     );
 
-    expect(result.compileResult?.status).toBe('failed');
-    const excerpt =
-      result.compileResult?.status === 'failed'
-        ? result.compileResult.logExcerpt
-        : '';
+    const excerpt = failedExcerpt(result);
     expect(excerpt).toContain('L0051');
     expect(excerpt).toContain('L0250');
     expect(excerpt).not.toContain('L0050');
@@ -151,10 +158,7 @@ describe('runCompileCheck', () => {
 
   it('truncates the combined excerpt to the last 12000 characters', async () => {
     const executionId = 'compile-char-truncation';
-    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
-    await initLatexPlatform({
-      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
-    });
+    await seedCompilableMainTex(executionId);
 
     // 150 lines * 101 chars (100 + newline) stays under the 200-line cap but
     // comfortably exceeds the 12000-character combined-excerpt limit once
@@ -170,18 +174,12 @@ describe('runCompileCheck', () => {
       logTail: lines.join('\n'),
     });
 
-    const outputState = seedMainTexOutput(executionId);
-
     const result = await runCompileCheck(
-      compileContext(executionId, outputState),
+      compileContext(executionId, seedMainTexOutput(executionId)),
       0,
     );
 
-    expect(result.compileResult?.status).toBe('failed');
-    const excerpt =
-      result.compileResult?.status === 'failed'
-        ? result.compileResult.logExcerpt
-        : '';
+    const excerpt = failedExcerpt(result);
     expect(excerpt.startsWith('[truncated to last 12000 characters]')).toBe(
       true,
     );
@@ -191,10 +189,7 @@ describe('runCompileCheck', () => {
 
   it('clears a stale failure log once a later attempt at the same round succeeds', async () => {
     const executionId = 'compile-stale-log';
-    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
-    await initLatexPlatform({
-      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
-    });
+    await seedCompilableMainTex(executionId);
 
     mocks.compileLatex2Pdf.mockResolvedValueOnce({
       ok: false,
@@ -235,7 +230,7 @@ describe('runCompileCheck', () => {
       'r0_main.tex.log',
     );
     await initLatexPlatform({
-      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
+      [texPath]: COMPILABLE_TEX,
       [legacyLogPath]: 'Compile check failed for main.tex (pre-upgrade)\n',
     });
 
@@ -300,10 +295,7 @@ describe('runCompileCheck', () => {
     // computation), which runs before compileOne's internal try/catch and so
     // can only be caught by runCompileCheck's outer per-file backstop.
     const executionId = 'compile-outer-backstop';
-    const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
-    await initLatexPlatform({
-      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
-    });
+    await seedCompilableMainTex(executionId);
 
     const filesModule = await import('@utils/files');
     const comparablePathSpy = vi
@@ -313,11 +305,8 @@ describe('runCompileCheck', () => {
       });
 
     try {
-      const outputState = createOutputState();
       const relativePath = path.join('r0', 'main.tex');
-      ensureRoundData(outputState, 0).outputs = [
-        outputFile(executionId, relativePath, 'main.tex', 0),
-      ];
+      const outputState = seedMainTexOutput(executionId);
 
       const result = await runCompileCheck(
         compileContext(executionId, outputState),

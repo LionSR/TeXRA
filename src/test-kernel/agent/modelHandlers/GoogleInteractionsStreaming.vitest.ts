@@ -14,8 +14,6 @@ import {
   GOOGLE_INTERACTIONS_TEST_CONFIG,
   StreamingGoogleInteractionsHandler,
 } from './googleInteractionsTestUtils';
-
-// Third-party imports
 import type { Interactions } from '@google/genai';
 
 type StreamRecord = {
@@ -70,6 +68,18 @@ function fakeClient(events: Interactions.InteractionSSEEvent[]): unknown {
     },
     models: {},
   };
+}
+
+function runPrompt(
+  handler: ModelHandlerGoogleInteractions,
+  events: Interactions.InteractionSSEEvent[],
+  text: string,
+) {
+  return handler.createResponse({
+    client: fakeClient(events) as never,
+    messages: [{ type: 'user_input', content: [{ type: 'text', text }] }],
+    temperature: 0,
+  });
 }
 
 describe('ModelHandlerGoogleInteractions streaming', () => {
@@ -130,13 +140,7 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
       },
     ];
 
-    const result = await handler.createResponse({
-      client: fakeClient(events) as never,
-      messages: [
-        { type: 'user_input', content: [{ type: 'text', text: 'Hi' }] },
-      ],
-      temperature: 0,
-    });
+    const result = await runPrompt(handler, events, 'Hi');
 
     expect(handler.extractResponse(result.response, '').text).toBe(
       'Hello world',
@@ -191,13 +195,7 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
       { event_type: 'step.stop', index: 0 },
     ];
 
-    const result = await handler.createResponse({
-      client: fakeClient(events) as never,
-      messages: [
-        { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
-      ],
-      temperature: 0,
-    });
+    const result = await runPrompt(handler, events, 'go');
 
     // Truncation is surfaced as `incomplete`, not silently `completed`.
     expect(result.response.status).toBe('incomplete');

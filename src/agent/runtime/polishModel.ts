@@ -52,8 +52,7 @@ export async function renderPolishPrompt(
   text: string,
 ): Promise<string> {
   const template = await loadPromptTemplate();
-  const rendered = nunjucksEnv.renderString(template, {
-    FILE_CONTEXT: fileContext,
-  });
-  return rendered + text;
+  return (
+    nunjucksEnv.renderString(template, { FILE_CONTEXT: fileContext }) + text
+  );
 }

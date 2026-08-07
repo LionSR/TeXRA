@@ -60,7 +60,7 @@ class MemoryConfigProvider implements ConfigProvider {
     } else {
       values.set(storedKey, value);
     }
-    this.watchers.notify(canonicalConfigKey(key));
+    this.watchers.notify(storedKey);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {

@@ -117,7 +117,7 @@ export function getNewestTimestamp(
 ): string | undefined {
   let best: string | undefined;
   for (const it of items) {
-    const t = it.updated_at ?? it.created_at ?? undefined;
+    const t = it.updated_at ?? it.created_at;
     if (t && (!best || t > best)) best = t;
   }
   return best;

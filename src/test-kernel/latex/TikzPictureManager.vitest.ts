@@ -9,14 +9,17 @@ import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { pathToLocation } from '@utils/files';
 
-function installPlatform(files: Record<string, string>) {
-  return installFakePlatform({ workspacePath: '/workspace', files });
+async function extractFromPaper(content: string) {
+  await installFakePlatform({
+    workspacePath: '/workspace',
+    files: { '/workspace/paper.tex': content },
+  });
+  return TikzPictureManager.extract(pathToLocation('paper.tex'));
 }
 
 describe('TikzPictureManager', () => {
   it('extracts labeled TikZ pictures from starred figure environments', async () => {
-    await installPlatform({
-      '/workspace/paper.tex': String.raw`
+    const result = await extractFromPaper(String.raw`
 \begin{figure*}[t]
   \centering
   \begin{tikzpicture}
@@ -25,12 +28,7 @@ describe('TikzPictureManager', () => {
   \caption{Wide figure}
   \label{fig:wide}
 \end{figure*}
-`,
-    });
-
-    const result = await TikzPictureManager.extract(
-      pathToLocation('paper.tex'),
-    );
+`);
 
     assert.deepStrictEqual(result, [
       [
@@ -45,8 +43,7 @@ describe('TikzPictureManager', () => {
   });
 
   it('does not attribute an unlabeled figure to a later labeled figure', async () => {
-    await installPlatform({
-      '/workspace/paper.tex': String.raw`
+    const result = await extractFromPaper(String.raw`
 \begin{figure}
   \begin{tikzpicture}
     \node {unlabeled};
@@ -59,12 +56,7 @@ describe('TikzPictureManager', () => {
   \end{tikzpicture}
   \label{fig:labeled}
 \end{figure}
-`,
-    });
-
-    const result = await TikzPictureManager.extract(
-      pathToLocation('paper.tex'),
-    );
+`);
 
     assert.deepStrictEqual(result, [
       [

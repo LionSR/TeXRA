@@ -53,7 +53,8 @@ export function scrollBoundedRows<T>({
   }
 
   if (maxDisplayLines <= compactRows) {
-    const visibleRows = rows.slice(0, Math.max(0, maxDisplayLines));
+    // maxDisplayLines > 0 here (the early return above rules out <= 0).
+    const visibleRows = rows.slice(0, maxDisplayLines);
     return {
       hiddenAfter: Math.max(0, rows.length - visibleRows.length),
       hiddenBefore: 0,

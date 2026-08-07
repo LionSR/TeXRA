@@ -110,7 +110,7 @@ export function escapeTextttUnderscores(text: string): string {
 }
 
 // Map of Unicode characters to their LaTeX equivalents
-const MATH_UNICODE_MAP: { [key: string]: string } = {
+const MATH_UNICODE_MAP: Record<string, string> = {
   // Greek letters (alphabetical)
   α: '\\alpha', // alpha
   β: '\\beta', // beta

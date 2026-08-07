@@ -1,12 +1,17 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - tools
 import {
   setLeanLanguageServices,
   type LeanLanguageServices,
 } from '@tools/lean/leanLanguageServices';
 import { LeanInspectTool } from '@tools/lean/LspTools';
+
+const GOAL_INSPECT_INPUT = {
+  type: 'goal',
+  file: 'Proof.lean',
+  line: 12,
+  column: 3,
+} as const;
 
 function installServices(overrides: Partial<LeanLanguageServices>): void {
   setLeanLanguageServices({
@@ -37,12 +42,7 @@ describe('LeanInspectTool', () => {
       }),
     });
 
-    const result = await new LeanInspectTool().call({
-      type: 'goal',
-      file: 'Proof.lean',
-      line: 12,
-      column: 3,
-    });
+    const result = await new LeanInspectTool().call(GOAL_INSPECT_INPUT);
 
     expect(result).toMatchObject({
       status: 'error',
@@ -59,12 +59,7 @@ describe('LeanInspectTool', () => {
       getGoalState: vi.fn(async () => ({ data: null, error: 'no goal here' })),
     });
 
-    const result = await new LeanInspectTool().call({
-      type: 'goal',
-      file: 'Proof.lean',
-      line: 12,
-      column: 3,
-    });
+    const result = await new LeanInspectTool().call(GOAL_INSPECT_INPUT);
 
     expect(result).toMatchObject({ status: 'error', summary: 'No goal state' });
     expect(result.error).toContain(

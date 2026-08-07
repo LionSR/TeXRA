@@ -42,8 +42,7 @@ import type { CliContext } from '../runtime/cliContext';
 export function parseHistoryListLimit(
   value: string | undefined,
 ): number | undefined {
-  if (!value) return undefined;
-  if (!/^\d+$/.test(value)) return undefined;
+  if (!value || !/^\d+$/.test(value)) return undefined;
   const limit = Number(value);
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
 }
@@ -128,9 +127,7 @@ export async function runHistoryExport(
     if (exportResult.status === 'incomplete') {
       writeTextStderr(
         `Execution ${id} exists but has nothing to export yet (no stored ` +
-          'config and/or conversation). Run `texra history show ' +
-          id +
-          '` to see what is available.',
+          `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
       );
       return CliExitCode.Usage;
     }

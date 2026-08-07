@@ -44,8 +44,8 @@ export function locatePathInRoot(
 ): ResolvedPath {
   // Normalize backslashes before posix.normalize so '..' segments collapse correctly.
   // On POSIX, backslashes are valid filename chars — path.normalize would preserve them.
-  const relative = path.posix.normalize(normalizeFilePath(inputPath));
-  if (relative.startsWith('..')) {
+  const relativePath = path.posix.normalize(normalizeFilePath(inputPath));
+  if (relativePath.startsWith('..')) {
     return annotateExternal({
       kind: 'external',
       absolutePath: path.resolve(root, inputPath),
@@ -53,7 +53,7 @@ export function locatePathInRoot(
   }
   return {
     kind: 'workspace',
-    absolutePath: path.join(root, relative),
-    relativePath: relative,
+    absolutePath: path.join(root, relativePath),
+    relativePath,
   };
 }

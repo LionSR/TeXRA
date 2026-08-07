@@ -90,18 +90,29 @@ function assertLifecycleSequence(accumulateResponse: AccumulateResponse): void {
 }
 
 describe('OpenAI ResponseAccumulator response.metadata compatibility', () => {
-  it('preserves the response snapshot in the CJS runtime', () => {
-    const { accumulateResponse } = nodeRequire(
-      'openai/lib/responses/ResponseAccumulator.js',
-    ) as { accumulateResponse: AccumulateResponse };
+  const runtimes = [
+    {
+      name: 'CJS',
+      load: async () =>
+        nodeRequire('openai/lib/responses/ResponseAccumulator.js') as {
+          accumulateResponse: AccumulateResponse;
+        },
+    },
+    {
+      name: 'ESM',
+      load: async () =>
+        (await import('openai/lib/responses/ResponseAccumulator.mjs')) as {
+          accumulateResponse: AccumulateResponse;
+        },
+    },
+  ];
 
-    assertLifecycleSequence(accumulateResponse);
-  });
+  it.each(runtimes)(
+    'preserves the response snapshot in the $name runtime',
+    async ({ load }) => {
+      const { accumulateResponse } = await load();
 
-  it('preserves the response snapshot in the ESM runtime', async () => {
-    const { accumulateResponse } =
-      await import('openai/lib/responses/ResponseAccumulator.mjs');
-
-    assertLifecycleSequence(accumulateResponse);
-  });
+      assertLifecycleSequence(accumulateResponse);
+    },
+  );
 });

@@ -261,7 +261,7 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     ['visibility', entry.visibility],
   ];
   const metadataLines = metadataFields.flatMap(([label, values]) =>
-    values && values.length > 0 ? [`${label}: ${values.join(', ')}`] : [],
+    values?.length ? [`${label}: ${values.join(', ')}`] : [],
   );
   if (metadataLines.length > 0) {
     lines.push('');

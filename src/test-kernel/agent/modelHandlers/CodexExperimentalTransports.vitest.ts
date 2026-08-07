@@ -61,6 +61,10 @@ function workflowHandler(): ModelHandlerCodex {
   return handler;
 }
 
+function internals(handler: ModelHandlerCodex): CodexInternals {
+  return handler as unknown as CodexInternals;
+}
+
 describe('Codex background/websocket transports follow the shared toggles', () => {
   afterEach(() => {
     resetCodexCoordinator();
@@ -74,12 +78,8 @@ describe('Codex background/websocket transports follow the shared toggles', () =
 
     expect(handler.isBackgroundModeActive()).toBe(false);
     expect(handler.getStreamingConfig()).toBe(true);
-    expect(
-      (handler as unknown as CodexInternals).storesResponsesServerSide,
-    ).toBe(false);
-    expect(
-      (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
-    ).toBe(false);
+    expect(internals(handler).storesResponsesServerSide).toBe(false);
+    expect(internals(handler).isWebSocketModeEnabled()).toBe(false);
   });
 
   it('stays on the streaming path while the subscription is active, even with the background toggle on', async () => {
@@ -93,9 +93,7 @@ describe('Codex background/websocket transports follow the shared toggles', () =
 
     expect(handler.isBackgroundModeActive()).toBe(false);
     expect(handler.getStreamingConfig()).toBe(true);
-    expect(
-      (handler as unknown as CodexInternals).storesResponsesServerSide,
-    ).toBe(false);
+    expect(internals(handler).storesResponsesServerSide).toBe(false);
   });
 
   it('keeps the background toggle from leaking into the request path on the subscription', async () => {
@@ -114,9 +112,7 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     expect(handler.isBackgroundModeActive()).toBe(false);
     // Streaming stays on, and websocket is only chosen because background is off.
     expect(handler.getStreamingConfig()).toBe(true);
-    expect(
-      (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
-    ).toBe(true);
+    expect(internals(handler).isWebSocketModeEnabled()).toBe(true);
   });
 
   it('honors background mode on the fallback OpenAI-API-key path when the subscription is off', async () => {
@@ -133,9 +129,7 @@ describe('Codex background/websocket transports follow the shared toggles', () =
 
     expect(handler.isBackgroundModeActive()).toBe(true);
     expect(handler.getStreamingConfig()).toBe(false);
-    expect(
-      (handler as unknown as CodexInternals).storesResponsesServerSide,
-    ).toBe(true);
+    expect(internals(handler).storesResponsesServerSide).toBe(true);
   });
 
   it('enables WebSocket against the Codex backend from the global websocket toggle', async () => {
@@ -145,9 +139,7 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     });
     const handler = workflowHandler();
 
-    expect(
-      (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
-    ).toBe(true);
+    expect(internals(handler).isWebSocketModeEnabled()).toBe(true);
   });
 
   it('rebuilds the sparse Codex completed response from streamed items/text', async () => {
@@ -157,7 +149,7 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     // HTTP and WebSocket transports must rebuild `output`/`output_text` from the
     // streamed deltas — otherwise the whole turn, tool calls included, is lost.
     await initPlatformWith({});
-    const handler = workflowHandler() as unknown as CodexInternals;
+    const handler = internals(workflowHandler());
 
     // A sparse completed response, as Codex returns it over WebSocket.
     const response = { output: [] as unknown[], output_text: undefined };
@@ -188,7 +180,7 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     });
     const handler = workflowHandler();
 
-    const wire = (handler as unknown as CodexInternals).prepareWireParams({
+    const wire = internals(handler).prepareWireParams({
       model: 'gpt-5.5',
       max_output_tokens: 1024,
       input: [{ role: 'user', content: 'hi' }],

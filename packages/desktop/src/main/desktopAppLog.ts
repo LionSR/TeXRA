@@ -116,7 +116,7 @@ function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
   const path = resolveActiveLogFilePath();
   if (path == null) return;
 
-  const message = args.length === 0 ? '' : format(...args);
+  const message = format(...args);
   try {
     appendFileSync(path, `${new Date().toISOString()} [${level}] ${message}\n`);
   } catch {

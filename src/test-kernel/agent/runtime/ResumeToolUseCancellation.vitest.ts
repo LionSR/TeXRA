@@ -140,6 +140,15 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       async (_executionId: ExecutionId, error: unknown) => error,
     );
     mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+    // Default: the lifecycle wrapper just runs the flow against a no-op
+    // handle. Tests that need a real handle override with
+    // mockImplementationOnce, which takes precedence for their single call.
+    mocks.runFlowWithLifecycle.mockImplementation(
+      async (
+        _context: unknown,
+        run: (liveHandle: unknown) => Promise<unknown>,
+      ) => run(noopFlowHandle()),
+    );
   });
 
   // The predecessor run's terminal outcome is projected onto every result
@@ -157,12 +166,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       return buildResumeContext(executionId, streamId);
     });
     mocks.hasPersistedParent.mockResolvedValueOnce(true);
-    mocks.runFlowWithLifecycle.mockImplementationOnce(
-      async (
-        _context: unknown,
-        run: (liveHandle: unknown) => Promise<unknown>,
-      ) => run(noopFlowHandle()),
-    );
     mocks.runToolUseFlow.mockImplementationOnce(async () => {
       order.push('flow');
       return { outcome: RUN_OUTCOME.COMPLETED };
@@ -254,24 +257,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('interrupts at flow attachment before substantive work starts', async () => {
     const executionId = 'e8049' as ExecutionId;
     const streamId = 'stream-8049' as StreamTabId;
-    const abortController = new AbortController();
-    const context = {
-      setting: { agentCategory: AgentCategory.ToolUse },
-      runScope: {
-        executionId,
-        streamId,
-        session: {
-          status: {},
-          transcripts: { ensureLoaded: vi.fn(async () => {}) },
-          flushArtifacts: vi.fn(async () => {}),
-        },
-        signal: abortController.signal,
-      },
-      config: { agent: 'test-agent', model: 'test-model' },
-      attachedMemoryMisses: [],
-      usageMonitor: { recordUsage: vi.fn() },
-      interrupt: () => abortController.abort(),
-    } as unknown as AgentLaunchContext;
+    const context = buildResumeContext(executionId, streamId);
     const order: string[] = [];
     const tools = [
       {
@@ -366,12 +352,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     const ctx = buildResumeContext(executionId, streamId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
     mocks.hasPersistedParent.mockResolvedValueOnce(false);
-    mocks.runFlowWithLifecycle.mockImplementationOnce(
-      async (
-        _context: unknown,
-        run: (liveHandle: unknown) => Promise<unknown>,
-      ) => run(noopFlowHandle()),
-    );
     mocks.runToolUseFlow.mockImplementationOnce(
       async (input: ModelSwitchingFlowInput) => {
         input.onModelChanged('next-model');
@@ -401,12 +381,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       buildResumeContext(executionId, streamId),
     );
     mocks.hasPersistedParent.mockResolvedValueOnce(true);
-    mocks.runFlowWithLifecycle.mockImplementationOnce(
-      async (
-        _context: unknown,
-        run: (liveHandle: unknown) => Promise<unknown>,
-      ) => run(noopFlowHandle()),
-    );
     mocks.runToolUseFlow.mockResolvedValueOnce({
       outcome: RUN_OUTCOME.FAILED,
       response: 'partial answer',

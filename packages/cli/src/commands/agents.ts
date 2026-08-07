@@ -95,12 +95,11 @@ const agentsListCommand = defineCliCommand({
         'Only list one category: workflow or toolUse (also accepts tool-use/tool_use)',
     },
   },
-  run: (context, ctx) => {
-    return listAgents(context, {
+  run: (context, ctx) =>
+    listAgents(context, {
       includeHidden: ctx.args.all === true,
       category: parseCliAgentCategoryFilter(optString(ctx.args.category)),
-    });
-  },
+    }),
 });
 
 const agentDetailsArgs = {

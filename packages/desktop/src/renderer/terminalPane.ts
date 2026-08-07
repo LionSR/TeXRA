@@ -207,7 +207,6 @@ export function createTerminalPane(
       for (const sessionId of [...sessions.keys()]) {
         disposeSession(sessionId);
       }
-      activeSessionId = undefined;
     },
   };
 }

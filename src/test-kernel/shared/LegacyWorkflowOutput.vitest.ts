@@ -111,7 +111,6 @@ describe('filename-era workflow output grammar', () => {
       'paper.tex',
       'custom:polish_long',
     );
-    expect(targets).not.toBeNull();
     if (!targets) {
       throw new Error('Expected valid housekeeping targets');
     }

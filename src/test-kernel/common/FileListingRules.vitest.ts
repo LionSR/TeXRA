@@ -31,26 +31,38 @@ describe('shared file-listing rules', () => {
       ignoredFiles: ['command.tex'],
     });
 
-    expect(shouldVisitDirectory('sections', filters)).toBe(true);
-    expect(shouldVisitDirectory('node_modules/pkg', filters)).toBe(false);
-    expect(shouldVisitDirectory('drafts/generated', filters)).toBe(false);
-    expect(passesFileFilters('sections/main.tex', filters)).toBe(true);
-    expect(passesFileFilters('command.tex', filters)).toBe(false);
-    expect(passesFileFilters('sections/main.pdf', filters)).toBe(false);
-    expect(passesFileFilters('sections/scratch-notes.tex', filters)).toBe(
-      false,
-    );
-    expect(passesFileFilters('templates/main.tex', filters)).toBe(true);
-    expect(passesFileFilters('.cache/main.tex', filters)).toBe(false);
+    const directoryCases: ReadonlyArray<readonly [string, boolean]> = [
+      ['sections', true],
+      ['node_modules/pkg', false],
+      ['drafts/generated', false],
+    ];
+    for (const [directory, expected] of directoryCases) {
+      expect(shouldVisitDirectory(directory, filters)).toBe(expected);
+    }
+
+    const fileCases: ReadonlyArray<readonly [string, boolean]> = [
+      ['sections/main.tex', true],
+      ['command.tex', false],
+      ['sections/main.pdf', false],
+      ['sections/scratch-notes.tex', false],
+      ['templates/main.tex', true],
+      ['.cache/main.tex', false],
+    ];
+    for (const [file, expected] of fileCases) {
+      expect(passesFileFilters(file, filters)).toBe(expected);
+    }
   });
 
   it('matches edited files with shared round-suffix base-name logic', () => {
-    expect(matchesEditedFile('sections/main_edited.tex', 'main.tex')).toBe(
-      true,
-    );
-    expect(matchesEditedFile('sections/main_r1.tex', 'main.tex')).toBe(true);
-    expect(matchesEditedFile('sections/main_r3.tex', 'main_r2.tex')).toBe(true);
-    expect(matchesEditedFile('main.tex', 'main.tex')).toBe(false);
-    expect(matchesEditedFile('sections/other.tex', 'main.tex')).toBe(false);
+    const cases: ReadonlyArray<readonly [string, string, boolean]> = [
+      ['sections/main_edited.tex', 'main.tex', true],
+      ['sections/main_r1.tex', 'main.tex', true],
+      ['sections/main_r3.tex', 'main_r2.tex', true],
+      ['main.tex', 'main.tex', false],
+      ['sections/other.tex', 'main.tex', false],
+    ];
+    for (const [edited, original, expected] of cases) {
+      expect(matchesEditedFile(edited, original)).toBe(expected);
+    }
   });
 });

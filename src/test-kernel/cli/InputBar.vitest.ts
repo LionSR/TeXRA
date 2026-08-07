@@ -186,33 +186,39 @@ describe('InputBar slash submit', () => {
     });
 
     try {
-      expect(shouldPersistInputHistory('/key private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/keys private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/key=private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/key:private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/key/private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/keysk-private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/keyArbitraryCredentialValue')).toBe(
-        false,
-      );
-      expect(shouldPersistInputHistory('/ky private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/kye:sk-private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/apikey private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/unknown')).toBe(true);
-      expect(shouldPersistInputHistory('/unknown private-value')).toBe(false);
-      expect(shouldPersistInputHistory('/unknown=value')).toBe(true);
-      expect(shouldPersistInputHistory('/tmp=backup')).toBe(true);
-      expect(shouldPersistInputHistory('/keyboard shortcuts')).toBe(false);
-      expect(shouldPersistInputHistory('/keynote.tex')).toBe(true);
-      expect(shouldPersistInputHistory('/model openai')).toBe(true);
-      expect(shouldPersistInputHistory('ordinary message')).toBe(true);
+      const cases: ReadonlyArray<readonly [string, boolean]> = [
+        ['/key private-value', false],
+        ['/keys private-value', false],
+        ['/key=private-value', false],
+        ['/key:private-value', false],
+        ['/key/private-value', false],
+        ['/keysk-private-value', false],
+        ['/keyArbitraryCredentialValue', false],
+        ['/ky private-value', false],
+        ['/kye:sk-private-value', false],
+        ['/apikey private-value', false],
+        ['/unknown', true],
+        ['/unknown private-value', false],
+        ['/unknown=value', true],
+        ['/tmp=backup', true],
+        ['/keyboard shortcuts', false],
+        ['/keynote.tex', true],
+        ['/model openai', true],
+        ['ordinary message', true],
+      ];
+      for (const [input, expected] of cases) {
+        expect(shouldPersistInputHistory(input)).toBe(expected);
+      }
     } finally {
       unregisterSlashCommand('key');
       unregisterSlashCommand('model');
     }
   });
 
-  it('waits for pending image pastes and submits the latest draft', async () => {
+  it.each([
+    ['submits the latest draft', ' [Image #1]'],
+    ['keeps an image chip attached to the typed slash prefix', '[Image #1]'],
+  ])('waits for pending image pastes and %s', async (_caseName, chipSuffix) => {
     const imagePasteQueue = new ImagePasteQueue();
     const paste = createDeferred();
     const submitted: string[] = [];
@@ -220,7 +226,7 @@ describe('InputBar slash submit', () => {
 
     imagePasteQueue.track(
       paste.promise.then(() => {
-        draft = '/h [Image #1]';
+        draft = `/h${chipSuffix}`;
       }),
     );
 
@@ -234,34 +240,6 @@ describe('InputBar slash submit', () => {
     });
 
     expect(submitted).toEqual([]);
-
-    paste.resolve();
-    await paste.promise;
-    await flushPromiseQueue();
-
-    expect(submitted).toEqual(['/help [Image #1]']);
-  });
-
-  it('keeps an image chip attached to the typed slash prefix', async () => {
-    const imagePasteQueue = new ImagePasteQueue();
-    const paste = createDeferred();
-    const submitted: string[] = [];
-    let draft = '/h';
-
-    imagePasteQueue.track(
-      paste.promise.then(() => {
-        draft = '/h[Image #1]';
-      }),
-    );
-
-    submitSlashCommandWhenReady({
-      commandName: 'help',
-      handleSubmit: (value) => submitted.push(value),
-      imagePasteQueue,
-      readDraft: () => draft,
-      remainder: '',
-      typedName: 'h',
-    });
 
     paste.resolve();
     await paste.promise;

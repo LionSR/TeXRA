@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { rootCommand } from '@cli/commands/root';
 import {
@@ -34,7 +34,27 @@ function commandAt(
   return command;
 }
 
+/** Run a bash completion probe against the generated script: drop the
+ *  self-registration `complete` line, append the probe body, execute it, and
+ *  return the lines the probe printed. Any bash failure is a test failure. */
+function probeBashCompletion(script: string, body: string): string[] {
+  const result = spawnSync('bash', ['-s'], {
+    input: `${script.replace(/\ncomplete .*_texra texra\n$/, '\n')}\n${body}`,
+    encoding: 'utf8',
+  });
+
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  return result.stdout.trim().split('\n');
+}
+
 describe('CLI shell completion', () => {
+  let bash: string;
+
+  beforeAll(async () => {
+    bash = await generateCompletionScript(rootCommand, 'bash');
+  });
+
   for (const shell of CLI_COMPLETION_SHELLS) {
     it(`generates ${shell} completion`, async () => {
       const script = await generateCompletionScript(rootCommand, shell);
@@ -43,9 +63,7 @@ describe('CLI shell completion', () => {
     });
   }
 
-  it('keeps dynamic completion gated by TEXRA_COMPLETION_DYNAMIC', async () => {
-    const bash = await generateCompletionScript(rootCommand, 'bash');
-
+  it('keeps dynamic completion gated by TEXRA_COMPLETION_DYNAMIC', () => {
     expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
     expect(bash).toContain('texra agents list --quiet');
     expect(bash).toContain(
@@ -84,10 +102,7 @@ describe('CLI shell completion', () => {
   });
 
   it('consumes every bash value flag while resolving command paths', async () => {
-    const [bash, commands] = await Promise.all([
-      generateCompletionScript(rootCommand, 'bash'),
-      collectCommands(rootCommand),
-    ]);
+    const commands = await collectCommands(rootCommand);
     const lines = bash.split('\n');
     const valueSkipIndex = lines.findIndex((line) =>
       line.includes('((i+=2)); continue'),
@@ -110,9 +125,10 @@ describe('CLI shell completion', () => {
     }
   });
 
-  it('does not offer bash positionals while completing flag values', async () => {
-    const bash = await generateCompletionScript(rootCommand, 'bash');
+  it('does not offer bash positionals while completing flag values', () => {
     const lines = bash.split('\n');
+    // Each lookup must land on a real line: the toContain assertions below
+    // fail loudly on `undefined`, which is exactly the missing-line case.
     const fileValueLine = lines.find((line) =>
       line.includes('_texra_compgen_files "$cur"'),
     );
@@ -125,24 +141,18 @@ describe('CLI shell completion', () => {
 
     expect(bash).toContain('compgen -f -- "$1"');
     expect(bash).toContain('compgen -d -- "$1"');
-    expect(fileValueLine).toBeDefined();
-    expect(directoryValueLine).toBeDefined();
-    expect(genericValueLine).toBeDefined();
-    const fileLine = fileValueLine ?? '';
-    const directoryLine = directoryValueLine ?? '';
-    const genericLine = genericValueLine ?? '';
-    expect(fileLine).toContain('--input');
-    expect(fileLine).toContain('-i');
-    expect(fileLine).toContain('--context');
-    expect(fileLine).toContain('-c');
-    expect(fileLine).toContain('--output');
-    expect(fileLine).toContain('--instruction-file');
-    expect(directoryLine).toContain('--cwd');
-    expect(directoryLine).toContain('--output-dir');
-    expect(directoryLine).toContain('--source');
-    expect(directoryLine).toContain('-s');
-    expect(genericLine).toContain('--instruction');
-    expect(genericLine).toContain('--api-mode');
+    expect(fileValueLine).toContain('--input');
+    expect(fileValueLine).toContain('-i');
+    expect(fileValueLine).toContain('--context');
+    expect(fileValueLine).toContain('-c');
+    expect(fileValueLine).toContain('--output');
+    expect(fileValueLine).toContain('--instruction-file');
+    expect(directoryValueLine).toContain('--cwd');
+    expect(directoryValueLine).toContain('--output-dir');
+    expect(directoryValueLine).toContain('--source');
+    expect(directoryValueLine).toContain('-s');
+    expect(genericValueLine).toContain('--instruction');
+    expect(genericValueLine).toContain('--api-mode');
     expect(bash).toContain(
       '--model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;',
     );
@@ -151,8 +161,7 @@ describe('CLI shell completion', () => {
     );
   });
 
-  it('uses category-specific bash agent completions at launch boundaries', async () => {
-    const bash = await generateCompletionScript(rootCommand, 'bash');
+  it('uses category-specific bash agent completions at launch boundaries', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-bin-'));
     const bin = path.join(root, 'bin');
 
@@ -173,8 +182,9 @@ fi
 `,
         { mode: 0o755 },
       );
-      const script = `
-${bash.replace(/\ncomplete .*_texra texra\n$/, '\n')}
+      const completions = probeBashCompletion(
+        bash,
+        `
 export PATH=${bashQuote(bin)}:$PATH
 COMP_WORDS=(texra run p)
 COMP_CWORD=2
@@ -192,15 +202,10 @@ COMP_WORDS=(texra agents show p)
 COMP_CWORD=3
 _texra
 printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
-`;
-      const result = spawnSync('bash', ['-s'], {
-        input: script,
-        encoding: 'utf8',
-      });
+`,
+      );
 
-      expect(result.stderr).toBe('');
-      expect(result.status).toBe(0);
-      expect(result.stdout.trim().split('\n')).toEqual([
+      expect(completions).toEqual([
         'run:polish',
         'agents-run:review',
         'agent-flag:lean',
@@ -229,8 +234,7 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
     expect(fish).not.toContain('agents inspect');
   });
 
-  it('keeps spaced bash file completions as one candidate', async () => {
-    const bash = await generateCompletionScript(rootCommand, 'bash');
+  it('keeps spaced bash file completions as one candidate', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-'));
 
     try {
@@ -239,8 +243,9 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
       const spacedDir = path.join(root, 'paper drafts');
       mkdirSync(spacedDir);
       writeFileSync(path.join(spacedDir, '.keep'), '', { flag: 'w' });
-      const script = `
-${bash.replace(/\ncomplete .*_texra texra\n$/, '\n')}
+      const completions = probeBashCompletion(
+        bash,
+        `
 TEXRA_COMPLETION_DYNAMIC=0
 cd ${bashQuote(root)}
 COMP_WORDS=(texra run polish --input "paper")
@@ -251,15 +256,9 @@ COMP_WORDS=(texra --cwd "paper")
 COMP_CWORD=2
 _texra
 printf '%s\\n' "\${COMPREPLY[@]}"
-`;
-      const result = spawnSync('bash', ['-s'], {
-        input: script,
-        encoding: 'utf8',
-      });
+`,
+      );
 
-      expect(result.stderr).toBe('');
-      expect(result.status).toBe(0);
-      const completions = result.stdout.trim().split('\n');
       expect(completions).toContain('paper draft.tex');
       expect(completions).toContain('paper drafts');
       expect(completions).not.toContain('regular-file.tex');

@@ -543,8 +543,8 @@ export async function runWorkflowScript(
     let childStreamId: StreamTabId | undefined;
     let startEmitted = false;
     const attemptMetadata = (): WorkflowScriptAttemptMetadata => ({
-      ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
-      ...(childStreamId !== undefined ? { childStreamId } : {}),
+      ...(resolvedModel !== undefined && { model: resolvedModel }),
+      ...(childStreamId !== undefined && { childStreamId }),
       durationMs: Date.now() - startedAt,
     });
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
@@ -848,10 +848,7 @@ function deserializeBridgeValue(payload: string | undefined): unknown {
 }
 
 function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
-  if (
-    (raw !== undefined && raw !== null && typeof raw !== 'object') ||
-    Array.isArray(raw)
-  ) {
+  if (raw != null && (typeof raw !== 'object' || Array.isArray(raw))) {
     throw new Error('agent() options must be a plain object.');
   }
   // Arguments crossed the bridge as JSON text (see sandbox.ts marshalArgs),

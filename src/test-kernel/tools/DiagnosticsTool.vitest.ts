@@ -37,17 +37,28 @@ function addCriticismCall(): Extract<DiagnosticsInput, { command: 'add' }> {
 }
 
 describe('DiagnosticsTool', () => {
-  it('reports a capability error when the session has no diagnostics reader', async () => {
+  it.each([
+    {
+      name: 'reports a capability error when the session has no diagnostics reader',
+      input: { command: 'list', path: 'paper.tex' } as DiagnosticsInput,
+      message: 'Diagnostics capability unavailable',
+    },
+    {
+      name: 'reports a capability error when the session has no criticism sink',
+      input: addCriticismCall(),
+      message: 'Diagnostics add capability unavailable',
+    },
+  ])('$name', async ({ input, message }) => {
     await withSession(async (session) => {
       const result = await withRunContext(worktreeContext(session), () =>
-        new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
+        new DiagnosticsTool().call(input),
       );
 
       expect(result).toMatchObject({
         status: 'error',
         diagnostics: { name: 'ToolError' },
       });
-      expect(result.error).toContain('Diagnostics capability unavailable');
+      expect(result.error).toContain(message);
     });
   });
 
@@ -84,20 +95,6 @@ describe('DiagnosticsTool', () => {
     expect(result.error).toContain('at message');
     expect(result.error).toContain('at severity');
     expect(result.error).toContain('at confidence');
-  });
-
-  it('reports a capability error when the session has no criticism sink', async () => {
-    await withSession(async (session) => {
-      const result = await withRunContext(worktreeContext(session), () =>
-        new DiagnosticsTool().call(addCriticismCall()),
-      );
-
-      expect(result).toMatchObject({
-        status: 'error',
-        diagnostics: { name: 'ToolError' },
-      });
-      expect(result.error).toContain('Diagnostics add capability unavailable');
-    });
   });
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {

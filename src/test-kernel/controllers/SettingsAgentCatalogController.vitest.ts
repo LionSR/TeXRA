@@ -52,6 +52,20 @@ const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
   ],
 };
 
+// Raw persisted records that fail current validation but must survive
+// save/delete round-trips untouched.
+const LEGACY_ICON_PRESET = {
+  id: 'legacy-team',
+  name: 'Legacy Team',
+  description: 'test',
+  icon: 'future-icon',
+  agents: {
+    workflow: [],
+    toolUse: ['review'],
+  },
+};
+const MALFORMED_PRESET = { id: 'broken' };
+
 function createController(options?: {
   agents?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   enabled?: Partial<Record<AgentCategory, string[] | undefined>>;
@@ -199,7 +213,7 @@ describe('SettingsAgentCatalogController', () => {
 
   it('loads invalid custom presets as an empty list', () => {
     const { controller } = createController({
-      customPresets: [{ id: 'broken' }],
+      customPresets: [MALFORMED_PRESET],
     });
 
     assert.deepEqual(controller.getCustomPresets(), []);
@@ -389,7 +403,7 @@ describe('SettingsAgentCatalogController', () => {
   it('drops only invalid custom presets', () => {
     const { controller } = createController({
       customPresets: [
-        { id: 'broken' },
+        MALFORMED_PRESET,
         {
           id: 'custom-team',
           name: 'Custom Team',
@@ -441,26 +455,15 @@ describe('SettingsAgentCatalogController', () => {
   });
 
   it('preserves unrecognized persisted records when saving a preset', async () => {
-    const unknownIconPreset = {
-      id: 'legacy-team',
-      name: 'Legacy Team',
-      description: 'test',
-      icon: 'future-icon',
-      agents: {
-        workflow: [],
-        toolUse: ['review'],
-      },
-    };
-    const malformedPreset = { id: 'broken' };
     const state = createController({
-      customPresets: [unknownIconPreset, malformedPreset],
+      customPresets: [LEGACY_ICON_PRESET, MALFORMED_PRESET],
     });
 
     await state.controller.saveCurrentPreset('New Team');
 
     assert.deepEqual(state.customPresets.slice(0, 2), [
-      unknownIconPreset,
-      malformedPreset,
+      LEGACY_ICON_PRESET,
+      MALFORMED_PRESET,
     ]);
     assert.equal(
       (state.customPresets[2] as AgentModePreset | undefined)?.id,
@@ -500,25 +503,17 @@ describe('SettingsAgentCatalogController', () => {
         toolUse: [],
       },
     };
-    const unknownIconPreset = {
-      id: 'legacy-team',
-      name: 'Legacy Team',
-      description: 'test',
-      icon: 'future-icon',
-      agents: {
-        workflow: [],
-        toolUse: ['review'],
-      },
-    };
-    const malformedPreset = { id: 'broken' };
     const state = createController({
-      customPresets: [target, unknownIconPreset, malformedPreset],
+      customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],
     });
 
     assert.deepEqual(
       await state.controller.deleteCustomPreset(target.id),
       target,
     );
-    assert.deepEqual(state.customPresets, [unknownIconPreset, malformedPreset]);
+    assert.deepEqual(state.customPresets, [
+      LEGACY_ICON_PRESET,
+      MALFORMED_PRESET,
+    ]);
   });
 });

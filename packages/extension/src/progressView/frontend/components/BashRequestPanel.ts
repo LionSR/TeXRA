@@ -1,7 +1,7 @@
 /** Bash command approval request panel. */
 
 // Third-party imports
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Side-effect imports - register WA icon component
@@ -49,7 +49,7 @@ export class BashRequestPanel extends BaseBypassApprovalPanel<'bash'> {
             ? html`<div class="bash-approval-request__cwd">
                 Directory: <span>${data.cwd}</span>
               </div>`
-            : ''
+            : nothing
         }
         <div class="bash-approval-request__command">
           ${buildCodeBlock(data.command ?? '', { language: 'bash' })}

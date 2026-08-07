@@ -92,10 +92,12 @@ interface ParsedPath {
 /** Parse a path into directory and basename components */
 function parsePath(path: string): ParsedPath {
   const normalized = normalizeFilePath(path);
+  // With no slash, lastIndexOf is -1 and both slices already yield the
+  // fallbacks: '' for dir, the whole path for basename.
   const lastSlash = normalized.lastIndexOf('/');
   return {
-    dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',
-    basename: lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized,
+    dir: normalized.slice(0, lastSlash + 1),
+    basename: normalized.slice(lastSlash + 1),
   };
 }
 

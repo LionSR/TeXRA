@@ -43,16 +43,27 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     tempDir = undefined;
   });
 
-  it('uses internal workspace storage when a project config cannot be created', async () => {
+  async function createTempLayout(): Promise<{
+    workspace: string;
+    internalStorage: string;
+    globalStorage: string;
+  }> {
     tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
-    readOnlyWorkspace = join(tempDir, 'project');
+    const workspace = join(tempDir, 'project');
     const internalStorage = join(tempDir, 'internal');
     const globalStorage = join(tempDir, 'global');
     await Promise.all([
-      mkdir(readOnlyWorkspace),
+      mkdir(workspace),
       mkdir(internalStorage),
       mkdir(globalStorage),
     ]);
+    return { workspace, internalStorage, globalStorage };
+  }
+
+  it('uses internal workspace storage when a project config cannot be created', async () => {
+    const { workspace, internalStorage, globalStorage } =
+      await createTempLayout();
+    readOnlyWorkspace = workspace;
     await chmod(readOnlyWorkspace, 0o500);
 
     const config = await createExtensionTexraConfig(
@@ -68,15 +79,8 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   });
 
   it('returns schema defaults from an empty native config', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
-    const workspace = join(tempDir, 'project');
-    const internalStorage = join(tempDir, 'internal');
-    const globalStorage = join(tempDir, 'global');
-    await Promise.all([
-      mkdir(workspace),
-      mkdir(internalStorage),
-      mkdir(globalStorage),
-    ]);
+    const { workspace, internalStorage, globalStorage } =
+      await createTempLayout();
 
     const projectConfig = join(workspace, '.texra', 'config.json');
     const globalConfig = join(globalStorage, 'config.json');
@@ -157,15 +161,8 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   });
 
   it('returns isolated copies of mutable schema defaults', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
-    const workspace = join(tempDir, 'project');
-    const internalStorage = join(tempDir, 'internal');
-    const globalStorage = join(tempDir, 'global');
-    await Promise.all([
-      mkdir(workspace),
-      mkdir(internalStorage),
-      mkdir(globalStorage),
-    ]);
+    const { workspace, internalStorage, globalStorage } =
+      await createTempLayout();
 
     const config = await createExtensionTexraConfig(
       createStorage(internalStorage, globalStorage),

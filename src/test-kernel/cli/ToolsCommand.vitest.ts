@@ -29,6 +29,19 @@ vi.mock('@cli/runtime/tools', async (importOriginal) => {
 
 const { runCli } = await import('@cli/commands/root');
 
+/** Run `texra tools <args>` with the shared headless flag tail every
+ *  structured-output invocation in this suite carries. */
+function runToolsCli(args: readonly string[]): ReturnType<typeof runCli> {
+  return runCli([
+    'tools',
+    ...args,
+    '--print',
+    '--api-mode',
+    'personal',
+    '--no-color',
+  ]);
+}
+
 describe('CLI tools command', () => {
   let stdout = '';
   let stderr = '';
@@ -59,16 +72,11 @@ describe('CLI tools command', () => {
   });
 
   it('emits JSON for tool toggles', async () => {
-    const result = await runCli([
-      'tools',
+    const result = await runToolsCli([
       'disable',
       'codex',
-      '--print',
-      '--api-mode',
-      'personal',
       '--output-format',
       'json',
-      '--no-color',
     ]);
 
     expect(result.exitCode).toBe(0);
@@ -82,16 +90,11 @@ describe('CLI tools command', () => {
   });
 
   it('emits NDJSON for tool toggles', async () => {
-    const result = await runCli([
-      'tools',
+    const result = await runToolsCli([
       'enable',
       'codex',
-      '--print',
-      '--api-mode',
-      'personal',
       '--output-format',
       'ndjson',
-      '--no-color',
     ]);
 
     expect(result.exitCode).toBe(0);
@@ -106,16 +109,11 @@ describe('CLI tools command', () => {
   });
 
   it('emits JSON for install guides without running the command', async () => {
-    const result = await runCli([
-      'tools',
+    const result = await runToolsCli([
       'install',
       'codex',
-      '--print',
-      '--api-mode',
-      'personal',
       '--output-format',
       'json',
-      '--no-color',
     ]);
 
     expect(result.exitCode).toBe(0);
@@ -130,17 +128,12 @@ describe('CLI tools command', () => {
   });
 
   it('rejects structured install output when --run would contaminate stdout', async () => {
-    const result = await runCli([
-      'tools',
+    const result = await runToolsCli([
       'install',
       'codex',
       '--run',
-      '--print',
-      '--api-mode',
-      'personal',
       '--output-format',
       'json',
-      '--no-color',
     ]);
 
     expect(result.exitCode).toBe(2);
@@ -154,17 +147,12 @@ describe('CLI tools command', () => {
       text: 'Install help',
     });
 
-    const result = await runCli([
-      'tools',
+    const result = await runToolsCli([
       'install',
       'github-pr-subscription',
       '--run',
-      '--print',
-      '--api-mode',
-      'personal',
       '--output-format',
       'json',
-      '--no-color',
     ]);
 
     expect(result.exitCode).toBe(2);
@@ -181,16 +169,7 @@ describe('CLI tools command', () => {
       command: 'echo install && echo second-step',
     });
 
-    const result = await runCli([
-      'tools',
-      'install',
-      'codex',
-      '--run',
-      '--print',
-      '--api-mode',
-      'personal',
-      '--no-color',
-    ]);
+    const result = await runToolsCli(['install', 'codex', '--run']);
 
     expect(result.exitCode).toBe(1);
     expect(stdout).toBe('Install help\n');
@@ -203,16 +182,11 @@ describe('CLI tools command', () => {
       command: 'codex login',
     });
 
-    const result = await runCli([
-      'tools',
+    const result = await runToolsCli([
       'auth',
       'codex',
-      '--print',
-      '--api-mode',
-      'personal',
       '--output-format',
       'ndjson',
-      '--no-color',
     ]);
 
     expect(result.exitCode).toBe(0);

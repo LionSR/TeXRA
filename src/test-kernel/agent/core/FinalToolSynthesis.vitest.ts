@@ -57,43 +57,38 @@ function buildRound(supportsForcedToolChoice: boolean) {
   return { requests, services, shared };
 }
 
+const EXPECTED_MESSAGES = [
+  { role: 'user', content: 'Research this' },
+  { role: 'assistant', content: 'Draft answer' },
+  { role: 'user', content: 'Submit the final structured output now.' },
+];
+
 describe('final-tool synthesis turn', () => {
-  it('keeps exploration unforced, then forces exactly one final turn', async () => {
-    const { requests, services, shared } = buildRound(true);
+  it.each([
+    {
+      title: 'keeps exploration unforced, then forces exactly one final turn',
+      supportsForcedToolChoice: true,
+      expectedFinalTools: [undefined, { name: 'submit_output' }],
+    },
+    {
+      title: 'asks once without forcing when the provider cannot force tools',
+      supportsForcedToolChoice: false,
+      expectedFinalTools: [undefined, undefined],
+    },
+  ])('$title', async ({ supportsForcedToolChoice, expectedFinalTools }) => {
+    const { requests, services, shared } = buildRound(supportsForcedToolChoice);
 
     await withTestRunContext(services.runScope, () =>
       createToolUseRoundFlow().setServices(services).run(shared),
     );
 
-    expect(requests.map((request) => request.finalTool)).toEqual([
-      undefined,
-      { name: 'submit_output' },
-    ]);
-    expect(shared.finalTool).toBeUndefined();
-    expect(shared.finalToolAttempted).toBe(true);
-    expect(shared.messages).toEqual([
-      { role: 'user', content: 'Research this' },
-      { role: 'assistant', content: 'Draft answer' },
-      { role: 'user', content: 'Submit the final structured output now.' },
-    ]);
-  });
-
-  it('asks once without forcing when the provider cannot force tools', async () => {
-    const { requests, services, shared } = buildRound(false);
-
-    await withTestRunContext(services.runScope, () =>
-      createToolUseRoundFlow().setServices(services).run(shared),
+    expect(requests.map((request) => request.finalTool)).toEqual(
+      expectedFinalTools,
     );
-
-    expect(requests.map((request) => request.finalTool)).toEqual([
-      undefined,
-      undefined,
-    ]);
+    if (supportsForcedToolChoice) {
+      expect(shared.finalTool).toBeUndefined();
+    }
     expect(shared.finalToolAttempted).toBe(true);
-    expect(shared.messages).toEqual([
-      { role: 'user', content: 'Research this' },
-      { role: 'assistant', content: 'Draft answer' },
-      { role: 'user', content: 'Submit the final structured output now.' },
-    ]);
+    expect(shared.messages).toEqual(EXPECTED_MESSAGES);
   });
 });

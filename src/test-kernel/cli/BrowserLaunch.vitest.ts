@@ -2,36 +2,44 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveBrowserLaunch } from '@cli/runtime/browser';
 
+const SIMPLE_URL = 'https://example.com/pr';
+// Percent-encoded and quoted: must reach the OS handler without cmd reparsing.
+const QUOTED_URL =
+  'https://example.com/compare/feature%2Fdefault...topic%2Fpr?title=a"b';
+
 describe('resolveBrowserLaunch', () => {
-  it('uses open on macOS', () => {
-    expect(resolveBrowserLaunch('https://example.com/pr', 'darwin')).toEqual({
+  it.each<{
+    platform: NodeJS.Platform;
+    url: string;
+    command: string;
+    args: string[];
+  }>([
+    {
+      platform: 'darwin',
+      url: SIMPLE_URL,
       command: 'open',
-      args: ['https://example.com/pr'],
-      windowsVerbatimArguments: false,
-    });
-  });
-
-  it('uses xdg-open on Linux-style platforms', () => {
-    expect(resolveBrowserLaunch('https://example.com/pr', 'linux')).toEqual({
+      args: [SIMPLE_URL],
+    },
+    {
+      platform: 'linux',
+      url: SIMPLE_URL,
       command: 'xdg-open',
-      args: ['https://example.com/pr'],
-      windowsVerbatimArguments: false,
-    });
-  });
-
-  it('uses the Windows URL handler without cmd reparsing', () => {
-    expect(
-      resolveBrowserLaunch(
-        'https://example.com/compare/feature%2Fdefault...topic%2Fpr?title=a"b',
-        'win32',
-      ),
-    ).toEqual({
+      args: [SIMPLE_URL],
+    },
+    {
+      platform: 'win32',
+      url: QUOTED_URL,
       command: 'rundll32',
-      args: [
-        'url.dll,FileProtocolHandler',
-        'https://example.com/compare/feature%2Fdefault...topic%2Fpr?title=a"b',
-      ],
-      windowsVerbatimArguments: false,
-    });
-  });
+      args: ['url.dll,FileProtocolHandler', QUOTED_URL],
+    },
+  ])(
+    'uses $command on $platform without cmd reparsing',
+    ({ platform, url, command, args }) => {
+      expect(resolveBrowserLaunch(url, platform)).toEqual({
+        command,
+        args,
+        windowsVerbatimArguments: false,
+      });
+    },
+  );
 });

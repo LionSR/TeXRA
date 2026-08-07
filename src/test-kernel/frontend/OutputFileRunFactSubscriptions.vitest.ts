@@ -151,18 +151,23 @@ function addOutputFilesPayload(absolutePath: string): AddOutputFilesPayload {
   };
 }
 
-function emitAddOutputFilesRunFact(
+function emitOutputFiles(
   hub: InstanceType<typeof SessionEventHub>,
-  payload: AddOutputFilesPayload,
+  absolutePath: string,
 ): void {
   hub.emit({
     scope: 'run',
     streamId,
     event: {
       type: 'addOutputFiles',
-      ...payload,
+      ...addOutputFilesPayload(absolutePath),
     },
   });
+}
+
+/** Diagnostics currently recorded for `absolutePath` in the latest collection. */
+function latestDiagnostics(absolutePath: string): unknown[] | undefined {
+  return mocks.diagnosticCollections.at(-1)?.items.get(absolutePath);
 }
 
 function disposeContext(context: {
@@ -196,12 +201,13 @@ describe('output-file run fact frontend subscriptions', () => {
     const provider = mocks.registeredProviders.at(-1) as {
       provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
     };
+    const texraBadge = { badge: 'T', tooltip: 'Modified by TeXRA' };
 
     const runFactPath = '/tmp/texra-run-fact-output.tex';
-    emitAddOutputFilesRunFact(hub, addOutputFilesPayload(runFactPath));
+    emitOutputFiles(hub, runFactPath);
     expect(
       provider.provideFileDecoration(vscode.Uri.file(runFactPath)),
-    ).toMatchObject({ badge: 'T', tooltip: 'Modified by TeXRA' });
+    ).toMatchObject(texraBadge);
 
     const writtenPath = '/tmp/texra-workspace-written.tex';
     appSignals.emit('workspaceFilesWritten', {
@@ -209,7 +215,7 @@ describe('output-file run fact frontend subscriptions', () => {
     });
     expect(
       provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
-    ).toMatchObject({ badge: 'T', tooltip: 'Modified by TeXRA' });
+    ).toMatchObject(texraBadge);
 
     disposeContext(context);
     expect(
@@ -230,31 +236,23 @@ describe('output-file run fact frontend subscriptions', () => {
     const context = makeContext();
     registerInlineCriticism(context as unknown as VSCode.ExtensionContext, hub);
 
-    emitAddOutputFilesRunFact(hub, addOutputFilesPayload(outputPath));
+    emitOutputFiles(hub, outputPath);
     await setInlineCriticismEnabled(true);
-    expect(mocks.diagnosticCollections.at(-1)?.items.get(outputPath)).toBe(
-      undefined,
-    );
+    expect(latestDiagnostics(outputPath)).toBe(undefined);
 
-    emitAddOutputFilesRunFact(hub, addOutputFilesPayload(outputPath));
+    emitOutputFiles(hub, outputPath);
     await waitForCondition(
-      () =>
-        (mocks.diagnosticCollections.at(-1)?.items.get(outputPath) ?? [])
-          .length > 0,
+      () => (latestDiagnostics(outputPath) ?? []).length > 0,
       {
         timeoutMs: 200,
         timeoutMessage: 'inline criticism diagnostics were not refreshed',
       },
     );
-    expect(
-      mocks.diagnosticCollections.at(-1)?.items.get(outputPath),
-    ).toHaveLength(1);
+    expect(latestDiagnostics(outputPath)).toHaveLength(1);
 
     await setInlineCriticismEnabled(false);
-    emitAddOutputFilesRunFact(hub, addOutputFilesPayload(outputPath));
-    expect(mocks.diagnosticCollections.at(-1)?.items.get(outputPath)).toBe(
-      undefined,
-    );
+    emitOutputFiles(hub, outputPath);
+    expect(latestDiagnostics(outputPath)).toBe(undefined);
 
     disposeContext(context);
   });

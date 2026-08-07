@@ -26,22 +26,27 @@ function latexResultFixture(
 }
 
 describe('HistoryActionOutcomes', () => {
-  it('maps export-input error statuses to messages', () => {
-    expect(exportInputErrorMessage('config_missing')).toBe(
-      'History item not found',
-    );
-    expect(exportInputErrorMessage('conversation_missing')).toBe(
+  it.each([
+    ['config_missing', 'History item not found'],
+    [
+      'conversation_missing',
       'No conversation data available for this execution',
-    );
-  });
+    ],
+  ] as const)(
+    'maps export-input error %s to its message',
+    (status, message) => {
+      expect(exportInputErrorMessage(status)).toBe(message);
+    },
+  );
 
-  it('maps html export error statuses to messages', () => {
-    expect(htmlExportErrorMessage('config_missing')).toBe(
-      'History item not found',
-    );
-    expect(htmlExportErrorMessage('streamLogs_missing')).toBe(
+  it.each([
+    ['config_missing', 'History item not found'],
+    [
+      'streamLogs_missing',
       'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
-    );
+    ],
+  ] as const)('maps html export error %s to its message', (status, message) => {
+    expect(htmlExportErrorMessage(status)).toBe(message);
   });
 
   it('formats the exported-file message from a storage path', () => {

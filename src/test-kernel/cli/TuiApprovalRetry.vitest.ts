@@ -1,4 +1,3 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 import pDefer from 'p-defer';
@@ -227,12 +226,13 @@ function ordinaryRetry(
 }
 
 function chatGptSubscriptionRetry(streamId: string): RetryPermission {
+  const message = 'ChatGPT subscription usage limit reached.';
   return {
     streamId,
     operation: 'model request',
-    errorMessage: 'ChatGPT subscription usage limit reached.',
+    errorMessage: message,
     errorDetails: {
-      message: 'ChatGPT subscription usage limit reached.',
+      message,
       exhaustionReason: 'chatgpt-subscription',
       provider: 'openai',
     },
@@ -245,13 +245,35 @@ function decideRetry(decision: ApprovalDecision): void {
   pending?.decide(decision);
 }
 
+/** The pre-switch route: included API access with the ChatGPT subscription. */
+function expectIncludedSubscriptionRoute(): void {
+  expect(mocks.apiMode).toBe('included');
+  expect(mocks.preferSubscription).toBe(true);
+}
+
+function expectNoPreferenceWrites(): void {
+  expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+  expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+}
+
 function expectNoCredentialChange(
   prepareRetry: ReturnType<typeof vi.fn>,
 ): void {
   expect(mocks.invalidateApiKeyCache).not.toHaveBeenCalled();
-  expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-  expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+  expectNoPreferenceWrites();
   expect(prepareRetry).not.toHaveBeenCalled();
+}
+
+/** A promise that never settles; call sites document why that is safe. */
+function neverSettles(): Promise<void> {
+  return new Promise<void>(() => {});
+}
+
+/** Two microtask ticks: one for the abort-aware wrapper around an in-flight
+ *  lookup or preparation, one for the retry continuation behind it. */
+async function settleRetryContinuation(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 const PERSONAL_KEY_RETRY: ApprovalDecision = {
@@ -283,6 +305,28 @@ async function beginSubscriptionSwitch(
   await waitForApproval('retry', { streamId });
   decideRetry(PERSONAL_KEY_RETRY);
   return { result };
+}
+
+/** Approves an ordinary retry while a credential switch is pending, asserting
+ *  its client is still prepared on the old route. */
+async function approveOrdinaryRetryOnOldRoute(
+  interactions: HostInteractions,
+  streamId: string,
+): Promise<void> {
+  const ordinaryPrepare = vi.fn(async () => {
+    expectIncludedSubscriptionRoute();
+  });
+  const ordinary = interactions.requestRetry?.(ordinaryRetry(streamId), {
+    prepareRetry: ordinaryPrepare,
+  });
+  await waitForApproval('retry', { streamId });
+  decideRetry({ accepted: true });
+
+  await expect(ordinary).resolves.toEqual({
+    action: 'retry',
+    feedback: undefined,
+  });
+  expect(ordinaryPrepare).toHaveBeenCalledOnce();
 }
 
 beforeEach(() => {
@@ -676,8 +720,7 @@ describe('TUI retry approvals', () => {
       personalApiKeyAvailable: true,
     });
     expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+    expectNoPreferenceWrites();
 
     decideRetry(PERSONAL_KEY_RETRY);
 
@@ -737,8 +780,7 @@ describe('TUI retry approvals', () => {
     });
     await expect(result).resolves.toEqual({ action: 'cancel' });
     validation.resolve(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleRetryContinuation();
 
     expectNoCredentialChange(prepareRetry);
   });
@@ -760,10 +802,8 @@ describe('TUI retry approvals', () => {
       action: 'deny',
       reason: 'OpenAI client construction failed',
     });
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.apiMode).toBe('included');
-    expect(mocks.preferSubscription).toBe(true);
+    expectNoPreferenceWrites();
+    expectIncludedSubscriptionRoute();
     expect(prepareRetry).toHaveBeenCalledOnce();
   });
 
@@ -781,8 +821,7 @@ describe('TUI retry approvals', () => {
       { prepareRetry },
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-    expect(mocks.apiMode).toBe('included');
-    expect(mocks.preferSubscription).toBe(true);
+    expectIncludedSubscriptionRoute();
 
     // A later /api, /key, login, or logout selection owns these values now.
     mocks.apiMode = 'included';
@@ -793,19 +832,15 @@ describe('TUI retry approvals', () => {
       action: 'deny',
       reason: 'OpenAI client construction failed',
     });
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.apiMode).toBe('included');
-    expect(mocks.preferSubscription).toBe(true);
+    expectNoPreferenceWrites();
+    expectIncludedSubscriptionRoute();
   });
 
   it('cancels stalled candidate construction without publishing settings', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const prepareRetry = vi.fn(
-      async (_selection, _signal?: AbortSignal) =>
-        await new Promise<void>(() => {
-          // Deliberately never settles: cancellation must reject the wrapper.
-        }),
+      // Deliberately never settles: cancellation must reject the wrapper.
+      async (_selection, _signal?: AbortSignal) => await neverSettles(),
     );
     const { interactions } = tui();
     const { result } = await beginSubscriptionSwitch(
@@ -823,8 +858,7 @@ describe('TUI retry approvals', () => {
     await expect(result).resolves.toEqual({ action: 'cancel' });
     expect(prepareRetry.mock.calls[0]?.[1]?.aborted).toBe(true);
     await vi.waitFor(() => {
-      expect(mocks.apiMode).toBe('included');
-      expect(mocks.preferSubscription).toBe(true);
+      expectIncludedSubscriptionRoute();
     });
 
     const laterPrepare = vi.fn(async (selection) => {
@@ -848,9 +882,8 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     mocks.setCliApiMode.mockImplementationOnce(async (mode) => {
       mocks.apiMode = mode;
-      await new Promise<void>(() => {
-        // Simulate storage that never settles after updating in-memory state.
-      });
+      // Simulate storage that never settles after updating in-memory state.
+      await neverSettles();
     });
     const { interactions } = tui();
     const { result } = await beginSubscriptionSwitch(
@@ -965,8 +998,7 @@ describe('TUI retry approvals', () => {
         'Previous access settings could not be fully restored: The previous API mode appears restored in memory, but persistence could not be confirmed: API mode storage unavailable',
       ),
     });
-    expect(mocks.apiMode).toBe('included');
-    expect(mocks.preferSubscription).toBe(true);
+    expectIncludedSubscriptionRoute();
     expect(prepareRetry).toHaveBeenCalledOnce();
   });
 
@@ -989,13 +1021,11 @@ describe('TUI retry approvals', () => {
     preparation.resolve();
     await preparation.promise;
     await vi.waitFor(() => {
-      expect(mocks.apiMode).toBe('included');
-      expect(mocks.preferSubscription).toBe(true);
+      expectIncludedSubscriptionRoute();
     });
 
     expect(sessionMeta.get().apiMode).toBe('included');
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+    expectNoPreferenceWrites();
   });
 
   it('retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen', async () => {
@@ -1012,8 +1042,7 @@ describe('TUI retry approvals', () => {
       feedback: undefined,
     });
     expect(mocks.hasUsableApiKey).toHaveBeenCalledOnce();
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+    expectNoPreferenceWrites();
   });
 
   it('keeps new ordinary retry preparation on the old route while a candidate is building', async () => {
@@ -1028,22 +1057,7 @@ describe('TUI retry approvals', () => {
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
 
-    const ordinaryPrepare = vi.fn(async () => {
-      expect(mocks.apiMode).toBe('included');
-      expect(mocks.preferSubscription).toBe(true);
-    });
-    const ordinary = interactions.requestRetry?.(
-      ordinaryRetry('ordinary-stream', 'ordinary-retry'),
-      { prepareRetry: ordinaryPrepare },
-    );
-    await waitForApproval('retry', { streamId: 'ordinary-stream' });
-    decideRetry({ accepted: true });
-
-    await expect(ordinary).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(ordinaryPrepare).toHaveBeenCalledOnce();
+    await approveOrdinaryRetryOnOldRoute(interactions, 'ordinary-stream');
 
     preparation.resolve();
     await expect(switching).resolves.toEqual({
@@ -1069,21 +1083,10 @@ describe('TUI retry approvals', () => {
     );
     await vi.waitFor(() => expect(switchPrepare).toHaveBeenCalledOnce());
 
-    const ordinaryPrepare = vi.fn(async () => {
-      expect(mocks.apiMode).toBe('included');
-      expect(mocks.preferSubscription).toBe(true);
-    });
-    const ordinary = interactions.requestRetry?.(
-      ordinaryRetry('ordinary-after-rollback'),
-      { prepareRetry: ordinaryPrepare },
+    await approveOrdinaryRetryOnOldRoute(
+      interactions,
+      'ordinary-after-rollback',
     );
-    await waitForApproval('retry', { streamId: 'ordinary-after-rollback' });
-    decideRetry({ accepted: true });
-    await expect(ordinary).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(ordinaryPrepare).toHaveBeenCalledOnce();
 
     preparation.resolve();
     await expect(switching).resolves.toEqual({
@@ -1109,8 +1112,7 @@ describe('TUI retry approvals', () => {
       reason: 'ordinary client refresh failed',
     });
     expect(prepareRetry).toHaveBeenCalledOnce();
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+    expectNoPreferenceWrites();
   });
 
   it('holds a preparing retry out of the queue, then joins behind the open modal', async () => {
@@ -1179,10 +1181,8 @@ describe('TUI retry approvals', () => {
 
   it('cancels ordinary retry preparation after approval', async () => {
     const ordinaryPrepare = vi.fn(
-      async (_selection, _signal?: AbortSignal) =>
-        await new Promise<void>(() => {
-          // Cancellation settles the abort-aware wrapper around this task.
-        }),
+      // Cancellation settles the abort-aware wrapper around this task.
+      async (_selection, _signal?: AbortSignal) => await neverSettles(),
     );
     const { interactions } = tui();
     const ordinary = interactions.requestRetry?.(
@@ -1233,8 +1233,7 @@ describe('TUI retry approvals', () => {
       await expect(result).resolves.toEqual({ action: 'cancel' });
 
       resolveLookup?.(true);
-      await Promise.resolve();
-      await Promise.resolve();
+      await settleRetryContinuation();
 
       expect(mocks.setCliApiMode).not.toHaveBeenCalled();
       expect(currentApproval.get()).toBeUndefined();
@@ -1274,8 +1273,7 @@ describe('TUI retry approvals', () => {
     await waitForApproval('retry', { errorMessage: 'second retry' });
 
     resolveFirstLookup?.(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleRetryContinuation();
 
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
   });
@@ -1450,11 +1448,9 @@ describe('TUI retry approvals', () => {
     );
     await vi.waitFor(() => expect(queuedPrepare).toHaveBeenCalledOnce());
     queuedPreparation.resolve();
-    // One tick for the abort-aware wrapper around the preparation, one for the
-    // retry's continuation, which parks the commit behind the blocked one.
+    // The retry continuation parks its commit behind the blocked one.
     await queuedPreparation.promise;
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleRetryContinuation();
 
     interactions.cancel({
       streamId: 'queued-commit',

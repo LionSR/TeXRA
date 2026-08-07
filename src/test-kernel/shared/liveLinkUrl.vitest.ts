@@ -10,20 +10,13 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
 describe('sanitizeLiveLinkUrl', () => {
-  it('keeps safe absolute URLs', () => {
-    expect(sanitizeLiveLinkUrl('https://example.com/page')).toBe(
-      'https://example.com/page',
-    );
-    expect(sanitizeLiveLinkUrl('http://example.com')).toBe(
-      'http://example.com',
-    );
-    expect(sanitizeLiveLinkUrl('mailto:a@example.com')).toBe(
-      'mailto:a@example.com',
-    );
-  });
-
-  it('keeps anchor-only fragments', () => {
-    expect(sanitizeLiveLinkUrl('#section-2')).toBe('#section-2');
+  it.each([
+    'https://example.com/page',
+    'http://example.com',
+    'mailto:a@example.com',
+    '#section-2',
+  ])('keeps safe URL %s as-is', (url) => {
+    expect(sanitizeLiveLinkUrl(url)).toBe(url);
   });
 
   it.each(['/etc/passwd', '/Users/alice/.ssh/id_rsa', '/local/path'])(

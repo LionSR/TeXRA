@@ -1,10 +1,7 @@
-// Node imports
 import * as path from 'node:path';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports
 import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
 import { WorkspaceFS } from '@utils/files';
 

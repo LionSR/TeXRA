@@ -26,8 +26,11 @@ const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('personal');
 // dropping how the session is paid for.
 const PERSONAL_API_MODE_COMPACT = 'API keys';
 
-const statusBarSegmentText = (segment: { readonly text: string }): string =>
-  segment.text;
+type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
+
+function leftTexts(display: StatusBarDisplay): string[] {
+  return display.left.map((segment) => segment.text);
+}
 
 // `StatusBarDisplayInput` with every field optional and its three grouped
 // members individually overridable, so a test still names one field at a time
@@ -70,6 +73,51 @@ function statusInput(
   };
 }
 
+// Recurring shortcut bundles for the stream-navigation row.
+const STREAM_NAV_SHORTCUTS = {
+  childNavigationAvailable: true,
+  streamFocusAvailable: true,
+} as const;
+const TRANSCRIPT_SHORTCUTS = {
+  ...STREAM_NAV_SHORTCUTS,
+  transcriptAvailable: true,
+} as const;
+
+// The armed-exit notice most tests exercise; the discard-warning table drops
+// `resumeId` to keep its expected rows short.
+const EXIT_NOTICE = {
+  kind: 'exit',
+  text: 'Press Ctrl-C again to exit',
+  resumeId: 'abc123',
+  expiresAt: 1,
+} as const;
+
+const UNKNOWN_COMMAND_NOTICE = {
+  kind: 'message',
+  text: 'Unknown command: /wat',
+  expiresAt: 1,
+} as const;
+
+type RelayQuota = NonNullable<StatusBarDisplayInput['relayQuota']>;
+
+// Quota fixtures share a $10 limit; only the percentage varies per test.
+function relayQuota(percentUsed: number): RelayQuota {
+  return {
+    currentSpend: percentUsed / 10,
+    limit: 10,
+    remaining: (100 - percentUsed) / 10,
+    percentUsed,
+  };
+}
+
+type TokenUsage = NonNullable<StatusBarDisplayInput['usage']>;
+type UsageRoute = NonNullable<TokenUsage['usageRoute']>;
+
+// One heavy usage reading reused across the context-window route tests.
+function heavyUsage(usageRoute: UsageRoute): TokenUsage {
+  return { inputTokens: 187_000, outputTokens: 4_000, cost: 0, usageRoute };
+}
+
 describe('CLI StatusBar display model', () => {
   it('keeps a stream model and category paired for access resolution', () => {
     const session = {
@@ -100,13 +148,9 @@ describe('CLI StatusBar display model', () => {
       statusInput({ transcriptMode: 'ephemeral' }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain(
-      'EPHEMERAL TRANSCRIPT',
-    );
+    expect(leftTexts(display)).toContain('EPHEMERAL TRANSCRIPT');
     expect(
-      display.left.find(
-        (segment) => statusBarSegmentText(segment) === 'EPHEMERAL TRANSCRIPT',
-      ),
+      display.left.find((segment) => segment.text === 'EPHEMERAL TRANSCRIPT'),
     ).toMatchObject({ badge: true, badgeColor: 'yellow' });
     expect(display.bindings).not.toContain('Resume this session');
   });
@@ -115,17 +159,13 @@ describe('CLI StatusBar display model', () => {
     const input = statusInput({ approvalPolicy: 'ask' });
     const ask = buildStatusBarDisplay(input);
 
-    expect(ask.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'idle',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(ask)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
 
     const deny = buildStatusBarDisplay({
       ...input,
       approvalPolicy: 'never',
     });
-    expect(deny.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(deny)).toEqual([
       '◆',
       'idle',
       PERSONAL_API_MODE_LABEL,
@@ -137,7 +177,7 @@ describe('CLI StatusBar display model', () => {
       ...input,
       approvalPolicy: 'yolo',
     });
-    expect(yolo.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(yolo)).toEqual([
       '◆',
       'idle',
       PERSONAL_API_MODE_LABEL,
@@ -154,7 +194,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       PERSONAL_API_MODE_LABEL,
@@ -166,11 +206,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps idle state compact and omits static agent/model names', () => {
     const display = buildStatusBarDisplay(statusInput());
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'idle',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
     expect(display.bindings).toContain('/api api');
     expect(display.bindings).toContain('/model models');
     expect(display.bindings).not.toContain('/agent agents');
@@ -185,17 +221,13 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Esc back');
     expect(display.bindings).not.toContain('Tab sessions');
     expect(display.bindings).not.toContain('Alt-1..9 focus');
-    expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
+    expect(leftTexts(display)).not.toContain('deepseekT');
   });
 
   it('renders bindings in the shared KeyHints hint format', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
-        },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
@@ -209,11 +241,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         width: 80,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
-        },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
@@ -378,11 +406,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         width: 60,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
-        },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
@@ -394,11 +418,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         width: 42,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
-        },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
@@ -451,9 +471,7 @@ describe('CLI StatusBar display model', () => {
         width: 80,
         shortcuts: {
           agentSelectionAvailable: true,
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
+          ...TRANSCRIPT_SHORTCUTS,
         },
       }),
     );
@@ -504,11 +522,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 1,
         modelAccess: 'included',
         ctrlCAction: 'stop',
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          modifierLabel: 'Option',
-        },
+        shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
       }),
     );
 
@@ -530,11 +544,7 @@ describe('CLI StatusBar display model', () => {
         modelAccess: 'included',
         ctrlCAction: 'stop root',
         width: 100,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          modifierLabel: 'Option',
-        },
+        shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
       }),
     );
 
@@ -542,7 +552,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('scroll');
     expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-C stop root');
-    expect(display.left.map(statusBarSegmentText)).toContain('1 subagent');
+    expect(leftTexts(display)).toContain('1 subagent');
   });
 
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
@@ -568,14 +578,11 @@ describe('CLI StatusBar display model', () => {
         approvalDepth: 3,
         modelAccess: 'included',
         ctrlCAction: 'stop',
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       INCLUDED_ACCESS_LABEL,
@@ -625,7 +632,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({ status: STREAM_PHASE.RUNNING, runningFrame: '/' }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('/ running');
+    expect(leftTexts(display)).toContain('/ running');
   });
 
   it('omits the spin prefix outside active phases', () => {
@@ -633,9 +640,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({ status: STREAM_PHASE.WAITING, runningFrame: '/' }),
     );
 
-    expect(
-      display.left.map(statusBarSegmentText).some((text) => text.includes('/')),
-    ).toBe(false);
+    expect(leftTexts(display).some((text) => text.includes('/'))).toBe(false);
   });
 
   it.each(['relay', 'api-key'] as const)(
@@ -645,17 +650,10 @@ describe('CLI StatusBar display model', () => {
         statusInput({
           status: STREAM_PHASE.RUNNING,
           model: 'gpt56',
-          usage: {
-            inputTokens: 187_000,
-            outputTokens: 4_000,
-            cost: 0,
-            usageRoute,
-          },
+          usage: heavyUsage(usageRoute),
         }),
       );
-      expect(display.left.map(statusBarSegmentText)).toContain(
-        '187k/1.1M (18%)',
-      );
+      expect(leftTexts(display)).toContain('187k/1.1M (18%)');
     },
   );
 
@@ -664,18 +662,13 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         model: 'gpt56',
-        usage: {
-          inputTokens: 187_000,
-          outputTokens: 4_000,
-          cost: 0,
-          usageRoute: 'chatgpt-subscription',
-        },
+        usage: heavyUsage('chatgpt-subscription'),
       }),
     );
 
     // gpt-5.6's Codex subscription budget caps to 500k
     // (CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW), not the raw 1.05M API window.
-    expect(display.left.map(statusBarSegmentText)).toContain('187k/500k (37%)');
+    expect(leftTexts(display)).toContain('187k/500k (37%)');
   });
 
   it('uses the default 400k subscription budget for earlier Codex models', () => {
@@ -683,16 +676,11 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         model: 'gpt55',
-        usage: {
-          inputTokens: 187_000,
-          outputTokens: 4_000,
-          cost: 0,
-          usageRoute: 'chatgpt-subscription',
-        },
+        usage: heavyUsage('chatgpt-subscription'),
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('187k/400k (47%)');
+    expect(leftTexts(display)).toContain('187k/400k (47%)');
   });
 
   it('does not substitute a raw context window for unknown subscription models', () => {
@@ -700,16 +688,11 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         model: 'unknown-subscription-model',
-        usage: {
-          inputTokens: 187_000,
-          outputTokens: 4_000,
-          cost: 0,
-          usageRoute: 'chatgpt-subscription',
-        },
+        usage: heavyUsage('chatgpt-subscription'),
       }),
     );
 
-    const labels = display.left.map(statusBarSegmentText);
+    const labels = leftTexts(display);
     expect(labels).toContain('187k');
     expect(labels.some((label) => label.startsWith('187k/'))).toBe(false);
   });
@@ -719,21 +702,23 @@ describe('CLI StatusBar display model', () => {
       usageRoute:
         'chatgpt-subscription' | 'kimi-code-subscription' | 'relay' | 'api-key',
     ): string[] =>
-      buildStatusBarDisplay(
-        statusInput({
-          modelAccess: resolveCliModelAccessRoute({
-            apiMode: 'personal',
-            subscriptionActive: true,
-            usageRoute,
+      leftTexts(
+        buildStatusBarDisplay(
+          statusInput({
+            modelAccess: resolveCliModelAccessRoute({
+              apiMode: 'personal',
+              subscriptionActive: true,
+              usageRoute,
+            }),
+            usage: {
+              inputTokens: 1_000,
+              outputTokens: 100,
+              cost: 0,
+              usageRoute,
+            },
           }),
-          usage: {
-            inputTokens: 1_000,
-            outputTokens: 100,
-            cost: 0,
-            usageRoute,
-          },
-        }),
-      ).left.map(statusBarSegmentText);
+        ),
+      );
 
     expect(accessLabel('chatgpt-subscription')).toContain('subscription');
     expect(accessLabel('kimi-code-subscription')).toContain('subscription');
@@ -751,18 +736,13 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 60,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
-        },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
     expect(display.bindings).toBe(
       'Tab sessions · Ctrl-T full output · Ctrl-C stop',
     );
-    expect(display.bindings).toContain('Ctrl-C stop');
   });
 
   it('keeps the child list shortcut when the footer is narrow', () => {
@@ -773,12 +753,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 44,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          modifierLabel: 'Option',
-          transcriptAvailable: true,
-        },
+        shortcuts: { ...TRANSCRIPT_SHORTCUTS, modifierLabel: 'Option' },
       }),
     );
 
@@ -794,15 +769,11 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 27,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-          transcriptAvailable: true,
-        },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).not.toContain('3 sub');
+    expect(leftTexts(display)).not.toContain('3 sub');
     expect(display.bindings).toBe('Tab sessions');
   });
 
@@ -813,10 +784,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 13,
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
@@ -832,21 +800,18 @@ describe('CLI StatusBar display model', () => {
         ctrlCAction: 'stop',
         width: 34,
         foreground: { shortcutsActive: false },
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       '1m 15s',
       PERSONAL_API_MODE_COMPACT,
       '3 sub',
     ]);
-    expect(display.left.map(statusBarSegmentText).join(' ')).not.toContain(
+    expect(leftTexts(display).join(' ')).not.toContain(
       `${PERSONAL_API_MODE_COMPACT}3`,
     );
   });
@@ -862,7 +827,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       '1m 15s',
@@ -883,7 +848,7 @@ describe('CLI StatusBar display model', () => {
     // At 16 columns even `◆ running API keys` (18 cols + gaps) cannot fit —
     // the fitting sweep now removes access mode too instead of returning an
     // over-wide row that soft-wraps the 1-row status line.
-    expect(display.left.map(statusBarSegmentText)).toEqual(['◆', 'running']);
+    expect(leftTexts(display)).toEqual(['◆', 'running']);
   });
 
   it('drops the queued count segment before durable status on narrow bars', () => {
@@ -898,7 +863,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       '1m 15s',
@@ -934,11 +899,11 @@ describe('CLI StatusBar display model', () => {
     const baseDisplayInput = statusInput({
       status: STREAM_PHASE.CANCELLED,
       ctrlCAction: 'stop root',
-      shortcuts: { childNavigationAvailable: true, streamFocusAvailable: true },
+      shortcuts: STREAM_NAV_SHORTCUTS,
     });
     const display = buildStatusBarDisplay(baseDisplayInput);
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'stopped',
       'root active',
@@ -950,40 +915,31 @@ describe('CLI StatusBar display model', () => {
       ...baseDisplayInput,
       status: STREAM_PHASE.RUNNING,
     });
-    expect(liveChildDisplay.left.map(statusBarSegmentText)).not.toContain(
-      'root active',
-    );
+    expect(leftTexts(liveChildDisplay)).not.toContain('root active');
 
     const stoppedRootDisplay = buildStatusBarDisplay({
       ...baseDisplayInput,
       ctrlCAction: 'stop',
     });
-    expect(stoppedRootDisplay.left.map(statusBarSegmentText)).not.toContain(
-      'root active',
-    );
+    expect(leftTexts(stoppedRootDisplay)).not.toContain('root active');
   });
 
   it('labels a focused WAITING child distinctly from the root idle wording', () => {
     const rootDisplay = buildStatusBarDisplay(
       statusInput({ status: STREAM_PHASE.WAITING, isChildStream: false }),
     );
-    expect(rootDisplay.left.map(statusBarSegmentText)).toContain('idle');
+    expect(leftTexts(rootDisplay)).toContain('idle');
 
     const childDisplay = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.WAITING,
         isChildStream: true,
         ctrlCAction: 'stop root',
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
-    expect(childDisplay.left.map(statusBarSegmentText)).toContain(
-      'waiting for you',
-    );
-    expect(childDisplay.left.map(statusBarSegmentText)).not.toContain('idle');
+    expect(leftTexts(childDisplay)).toContain('waiting for you');
+    expect(leftTexts(childDisplay)).not.toContain('idle');
   });
 
   it.each([
@@ -996,7 +952,7 @@ describe('CLI StatusBar display model', () => {
         statusInput({ status, isChildStream: true }),
       );
 
-      expect(display.left.map(statusBarSegmentText)).toContain(label);
+      expect(leftTexts(display)).toContain(label);
     },
   );
 
@@ -1282,14 +1238,11 @@ describe('CLI StatusBar display model', () => {
         approvalDepth: 1,
         ctrlCAction: 'stop',
         foreground: { shortcutsActive: false },
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
+    expect(leftTexts(display)).toContain('1 approval');
     expect(display.bindings).toBe(
       'Keys go to the panel above · Esc close · Ctrl-C stop',
     );
@@ -1305,8 +1258,8 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('1 question');
-    expect(display.left.map(statusBarSegmentText)).not.toContain('1 approval');
+    expect(leftTexts(display)).toContain('1 question');
+    expect(leftTexts(display)).not.toContain('1 approval');
     expect(display.bindings).toContain('Esc skip');
   });
 
@@ -1330,10 +1283,7 @@ describe('CLI StatusBar display model', () => {
         ctrlCAction: 'stop',
         width: 40,
         foreground: { shortcutsActive: false },
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
@@ -1348,10 +1298,7 @@ describe('CLI StatusBar display model', () => {
         ctrlCAction: 'stop',
         width: 15,
         foreground: { shortcutsActive: false },
-        shortcuts: {
-          childNavigationAvailable: true,
-          streamFocusAvailable: true,
-        },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
@@ -1365,7 +1312,7 @@ describe('CLI StatusBar display model', () => {
     });
     const running = buildStatusBarDisplay(runningInput);
 
-    expect(running.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(running)).toEqual([
       '◆',
       'running',
       '1m 50s',
@@ -1376,7 +1323,7 @@ describe('CLI StatusBar display model', () => {
       ...runningInput,
       substate: STREAM_SUBSTATE.RESUMING,
     });
-    expect(resuming.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(resuming)).toEqual([
       '◆',
       'resuming',
       '1m 50s',
@@ -1387,7 +1334,7 @@ describe('CLI StatusBar display model', () => {
       ...runningInput,
       elapsedMs: -20_000,
     });
-    expect(justStarted.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(justStarted)).toEqual([
       '◆',
       'running',
       '0s',
@@ -1398,7 +1345,7 @@ describe('CLI StatusBar display model', () => {
       ...runningInput,
       thinkingActive: true,
     });
-    expect(thinking.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(thinking)).toEqual([
       '◆',
       'running',
       '1m 50s',
@@ -1411,7 +1358,7 @@ describe('CLI StatusBar display model', () => {
       compactingActive: true,
       thinkingActive: true,
     });
-    expect(compacting.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(compacting)).toEqual([
       '◆',
       'running',
       '1m 50s',
@@ -1428,11 +1375,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(idle.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'idle',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(idle)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
   });
 
   it('preserves distinct agent-task, bash, and edit bypass badges', () => {
@@ -1443,7 +1386,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       PERSONAL_API_MODE_LABEL,
@@ -1469,16 +1412,11 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        transientNotice: {
-          kind: 'exit',
-          text: 'Press Ctrl-C again to exit',
-          resumeId: 'abc123',
-          expiresAt: 1,
-        },
+        transientNotice: EXIT_NOTICE,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
+    expect(leftTexts(display)).toEqual([
       '◆',
       'running',
       'Press Ctrl-C again to exit',
@@ -1493,12 +1431,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        transientNotice: {
-          kind: 'exit',
-          text: 'Press Ctrl-C again to exit',
-          resumeId: 'abc123',
-          expiresAt: 1,
-        },
+        transientNotice: EXIT_NOTICE,
         commandName: 'texra-local',
       }),
     );
@@ -1512,12 +1445,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        transientNotice: {
-          kind: 'exit',
-          text: 'Press Ctrl-C again to exit',
-          resumeId: 'abc123',
-          expiresAt: 1,
-        },
+        transientNotice: EXIT_NOTICE,
         queuedFollowUpMessages: [
           'Keep the proof under one page.',
           'Also mention the finite monoid argument.',
@@ -1525,14 +1453,12 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain(
+    expect(leftTexts(display)).toContain(
       '2 queued follow-ups will be discarded',
     );
     expect(
       display.left.find(
-        (segment) =>
-          statusBarSegmentText(segment) ===
-          '2 queued follow-ups will be discarded',
+        (segment) => segment.text === '2 queued follow-ups will be discarded',
       ),
     ).toMatchObject({ color: 'red' });
   });
@@ -1549,10 +1475,8 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain(
-      'Signed in successfully',
-    );
-    expect(display.left.map(statusBarSegmentText)).not.toContain(
+    expect(leftTexts(display)).toContain('Signed in successfully');
+    expect(leftTexts(display)).not.toContain(
       '1 queued follow-up will be discarded',
     );
   });
@@ -1563,20 +1487,12 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         runningFrame: '/',
         elapsedMs: 45_000,
-        transientNotice: {
-          kind: 'message',
-          text: 'Unknown command: /wat',
-          expiresAt: 1,
-        },
+        transientNotice: UNKNOWN_COMMAND_NOTICE,
         width: 20,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'run 45s',
-      'Unknown…',
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'run 45s', 'Unknown…']);
   });
 
   it('keeps thinking status visible during transient notices', () => {
@@ -1586,20 +1502,32 @@ describe('CLI StatusBar display model', () => {
         runningFrame: '/',
         elapsedMs: 45_000,
         thinkingActive: true,
-        transientNotice: {
-          kind: 'message',
-          text: 'Unknown command: /wat',
-          expiresAt: 1,
-        },
+        transientNotice: UNKNOWN_COMMAND_NOTICE,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual(
+    expect(leftTexts(display)).toEqual(
       expect.arrayContaining(['/ running 45s', 'thinking...']),
     );
   });
 
-  it('keeps queued-input discard warnings ahead of status details', () => {
+  it.each([
+    {
+      name: 'keeps queued-input discard warnings ahead of status details',
+      width: 80,
+      expected: [
+        '◆',
+        'run 45s',
+        'Press Ctrl-C again to exit',
+        '1 queued follow-up will be discarded',
+      ],
+    },
+    {
+      name: 'bounds queued-input discard warnings in very narrow footers',
+      width: 30,
+      expected: ['◆', '1 queued follow-up will b…'],
+    },
+  ])('$name', ({ width, expected }) => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
@@ -1611,38 +1539,11 @@ describe('CLI StatusBar display model', () => {
           expiresAt: 1,
         },
         queuedFollowUpMessages: ['Continue with the proof.'],
-        width: 80,
+        width,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'run 45s',
-      'Press Ctrl-C again to exit',
-      '1 queued follow-up will be discarded',
-    ]);
-  });
-
-  it('bounds queued-input discard warnings in very narrow footers', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: STREAM_PHASE.RUNNING,
-        runningFrame: '/',
-        elapsedMs: 45_000,
-        transientNotice: {
-          kind: 'exit',
-          text: 'Press Ctrl-C again to exit',
-          expiresAt: 1,
-        },
-        queuedFollowUpMessages: ['Continue with the proof.'],
-        width: 30,
-      }),
-    );
-
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      '1 queued follow-up will b…',
-    ]);
+    expect(leftTexts(display)).toEqual(expected);
   });
 
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
@@ -1652,17 +1553,13 @@ describe('CLI StatusBar display model', () => {
     });
 
     // Wide: the full usage segment fits.
-    expect(
-      buildStatusBarDisplay({ ...input, width: 80 }).left.map(
-        statusBarSegmentText,
-      ),
-    ).toContain('80k/1.0M (8%)');
+    expect(leftTexts(buildStatusBarDisplay({ ...input, width: 80 }))).toContain(
+      '80k/1.0M (8%)',
+    );
 
     // Narrow: the segment degrades to the bare percentage instead of
     // disappearing, keeping context pressure visible.
-    const narrow = buildStatusBarDisplay({ ...input, width: 24 }).left.map(
-      statusBarSegmentText,
-    );
+    const narrow = leftTexts(buildStatusBarDisplay({ ...input, width: 24 }));
     expect(narrow).not.toContain('80k/1.0M (8%)');
     expect(narrow).toContain('8%');
   });
@@ -1671,21 +1568,12 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        transientNotice: {
-          kind: 'exit',
-          text: 'Press Ctrl-C again to exit',
-          resumeId: 'abc123',
-          expiresAt: 1,
-        },
+        transientNotice: EXIT_NOTICE,
         width: 29,
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'run',
-      'Press Ctrl-C again t…',
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'run', 'Press Ctrl-C again t…']);
     expect(display.bindings).toBe(
       'Resume this session with: texra resume abc123',
     );
@@ -1704,19 +1592,15 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'Sign-in failed; try again',
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'Sign-in failed; try again']);
   });
 
   it('uses portable Esc labels for meta shortcuts on macOS', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         shortcuts: {
-          childNavigationAvailable: true,
+          ...STREAM_NAV_SHORTCUTS,
           parentNavigationAvailable: true,
-          streamFocusAvailable: true,
           modifierLabel: defaultShortcutModifierLabel('darwin'),
         },
       }),
@@ -1733,75 +1617,43 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         modelAccess: 'included',
-        relayQuota: {
-          currentSpend: 8.4,
-          limit: 10,
-          remaining: 1.6,
-          percentUsed: 84,
-        },
+        relayQuota: relayQuota(84),
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain(
-      'included access 16% left',
-    );
+    expect(leftTexts(display)).toContain('included access 16% left');
   });
 
   it('keeps the quota silent below the warning threshold', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         modelAccess: 'included',
-        relayQuota: {
-          currentSpend: 7.9,
-          limit: 10,
-          remaining: 2.1,
-          percentUsed: 79,
-        },
+        relayQuota: relayQuota(79),
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'idle',
-      INCLUDED_ACCESS_LABEL,
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'idle', INCLUDED_ACCESS_LABEL]);
   });
 
   it('reports an exhausted relay quota rather than dropping the warning', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         modelAccess: 'included',
-        relayQuota: {
-          currentSpend: 10,
-          limit: 10,
-          remaining: 0,
-          percentUsed: 100,
-        },
+        relayQuota: relayQuota(100),
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain(
-      'included access used up',
-    );
+    expect(leftTexts(display)).toContain('included access used up');
   });
 
   it('hides the relay quota when the route does not spend it', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         modelAccess: 'personal',
-        relayQuota: {
-          currentSpend: 9.5,
-          limit: 10,
-          remaining: 0.5,
-          percentUsed: 95,
-        },
+        relayQuota: relayQuota(95),
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toEqual([
-      '◆',
-      'idle',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
   });
 });

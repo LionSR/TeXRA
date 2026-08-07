@@ -34,9 +34,9 @@ function PatchPreview({
   // from the real terminal so the full-row bands fill exactly the available
   // columns instead of padding to a fixed default and wrapping on narrow
   // terminals. `DiffView` floors this at its own minimum.
-  const diffWidth =
-    (width ?? PATCH_PREVIEW_FALLBACK_WIDTH) - PATCH_PREVIEW_INDENT;
-  const labelWidth = (width ?? PATCH_PREVIEW_FALLBACK_WIDTH) - 2;
+  const baseWidth = width ?? PATCH_PREVIEW_FALLBACK_WIDTH;
+  const diffWidth = baseWidth - PATCH_PREVIEW_INDENT;
+  const labelWidth = baseWidth - 2;
   return (
     <Box
       flexDirection="column"

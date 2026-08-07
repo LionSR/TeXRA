@@ -80,11 +80,7 @@ export class LeanSession {
     if (this.disposed) {
       throw new Error('Lean session has been disposed.');
     }
-    if (this.readyPromise) {
-      await this.readyPromise;
-      return;
-    }
-    this.readyPromise = this.spawnAndInitialize();
+    this.readyPromise ??= this.spawnAndInitialize();
     await this.readyPromise;
   }
 

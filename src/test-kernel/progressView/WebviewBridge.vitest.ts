@@ -1,8 +1,19 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 // Local imports
-import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import {
+  WebviewBridge,
+  type ProgressViewMessageSender,
+} from '@controllers/progressView/backend/WebviewBridge';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LOG_LEVELS,
@@ -18,6 +29,9 @@ import {
   updateTranscriptEntry,
 } from '@test/support/storeTestDrivers';
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
+
+const ACTIVE = 'active' as StreamTabId;
+const INACTIVE = 'inactive' as StreamTabId;
 
 function logEntry(
   id: string,
@@ -45,6 +59,28 @@ function deferredBoolean(): {
   return { promise, resolve };
 }
 
+/** The exact LOG_DELTA payload shape the bridge posts to the webview. */
+function logDeltaMessage(
+  streamId: StreamTabId,
+  delta: {
+    entries?: unknown[];
+    updates?: unknown[];
+    textDeltas?: unknown[];
+  },
+): Record<string, unknown> {
+  return {
+    command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+    streamId,
+    entries: delta.entries ?? [],
+    updates: delta.updates ?? [],
+    textDeltas: delta.textDeltas ?? [],
+  };
+}
+
+function entryContaining(id: string, text: string): unknown {
+  return expect.objectContaining({ id, text });
+}
+
 describe('WebviewBridge', () => {
   const bridges: WebviewBridge[] = [];
 
@@ -57,186 +93,161 @@ describe('WebviewBridge', () => {
     vi.useRealTimers();
   });
 
-  /** Registers a bridge for the shared teardown above. */
-  function track(bridge: WebviewBridge): WebviewBridge {
+  /** Builds a bridge wired to an ephemeral store and registered for teardown. */
+  function setupBridge(
+    options: {
+      sendMessage?: Mock<ProgressViewMessageSender>;
+      activeStream?: () => StreamTabId;
+    } = {},
+  ): {
+    store: StreamLogStore;
+    sendMessage: Mock<ProgressViewMessageSender>;
+    bridge: WebviewBridge;
+  } {
+    const store = StreamLogStore.ephemeral('test');
+    const sendMessage =
+      options.sendMessage ?? vi.fn<ProgressViewMessageSender>(() => true);
+    const bridge = new WebviewBridge(
+      store,
+      sendMessage,
+      options.activeStream ?? (() => ACTIVE),
+    );
     bridges.push(bridge);
-    return bridge;
+    return { store, sendMessage, bridge };
   }
 
   it('flushes active stream log deltas', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active' as StreamTabId;
-    const sendMessage = vi.fn(() => true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    const { store, sendMessage, bridge } = setupBridge();
 
-    bridge.syncStream(activeStream);
+    bridge.syncStream(ACTIVE);
     appendTranscriptEntry(
       store,
-      activeStream,
+      ACTIVE,
       logEntry('active-1', 'active log', 100),
     );
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(sendMessage).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [
-        expect.objectContaining({
-          id: 'active-1',
-          text: 'active log',
-        }),
-      ],
-      updates: [],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [entryContaining('active-1', 'active log')],
+      }),
+    );
   });
 
   it('pushes restart-repair group settlements through log deltas', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active-repair' as StreamTabId;
-    const sendMessage = vi.fn(() => true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    const repairStream = 'active-repair' as StreamTabId;
+    const { store, sendMessage, bridge } = setupBridge({
+      activeStream: () => repairStream,
+    });
 
-    appendTranscriptEntry(store, activeStream, {
+    appendTranscriptEntry(store, repairStream, {
       id: 'running-group',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       level: LOG_LEVELS.INFO,
       timestamp: 100,
       data: { status: STREAM_PHASE.RUNNING },
     });
-    bridge.syncStream(activeStream);
+    bridge.syncStream(repairStream);
     await vi.advanceTimersByTimeAsync(20);
     sendMessage.mockClear();
 
     await store.endRunningGroupsForStreams(
-      [activeStream],
+      [repairStream],
       200,
       RUN_OUTCOME.FAILED,
     );
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(sendMessage).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [],
-      updates: [
-        expect.objectContaining({
-          id: 'running-group',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: expect.objectContaining({ status: RUN_OUTCOME.FAILED }),
-        }),
-      ],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(repairStream, {
+        updates: [
+          expect.objectContaining({
+            id: 'running-group',
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            data: expect.objectContaining({ status: RUN_OUTCOME.FAILED }),
+          }),
+        ],
+      }),
+    );
   });
 
   it('does not queue inactive stream flushes that race with tab switches', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    let activeStream = 'active' as StreamTabId;
-    const sendMessage = vi.fn(() => true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    let activeStream = ACTIVE;
+    const { store, sendMessage } = setupBridge({
+      activeStream: () => activeStream,
+    });
 
     appendTranscriptEntry(
       store,
-      'inactive' as StreamTabId,
+      INACTIVE,
       logEntry('inactive-1', 'inactive log', 100),
     );
-    activeStream = 'inactive' as StreamTabId;
+    activeStream = INACTIVE;
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('syncs inactive stream history explicitly on tab switch', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    let activeStream = 'active' as StreamTabId;
-    const sendMessage = vi.fn(() => true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    let activeStream = ACTIVE;
+    const { store, sendMessage, bridge } = setupBridge({
+      activeStream: () => activeStream,
+    });
 
     appendTranscriptEntry(
       store,
-      'inactive' as StreamTabId,
+      INACTIVE,
       logEntry('inactive-1', 'inactive log', 100),
     );
 
-    activeStream = 'inactive' as StreamTabId;
+    activeStream = INACTIVE;
     bridge.syncStream(activeStream);
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(sendMessage).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [
-        expect.objectContaining({
-          id: 'inactive-1',
-          text: 'inactive log',
-        }),
-      ],
-      updates: [],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(INACTIVE, {
+        entries: [entryContaining('inactive-1', 'inactive log')],
+      }),
+    );
   });
 
   it('replays full streamed text when a webview syncs mid-stream', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active' as StreamTabId;
-    const sendMessage = vi.fn(() => true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    const { store, sendMessage, bridge } = setupBridge();
 
-    appendTranscriptEntry(store, activeStream, logEntry('active-1', '', 100));
-    appendTranscriptText(store, activeStream, 'active-1', 'hello ');
-    appendTranscriptText(store, activeStream, 'active-1', 'world');
+    appendTranscriptEntry(store, ACTIVE, logEntry('active-1', '', 100));
+    appendTranscriptText(store, ACTIVE, 'active-1', 'hello ');
+    appendTranscriptText(store, ACTIVE, 'active-1', 'world');
 
-    bridge.syncStream(activeStream);
+    bridge.syncStream(ACTIVE);
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(sendMessage).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [
-        expect.objectContaining({
-          id: 'active-1',
-          text: 'hello world',
-        }),
-      ],
-      updates: [],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [entryContaining('active-1', 'hello world')],
+      }),
+    );
   });
 
   it('keeps the cursor and dirty updates when no target accepts a log delta', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active' as StreamTabId;
-    const sendMessage = vi
-      .fn()
-      .mockReturnValueOnce(true)
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    const { store, sendMessage, bridge } = setupBridge({
+      sendMessage: vi
+        .fn()
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(true),
+    });
 
-    bridge.syncStream(activeStream);
+    bridge.syncStream(ACTIVE);
     appendTranscriptEntry(
       store,
-      activeStream,
+      ACTIVE,
       logEntry('active-1', 'active log', 100),
     );
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
-    updateTranscriptEntry(store, activeStream, 'active-1', {
+    updateTranscriptEntry(store, ACTIVE, 'active-1', {
       text: 'edited log',
     });
     await vi.advanceTimersByTimeAsync(20);
@@ -245,53 +256,39 @@ describe('WebviewBridge', () => {
 
     appendTranscriptEntry(
       store,
-      activeStream,
+      ACTIVE,
       logEntry('active-2', 'retry trigger', 200),
     );
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(sendMessage).toHaveBeenLastCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [
-        expect.objectContaining({
-          id: 'active-2',
-          text: 'retry trigger',
-        }),
-      ],
-      updates: [
-        expect.objectContaining({
-          id: 'active-1',
-          text: 'edited log',
-        }),
-      ],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [entryContaining('active-2', 'retry trigger')],
+        updates: [entryContaining('active-1', 'edited log')],
+      }),
+    );
   });
 
   it('serializes async flushes and preserves updates made during delivery', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active' as StreamTabId;
     const firstDelivery = deferredBoolean();
-    const sendMessage = vi
-      .fn()
-      .mockReturnValueOnce(firstDelivery.promise)
-      .mockResolvedValue(true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    const { store, sendMessage, bridge } = setupBridge({
+      sendMessage: vi
+        .fn()
+        .mockReturnValueOnce(firstDelivery.promise)
+        .mockResolvedValue(true),
+    });
 
-    bridge.syncStream(activeStream);
+    bridge.syncStream(ACTIVE);
     appendTranscriptEntry(
       store,
-      activeStream,
+      ACTIVE,
       logEntry('active-1', 'active log', 100),
     );
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
-    updateTranscriptEntry(store, activeStream, 'active-1', {
+    updateTranscriptEntry(store, ACTIVE, 'active-1', {
       text: 'edited while sending',
     });
     await vi.advanceTimersByTimeAsync(20);
@@ -302,52 +299,35 @@ describe('WebviewBridge', () => {
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenLastCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [],
-      updates: [
-        expect.objectContaining({
-          id: 'active-1',
-          text: 'edited while sending',
-        }),
-      ],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      logDeltaMessage(ACTIVE, {
+        updates: [entryContaining('active-1', 'edited while sending')],
+      }),
+    );
   });
 
   it('does not resend streamed text already covered by an in-flight full entry', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active' as StreamTabId;
     const firstDelivery = deferredBoolean();
-    const sendMessage = vi
-      .fn()
-      .mockReturnValueOnce(firstDelivery.promise)
-      .mockResolvedValue(true);
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
+    const { store, sendMessage, bridge } = setupBridge({
+      sendMessage: vi
+        .fn()
+        .mockReturnValueOnce(firstDelivery.promise)
+        .mockResolvedValue(true),
+    });
 
-    bridge.syncStream(activeStream);
-    appendTranscriptEntry(store, activeStream, logEntry('active-1', '', 100));
-    appendTranscriptText(store, activeStream, 'active-1', 'hello');
+    bridge.syncStream(ACTIVE);
+    appendTranscriptEntry(store, ACTIVE, logEntry('active-1', '', 100));
+    appendTranscriptText(store, ACTIVE, 'active-1', 'hello');
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(sendMessage).toHaveBeenLastCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [
-        expect.objectContaining({
-          id: 'active-1',
-          text: 'hello',
-        }),
-      ],
-      updates: [],
-      textDeltas: [],
-    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [entryContaining('active-1', 'hello')],
+      }),
+    );
 
-    appendTranscriptText(store, activeStream, 'active-1', ' world');
+    appendTranscriptText(store, ACTIVE, 'active-1', ' world');
     await vi.advanceTimersByTimeAsync(20);
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
@@ -355,44 +335,39 @@ describe('WebviewBridge', () => {
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenLastCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId: activeStream,
-      entries: [],
-      updates: [],
-      textDeltas: [{ id: 'active-1', appendText: ' world' }],
-    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      logDeltaMessage(ACTIVE, {
+        textDeltas: [{ id: 'active-1', appendText: ' world' }],
+      }),
+    );
   });
 
   it('ships streamed text as O(L) append deltas instead of full updates', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    const activeStream = 'active' as StreamTabId;
     let deliveredBytes = 0;
-    const sendMessage = vi.fn((message) => {
-      deliveredBytes += JSON.stringify(message).length;
-      return true;
+    const { store, sendMessage, bridge } = setupBridge({
+      sendMessage: vi.fn((message) => {
+        deliveredBytes += JSON.stringify(message).length;
+        return true;
+      }),
     });
-    const bridge = track(
-      new WebviewBridge(store, sendMessage, () => activeStream),
-    );
     const chunk = 'x'.repeat(1024);
 
-    bridge.syncStream(activeStream);
-    appendTranscriptEntry(store, activeStream, logEntry('active-1', '', 100));
+    bridge.syncStream(ACTIVE);
+    appendTranscriptEntry(store, ACTIVE, logEntry('active-1', '', 100));
     await vi.advanceTimersByTimeAsync(20);
 
     for (let i = 0; i < 40; i++) {
-      appendTranscriptText(store, activeStream, 'active-1', chunk);
+      appendTranscriptText(store, ACTIVE, 'active-1', chunk);
       await vi.advanceTimersByTimeAsync(20);
     }
 
     const streamedFrames = sendMessage.mock.calls.slice(1).map(([message]) => {
       expect(message).toEqual(
-        expect.objectContaining({
-          entries: [],
-          updates: [],
-          textDeltas: [{ id: 'active-1', appendText: chunk }],
-        }),
+        expect.objectContaining(
+          logDeltaMessage(ACTIVE, {
+            textDeltas: [{ id: 'active-1', appendText: chunk }],
+          }),
+        ),
       );
       return JSON.stringify(message).length;
     });

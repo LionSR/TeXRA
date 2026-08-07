@@ -32,7 +32,7 @@ async function walkDirectory(
   for (const [name, type] of entries) {
     // Build raw path for filesystem access (preserves platform separators),
     // then normalize to forward slashes only for display output.
-    const entryRaw = relativePath ? path.join(relativePath, name) : name;
+    const entryRaw = path.join(relativePath, name);
     const entryRelative = normalizeFilePath(entryRaw);
     const entryFull = path.join(basePath, entryRaw);
     const isDir = isDirectory(type);

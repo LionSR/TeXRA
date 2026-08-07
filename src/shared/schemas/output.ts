@@ -111,10 +111,10 @@ export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 export type CompileFailure = z.infer<typeof CompileFailureSchema>;
 
 /**
- * The output a finished run treats as final: the first output of the highest
- * round. Multi-document workflows emit the primary document first, so the
- * first entry of the final round is the one every host opens, copies, or
- * reports.
+ * The output a finished run treats as final: the last output of the highest
+ * round. The CLI's prior pickers both kept the later element on a round tie,
+ * and callers' output order is not guaranteed to lead with the primary
+ * document.
  */
 export function finalWorkflowOutput(
   outputs: readonly OutputFileSummary[],
@@ -122,9 +122,6 @@ export function finalWorkflowOutput(
   if (outputs.length === 0) return undefined;
 
   const finalRound = Math.max(...outputs.map((output) => output.round));
-  // Last entry of the final round, not the first: the CLI's prior pickers both
-  // kept the later element on a round tie, and callers' output order is not
-  // guaranteed to lead with the primary document.
   return outputs.findLast((output) => output.round === finalRound);
 }
 
@@ -155,7 +152,7 @@ export const CompileResultSchema = z.discriminatedUnion('status', [
 ]);
 export type CompileResult = z.infer<typeof CompileResultSchema>;
 
-const CanonicalOutputXmlSummarySchema = z.strictObject({
+export const OutputXmlSummarySchema = z.strictObject({
   tagContents: z
     .record(
       z.string(),
@@ -168,7 +165,6 @@ const CanonicalOutputXmlSummarySchema = z.strictObject({
   sourceLocation: FileLocationSchema.nullable().prefault(null),
 });
 
-export const OutputXmlSummarySchema = CanonicalOutputXmlSummarySchema;
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
 export const RoundOutputSchema = z.strictObject({

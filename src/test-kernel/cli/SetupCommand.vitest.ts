@@ -48,7 +48,9 @@ describe('texra setup combined flow', () => {
     mocks.runCliOnboarding
       .mockReset()
       .mockResolvedValue({ configured: false, declined: true });
-    mocks.runChat.mockReset().mockResolvedValue({ exitCode: 0 });
+    mocks.runChat
+      .mockReset()
+      .mockResolvedValue({ exitCode: CliExitCode.Success });
     mocks.initInteractiveCliPlatform.mockReset().mockResolvedValue(undefined);
   });
 
@@ -75,14 +77,9 @@ describe('texra setup combined flow', () => {
       configured: true,
       declined: false,
     });
-    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.Success });
 
     await runSetup(INTERACTIVE_CONTEXT);
 
-    // `texra setup` always ends in the chat TUI, so it must route through
-    // initInteractiveCliPlatform — not plain initCliPlatform — so the TUI can
-    // later hand itself exclusive SIGINT/SIGTERM ownership once it mounts
-    // (see initPlatform.ts).
     expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ ...INTERACTIVE_CONTEXT, quietLogs: true }),
     );
@@ -93,7 +90,6 @@ describe('texra setup combined flow', () => {
       configured: true,
       declined: false,
     });
-    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.Success });
 
     const exit = await runSetup(INTERACTIVE_CONTEXT);
 
@@ -114,7 +110,6 @@ describe('texra setup combined flow', () => {
 
   it('skips the picker for already-credentialed users — straight to the agent', async () => {
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
-    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.Success });
 
     const exit = await runSetup(INTERACTIVE_CONTEXT);
 

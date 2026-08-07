@@ -41,11 +41,6 @@ function setupMachine(streamId: string): {
 }
 
 describe('StreamStatusMachine', () => {
-  const phases = Object.values(STREAM_PHASE) as StreamPhase[];
-  const causes = Object.values(
-    STREAM_TRANSITION_CAUSE,
-  ) as StreamTransitionCause[];
-
   it('keeps stream status state per instance', () => {
     const first = new StreamStatusMachine(new SessionEventHub());
     const second = new StreamStatusMachine(new SessionEventHub());
@@ -79,6 +74,10 @@ describe('StreamStatusMachine', () => {
   });
 
   it('exercises the live machine against the exhaustive transition table', () => {
+    const phases = Object.values(STREAM_PHASE) as StreamPhase[];
+    const causes = Object.values(
+      STREAM_TRANSITION_CAUSE,
+    ) as StreamTransitionCause[];
     for (const from of [undefined, ...phases]) {
       for (const to of phases) {
         for (const cause of causes) {

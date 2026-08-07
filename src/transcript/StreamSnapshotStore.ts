@@ -1439,10 +1439,8 @@ export class StreamSnapshotStore {
    * accumulators are authoritative afterward.
    */
   private async awaitSeeded(streamId: StreamTabId): Promise<boolean> {
-    const seedChain = this.records.get(streamId)?.seedChain;
-    if (seedChain) {
-      await seedChain;
-    }
+    // Awaiting `undefined` (no in-flight seed) resolves immediately.
+    await this.records.get(streamId)?.seedChain;
     return this.records.get(streamId)?.seeded ?? false;
   }
 

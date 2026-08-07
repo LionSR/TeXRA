@@ -16,6 +16,7 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -167,6 +168,32 @@ describe('MediaAttachmentProcessor', () => {
     return createTempFile('empty.bin', Buffer.alloc(0));
   }
 
+  function expectAudioResult(
+    results: MediaFileResult[],
+    displayPath: string,
+    mimeType: string,
+    sourcePath: string,
+  ): void {
+    assert.deepEqual(results, [
+      {
+        path: displayPath,
+        ok: true,
+        media: {
+          kind: 'audio',
+          mimeType,
+          sizeBytes: fs.statSync(sourcePath).size,
+        },
+      },
+    ]);
+  }
+
+  function expectAudioEntry(entry: MediaEntry, sourcePath: string): void {
+    assert.equal(entry.media_category, 'audio');
+    assert.equal(entry.source_path, sourcePath);
+    assert.equal(entry.bytes_match_source, true);
+    assert.ok(entry.data.length > 0, 'Audio data should be base64 encoded');
+  }
+
   it('processes PDF fixtures using native ingestion when supported', async () => {
     const pdfPath = await createPdfFixture();
     const pdfLocation = pathToLocation(pdfPath);
@@ -216,7 +243,6 @@ describe('MediaAttachmentProcessor', () => {
   it('processes native audio fixtures into audio media entries', async () => {
     const audioPath = createAudioFixture();
     const audioLocation = pathToLocation(audioPath);
-    const displayPath = getComparablePath(audioLocation);
     const stub = createMediaLogRecorder();
     const processor = createProcessor(
       stub,
@@ -228,25 +254,17 @@ describe('MediaAttachmentProcessor', () => {
 
     const { entries, results } = await processor.loadEntries([audioLocation]);
 
-    assert.deepEqual(results, [
-      {
-        path: displayPath,
-        ok: true,
-        media: {
-          kind: 'audio',
-          mimeType: 'audio/wav',
-          sizeBytes: fs.statSync(audioPath).size,
-        },
-      },
-    ]);
+    expectAudioResult(
+      results,
+      getComparablePath(audioLocation),
+      'audio/wav',
+      audioPath,
+    );
     assert.equal(entries.length, 1, 'expected a single audio entry');
 
     const [entry] = entries;
-    assert.equal(entry.media_category, 'audio');
+    expectAudioEntry(entry, audioPath);
     assert.ok(entry.media_type.startsWith('audio/'));
-    assert.equal(entry.source_path, audioPath);
-    assert.equal(entry.bytes_match_source, true);
-    assert.ok(entry.data.length > 0, 'Audio data should be base64 encoded');
 
     processor.logResults(results);
     assert.equal(stub.fileListEntries.length, 1, 'should log processed audio');
@@ -283,16 +301,16 @@ describe('MediaAttachmentProcessor', () => {
     ]);
   });
 
-  for (const [extension, mediaType] of [
+  it.each([
     ['.opus', 'audio/opus'],
     ['.l16', 'audio/l16'],
     ['.alaw', 'audio/alaw'],
     ['.mulaw', 'audio/mulaw'],
-  ] as const) {
-    it(`processes ${extension} audio with provider-supported MIME type`, async () => {
+  ] as const)(
+    'processes %s audio with provider-supported MIME type',
+    async (extension, mediaType) => {
       const audioPath = createRawAudioFixture(extension);
       const audioLocation = pathToLocation(audioPath);
-      const displayPath = getComparablePath(audioLocation);
       const stub = createMediaLogRecorder();
       const processor = createProcessor(
         stub,
@@ -304,27 +322,19 @@ describe('MediaAttachmentProcessor', () => {
 
       const { entries, results } = await processor.loadEntries([audioLocation]);
 
-      assert.deepEqual(results, [
-        {
-          path: displayPath,
-          ok: true,
-          media: {
-            kind: 'audio',
-            mimeType: mediaType,
-            sizeBytes: fs.statSync(audioPath).size,
-          },
-        },
-      ]);
+      expectAudioResult(
+        results,
+        getComparablePath(audioLocation),
+        mediaType,
+        audioPath,
+      );
       assert.equal(entries.length, 1, 'expected a single audio entry');
 
       const [entry] = entries;
-      assert.equal(entry.media_category, 'audio');
+      expectAudioEntry(entry, audioPath);
       assert.equal(entry.media_type, mediaType);
-      assert.equal(entry.source_path, audioPath);
-      assert.equal(entry.bytes_match_source, true);
-      assert.ok(entry.data.length > 0, 'Audio data should be base64 encoded');
-    });
-  }
+    },
+  );
 
   it('reports empty media fixtures as failed loads', async () => {
     const emptyPath = createEmptyFixture();
@@ -356,7 +366,7 @@ describe('MediaAttachmentProcessor', () => {
     const displayPath = getComparablePath(mediaLocation);
     const stub = createMediaLogRecorder();
     const processor = createProcessor(stub, { supportsVision: true });
-    const originalExists = absoluteFsAny.exists;
+    const fsBackedExists = absoluteFsAny.exists;
 
     const error = new Error('plain fallback');
     attachProviderError(error, {
@@ -382,7 +392,7 @@ describe('MediaAttachmentProcessor', () => {
         /HTTP 429 Too Many Requests - provider body/,
       );
     } finally {
-      absoluteFsAny.exists = originalExists;
+      absoluteFsAny.exists = fsBackedExists;
     }
   });
 });

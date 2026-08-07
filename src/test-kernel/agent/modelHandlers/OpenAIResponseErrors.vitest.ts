@@ -18,6 +18,15 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 describe('OpenAI Responses error normalization', () => {
+  function notFoundError(requestId: string): OpenAINotFoundError {
+    return new OpenAINotFoundError(
+      404,
+      { message: 'response not found' },
+      'response not found',
+      new Headers([['x-request-id', requestId]]),
+    );
+  }
+
   it('normalizes provider errors at the OpenAI Responses boundary', () => {
     const error = new Error('background response failed') as Error & {
       error: unknown;
@@ -47,14 +56,10 @@ describe('OpenAI Responses error normalization', () => {
   });
 
   it('clears pending background responses for definitive resume failures', () => {
-    const error = new OpenAINotFoundError(
-      404,
-      { message: 'response not found' },
-      'response not found',
-      new Headers([['x-request-id', 'req_missing']]),
+    const result = classifyOpenAIBackgroundResumeError(
+      notFoundError('req_missing'),
+      'openai',
     );
-
-    const result = classifyOpenAIBackgroundResumeError(error, 'openai');
 
     expect(result.shouldRetainPendingResponse).toBe(false);
     expect(result.providerError.statusCode).toBe(404);
@@ -62,15 +67,9 @@ describe('OpenAI Responses error normalization', () => {
   });
 
   it('wraps vanished polling responses as retryable provider failures', () => {
-    const cause = new OpenAINotFoundError(
-      404,
-      { message: 'response not found' },
-      'response not found',
-      new Headers([['x-request-id', 'req_poll']]),
-    );
     const wrapped = createOpenAIBackgroundPollingError(
       'resp_123',
-      cause,
+      notFoundError('req_poll'),
       'openai',
     );
 

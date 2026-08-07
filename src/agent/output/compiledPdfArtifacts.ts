@@ -63,9 +63,8 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
       : stripRoundPrefix(getComparablePath(options.source), options.round);
   const parsed = path.parse(comparablePath || options.displayName);
   const stem = parsed.name || path.basename(options.displayName, parsed.ext);
-  const directory = parsed.dir;
   const pdfStem = `${stem || 'output'}${options.pdfStemSuffix ?? ''}`;
-  return normalizePdfRelativePath(path.join(directory, `${pdfStem}.pdf`));
+  return normalizePdfRelativePath(path.join(parsed.dir, `${pdfStem}.pdf`));
 }
 
 async function copyArtifactFile(

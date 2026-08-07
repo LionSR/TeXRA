@@ -557,7 +557,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       statusLabel: (detected) =>
         detected ? 'Detected; integration coming soon' : undefined,
       detailCheck: (detected) =>
-        (detected ?? false)
+        detected
           ? 'TeXRA CLI detected on PATH. This integration is not enabled for agent runs yet.'
           : 'TeXRA CLI not detected on PATH. This integration is not enabled for agent runs yet.',
     }),

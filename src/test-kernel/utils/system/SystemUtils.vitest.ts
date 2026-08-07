@@ -22,12 +22,20 @@ import { BinaryResolverService } from '@utils/system/binaryResolver';
 // execUtils
 // ---------------------------------------------------------------------------
 
-async function waitForFile(filePath: string): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (existsSync(filePath)) return;
+async function waitFor(
+  description: string,
+  check: () => boolean,
+  attempts = 50,
+): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (check()) return;
     await sleep(20);
   }
-  throw new Error(`Timed out waiting for ${filePath}`);
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
+function waitForFile(filePath: string): Promise<void> {
+  return waitFor(filePath, () => existsSync(filePath));
 }
 
 // Signal delivery to a whole process group, and the kernel reaping the members,
@@ -41,16 +49,19 @@ async function waitForFile(filePath: string): Promise<void> {
 // runner aborts the test mid-poll and the extra budget buys nothing.
 const PROCESS_EXIT_TEST_TIMEOUT_MS = 30_000;
 
-async function waitForProcessExit(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 500; attempt += 1) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return;
-    }
-    await sleep(20);
-  }
-  throw new Error(`Process ${pid} was still running after abort`);
+function waitForProcessExit(pid: number): Promise<void> {
+  return waitFor(
+    `process ${pid} to exit`,
+    () => {
+      try {
+        process.kill(pid, 0);
+        return false;
+      } catch {
+        return true;
+      }
+    },
+    500,
+  );
 }
 
 type ExecuteCommandOptions = NonNullable<Parameters<typeof executeCommand>[1]>;
@@ -109,23 +120,22 @@ describe('executeCommand', () => {
     return { promise, childPid };
   }
 
-  it('runs string commands with shell operators intact', async () => {
-    const result = await executeCommand(
-      'node -e "process.stdout.write(\'one\')" && echo two',
-    );
+  it.each([
+    {
+      name: 'shell operators intact',
+      command: 'node -e "process.stdout.write(\'one\')" && echo two',
+      stdout: 'onetwo',
+    },
+    {
+      name: 'fallback execution with logical OR',
+      command: 'node -e "process.exit(1)" || echo fallback',
+      stdout: 'fallback',
+    },
+  ])('runs string commands with $name', async ({ command, stdout }) => {
+    const result = await executeCommand(command);
 
     assert.ok(result.success);
-    assert.equal(result.stdout, 'onetwo');
-    assert.equal(result.stderr, null);
-  });
-
-  it('preserves fallback execution with logical OR', async () => {
-    const result = await executeCommand(
-      'node -e "process.exit(1)" || echo fallback',
-    );
-
-    assert.ok(result.success);
-    assert.equal(result.stdout, 'fallback');
+    assert.equal(result.stdout, stdout);
     assert.equal(result.stderr, null);
   });
 
@@ -270,13 +280,7 @@ describe('executeCommand', () => {
         },
       );
 
-      for (
-        let attempt = 0;
-        attempt < 50 && childPid === undefined;
-        attempt += 1
-      ) {
-        await sleep(20);
-      }
+      await waitFor('child pid', () => childPid !== undefined);
       assert.ok(childPid && childPid > 0);
 
       controller.abort();

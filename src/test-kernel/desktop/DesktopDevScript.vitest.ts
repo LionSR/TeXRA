@@ -38,28 +38,31 @@ const originalElectronDistPath = process.env.ELECTRON_OVERRIDE_DIST_PATH;
 const originalSigintListeners = new Set(process.listeners('SIGINT'));
 const originalSigtermListeners = new Set(process.listeners('SIGTERM'));
 
+function restoreEnvVar(name: string, original: string | undefined): void {
+  if (original == null) {
+    delete process.env[name];
+  } else {
+    process.env[name] = original;
+  }
+}
+
+function removeAddedListeners(
+  signal: NodeJS.Signals,
+  original: ReadonlySet<NodeJS.SignalsListener>,
+): void {
+  for (const listener of process.listeners(signal)) {
+    if (!original.has(listener)) {
+      process.removeListener(signal, listener);
+    }
+  }
+}
+
 afterEach(() => {
   process.argv = [...originalArgv];
-  if (originalNpmExecPath == null) {
-    delete process.env.npm_execpath;
-  } else {
-    process.env.npm_execpath = originalNpmExecPath;
-  }
-  if (originalElectronDistPath == null) {
-    delete process.env.ELECTRON_OVERRIDE_DIST_PATH;
-  } else {
-    process.env.ELECTRON_OVERRIDE_DIST_PATH = originalElectronDistPath;
-  }
-  for (const listener of process.listeners('SIGINT')) {
-    if (!originalSigintListeners.has(listener)) {
-      process.removeListener('SIGINT', listener);
-    }
-  }
-  for (const listener of process.listeners('SIGTERM')) {
-    if (!originalSigtermListeners.has(listener)) {
-      process.removeListener('SIGTERM', listener);
-    }
-  }
+  restoreEnvVar('npm_execpath', originalNpmExecPath);
+  restoreEnvVar('ELECTRON_OVERRIDE_DIST_PATH', originalElectronDistPath);
+  removeAddedListeners('SIGINT', originalSigintListeners);
+  removeAddedListeners('SIGTERM', originalSigtermListeners);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.resetModules();

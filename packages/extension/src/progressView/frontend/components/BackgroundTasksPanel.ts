@@ -25,7 +25,6 @@ import {
 import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -291,8 +290,8 @@ export class BackgroundTasksPanel extends LitElement {
         class="panel-collapsible"
         summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background tasks'}
         ?open=${this.open}
-        @wa-show=${this.handleShow}
-        @wa-hide=${this.handleHide}
+        @wa-show=${this.handleOpenToggle}
+        @wa-hide=${this.handleOpenToggle}
       >
         <div class="task-list">
           ${this.renderSection(visibleSubagents, withSectionHeaders)}
@@ -406,10 +405,9 @@ export class BackgroundTasksPanel extends LitElement {
     index: number,
   ): TemplateResult {
     const icon = getTaskIcon(child);
-    // Icons and clickability key on `identity.kind`; every roster row owns a
-    // stream tab, so every row is navigable.
+    // Every roster row owns a stream tab, so every row is navigable; the
+    // handlers attach only while a childStreamId is known.
     const childStreamId = child.childStreamId;
-    const isClickable = true;
     const description = childStreamId
       ? this.streamById.get(childStreamId)?.description
       : undefined;
@@ -422,7 +420,6 @@ export class BackgroundTasksPanel extends LitElement {
     const displayName = child.identity
       ? runIdentityDisplayName(child.identity)
       : child.agentName;
-    const nameTooltip = isClickable ? `Go to ${displayName}` : displayName;
 
     return html`
       <div class="task-header">
@@ -431,12 +428,9 @@ export class BackgroundTasksPanel extends LitElement {
         })}
         <span
           id="${idPrefix}-name"
-          class=${classMap({
-            'task-name': true,
-            'task-name--clickable': isClickable,
-          })}
-          role=${isClickable ? 'link' : nothing}
-          tabindex=${isClickable ? '0' : nothing}
+          class="task-name task-name--clickable"
+          role="link"
+          tabindex="0"
           @click=${
             childStreamId !== undefined
               ? () => this.navigateToStream(childStreamId)
@@ -454,7 +448,7 @@ export class BackgroundTasksPanel extends LitElement {
           }
           >${displayName}</span
         >
-        <wa-tooltip for="${idPrefix}-name">${nameTooltip}</wa-tooltip>
+        <wa-tooltip for="${idPrefix}-name">Go to ${displayName}</wa-tooltip>
         ${
           phaseLabel
             ? html`<span id="${idPrefix}-phase" class="task-phase"
@@ -486,14 +480,9 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private handleShow(e: Event): void {
+  private handleOpenToggle(e: Event): void {
     if (e.target !== e.currentTarget) return;
-    this.open = true;
-  }
-
-  private handleHide(e: Event): void {
-    if (e.target !== e.currentTarget) return;
-    this.open = false;
+    this.open = e.type === 'wa-show';
   }
 
   private navigateToStream(streamId: string): void {
@@ -533,9 +522,9 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
       // AI agent rows — native and external-CLI-driven alike.
       return 'robot';
     case 'multiAgentWorkflow':
-      return 'server';
     case undefined:
-      // Legacy emitter without an identity: neutral agent icon.
+      // Workflow containers and legacy emitters without an identity get the
+      // neutral agent icon.
       return 'server';
   }
 }

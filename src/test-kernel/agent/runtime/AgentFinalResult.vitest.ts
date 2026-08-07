@@ -4,7 +4,10 @@ import {
   AgentFinalResultSchema,
   buildAgentFinalResult,
 } from '@agent/runtime/AgentFinalResult';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type {
+  ToolUseFlowResult,
+  WorkflowFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 
@@ -17,6 +20,38 @@ const OUTPUT: OutputFileSummary = {
   added: 4,
   removed: 2,
 };
+
+const EXECUTION_ID = 'abcdefabcdef' as ExecutionId;
+
+function workflowFlowResult(
+  overrides: Partial<WorkflowFlowResult> = {},
+): WorkflowFlowResult {
+  return {
+    category: 'workflow',
+    outcome: 'completed',
+    executionId: EXECUTION_ID,
+    streamId: 'stream:workflow' as StreamTabId,
+    outputs: [],
+    compileFailures: [],
+    ...overrides,
+  };
+}
+
+function toolUseFlowResult(
+  overrides: Partial<ToolUseFlowResult> = {},
+): ToolUseFlowResult {
+  return {
+    category: 'toolUse',
+    outcome: 'completed',
+    executionId: EXECUTION_ID,
+    streamId: 'stream:tool-use' as StreamTabId,
+    ...overrides,
+  };
+}
+
+function expectInvalidFinalResult(input: unknown): void {
+  expect(AgentFinalResultSchema.safeParse(input).success).toBe(false);
+}
 
 describe('AgentFinalResult', () => {
   it('normalizes every omitted workflow list and cost', () => {
@@ -51,16 +86,11 @@ describe('AgentFinalResult', () => {
   });
 
   it('builds the workflow envelope after diffs exist and drops runtime fields', () => {
-    const flowResult: AgentFlowResult = {
-      category: 'workflow',
-      outcome: 'completed',
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:workflow' as StreamTabId,
+    const flowResult = workflowFlowResult({
       outputs: [OUTPUT],
-      compileFailures: [],
       memoryMisses: [{ path: '/memories/missing.md', reason: 'not found' }],
       totalCostUsd: 1.25,
-    };
+    });
 
     expect(
       buildAgentFinalResult({
@@ -90,15 +120,11 @@ describe('AgentFinalResult', () => {
   });
 
   it('keeps tool-use files as path strings', () => {
-    const flowResult: AgentFlowResult = {
-      category: 'toolUse',
-      outcome: 'completed',
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:tool-use' as StreamTabId,
+    const flowResult = toolUseFlowResult({
       response: 'Checked the argument.',
       files: ['notes.md'],
       totalCostUsd: 0.2,
-    };
+    });
 
     expect(buildAgentFinalResult({ flowResult })).toEqual({
       category: 'toolUse',
@@ -110,14 +136,7 @@ describe('AgentFinalResult', () => {
   });
 
   it('surfaces structured output on the workflow envelope', () => {
-    const flowResult: AgentFlowResult = {
-      category: 'workflow',
-      outcome: 'completed',
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:workflow' as StreamTabId,
-      outputs: [],
-      compileFailures: [],
-    };
+    const flowResult = workflowFlowResult();
 
     expect(
       buildAgentFinalResult({ flowResult, structured: { title: 'Lemma 1' } }),
@@ -128,12 +147,7 @@ describe('AgentFinalResult', () => {
   });
 
   it('surfaces structured output on the tool-use envelope', () => {
-    const flowResult: AgentFlowResult = {
-      category: 'toolUse',
-      outcome: 'completed',
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:tool-use' as StreamTabId,
-    };
+    const flowResult = toolUseFlowResult();
 
     expect(
       buildAgentFinalResult({ flowResult, structured: [1, 2, 3] }),
@@ -144,13 +158,9 @@ describe('AgentFinalResult', () => {
   });
 
   it('surfaces the flow result own structured value when the source omits it', () => {
-    const flowResult: AgentFlowResult = {
-      category: 'toolUse',
-      outcome: 'completed',
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:tool-use' as StreamTabId,
+    const flowResult = toolUseFlowResult({
       structured: { title: 'Captured' },
-    };
+    });
 
     // The caller passed no `structured`, so the flow result's own captured
     // value must surface without the caller re-threading it.
@@ -170,38 +180,30 @@ describe('AgentFinalResult', () => {
   );
 
   it('rejects runtime-only fields at the final-result boundary', () => {
-    expect(
-      AgentFinalResultSchema.safeParse({
-        category: 'toolUse',
-        outcome: 'completed',
-        executionId: 'abcdefabcdef',
-      }).success,
-    ).toBe(false);
+    expectInvalidFinalResult({
+      category: 'toolUse',
+      outcome: 'completed',
+      executionId: 'abcdefabcdef',
+    });
   });
 
   it('rejects structured values that cannot be persisted as JSON', () => {
-    expect(
-      AgentFinalResultSchema.safeParse({
-        category: 'toolUse',
-        outcome: 'completed',
-        structured: { count: 1n },
-      }).success,
-    ).toBe(false);
+    expectInvalidFinalResult({
+      category: 'toolUse',
+      outcome: 'completed',
+      structured: { count: 1n },
+    });
   });
 
   it('rejects WAITING and negative cumulative cost', () => {
-    expect(
-      AgentFinalResultSchema.safeParse({
-        category: 'toolUse',
-        outcome: 'waiting',
-      }).success,
-    ).toBe(false);
-    expect(
-      AgentFinalResultSchema.safeParse({
-        category: 'toolUse',
-        outcome: 'completed',
-        cost: -0.01,
-      }).success,
-    ).toBe(false);
+    expectInvalidFinalResult({
+      category: 'toolUse',
+      outcome: 'waiting',
+    });
+    expectInvalidFinalResult({
+      category: 'toolUse',
+      outcome: 'completed',
+      cost: -0.01,
+    });
   });
 });

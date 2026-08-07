@@ -466,8 +466,7 @@ export async function runFlowWithLifecycle(
   // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
     try {
-      const maybePromise = options.onRun(handle);
-      void Promise.resolve(maybePromise).catch((err: unknown) =>
+      void Promise.resolve(options.onRun(handle)).catch((err: unknown) =>
         logger.warn('onRun callback rejected', {
           data: { agentIdentifier, error: err },
         }),

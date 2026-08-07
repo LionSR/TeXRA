@@ -49,6 +49,14 @@ function renderAgentSelectionPanel(
   });
 }
 
+function queryToggle(
+  panel: AgentSelectionPanelElement,
+): HTMLElement & { checked?: boolean } {
+  const toggle = panel.shadowRoot!.querySelector('.agent-list-item-toggle');
+  expect(toggle).not.toBeNull();
+  return toggle as HTMLElement & { checked?: boolean };
+}
+
 describe('AgentSelectionPanel', () => {
   useLitComponentTestDom(
     () =>
@@ -63,11 +71,8 @@ describe('AgentSelectionPanel', () => {
     const panel = await renderAgentSelectionPanel();
 
     expect(panel.shadowRoot!.querySelector('wa-checkbox')).toBeNull();
-    const toggle = panel.shadowRoot!.querySelector(
-      '.agent-list-item-toggle',
-    ) as HTMLElement & { checked?: boolean };
+    const toggle = queryToggle(panel);
 
-    expect(toggle).not.toBeNull();
     expect(toggle.tagName.toLowerCase()).toBe('wa-switch');
     expect(toggle.checked).toBe(true);
   });
@@ -82,10 +87,7 @@ describe('AgentSelectionPanel', () => {
         rowClicked = true;
       });
 
-    const toggle = panel.shadowRoot!.querySelector(
-      '.agent-list-item-toggle',
-    ) as HTMLElement;
-    toggle.dispatchEvent(
+    queryToggle(panel).dispatchEvent(
       new MouseEvent('click', { bubbles: true, composed: true }),
     );
 

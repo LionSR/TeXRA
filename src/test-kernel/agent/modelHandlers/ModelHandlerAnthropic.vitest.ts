@@ -10,7 +10,7 @@ import {
   BadRequestError as AnthropicBadRequestError,
 } from '@anthropic-ai/sdk';
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ModelCapabilities,
   MODEL_CONFIGS,
@@ -37,12 +37,13 @@ import {
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 import * as serverKeysModule from '@auth/serverKeys';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files';
 import * as configUtils from '@utils/config/configUtils';
 
-// Third-party imports
+// Anthropic SDK message types
 import type {
   ContentBlock,
   ContentBlockParam,
@@ -223,38 +224,53 @@ describe('ModelHandlerAnthropic cache pricing', () => {
   });
 });
 
+/** A minimal direct tool call for follow-up message tests. */
+function createAnthropicToolCall(callId: string): AnthropicToolCall {
+  return {
+    provider: 'anthropic',
+    callId,
+    name: 'read_file',
+    input: {},
+    raw: {
+      id: callId,
+      type: 'tool_use',
+      caller: { type: 'direct' },
+      name: 'read_file',
+      input: {},
+    },
+  };
+}
+
+/** A Files API client reached via withOptions, plus its upload spy. */
+function createUploadClient(fileId: string): {
+  upload: ReturnType<typeof vi.fn>;
+  withOptions: ReturnType<typeof vi.fn>;
+} {
+  const upload = vi.fn(async () => ({ id: fileId }));
+  const uploadClient = { beta: { files: { upload } } };
+  const withOptions = vi.fn(() => uploadClient);
+  return { upload, withOptions };
+}
+
+function chartAttachment(): ToolFileAttachment {
+  return {
+    path: 'chart.png',
+    mimeType: 'image/png',
+    bytes: new Uint8Array([1, 2, 3]),
+  };
+}
+
 describe('ModelHandlerAnthropic auxiliary requests', () => {
   it('restores SDK retries for tool-result uploads outside the model gate', async () => {
     const handler = createAnthropicHandler();
     handler.setLogger({ ...noopTrace });
-    const upload = vi.fn(async () => ({ id: 'file-1' }));
-    const uploadClient = { beta: { files: { upload } } };
-    const withOptions = vi.fn(() => uploadClient);
-    const call: AnthropicToolCall = {
-      provider: 'anthropic',
-      callId: 'call-1',
-      name: 'read_file',
-      input: {},
-      raw: {
-        id: 'call-1',
-        type: 'tool_use',
-        caller: { type: 'direct' },
-        name: 'read_file',
-        input: {},
-      },
-    };
+    const { upload, withOptions } = createUploadClient('file-1');
 
     await handler.createToolUseFollowUpMessages(
       { withOptions } as never,
-      call,
+      createAnthropicToolCall('call-1'),
       { status: 'executed', output: 'done' },
-      [
-        {
-          path: 'chart.png',
-          mimeType: 'image/png',
-          bytes: new Uint8Array([1, 2, 3]),
-        },
-      ],
+      [chartAttachment()],
     );
 
     assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
@@ -264,22 +280,7 @@ describe('ModelHandlerAnthropic auxiliary requests', () => {
   it('uses the run-bound client for batched tool-result uploads', async () => {
     const handler = createAnthropicHandler();
     handler.setLogger({ ...noopTrace });
-    const upload = vi.fn(async () => ({ id: 'file-batched' }));
-    const uploadClient = { beta: { files: { upload } } };
-    const withOptions = vi.fn(() => uploadClient);
-    const call: AnthropicToolCall = {
-      provider: 'anthropic',
-      callId: 'call-batched',
-      name: 'read_file',
-      input: {},
-      raw: {
-        id: 'call-batched',
-        type: 'tool_use',
-        caller: { type: 'direct' },
-        name: 'read_file',
-        input: {},
-      },
-    };
+    const { upload, withOptions } = createUploadClient('file-batched');
     const getClient = vi
       .spyOn(handler, 'getClient')
       .mockRejectedValue(new Error('must not select another credential route'));
@@ -287,15 +288,9 @@ describe('ModelHandlerAnthropic auxiliary requests', () => {
     await handler.createBatchedToolUseFollowUpMessages(
       [
         {
-          call,
+          call: createAnthropicToolCall('call-batched'),
           result: { status: 'executed', output: 'done' },
-          attachments: [
-            {
-              path: 'chart.png',
-              mimeType: 'image/png',
-              bytes: new Uint8Array([1, 2, 3]),
-            },
-          ],
+          attachments: [chartAttachment()],
         },
       ],
       undefined,
@@ -448,6 +443,38 @@ function createFileEstimateHarness(...fileIds: string[]): {
   };
 }
 
+/** A Files API client stub whose retrieveMetadata only reports a byte size. */
+function createSizeMetadataClient(sizeBytes = 800_000): {
+  retrieveMetadata: ReturnType<typeof vi.fn>;
+  client: unknown;
+} {
+  const retrieveMetadata = vi.fn(async () => ({ size_bytes: sizeBytes }));
+  return {
+    retrieveMetadata,
+    client: { beta: { files: { retrieveMetadata } } },
+  };
+}
+
+/** A Files API client stub for a downloadable PDF of the given bytes. */
+function createPdfMetadataClient(pdfBytes: ArrayBuffer): {
+  retrieveMetadata: ReturnType<typeof vi.fn>;
+  download: ReturnType<typeof vi.fn>;
+  client: unknown;
+} {
+  const retrieveMetadata = vi.fn(async () => ({
+    mime_type: 'application/pdf',
+    size_bytes: 800_000,
+  }));
+  const download = vi.fn(async () => ({
+    arrayBuffer: async () => pdfBytes,
+  }));
+  return {
+    retrieveMetadata,
+    download,
+    client: { beta: { files: { retrieveMetadata, download } } },
+  };
+}
+
 class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
   private mediaContent: ContentBlockParam[] = [];
 
@@ -484,31 +511,32 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(documentBlocks[0].title, 'sample.pdf');
   });
 
-  it('omits whitespace-only prefix content when initializing messages', async () => {
-    const handler = createAnthropicHandler();
-    const messages = await handler.initializeMessages(
-      '   ',
-      '  request text  ',
-    );
+  it.each([
+    {
+      label: 'prefix',
+      prefix: '   ',
+      request: '  request text  ',
+      expected: 'request text',
+    },
+    {
+      label: 'request',
+      prefix: '  prefix value  ',
+      request: '   ',
+      expected: 'prefix value',
+    },
+  ])(
+    'omits whitespace-only $label content when initializing messages',
+    async ({ prefix, request, expected }) => {
+      const handler = createAnthropicHandler();
+      const messages = await handler.initializeMessages(prefix, request);
 
-    assert.equal(messages.length, 1, 'should return a single user message');
-    const content = messages[0].content as ContentBlock[];
-    const textBlock = assertSingleTextBlock(content);
-    assert.equal(textBlock.text, 'request text');
-  });
-
-  it('omits whitespace-only request content when initializing messages', async () => {
-    const handler = createAnthropicHandler();
-    const messages = await handler.initializeMessages(
-      '  prefix value  ',
-      '   ',
-    );
-
-    assert.equal(messages.length, 1, 'should return a single user message');
-    const content = messages[0].content as ContentBlock[];
-    const textBlock = assertSingleTextBlock(content);
-    assert.equal(textBlock.text, 'prefix value');
-  });
+      assert.equal(messages.length, 1, 'should return a single user message');
+      const textBlock = assertSingleTextBlock(
+        messages[0].content as ContentBlock[],
+      );
+      assert.equal(textBlock.text, expected);
+    },
+  );
 
   it('throws when both prefix and request are empty', async () => {
     const handler = createAnthropicHandler();
@@ -527,28 +555,43 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('trims round message text and rejects empty content', async () => {
-    const handler = createAnthropicHandler();
-    const baseMessages = await handler.initializeMessages('prefix', 'request');
+  it.each([
+    {
+      method: 'createRoundMessages',
+      text: 'follow up text',
+      emptyPattern: /non-empty content block/i,
+    },
+    {
+      method: 'createUserFollowUpMessages',
+      text: 'another follow up',
+      emptyPattern: /non-empty user text/i,
+    },
+  ] as const)(
+    'trims $method text and rejects empty content',
+    async ({ method, text, emptyPattern }) => {
+      const handler = createAnthropicHandler();
+      const baseMessages = await handler.initializeMessages(
+        'prefix',
+        'request',
+      );
 
-    const updated = await handler.createRoundMessages(
-      [...baseMessages],
-      '  follow up text  ',
-    );
-    const followUp = updated.at(-1)!;
-    const followUpContent = followUp.content as ContentBlock[];
-    const textBlock = assertSingleTextBlock(followUpContent);
-    assert.equal(textBlock.text, 'follow up text');
+      const updated = await handler[method]([...baseMessages], `  ${text}  `);
+      const followUp = updated.at(-1)!;
+      const textBlock = assertSingleTextBlock(
+        followUp.content as ContentBlock[],
+      );
+      assert.equal(textBlock.text, text);
 
-    await assert.rejects(
-      handler.createRoundMessages([...baseMessages], '   '),
-      (err: unknown) => {
-        assert.ok(err instanceof Error);
-        assert.match(err.message, /non-empty content block/i);
-        return true;
-      },
-    );
-  });
+      await assert.rejects(
+        handler[method]([...baseMessages], '   '),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.match(err.message, emptyPattern);
+          return true;
+        },
+      );
+    },
+  );
 
   it('does not set block-level cache markers on messages (top-level automatic caching handles this)', async () => {
     const handler = createAnthropicHandler();
@@ -799,30 +842,17 @@ describe('ModelHandlerAnthropic message guards', () => {
       'newest compaction marker should be preserved',
     );
   });
-
-  it('trims follow-up text and rejects empty follow-ups', async () => {
-    const handler = createAnthropicHandler();
-    const baseMessages = await handler.initializeMessages('prefix', 'request');
-
-    const withFollowUp = await handler.createUserFollowUpMessages(
-      [...baseMessages],
-      '  another follow up  ',
-    );
-    const followUp = withFollowUp.at(-1)!;
-    const followUpContent = followUp.content as ContentBlock[];
-    const textBlock = assertSingleTextBlock(followUpContent);
-    assert.equal(textBlock.text, 'another follow up');
-
-    await assert.rejects(
-      handler.createUserFollowUpMessages([...baseMessages], '   '),
-      (err: unknown) => {
-        assert.ok(err instanceof Error);
-        assert.match(err.message, /non-empty user text/i);
-        return true;
-      },
-    );
-  });
 });
+
+/** Attach a files.upload stub that records its params and returns file_uploaded. */
+function addCapturingUpload(client: any, uploadArgs: any[]): void {
+  client.beta.files = {
+    upload: async (params: any) => {
+      uploadArgs.push(params);
+      return { id: 'file_uploaded' };
+    },
+  };
+}
 
 describe('ModelHandlerAnthropic PDF uploads and token counting', () => {
   it('uploads base64 PDF documents before creating responses', async () => {
@@ -834,12 +864,7 @@ describe('ModelHandlerAnthropic PDF uploads and token counting', () => {
     const uploadArgs: any[] = [];
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-test');
-    client.beta.files = {
-      upload: async (params: any) => {
-        uploadArgs.push(params);
-        return { id: 'file_uploaded' };
-      },
-    };
+    addCapturingUpload(client, uploadArgs);
 
     const response = await handler.createResponse({
       client,
@@ -874,12 +899,7 @@ describe('ModelHandlerAnthropic PDF uploads and token counting', () => {
 
     const uploadArgs: any[] = [];
     const { client } = createCapturingAnthropicClient('claude-test');
-    client.beta.files = {
-      upload: async (params: any) => {
-        uploadArgs.push(params);
-        return { id: 'file_uploaded' };
-      },
-    };
+    addCapturingUpload(client, uploadArgs);
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -1102,20 +1122,11 @@ describe('ModelHandlerAnthropic model capabilities', () => {
   it.each(['claude-opus-4-6', 'claude-opus-4-8'])(
     'adds native compaction context edit for %s tool-use runs',
     async (fullName) => {
-      const handler = createAnthropicHandler({
-        supportsTokenCounting: false,
-        supportsReasoning: false,
-      });
-      handler.config.fullName = fullName;
-      handler.setAgentCategory(AgentCategory.ToolUse);
-
-      stubHandlerForTest(handler);
+      const handler = createCompactionEligibleHandler({ fullName });
 
       const messages = helloMessages();
       const { client, messageOptions } =
         createCapturingAnthropicClient(fullName);
-
-      stubCompactionThresholdPercent(75);
 
       await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -1276,21 +1287,43 @@ describe('ModelHandlerAnthropic model capabilities', () => {
 });
 
 /**
+ * A logged, non-streaming handler pinned to a given model with the compaction
+ * threshold stubbed — the setup most compaction tests need.
+ */
+function createCompactionEligibleHandler({
+  fullName = 'claude-opus-4-6',
+  category = AgentCategory.ToolUse,
+  capabilities = {},
+  thresholdPercent = 75,
+}: {
+  fullName?: string;
+  category?: AgentCategory;
+  capabilities?: Partial<ModelCapabilities>;
+  thresholdPercent?: number;
+} = {}): ModelHandlerAnthropic {
+  const handler = createAnthropicHandler({
+    supportsTokenCounting: false,
+    supportsReasoning: false,
+    ...capabilities,
+  });
+  handler.config.fullName = fullName;
+  handler.setAgentCategory(category);
+  stubHandlerForTest(handler);
+  stubCompactionThresholdPercent(thresholdPercent);
+  return handler;
+}
+
+/**
  * A logged, non-streaming handler pinned to a compaction-capable model with
  * the compaction threshold at 0, the setup every forced-compaction test needs.
  */
 function createForcedCompactionHandler(
   agentCategory: AgentCategory = AgentCategory.Workflow,
 ): ModelHandlerAnthropic {
-  const handler = createAnthropicHandler({
-    supportsTokenCounting: false,
-    supportsReasoning: false,
+  return createCompactionEligibleHandler({
+    category: agentCategory,
+    thresholdPercent: 0,
   });
-  handler.config.fullName = 'claude-opus-4-6';
-  handler.setAgentCategory(agentCategory);
-  stubHandlerForTest(handler);
-  stubCompactionThresholdPercent(0);
-  return handler;
 }
 
 describe('ModelHandlerAnthropic forced compaction', () => {
@@ -1593,15 +1626,10 @@ describe('ModelHandlerAnthropic forced compaction', () => {
   });
 
   it('announces expected compaction after the measured count crosses the trigger', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: true,
-      supportsReasoning: false,
+    const handler = createCompactionEligibleHandler({
+      capabilities: { supportsTokenCounting: true },
     });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.ToolUse);
-
     const activityStates = captureCompactionActivity(handler);
-    stubCompactionThresholdPercent(75);
 
     const client = {
       beta: {
@@ -1637,15 +1665,9 @@ describe('ModelHandlerAnthropic forced compaction', () => {
 
 describe('ModelHandlerAnthropic file-reference token estimation', () => {
   it('drops compacted file metadata before estimating later requests', async () => {
-    const handler = createAnthropicHandler({
-      supportsNativePdf: true,
-      supportsTokenCounting: false,
-      supportsReasoning: false,
+    const handler = createCompactionEligibleHandler({
+      capabilities: { supportsNativePdf: true },
     });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    stubHandlerForTest(handler);
-    stubCompactionThresholdPercent(75);
 
     const pdf = await PDFDocument.create();
     pdf.addPage();
@@ -1781,13 +1803,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
   ])(
     'uses a fallback estimate for a $label unmeasured non-streaming request',
     async ({ messages, trackedPdfPages, expectedAtRequest, expectedFinal }) => {
-      const handler = createAnthropicHandler({
-        supportsNativePdf: true,
-        supportsTokenCounting: false,
-        supportsReasoning: false,
+      const handler = createCompactionEligibleHandler({
+        capabilities: { supportsNativePdf: true },
       });
-      handler.config.fullName = 'claude-opus-4-6';
-      handler.setAgentCategory(AgentCategory.ToolUse);
       if (trackedPdfPages > 0) {
         (handler as any).uploadedPdfPageCounts.set(
           'file_existing',
@@ -1796,7 +1814,6 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
       }
 
       const activityStates = captureCompactionActivity(handler);
-      stubCompactionThresholdPercent(75);
 
       const client = {
         beta: {
@@ -1831,15 +1848,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
   );
 
   it('skips file metadata after text already crosses the trigger', async () => {
-    const handler = createAnthropicHandler({
-      supportsNativePdf: true,
-      supportsTokenCounting: false,
-      supportsReasoning: false,
+    const handler = createCompactionEligibleHandler({
+      capabilities: { supportsNativePdf: true },
     });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    stubHandlerForTest(handler);
-    stubCompactionThresholdPercent(75);
 
     const retrieveMetadata = vi.fn(async (_fileId: string) => ({
       size_bytes: 800_000,
@@ -1865,16 +1876,10 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
   });
 
   it('includes Files API document size in the unmeasured fallback', async () => {
-    const handler = createAnthropicHandler({
-      supportsNativePdf: true,
-      supportsTokenCounting: true,
-      supportsReasoning: false,
+    const handler = createCompactionEligibleHandler({
+      capabilities: { supportsNativePdf: true, supportsTokenCounting: true },
     });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.ToolUse);
-
     const activityStates = captureCompactionActivity(handler);
-    stubCompactionThresholdPercent(75);
 
     const messages: MessageParam[] = [
       {
@@ -1926,14 +1931,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
     const pdf = await PDFDocument.create();
     pdf.addPage();
     const pdfBytes = Uint8Array.from(await pdf.save());
-    const retrieveMetadata = vi.fn(async () => ({
-      mime_type: 'application/pdf',
-      size_bytes: 800_000,
-    }));
-    const download = vi.fn(async () => ({
-      arrayBuffer: async () => pdfBytes.buffer,
-    }));
-    const client = { beta: { files: { retrieveMetadata, download } } };
+    const { retrieveMetadata, download, client } = createPdfMetadataClient(
+      pdfBytes.buffer,
+    );
 
     const firstEstimate = await target.estimateFileReferenceTokens(
       client,
@@ -1952,14 +1952,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
 
   it('caches a size fallback when a resumed PDF cannot be parsed', async () => {
     const { target, messages } = createFileEstimateHarness('file_invalid_pdf');
-    const retrieveMetadata = vi.fn(async () => ({
-      mime_type: 'application/pdf',
-      size_bytes: 800_000,
-    }));
-    const download = vi.fn(async () => ({
-      arrayBuffer: async () => new TextEncoder().encode('not a PDF').buffer,
-    }));
-    const client = { beta: { files: { retrieveMetadata, download } } };
+    const { retrieveMetadata, download, client } = createPdfMetadataClient(
+      new TextEncoder().encode('not a PDF').buffer,
+    );
 
     const firstEstimate = await target.estimateFileReferenceTokens(
       client,
@@ -2006,14 +2001,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
       'file_tracked',
     );
     target.uploadedPdfPageCounts.set('file_tracked', 1);
-    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
-      size_bytes: 800_000,
-    }));
+    const { retrieveMetadata, client } = createSizeMetadataClient();
 
-    const estimate = await target.estimateFileReferenceTokens(
-      { beta: { files: { retrieveMetadata } } },
-      messages,
-    );
+    const estimate = await target.estimateFileReferenceTokens(client, messages);
 
     assert.equal(estimate, 6_000);
     assert.equal(retrieveMetadata.mock.calls.length, 0);
@@ -2024,12 +2014,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
       'file_repeated',
       'file_repeated',
     );
-    const retrieveMetadata = vi.fn(async () => ({ size_bytes: 800_000 }));
+    const { retrieveMetadata, client } = createSizeMetadataClient();
 
-    const estimate = await target.estimateFileReferenceTokens(
-      { beta: { files: { retrieveMetadata } } },
-      messages,
-    );
+    const estimate = await target.estimateFileReferenceTokens(client, messages);
 
     assert.equal(estimate, 400_000);
     assert.equal(retrieveMetadata.mock.calls.length, 1);
@@ -2063,14 +2050,9 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
         ] as unknown as ContentBlockParam[],
       },
     ];
-    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
-      size_bytes: 800_000,
-    }));
+    const { retrieveMetadata, client } = createSizeMetadataClient();
 
-    const estimate = await target.estimateFileReferenceTokens(
-      { beta: { files: { retrieveMetadata } } },
-      messages,
-    );
+    const estimate = await target.estimateFileReferenceTokens(client, messages);
 
     assert.equal(estimate, 200_000);
     assert.equal(retrieveMetadata.mock.calls.length, 1);
@@ -2082,12 +2064,10 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
       'file_first',
       'file_unneeded',
     );
-    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
-      size_bytes: 800_000,
-    }));
+    const { retrieveMetadata, client } = createSizeMetadataClient();
 
     const estimate = await target.estimateFileReferenceTokens(
-      { beta: { files: { retrieveMetadata } } },
+      client,
       messages,
       undefined,
       100_000,
@@ -2121,20 +2101,13 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
 
 describe('ModelHandlerAnthropic usage and server-side compaction reporting', () => {
   it('does not add native compaction context edit for non-Opus models', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
+    const handler = createCompactionEligibleHandler({
+      fullName: 'claude-sonnet-4-5',
     });
-    handler.config.fullName = 'claude-sonnet-4-5';
-    handler.setAgentCategory(AgentCategory.ToolUse);
-
-    stubHandlerForTest(handler);
 
     const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-sonnet-4-5');
-
-    stubCompactionThresholdPercent(75);
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -2476,27 +2449,33 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
     >);
   }
 
-  it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
-    stubDirectServerKeyService();
+  beforeEach(stubDirectServerKeyService);
 
+  /**
+   * A logged handler forced onto the streaming path so tests exercise the
+   * pre-message_start catch block.
+   */
+  function createStreamingHandler(logger?: AgentTrace): ModelHandlerAnthropic {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger({ ...noopTrace });
-    // Force streaming path so we exercise the pre-message_start catch block.
+    handler.setLogger(logger ?? { ...noopTrace });
     (handler as any).getStreamingConfig = () => true;
+    return handler;
+  }
+
+  function streamClientOf(streamStub: unknown): any {
+    return { beta: { messages: { stream: () => streamStub } } } as any;
+  }
+
+  it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
+    const handler = createStreamingHandler();
 
     const abortError = new AnthropicUserAbortError();
     const streamStub = buildStreamStub(abortError);
 
-    const client = {
-      beta: {
-        messages: {
-          stream: () => streamStub,
-        },
-      },
-    } as any;
+    const client = streamClientOf(streamStub);
 
     const messages = helloMessages();
 
@@ -2528,14 +2507,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
   });
 
   it('preserves the original error message once message_start was received (does not mislabel a post-start stream failure)', async () => {
-    stubDirectServerKeyService();
-
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => true;
+    const handler = createStreamingHandler();
 
     // Simulates the message_stop guard above: message_start (and content)
     // was received, but the stream was truncated (e.g. proxy idle timeout
@@ -2549,13 +2521,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       emitMessageStart: true,
     });
 
-    const client = {
-      beta: {
-        messages: {
-          stream: () => streamStub,
-        },
-      },
-    } as any;
+    const client = streamClientOf(streamStub);
 
     const messages = helloMessages();
 
@@ -2577,12 +2543,6 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
   });
 
   it('keeps raw stream failures out of visible warning logs', async () => {
-    stubDirectServerKeyService();
-
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
     const logger = {
       ...noopTrace,
       debug: vi.fn(),
@@ -2591,9 +2551,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       error: vi.fn(),
       domain: vi.fn(),
     };
-    handler.setLogger(logger as unknown as AgentTrace);
-    (handler as { getStreamingConfig: () => boolean }).getStreamingConfig =
-      () => true;
+    const handler = createStreamingHandler(logger as unknown as AgentTrace);
 
     const providerError = new AnthropicBadRequestError(
       400,
@@ -2610,17 +2568,11 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       new Headers([['request-id', 'req_low_credit']]),
     );
     const stream = buildStreamStub(providerError);
-    const client = {
-      beta: {
-        messages: {
-          stream: vi.fn(() => stream),
-        },
-      },
-    };
+    const client = streamClientOf(stream);
 
     await expect(
       handler.createResponse({
-        client: client as any,
+        client,
         messages: helloMessages(),
         temperature: 0,
       }),

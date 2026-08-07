@@ -55,6 +55,44 @@ function changeValue(element: HTMLElement, value: string): void {
 }
 
 /**
+ * Cross-fade renders both picker panes simultaneously; the inactive pane is
+ * hidden via opacity and inert/aria-hidden, not removed from the DOM.
+ */
+function expectVisiblePane(
+  element: InstructionPanel,
+  visible: 'agent' | 'team',
+): void {
+  const hidden = visible === 'agent' ? 'team' : 'agent';
+  expect(
+    query(element, '.launcher-picker-fade')?.classList.contains(
+      `${visible}-picker-visible`,
+    ),
+  ).toBe(true);
+  expect(query(element, `.${visible}-picker-pane`)?.hasAttribute('inert')).toBe(
+    false,
+  );
+  expect(
+    query(element, `.${visible}-picker-pane`)?.getAttribute('aria-hidden'),
+  ).toBe('false');
+  expect(query(element, `.${hidden}-picker-pane`)?.hasAttribute('inert')).toBe(
+    true,
+  );
+  expect(
+    query(element, `.${hidden}-picker-pane`)?.getAttribute('aria-hidden'),
+  ).toBe('true');
+}
+
+function expectLauncherLabels(
+  element: InstructionPanel,
+  modelLabel: string,
+): void {
+  expect(
+    query<HTMLElement>(element, '#executeButton')?.getAttribute('aria-label'),
+  ).toBe('Run agent');
+  expect(query(element, '#model')?.getAttribute('aria-label')).toBe(modelLabel);
+}
+
+/**
  * Rendering contract for the Agent/Team launcher (Design Concept A): the
  * panel swaps its picker, execute-button label, model-picker label, and
  * session hint off `session.launchTarget`, and the team select must
@@ -83,27 +121,9 @@ describe('instruction-panel launcher', () => {
 
       expect(query(element, '#toolUseAgent')).toBeTruthy();
       expect(query(element, '#agentSettingsButton')).toBeTruthy();
-      // Cross-fade renders both panes; in agent mode the team pane is hidden
-      // via opacity, not removed from DOM.
-      expect(
-        query(element, '.launcher-picker-fade')?.classList.contains(
-          'agent-picker-visible',
-        ),
-      ).toBe(true);
       expect(query(element, '#teamPicker')).toBeTruthy();
       expect(query(element, '#teamSettingsButton')).toBeTruthy();
-      expect(query(element, '.agent-picker-pane')?.hasAttribute('inert')).toBe(
-        false,
-      );
-      expect(
-        query(element, '.agent-picker-pane')?.getAttribute('aria-hidden'),
-      ).toBe('false');
-      expect(query(element, '.team-picker-pane')?.hasAttribute('inert')).toBe(
-        true,
-      );
-      expect(
-        query(element, '.team-picker-pane')?.getAttribute('aria-hidden'),
-      ).toBe('true');
+      expectVisiblePane(element, 'agent');
     });
 
     it('shows the workflow agent picker directly without the launch-target toggle', async () => {
@@ -201,27 +221,9 @@ describe('instruction-panel launcher', () => {
       expect(picker).toBeTruthy();
       expect((picker as unknown as { value: string }).value).toBe('physicist');
       expect(query(element, '#teamSettingsButton')).toBeTruthy();
-      // Cross-fade renders both panes simultaneously; in team mode the agent
-      // pane is hidden via opacity, not removed from the DOM.
-      expect(
-        query(element, '.launcher-picker-fade')?.classList.contains(
-          'team-picker-visible',
-        ),
-      ).toBe(true);
       expect(query(element, '#toolUseAgent')).toBeTruthy();
       expect(query(element, '#agentSettingsButton')).toBeTruthy();
-      expect(query(element, '.team-picker-pane')?.hasAttribute('inert')).toBe(
-        false,
-      );
-      expect(
-        query(element, '.team-picker-pane')?.getAttribute('aria-hidden'),
-      ).toBe('false');
-      expect(query(element, '.agent-picker-pane')?.hasAttribute('inert')).toBe(
-        true,
-      );
-      expect(
-        query(element, '.agent-picker-pane')?.getAttribute('aria-hidden'),
-      ).toBe('true');
+      expectVisiblePane(element, 'team');
 
       const options = [
         ...(element.shadowRoot?.querySelectorAll('#teamPicker wa-option') ??
@@ -289,31 +291,13 @@ describe('instruction-panel launcher', () => {
     });
 
     it('labels the execute action and the lead model picker', async () => {
-      const element = await mountPanel(TEAM_SESSION);
-
-      expect(
-        query<HTMLElement>(element, '#executeButton')?.getAttribute(
-          'aria-label',
-        ),
-      ).toBe('Run agent');
-      expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
-        'Lead model',
-      );
+      expectLauncherLabels(await mountPanel(TEAM_SESSION), 'Lead model');
     });
   });
 
   describe('agent launcher labels', () => {
     it('labels the execute action and the model picker', async () => {
-      const element = await mountPanel(makeSession());
-
-      expect(
-        query<HTMLElement>(element, '#executeButton')?.getAttribute(
-          'aria-label',
-        ),
-      ).toBe('Run agent');
-      expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
-        'Model',
-      );
+      expectLauncherLabels(await mountPanel(makeSession()), 'Model');
     });
   });
 

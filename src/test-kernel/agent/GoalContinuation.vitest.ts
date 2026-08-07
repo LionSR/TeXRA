@@ -126,16 +126,22 @@ describe('maybeBuildGoalContinuation', () => {
     expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('active');
   });
 
-  it('returns null when no goal exists for the stream', async () => {
-    const out = await maybeBuildGoalContinuation(STREAM_ID);
-    expect(out).toBeNull();
-  });
+  it.each([
+    {
+      name: 'returns null when no goal exists for the stream',
+      arrange: async () => {},
+    },
+    {
+      name: 'returns null when the goal is paused',
+      arrange: async () => {
+        await GoalStore.start(STREAM_ID, 'objective');
+        await GoalStore.setStatus(STREAM_ID, 'paused');
+      },
+    },
+  ])('$name', async ({ arrange }) => {
+    await arrange();
 
-  it('returns null when the goal is paused', async () => {
-    await GoalStore.start(STREAM_ID, 'objective');
-    await GoalStore.setStatus(STREAM_ID, 'paused');
-    const out = await maybeBuildGoalContinuation(STREAM_ID);
-    expect(out).toBeNull();
+    await expect(maybeBuildGoalContinuation(STREAM_ID)).resolves.toBeNull();
   });
 
   it('is a pure read — leaves the record untouched', async () => {

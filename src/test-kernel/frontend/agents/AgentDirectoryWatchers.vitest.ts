@@ -151,15 +151,28 @@ describe('agent directory watcher rebuilds', () => {
     agentDirectories.initialize({} as vscode.ExtensionContext);
   });
 
-  it('builds the watcher set once for subscriptions racing the same directory read', async () => {
-    const firstRead = pDefer<AgentDirectoryEntry[]>();
-    mocks.getAllLocal
-      .mockReturnValueOnce(firstRead.promise)
-      .mockResolvedValue(directoryList('/agents/builtin'));
-
+  function subscribe(): vscode.Disposable {
     subscription = agentDirectories.watchAgentDirectories({
       onEvent: () => {},
     });
+    return subscription;
+  }
+
+  /** Parks the first directory read; later reads return `subsequent`. */
+  function parkFirstRead(
+    subsequent: AgentDirectoryEntry[],
+  ): ReturnType<typeof pDefer<AgentDirectoryEntry[]>> {
+    const firstRead = pDefer<AgentDirectoryEntry[]>();
+    mocks.getAllLocal
+      .mockReturnValueOnce(firstRead.promise)
+      .mockResolvedValue(subsequent);
+    return firstRead;
+  }
+
+  it('builds the watcher set once for subscriptions racing the same directory read', async () => {
+    const firstRead = parkFirstRead(directoryList('/agents/builtin'));
+
+    subscribe();
     const second = agentDirectories.watchAgentDirectories({
       onEvent: () => {},
     });
@@ -172,14 +185,9 @@ describe('agent directory watcher rebuilds', () => {
   });
 
   it('rebuilds for a directory change raised while a rebuild is already running', async () => {
-    const firstRead = pDefer<AgentDirectoryEntry[]>();
-    mocks.getAllLocal
-      .mockReturnValueOnce(firstRead.promise)
-      .mockResolvedValue(directoryList('/agents/custom'));
+    const firstRead = parkFirstRead(directoryList('/agents/custom'));
 
-    subscription = agentDirectories.watchAgentDirectories({
-      onEvent: () => {},
-    });
+    subscribe();
 
     // The settings view changes the custom agent directory while the first
     // read is still in flight: the change must not be dropped.
@@ -195,14 +203,9 @@ describe('agent directory watcher rebuilds', () => {
   });
 
   it('settles a queued rebuild when the last subscription is disposed first', async () => {
-    const firstRead = pDefer<AgentDirectoryEntry[]>();
-    mocks.getAllLocal
-      .mockReturnValueOnce(firstRead.promise)
-      .mockResolvedValue(directoryList('/agents/custom'));
+    const firstRead = parkFirstRead(directoryList('/agents/custom'));
 
-    subscription = agentDirectories.watchAgentDirectories({
-      onEvent: () => {},
-    });
+    const handle = subscribe();
 
     // The settings view awaits a rebuild that is still queued behind the
     // in-flight one when the sidebar drops its last subscription.
@@ -211,7 +214,7 @@ describe('agent directory watcher rebuilds', () => {
       refreshSettled = true;
     });
 
-    subscription.dispose();
+    handle.dispose();
     subscription = undefined;
     firstRead.resolve(directoryList('/agents/builtin'));
     await settle();
@@ -229,14 +232,12 @@ describe('agent directory watcher rebuilds', () => {
     mocks.tree.set(EXTERNAL_FIRST, []);
     mocks.heldReads.set(EXTERNAL_FIRST, scan);
 
-    subscription = agentDirectories.watchAgentDirectories({
-      onEvent: () => {},
-    });
+    const handle = subscribe();
     await vi.waitFor(() => {
       expect(mocks.heldReads.has(EXTERNAL_FIRST)).toBe(false);
     });
 
-    subscription.dispose();
+    handle.dispose();
     subscription = undefined;
     scan.resolve();
     await settle();
@@ -246,15 +247,11 @@ describe('agent directory watcher rebuilds', () => {
   });
 
   it('rebuilds for a subdirectory created after the running rebuild listed its parent', async () => {
-    mocks.getAllLocal.mockImplementation(async () =>
-      externalCustomDirectories(),
-    );
+    mocks.getAllLocal.mockResolvedValue(externalCustomDirectories());
     mocks.tree.set(EXTERNAL_FIRST, []);
     mocks.tree.set(EXTERNAL_SECOND, []);
 
-    subscription = agentDirectories.watchAgentDirectories({
-      onEvent: () => {},
-    });
+    subscribe();
     await settle();
 
     expect(mocks.watchedDirectories).toEqual([EXTERNAL_FIRST, EXTERNAL_SECOND]);

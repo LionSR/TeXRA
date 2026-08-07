@@ -187,8 +187,8 @@ type ConfigFormMode =
       readonly category: string;
     };
 
-/* Every /config layout wraps one Select in the same chrome: two FormFrame
-	   border rows, the title, the KeyHints margin, and the hints row. */
+// Every /config layout wraps one Select in the same chrome: two FormFrame
+// border rows, the title, the KeyHints margin, and the hints row.
 const SELECT_CHROME_ROWS = 5;
 
 /** Inline text editor for a string/number setting (its own input buffer). */

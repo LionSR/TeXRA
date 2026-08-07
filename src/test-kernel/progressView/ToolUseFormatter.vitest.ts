@@ -68,6 +68,20 @@ function toolUseMessage(id: string, data: unknown): LogMessageData {
   };
 }
 
+/** Renders an `executions` tool call with subagent labels and returns the title. */
+function executionsTitle(
+  input: Record<string, unknown>,
+  labels: [string, string][],
+): string | null | undefined {
+  const container = renderTemplate(
+    formatToolUseTemplate(
+      toolUseMessage('executions-title', { toolName: 'executions', input }),
+      { executionLabels: new Map(labels) },
+    ),
+  );
+  return container.querySelector('.tool-use-title')?.textContent;
+}
+
 describe('tool-use formatter', () => {
   it('renders workflow-script delegation details without proposal or journal data', () => {
     const script = `export const meta = {
@@ -325,66 +339,35 @@ return { papers, question: args.question };`;
   });
 
   it('labels executions targets when the display model knows the subagents', () => {
-    const message = toolUseMessage('executions-subagents', {
-      toolName: 'executions',
-      input: {
-        action: 'wait',
-        path: '/executions',
-        ids: ['sub-1', 'sub-2'],
-      },
-    });
-
-    const container = renderTemplate(
-      formatToolUseTemplate(message, {
-        executionLabels: new Map([
+    expect(
+      executionsTitle(
+        {
+          action: 'wait',
+          path: '/executions',
+          ids: ['sub-1', 'sub-2'],
+        },
+        [
           ['sub-1', 'reviewer'],
           ['sub-2', 'leanSolver'],
-        ]),
-      }),
-    );
-
-    expect(container.querySelector('.tool-use-title')?.textContent).toBe(
-      'executions — wait: reviewer, leanSolver',
-    );
+        ],
+      ),
+    ).toBe('executions — wait: reviewer, leanSolver');
   });
 
   it('keeps the resource path when labeling an executions target', () => {
-    const message = toolUseMessage('executions-subagent-resource', {
-      toolName: 'executions',
-      input: {
-        path: '/executions/sub-1/workspace-files/review.md',
-      },
-    });
-
-    const container = renderTemplate(
-      formatToolUseTemplate(message, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
-      }),
-    );
-
-    expect(container.querySelector('.tool-use-title')?.textContent).toBe(
-      'executions — view: reviewer/workspace-files/review.md',
-    );
+    expect(
+      executionsTitle({ path: '/executions/sub-1/workspace-files/review.md' }, [
+        ['sub-1', 'reviewer'],
+      ]),
+    ).toBe('executions — view: reviewer/workspace-files/review.md');
   });
 
   it('keeps the existing executions title for a background process', () => {
-    const message = toolUseMessage('executions-process', {
-      toolName: 'executions',
-      input: {
-        action: 'view',
-        path: '/executions/process-1',
-      },
-    });
-
-    const container = renderTemplate(
-      formatToolUseTemplate(message, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
-      }),
-    );
-
-    expect(container.querySelector('.tool-use-title')?.textContent).toBe(
-      'executions — view /executions/process-1',
-    );
+    expect(
+      executionsTitle({ action: 'view', path: '/executions/process-1' }, [
+        ['sub-1', 'reviewer'],
+      ]),
+    ).toBe('executions — view /executions/process-1');
   });
 });
 

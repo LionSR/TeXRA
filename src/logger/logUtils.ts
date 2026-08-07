@@ -116,7 +116,7 @@ function writeLine(
   const prefix = isAgent ? '' : `[${channel}] `;
   sink.appendLine(`${LEVEL_TAG[level]} [${timestamp}] ${prefix}${message}`);
 
-  if (data === null || data === undefined) return;
+  if (data == null) return;
   if (!isDebugModeEnabled()) return;
 
   sink.appendLine(normalizeLogData(data));

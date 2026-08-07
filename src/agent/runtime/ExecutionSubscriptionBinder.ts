@@ -214,10 +214,10 @@ export class ExecutionSubscriptionBinder {
    * (stream, execution) pair.
    */
   unbind(streamId: StreamTabId, executionId: string): boolean {
-    const d = this.perStream.get(streamId)?.get(executionId);
-    if (!d) return false;
+    const subscription = this.perStream.get(streamId)?.get(executionId);
+    if (!subscription) return false;
     try {
-      d.dispose();
+      subscription.dispose();
     } catch (err) {
       this.logger.warn('Disposer threw on explicit unsubscribe', {
         data: err,
@@ -246,9 +246,9 @@ export class ExecutionSubscriptionBinder {
   }
 
   private disposeBoundSubscriptions(bound: PerStream, reason: string): void {
-    for (const d of [...bound.values()]) {
+    for (const subscription of [...bound.values()]) {
       try {
-        d.dispose();
+        subscription.dispose();
       } catch (err) {
         this.logger.warn(`Disposer threw during ${reason}`, { data: err });
       }

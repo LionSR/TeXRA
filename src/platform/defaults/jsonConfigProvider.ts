@@ -61,12 +61,9 @@ export class JsonConfigProvider implements ConfigProvider {
   ): Promise<void> {
     const store = target === 'global' ? this.globalStore : this.workspaceStore;
     const storedKey = canonicalConfigKey(key);
-    if (value === undefined) {
-      await store.set(storedKey, undefined);
-    } else {
-      await store.set(storedKey, value);
-    }
-    this.watchers.notify(canonicalConfigKey(key));
+    // JsonStore.set treats `undefined` as a delete.
+    await store.set(storedKey, value);
+    this.watchers.notify(storedKey);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {

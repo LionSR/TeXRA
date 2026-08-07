@@ -193,10 +193,6 @@ export function restorePersistedState(): void {
   watcher.watch(persistedSnapshot$);
 }
 
-function restorePerModeInstructions(state: MainViewPersistedState): void {
-  instructionDrafts$.set({ ...state.instruction });
-}
-
 /**
  * Apply a backend-pushed restore (history rerun or reset).
  *
@@ -242,7 +238,7 @@ function applyState(state: MainViewPersistedState): void {
   agent$.set({ ...state.agent });
   model$.set(state.model);
   commit$.set(state.commit);
-  restorePerModeInstructions(state);
+  instructionDrafts$.set({ ...state.instruction });
   singleFiles$.set({
     editedFile: state.editedFile,
     baseFile: state.baseFile,

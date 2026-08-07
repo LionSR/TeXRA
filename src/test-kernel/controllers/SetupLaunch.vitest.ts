@@ -72,23 +72,34 @@ beforeEach(() => {
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
 });
 
+function selectCredentialModel(
+  includeOpenRouter?: boolean,
+): ReturnType<typeof selectSetupCredentialModelExcludingOpenRouter> {
+  return selectSetupCredentialModelExcludingOpenRouter(
+    {} as never,
+    includeOpenRouter,
+  );
+}
+
+function mockDirectApiKey(provider: string, key: string): void {
+  mocks.lookupApiKey.mockImplementation(async (_secrets, p) =>
+    p === provider ? key : undefined,
+  );
+}
+
 describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   it('prefers an active ChatGPT subscription over every other credential', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
     mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never),
-    ).resolves.toBe(CHATGPT_SETUP_MODEL);
+    await expect(selectCredentialModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('falls back to the default agent model when server-side keys cover it', async () => {
     mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
 
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never),
-    ).resolves.toBe(DEFAULT_AGENT_MODEL);
+    await expect(selectCredentialModel()).resolves.toBe(DEFAULT_AGENT_MODEL);
     expect(mocks.canUseServerSideKeysForModel).toHaveBeenCalledWith(
       DEFAULT_AGENT_MODEL,
     );
@@ -101,9 +112,9 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
       (model) => model === SETUP_MODEL_BY_PROVIDER.google,
     );
 
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never),
-    ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.google);
+    await expect(selectCredentialModel()).resolves.toBe(
+      SETUP_MODEL_BY_PROVIDER.google,
+    );
   });
 
   it('skips the openRouter entry when scanning per-provider server-side models', async () => {
@@ -114,19 +125,15 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
       (model) => model === SETUP_MODEL_BY_PROVIDER.openRouter,
     );
 
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never),
-    ).resolves.toBeNull();
+    await expect(selectCredentialModel()).resolves.toBeNull();
   });
 
   it('falls back to a direct provider API key, skipping openRouter', async () => {
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
-      provider === 'anthropic' ? 'sk-ant-test' : undefined,
-    );
+    mockDirectApiKey('anthropic', 'sk-ant-test');
 
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never),
-    ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.anthropic);
+    await expect(selectCredentialModel()).resolves.toBe(
+      SETUP_MODEL_BY_PROVIDER.anthropic,
+    );
     expect(mocks.lookupApiKey).not.toHaveBeenCalledWith(
       expect.anything(),
       'openRouter',
@@ -134,30 +141,24 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   });
 
   it('keeps managed direct credentials available when OpenRouter is enabled', async () => {
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
-      provider === 'kimiCode' ? 'kimi-code-test' : undefined,
-    );
+    mockDirectApiKey('kimiCode', 'kimi-code-test');
 
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never, true),
-    ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.kimiCode);
+    await expect(selectCredentialModel(true)).resolves.toBe(
+      SETUP_MODEL_BY_PROVIDER.kimiCode,
+    );
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
     expect(mocks.canUseServerSideKeys).not.toHaveBeenCalled();
   });
 
   it('returns null when no credential resolves to a runnable model', async () => {
-    await expect(
-      selectSetupCredentialModelExcludingOpenRouter({} as never),
-    ).resolves.toBeNull();
+    await expect(selectCredentialModel()).resolves.toBeNull();
   });
 });
 
 describe('selectDesktopSetupModel', () => {
   it('routes through OpenRouter only when the flag is on and a key exists', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
-      provider === 'openRouter' ? 'or-test' : undefined,
-    );
+    mockDirectApiKey('openRouter', 'or-test');
 
     await expect(selectDesktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.openRouter,
@@ -174,9 +175,7 @@ describe('selectDesktopSetupModel', () => {
 
   it('uses a managed direct key when the OpenRouter flag is on without a key', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
-      provider === 'kimiCode' ? 'kimi-code-test' : undefined,
-    );
+    mockDirectApiKey('kimiCode', 'kimi-code-test');
 
     await expect(selectDesktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.kimiCode,
@@ -200,9 +199,7 @@ describe('selectDesktopSetupModel', () => {
  */
 describe('resolveSetupLaunchModel', () => {
   it('falls back to the OpenRouter access-list model when no credential is available and the caller opts in', async () => {
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
-      provider === 'openRouter' ? 'or-test' : undefined,
-    );
+    mockDirectApiKey('openRouter', 'or-test');
 
     await expect(resolveSetupLaunchModel({} as never, true)).resolves.toEqual({
       model: SETUP_MODEL_BY_PROVIDER.openRouter,
@@ -211,9 +208,7 @@ describe('resolveSetupLaunchModel', () => {
   });
 
   it('returns null instead of the access-list fallback when the caller opts out', async () => {
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
-      provider === 'openRouter' ? 'or-test' : undefined,
-    );
+    mockDirectApiKey('openRouter', 'or-test');
 
     await expect(resolveSetupLaunchModel({} as never, false)).resolves.toBe(
       null,

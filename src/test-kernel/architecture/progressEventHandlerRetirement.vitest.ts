@@ -60,15 +60,12 @@ function mentionsRetiredDesktopProgressBridgeTerm(file: string): boolean {
 }
 
 describe('ProgressEventHandler retirement boundary', () => {
-  it('removes the retired ProgressEventHandler module', () => {
-    expect(existsSync(resolve(REPO_ROOT, RETIRED_MODULE))).toBe(false);
-  });
-
-  it('removes the retired extension progress-event adapter module', () => {
-    expect(
-      existsSync(resolve(REPO_ROOT, RETIRED_EXTENSION_PROGRESS_MODULE)),
-    ).toBe(false);
-  });
+  it.each([RETIRED_MODULE, RETIRED_EXTENSION_PROGRESS_MODULE])(
+    'removes the retired module %s',
+    (module) => {
+      expect(existsSync(resolve(REPO_ROOT, module))).toBe(false);
+    },
+  );
 
   it('removes the ProgressEventHandler class name from production sources', () => {
     const offenders = SCAN_ROOTS.flatMap(sourceFilesUnder)

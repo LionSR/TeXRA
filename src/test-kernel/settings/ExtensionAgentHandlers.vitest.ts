@@ -55,6 +55,15 @@ vi.mock('@auth/SupabaseClient', async () => ({
 
 const { AgentHandlers } = await import('@settingsView/handlers/agentHandlers');
 
+type Handlers = InstanceType<typeof AgentHandlers>;
+
+function applyPreset(handlers: Handlers, presetId: string): Promise<void> {
+  return handlers.handleApplyAgentModePreset({
+    command: 'applyAgentModePreset',
+    presetId,
+  });
+}
+
 function physicistCatalog(): AgentCatalog {
   const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
     source: 'builtInWorkflow',
@@ -166,10 +175,7 @@ describe('extension settings AgentHandlers', () => {
       modalChoice: 'Continue with available members',
     });
 
-    await handlers.handleApplyAgentModePreset({
-      command: 'applyAgentModePreset',
-      presetId: 'physicist',
-    });
+    await applyPreset(handlers, 'physicist');
 
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
@@ -203,10 +209,7 @@ describe('extension settings AgentHandlers', () => {
       workspaceState,
     });
 
-    await handlers.handleApplyAgentModePreset({
-      command: 'applyAgentModePreset',
-      presetId: 'partial-team',
-    });
+    await applyPreset(handlers, 'partial-team');
 
     expect(notifications).toEqual([
       'Applied "Partial team" with 1 member still unavailable',
@@ -238,10 +241,7 @@ describe('extension settings AgentHandlers', () => {
     });
     const update = vi.spyOn(workspaceState, 'update');
 
-    await handlers.handleApplyAgentModePreset({
-      command: 'applyAgentModePreset',
-      presetId: 'remote-team',
-    });
+    await applyPreset(handlers, 'remote-team');
 
     expect(order).toEqual(['sign-in', 'refresh']);
     expect(host.executeCommand).toHaveBeenCalledOnce();
@@ -265,10 +265,7 @@ describe('extension settings AgentHandlers', () => {
       createHandlerFixture({ workspaceState, modalChoice: undefined });
     const update = vi.spyOn(workspaceState, 'update');
 
-    await handlers.handleApplyAgentModePreset({
-      command: 'applyAgentModePreset',
-      presetId: 'remote-team',
-    });
+    await applyPreset(handlers, 'remote-team');
 
     expect(modalPrompts).toHaveLength(1);
     expect(registry.refreshAgents).not.toHaveBeenCalled();

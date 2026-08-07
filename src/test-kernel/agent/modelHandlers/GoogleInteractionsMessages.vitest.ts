@@ -39,6 +39,10 @@ function textOf(step: Step): string {
     .join('');
 }
 
+function userStep(text: string): Step {
+  return { type: 'user_input', content: [{ type: 'text', text }] };
+}
+
 /** Stub the media loader so no platform / filesystem is touched. */
 function stubImageMediaLoader(handler: ModelHandlerGoogleInteractions): void {
   (
@@ -48,6 +52,29 @@ function stubImageMediaLoader(handler: ModelHandlerGoogleInteractions): void {
   ).createMediaMessage = async () => [
     { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
   ];
+}
+
+/** Replace the client factory with a canned client (e.g. a files.upload stub). */
+function stubGetClient(
+  handler: ModelHandlerGoogleInteractions,
+  client: unknown,
+): void {
+  (handler as unknown as { getClient: () => Promise<unknown> }).getClient =
+    async () => client;
+}
+
+/** Reach the private media-upload pipeline directly. */
+function uploadMediaEntries(
+  handler: ModelHandlerGoogleInteractions,
+  entries: unknown[],
+): Promise<Interactions.Content[]> {
+  return (
+    handler as unknown as {
+      uploadMediaEntries: (
+        entries: unknown[],
+      ) => Promise<Interactions.Content[]>;
+    }
+  ).uploadMediaEntries(entries);
 }
 
 describe('ModelHandlerGoogleInteractions message construction', () => {
@@ -98,20 +125,14 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
 
   it('does not append an empty follow-up text block', async () => {
     const handler = createHandler();
-    const steps: Step[] = [
-      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
-    ];
+    const steps: Step[] = [userStep('body')];
     await handler.createUserFollowUpMessages(steps, '');
-    expect(steps).toEqual([
-      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
-    ]);
+    expect(steps).toEqual([userStep('body')]);
   });
 
   it('prependTextToUserMessage prepends into the trailing user_input step', () => {
     const handler = createHandler();
-    const steps: Step[] = [
-      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
-    ];
+    const steps: Step[] = [userStep('body')];
     handler.prependTextToUserMessage(steps, 'stats');
     const content = (steps[0] as Interactions.UserInputStep).content ?? [];
     expect((content[0] as Interactions.TextContent).text).toBe('stats');
@@ -120,9 +141,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
 
   it('addMediaToUserMessage unshifts inline image content into the trailing user_input step', async () => {
     const handler = createHandler();
-    const steps: Step[] = [
-      { type: 'user_input', content: [{ type: 'text', text: 'caption' }] },
-    ];
+    const steps: Step[] = [userStep('caption')];
 
     stubImageMediaLoader(handler);
 
@@ -138,7 +157,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
   it('creates a new user turn for an image-only follow-up', async () => {
     const handler = createHandler();
     const steps: Step[] = [
-      { type: 'user_input', content: [{ type: 'text', text: 'question' }] },
+      userStep('question'),
       { type: 'model_output', content: [{ type: 'text', text: 'answer' }] },
     ];
     stubImageMediaLoader(handler);
@@ -192,15 +211,14 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     handler.setLogger({ ...noopTrace });
 
     let uploadCalls = 0;
-    (handler as unknown as { getClient: () => Promise<unknown> }).getClient =
-      async () => ({
-        files: {
-          upload: async () => {
-            uploadCalls += 1;
-            return { uri: 'files/abc', mimeType: 'image/png' };
-          },
+    stubGetClient(handler, {
+      files: {
+        upload: async () => {
+          uploadCalls += 1;
+          return { uri: 'files/abc', mimeType: 'image/png' };
         },
-      });
+      },
+    });
 
     const entries = [
       // 2 bytes decoded (<= 4) → inline data.
@@ -219,11 +237,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       },
     ];
 
-    const content = await (
-      handler as unknown as {
-        uploadMediaEntries: (e: unknown[]) => Promise<Interactions.Content[]>;
-      }
-    ).uploadMediaEntries(entries);
+    const content = await uploadMediaEntries(handler, entries);
 
     expect(content).toHaveLength(2);
     const inline = content[0] as Interactions.ImageContent;
@@ -242,14 +256,13 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
 
   it('builds typed Interactions media content for audio, video, and documents', async () => {
     const handler = createHandler();
-    (handler as unknown as { getClient: () => Promise<unknown> }).getClient =
-      async () => ({
-        files: {
-          upload: async () => {
-            throw new Error('expected inline media');
-          },
+    stubGetClient(handler, {
+      files: {
+        upload: async () => {
+          throw new Error('expected inline media');
         },
-      });
+      },
+    });
 
     const entries = [
       {
@@ -269,11 +282,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       },
     ];
 
-    const content = await (
-      handler as unknown as {
-        uploadMediaEntries: (e: unknown[]) => Promise<Interactions.Content[]>;
-      }
-    ).uploadMediaEntries(entries);
+    const content = await uploadMediaEntries(handler, entries);
 
     expect(content).toEqual([
       {

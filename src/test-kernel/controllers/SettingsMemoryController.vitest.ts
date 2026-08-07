@@ -36,12 +36,17 @@ vi.mock('@utils/files', () => ({
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
-function createController(options?: { memoryEnabled?: boolean }): {
+function createController(options?: {
+  memoryEnabled?: boolean;
+  confirmResponses?: readonly boolean[];
+}): {
   controller: SettingsMemoryController;
   hosts: ReturnType<typeof createFakeUIHosts>;
   memoryEnabledValue: () => boolean;
 } {
-  const hosts = createFakeUIHosts();
+  const hosts = createFakeUIHosts({
+    confirmResponses: options?.confirmResponses,
+  });
   let memoryEnabled = options?.memoryEnabled ?? true;
 
   return {
@@ -127,12 +132,7 @@ describe('SettingsMemoryController', () => {
   });
 
   it('leaves memory files untouched when deletion is cancelled', async () => {
-    const hosts = createFakeUIHosts({ confirmResponses: [false] });
-    const controller = new SettingsMemoryController({
-      prompt: hosts.prompt,
-      isMemoryEnabled: () => true,
-      setMemoryEnabled: async () => undefined,
-    });
+    const { controller } = createController({ confirmResponses: [false] });
 
     assert.equal(
       await controller.deleteMemory({
@@ -146,12 +146,7 @@ describe('SettingsMemoryController', () => {
 
   it('deletes confirmed memory files and returns refreshed data', async () => {
     mocks.loadMemoryItems.mockResolvedValue([]);
-    const hosts = createFakeUIHosts({ confirmResponses: [true] });
-    const controller = new SettingsMemoryController({
-      prompt: hosts.prompt,
-      isMemoryEnabled: () => true,
-      setMemoryEnabled: async () => undefined,
-    });
+    const { controller } = createController({ confirmResponses: [true] });
 
     const message = await controller.deleteMemory({
       storagePath: 'item.md',
@@ -165,39 +160,28 @@ describe('SettingsMemoryController', () => {
     assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
   });
 
-  it('pins memory files and returns refreshed data', async () => {
-    mocks.setMemoryPinned.mockResolvedValue({
-      status: 'changed',
-      pinnedCount: 1,
-    });
-    mocks.loadMemoryItems.mockResolvedValue([]);
-    const { controller } = createController();
+  it.each([
+    { method: 'pinMemory', pinned: true },
+    { method: 'unpinMemory', pinned: false },
+  ] as const)(
+    '$method sets the pinned flag and returns refreshed data',
+    async ({ method, pinned }) => {
+      mocks.setMemoryPinned.mockResolvedValue({
+        status: 'changed',
+        pinnedCount: 1,
+      });
+      mocks.loadMemoryItems.mockResolvedValue([]);
+      const { controller } = createController();
 
-    const message = await controller.pinMemory('item.md');
+      const message = await controller[method]('item.md');
 
-    assert.deepEqual(mocks.setMemoryPinned.mock.calls[0], [
-      'mem/item.md',
-      true,
-    ]);
-    assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-  });
-
-  it('unpins memory files and returns refreshed data', async () => {
-    mocks.setMemoryPinned.mockResolvedValue({
-      status: 'changed',
-      pinnedCount: 1,
-    });
-    mocks.loadMemoryItems.mockResolvedValue([]);
-    const { controller } = createController();
-
-    const message = await controller.unpinMemory('item.md');
-
-    assert.deepEqual(mocks.setMemoryPinned.mock.calls[0], [
-      'mem/item.md',
-      false,
-    ]);
-    assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-  });
+      assert.deepEqual(mocks.setMemoryPinned.mock.calls[0], [
+        'mem/item.md',
+        pinned,
+      ]);
+      assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
+    },
+  );
 
   it('refreshes without warning when the file is already in the requested state', async () => {
     mocks.setMemoryPinned.mockResolvedValue({ status: 'already' });

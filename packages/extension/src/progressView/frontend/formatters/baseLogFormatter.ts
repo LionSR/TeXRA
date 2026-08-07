@@ -49,8 +49,7 @@ export function safeFormat<T>(
     const value = formatter();
     return { ok: true, value };
   } catch (e) {
-    const errorMsg = toErrorMessage(e);
     console.error(`Error parsing ${errorContext}:`, e);
-    return { ok: false, error: errorMsg };
+    return { ok: false, error: toErrorMessage(e) };
   }
 }

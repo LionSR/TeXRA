@@ -97,6 +97,698 @@ const RECOVERED_DOCUMENT_LINES = [
 ];
 const RECOVERED_DOCUMENT_CONTENT = [...RECOVERED_DOCUMENT_LINES, ''].join('\n');
 
+function expectSources(
+  outputs: readonly { source: string }[],
+  expected: readonly string[],
+): void {
+  expect(outputs.map((output) => output.source)).toEqual(expected);
+}
+
+async function expectWritten(path: string, content: string): Promise<void> {
+  await expect(AbsoluteFS.read(`/tmp/run/${path}`)).resolves.toBe(content);
+}
+
+async function expectAbsent(path: string): Promise<void> {
+  await expect(AbsoluteFS.exists(`/tmp/run/${path}`)).resolves.toBe(false);
+}
+
+/**
+ * A recovery scenario against the default single `paper.tex` input: the raw
+ * output lines, the files that must be written (keyed by run-relative path,
+ * in expected source order), and any paths that must not be written.
+ */
+// Mutable tuple types: vitest's it.each infers spread-arg callback types only
+// for mutable tuples (readonly tuples with optional elements hit its
+// union-of-elements fallback).
+type RecoveryCase = [
+  name: string,
+  output: string[],
+  files: Record<string, string>,
+  absent?: string[],
+];
+
+/** Same as RecoveryCase but with explicit input files. */
+type LabeledRecoveryCase = [
+  name: string,
+  output: string[],
+  inputFiles: string[],
+  files: Record<string, string>,
+  absent?: string[],
+];
+
+const RECOVERY_CASES: readonly RecoveryCase[] = [
+  [
+    'removes surrounding markdown fences from percent filename output',
+    ['```latex', '% main.tex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    { 'main.tex': RECOVERED_DOCUMENT_CONTENT },
+  ],
+  [
+    'removes compact markdown fence info strings after percent headers',
+    ['% main.tex', '```latex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    { 'main.tex': RECOVERED_DOCUMENT_CONTENT },
+  ],
+  [
+    'removes spaced markdown fence info strings after percent headers',
+    ['% main.tex', '``` latex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    { 'main.tex': RECOVERED_DOCUMENT_CONTENT },
+  ],
+  [
+    'recovers documents from percent filename headers',
+    [
+      'Here is the output:',
+      '% main.tex',
+      '\\section{Recovered}',
+      '% sections/appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': '\\section{Recovered}\n',
+      'sections/appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'preserves fence-looking lines inside percent-header content',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '\\begin{document}',
+      '\\begin{verbatim}',
+      '```',
+      '\\end{verbatim}',
+      '\\end{document}',
+    ],
+    {
+      'main.tex': [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\begin{verbatim}',
+        '```',
+        '\\end{verbatim}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
+  ],
+  [
+    'prefers named document fallback over percent filename comments',
+    [
+      '<document name="main.tex">',
+      'Main body.',
+      '% notes.tex',
+      'Still main body.',
+      '</document>',
+      '<document name="appendix.tex">',
+      'Appendix body.',
+      '</document>',
+    ],
+    {
+      'main.tex': 'Main body.\n% notes.tex\nStill main body.\n',
+      'appendix.tex': 'Appendix body.\n',
+    },
+    ['notes.tex'],
+  ],
+  [
+    'prefers percent filename headers over single-document input recovery',
+    ['% declared.tex', ...RECOVERED_DOCUMENT_LINES],
+    { 'declared.tex': RECOVERED_DOCUMENT_CONTENT },
+    ['paper.tex'],
+  ],
+  [
+    'recovers dot-prefixed relative percent filename headers',
+    [
+      '% ./main.tex',
+      'Main text.',
+      '% ./sections/appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': 'Main text.\n',
+      'sections/appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'recovers hyphenated percent filename headers',
+    ['% main-file.tex', 'Main text.', '% sections/part-1.tex', 'Part text.'],
+    {
+      'main-file.tex': 'Main text.\n',
+      'sections/part-1.tex': 'Part text.\n',
+    },
+  ],
+  [
+    'recovers underscore-prefixed percent filename headers',
+    [
+      '% _macros.tex',
+      '\\newcommand{\\R}{\\mathbb{R}}',
+      '% _generated/main.tex',
+      'Generated text.',
+    ],
+    {
+      '_macros.tex': '\\newcommand{\\R}{\\mathbb{R}}\n',
+      '_generated/main.tex': 'Generated text.\n',
+    },
+  ],
+  [
+    'recovers backslash-separated percent filename headers',
+    ['% sections\\intro.tex', 'Intro text.'],
+    {
+      'sections/intro.tex': 'Intro text.\n',
+    },
+  ],
+  [
+    'keeps percent filename comments inside a LaTeX document body',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '\\begin{document}',
+      '% notes.tex',
+      'Still the main document.',
+      '\\end{document}',
+      '% appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '% notes.tex',
+        'Still the main document.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+      'appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'keeps percent filename comments in a LaTeX document preamble',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '% macros.tex',
+      '\\begin{document}',
+      'Body.',
+      '\\end{document}',
+      '% appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': [
+        '\\documentclass{article}',
+        '% macros.tex',
+        '\\begin{document}',
+        'Body.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+      'appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'keeps multiple percent filename comments in a LaTeX document preamble',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '% macros.tex',
+      '% notation.tex',
+      '\\begin{document}',
+      'Body.',
+      '\\end{document}',
+      '% appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': [
+        '\\documentclass{article}',
+        '% macros.tex',
+        '% notation.tex',
+        '\\begin{document}',
+        'Body.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+      'appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'does not treat pre-header LaTeX preamble comments as percent outputs',
+    [
+      '\\documentclass{article}',
+      '% macros.tex',
+      '\\begin{document}',
+      'Body.',
+      '\\end{document}',
+    ],
+    {
+      'paper.tex': [
+        '\\documentclass{article}',
+        '% macros.tex',
+        '\\begin{document}',
+        'Body.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
+    ['macros.tex'],
+  ],
+  [
+    'falls back to single-document recovery for LaTeX content before the first percent header',
+    [
+      '\\section{Intro}',
+      '% appendix.tex',
+      'More text.',
+      '% notes.tex',
+      'Still the same fragment.',
+    ],
+    {
+      'paper.tex': [
+        '\\section{Intro}',
+        '% appendix.tex',
+        'More text.',
+        '% notes.tex',
+        'Still the same fragment.',
+        '',
+      ].join('\n'),
+    },
+    ['appendix.tex', 'notes.tex'],
+  ],
+  [
+    'allows percent headers after documentclass-only blocks',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '% sections/intro.tex',
+      '\\section{Intro}',
+    ],
+    {
+      'main.tex': '\\documentclass{article}\n',
+      'sections/intro.tex': '\\section{Intro}\n',
+    },
+  ],
+  [
+    'allows percent headers before later files with their own documentclass',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '% appendix.tex',
+      '\\documentclass{article}',
+      '\\begin{document}',
+      'Appendix.',
+      '\\end{document}',
+    ],
+    {
+      'main.tex': '\\documentclass{article}\n',
+      'appendix.tex': [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Appendix.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
+  ],
+  [
+    'ignores commented end-document lines when detecting percent headers',
+    [
+      '% main.tex',
+      '\\documentclass{article}',
+      '\\begin{document}',
+      '% \\end{document}',
+      '% notes.tex',
+      'Still the main document.',
+      '\\end{document}',
+      '% appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '% \\end{document}',
+        '% notes.tex',
+        'Still the main document.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+      'appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'removes prefaced markdown fence delimiters from percent output',
+    [
+      'Here are the files:',
+      '```latex',
+      '% main.tex',
+      'Main text.',
+      '```',
+      'Done.',
+    ],
+    { 'main.tex': 'Main text.\n' },
+  ],
+  [
+    'preserves prefaced fence state across empty repeated headers',
+    [
+      'Here are the files:',
+      '```latex',
+      '% main.tex',
+      '% main.tex',
+      'Main text.',
+      '```',
+    ],
+    { 'main.tex': 'Main text.\n' },
+  ],
+  [
+    'clears complete pre-header fences before the real percent output',
+    [
+      'Example:',
+      '```tex',
+      'not output',
+      '```',
+      'Actual files:',
+      '```latex',
+      '% main.tex',
+      'Main text.',
+      '```',
+    ],
+    { 'main.tex': 'Main text.\n' },
+  ],
+  [
+    'keeps inner fence delimiters inside prefaced fenced percent output',
+    [
+      'Here are the files:',
+      '```latex',
+      '% main.tex',
+      '\\documentclass{article}',
+      '\\begin{document}',
+      '\\begin{verbatim}',
+      '```',
+      '\\end{verbatim}',
+      '\\end{document}',
+      '```',
+      'Done.',
+    ],
+    {
+      'main.tex': [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\begin{verbatim}',
+        '```',
+        '\\end{verbatim}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
+  ],
+  [
+    'ignores prose after a fenced percent-header block until the next header',
+    [
+      '% main.tex',
+      '```latex',
+      'Main text.',
+      '```',
+      'Done.',
+      '% appendix.tex',
+      'Appendix text.',
+    ],
+    {
+      'main.tex': 'Main text.\n',
+      'appendix.tex': 'Appendix text.\n',
+    },
+  ],
+  [
+    'ignores scratchpad percent filename mentions during recovery',
+    [
+      '<scratchpad>',
+      '% main.tex',
+      'Draft routing notes.',
+      '</scratchpad>',
+      '% main.tex',
+      'Actual output.',
+    ],
+    { 'main.tex': 'Actual output.\n' },
+    ['main-2.tex'],
+  ],
+  [
+    'makes duplicate percent filename headers unique before writing',
+    ['% chunk.tex', 'First.', '% chunk.tex', 'Second.'],
+    {
+      'chunk.tex': 'First.\n',
+      'chunk-2.tex': 'Second.\n',
+    },
+  ],
+  [
+    'avoids percent filename suffix collisions with explicit headers',
+    [
+      '% chunk.tex',
+      'First.',
+      '% chunk-2.tex',
+      'Explicit suffix.',
+      '% chunk.tex',
+      'Second duplicate.',
+    ],
+    {
+      'chunk.tex': 'First.\n',
+      'chunk-2.tex': 'Explicit suffix.\n',
+      'chunk-3.tex': 'Second duplicate.\n',
+    },
+  ],
+  [
+    'does not reserve empty percent filename header blocks',
+    ['% chunk.tex', '% chunk.tex', 'Actual content.'],
+    { 'chunk.tex': 'Actual content.\n' },
+  ],
+  [
+    'deduplicates percent filename headers after safe-path normalization',
+    [
+      '% sections/main.tex',
+      'Plain path.',
+      '% sections/./main.tex',
+      'Equivalent safe path.',
+    ],
+    {
+      'sections/main.tex': 'Plain path.\n',
+      'sections/main-2.tex': 'Equivalent safe path.\n',
+    },
+  ],
+];
+
+const LABELED_RECOVERY_CASES: readonly LabeledRecoveryCase[] = [
+  [
+    'recovers documents from bare filename labels with no % prefix',
+    [
+      '## Reflection',
+      '',
+      'Some narrative text about what changed.',
+      '',
+      'Draft/LeanMPSPaper/Draft3.tex:',
+      '```latex',
+      '\\documentclass{article}',
+      '\\begin{document}',
+      'Body one.',
+      '\\end{document}',
+      '```',
+      '',
+      'Draft/LeanMPSPaper/endmatter.tex:',
+      '```latex',
+      'End matter body.',
+      '```',
+    ],
+    ['Draft/LeanMPSPaper/Draft3.tex', 'Draft/LeanMPSPaper/endmatter.tex'],
+    {
+      'Draft/LeanMPSPaper/Draft3.tex':
+        '\\documentclass{article}\n\\begin{document}\nBody one.\n\\end{document}\n',
+      'Draft/LeanMPSPaper/endmatter.tex': 'End matter body.\n',
+    },
+  ],
+  [
+    // The % header stays (it is a valid LaTeX comment); the bare label is
+    // not LaTeX and must not leak into the recovered document.
+    'drops a bare label line inside a synthesized single-input document body',
+    [
+      '\\section{Intro}',
+      'Text.',
+      '% paper.tex',
+      'More text.',
+      'paper.tex:',
+      'Final text.',
+    ],
+    ['paper.tex'],
+    {
+      'paper.tex':
+        '\\section{Intro}\nText.\n% paper.tex\nMore text.\nFinal text.\n',
+    },
+  ],
+  [
+    'keeps a bare label inside a verbatim block instead of splitting the fragment',
+    [
+      'main.tex:',
+      '\\section{Listing}',
+      '\\begin{verbatim}',
+      'appendix.tex:',
+      '\\end{verbatim}',
+      'Tail.',
+      'appendix.tex:',
+      'Appendix content.',
+    ],
+    ['main.tex', 'appendix.tex'],
+    {
+      'main.tex':
+        '\\section{Listing}\n\\begin{verbatim}\nappendix.tex:\n\\end{verbatim}\nTail.\n',
+      'appendix.tex': 'Appendix content.\n',
+    },
+  ],
+  [
+    'ignores bare labels inside pre-output example fences',
+    [
+      'Here is the label format:',
+      '```text',
+      'main.tex:',
+      'example body',
+      '```',
+      '',
+      'main.tex:',
+      '```latex',
+      'Real output.',
+      '```',
+    ],
+    ['main.tex'],
+    { 'main.tex': 'Real output.\n' },
+    ['main-2.tex'],
+  ],
+  [
+    'does not strip unrelated example and output fences as one wrapper',
+    [
+      '```text',
+      'main.tex:',
+      'example body',
+      '```',
+      '',
+      'main.tex:',
+      '```latex',
+      'Real output.',
+      '```',
+    ],
+    ['main.tex'],
+    { 'main.tex': 'Real output.\n' },
+    ['main-2.tex'],
+  ],
+  [
+    'preserves a shared outer fence across filename-label splits',
+    [
+      'Here are the files:',
+      '```latex',
+      'main.tex:',
+      'Main body.',
+      'appendix.tex:',
+      'Appendix body.',
+      '```',
+    ],
+    ['main.tex', 'appendix.tex'],
+    {
+      'main.tex': 'Main body.\n',
+      'appendix.tex': 'Appendix body.\n',
+    },
+  ],
+  [
+    'recovers headers after an unclosed non-LaTeX example fence',
+    [
+      'Example:',
+      '```text',
+      'The response should then provide the real file.',
+      'main.tex:',
+      'Real body.',
+    ],
+    ['main.tex'],
+    { 'main.tex': 'Real body.\n' },
+  ],
+  [
+    'recovers real filename-labelled outputs inside a prefaced text fence',
+    [
+      'Here are the files:',
+      '```text',
+      'main.tex:',
+      'Main body.',
+      'appendix.tex:',
+      'Appendix body.',
+      '```',
+    ],
+    ['main.tex', 'appendix.tex'],
+    {
+      'main.tex': 'Main body.\n',
+      'appendix.tex': 'Appendix body.\n',
+    },
+  ],
+  [
+    'recovers a single plain output inside a prefaced text fence',
+    [
+      'Here is the file:',
+      '```text',
+      'main.tex:',
+      'A plain paragraph with no command-looking LaTeX.',
+      '```',
+    ],
+    ['main.tex'],
+    { 'main.tex': 'A plain paragraph with no command-looking LaTeX.\n' },
+  ],
+  [
+    'keeps inner fence delimiters inside fenced LaTeX fragments',
+    [
+      'main.tex:',
+      '```latex',
+      '\\begin{verbatim}',
+      '```',
+      '\\end{verbatim}',
+      'Tail.',
+      '```',
+    ],
+    ['main.tex'],
+    { 'main.tex': '\\begin{verbatim}\n```\n\\end{verbatim}\nTail.\n' },
+  ],
+  [
+    'strips an outer documents envelope before filename-label recovery',
+    ['<documents>', 'main.tex:', 'Recovered body.', '</documents>'],
+    ['main.tex'],
+    { 'main.tex': 'Recovered body.\n' },
+  ],
+  [
+    'strips an outer documents envelope inside a markdown wrapper',
+    [
+      '```xml',
+      '<documents>',
+      'main.tex:',
+      'Recovered body.',
+      '</documents>',
+      '```',
+    ],
+    ['main.tex'],
+    { 'main.tex': 'Recovered body.\n' },
+  ],
+  [
+    'drops a bare label that triggers single-input prefix synthesis',
+    ['\\section{Intro}', 'Text.', 'paper.tex:', 'More text.'],
+    ['paper.tex'],
+    { 'paper.tex': '\\section{Intro}\nText.\nMore text.\n' },
+  ],
+  [
+    // Unlike a % header, a bare label is never a LaTeX comment, so the
+    // "maybe this is a preamble comment" lookahead must not swallow the
+    // label separating a preamble-only file from the next document.
+    'splits on a bare label even after preamble-only content',
+    [
+      'main.tex:',
+      '\\documentclass{article}',
+      '\\usepackage{amsmath}',
+      'body.tex:',
+      '\\begin{document}',
+      'Hi.',
+      '\\end{document}',
+    ],
+    ['main.tex', 'body.tex'],
+    {
+      'main.tex': '\\documentclass{article}\n\\usepackage{amsmath}\n',
+      'body.tex': '\\begin{document}\nHi.\n\\end{document}\n',
+    },
+  ],
+];
+
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
     formatterMocks.runLatexFormatter.mockReset();
@@ -121,7 +813,8 @@ describe('XmlOutputManager', () => {
       0,
     );
 
-    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
+    await expectWritten(
+      'paper.tex',
       '\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n',
     );
   });
@@ -140,9 +833,7 @@ describe('XmlOutputManager', () => {
       0,
     );
 
-    await expect(AbsoluteFS.read('/tmp/run/fragment.tex')).resolves.toBe(
-      'Body only.\n',
-    );
+    await expectWritten('fragment.tex', 'Body only.\n');
   });
 
   it('creates parent directories for extracted document names with subdirectories', async () => {
@@ -154,330 +845,19 @@ describe('XmlOutputManager', () => {
       0,
     );
 
-    await expect(AbsoluteFS.read('/tmp/run/sections/main.tex')).resolves.toBe(
-      'Nested section.\n',
-    );
+    await expectWritten('sections/main.tex', 'Nested section.\n');
   });
 
-  it('recovers documents from percent filename headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      'Here is the output:',
-      '% main.tex',
-      '\\section{Recovered}',
-      '% sections/appendix.tex',
-      'Appendix text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'sections/appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\section{Recovered}\n',
-    );
-    await expect(
-      AbsoluteFS.read('/tmp/run/sections/appendix.tex'),
-    ).resolves.toBe('Appendix text.\n');
-  });
-
-  it.each([
-    [
-      'removes surrounding markdown fences from percent filename output',
-      ['```latex', '% main.tex', ...RECOVERED_DOCUMENT_LINES, '```'],
-    ],
-    [
-      'removes compact markdown fence info strings after percent headers',
-      ['% main.tex', '```latex', ...RECOVERED_DOCUMENT_LINES, '```'],
-    ],
-    [
-      'removes spaced markdown fence info strings after percent headers',
-      ['% main.tex', '``` latex', ...RECOVERED_DOCUMENT_LINES, '```'],
-    ],
-  ] satisfies readonly (readonly [string, readonly string[]])[])(
-    '%s',
-    async (_name, output) => {
-      const outputs = await writeAndSplitDocuments(output);
-
-      expect(outputs.map((entry) => entry.source)).toEqual(['main.tex']);
-      await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-        RECOVERED_DOCUMENT_CONTENT,
-      );
-    },
-  );
-
-  it('preserves fence-looking lines inside percent-header content', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '\\begin{verbatim}',
-      '```',
-      '\\end{verbatim}',
-      '\\end{document}',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '\\begin{verbatim}',
-        '```',
-        '\\end{verbatim}',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('prefers named document fallback over percent filename comments', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '<document name="main.tex">',
-      'Main body.',
-      '% notes.tex',
-      'Still main body.',
-      '</document>',
-      '<document name="appendix.tex">',
-      'Appendix body.',
-      '</document>',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main body.\n% notes.tex\nStill main body.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix body.\n',
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/notes.tex')).resolves.toBe(false);
-  });
-
-  it('prefers percent filename headers over single-document input recovery', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% declared.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      'Recovered.',
-      '\\end{document}',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['declared.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/declared.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Recovered.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/paper.tex')).resolves.toBe(false);
-  });
-
-  it.each([
-    [
-      'recovers dot-prefixed relative percent filename headers',
-      [
-        '% ./main.tex',
-        'Main text.',
-        '% ./sections/appendix.tex',
-        'Appendix text.',
-      ],
-      {
-        'main.tex': 'Main text.\n',
-        'sections/appendix.tex': 'Appendix text.\n',
-      },
-    ],
-    [
-      'recovers hyphenated percent filename headers',
-      ['% main-file.tex', 'Main text.', '% sections/part-1.tex', 'Part text.'],
-      {
-        'main-file.tex': 'Main text.\n',
-        'sections/part-1.tex': 'Part text.\n',
-      },
-    ],
-    [
-      'recovers underscore-prefixed percent filename headers',
-      [
-        '% _macros.tex',
-        '\\newcommand{\\R}{\\mathbb{R}}',
-        '% _generated/main.tex',
-        'Generated text.',
-      ],
-      {
-        '_macros.tex': '\\newcommand{\\R}{\\mathbb{R}}\n',
-        '_generated/main.tex': 'Generated text.\n',
-      },
-    ],
-    [
-      'recovers backslash-separated percent filename headers',
-      ['% sections\\intro.tex', 'Intro text.'],
-      {
-        'sections/intro.tex': 'Intro text.\n',
-      },
-    ],
-  ] satisfies readonly (readonly [
-    string,
-    readonly string[],
-    Record<string, string>,
-  ])[])('%s', async (_name, output, expectedFiles) => {
+  it.each(RECOVERY_CASES)('%s', async (_name, output, files, absent = []) => {
     const outputs = await writeAndSplitDocuments(output);
 
-    expect(outputs.map((entry) => entry.source)).toEqual(
-      Object.keys(expectedFiles),
-    );
-    for (const [source, content] of Object.entries(expectedFiles)) {
-      await expect(AbsoluteFS.read(`/tmp/run/${source}`)).resolves.toBe(
-        content,
-      );
+    expectSources(outputs, Object.keys(files));
+    for (const [source, content] of Object.entries(files)) {
+      await expectWritten(source, content);
     }
-  });
-
-  it('keeps percent filename comments inside a LaTeX document body', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '% notes.tex',
-      'Still the main document.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '% notes.tex',
-        'Still the main document.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix text.\n',
-    );
-  });
-
-  it('keeps percent filename comments in a LaTeX document preamble', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '% macros.tex',
-      '\\begin{document}',
-      'Body.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '% macros.tex',
-        '\\begin{document}',
-        'Body.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix text.\n',
-    );
-  });
-
-  it('keeps multiple percent filename comments in a LaTeX document preamble', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '% macros.tex',
-      '% notation.tex',
-      '\\begin{document}',
-      'Body.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '% macros.tex',
-        '% notation.tex',
-        '\\begin{document}',
-        'Body.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix text.\n',
-    );
-  });
-
-  it('does not treat pre-header LaTeX preamble comments as percent outputs', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '\\documentclass{article}',
-      '% macros.tex',
-      '\\begin{document}',
-      'Body.',
-      '\\end{document}',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '% macros.tex',
-        '\\begin{document}',
-        'Body.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/macros.tex')).resolves.toBe(false);
-  });
-
-  it('falls back to single-document recovery for LaTeX content before the first percent header', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '\\section{Intro}',
-      '% appendix.tex',
-      'More text.',
-      '% notes.tex',
-      'Still the same fragment.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
-      [
-        '\\section{Intro}',
-        '% appendix.tex',
-        'More text.',
-        '% notes.tex',
-        'Still the same fragment.',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/appendix.tex')).resolves.toBe(
-      false,
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/notes.tex')).resolves.toBe(false);
+    for (const path of absent) {
+      await expectAbsent(path);
+    }
   });
 
   it('continues percent recovery for multi-input outputs after leading LaTeX content', async () => {
@@ -486,291 +866,8 @@ describe('XmlOutputManager', () => {
       ['main.tex', 'appendix.tex'],
     );
 
-    expect(outputs.map((output) => output.source)).toEqual(['appendix.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix.\n',
-    );
-  });
-
-  it('allows percent headers after documentclass-only blocks', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '% sections/intro.tex',
-      '\\section{Intro}',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'sections/intro.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\documentclass{article}\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/sections/intro.tex')).resolves.toBe(
-      '\\section{Intro}\n',
-    );
-  });
-
-  it('allows percent headers before later files with their own documentclass', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '% appendix.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      'Appendix.',
-      '\\end{document}',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\documentclass{article}\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Appendix.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('ignores commented end-document lines when detecting percent headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '% \\end{document}',
-      '% notes.tex',
-      'Still the main document.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '% \\end{document}',
-        '% notes.tex',
-        'Still the main document.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix text.\n',
-    );
-  });
-
-  it('removes prefaced markdown fence delimiters from percent output', async () => {
-    const outputs = await writeAndSplitDocuments([
-      'Here are the files:',
-      '```latex',
-      '% main.tex',
-      'Main text.',
-      '```',
-      'Done.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main text.\n',
-    );
-  });
-
-  it('preserves prefaced fence state across empty repeated headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      'Here are the files:',
-      '```latex',
-      '% main.tex',
-      '% main.tex',
-      'Main text.',
-      '```',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main text.\n',
-    );
-  });
-
-  it('clears complete pre-header fences before the real percent output', async () => {
-    const outputs = await writeAndSplitDocuments([
-      'Example:',
-      '```tex',
-      'not output',
-      '```',
-      'Actual files:',
-      '```latex',
-      '% main.tex',
-      'Main text.',
-      '```',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main text.\n',
-    );
-  });
-
-  it('keeps inner fence delimiters inside prefaced fenced percent output', async () => {
-    const outputs = await writeAndSplitDocuments([
-      'Here are the files:',
-      '```latex',
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '\\begin{verbatim}',
-      '```',
-      '\\end{verbatim}',
-      '\\end{document}',
-      '```',
-      'Done.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '\\begin{verbatim}',
-        '```',
-        '\\end{verbatim}',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('ignores prose after a fenced percent-header block until the next header', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '```latex',
-      'Main text.',
-      '```',
-      'Done.',
-      '% appendix.tex',
-      'Appendix text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main text.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix text.\n',
-    );
-  });
-
-  it('ignores scratchpad percent filename mentions during recovery', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '<scratchpad>',
-      '% main.tex',
-      'Draft routing notes.',
-      '</scratchpad>',
-      '% main.tex',
-      'Actual output.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Actual output.\n',
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/main-2.tex')).resolves.toBe(false);
-  });
-
-  it('makes duplicate percent filename headers unique before writing', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% chunk.tex',
-      'First.',
-      '% chunk.tex',
-      'Second.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'chunk.tex',
-      'chunk-2.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
-      'First.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/chunk-2.tex')).resolves.toBe(
-      'Second.\n',
-    );
-  });
-
-  it('avoids percent filename suffix collisions with explicit headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% chunk.tex',
-      'First.',
-      '% chunk-2.tex',
-      'Explicit suffix.',
-      '% chunk.tex',
-      'Second duplicate.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'chunk.tex',
-      'chunk-2.tex',
-      'chunk-3.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
-      'First.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/chunk-2.tex')).resolves.toBe(
-      'Explicit suffix.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/chunk-3.tex')).resolves.toBe(
-      'Second duplicate.\n',
-    );
-  });
-
-  it('does not reserve empty percent filename header blocks', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% chunk.tex',
-      '% chunk.tex',
-      'Actual content.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['chunk.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
-      'Actual content.\n',
-    );
-  });
-
-  it('deduplicates percent filename headers after safe-path normalization', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% sections/main.tex',
-      'Plain path.',
-      '% sections/./main.tex',
-      'Equivalent safe path.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'sections/main.tex',
-      'sections/main-2.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/sections/main.tex')).resolves.toBe(
-      'Plain path.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/sections/main-2.tex')).resolves.toBe(
-      'Equivalent safe path.\n',
-    );
+    expectSources(outputs, ['appendix.tex']);
+    await expectWritten('appendix.tex', 'Appendix.\n');
   });
 
   it('deduplicates percent filename headers after final output path mapping', async () => {
@@ -781,16 +878,12 @@ describe('XmlOutputManager', () => {
       'Explicit extracted fallback.',
     ]);
 
-    expect(outputs.map((output) => output.source)).toEqual([
-      'output.tex',
+    expectSources(outputs, ['output.tex', 'output_extracted-2.tex']);
+    await expectWritten('output_extracted.tex', 'Primary fallback.\n');
+    await expectWritten(
       'output_extracted-2.tex',
-    ]);
-    await expect(
-      AbsoluteFS.read('/tmp/run/output_extracted.tex'),
-    ).resolves.toBe('Primary fallback.\n');
-    await expect(
-      AbsoluteFS.read('/tmp/run/output_extracted-2.tex'),
-    ).resolves.toBe('Explicit extracted fallback.\n');
+      'Explicit extracted fallback.\n',
+    );
   });
 
   it('does not auto-format extracted workflow outputs', async () => {
@@ -826,61 +919,33 @@ Appendix.
 
     expect(roundOutputs).toHaveLength(2);
     expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n',
-    );
+    await expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
   });
 
-  it('recovers documents from bare filename labels with no % prefix', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        '## Reflection',
-        '',
-        'Some narrative text about what changed.',
-        '',
-        'Draft/LeanMPSPaper/Draft3.tex:',
-        '```latex',
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Body one.',
-        '\\end{document}',
-        '```',
-        '',
-        'Draft/LeanMPSPaper/endmatter.tex:',
-        '```latex',
-        'End matter body.',
-        '```',
-      ],
-      ['Draft/LeanMPSPaper/Draft3.tex', 'Draft/LeanMPSPaper/endmatter.tex'],
-    );
+  it.each(LABELED_RECOVERY_CASES)(
+    '%s',
+    async (_name, output, inputFiles, files, absent = []) => {
+      const outputs = await writeAndSplitDocuments(output, [...inputFiles]);
 
-    expect(outputs.map((output) => output.source)).toEqual([
-      'Draft/LeanMPSPaper/Draft3.tex',
-      'Draft/LeanMPSPaper/endmatter.tex',
-    ]);
-    await expect(
-      AbsoluteFS.read('/tmp/run/Draft/LeanMPSPaper/Draft3.tex'),
-    ).resolves.toBe(
-      '\\documentclass{article}\n\\begin{document}\nBody one.\n\\end{document}\n',
-    );
-    await expect(
-      AbsoluteFS.read('/tmp/run/Draft/LeanMPSPaper/endmatter.tex'),
-    ).resolves.toBe('End matter body.\n');
-  });
+      expectSources(outputs, Object.keys(files));
+      for (const [source, content] of Object.entries(files)) {
+        await expectWritten(source, content);
+      }
+      for (const path of absent) {
+        await expectAbsent(path);
+      }
+    },
+  );
 
-  it('matches a bare label by basename when the model drops the directory prefix', async () => {
-    const outputs = await writeAndSplitDocuments(
+  it.each([
+    [
+      'matches a bare label by basename when the model drops the directory prefix',
       ['Draft3.tex:', '```latex', 'Recovered by basename.', '```'],
       ['Draft/LeanMPSPaper/Draft3.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'Draft/LeanMPSPaper/Draft3.tex',
-    ]);
-  });
-
-  it('matches a bare label whose path uses Windows separators or a ./ prefix', async () => {
-    const outputs = await writeAndSplitDocuments(
+      ['Draft/LeanMPSPaper/Draft3.tex'],
+    ],
+    [
+      'matches a bare label whose path uses Windows separators or a ./ prefix',
       [
         'Draft\\LeanMPSPaper\\Draft3.tex:',
         '```latex',
@@ -893,37 +958,10 @@ Appendix.
         '```',
       ],
       ['Draft/LeanMPSPaper/Draft3.tex', 'Draft/LeanMPSPaper/endmatter.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'Draft/LeanMPSPaper/Draft3.tex',
-      'Draft/LeanMPSPaper/endmatter.tex',
-    ]);
-  });
-
-  it('drops a bare label line inside a synthesized single-input document body', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        '\\section{Intro}',
-        'Text.',
-        '% paper.tex',
-        'More text.',
-        'paper.tex:',
-        'Final text.',
-      ],
-      ['paper.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
-    // The % header stays (it is a valid LaTeX comment); the bare label is
-    // not LaTeX and must not leak into the recovered document.
-    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
-      '\\section{Intro}\nText.\n% paper.tex\nMore text.\nFinal text.\n',
-    );
-  });
-
-  it('matches bare labels with leading underscores and emphasis decoration', async () => {
-    const outputs = await writeAndSplitDocuments(
+      ['Draft/LeanMPSPaper/Draft3.tex', 'Draft/LeanMPSPaper/endmatter.tex'],
+    ],
+    [
+      'matches bare labels with leading underscores and emphasis decoration',
       [
         '_macros.tex:',
         '```latex',
@@ -936,276 +974,28 @@ Appendix.
         '```',
       ],
       ['_macros.tex', '_helpers.tex'],
-    );
+      ['_macros.tex', '_helpers.tex'],
+    ],
+  ] satisfies readonly (readonly [
+    string,
+    readonly string[],
+    readonly string[],
+    readonly string[],
+  ])[])('%s', async (_name, output, inputFiles, expectedSources) => {
+    const outputs = await writeAndSplitDocuments(output, [...inputFiles]);
 
-    expect(outputs.map((output) => output.source)).toEqual([
-      '_macros.tex',
-      '_helpers.tex',
-    ]);
-  });
-
-  it('keeps a bare label inside a verbatim block instead of splitting the fragment', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'main.tex:',
-        '\\section{Listing}',
-        '\\begin{verbatim}',
-        'appendix.tex:',
-        '\\end{verbatim}',
-        'Tail.',
-        'appendix.tex:',
-        'Appendix content.',
-      ],
-      ['main.tex', 'appendix.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\section{Listing}\n\\begin{verbatim}\nappendix.tex:\n\\end{verbatim}\nTail.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix content.\n',
-    );
-  });
-
-  it('ignores bare labels inside pre-output example fences', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'Here is the label format:',
-        '```text',
-        'main.tex:',
-        'example body',
-        '```',
-        '',
-        'main.tex:',
-        '```latex',
-        'Real output.',
-        '```',
-      ],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Real output.\n',
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/main-2.tex')).resolves.toBe(false);
-  });
-
-  it('does not strip unrelated example and output fences as one wrapper', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        '```text',
-        'main.tex:',
-        'example body',
-        '```',
-        '',
-        'main.tex:',
-        '```latex',
-        'Real output.',
-        '```',
-      ],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Real output.\n',
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/main-2.tex')).resolves.toBe(false);
-  });
-
-  it('preserves a shared outer fence across filename-label splits', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'Here are the files:',
-        '```latex',
-        'main.tex:',
-        'Main body.',
-        'appendix.tex:',
-        'Appendix body.',
-        '```',
-      ],
-      ['main.tex', 'appendix.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main body.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix body.\n',
-    );
-  });
-
-  it('recovers headers after an unclosed non-LaTeX example fence', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'Example:',
-        '```text',
-        'The response should then provide the real file.',
-        'main.tex:',
-        'Real body.',
-      ],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Real body.\n',
-    );
-  });
-
-  it('recovers real filename-labelled outputs inside a prefaced text fence', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'Here are the files:',
-        '```text',
-        'main.tex:',
-        'Main body.',
-        'appendix.tex:',
-        'Appendix body.',
-        '```',
-      ],
-      ['main.tex', 'appendix.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main body.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
-      'Appendix body.\n',
-    );
-  });
-
-  it('recovers a single plain output inside a prefaced text fence', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'Here is the file:',
-        '```text',
-        'main.tex:',
-        'A plain paragraph with no command-looking LaTeX.',
-        '```',
-      ],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'A plain paragraph with no command-looking LaTeX.\n',
-    );
-  });
-
-  it('keeps inner fence delimiters inside fenced LaTeX fragments', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'main.tex:',
-        '```latex',
-        '\\begin{verbatim}',
-        '```',
-        '\\end{verbatim}',
-        'Tail.',
-        '```',
-      ],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\begin{verbatim}\n```\n\\end{verbatim}\nTail.\n',
-    );
-  });
-
-  it('strips an outer documents envelope before filename-label recovery', async () => {
-    const outputs = await writeAndSplitDocuments(
-      ['<documents>', 'main.tex:', 'Recovered body.', '</documents>'],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Recovered body.\n',
-    );
-  });
-
-  it('strips an outer documents envelope inside a markdown wrapper', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        '```xml',
-        '<documents>',
-        'main.tex:',
-        'Recovered body.',
-        '</documents>',
-        '```',
-      ],
-      ['main.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Recovered body.\n',
-    );
-  });
-
-  it('drops a bare label that triggers single-input prefix synthesis', async () => {
-    const outputs = await writeAndSplitDocuments(
-      ['\\section{Intro}', 'Text.', 'paper.tex:', 'More text.'],
-      ['paper.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
-      '\\section{Intro}\nText.\nMore text.\n',
-    );
-  });
-
-  it('splits on a bare label even after preamble-only content', async () => {
-    // Unlike a % header, a bare label is never a LaTeX comment, so the
-    // "maybe this is a preamble comment" lookahead must not swallow the
-    // label separating a preamble-only file from the next document.
-    const outputs = await writeAndSplitDocuments(
-      [
-        'main.tex:',
-        '\\documentclass{article}',
-        '\\usepackage{amsmath}',
-        'body.tex:',
-        '\\begin{document}',
-        'Hi.',
-        '\\end{document}',
-      ],
-      ['main.tex', 'body.tex'],
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'body.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      '\\documentclass{article}\n\\usepackage{amsmath}\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/body.tex')).resolves.toBe(
-      '\\begin{document}\nHi.\n\\end{document}\n',
-    );
+    expectSources(outputs, expectedSources);
   });
 
   it('falls back to content-similarity matching for unlabeled fenced blocks against the original inputs', async () => {
-    const appendicesOriginal =
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n';
-    const costSectionOriginal =
-      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
-
-    await AbsoluteFS.write('/tmp/run/appendices.tex', appendicesOriginal);
-    await AbsoluteFS.write('/tmp/run/cost_section.tex', costSectionOriginal);
+    await AbsoluteFS.write(
+      '/tmp/run/appendices.tex',
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n',
+    );
+    await AbsoluteFS.write(
+      '/tmp/run/cost_section.tex',
+      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
+    );
 
     // Response order is deliberately swapped relative to inputFiles, and
     // neither fence carries any filename label, to prove the match is
@@ -1234,10 +1024,12 @@ Appendix.
       'appendices.tex',
       'cost_section.tex',
     ]);
-    await expect(AbsoluteFS.read('/tmp/run/appendices.tex')).resolves.toBe(
+    await expectWritten(
+      'appendices.tex',
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a persistent shared memory.\n',
     );
-    await expect(AbsoluteFS.read('/tmp/run/cost_section.tex')).resolves.toBe(
+    await expectWritten(
+      'cost_section.tex',
       '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nRevised numbers from the local interactive logs.\n',
     );
   });
@@ -1252,68 +1044,58 @@ Appendix.
   };
   const singleArtifactInputs = ['page1.png', 'page2.png'];
 
-  it('recovers an unlabeled fence under the declared output name for single-artifact agents', async () => {
-    // Content-similarity matching against inputFiles must not run in this
-    // shape (it would label the block with an input media name); instead the
-    // single-document recovery names the block after the sole declared
-    // output.
-    const outputs = await writeAndSplitDocuments(
+  it.each([
+    [
+      // Content-similarity matching against inputFiles must not run in this
+      // shape (it would label the block with an input media name); instead
+      // the single-document recovery names the block after the sole
+      // declared output.
+      'recovers an unlabeled fence under the declared output name for single-artifact agents',
       ['```latex', 'Unlabeled recovered content.', '```'],
       singleArtifactInputs,
-      singleArtifactOptions,
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
       'Unlabeled recovered content.\n',
-    );
-  });
-
-  it('ignores bare labels naming an input when the agent declares outputFiles', async () => {
-    // For single-artifact agents the inputs can be media files the response
-    // mentions in prose; a `page1.png:` line must never become a document
-    // named after the input. The fenced content is still recovered, but
-    // under the sole declared output name.
-    const outputs = await writeAndSplitDocuments(
+    ],
+    [
+      // For single-artifact agents the inputs can be media files the
+      // response mentions in prose; a `page1.png:` line must never become a
+      // document named after the input. The fenced content is still
+      // recovered, but under the sole declared output name.
+      'ignores bare labels naming an input when the agent declares outputFiles',
       ['page1.png:', '```latex', 'Transcribed content.', '```'],
       singleArtifactInputs,
-      singleArtifactOptions,
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
       'Transcribed content.\n',
-    );
-  });
-
-  it('synthesizes an unlabeled prefix under the declared output name, not the input', async () => {
-    const outputs = await writeAndSplitDocuments(
+    ],
+    [
+      'synthesizes an unlabeled prefix under the declared output name, not the input',
       ['\\section{Transcription}', 'Intro.', 'ocr_result.tex:', 'More.'],
       ['paper.tex'],
-      singleArtifactOptions,
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
       '\\section{Transcription}\nIntro.\nMore.\n',
-    );
-  });
-
-  it('recovers a bare label naming a declared output file', async () => {
-    const outputs = await writeAndSplitDocuments(
+    ],
+    [
+      'recovers a bare label naming a declared output file',
       ['ocr_result.tex:', '```latex', 'Transcribed content.', '```'],
       singleArtifactInputs,
+      'Transcribed content.\n',
+    ],
+  ] satisfies readonly (readonly [
+    string,
+    readonly string[],
+    readonly string[],
+    string,
+  ])[])('%s', async (_name, output, inputFiles, expectedContent) => {
+    const outputs = await writeAndSplitDocuments(
+      output,
+      [...inputFiles],
       singleArtifactOptions,
     );
 
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
-      'Transcribed content.\n',
-    );
+    expectSources(outputs, ['ocr_result.tex']);
+    await expectWritten('ocr_result.tex', expectedContent);
   });
 
-  it('coalesces repeated labels for the sole declared output', async () => {
-    const outputs = await writeAndSplitDocuments(
+  it.each([
+    [
+      'coalesces repeated labels for the sole declared output',
       [
         'ocr_result.tex:',
         '```latex',
@@ -1325,21 +1107,9 @@ Appendix.
         'Page two transcription.',
         '```',
       ],
-      singleArtifactInputs,
-      singleArtifactOptions,
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
-      'Page one transcription.\n\nPage two transcription.\n',
-    );
-    await expect(AbsoluteFS.exists('/tmp/run/ocr_result-2.tex')).resolves.toBe(
-      false,
-    );
-  });
-
-  it('coalesces unlabeled chunks after a sole-output header chunk', async () => {
-    const outputs = await writeAndSplitDocuments(
+    ],
+    [
+      'coalesces unlabeled chunks after a sole-output header chunk',
       [
         'ocr_result.tex:',
         '```latex',
@@ -1351,15 +1121,38 @@ Appendix.
         'Page two transcription.',
         '```',
       ],
-      singleArtifactInputs,
-      singleArtifactOptions,
-    );
+    ],
+    [
+      'concatenates multiple unlabeled fences under the sole declared output',
+      [
+        'page1.png:',
+        '```latex',
+        'Page one transcription.',
+        '```',
+        '',
+        'page2.png:',
+        '```latex',
+        'Page two transcription.',
+        '```',
+      ],
+    ],
+  ] satisfies readonly (readonly [string, readonly string[]])[])(
+    '%s',
+    async (_name, output) => {
+      const outputs = await writeAndSplitDocuments(
+        output,
+        singleArtifactInputs,
+        singleArtifactOptions,
+      );
 
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
-      'Page one transcription.\n\nPage two transcription.\n',
-    );
-  });
+      expectSources(outputs, ['ocr_result.tex']);
+      await expectWritten(
+        'ocr_result.tex',
+        'Page one transcription.\n\nPage two transcription.\n',
+      );
+      await expectAbsent('ocr_result-2.tex');
+    },
+  );
 
   it('does not coalesce explanatory fences after a sole-output header chunk', async () => {
     const outputs = await writeAndSplitDocuments(
@@ -1378,10 +1171,8 @@ Appendix.
       singleArtifactOptions,
     );
 
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
-      'Page one transcription.\n',
-    );
+    expectSources(outputs, ['ocr_result.tex']);
+    await expectWritten('ocr_result.tex', 'Page one transcription.\n');
   });
 
   it('does not concatenate later explanatory fences for single-input edits', async () => {
@@ -1399,33 +1190,8 @@ Appendix.
       ['paper.tex'],
     );
 
-    expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
-      'Revised paper body.\n',
-    );
-  });
-
-  it('concatenates multiple unlabeled fences under the sole declared output', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'page1.png:',
-        '```latex',
-        'Page one transcription.',
-        '```',
-        '',
-        'page2.png:',
-        '```latex',
-        'Page two transcription.',
-        '```',
-      ],
-      singleArtifactInputs,
-      singleArtifactOptions,
-    );
-
-    expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
-      'Page one transcription.\n\nPage two transcription.\n',
-    );
+    expectSources(outputs, ['paper.tex']);
+    await expectWritten('paper.tex', 'Revised paper body.\n');
   });
 
   it('leaves an unlabeled block unmatched when identical base files make the match ambiguous', async () => {
@@ -1450,12 +1216,14 @@ Appendix.
   });
 
   it('routes the revision, not the echoed original, when the model quotes both', async () => {
-    const costOriginal =
-      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
-    const archOriginal =
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n';
-    await AbsoluteFS.write('/tmp/run/cost.tex', costOriginal);
-    await AbsoluteFS.write('/tmp/run/arch.tex', archOriginal);
+    await AbsoluteFS.write(
+      '/tmp/run/cost.tex',
+      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
+    );
+    await AbsoluteFS.write(
+      '/tmp/run/arch.tex',
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
+    );
 
     const outputs = await writeAndSplitDocuments(
       [
@@ -1485,7 +1253,8 @@ Appendix.
       'arch.tex',
       'cost.tex',
     ]);
-    await expect(AbsoluteFS.read('/tmp/run/cost.tex')).resolves.toBe(
+    await expectWritten(
+      'cost.tex',
       '\\section{Computational cost}\nFinal numbers from the local interactive logs.\n',
     );
   });
@@ -1574,18 +1343,21 @@ Appendix.
       'appendices.tex',
       'cost_section.tex',
     ]);
-    await expect(AbsoluteFS.read('/tmp/run/r1/cost_section.tex')).resolves.toBe(
+    await expectWritten(
+      'r1/cost_section.tex',
       '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nFinal numbers from the interactive logs.\n',
     );
   });
 
   it('reports input files left unmatched by content-similarity recovery', async () => {
-    const costOriginal =
-      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n';
-    const archOriginal =
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n';
-    await AbsoluteFS.write('/tmp/run/cost.tex', costOriginal);
-    await AbsoluteFS.write('/tmp/run/arch.tex', archOriginal);
+    await AbsoluteFS.write(
+      '/tmp/run/cost.tex',
+      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
+    );
+    await AbsoluteFS.write(
+      '/tmp/run/arch.tex',
+      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
+    );
 
     const outputs = await writeAndSplitDocuments(
       [
@@ -1598,7 +1370,7 @@ Appendix.
       { baseFiles: ['cost.tex', 'arch.tex'] },
     );
 
-    expect(outputs.map((output) => output.source)).toEqual(['cost.tex']);
+    expectSources(outputs, ['cost.tex']);
   });
 
   it('reports expected files left unmatched by filename-header recovery', async () => {
@@ -1618,7 +1390,7 @@ Appendix.
       { logger },
     );
 
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    expectSources(outputs, ['main.tex']);
     expect(logger.domain).toHaveBeenCalledWith(
       expect.objectContaining({
         key: 'missingOutputs',

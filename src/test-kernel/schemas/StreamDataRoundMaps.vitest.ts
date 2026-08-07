@@ -19,17 +19,18 @@ describe('round-key/round-number invariant: non-negative safe integers only', ()
     expect(RoundNumberSchema.safeParse(1.5).success).toBe(false);
   });
 
-  it('RoundKeySchema coerces and rejects negative/fractional string keys', () => {
-    expect(RoundKeySchema.safeParse('0')).toMatchObject({
+  it.each([
+    { key: '0', data: 0 },
+    { key: '5', data: 5 },
+  ])('RoundKeySchema coerces $key to $data', ({ key, data }) => {
+    expect(RoundKeySchema.safeParse(key)).toMatchObject({
       success: true,
-      data: 0,
+      data,
     });
-    expect(RoundKeySchema.safeParse('5')).toMatchObject({
-      success: true,
-      data: 5,
-    });
-    expect(RoundKeySchema.safeParse('-1').success).toBe(false);
-    expect(RoundKeySchema.safeParse('1.5').success).toBe(false);
+  });
+
+  it.each(['-1', '1.5'])('RoundKeySchema rejects %s', (key) => {
+    expect(RoundKeySchema.safeParse(key).success).toBe(false);
   });
 
   it('RoundKeySchema and RoundKeyStringSchema agree on scientific notation', () => {
@@ -44,21 +45,27 @@ describe('round-key/round-number invariant: non-negative safe integers only', ()
     expect(RoundKeyStringSchema.safeParse('1e5').success).toBe(true);
   });
 
-  it('RoundKeyStringSchema rejects non-numeric and legacy runId-shaped keys', () => {
-    expect(RoundKeyStringSchema.safeParse('run-1').success).toBe(false);
-    expect(RoundKeyStringSchema.safeParse('abc').success).toBe(false);
-    expect(RoundKeyStringSchema.safeParse('-1').success).toBe(false);
-    expect(RoundKeyStringSchema.safeParse('1.5').success).toBe(false);
-  });
+  it.each(['run-1', 'abc', '-1', '1.5'])(
+    'RoundKeyStringSchema rejects non-numeric and legacy runId-shaped key %s',
+    (key) => {
+      expect(RoundKeyStringSchema.safeParse(key).success).toBe(false);
+    },
+  );
 
-  it('roundIndexedRecord() rejects negative, fractional, and non-numeric keys', () => {
+  it('roundIndexedRecord() accepts non-negative integer keys', () => {
     const schema = roundIndexedRecord(StringItemSchema);
 
     expect(schema.safeParse({ '0': ['a'], '5': ['b'] }).success).toBe(true);
-    expect(schema.safeParse({ '-1': ['a'] }).success).toBe(false);
-    expect(schema.safeParse({ '1.5': ['a'] }).success).toBe(false);
-    expect(schema.safeParse({ 'run-1': ['a'] }).success).toBe(false);
   });
+
+  it.each(['-1', '1.5', 'run-1'])(
+    'roundIndexedRecord() rejects key %s',
+    (key) => {
+      const schema = roundIndexedRecord(StringItemSchema);
+
+      expect(schema.safeParse({ [key]: ['a'] }).success).toBe(false);
+    },
+  );
 
   it('roundIndexedRecord() accepts scientific-notation keys, matching RoundKeySchema', () => {
     const schema = roundIndexedRecord(StringItemSchema);

@@ -129,13 +129,18 @@ export class OutputNode<C = unknown> extends Node<
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
-        mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
+        const roundMapping = traceFileLineage(
+          outputState,
+          diffBaseFiles,
+          currentRound,
+        );
+        mapping = roundMapping;
 
         await tryOperation(async () => {
           const diffArtifacts = await this.handleLatexdiff(
             currentRound,
             diffBaseFiles,
-            mapping!,
+            roundMapping,
             diffManager,
           );
           compiledArtifacts.push(...diffArtifacts);

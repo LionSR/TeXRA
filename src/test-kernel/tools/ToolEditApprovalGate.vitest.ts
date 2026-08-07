@@ -34,12 +34,19 @@ let testApprovalHandler:
   | undefined;
 let detachHostInteractions = (): void => {};
 let policyDenials = 0;
+// Requests the default auto-approve handler saw; tests override the handler
+// when they need to deny or adjust, and assert on this list otherwise.
+let approvalRequests: ToolEditApprovalRequest[] = [];
 
 async function installPlatform(
   config: Record<string, unknown> = {},
   files: Record<string, string | Uint8Array> = {},
 ) {
-  testApprovalHandler = undefined;
+  approvalRequests = [];
+  testApprovalHandler = async (request) => {
+    approvalRequests.push(request);
+    return { accepted: true, appliedContent: request.proposedContent };
+  };
   await installFakePlatform({ workspacePath: '/workspace', config, files });
   detachHostInteractions();
   detachHostInteractions = defaultSession().useHostInteractions({
@@ -82,21 +89,15 @@ describe('Tool edit approval gating', () => {
 
   it('write_file applies changes after approval', async () => {
     const tool = new WriteFileTool();
-    let capturedRequest: ToolEditApprovalRequest | undefined;
-
     const write = stubWorkspaceFile({ exists: true, content: 'old content' });
-
-    testApprovalHandler = async (request) => {
-      capturedRequest = request;
-      return { accepted: true, appliedContent: request.proposedContent };
-    };
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
 
-    assert.strictEqual(capturedRequest?.path, 'doc.txt');
-    assert.strictEqual(capturedRequest?.originalContent, 'old content');
-    assert.strictEqual(capturedRequest?.proposedContent, 'new content');
-    assert.strictEqual(capturedRequest?.sourceTool, 'write_file');
+    const [request] = approvalRequests;
+    assert.strictEqual(request?.path, 'doc.txt');
+    assert.strictEqual(request?.originalContent, 'old content');
+    assert.strictEqual(request?.proposedContent, 'new content');
+    assert.strictEqual(request?.sourceTool, 'write_file');
     assert.strictEqual(write.mock.lastCall?.[1], 'new content');
     assert.strictEqual(result.output, 'written');
   });
@@ -147,18 +148,11 @@ describe('Tool edit approval gating', () => {
     await installPlatform({ 'texra.toolUse.requireEditApproval': false });
 
     const tool = new WriteFileTool();
-    let handlerCalled = false;
-
     const write = stubWorkspaceFile({ exists: false, content: '' });
-
-    testApprovalHandler = async (request) => {
-      handlerCalled = true;
-      return { accepted: true, appliedContent: request.proposedContent };
-    };
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
 
-    assert.strictEqual(handlerCalled, false);
+    assert.strictEqual(approvalRequests.length, 0);
     assert.strictEqual(write.mock.lastCall?.[1], 'new content');
     assert.strictEqual(result.output, 'written');
   });
@@ -168,12 +162,7 @@ describe('Tool edit approval gating', () => {
     defaultSession().setApprovalPolicy('never');
 
     const tool = new WriteFileTool();
-    let handlerCalled = false;
     const write = stubWorkspaceFile({ exists: false, content: '' });
-    testApprovalHandler = async (request) => {
-      handlerCalled = true;
-      return { accepted: true, appliedContent: request.proposedContent };
-    };
 
     const result = await withRunContext(
       createRunContext({
@@ -184,7 +173,7 @@ describe('Tool edit approval gating', () => {
       () => tool.call({ path: 'denied.txt', content: 'blocked' }),
     );
 
-    assert.strictEqual(handlerCalled, false);
+    assert.strictEqual(approvalRequests.length, 0);
     assert.strictEqual(write.mock.calls.length, 0);
     assert.strictEqual(result.status, 'error');
     assert.strictEqual(
@@ -196,14 +185,7 @@ describe('Tool edit approval gating', () => {
 
   it('session bypass auto-approves pending requests', async () => {
     const tool = new WriteFileTool();
-    let handlerCalled = false;
-
     const write = stubWorkspaceFile({ exists: false, content: '' });
-
-    testApprovalHandler = async (request) => {
-      handlerCalled = true;
-      return { accepted: true, appliedContent: request.proposedContent };
-    };
 
     setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
 
@@ -216,7 +198,7 @@ describe('Tool edit approval gating', () => {
       () => tool.call({ path: 'doc.txt', content: 'auto' }),
     );
 
-    assert.strictEqual(handlerCalled, false);
+    assert.strictEqual(approvalRequests.length, 0);
     assert.strictEqual(write.mock.lastCall?.[1], 'auto');
     assert.strictEqual(result.output, 'written');
   });

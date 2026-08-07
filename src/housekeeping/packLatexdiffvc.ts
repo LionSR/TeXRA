@@ -4,8 +4,8 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { collectFilesFromPatterns, generateTimestamp } from './utils';
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
+import { collectFilesFromPatterns, generateTimestamp } from './utils';
 
 export type LatexdiffPackResult =
   | {
@@ -100,7 +100,7 @@ export async function runPackLatexdiffvcMultiple(
   commitHash: string,
   clean: boolean = false,
 ): Promise<LatexdiffPackResult[]> {
-  if (!inputFiles || inputFiles.length === 0) {
+  if (inputFiles.length === 0) {
     logger.error(
       CHANNEL,
       'No input files provided for multiple LaTeX diff packing',

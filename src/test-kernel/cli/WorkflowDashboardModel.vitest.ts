@@ -135,6 +135,28 @@ async function navigate(
   }
 }
 
+/** Drive the two-phase list with the shared props every test uses. */
+function navigateList(
+  keys: readonly string[],
+  selectedValue: ChildListValue,
+  columns: number,
+): Promise<readonly ChildListValue[]> {
+  return navigate(
+    keys,
+    {
+      keyboardActive: true,
+      listRootStreamId: ROOT,
+      listRootSlice: TWO_PHASE_ROOT,
+      maxRows: 12,
+      onCancel: vi.fn(),
+      selectedValue,
+      sessions: [],
+      streams: STREAMS,
+    },
+    columns,
+  );
+}
+
 describe('workflow dashboard model', () => {
   it('orders phase rows by first appearance and task rows by transcript order', () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
@@ -194,18 +216,9 @@ describe('workflow dashboard model', () => {
 
   it('renders exactly the narrow row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
-    const visited = await navigate(
+    const visited = await navigateList(
       [ARROW_DOWN, ARROW_DOWN, ARROW_DOWN],
-      {
-        keyboardActive: true,
-        listRootStreamId: ROOT,
-        listRootSlice: TWO_PHASE_ROOT,
-        maxRows: 12,
-        onCancel: vi.fn(),
-        selectedValue: model.listValues[0],
-        sessions: [],
-        streams: STREAMS,
-      },
+      model.listValues[0]!,
       NARROW_COLUMNS,
     );
 
@@ -217,18 +230,9 @@ describe('workflow dashboard model', () => {
   it('renders exactly the wide phase row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
     const phaseValues = model.groups.map((group) => group.value);
-    const visited = await navigate(
+    const visited = await navigateList(
       [ARROW_DOWN, ARROW_DOWN],
-      {
-        keyboardActive: true,
-        listRootStreamId: ROOT,
-        listRootSlice: TWO_PHASE_ROOT,
-        maxRows: 12,
-        onCancel: vi.fn(),
-        selectedValue: phaseValues[0],
-        sessions: [],
-        streams: STREAMS,
-      },
+      phaseValues[0]!,
       WIDE_COLUMNS,
     );
 
@@ -239,18 +243,9 @@ describe('workflow dashboard model', () => {
   it('enters a phase at a task row that exists in the same row list', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
     const secondGroup = model.groups[1]!;
-    const visited = await navigate(
+    const visited = await navigateList(
       [ARROW_RIGHT],
-      {
-        keyboardActive: true,
-        listRootStreamId: ROOT,
-        listRootSlice: TWO_PHASE_ROOT,
-        maxRows: 12,
-        onCancel: vi.fn(),
-        selectedValue: secondGroup.value,
-        sessions: [],
-        streams: STREAMS,
-      },
+      secondGroup.value,
       WIDE_COLUMNS,
     );
 

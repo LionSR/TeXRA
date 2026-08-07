@@ -182,7 +182,6 @@ export class StreamTab extends LitElement {
     const statusGlyph: TeXRAIconName | undefined = this.hasPendingApproval
       ? 'triangle-exclamation'
       : phaseGlyph;
-    const tooltip = this._tooltip;
     // Also names the delete button: one "Delete" repeated down the rail tells
     // a screen-reader user nothing about which session it destroys.
     const streamTitle = stream.description || stream.label || stream.name;
@@ -241,7 +240,7 @@ export class StreamTab extends LitElement {
           class="tab"
           data-stream=${stream.name}
           data-action="select"
-          aria-label=${tooltip}
+          aria-label=${this._tooltip}
         >
           <div class="tab-header">
             ${
@@ -463,7 +462,6 @@ export class StreamTabs extends LitElement {
         if (child.identity?.kind === 'process') {
           const childStatus = this.streamStates.get(child.name)?.status;
           const phase =
-            childStatus === undefined ||
             childStatus === DEFAULT_STREAM_METADATA_STATUS
               ? undefined
               : childStatus;

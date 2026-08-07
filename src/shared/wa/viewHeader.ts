@@ -54,9 +54,7 @@ export function renderViewHeader({
         <wa-tab
           panel="launcher"
           class=${ifDefined(
-            launcherTab?.focusSidebar === true
-              ? 'focus-sidebar-tab'
-              : undefined,
+            launcherTab?.focusSidebar ? 'focus-sidebar-tab' : undefined,
           )}
           title=${ifDefined(launcherTab?.title)}
           @click=${launcherTab?.onClick}

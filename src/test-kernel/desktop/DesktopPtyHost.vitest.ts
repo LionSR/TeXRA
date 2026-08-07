@@ -40,6 +40,32 @@ function loadFakePty(spawn: SpawnPty): LoadPty {
   return async () => ({ spawn });
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve = (_value: T): void => {};
+  let reject = (_error: unknown): void => {};
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+const TERMINAL_ID = 'workbench:terminal:1';
+
+function createHost(
+  overrides: Partial<DesktopPtyHostOptions> = {},
+): ReturnType<typeof createDesktopPtyHost> {
+  return createDesktopPtyHost({
+    onData: vi.fn(),
+    onExit: vi.fn(),
+    ...overrides,
+  });
+}
+
 describe('desktop pty host', () => {
   it('ignores callbacks from a disposed session after its id is reused', async () => {
     const oldPty = createFakePty(101);
@@ -50,21 +76,17 @@ describe('desktop pty host', () => {
       .mockReturnValueOnce(replacementPty);
     const onData = vi.fn();
     const onExit = vi.fn();
-    const host = createDesktopPtyHost({
-      onData,
-      onExit,
-      loadPty: loadFakePty(spawnPty),
-    });
+    const host = createHost({ onData, onExit, loadPty: loadFakePty(spawnPty) });
 
     const oldSession = await host.create({
-      id: 'workbench:terminal:1',
+      id: TERMINAL_ID,
       cols: 80,
       rows: 24,
     });
     if (!oldSession) throw new Error('Expected the old session to start.');
     oldSession.dispose();
     const replacementSession = await host.create({
-      id: 'workbench:terminal:1',
+      id: TERMINAL_ID,
       cols: 100,
       rows: 30,
     });
@@ -77,77 +99,65 @@ describe('desktop pty host', () => {
     oldPty.emitData('late output');
     oldPty.emitExit(0);
 
-    expect(host.get('workbench:terminal:1')).toBe(replacementSession);
+    expect(host.get(TERMINAL_ID)).toBe(replacementSession);
     expect(onData).not.toHaveBeenCalled();
     expect(onExit).not.toHaveBeenCalled();
 
     replacementPty.emitData('new output');
     replacementPty.emitExit(7);
 
-    expect(onData).toHaveBeenCalledWith('workbench:terminal:1', 'new output');
-    expect(onExit).toHaveBeenCalledWith('workbench:terminal:1', 7);
-    expect(host.get('workbench:terminal:1')).toBeUndefined();
+    expect(onData).toHaveBeenCalledWith(TERMINAL_ID, 'new output');
+    expect(onExit).toHaveBeenCalledWith(TERMINAL_ID, 7);
+    expect(host.get(TERMINAL_ID)).toBeUndefined();
   });
 
   it('abandons a session creation invalidated while its module loads', async () => {
     const pty = createFakePty(201);
     const spawnPty = vi.fn<SpawnPty>(() => pty);
-    let finishLoading = (_module: PtyModule): void => {};
-    const firstLoad = new Promise<PtyModule>((resolve) => {
-      finishLoading = resolve;
-    });
+    const firstLoad = deferred<PtyModule>();
     const loadPty = vi
       .fn<LoadPty>()
-      .mockReturnValueOnce(firstLoad)
+      .mockReturnValueOnce(firstLoad.promise)
       .mockResolvedValue({ spawn: spawnPty });
-    const host = createDesktopPtyHost({
-      onData: vi.fn(),
-      onExit: vi.fn(),
-      loadPty,
-    });
+    const host = createHost({ loadPty });
 
     const staleCreation = host.create({
-      id: 'workbench:terminal:1',
+      id: TERMINAL_ID,
       cols: 80,
       rows: 24,
     });
     host.disposeAll();
-    finishLoading({ spawn: spawnPty });
+    firstLoad.resolve({ spawn: spawnPty });
 
     expect(await staleCreation).toBeUndefined();
     expect(spawnPty).not.toHaveBeenCalled();
-    expect(host.get('workbench:terminal:1')).toBeUndefined();
+    expect(host.get(TERMINAL_ID)).toBeUndefined();
 
     const replacement = await host.create({
-      id: 'workbench:terminal:1',
+      id: TERMINAL_ID,
       cols: 100,
       rows: 30,
     });
     expect(replacement).toBeDefined();
     expect(spawnPty).toHaveBeenCalledOnce();
-    expect(host.get('workbench:terminal:1')).toBe(replacement);
+    expect(host.get(TERMINAL_ID)).toBe(replacement);
   });
 
   it('ignores a module-load failure from an invalidated creation', async () => {
-    let failLoading = (_error: Error): void => {};
-    const loadFailure = new Promise<PtyModule>((_resolve, reject) => {
-      failLoading = reject;
-    });
-    const host = createDesktopPtyHost({
-      onData: vi.fn(),
-      onExit: vi.fn(),
-      loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure),
+    const loadFailure = deferred<PtyModule>();
+    const host = createHost({
+      loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure.promise),
     });
 
     const staleCreation = host.create({
-      id: 'workbench:terminal:1',
+      id: TERMINAL_ID,
       cols: 80,
       rows: 24,
     });
     host.disposeAll();
-    failLoading(new Error('node-pty unavailable'));
+    loadFailure.reject(new Error('node-pty unavailable'));
 
     await expect(staleCreation).resolves.toBeUndefined();
-    expect(host.get('workbench:terminal:1')).toBeUndefined();
+    expect(host.get(TERMINAL_ID)).toBeUndefined();
   });
 });

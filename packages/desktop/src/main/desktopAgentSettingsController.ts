@@ -500,8 +500,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       await this.notifications.showErrorMessage(`Unknown team: ${presetId}`);
       return;
     }
-    if (result.status === 'cancelled') return;
-    if (result.status === 'choice-required') return;
+    if (result.status === 'cancelled' || result.status === 'choice-required')
+      return;
     if (result.status === 'unavailable') {
       await this.notifications.showErrorMessage(
         `Team "${result.preset.name}" is still unavailable: ${result.unavailableNames.join(', ')}`,

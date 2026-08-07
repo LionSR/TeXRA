@@ -32,6 +32,25 @@ function execResult(success: boolean): ExecResult {
   return { success, stdout: '', stderr: '', exitCode: success ? 0 : 1 };
 }
 
+function compile(
+  sourceFile = 'main.tex',
+  outputDirectory = path.join(workspacePath, 'build'),
+): ReturnType<typeof compileLatex2Pdf> {
+  return compileLatex2Pdf(
+    pathToLocation(path.join(workspacePath, sourceFile)),
+    {
+      outputDirectory,
+    },
+  );
+}
+
+function failedLogTail(
+  result: Awaited<ReturnType<typeof compileLatex2Pdf>>,
+): string {
+  if (result.ok) throw new Error('expected a failed compile');
+  return result.logTail;
+}
+
 // Issue #7079: compileLatex2Pdf used to return a bare boolean, so every
 // caller besides compileCheck.readLogTail swallowed the compile log on
 // failure. These tests exercise the real production code (only the
@@ -46,10 +65,7 @@ describe('compileLatex2Pdf structured return', () => {
   it('returns { ok: true } with no logTail on a successful compile', async () => {
     mocks.runToolWithCheck.mockResolvedValue(execResult(true));
 
-    const result = await compileLatex2Pdf(
-      pathToLocation(path.join(workspacePath, 'main.tex')),
-      { outputDirectory: path.join(workspacePath, 'build') },
-    );
+    const result = await compile();
 
     expect(result).toEqual({ ok: true });
   });
@@ -60,9 +76,8 @@ describe('compileLatex2Pdf structured return', () => {
     const outputDirectory = path.join(workspacePath, 'build');
     // Zero-padded so containment checks below can't be fooled by numeric
     // substrings (e.g. "L0001" would otherwise match inside "L00010").
-    const totalLines = 250;
     const lines = Array.from(
-      { length: totalLines },
+      { length: 250 },
       (_, i) => `L${String(i + 1).padStart(4, '0')}`,
     );
     await AbsoluteFS.ensureDir(outputDirectory);
@@ -71,17 +86,13 @@ describe('compileLatex2Pdf structured return', () => {
       lines.join('\n'),
     );
 
-    const result = await compileLatex2Pdf(
-      pathToLocation(path.join(workspacePath, 'main.tex')),
-      { outputDirectory },
-    );
+    const logTail = failedLogTail(await compile());
 
-    if (result.ok) throw new Error('expected a failed compile');
     // Last 200 of 250 lines survive: L0051 .. L0250.
-    expect(result.logTail).toContain('L0051');
-    expect(result.logTail).toContain('L0250');
-    expect(result.logTail).not.toContain('L0050');
-    expect(result.logTail).not.toContain('L0001');
+    expect(logTail).toContain('L0051');
+    expect(logTail).toContain('L0250');
+    expect(logTail).not.toContain('L0050');
+    expect(logTail).not.toContain('L0001');
   });
 
   it('finds the engine log for a .ltx source, not just .tex', async () => {
@@ -96,26 +107,20 @@ describe('compileLatex2Pdf structured return', () => {
       'engine log content',
     );
 
-    const result = await compileLatex2Pdf(
-      pathToLocation(path.join(workspacePath, 'main.ltx')),
-      { outputDirectory },
-    );
+    const logTail = failedLogTail(await compile('main.ltx', outputDirectory));
 
-    if (result.ok) throw new Error('expected a failed compile');
-    expect(result.logTail).toContain('engine log content');
-    expect(result.logTail).not.toContain('no LaTeX log at');
+    expect(logTail).toContain('engine log content');
+    expect(logTail).not.toContain('no LaTeX log at');
   });
 
   it('falls back to a discoverable placeholder when no engine log exists on disk', async () => {
     mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 
-    const result = await compileLatex2Pdf(
-      pathToLocation(path.join(workspacePath, 'missing.tex')),
-      { outputDirectory: path.join(workspacePath, 'build-missing') },
+    const logTail = failedLogTail(
+      await compile('missing.tex', path.join(workspacePath, 'build-missing')),
     );
 
-    if (result.ok) throw new Error('expected a failed compile');
-    expect(result.logTail).toContain('no LaTeX log at');
+    expect(logTail).toContain('no LaTeX log at');
   });
 
   it('surfaces the exception message as logTail when the compiler invocation throws', async () => {
@@ -123,13 +128,9 @@ describe('compileLatex2Pdf structured return', () => {
       new Error('boom: pdflatex crashed'),
     );
 
-    const result = await compileLatex2Pdf(
-      pathToLocation(path.join(workspacePath, 'main.tex')),
-      { outputDirectory: path.join(workspacePath, 'build') },
-    );
+    const logTail = failedLogTail(await compile());
 
-    if (result.ok) throw new Error('expected a failed compile');
-    expect(result.logTail).toContain('boom: pdflatex crashed');
+    expect(logTail).toContain('boom: pdflatex crashed');
   });
 });
 

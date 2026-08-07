@@ -113,10 +113,15 @@ describe('findTeamPreset', () => {
   });
 });
 
+function builtInPreset(id: string): TeamPreset {
+  const found = teamPresets([]).find((item) => item.id === id);
+  if (!found) throw new Error(`Unknown built-in preset: ${id}`);
+  return found;
+}
+
 describe('planTeamRun', () => {
   it('selects the orchestrator for the built-in physicist team', () => {
-    const physicist = teamPresets([]).find((item) => item.id === 'physicist')!;
-    const plan = planTeamRun(physicist, {
+    const plan = planTeamRun(builtInPreset('physicist'), {
       agents: {
         workflow: [],
         toolUse: [
@@ -130,10 +135,7 @@ describe('planTeamRun', () => {
   });
 
   it('selects engineer for the built-in software-engineer team', () => {
-    const software = teamPresets([]).find(
-      (item) => item.id === 'software-engineer',
-    )!;
-    const plan = planTeamRun(software, {
+    const plan = planTeamRun(builtInPreset('software-engineer'), {
       agents: {
         workflow: [],
         toolUse: [
@@ -147,8 +149,7 @@ describe('planTeamRun', () => {
   });
 
   it('does not fall back to an arbitrary delegating agent for a built-in', () => {
-    const physicist = teamPresets([]).find((item) => item.id === 'physicist')!;
-    const plan = planTeamRun(physicist, {
+    const plan = planTeamRun(builtInPreset('physicist'), {
       agents: {
         workflow: [],
         toolUse: [agent('research', { tools: delegateTools })],
@@ -655,46 +656,40 @@ describe('refreshRemoteCatalogForGaps', () => {
     expect(replan).toHaveBeenCalledOnce();
   });
 
-  it('skips access, refresh, and replan without gaps', async () => {
-    const canAccessRemoteCatalog = vi.fn(async () => true);
-    const refreshRemote = vi.fn(async () => undefined);
-    const replan = vi.fn(() => 'remote');
+  it.each([
+    {
+      name: 'without gaps',
+      hasGaps: false,
+      canAccess: true,
+      accessChecks: 0,
+    },
+    {
+      name: 'when remote access is unavailable',
+      hasGaps: true,
+      canAccess: false,
+      accessChecks: 1,
+    },
+  ])(
+    'returns the local plan $name without refreshing or replanning',
+    async ({ hasGaps, canAccess, accessChecks }) => {
+      const canAccessRemoteCatalog = vi.fn(async () => canAccess);
+      const refreshRemote = vi.fn(async () => undefined);
+      const replan = vi.fn(() => 'remote');
 
-    const result = await refreshRemoteCatalogForGaps(
-      'local',
-      () => false,
-      replan,
-      { canAccessRemoteCatalog, refreshRemote },
-    );
+      const result = await refreshRemoteCatalogForGaps(
+        'local',
+        () => hasGaps,
+        replan,
+        { canAccessRemoteCatalog, refreshRemote },
+      );
 
-    expect(result).toEqual({
-      value: 'local',
-      remoteCatalogRefreshAttempted: false,
-    });
-    expect(canAccessRemoteCatalog).not.toHaveBeenCalled();
-    expect(refreshRemote).not.toHaveBeenCalled();
-    expect(replan).not.toHaveBeenCalled();
-  });
-
-  it('does not refresh or replan when remote access is unavailable', async () => {
-    const refreshRemote = vi.fn(async () => undefined);
-    const replan = vi.fn(() => 'remote');
-
-    const result = await refreshRemoteCatalogForGaps(
-      'local',
-      () => true,
-      replan,
-      {
-        canAccessRemoteCatalog: async () => false,
-        refreshRemote,
-      },
-    );
-
-    expect(result).toEqual({
-      value: 'local',
-      remoteCatalogRefreshAttempted: false,
-    });
-    expect(refreshRemote).not.toHaveBeenCalled();
-    expect(replan).not.toHaveBeenCalled();
-  });
+      expect(result).toEqual({
+        value: 'local',
+        remoteCatalogRefreshAttempted: false,
+      });
+      expect(canAccessRemoteCatalog).toHaveBeenCalledTimes(accessChecks);
+      expect(refreshRemote).not.toHaveBeenCalled();
+      expect(replan).not.toHaveBeenCalled();
+    },
+  );
 });

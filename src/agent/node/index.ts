@@ -260,8 +260,7 @@ class Flow<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
       // Propagate services to each node (immutable, same instance)
       current.setServices(this._services);
       const action = await current._run(shared);
-      current = current.getNextNode(action);
-      current = current?.clone();
+      current = current.getNextNode(action)?.clone();
     }
   }
   async _run(shared: S): Promise<Action | undefined> {

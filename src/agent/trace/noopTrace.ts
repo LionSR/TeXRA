@@ -18,10 +18,10 @@ class NoopStageHandle implements StageHandle {
   constructor(readonly id: string | undefined) {}
   end(_status?: RunOutcome): void {}
   async within<T>(fn: () => Promise<T> | T): Promise<T> {
-    return Promise.resolve(fn());
+    return fn();
   }
   async run<T>(fn: () => Promise<T> | T): Promise<T> {
-    return Promise.resolve(fn());
+    return this.within(fn);
   }
   child(_label: string, _options?: StageOptions): StageHandle {
     return new NoopStageHandle(generateShortId());

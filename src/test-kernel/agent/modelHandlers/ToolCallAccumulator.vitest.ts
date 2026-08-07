@@ -4,12 +4,13 @@ import { ToolCallAccumulator } from '@agent/modelHandlers/utils/toolCallAccumula
 
 type Built = { id: string; name: string; arguments: string };
 
-const build = (acc: ToolCallAccumulator): Built[] =>
-  acc.build(({ id, name, arguments: args }) => ({
+function build(acc: ToolCallAccumulator): Built[] {
+  return acc.build(({ id, name, arguments: args }) => ({
     id,
     name,
     arguments: args,
   }));
+}
 
 describe('ToolCallAccumulator', () => {
   it('assembles id, name, and argument fragments spread across deltas', () => {

@@ -21,145 +21,161 @@ import {
 import { selectVisibleInlineOverflowText } from '@cli/chat/tui/render/overflowText';
 
 describe('CLI ModelListForm empty state', () => {
-  it('uses a truthful description for empty and non-empty model lists', () => {
-    expect(modelListDescription({ itemCount: 0, selectable: false })).toBe(
-      'No model choices in this API mode.',
-    );
-    expect(modelListDescription({ itemCount: 0, selectable: true })).toBe(
-      'No model choices in this API mode.',
-    );
-    expect(modelListDescription({ itemCount: 2, selectable: false })).toBe(
-      'Available models. Finish the active response before switching models.',
-    );
-    expect(modelListDescription({ itemCount: 2, selectable: true })).toBe(
-      'Choose the model for future turns.',
-    );
-  });
+  it.each<{
+    itemCount: number;
+    selectable: boolean;
+    expected: string;
+  }>([
+    {
+      itemCount: 0,
+      selectable: false,
+      expected: 'No model choices in this API mode.',
+    },
+    {
+      itemCount: 0,
+      selectable: true,
+      expected: 'No model choices in this API mode.',
+    },
+    {
+      itemCount: 2,
+      selectable: false,
+      expected:
+        'Available models. Finish the active response before switching models.',
+    },
+    {
+      itemCount: 2,
+      selectable: true,
+      expected: 'Choose the model for future turns.',
+    },
+  ])(
+    'describes itemCount=$itemCount selectable=$selectable truthfully',
+    ({ itemCount, selectable, expected }) => {
+      expect(modelListDescription({ itemCount, selectable })).toBe(expected);
+    },
+  );
 });
 
 describe('CLI async list form close input', () => {
-  it('treats normalized and raw Escape as close in non-actionable states', () => {
-    expect(
-      shouldCloseAsyncListFormOnInput({
+  it.each<{
+    name: string;
+    args: Parameters<typeof shouldCloseAsyncListFormOnInput>[0];
+    expected: boolean;
+  }>([
+    {
+      name: 'normalized Escape closes while loading',
+      args: {
         input: '',
         key: { escape: true },
         loading: true,
         error: undefined,
         empty: false,
-      }),
-    ).toBe(true);
-    expect(
-      shouldCloseAsyncListFormOnInput({
+      },
+      expected: true,
+    },
+    {
+      name: 'raw Escape closes an errored form',
+      args: {
         input: '\u001B',
         key: {},
         loading: false,
         error: 'failed',
         empty: false,
-      }),
-    ).toBe(true);
-    expect(
-      shouldCloseAsyncListFormOnInput({
+      },
+      expected: true,
+    },
+    {
+      name: 'raw Escape closes an empty form',
+      args: {
         input: '\u001B',
         key: {},
         loading: false,
         error: undefined,
         empty: true,
-      }),
-    ).toBe(true);
-  });
-
-  it('does not let Escape close an actionable list form', () => {
-    expect(
-      shouldCloseAsyncListFormOnInput({
+      },
+      expected: true,
+    },
+    {
+      name: 'Escape does not close an actionable list form',
+      args: {
         input: '\u001B',
         key: {},
         loading: false,
         error: undefined,
         empty: false,
-      }),
-    ).toBe(false);
-  });
-
-  it('closes an empty picker on Enter only when its footer advertises it', () => {
-    expect(
-      shouldCloseAsyncListFormOnInput({
+      },
+      expected: false,
+    },
+    {
+      name: 'Enter closes an empty picker only when its footer advertises it',
+      args: {
         input: '\r',
         key: { return: true },
         loading: false,
         error: undefined,
         empty: true,
         closeEmptyOnEnter: true,
-      }),
-    ).toBe(true);
-    expect(
-      shouldCloseAsyncListFormOnInput({
+      },
+      expected: true,
+    },
+    {
+      name: 'Enter does not close an empty picker without the footer hint',
+      args: {
         input: '\r',
         key: { return: true },
         loading: false,
         error: undefined,
         empty: true,
-      }),
-    ).toBe(false);
+      },
+      expected: false,
+    },
+  ])('$name', ({ args, expected }) => {
+    expect(shouldCloseAsyncListFormOnInput(args)).toBe(expected);
   });
 });
 
 describe('CLI async list form buffered input', () => {
-  it('captures ordinary keys while loading', () => {
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: '6',
-        key: {},
-        loading: true,
-      }),
-    ).toBe(true);
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: '21',
-        key: {},
-        loading: true,
-      }),
-    ).toBe(true);
-  });
-
-  it('ignores navigation, enter, escape, and modified keys', () => {
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: '2',
-        key: { downArrow: true },
-        loading: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: '\r',
-        key: { return: true },
-        loading: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: '\u001B',
-        key: { escape: true },
-        loading: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: 'c',
-        key: { ctrl: true },
-        loading: true,
-      }),
-    ).toBe(false);
-  });
-
-  it('only buffers while loading', () => {
-    expect(
-      shouldBufferAsyncListFormInput({
-        input: '6',
-        key: {},
-        loading: false,
-      }),
-    ).toBe(false);
+  it.each<{
+    name: string;
+    args: Parameters<typeof shouldBufferAsyncListFormInput>[0];
+    expected: boolean;
+  }>([
+    {
+      name: 'captures an ordinary key while loading',
+      args: { input: '6', key: {}, loading: true },
+      expected: true,
+    },
+    {
+      name: 'captures a multi-digit key while loading',
+      args: { input: '21', key: {}, loading: true },
+      expected: true,
+    },
+    {
+      name: 'ignores navigation keys',
+      args: { input: '2', key: { downArrow: true }, loading: true },
+      expected: false,
+    },
+    {
+      name: 'ignores Enter',
+      args: { input: '\r', key: { return: true }, loading: true },
+      expected: false,
+    },
+    {
+      name: 'ignores Escape',
+      args: { input: '\u001B', key: { escape: true }, loading: true },
+      expected: false,
+    },
+    {
+      name: 'ignores modified keys',
+      args: { input: 'c', key: { ctrl: true }, loading: true },
+      expected: false,
+    },
+    {
+      name: 'only buffers while loading',
+      args: { input: '6', key: {}, loading: false },
+      expected: false,
+    },
+  ])('$name', ({ args, expected }) => {
+    expect(shouldBufferAsyncListFormInput(args)).toBe(expected);
   });
 });
 
@@ -181,103 +197,104 @@ describe('Select render keys', () => {
 });
 
 describe('CLI Select visible range', () => {
-  it('keeps a contiguous window around the highlighted row', () => {
-    expect(
-      visibleSelectRange({
-        itemCount: 8,
-        highlight: 5,
-        maxVisibleItems: 5,
-      }),
-    ).toEqual({ start: 3, end: 8 });
-  });
-
-  it('clamps the visible window at list edges', () => {
-    expect(
-      visibleSelectRange({
-        itemCount: 8,
-        highlight: 0,
-        maxVisibleItems: 5,
-      }),
-    ).toEqual({ start: 0, end: 5 });
-    expect(
-      visibleSelectRange({
-        itemCount: 8,
-        highlight: 7,
-        maxVisibleItems: 5,
-      }),
-    ).toEqual({ start: 3, end: 8 });
-  });
-
-  it('allows callers to reserve zero visible rows', () => {
-    expect(
-      visibleSelectRange({
-        itemCount: 8,
-        highlight: 3,
-        maxVisibleItems: 0,
-      }),
-    ).toEqual({ start: 0, end: 0 });
+  it.each<{
+    name: string;
+    args: Parameters<typeof visibleSelectRange>[0];
+    expected: { start: number; end: number };
+  }>([
+    {
+      name: 'keeps a contiguous window around the highlighted row',
+      args: { itemCount: 8, highlight: 5, maxVisibleItems: 5 },
+      expected: { start: 3, end: 8 },
+    },
+    {
+      name: 'clamps the visible window at the list start',
+      args: { itemCount: 8, highlight: 0, maxVisibleItems: 5 },
+      expected: { start: 0, end: 5 },
+    },
+    {
+      name: 'clamps the visible window at the list end',
+      args: { itemCount: 8, highlight: 7, maxVisibleItems: 5 },
+      expected: { start: 3, end: 8 },
+    },
+    {
+      name: 'allows callers to reserve zero visible rows',
+      args: { itemCount: 8, highlight: 3, maxVisibleItems: 0 },
+      expected: { start: 0, end: 0 },
+    },
+  ])('$name', ({ args, expected }) => {
+    expect(visibleSelectRange(args)).toEqual(expected);
   });
 });
 
 describe('CLI Select inline overflow', () => {
-  it('summarizes hidden choices when separate overflow rows are disabled', () => {
-    expect(
-      selectVisibleInlineOverflowText({
+  it.each<{
+    name: string;
+    args: Parameters<typeof selectVisibleInlineOverflowText>[0];
+    expected: string | undefined;
+  }>([
+    {
+      name: 'summarizes choices hidden after the window',
+      args: {
         hiddenBefore: 0,
         hiddenAfter: 3,
         showOverflow: false,
         visibleItemCount: 3,
-      }),
-    ).toBe('+3 more');
-    expect(
-      selectVisibleInlineOverflowText({
+      },
+      expected: '+3 more',
+    },
+    {
+      name: 'summarizes choices hidden before the window',
+      args: {
         hiddenBefore: 2,
         hiddenAfter: 0,
         showOverflow: false,
         visibleItemCount: 3,
-      }),
-    ).toBe('+2 earlier');
-    expect(
-      selectVisibleInlineOverflowText({
+      },
+      expected: '+2 earlier',
+    },
+    {
+      name: 'summarizes choices hidden on both sides',
+      args: {
         hiddenBefore: 2,
         hiddenAfter: 4,
         showOverflow: false,
         visibleItemCount: 3,
-      }),
-    ).toBe('+2 earlier, +4 more');
-  });
-
-  it('defers to separate overflow rows when they are enabled', () => {
-    expect(
-      selectVisibleInlineOverflowText({
+      },
+      expected: '+2 earlier, +4 more',
+    },
+    {
+      name: 'defers to separate overflow rows when they are enabled',
+      args: {
         hiddenBefore: 0,
         hiddenAfter: 3,
         showOverflow: true,
         visibleItemCount: 3,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('suppresses inline overflow when there are no visible items', () => {
-    expect(
-      selectVisibleInlineOverflowText({
+      },
+      expected: undefined,
+    },
+    {
+      name: 'suppresses inline overflow when there are no visible items',
+      args: {
         hiddenBefore: 0,
         hiddenAfter: 3,
         showOverflow: false,
         visibleItemCount: 0,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('shows inline overflow for any clipped visible window', () => {
-    expect(
-      selectVisibleInlineOverflowText({
+      },
+      expected: undefined,
+    },
+    {
+      name: 'shows inline overflow for any clipped visible window',
+      args: {
         hiddenBefore: 0,
         hiddenAfter: 2,
         showOverflow: false,
         visibleItemCount: 3,
-      }),
-    ).toBe('+2 more');
+      },
+      expected: '+2 more',
+    },
+  ])('$name', ({ args, expected }) => {
+    expect(selectVisibleInlineOverflowText(args)).toBe(expected);
   });
 });
 
@@ -288,105 +305,83 @@ describe('CLI Select disabled-row focus', () => {
     { value: 'opus', label: 'Opus' },
     { value: 'deepseek', label: 'DeepSeek', disabled: true },
   ];
+  const enabledItems = [
+    { value: 'gemini', label: 'Gemini' },
+    { value: 'sonnet', label: 'Sonnet' },
+    { value: 'opus', label: 'Opus' },
+  ];
 
-  it('starts on the active row when it is enabled', () => {
-    expect(
-      selectInitialHighlightIndex({
-        activeValue: 'sonnet',
-        items,
-      }),
-    ).toBe(1);
+  it.each<{
+    name: string;
+    args: Parameters<typeof selectInitialHighlightIndex>[0];
+    expected: number;
+  }>([
+    {
+      name: 'starts on the active row when it is enabled',
+      args: { activeValue: 'sonnet', items },
+      expected: 1,
+    },
+    {
+      name: 'starts on the first enabled row when the active row is disabled',
+      args: { activeValue: 'deepseek', items },
+      expected: 1,
+    },
+    {
+      name: 'starts on the first enabled row when the requested initial row is disabled',
+      args: { initialIndex: 3, items },
+      expected: 1,
+    },
+  ])('$name', ({ args, expected }) => {
+    expect(selectInitialHighlightIndex(args)).toBe(expected);
   });
 
-  it('starts on the first enabled row when the active row is disabled', () => {
-    expect(
-      selectInitialHighlightIndex({
-        activeValue: 'deepseek',
-        items,
-      }),
-    ).toBe(1);
-  });
-
-  it('starts on the first enabled row when the requested initial row is disabled', () => {
-    expect(
-      selectInitialHighlightIndex({
-        initialIndex: 3,
-        items,
-      }),
-    ).toBe(1);
-  });
-
-  it('keeps arrow navigation directional around disabled rows', () => {
-    expect(
-      nextSelectHighlightIndex({
-        direction: 1,
-        highlight: 1,
-        items,
-      }),
-    ).toBe(2);
-    expect(
-      nextSelectHighlightIndex({
-        direction: 1,
-        highlight: 2,
-        items,
-      }),
-    ).toBe(2);
-    expect(
-      nextSelectHighlightIndex({
-        direction: -1,
-        highlight: 1,
-        items,
-      }),
-    ).toBe(1);
-    expect(
-      nextSelectHighlightIndex({
-        direction: -1,
-        highlight: 2,
-        items,
-      }),
-    ).toBe(1);
-  });
-
-  it('reports disabled outer rows as non-wrapping boundaries', () => {
-    expect(
-      nextSelectHighlightIndex({
-        direction: -1,
-        highlight: 1,
-        items,
-        wrap: false,
-      }),
-    ).toBe(1);
-    expect(
-      nextSelectHighlightIndex({
-        direction: 1,
-        highlight: 2,
-        items,
-        wrap: false,
-      }),
-    ).toBe(2);
-  });
-
-  it('keeps wraparound navigation for all-enabled lists', () => {
-    const enabledItems = [
-      { value: 'gemini', label: 'Gemini' },
-      { value: 'sonnet', label: 'Sonnet' },
-      { value: 'opus', label: 'Opus' },
-    ];
-
-    expect(
-      nextSelectHighlightIndex({
-        direction: -1,
-        highlight: 0,
-        items: enabledItems,
-      }),
-    ).toBe(2);
-    expect(
-      nextSelectHighlightIndex({
-        direction: 1,
-        highlight: 2,
-        items: enabledItems,
-      }),
-    ).toBe(0);
+  it.each<{
+    name: string;
+    args: Parameters<typeof nextSelectHighlightIndex>[0];
+    expected: number;
+  }>([
+    {
+      name: 'moves down past an enabled row',
+      args: { direction: 1, highlight: 1, items },
+      expected: 2,
+    },
+    {
+      name: 'stops moving down at a disabled boundary row',
+      args: { direction: 1, highlight: 2, items },
+      expected: 2,
+    },
+    {
+      name: 'stops moving up at a disabled boundary row',
+      args: { direction: -1, highlight: 1, items },
+      expected: 1,
+    },
+    {
+      name: 'moves up to an enabled row',
+      args: { direction: -1, highlight: 2, items },
+      expected: 1,
+    },
+    {
+      name: 'reports the disabled top row as a non-wrapping boundary',
+      args: { direction: -1, highlight: 1, items, wrap: false },
+      expected: 1,
+    },
+    {
+      name: 'reports the disabled bottom row as a non-wrapping boundary',
+      args: { direction: 1, highlight: 2, items, wrap: false },
+      expected: 2,
+    },
+    {
+      name: 'wraps upward from the top of an all-enabled list',
+      args: { direction: -1, highlight: 0, items: enabledItems },
+      expected: 2,
+    },
+    {
+      name: 'wraps downward from the bottom of an all-enabled list',
+      args: { direction: 1, highlight: 2, items: enabledItems },
+      expected: 0,
+    },
+  ])('$name', ({ args, expected }) => {
+    expect(nextSelectHighlightIndex(args)).toBe(expected);
   });
 });
 
@@ -397,25 +392,32 @@ describe('CLI ModelListForm row budget', () => {
     expect(isCompactFormRows(10)).toBe(false);
   });
 
-  it('removes the row floor on short terminals', () => {
-    expect(modelSelectWindow({ availableRows: 6, itemCount: 8 })).toEqual({
-      maxVisibleItems: 1,
-      showOverflow: false,
-    });
-    expect(modelSelectWindow({ availableRows: 7, itemCount: 8 })).toEqual({
-      maxVisibleItems: 1,
-      showOverflow: false,
-    });
-    expect(modelSelectWindow({ availableRows: 8, itemCount: 8 })).toEqual({
-      maxVisibleItems: 2,
-      showOverflow: false,
-    });
-  });
-
-  it('spends overflow rows only when the budget can fit them', () => {
-    expect(modelSelectWindow({ availableRows: 12, itemCount: 8 })).toEqual({
-      maxVisibleItems: 4,
-      showOverflow: true,
-    });
-  });
+  it.each<{
+    availableRows: number;
+    expected: ReturnType<typeof modelSelectWindow>;
+  }>([
+    {
+      availableRows: 6,
+      expected: { maxVisibleItems: 1, showOverflow: false },
+    },
+    {
+      availableRows: 7,
+      expected: { maxVisibleItems: 1, showOverflow: false },
+    },
+    {
+      availableRows: 8,
+      expected: { maxVisibleItems: 2, showOverflow: false },
+    },
+    {
+      availableRows: 12,
+      expected: { maxVisibleItems: 4, showOverflow: true },
+    },
+  ])(
+    'sizes the window for $availableRows available rows',
+    ({ availableRows, expected }) => {
+      expect(modelSelectWindow({ availableRows, itemCount: 8 })).toEqual(
+        expected,
+      );
+    },
+  );
 });

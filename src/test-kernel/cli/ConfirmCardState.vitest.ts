@@ -34,6 +34,27 @@ describe('CLI confirm-card key handling', () => {
     rejectionMode: 'immediate',
   } as const;
 
+  const sessionCommandsLabel = 'approve commands for session';
+  const compactCommandHints = [
+    { key: 'y', action: 'approve' },
+    { key: 'n', action: 'reject' },
+    { key: 'a', action: 'all commands' },
+    { key: 'Esc', action: 'reject' },
+  ];
+
+  function hintsForWidth(
+    alwaysAllowLabel: string,
+    maxColumns: number,
+  ): ReturnType<typeof confirmCardKeyHintsForWidth> {
+    return confirmCardKeyHintsForWidth({ alwaysAllowLabel, maxColumns });
+  }
+
+  function renderHints(
+    hints: ReturnType<typeof confirmCardKeyHintsForWidth>,
+  ): string {
+    return hints.map((hint) => `${hint.key} ${hint.action}`).join(' · ');
+  }
+
   it('approves with y, collects rejection feedback with n, and rejects with escape', () => {
     expect(confirmCardKeyAction('y', {}, feedbackRejection)).toBe('approve');
     expect(confirmCardKeyAction('Y', {}, feedbackRejection)).toBe('approve');
@@ -74,12 +95,12 @@ describe('CLI confirm-card key handling', () => {
   it('shows scoped session-wide approval hints for approval modals', () => {
     expect(
       confirmCardKeyHints({
-        alwaysAllowLabel: 'approve commands for session',
+        alwaysAllowLabel: sessionCommandsLabel,
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject & note' },
-      { key: 'a', action: 'approve commands for session' },
+      { key: 'a', action: sessionCommandsLabel },
       { key: 'Esc', action: 'reject' },
     ]);
 
@@ -89,13 +110,10 @@ describe('CLI confirm-card key handling', () => {
       }),
     ).toContainEqual({ key: 'a', action: 'approve edits for session' });
 
-    const compactRendered = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve commands for session',
-      maxColumns: 80,
-    })
-      .map((hint) => `${hint.key} ${hint.action}`)
-      .join(' · ');
-    expect(compactRendered).toContain('a approve commands for session');
+    const compactRendered = renderHints(
+      hintsForWidth(sessionCommandsLabel, 80),
+    );
+    expect(compactRendered).toContain(`a ${sessionCommandsLabel}`);
     expect(compactRendered).toContain('n reject & note');
     expect(compactRendered.length).toBeLessThanOrEqual(80);
   });
@@ -108,46 +126,29 @@ describe('CLI confirm-card key handling', () => {
   });
 
   it('compacts long optional approval hints before hiding cancel', () => {
-    expect(
-      confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve commands for session',
-        maxColumns: 80,
-      }),
-    ).toEqual(
+    expect(hintsForWidth(sessionCommandsLabel, 80)).toEqual(
       confirmCardKeyHints({
-        alwaysAllowLabel: 'approve commands for session',
+        alwaysAllowLabel: sessionCommandsLabel,
       }),
     );
 
-    const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve commands for session',
-      maxColumns: 60,
+    const compact = hintsForWidth(sessionCommandsLabel, 60);
+
+    expect(compact).toEqual(compactCommandHints);
+    expect(renderHints(compact).length).toBeLessThanOrEqual(60);
+
+    expect(hintsForWidth('approve edits for session', 60)).toContainEqual({
+      key: 'a',
+      action: 'all edits',
     });
 
-    expect(compact).toEqual([
-      { key: 'y', action: 'approve' },
-      { key: 'n', action: 'reject' },
-      { key: 'a', action: 'all commands' },
-      { key: 'Esc', action: 'reject' },
-    ]);
     expect(
-      compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
-    ).toBeLessThanOrEqual(60);
-
-    expect(
-      confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve edits for session',
-        maxColumns: 60,
-      }),
-    ).toContainEqual({ key: 'a', action: 'all edits' });
-
-    expect(
-      confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: DELEGATION_APPROVAL_COPY.cliAction,
+      hintsForWidth(
+        DELEGATION_APPROVAL_COPY.cliAction,
         // ConfirmCard reserves four columns of an actual 72-column terminal
         // for its border and padding.
-        maxColumns: 68,
-      }),
+        68,
+      ),
     ).toContainEqual({
       key: 'a',
       action: DELEGATION_APPROVAL_COPY.cliCompactAction,
@@ -155,52 +156,26 @@ describe('CLI confirm-card key handling', () => {
   });
 
   it('keeps the approve-all hint on mid-width terminals', () => {
-    const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve commands for session',
-      maxColumns: 62,
-    });
+    const compact = hintsForWidth(sessionCommandsLabel, 62);
 
-    expect(compact).toEqual([
-      { key: 'y', action: 'approve' },
-      { key: 'n', action: 'reject' },
-      { key: 'a', action: 'all commands' },
-      { key: 'Esc', action: 'reject' },
-    ]);
-    expect(
-      compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
-    ).toBeLessThanOrEqual(62);
+    expect(compact).toEqual(compactCommandHints);
+    expect(renderHints(compact).length).toBeLessThanOrEqual(62);
   });
 
   it('drops optional approval hints before hiding cancel on narrow terminals', () => {
-    expect(
-      confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve commands for session',
-        maxColumns: 54,
-      }),
-    ).toEqual([
-      { key: 'y', action: 'approve' },
-      { key: 'n', action: 'reject' },
-      { key: 'a', action: 'all commands' },
-      { key: 'Esc', action: 'reject' },
-    ]);
+    expect(hintsForWidth(sessionCommandsLabel, 54)).toEqual(
+      compactCommandHints,
+    );
 
-    expect(
-      confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve commands for session',
-        maxColumns: 36,
-      }),
-    ).toEqual([
+    expect(hintsForWidth(sessionCommandsLabel, 36)).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
       { key: 'Esc', action: 'reject' },
     ]);
 
-    expect(
-      confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve commands for session',
-        maxColumns: 10,
-      }),
-    ).toEqual([{ key: 'Esc', action: 'reject' }]);
+    expect(hintsForWidth(sessionCommandsLabel, 10)).toEqual([
+      { key: 'Esc', action: 'reject' },
+    ]);
   });
 
   it('reports stacked compact chrome rows for long extra actions', () => {

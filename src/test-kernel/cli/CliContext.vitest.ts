@@ -334,51 +334,87 @@ describe('CLI --cwd validation', () => {
 });
 
 describe('CLI per-stream color resolution', () => {
-  it('colors only when the stream itself is a TTY', () => {
-    expect(resolveStreamColor(true, { env: {} })).toBe(true);
-    expect(resolveStreamColor(false, { env: {} })).toBe(false);
-  });
-
-  it('NO_COLOR and TERM=dumb disable color even on a TTY', () => {
-    expect(resolveStreamColor(true, { env: { NO_COLOR: '1' } })).toBe(false);
-    expect(resolveStreamColor(true, { env: { NO_COLOR: '' } })).toBe(false);
-    expect(resolveStreamColor(true, { env: { TERM: 'dumb' } })).toBe(false);
-  });
-
-  it('FORCE_COLOR enables color even off a TTY', () => {
-    expect(resolveStreamColor(false, { env: { FORCE_COLOR: '1' } })).toBe(true);
-    expect(resolveStreamColor(false, { env: { FORCE_COLOR: 'true' } })).toBe(
-      true,
-    );
-  });
-
-  it('FORCE_COLOR=0 disables color even on a TTY', () => {
-    expect(resolveStreamColor(true, { env: { FORCE_COLOR: '0' } })).toBe(false);
-    expect(resolveStreamColor(true, { env: { FORCE_COLOR: 'false' } })).toBe(
-      false,
-    );
-    expect(resolveStreamColor(true, { env: { FORCE_COLOR: 'no' } })).toBe(
-      false,
-    );
-  });
-
-  it('empty FORCE_COLOR does not force color off a TTY', () => {
-    expect(resolveStreamColor(false, { env: { FORCE_COLOR: '' } })).toBe(false);
-  });
-
-  it('NO_COLOR wins over FORCE_COLOR', () => {
-    expect(
-      resolveStreamColor(true, { env: { FORCE_COLOR: '1', NO_COLOR: '1' } }),
-    ).toBe(false);
-  });
-
-  it('forceDisable beats everything', () => {
-    expect(
-      resolveStreamColor(true, {
-        forceDisable: true,
-        env: { FORCE_COLOR: '1' },
-      }),
-    ).toBe(false);
+  it.each([
+    {
+      label: 'colors when the stream itself is a TTY',
+      isTty: true,
+      options: { env: {} },
+      expected: true,
+    },
+    {
+      label: 'stays plain when the stream itself is not a TTY',
+      isTty: false,
+      options: { env: {} },
+      expected: false,
+    },
+    {
+      label: 'NO_COLOR disables color even on a TTY',
+      isTty: true,
+      options: { env: { NO_COLOR: '1' } },
+      expected: false,
+    },
+    {
+      label: 'empty NO_COLOR still disables color',
+      isTty: true,
+      options: { env: { NO_COLOR: '' } },
+      expected: false,
+    },
+    {
+      label: 'TERM=dumb disables color even on a TTY',
+      isTty: true,
+      options: { env: { TERM: 'dumb' } },
+      expected: false,
+    },
+    {
+      label: 'FORCE_COLOR enables color even off a TTY',
+      isTty: false,
+      options: { env: { FORCE_COLOR: '1' } },
+      expected: true,
+    },
+    {
+      label: 'FORCE_COLOR=true enables color even off a TTY',
+      isTty: false,
+      options: { env: { FORCE_COLOR: 'true' } },
+      expected: true,
+    },
+    {
+      label: 'FORCE_COLOR=0 disables color even on a TTY',
+      isTty: true,
+      options: { env: { FORCE_COLOR: '0' } },
+      expected: false,
+    },
+    {
+      label: 'FORCE_COLOR=false disables color even on a TTY',
+      isTty: true,
+      options: { env: { FORCE_COLOR: 'false' } },
+      expected: false,
+    },
+    {
+      label: 'FORCE_COLOR=no disables color even on a TTY',
+      isTty: true,
+      options: { env: { FORCE_COLOR: 'no' } },
+      expected: false,
+    },
+    {
+      label: 'empty FORCE_COLOR does not force color off a TTY',
+      isTty: false,
+      options: { env: { FORCE_COLOR: '' } },
+      expected: false,
+    },
+    {
+      label: 'NO_COLOR wins over FORCE_COLOR',
+      isTty: true,
+      options: { env: { FORCE_COLOR: '1', NO_COLOR: '1' } },
+      expected: false,
+    },
+    {
+      label: 'forceDisable beats everything',
+      isTty: true,
+      options: { forceDisable: true, env: { FORCE_COLOR: '1' } },
+      expected: false,
+    },
+  ])('$label', ({ isTty, options, expected }) => {
+    expect(resolveStreamColor(isTty, options)).toBe(expected);
   });
 });
 

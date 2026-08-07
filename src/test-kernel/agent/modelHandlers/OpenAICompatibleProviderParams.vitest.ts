@@ -13,6 +13,7 @@ import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 const NO_VISION_CAPABILITIES = Object.freeze({ supportsVision: false });
 const MOONSHOT_TEST_CONFIG = Object.freeze({
@@ -28,7 +29,15 @@ const XAI_TEST_CONFIG = Object.freeze({
   capabilities: NO_VISION_CAPABILITIES,
 });
 
-const SINGLE_TURN = [{ role: 'user', content: 'think' }];
+const SINGLE_TURN: ChatCompletionMessageParam[] = [
+  { role: 'user', content: 'think' },
+];
+const KIMI_K27_CODE_ALIASES = [
+  'kimi-k2.7-code',
+  'kimi-for-coding',
+  'kimi-for-coding-highspeed',
+];
+const KIMI_K3_ALIASES = ['kimi-k3', 'k3'];
 const COMPACTION_TURN = [
   { role: 'user', content: 'first' },
   { role: 'assistant', content: 'second' },
@@ -100,6 +109,42 @@ function createKimiHandler(overrides: ConfigOverrides): ModelHandlerKimi {
   );
 }
 
+function createGlmHandler(overrides: ConfigOverrides): ModelHandlerGLM {
+  return configureHandler(
+    new ModelHandlerGLM(buildTestModelConfig(GLM_TEST_CONFIG, overrides)),
+  );
+}
+
+function createXaiHandler(overrides: ConfigOverrides): ModelHandlerXAI {
+  return configureHandler(
+    new ModelHandlerXAI(buildTestModelConfig(XAI_TEST_CONFIG, overrides)),
+  );
+}
+
+function createK27CodeHandler(fullName: string): ModelHandlerKimi {
+  return createKimiHandler({
+    name: 'kimi27codeT',
+    fullName,
+    capabilities: {
+      supportsReasoning: true,
+      supportsVision: true,
+    },
+  });
+}
+
+function createK3Handler(fullName: string): ModelHandlerKimi {
+  return createKimiHandler({
+    name: 'kimi3',
+    fullName,
+    capabilities: {
+      supportsReasoning: true,
+      supportsReasoningEffort: true,
+      reasoningEffort: ReasoningEffort.MAX,
+      supportsVision: true,
+    },
+  });
+}
+
 async function sendRequest(
   handler: CompatibleHandler,
   messages: any[] = SINGLE_TURN,
@@ -139,7 +184,7 @@ describe('OpenAI-compatible provider request params', () => {
     const { client } = createClientStub();
     await handler.createResponse({
       client: handler.tagApiKeyClient(client) as any,
-      messages: [{ role: 'user', content: 'think' }],
+      messages: SINGLE_TURN,
       temperature: 0,
     });
 
@@ -149,17 +194,10 @@ describe('OpenAI-compatible provider request params', () => {
     );
   });
 
-  it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
+  it.each(KIMI_K27_CODE_ALIASES)(
     'keeps Kimi K2.7 Code alias %s on required defaults',
     async (fullName) => {
-      const handler = createKimiHandler({
-        name: 'kimi27codeT',
-        fullName,
-        capabilities: {
-          supportsReasoning: true,
-          supportsVision: true,
-        },
-      });
+      const handler = createK27CodeHandler(fullName);
 
       const { createCalls } = await sendRequest(handler);
 
@@ -168,17 +206,10 @@ describe('OpenAI-compatible provider request params', () => {
     },
   );
 
-  it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
+  it.each(KIMI_K27_CODE_ALIASES)(
     'does not disable Kimi K2.7 alias %s during compaction',
     async (fullName) => {
-      const handler = createKimiHandler({
-        name: 'kimi27codeT',
-        fullName,
-        capabilities: {
-          supportsReasoning: true,
-          supportsVision: true,
-        },
-      });
+      const handler = createK27CodeHandler(fullName);
       handler.setAgentCategory(AgentCategory.ToolUse);
       handler.requestCompaction();
 
@@ -245,22 +276,13 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].thinking, undefined);
   });
 
-  it.each(['kimi-k3', 'k3'])(
+  it.each(KIMI_K3_ALIASES)(
     'omits temperature and sends reasoning_effort max for Kimi K3 alias %s',
     async (fullName) => {
       // Moonshot fixes K3 sampling server-side (docs say omit temperature), and
       // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
       // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
-      const handler = createKimiHandler({
-        name: 'kimi3',
-        fullName,
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-          supportsVision: true,
-        },
-      });
+      const handler = createK3Handler(fullName);
 
       const { createCalls } = await sendRequest(handler);
 
@@ -270,19 +292,10 @@ describe('OpenAI-compatible provider request params', () => {
     },
   );
 
-  it.each(['kimi-k3', 'k3'])(
+  it.each(KIMI_K3_ALIASES)(
     'preserves thinking in Kimi K3 alias %s compaction summaries',
     async (fullName) => {
-      const handler = createKimiHandler({
-        name: 'kimi3',
-        fullName,
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-          supportsVision: true,
-        },
-      });
+      const handler = createK3Handler(fullName);
       handler.setAgentCategory(AgentCategory.ToolUse);
       handler.requestCompaction();
 
@@ -332,19 +345,15 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('maps GLM low reasoning effort to the provider minimum', async () => {
-    const handler = configureHandler(
-      new ModelHandlerGLM(
-        buildTestModelConfig(GLM_TEST_CONFIG, {
-          name: 'glm52',
-          fullName: 'glm-5.2',
-          capabilities: {
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.LOW,
-          },
-        }),
-      ),
-    );
+    const handler = createGlmHandler({
+      name: 'glm52',
+      fullName: 'glm-5.2',
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.LOW,
+      },
+    });
 
     const { createCalls } = await sendRequest(handler);
 
@@ -353,19 +362,15 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('maps GLM max reasoning effort to the provider maximum', async () => {
-    const handler = configureHandler(
-      new ModelHandlerGLM(
-        buildTestModelConfig(GLM_TEST_CONFIG, {
-          name: 'glm52',
-          fullName: 'glm-5.2',
-          capabilities: {
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.MAX,
-          },
-        }),
-      ),
-    );
+    const handler = createGlmHandler({
+      name: 'glm52',
+      fullName: 'glm-5.2',
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MAX,
+      },
+    });
 
     const { createCalls } = await sendRequest(handler, [
       { role: 'user', content: 'think harder' },
@@ -375,19 +380,15 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('passes medium reasoning effort through for current Grok models', async () => {
-    const handler = configureHandler(
-      new ModelHandlerXAI(
-        buildTestModelConfig(XAI_TEST_CONFIG, {
-          name: 'grok45',
-          fullName: 'grok-4.5',
-          capabilities: {
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.MEDIUM,
-          },
-        }),
-      ),
-    );
+    const handler = createXaiHandler({
+      name: 'grok45',
+      fullName: 'grok-4.5',
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MEDIUM,
+      },
+    });
 
     const { createCalls } = await sendRequest(handler);
 
@@ -395,19 +396,15 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('clamps above-high reasoning effort to high for Grok models', async () => {
-    const handler = configureHandler(
-      new ModelHandlerXAI(
-        buildTestModelConfig(XAI_TEST_CONFIG, {
-          name: 'grok45',
-          fullName: 'grok-4.5',
-          capabilities: {
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.XHIGH,
-          },
-        }),
-      ),
-    );
+    const handler = createXaiHandler({
+      name: 'grok45',
+      fullName: 'grok-4.5',
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.XHIGH,
+      },
+    });
 
     const { createCalls } = await sendRequest(handler, [
       { role: 'user', content: 'think harder' },

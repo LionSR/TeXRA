@@ -109,6 +109,14 @@ function mountMainApp(): Promise<MainApp> {
   return mountComponent<MainApp>('main-app');
 }
 
+/** Mount, then clear mount-time traffic so assertions see only test actions. */
+async function mountFreshApp(): Promise<MainApp> {
+  const element = await mountMainApp();
+  posted.length = 0;
+  storageWrites.length = 0;
+  return element;
+}
+
 function dispatchHostMessage(data: Record<string, unknown>): void {
   window.dispatchEvent(new window.MessageEvent('message', { data }));
 }
@@ -143,6 +151,29 @@ function restoreState(
     attachTeXCount: false,
     ...overrides,
   };
+}
+
+/** Push a backend restore blob and wait for the component to settle. */
+async function pushRestore(
+  element: MainApp,
+  overrides: Parameters<typeof restoreState>[0] = {},
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  dispatchHostMessage({
+    command: COMMON_COMMANDS.STATE_RESTORE,
+    state: restoreState(overrides),
+    ...extra,
+  });
+  await element.updateComplete;
+}
+
+async function withFakeTimers(run: () => Promise<void>): Promise<void> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    await run();
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 describe('MainApp persistence and restore characterization', () => {
@@ -293,18 +324,13 @@ describe('MainApp persistence and restore characterization', () => {
   });
 
   it('normalizes stale workflow team state during backend restore', async () => {
-    const element = await mountMainApp();
-    storageWrites.length = 0;
+    const element = await mountFreshApp();
 
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        sessionType: 'workflow',
-        launchTarget: 'team',
-        selectedTeamId: 'physicist',
-      }),
+    await pushRestore(element, {
+      sessionType: 'workflow',
+      launchTarget: 'team',
+      selectedTeamId: 'physicist',
     });
-    await element.updateComplete;
 
     expect(contextsOf(element).session).toMatchObject({
       sessionType: 'workflow',
@@ -319,34 +345,23 @@ describe('MainApp persistence and restore characterization', () => {
   });
 
   it('normalizes a legacy Copilot model id during VS Code backend restore', async () => {
-    const element = await mountMainApp();
-    storageWrites.length = 0;
+    const element = await mountFreshApp();
 
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({ model: 'copilot:sonnet46' }),
-    });
-    await element.updateComplete;
+    await pushRestore(element, { model: 'copilot:sonnet46' });
 
     expect(contextsOf(element).session.model).toBe('sonnet46');
     expect(lastPersistedBlob().model).toBe('sonnet46');
   });
 
   it('applies a backend-pushed restore with exactly one storage write and forced output reset', async () => {
-    const element = await mountMainApp();
-    posted.length = 0;
-    storageWrites.length = 0;
+    const element = await mountFreshApp();
 
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        instruction: {
-          workflow: 'restored workflow instruction',
-          toolUse: 'restored tool-use instruction',
-        },
-      }),
+    await pushRestore(element, {
+      instruction: {
+        workflow: 'restored workflow instruction',
+        toolUse: 'restored tool-use instruction',
+      },
     });
-    await element.updateComplete;
 
     // Single-writer characterization: the whole restore settles into one
     // projection, so it produces exactly one storage write — never one per
@@ -382,20 +397,15 @@ describe('MainApp persistence and restore characterization', () => {
   });
 
   it('restores both per-mode instructions', async () => {
-    const element = await mountMainApp();
-    storageWrites.length = 0;
+    const element = await mountFreshApp();
 
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        sessionType: 'workflow',
-        instruction: {
-          workflow: 'workflow winner',
-          toolUse: 'tool-use winner',
-        },
-      }),
+    await pushRestore(element, {
+      sessionType: 'workflow',
+      instruction: {
+        workflow: 'workflow winner',
+        toolUse: 'tool-use winner',
+      },
     });
-    await element.updateComplete;
 
     const blob = lastPersistedBlob();
     expect(blob.instruction.workflow).toBe('workflow winner');
@@ -404,17 +414,13 @@ describe('MainApp persistence and restore characterization', () => {
   });
 
   it('executes immediately after a successful restore when requested', async () => {
-    const element = await mountMainApp();
-    posted.length = 0;
+    const element = await mountFreshApp();
 
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        instruction: { workflow: '', toolUse: 'run this' },
-      }),
-      executeImmediately: true,
-    });
-    await element.updateComplete;
+    await pushRestore(
+      element,
+      { instruction: { workflow: '', toolUse: 'run this' } },
+      { executeImmediately: true },
+    );
 
     const executes = posted.filter(
       (m) => m.command === MAIN_VIEW_COMMANDS.EXECUTE,
@@ -424,21 +430,17 @@ describe('MainApp persistence and restore characterization', () => {
   });
 
   it('reset operation in workflow mode clears instructions and files and applies checkbox overrides', async () => {
-    const element = await mountMainApp();
+    const element = await mountFreshApp();
 
     // Establish a workflow session with content to clear.
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        sessionType: 'workflow',
-        instruction: { workflow: 'about to be cleared', toolUse: '' },
-        autoExtractFigure: true,
-        autoExtractTikzFigure: true,
-        autoCompileInputPdf: true,
-        attachTeXCount: true,
-      }),
+    await pushRestore(element, {
+      sessionType: 'workflow',
+      instruction: { workflow: 'about to be cleared', toolUse: '' },
+      autoExtractFigure: true,
+      autoExtractTikzFigure: true,
+      autoCompileInputPdf: true,
+      attachTeXCount: true,
     });
-    await element.updateComplete;
     storageWrites.length = 0;
 
     dispatchHostMessage({
@@ -477,18 +479,14 @@ describe('MainApp persistence and restore characterization', () => {
   });
 
   it('reset operation in tool-use mode clears instructions but keeps file selections', async () => {
-    const element = await mountMainApp();
+    const element = await mountFreshApp();
 
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        sessionType: 'toolUse',
-        instruction: { workflow: '', toolUse: 'about to be cleared' },
-        mediaFiles: ['kept-figure.png'],
-        editedFile: 'kept_edited.tex',
-      }),
+    await pushRestore(element, {
+      sessionType: 'toolUse',
+      instruction: { workflow: '', toolUse: 'about to be cleared' },
+      mediaFiles: ['kept-figure.png'],
+      editedFile: 'kept_edited.tex',
     });
-    await element.updateComplete;
     storageWrites.length = 0;
 
     dispatchHostMessage({
@@ -512,8 +510,7 @@ describe('MainApp persistence and restore characterization', () => {
 
   describe('single-writer rules', () => {
     it('writes nothing when a host push moves only non-persisted state', async () => {
-      const element = await mountMainApp();
-      storageWrites.length = 0;
+      const element = await mountFreshApp();
 
       // The edited-file option list is presentation state; the selected file
       // (which IS persisted) still resolves, so the projection is unchanged.
@@ -546,11 +543,9 @@ describe('MainApp persistence and restore characterization', () => {
     });
 
     it('coalesces rapid instruction keystrokes into a single storage write after 300ms', async () => {
-      const element = await mountMainApp();
-      storageWrites.length = 0;
+      const element = await mountFreshApp();
 
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-      try {
+      await withFakeTimers(async () => {
         setInstruction('h');
         await Promise.resolve();
         vi.advanceTimersByTime(200);
@@ -566,19 +561,15 @@ describe('MainApp persistence and restore characterization', () => {
         vi.advanceTimersByTime(1);
         expect(storageWrites).toHaveLength(1);
         expect(lastPersistedBlob().instruction.workflow).toBe('hello');
-      } finally {
-        vi.useRealTimers();
-      }
+      });
 
       element.remove();
     });
 
     it('writes a non-draft change immediately, carrying the pending draft with it', async () => {
-      const element = await mountMainApp();
-      storageWrites.length = 0;
+      const element = await mountFreshApp();
 
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-      try {
+      await withFakeTimers(async () => {
         setInstruction('typed but not yet due');
         await Promise.resolve();
         expect(storageWrites).toHaveLength(0);
@@ -597,19 +588,15 @@ describe('MainApp persistence and restore characterization', () => {
         // The draft timer was cancelled by that write, not left to fire again.
         vi.advanceTimersByTime(1000);
         expect(storageWrites).toHaveLength(1);
-      } finally {
-        vi.useRealTimers();
-      }
+      });
 
       element.remove();
     });
 
     it('flushPendingSave (called on disconnect) synchronously persists a pending draft', async () => {
-      const element = await mountMainApp();
-      storageWrites.length = 0;
+      const element = await mountFreshApp();
 
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-      try {
+      await withFakeTimers(async () => {
         setInstruction('unsaved when disconnected');
         await Promise.resolve();
         expect(storageWrites).toHaveLength(0);
@@ -626,17 +613,13 @@ describe('MainApp persistence and restore characterization', () => {
         // not produce a second write.
         vi.advanceTimersByTime(1000);
         expect(storageWrites).toHaveLength(1);
-      } finally {
-        vi.useRealTimers();
-      }
+      });
     });
 
     it('resetPersistenceRuntime cancels a pending draft instead of flushing it', async () => {
-      const element = await mountMainApp();
-      storageWrites.length = 0;
+      const element = await mountFreshApp();
 
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-      try {
+      await withFakeTimers(async () => {
         setInstruction('discarded by reset, not persisted');
         await Promise.resolve();
 
@@ -644,9 +627,7 @@ describe('MainApp persistence and restore characterization', () => {
 
         vi.advanceTimersByTime(1000);
         expect(storageWrites).toHaveLength(0);
-      } finally {
-        vi.useRealTimers();
-      }
+      });
 
       element.remove();
     });

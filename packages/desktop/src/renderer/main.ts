@@ -475,6 +475,15 @@ function requestFileWrite(path: string, contents: string): Promise<void> {
   });
 }
 
+/** Pops the pending list request for a directory, if one is in flight. */
+function takePendingFileList(
+  directory: string,
+): PendingFileListRequest | undefined {
+  const pending = pendingFileLists.get(directory);
+  pendingFileLists.delete(directory);
+  return pending;
+}
+
 /**
  * Progress-view messages are dispatched straight into the shared
  * messageDispatcher: `<progress-app>` is never mounted on desktop, its children
@@ -629,29 +638,29 @@ function workbenchPlaceholderTemplate(): TemplateResult {
   });
 }
 
+function workbenchSurfaceTemplate(content: unknown): TemplateResult {
+  return html`<div class="task-workbench-surface">${content}</div>`;
+}
+
 function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {
   switch (tab.kind) {
     case 'editor':
       return tab.target
-        ? html`<div class="task-workbench-surface">${editorPane.element}</div>`
+        ? workbenchSurfaceTemplate(editorPane.element)
         : workbenchPlaceholderTemplate();
     case 'terminal':
-      return html`<div class="task-workbench-surface">
-        ${terminalPane.element}
-      </div>`;
+      return workbenchSurfaceTemplate(terminalPane.element);
     case 'browser':
       return html`<div
         class="task-workbench-surface"
         data-browser-slot=${tab.id}
       ></div>`;
     case 'review':
-      return html`<div class="task-workbench-surface">
-        ${reviewPane.element}
-      </div>`;
+      return workbenchSurfaceTemplate(reviewPane.element);
     case 'settings':
-      return html`<div class="task-workbench-surface">${settingsView}</div>`;
+      return workbenchSurfaceTemplate(settingsView);
     case 'logs':
-      return html`<div class="task-workbench-surface">${logsPane}</div>`;
+      return workbenchSurfaceTemplate(logsPane);
   }
 }
 
@@ -1511,12 +1520,10 @@ const MESSAGE_ROUTES: ReadonlyArray<(data: unknown) => boolean> = [
     promptOverlay.open(message),
   ),
   messageRoute(DesktopFilesListedMessageSchema, (message) => {
-    pendingFileLists.get(message.directory)?.resolve(message.files);
-    pendingFileLists.delete(message.directory);
+    takePendingFileList(message.directory)?.resolve(message.files);
   }),
   messageRoute(DesktopFilesListErrorMessageSchema, (message) => {
-    pendingFileLists.get(message.directory)?.reject(new Error(message.message));
-    pendingFileLists.delete(message.directory);
+    takePendingFileList(message.directory)?.reject(new Error(message.message));
   }),
   messageRoute(DesktopFileReadMessageSchema, (message) => {
     settlePending(pendingFileReads, message.path, (request) =>

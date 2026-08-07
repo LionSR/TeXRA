@@ -353,11 +353,10 @@ async function getFileVars(
 
   for (const prefix of FILE_VAR_CATEGORIES) {
     const allFiles = getCategoryFiles(agentConfig, prefix);
-    const fileContent =
+    const { xml, readableFiles } =
       allFiles.length > 0
         ? await getXmlFormatFromReadableFiles(allFiles)
         : { xml: null, readableFiles: [] };
-    const readableFiles = fileContent.readableFiles;
     const primaryFile = readableFiles[0];
 
     const loaded =
@@ -368,7 +367,7 @@ async function getFileVars(
       userVars[`${prefix}_CONTENT`] = null;
     }
 
-    userVars[`ALL_${prefix}S`] = fileContent.xml;
+    userVars[`ALL_${prefix}S`] = xml;
     userVars[`${prefix}_FILES`] = readableFiles.map((file) =>
       getPromptFileName(file),
     );

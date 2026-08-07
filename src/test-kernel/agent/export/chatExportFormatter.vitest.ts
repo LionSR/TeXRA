@@ -247,41 +247,39 @@ describe('chat export formatters', () => {
     assert.doesNotMatch(markdown, /\]\(javascript:/);
   });
 
-  it('escapes emphasis/code-span/heading characters in web tool titles', () => {
-    const title = '`rm -rf /` *bold* _italic_ # Heading';
-    const markdown = formatChatAsMarkdown(
-      assistantChatInput([
-        webSearchBlock({ title, url: 'https://example.com' }),
-      ]),
-    );
+  const RAW_TITLE = '`rm -rf /` *bold* _italic_ # Heading';
+  const ESCAPED_TITLE = '\\`rm -rf /\\` \\*bold\\* \\_italic\\_ \\# Heading';
 
-    assert.ok(
-      markdown.includes('\\`rm -rf /\\` \\*bold\\* \\_italic\\_ \\# Heading'),
-      `expected escaped title, got: ${markdown}`,
-    );
-  });
-
-  it('escapes emphasis/code-span/heading characters in web-fetch titles too', () => {
-    // Same escapeMarkdownText call as the web_search case above, but through
-    // the web_fetch **Title:** container (markdownSpec.ts's second call site).
-    const title = '`rm -rf /` *bold* _italic_ # Heading';
-    const markdown = formatChatAsMarkdown(
-      assistantChatInput([
+  it.each([
+    {
+      container: 'web search result link',
+      block: () =>
+        webSearchBlock({ title: RAW_TITLE, url: 'https://example.com' }),
+      expected: ESCAPED_TITLE,
+    },
+    {
+      // Same escapeMarkdownText call, but through the web_fetch **Title:**
+      // container (markdownSpec.ts's second call site).
+      container: 'web-fetch **Title:**',
+      block: () =>
         webFetchBlock({
           url: 'https://example.com',
-          title,
+          title: RAW_TITLE,
           page_content: 'body',
         }),
-      ]),
-    );
+      expected: `**Title:** ${ESCAPED_TITLE}`,
+    },
+  ])(
+    'escapes emphasis/code-span/heading characters in $container titles',
+    ({ block, expected }) => {
+      const markdown = formatChatAsMarkdown(assistantChatInput([block()]));
 
-    assert.ok(
-      markdown.includes(
-        '**Title:** \\`rm -rf /\\` \\*bold\\* \\_italic\\_ \\# Heading',
-      ),
-      `expected escaped title, got: ${markdown}`,
-    );
-  });
+      assert.ok(
+        markdown.includes(expected),
+        `expected escaped title, got: ${markdown}`,
+      );
+    },
+  );
 
   it('preserves IPv6 host brackets in Markdown link destinations', () => {
     const url = 'http://[::1]:8080/path';

@@ -40,9 +40,11 @@ export async function loginWithDeviceCode(
   options: XaiDeviceLoginOptions,
 ): Promise<XaiSession> {
   const device = await requestDeviceCode(options.signal);
-  let intervalMs = (device.interval ?? XAI_DEVICE_DEFAULT_INTERVAL_SEC) * 1000;
   // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
-  intervalMs = Math.max(intervalMs, 1000);
+  let intervalMs = Math.max(
+    (device.interval ?? XAI_DEVICE_DEFAULT_INTERVAL_SEC) * 1000,
+    1000,
+  );
 
   options.onPrompt({
     userCode: device.user_code,

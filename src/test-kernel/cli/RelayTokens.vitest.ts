@@ -183,59 +183,49 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
   });
 
-  it('keeps a live 401 rejection sticky against a slower in-flight probe', async () => {
-    // Interleaving: a probe for `token` is already in flight (e.g. kicked
-    // off by an earlier synchronous check) when a *later* relay call gets a
-    // live 401 and calls markRelayTokenRejected — evidence that is fresher
-    // than whatever the in-flight probe will report. The probe then resolves
-    // 'valid' from data fetched before the rejection. The stale 'valid' must
-    // not clobber the fresher 'invalid': invalid is sticky until an explicit
-    // refresh (cache reset) or TTL expiry.
-    const { fetchImpl, resolveFetch } = pendingFetch();
+  // Interleaving: a probe for the token is already in flight (e.g. kicked
+  // off by an earlier synchronous check) when a *later* relay call gets a
+  // live 401 and calls markRelayTokenRejected — evidence that is fresher
+  // than whatever the in-flight probe will report. The probe then resolves
+  // from data fetched before the rejection. The stale result must not
+  // clobber the fresher 'invalid' (sticky until an explicit refresh — cache
+  // reset — or TTL expiry), and the resolved value itself must agree with
+  // the cache, otherwise a caller that trusts the return value (getUserTier,
+  // getCliAuthProfile) could still treat the just-rejected token as usable.
+  // The 'unknown' row matters because 'unknown' results are never cached, so
+  // a naive fix that only re-checks the sticky guard for settled results
+  // would return 'unknown' even though the cache already holds 'invalid' —
+  // exactly the return-value/cache inconsistency this guard exists to
+  // prevent.
+  it.each([
+    {
+      name: "resolves a stale 'valid' verdict",
+      response: () =>
+        jsonResponse({ userStatus: { tier: 'Ultra', isExpired: false } }),
+    },
+    {
+      name: "resolves 'unknown' from a transient 5xx",
+      response: () => new Response('boom', { status: 500 }),
+    },
+  ])(
+    'keeps a live 401 rejection sticky against a slower in-flight probe that $name',
+    async ({ response }) => {
+      const { fetchImpl, resolveFetch } = pendingFetch();
 
-    const pending = fetchRelayTokenStatus(TOKEN, fetchImpl);
+      const pending = fetchRelayTokenStatus(TOKEN, fetchImpl);
 
-    // The live 401 lands and marks the token invalid while the probe above
-    // is still in flight.
-    markRelayTokenRejected(TOKEN);
-    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
+      // The live 401 lands and marks the token invalid while the probe above
+      // is still in flight.
+      markRelayTokenRejected(TOKEN);
+      expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
 
-    // The in-flight probe now resolves with a stale 'valid' verdict.
-    resolveFetch(
-      jsonResponse({ userStatus: { tier: 'Ultra', isExpired: false } }),
-    );
+      // The in-flight probe now resolves with a stale verdict.
+      resolveFetch(response());
 
-    // The resolved value itself must agree with the cache — not just the
-    // cache in isolation — otherwise a caller that trusts the return value
-    // (getUserTier, getCliAuthProfile) could still treat the
-    // just-rejected token as usable.
-    await expect(pending).resolves.toEqual({ state: 'invalid' });
-
-    // The fresher rejection must survive: the cache must not be clobbered
-    // back to 'valid' by the stale probe result.
-    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
-  });
-
-  it('keeps a live 401 rejection sticky against a slower in-flight probe that resolves unknown', async () => {
-    // Same race as above, but the in-flight probe resolves 'unknown' (e.g. a
-    // transient 5xx) instead of a settled 'valid'/'invalid'. 'unknown'
-    // results are never cached, so a naive fix that only re-checks the
-    // sticky guard for settled results would return 'unknown' here even
-    // though the cache already holds the fresher 'invalid' — exactly the
-    // return-value/cache inconsistency this guard exists to prevent.
-    const { fetchImpl, resolveFetch } = pendingFetch();
-
-    const pending = fetchRelayTokenStatus(TOKEN, fetchImpl);
-
-    markRelayTokenRejected(TOKEN);
-    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
-
-    // The in-flight probe resolves with a transient failure response.
-    resolveFetch(new Response('boom', { status: 500 }));
-
-    await expect(pending).resolves.toEqual({ state: 'invalid' });
-    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
-  });
+      await expect(pending).resolves.toEqual({ state: 'invalid' });
+      expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
+    },
+  );
 
   it('warns on logout that a configured relay token stays active', () => {
     expect(relayTokenStillActiveNotice({})).toBeUndefined();

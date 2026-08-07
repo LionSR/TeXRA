@@ -19,48 +19,44 @@ interface WarningDialogModule {
   }): WindowLike | undefined;
 }
 
+async function loadDialogModule(): Promise<WarningDialogModule> {
+  const module = await loadSourceModule('@desktop/main/platform/warningDialog');
+  return module as unknown as WarningDialogModule;
+}
+
+const focusedWindow: WindowLike = { isDestroyed: () => false };
+const otherWindow: WindowLike = { isDestroyed: () => false };
+const destroyedWindow: WindowLike = { isDestroyed: () => true };
+const liveWindow: WindowLike = { isDestroyed: () => false };
+
 describe('desktop warning dialog', () => {
-  async function loadDialogModule(): Promise<WarningDialogModule> {
-    const module = await loadSourceModule(
-      '@desktop/main/platform/warningDialog',
-    );
-    return module as unknown as WarningDialogModule;
-  }
-
-  it('uses the focused BrowserWindow when one is active', async () => {
-    const { getDesktopWarningParentWindow } = await loadDialogModule();
-    const focusedWindow = { isDestroyed: () => false };
-    const otherWindow = { isDestroyed: () => false };
-
-    expect(
-      getDesktopWarningParentWindow({
-        getFocusedWindow: () => focusedWindow,
-        getAllWindows: () => [otherWindow],
-      }),
-    ).toBe(focusedWindow);
-  });
-
-  it('falls back to an existing non-destroyed BrowserWindow', async () => {
-    const { getDesktopWarningParentWindow } = await loadDialogModule();
-    const destroyedWindow = { isDestroyed: () => true };
-    const liveWindow = { isDestroyed: () => false };
-
-    expect(
-      getDesktopWarningParentWindow({
-        getFocusedWindow: () => null,
-        getAllWindows: () => [destroyedWindow, liveWindow],
-      }),
-    ).toBe(liveWindow);
-  });
-
-  it('preserves app-level warning fallback before any window exists', async () => {
+  it.each([
+    {
+      name: 'uses the focused BrowserWindow when one is active',
+      focused: focusedWindow,
+      all: [otherWindow],
+      expected: focusedWindow,
+    },
+    {
+      name: 'falls back to an existing non-destroyed BrowserWindow',
+      focused: null,
+      all: [destroyedWindow, liveWindow],
+      expected: liveWindow,
+    },
+    {
+      name: 'preserves app-level warning fallback before any window exists',
+      focused: null,
+      all: [],
+      expected: undefined,
+    },
+  ])('$name', async ({ focused, all, expected }) => {
     const { getDesktopWarningParentWindow } = await loadDialogModule();
 
     expect(
       getDesktopWarningParentWindow({
-        getFocusedWindow: () => null,
-        getAllWindows: () => [],
+        getFocusedWindow: () => focused,
+        getAllWindows: () => all,
       }),
-    ).toBeUndefined();
+    ).toBe(expected);
   });
 });

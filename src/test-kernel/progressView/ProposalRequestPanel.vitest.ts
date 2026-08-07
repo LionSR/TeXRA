@@ -181,16 +181,11 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     dispatchKey(fileName!, 'Enter');
     dispatchKey(fileName!, ' ');
 
-    expect(posted).toEqual([
-      {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-        file: '/workspace/paper.tex',
-      },
-      {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-        file: '/workspace/paper.tex',
-      },
-    ]);
+    const openPaper = {
+      command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+      file: '/workspace/paper.tex',
+    };
+    expect(posted).toEqual([openPaper, openPaper]);
   });
 
   it('does not add role/tabindex to read-only (non-clickable) file names', async () => {

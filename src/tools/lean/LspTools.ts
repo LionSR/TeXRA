@@ -332,8 +332,10 @@ Requires: Lean 4 VS Code extension installed and active.`,
       );
     }
 
-    const goalCount = data.goals.length;
-    return executed(data.rendered, formatResultCount(goalCount, 'goal'));
+    return executed(
+      data.rendered,
+      formatResultCount(data.goals.length, 'goal'),
+    );
   }
 
   private async executeTermGoal(

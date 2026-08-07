@@ -24,6 +24,25 @@ function readOutput(
   return readFile(path.join(runDirectory, 'output', ...segments), 'utf8');
 }
 
+function externalSource(
+  runDirectory: string,
+  relativePath: string,
+): ReturnType<typeof createExternalLocation> {
+  return createExternalLocation(path.join(runDirectory, relativePath));
+}
+
+function runStorageSource(
+  runDirectory: string,
+  relativePath: string,
+  executionId: string,
+): ReturnType<typeof createRunStorageLocation> {
+  return createRunStorageLocation(
+    path.join(runDirectory, relativePath),
+    relativePath,
+    executionId,
+  );
+}
+
 describe('compiled PDF artifacts', () => {
   const tempDirs: string[] = [];
 
@@ -53,7 +72,7 @@ describe('compiled PDF artifacts', () => {
         executionId: 'missing123',
         round: 1,
         displayName: 'missing.tex',
-        source: createExternalLocation(path.join(runDirectory, 'missing.tex')),
+        source: externalSource(runDirectory, 'missing.tex'),
         compiledPdfPath: path.join(runDirectory, 'missing.pdf'),
       }),
     ).resolves.toBeNull();
@@ -72,7 +91,7 @@ describe('compiled PDF artifacts', () => {
         executionId: 'stat123',
         round: 1,
         displayName: 'paper.tex',
-        source: createExternalLocation(path.join(runDirectory, 'paper.tex')),
+        source: externalSource(runDirectory, 'paper.tex'),
         compiledPdfPath: path.join(runDirectory, 'paper.pdf'),
       }),
     ).rejects.toBe(statError);
@@ -91,7 +110,7 @@ describe('compiled PDF artifacts', () => {
       executionId: 'delete-missing123',
       round: 1,
       displayName: 'paper.tex',
-      source: createExternalLocation(path.join(runDirectory, 'paper.tex')),
+      source: externalSource(runDirectory, 'paper.tex'),
       compiledPdfPath,
     });
 
@@ -116,7 +135,7 @@ describe('compiled PDF artifacts', () => {
         executionId: 'delete123',
         round: 1,
         displayName: 'paper.tex',
-        source: createExternalLocation(path.join(runDirectory, 'paper.tex')),
+        source: externalSource(runDirectory, 'paper.tex'),
         compiledPdfPath,
       }),
     ).rejects.toBe(deleteError);
@@ -133,9 +152,7 @@ describe('compiled PDF artifacts', () => {
       executionId: 'abc123',
       round: 2,
       displayName: 'paper.tex',
-      source: createExternalLocation(
-        path.join(runDirectory, 'r2', 'paper.tex'),
-      ),
+      source: externalSource(runDirectory, path.join('r2', 'paper.tex')),
       compiledPdfPath,
     });
 
@@ -160,7 +177,7 @@ describe('compiled PDF artifacts', () => {
       executionId: 'def456',
       round: 1,
       displayName: 'chapter-diff.pdf',
-      source: createExternalLocation(path.join(runDirectory, 'diff.tex')),
+      source: externalSource(runDirectory, 'diff.tex'),
       compiledPdfPath,
       outputPdfName: 'chapter-diff.pdf',
     });
@@ -182,8 +199,8 @@ describe('compiled PDF artifacts', () => {
       executionId: 'suffix123',
       round: 4,
       displayName: 'latexdiff-output.tex',
-      source: createRunStorageLocation(
-        path.join(runDirectory, 'r4', 'sections', 'main.tex'),
+      source: runStorageSource(
+        runDirectory,
         path.join('r4', 'sections', 'main.tex'),
         'suffix123',
       ),
@@ -227,8 +244,8 @@ describe('compiled PDF artifacts', () => {
     const buildDir = path.join(runDirectory, 'diff', 'r5', 'build');
     const baseDiffPdfPath = path.join(buildDir, 'base.pdf');
     const roundDiffPdfPath = path.join(buildDir, 'round.pdf');
-    const source = createRunStorageLocation(
-      path.join(runDirectory, 'r5', 'sections', 'main.tex'),
+    const source = runStorageSource(
+      runDirectory,
       path.join('r5', 'sections', 'main.tex'),
       'kind123',
     );
@@ -279,8 +296,8 @@ describe('compiled PDF artifacts', () => {
       executionId: 'dup123',
       round: 3,
       displayName: 'main.tex',
-      source: createRunStorageLocation(
-        path.join(runDirectory, 'r3', 'ch1', 'main.tex'),
+      source: runStorageSource(
+        runDirectory,
         path.join('r3', 'ch1', 'main.tex'),
         'dup123',
       ),
@@ -291,8 +308,8 @@ describe('compiled PDF artifacts', () => {
       executionId: 'dup123',
       round: 3,
       displayName: 'main.tex',
-      source: createRunStorageLocation(
-        path.join(runDirectory, 'r3', 'ch2', 'main.tex'),
+      source: runStorageSource(
+        runDirectory,
         path.join('r3', 'ch2', 'main.tex'),
         'dup123',
       ),

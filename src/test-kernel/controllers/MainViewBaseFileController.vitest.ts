@@ -5,6 +5,12 @@ import {
   planCurrentFileAsEdited,
 } from '@controllers/mainView/MainViewBaseFileController';
 
+type FilePlan = ReturnType<typeof planCurrentFileAsBase>;
+
+function expectNotification(plan: FilePlan, messagePart: string): void {
+  expect(plan.notification?.message).toContain(messagePart);
+}
+
 describe('MainViewBaseFileController', () => {
   describe('planCurrentFileAsBase', () => {
     it('selects the derived base file when it exists on disk', () => {
@@ -33,8 +39,7 @@ describe('MainViewBaseFileController', () => {
         shouldPostSetCurrentFile: true,
         shouldRequestBaseFile: false,
       });
-      expect(plan.notification).toBeDefined();
-      expect(plan.notification!.message).toContain('could not be found');
+      expectNotification(plan, 'could not be found');
       expect(plan.log).toBeDefined();
       expect(plan.log!.level).toBe('info');
       expect(plan.log!.message).toContain('does not exist on disk');
@@ -76,8 +81,7 @@ describe('MainViewBaseFileController', () => {
         shouldPostSetCurrentFile: false,
         shouldRequestBaseFile: false,
       });
-      expect(plan.notification).toBeDefined();
-      expect(plan.notification!.message).toContain('Choose a base file');
+      expectNotification(plan, 'Choose a base file');
     });
 
     it('rejects when the current file does not match the base file naming pattern', () => {
@@ -91,10 +95,7 @@ describe('MainViewBaseFileController', () => {
         shouldPostSetCurrentFile: false,
         shouldRequestBaseFile: false,
       });
-      expect(plan.notification).toBeDefined();
-      expect(plan.notification!.message).toContain(
-        'not a valid edited version',
-      );
+      expectNotification(plan, 'not a valid edited version');
     });
 
     it('rejects when the current file has the same name as the base file', () => {
@@ -106,10 +107,7 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toMatchObject({
         shouldPostSetCurrentFile: false,
       });
-      expect(plan.notification).toBeDefined();
-      expect(plan.notification!.message).toContain(
-        'not a valid edited version',
-      );
+      expectNotification(plan, 'not a valid edited version');
     });
   });
 });

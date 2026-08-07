@@ -78,8 +78,9 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     );
   }
 
+  const shortcut = listFormShortcutLabel(props.items.length);
+
   if (isCompactFormRows(props.availableRows)) {
-    const shortcut = listFormShortcutLabel(props.items.length);
     return (
       <FormFrame
         title={props.compactTitle ?? props.title}
@@ -112,7 +113,6 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     detailRows: props.detailRows,
     selectMarginTop: props.selectMarginTop,
   });
-  const shortcut = listFormShortcutLabel(props.items.length);
   return (
     <FormFrame title={props.title} showCloseHint={false}>
       {props.description}

@@ -59,6 +59,13 @@ const INCLUDED_CHAT_SESSION: SessionMeta = {
   version: 'test',
 };
 
+const PERSONAL_CHAT_SESSION: SessionMeta = {
+  ...INCLUDED_CHAT_SESSION,
+  model: 'gpt54',
+  modelSource: 'explicit-override',
+  apiMode: 'personal',
+};
+
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
   resetCliState();
@@ -113,6 +120,28 @@ describe('slashRegistry', () => {
       props: node.props,
       isClosed: () => closed,
     };
+  }
+
+  /** Both form openers must hold the command echo until selection settles. */
+  async function expectDeferredEcho(
+    openForm: (onEcho: () => void) => unknown,
+  ): Promise<void> {
+    const events: string[] = [];
+    registerBuiltinSlashCommands({
+      onModelSelect: () => {
+        events.push('outcome');
+      },
+    });
+    openForm(() => events.push('echo'));
+    expect(events).toEqual([]);
+
+    const modelNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    modelNode.props?.onSelect?.('gpt55');
+    await settleFormSelection();
+
+    expect(events).toEqual(['echo', 'outcome']);
   }
 
   it('keeps the CLI session control commands registered', () => {
@@ -278,18 +307,7 @@ describe('slashRegistry', () => {
   });
 
   it('passes live model-switch disabled reasons into the model picker', () => {
-    resetCliState({
-      agent: 'chat',
-      category: AgentCategory.ToolUse,
-      model: 'gpt54',
-      modelSource: 'explicit-override',
-      cwd: '/tmp/workspace',
-      apiMode: 'personal',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      transcriptMode: 'persistent',
-      version: 'test',
-    });
+    resetCliState(PERSONAL_CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectModel: () => true,
       getModelSwitchDisabledReason: (model) =>
@@ -329,41 +347,15 @@ describe('slashRegistry', () => {
   });
 
   it('defers a form command echo until a persistent selection', async () => {
-    const events: string[] = [];
-    registerBuiltinSlashCommands({
-      onModelSelect: () => {
-        events.push('outcome');
-      },
+    await expectDeferredEcho((onEcho) => {
+      openRegisteredCliSlashForm(requireSlashCommand('model'), '', onEcho);
     });
-    const model = requireSlashCommand('model');
-    openRegisteredCliSlashForm(model, '', () => events.push('echo'));
-    expect(events).toEqual([]);
-
-    const modelNode = renderOpenForm<{
-      onSelect?: (value: string) => void;
-    }>();
-    modelNode.props?.onSelect?.('gpt55');
-    await settleFormSelection();
-
-    expect(events).toEqual(['echo', 'outcome']);
   });
 
   it('preserves deferred echo through the command-name form helper', async () => {
-    const events: string[] = [];
-    registerBuiltinSlashCommands({
-      onModelSelect: () => {
-        events.push('outcome');
-      },
+    await expectDeferredEcho((onEcho) => {
+      openCliSlashCommandForm('model', '', onEcho);
     });
-
-    openCliSlashCommandForm('model', '', () => events.push('echo'));
-    const modelNode = renderOpenForm<{
-      onSelect?: (value: string) => void;
-    }>();
-    modelNode.props?.onSelect?.('gpt55');
-    await settleFormSelection();
-
-    expect(events).toEqual(['echo', 'outcome']);
   });
 
   it('routes model picker selection failures to the shared error handler', async () => {
@@ -460,29 +452,21 @@ describe('slashRegistry', () => {
 
   it('closes the login form after the selected login path settles', async () => {
     const selected: string[] = [];
-    let closed = false;
     let sawClosedBeforeLogin = false;
     registerBuiltinSlashCommands({
       onLoginSelect: (value) => {
-        sawClosedBeforeLogin = closed;
+        sawClosedBeforeLogin = loginNode.isClosed();
         selected.push(value);
       },
     });
-    const login = requireSlashCommand('login');
-    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
-
-    const loginNode = renderFormAdapter<{
-      onSelect?: (value: string) => void;
-    }>(
-      activeForm.get()?.render(() => {
-        closed = true;
-      }, 20),
+    const loginNode = openSlashForm<{ onSelect?: (value: string) => void }>(
+      'login',
     );
     loginNode.props?.onSelect?.('chatgpt');
     await settleFormSelection();
 
     expect(selected).toEqual(['chatgpt']);
-    expect(closed).toBe(true);
+    expect(loginNode.isClosed()).toBe(true);
     expect(sawClosedBeforeLogin).toBe(false);
   });
 
@@ -661,78 +645,54 @@ describe('slashRegistry', () => {
   });
 
   it('closes the approval policy picker before applying the new policy', async () => {
-    let closed = false;
     let sawClosedBeforePolicySelect = false;
     registerBuiltinSlashCommands({
       onApprovalPolicySelect: () => {
-        sawClosedBeforePolicySelect = closed;
+        sawClosedBeforePolicySelect = approvalNode.isClosed();
       },
     });
-    const approval = requireSlashCommand('approval');
-    expect(openRegisteredCliSlashForm(approval, '')).toBe(true);
-
-    const approvalNode = renderFormAdapter<{
+    const approvalNode = openSlashForm<{
       onSelect?: (value: TexraApprovalPolicy) => void;
-    }>(
-      activeForm.get()?.render(() => {
-        closed = true;
-      }, 20),
-    );
+    }>('approval');
     approvalNode.props?.onSelect?.('yolo');
     await settleFormSelection();
 
-    expect(closed).toBe(true);
+    expect(approvalNode.isClosed()).toBe(true);
     expect(sawClosedBeforePolicySelect).toBe(true);
   });
 
   it('closes the resume picker before running the resume action', async () => {
-    let closed = false;
     let sawClosedBeforeResume = false;
     registerBuiltinSlashCommands({
       onResumeSelect: async () => {
-        sawClosedBeforeResume = closed;
+        sawClosedBeforeResume = resumeNode.isClosed();
       },
     });
-    const resume = requireSlashCommand('resume');
-    expect(openRegisteredCliSlashForm(resume, '')).toBe(true);
-
-    const resumeNode = renderFormAdapter<{
-      onSelect?: (id: string) => void;
-    }>(
-      activeForm.get()?.render(() => {
-        closed = true;
-      }, 20),
+    const resumeNode = openSlashForm<{ onSelect?: (id: string) => void }>(
+      'resume',
     );
     resumeNode.props?.onSelect?.('previous-session');
     await settleFormSelection();
 
-    expect(closed).toBe(true);
+    expect(resumeNode.isClosed()).toBe(true);
     expect(sawClosedBeforeResume).toBe(true);
   });
 
   it('routes skill picker selections through the shared handler', async () => {
     const selected: string[] = [];
-    let closed = false;
     let sawClosedBeforeSkillSelect = false;
     registerBuiltinSlashCommands({
       onSkillSelect: (value) => {
-        sawClosedBeforeSkillSelect = closed;
+        sawClosedBeforeSkillSelect = skillsNode.isClosed();
         selected.push(value.activationPrompt);
       },
     });
-    const skills = requireSlashCommand('skills');
-    expect(openRegisteredCliSlashForm(skills, '')).toBe(true);
-
-    const skillsNode = renderFormAdapter<{
+    const skillsNode = openSlashForm<{
       onSelect?: (value: {
         readonly name: string;
         readonly activationPrompt: string;
       }) => void;
-    }>(
-      activeForm.get()?.render(() => {
-        closed = true;
-      }, 20),
-    );
+    }>('skills');
     skillsNode.props?.onSelect?.({
       name: 'proof-audit',
       activationPrompt: '<skill_activation>proof-audit</skill_activation>',
@@ -742,7 +702,7 @@ describe('slashRegistry', () => {
     expect(selected).toEqual([
       '<skill_activation>proof-audit</skill_activation>',
     ]);
-    expect(closed).toBe(true);
+    expect(skillsNode.isClosed()).toBe(true);
     expect(sawClosedBeforeSkillSelect).toBe(true);
   });
 

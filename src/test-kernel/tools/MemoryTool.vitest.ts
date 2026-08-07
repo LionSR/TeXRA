@@ -49,6 +49,18 @@ function fileStat(size: number): FileStat {
   };
 }
 
+function streamOf(
+  content: string,
+): ReturnType<typeof StorageFS.createReadStream> {
+  return Readable.from([Buffer.from(content)]) as unknown as ReturnType<
+    typeof StorageFS.createReadStream
+  >;
+}
+
+function viewMemory(path?: string) {
+  return new MemoryTool().call({ command: 'view', path });
+}
+
 describe('MemoryTool view with an omitted path', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -58,11 +70,8 @@ describe('MemoryTool view with an omitted path', () => {
   it('lists the empty memory root instead of erroring on a fresh session', async () => {
     vi.spyOn(StorageFS, 'exists').mockResolvedValue(false);
 
-    const omitted = await new MemoryTool().call({ command: 'view' });
-    const explicitRoot = await new MemoryTool().call({
-      command: 'view',
-      path: MEMORY_DISPLAY_ROOT,
-    });
+    const omitted = await viewMemory();
+    const explicitRoot = await viewMemory(MEMORY_DISPLAY_ROOT);
 
     expect(omitted.status).toBe('executed');
     expect(omitted).toEqual(explicitRoot);
@@ -83,18 +92,12 @@ describe('MemoryTool view with an omitted path', () => {
       target === MEMORY_STORAGE_DIR ? [['notes.md', FileType.File]] : [],
     );
     vi.spyOn(StorageFS, 'read').mockResolvedValue(TEST_FRONTMATTER);
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(
-      () =>
-        Readable.from([Buffer.from(TEST_FRONTMATTER)]) as unknown as ReturnType<
-          typeof StorageFS.createReadStream
-        >,
+    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
+      streamOf(TEST_FRONTMATTER),
     );
 
-    const omitted = await new MemoryTool().call({ command: 'view' });
-    const explicitRoot = await new MemoryTool().call({
-      command: 'view',
-      path: MEMORY_DISPLAY_ROOT,
-    });
+    const omitted = await viewMemory();
+    const explicitRoot = await viewMemory(MEMORY_DISPLAY_ROOT);
 
     expect(omitted.status).toBe('executed');
     expect(omitted).toEqual(explicitRoot);
@@ -151,19 +154,11 @@ describe('MemoryTool view with an omitted path', () => {
       }
       return dirStat();
     });
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(
-      (target) =>
-        Readable.from([
-          Buffer.from(
-            target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER,
-          ),
-        ]) as unknown as ReturnType<typeof StorageFS.createReadStream>,
+    vi.spyOn(StorageFS, 'createReadStream').mockImplementation((target) =>
+      streamOf(target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER),
     );
 
-    const result = await new MemoryTool().call({
-      command: 'view',
-      path: MEMORY_DISPLAY_ROOT,
-    });
+    const result = await viewMemory(MEMORY_DISPLAY_ROOT);
 
     expect(result).toEqual({
       status: 'executed',
@@ -200,10 +195,7 @@ describe('MemoryTool view with an omitted path', () => {
       return dirStat();
     });
 
-    const result = await new MemoryTool().call({
-      command: 'view',
-      path: MEMORY_DISPLAY_ROOT,
-    });
+    const result = await viewMemory(MEMORY_DISPLAY_ROOT);
 
     expect(result).toMatchObject({
       status: 'executed',

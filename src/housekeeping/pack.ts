@@ -1,12 +1,10 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Local imports - result types
+// Internal imports
 import * as logger from '@logger/logUtils';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import type { FileOpResult } from '@shared/schemas/opResults';
-
-// Local imports - log
 import {
   getAgentFirstNameChunk,
   parseWorkflowOutputRoundDir,
@@ -107,11 +105,9 @@ export async function runPackSingle(
 
     return { status: 'success', outputFolder: resolvedOutputFolder };
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error during file operations: ${toErrorMessage(err)}`,
-    );
-    return { status: 'error', error: toErrorMessage(err) };
+    const message = toErrorMessage(err);
+    logger.error(CHANNEL, `Error during file operations: ${message}`);
+    return { status: 'error', error: message };
   }
 }
 
@@ -162,11 +158,9 @@ export async function runPackMultiple(
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
     return { status: 'noFiles' };
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error during multiple pack operation: ${toErrorMessage(err)}`,
-    );
-    return { status: 'error', error: toErrorMessage(err) };
+    const message = toErrorMessage(err);
+    logger.error(CHANNEL, `Error during multiple pack operation: ${message}`);
+    return { status: 'error', error: message };
   }
 }
 

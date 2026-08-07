@@ -151,6 +151,11 @@ export class InstructionPanel extends LitElement {
     postDroppedFiles(paths),
   );
 
+  /** Compact select sizing on the desktop composer; default size otherwise. */
+  private get selectSize(): 'xs' | typeof nothing {
+    return this.desktopHost ? 'xs' : nothing;
+  }
+
   private renderSessionHint(session: SessionContextValue): unknown {
     if (!this.showSessionHint) return nothing;
 
@@ -412,7 +417,7 @@ export class InstructionPanel extends LitElement {
         class="agent-select"
         data-session-type=${agent.sessionType}
         aria-label=${agent.ariaLabel}
-        size=${this.desktopHost ? 'xs' : nothing}
+        size=${this.selectSize}
         placement="top"
         placeholder="Agent…"
         .value=${agent.value}
@@ -467,7 +472,7 @@ export class InstructionPanel extends LitElement {
             id="teamPicker"
             class="agent-select team-select"
             aria-label="Team"
-            size=${this.desktopHost ? 'xs' : nothing}
+            size=${this.selectSize}
             placement="top"
             placeholder="Team…"
             .value=${session.selectedTeamId}
@@ -529,7 +534,7 @@ export class InstructionPanel extends LitElement {
           id="workingDirectory"
           class="workspace-root-select"
           aria-label="Working directory"
-          size=${this.desktopHost ? 'xs' : nothing}
+          size=${this.selectSize}
           placement="top"
           title=${session.workingDirectory}
           .value=${session.workingDirectory}
@@ -737,7 +742,7 @@ export class InstructionPanel extends LitElement {
                 class="model-select"
                 placement="top"
                 aria-label=${isTeamLaunch(session) ? 'Lead model' : 'Model'}
-                size=${this.desktopHost ? 'xs' : nothing}
+                size=${this.selectSize}
                 placeholder="Select model…"
                 title=${
                   session.modelOptions.find((o) => o.value === session.model)

@@ -379,8 +379,11 @@ export class AgentRosterController<
       );
       const alreadyEnabled = index >= 0;
       if (input.enabled === alreadyEnabled) return;
-      if (input.enabled && index < 0) target.push(key);
-      if (!input.enabled && index >= 0) target.splice(index, 1);
+      if (input.enabled) {
+        target.push(key);
+      } else {
+        target.splice(index, 1);
+      }
       await this.writeSelection({
         kind: 'custom',
         agentKeys: byCategory((category) =>

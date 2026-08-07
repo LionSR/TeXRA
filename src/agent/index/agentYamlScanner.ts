@@ -96,7 +96,7 @@ function entriesWithUniqueNames(
       );
       continue;
     }
-    unique.push(...matches);
+    unique.push(matches[0]);
   }
   return unique;
 }
@@ -132,13 +132,6 @@ interface InheritedDefinitionBlock {
   readonly complete: boolean;
 }
 
-function parentDefinition(
-  parentName: string,
-  definitions: Map<string, ParsedAgentYaml>,
-): ParsedAgentYaml | undefined {
-  return definitions.get(parentName);
-}
-
 function inheritedDefinitionBlock(
   entry: ParsedAgentYaml,
   definitions: Map<string, ParsedAgentYaml>,
@@ -153,7 +146,7 @@ function inheritedDefinitionBlock(
   const parentName = entry.definition.inherits;
   if (!parentName) return { value: ownBlock, complete: true };
 
-  const parent = parentDefinition(parentName, definitions);
+  const parent = definitions.get(parentName);
   if (!parent || seen.has(parent.name)) {
     return { value: ownBlock, complete: false };
   }

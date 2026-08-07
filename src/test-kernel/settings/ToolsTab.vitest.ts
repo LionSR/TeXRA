@@ -50,6 +50,42 @@ function mount(
   });
 }
 
+/**
+ * Mounts the tab, pins the switch's label and initial state, flips it, and
+ * asserts the resulting UPDATE_STATE_SETTING message.
+ */
+async function expectTogglableSwitch(options: {
+  items?: ToolDashboardItem[];
+  props?: Partial<ToolsTab>;
+  id: string;
+  label: string;
+  initialChecked: boolean;
+  stateKey: string;
+}): Promise<void> {
+  const element = await mount(options.items ?? [], options.props);
+  const toggle = element.shadowRoot?.querySelector<
+    HTMLElement & { checked?: boolean }
+  >(`wa-switch#${options.id}`);
+
+  expect(toggle).not.toBeNull();
+  // The <label for> is what names the control; a host aria-label never
+  // reached the role-bearing input inside wa-switch's shadow root.
+  expect(
+    element.shadowRoot?.querySelector(`label[for="${options.id}"]`)
+      ?.textContent,
+  ).toBe(options.label);
+  expect(toggle?.checked).toBe(options.initialChecked);
+
+  if (!toggle) return;
+  toggle.checked = !options.initialChecked;
+  toggle.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+
+  expect(mocks.postMessage).toHaveBeenCalledWith(
+    SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+    { key: options.stateKey, value: !options.initialChecked },
+  );
+}
+
 describe('tools-tab availability summary', () => {
   beforeEach(() => {
     mocks.postMessage.mockClear();
@@ -73,63 +109,22 @@ describe('tools-tab availability summary', () => {
   });
 
   it('renders and updates the shared agent-skills switch', async () => {
-    const element = await mount([]);
-    const skillSwitch = element.shadowRoot?.querySelector<
-      HTMLElement & { checked?: boolean }
-    >('wa-switch#settings-toggle-make-skills-available-to-tool-use-agents');
-
-    expect(skillSwitch).not.toBeNull();
-    // The <label for> is what names the control; a host aria-label never
-    // reached the role-bearing input inside wa-switch's shadow root.
-    expect(
-      element.shadowRoot?.querySelector(
-        'label[for="settings-toggle-make-skills-available-to-tool-use-agents"]',
-      )?.textContent,
-    ).toBe('Make skills available to tool-use agents');
-    expect(skillSwitch?.checked).toBe(true);
-
-    if (!skillSwitch) return;
-    skillSwitch.checked = false;
-    skillSwitch.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
-
-    expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-      { key: AGENT_SKILLS_CONFIG_KEY, value: false },
-    );
+    await expectTogglableSwitch({
+      id: 'settings-toggle-make-skills-available-to-tool-use-agents',
+      label: 'Make skills available to tool-use agents',
+      initialChecked: true,
+      stateKey: AGENT_SKILLS_CONFIG_KEY,
+    });
   });
 
   it('renders and updates working-directory path protection', async () => {
-    const element = await mount([tool('file-ops', 'available')], {
-      toolPathProtectionEnabled: false,
+    await expectTogglableSwitch({
+      items: [tool('file-ops', 'available')],
+      props: { toolPathProtectionEnabled: false },
+      id: 'settings-toggle-restrict-tool-paths-to-the-working-directory',
+      label: 'Restrict tool paths to the working directory',
+      initialChecked: false,
+      stateKey: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     });
-    const protectionSwitch = element.shadowRoot?.querySelector<
-      HTMLElement & { checked?: boolean }
-    >('wa-switch#settings-toggle-restrict-tool-paths-to-the-working-directory');
-
-    expect(protectionSwitch).not.toBeNull();
-    // The <label for> is what names the control; a host aria-label never
-    // reached the role-bearing input inside wa-switch's shadow root.
-    expect(
-      element.shadowRoot?.querySelector(
-        'label[for="settings-toggle-restrict-tool-paths-to-the-working-directory"]',
-      )?.textContent,
-    ).toBe('Restrict tool paths to the working directory');
-    expect(protectionSwitch?.checked).toBe(false);
-
-    if (!protectionSwitch) return;
-    protectionSwitch.checked = true;
-    protectionSwitch.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
-
-    expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-      {
-        key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-        value: true,
-      },
-    );
   });
 });

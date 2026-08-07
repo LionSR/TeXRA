@@ -48,6 +48,18 @@ function renderSubscriptionsTab(
   });
 }
 
+function copilotSection(
+  tab: SubscriptionsTabElement,
+): HTMLElement | null | undefined {
+  return tab.shadowRoot?.querySelector<HTMLElement>('#copilot-access');
+}
+
+function sectionButtons(
+  section: HTMLElement | null | undefined,
+): HTMLElement[] {
+  return [...(section?.querySelectorAll<HTMLElement>('wa-button') ?? [])];
+}
+
 describe('Copilot model access settings', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/SubscriptionsTab'),
@@ -60,7 +72,7 @@ describe('Copilot model access settings', () => {
   it('shows a keyless consent action only when VS Code discovers Copilot models', async () => {
     const tab = await renderSubscriptionsTab([consentRoute]);
 
-    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    const section = copilotSection(tab);
     expect(section?.textContent).toContain('Copilot in VS Code');
     expect(section?.textContent?.replaceAll(/\s+/g, ' ')).toContain(
       'No provider API key is needed',
@@ -75,13 +87,13 @@ describe('Copilot model access settings', () => {
   it('omits the Copilot section when the host discovers no models', async () => {
     const tab = await renderSubscriptionsTab([]);
 
-    expect(tab.shadowRoot?.querySelector('#copilot-access')).toBeNull();
+    expect(copilotSection(tab)).toBeNull();
   });
 
   it('offers an explicit opt-in for an already-authorized route', async () => {
     const tab = await renderSubscriptionsTab([allowedRoute]);
 
-    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    const section = copilotSection(tab);
     expect(section?.textContent).toContain('1 Copilot model is ready');
     const button = section?.querySelector<HTMLElement>('wa-button');
     expect(button?.textContent).toContain('Use Copilot');
@@ -97,7 +109,7 @@ describe('Copilot model access settings', () => {
       { ...allowedRoute, preferred: true },
     ]);
 
-    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    const section = copilotSection(tab);
     expect(section?.textContent).toContain('Using Copilot for this model.');
     const button = section?.querySelector<HTMLElement>('wa-button');
     expect(button?.textContent).toContain('Stop using Copilot');
@@ -114,11 +126,7 @@ describe('Copilot model access settings', () => {
       consentRoute,
     ]);
 
-    const buttons = [
-      ...(tab.shadowRoot?.querySelectorAll<HTMLElement>(
-        '#copilot-access wa-button',
-      ) ?? []),
-    ];
+    const buttons = sectionButtons(copilotSection(tab));
     expect(buttons.map((button) => button.textContent?.trim())).toEqual([
       'Stop using Copilot',
       'Grant access',
@@ -149,13 +157,11 @@ describe('Copilot model access settings', () => {
       { ...consentRoute, preferred: true },
     ]);
 
-    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    const section = copilotSection(tab);
     expect(section?.textContent).toContain(
       'Selected. Waiting for your approval in VS Code.',
     );
-    const buttons = [
-      ...(section?.querySelectorAll<HTMLElement>('wa-button') ?? []),
-    ];
+    const buttons = sectionButtons(section);
     expect(buttons.map((button) => button.textContent?.trim())).toEqual([
       'Grant access',
       'Stop using Copilot',
@@ -174,7 +180,7 @@ describe('Copilot model access settings', () => {
       { ...allowedRoute, access: 'unavailable', preferred: true },
     ]);
 
-    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    const section = copilotSection(tab);
     expect(section?.textContent).toContain(
       '1 selected Copilot model needs attention.',
     );

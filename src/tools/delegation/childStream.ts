@@ -295,13 +295,14 @@ async function finalizeChildStream(
   let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
   try {
     const outcomeOption = options?.outcome ?? { kind: 'completed' as const };
-    const errorMessage =
-      outcomeOption.kind === 'failed'
-        ? (outcomeOption.errorMessage ??
-          (outcomeOption.error != null
-            ? toErrorMessage(outcomeOption.error)
-            : undefined))
-        : undefined;
+    let errorMessage: string | undefined;
+    if (outcomeOption.kind === 'failed') {
+      errorMessage =
+        outcomeOption.errorMessage ??
+        (outcomeOption.error != null
+          ? toErrorMessage(outcomeOption.error)
+          : undefined);
+    }
 
     if (errorMessage) {
       logger.error(errorMessage);

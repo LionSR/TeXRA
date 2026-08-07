@@ -1,8 +1,11 @@
 # Code-simplifier campaign: full-history stats and rulings
 
-Date: 2026-08-06. Evidence base for `.claude/agents/code-simplifier.md`.
-Compiled from five archival passes over all PRs, issues, git history, and
-deleted workflow scripts (2025-05 → 2026-08-06).
+Date: 2026-08-06. Evidence base for `.claude/agents/our-code-simplifier.md`.
+Compiled from six archival passes over all PRs, issues, git history, and
+deleted workflow scripts. Scope: the TypeScript repo, 2025-05 → 2026-08-06
+(the pre-port Python era, 2024-05 → 2025-02, is excluded as a different
+codebase; its only durable lesson — delete wholesale when there are no
+downstream consumers — appears in the meta-lessons).
 
 ## Headline numbers
 
@@ -121,7 +124,7 @@ extends-collapse + root-typecheck-include (NET_LOSS); CLI scanner fold
 | 2026-07-20    | #8975 adds `tech-debt-tournament.mjs` + skill; ledger #8974; 3 refuters/candidate; NET_LOSS verdicts written back to do-not-do list                                                                |
 | 2026-07-24    | #9114 deletes the 3 detector scripts (OSS streamlining)                                                                                                                                            |
 | 2026-07-30/31 | Big three (#9472/#9473/#9477) — ad-hoc escalating-scope runs, per-area adversarial review pre-merge                                                                                                |
-| 2026-08-06    | #9817 (parallel 3-reviewer pass); repo-local `code-simplifier` agent created from this doc                                                                                                         |
+| 2026-08-06    | #9817 (parallel 3-reviewer pass); repo-local `our-code-simplifier` agent created from this doc                                                                                                     |
 
 **Rotation history**: #8787 debt-audit rotation R1–R7 (~49 verified
 findings, ~−10k LOC, 100% closed) — superseded 2026-08-03 by the #8974

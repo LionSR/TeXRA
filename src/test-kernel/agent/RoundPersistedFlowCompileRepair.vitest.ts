@@ -99,59 +99,48 @@ function initialShared(overrides: Partial<FakeShared>): FakeShared {
   };
 }
 
+async function runFlow(overrides: Partial<FakeShared>): Promise<FakeShared> {
+  const flow = makeFlow();
+  await flow.run(initialShared(overrides));
+  return (await flow.getShared())!;
+}
+
 describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
   it('grants exactly one extra round when the final configured round fails to compile', async () => {
-    const flow = makeFlow();
     // totalRounds: 2 (rounds 0 and 1 configured); round 1 (the last one) fails.
-    const shared = initialShared({ totalRounds: 2, failingRounds: [1] });
-
-    await flow.run(shared);
-    const finalShared = (await flow.getShared())!;
+    const shared = await runFlow({ failingRounds: [1] });
 
     // Round 0, round 1 (configured, fails), and a granted repair round 2.
-    expect(finalShared.roundsRun).toEqual([0, 1, 2]);
+    expect(shared.roundsRun).toEqual([0, 1, 2]);
     // The repair round (2) received the failure context from round 1.
-    expect(finalShared.contextSeenByRound[2]).toBe('compile failed on round 1');
-    expect(finalShared.compileRepairRoundGranted).toBe(true);
+    expect(shared.contextSeenByRound[2]).toBe('compile failed on round 1');
+    expect(shared.compileRepairRoundGranted).toBe(true);
   });
 
   it('does not grant an extra round when a clean final round has no failure context', async () => {
-    const flow = makeFlow();
-    const shared = initialShared({ totalRounds: 2, failingRounds: [] });
+    const shared = await runFlow({ failingRounds: [] });
 
-    await flow.run(shared);
-    const finalShared = (await flow.getShared())!;
-
-    expect(finalShared.roundsRun).toEqual([0, 1]);
-    expect(finalShared.compileRepairRoundGranted).toBeUndefined();
+    expect(shared.roundsRun).toEqual([0, 1]);
+    expect(shared.compileRepairRoundGranted).toBeUndefined();
   });
 
   it('does not grant an extra round when rejectOnCompileFailure is off', async () => {
-    const flow = makeFlow();
-    const shared = initialShared({
-      totalRounds: 2,
+    const shared = await runFlow({
       failingRounds: [1],
       rejectOnCompileFailureEnabled: false,
     });
 
-    await flow.run(shared);
-    const finalShared = (await flow.getShared())!;
-
-    expect(finalShared.roundsRun).toEqual([0, 1]);
-    expect(finalShared.compileRepairRoundGranted).toBeUndefined();
+    expect(shared.roundsRun).toEqual([0, 1]);
+    expect(shared.compileRepairRoundGranted).toBeUndefined();
   });
 
   it('does not chain a second repair round when the repair round itself fails again', async () => {
-    const flow = makeFlow();
     // Both the configured final round (1) and the granted repair round (2) fail.
-    const shared = initialShared({ totalRounds: 2, failingRounds: [1, 2] });
-
-    await flow.run(shared);
-    const finalShared = (await flow.getShared())!;
+    const shared = await runFlow({ failingRounds: [1, 2] });
 
     // Exactly one repair round (2) — no round 3, even though round 2 also failed.
-    expect(finalShared.roundsRun).toEqual([0, 1, 2]);
-    expect(finalShared.compileRepairRoundGranted).toBe(true);
+    expect(shared.roundsRun).toEqual([0, 1, 2]);
+    expect(shared.compileRepairRoundGranted).toBe(true);
   });
 });
 

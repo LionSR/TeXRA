@@ -540,8 +540,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         scriptPath,
       );
     });
-    return Promise.resolve(runResult).catch((error: unknown) => {
+    try {
+      return await runResult;
+    } catch (error) {
       throw workflowScriptToolError(error, scriptPath);
-    });
+    }
   }
 }

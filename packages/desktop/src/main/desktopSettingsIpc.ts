@@ -353,10 +353,6 @@ export function createDesktopSettingsIpc(
     await postGitHubTokenStatus();
   }
 
-  async function openGitHubTokenUrl(): Promise<void> {
-    await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
-  }
-
   async function postGitHubSubscriptions(): Promise<void> {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
@@ -425,7 +421,9 @@ export function createDesktopSettingsIpc(
     getGitHubTokenStatus: () => postGitHubTokenStatus(),
     setGitHubToken: () => setGitHubToken(),
     removeGitHubToken: () => removeGitHubToken(),
-    openGitHubTokenUrl: () => openGitHubTokenUrl(),
+    openGitHubTokenUrl: async () => {
+      await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
+    },
     getPRSubscriptions: () => postGitHubSubscriptions(),
     unsubscribePR: (message) => unsubscribeGitHub(message),
     openPRSubscriptionStream: (message) => revealStream(message.streamId),

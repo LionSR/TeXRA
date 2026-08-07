@@ -101,7 +101,7 @@ export function renderSettingsToggleRow(
         <wa-switch
           id=${id}
           ?checked=${options.checked}
-          ?disabled=${options.disabled ?? false}
+          ?disabled=${options.disabled}
           @change=${options.onChange}
         ></wa-switch>
       </div>

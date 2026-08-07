@@ -451,9 +451,7 @@ function currentCatalogOptions<T extends TeamCatalogAgent>(
 
 /** Missing workflow and tool-use member names, in preset-declaration order. */
 function missingMemberNames(plan: TeamRunPlan): string[] {
-  return AGENT_CATEGORIES.flatMap((category) => [
-    ...plan.missingAgents[category],
-  ]);
+  return AGENT_CATEGORIES.flatMap((category) => plan.missingAgents[category]);
 }
 
 function resolvePresetAgents<T extends TeamCatalogAgent>(

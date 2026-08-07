@@ -27,13 +27,18 @@ describe('CLI implicit default agent policy', () => {
     ]);
   });
 
-  it('recognizes which agents may be the implicit default', () => {
-    expect(isImplicitDefaultEligible('review')).toBe(true);
-    expect(isImplicitDefaultEligible(' review ')).toBe(true);
-    expect(isImplicitDefaultEligible('simplifier')).toBe(false);
-    expect(isImplicitDefaultEligible('SIMPLIFIER')).toBe(false);
-    expect(isImplicitDefaultEligible('builtInToolUse:simplifier')).toBe(false);
-  });
+  it.each([
+    { name: 'review', eligible: true },
+    { name: ' review ', eligible: true },
+    { name: 'simplifier', eligible: false },
+    { name: 'SIMPLIFIER', eligible: false },
+    { name: 'builtInToolUse:simplifier', eligible: false },
+  ])(
+    'recognizes "$name" as implicit-default-eligible: $eligible',
+    ({ name, eligible }) => {
+      expect(isImplicitDefaultEligible(name)).toBe(eligible);
+    },
+  );
 
   it('selects the built-in default only when it is visible', () => {
     expect(

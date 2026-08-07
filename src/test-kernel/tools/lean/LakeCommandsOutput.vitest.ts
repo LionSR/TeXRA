@@ -16,6 +16,12 @@ vi.mock('execa', () => ({ execa: mocks.execa }));
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 
 describe('runLakeCommand output failures', () => {
+  const LAKE_BUILD = {
+    workspaceRoot: '/workspace',
+    lakeCommand: 'lake',
+    args: ['build'],
+  };
+
   beforeEach(() => {
     mocks.execa.mockReset();
   });
@@ -31,11 +37,7 @@ describe('runLakeCommand output failures', () => {
       shortMessage: 'Command failed with exit code 7',
     });
 
-    const result = await runLakeCommand({
-      workspaceRoot: '/workspace',
-      lakeCommand: 'lake',
-      args: ['build'],
-    });
+    const result = await runLakeCommand(LAKE_BUILD);
 
     expect(result).toEqual({
       exitCode: 7,
@@ -54,11 +56,7 @@ describe('runLakeCommand output failures', () => {
       shortMessage: 'Command failed: stdout maxBuffer exceeded',
     });
 
-    const result = await runLakeCommand({
-      workspaceRoot: '/workspace',
-      lakeCommand: 'lake',
-      args: ['build'],
-    });
+    const result = await runLakeCommand(LAKE_BUILD);
 
     expect(result).toEqual({
       exitCode: -1,
