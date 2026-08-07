@@ -20,6 +20,7 @@ import {
   isPathWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
+import { normalizeFilePath } from '@utils/core';
 
 export interface WorkspacePathResolution {
   relative: string;
@@ -120,7 +121,7 @@ export function resolveWorkspaceRelativePath(
       throw new ToolError(outsideMessage);
     }
     return {
-      relative: absolutePath,
+      relative: normalizeFilePath(absolutePath),
       absolute: absolutePath,
       fsPath: absolutePath,
       ...(match ? { external: externalInfo(match) } : {}),
