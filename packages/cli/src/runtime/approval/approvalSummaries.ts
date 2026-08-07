@@ -14,11 +14,11 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import {
   CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
-  CLI_KIMI_CODE_SUBSCRIPTION_RETRY_HINT,
   CLI_PERSONAL_API_RETRY_HINT,
+  codingPlanRetryHint,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-  isCliKimiCodeSubscriptionRetry,
+  isCliCodingPlanRetry,
 } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
@@ -133,8 +133,11 @@ export function formatRetryRequestMessage(payload: RetryPermission): string {
   if (isCliChatGptSubscriptionRetry(payload)) {
     return [message, CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT].join('\n');
   }
-  if (isCliKimiCodeSubscriptionRetry(payload)) {
-    return [message, CLI_KIMI_CODE_SUBSCRIPTION_RETRY_HINT].join('\n');
+  const codingPlanHint = codingPlanRetryHint(
+    payload.errorDetails?.exhaustionReason,
+  );
+  if (codingPlanHint) {
+    return [message, codingPlanHint].join('\n');
   }
   if (isCliApiSwitchableRetry(payload)) {
     return [message, CLI_PERSONAL_API_RETRY_HINT].join('\n');
