@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
+import { normalizeFilePath } from '@utils/core';
 
 import { getGitAPI } from './gitExtensionTypes';
 
@@ -21,10 +22,10 @@ export function resolveCommonRootFromGitdir(
     path.basename(worktreesDir) === 'worktrees' &&
     path.basename(commonGitDir) === '.git'
   ) {
-    return path.dirname(commonGitDir);
+    return normalizeFilePath(path.dirname(commonGitDir));
   }
 
-  return repoRoot;
+  return normalizeFilePath(repoRoot);
 }
 
 /**
