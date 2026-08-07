@@ -52,9 +52,9 @@ import {
 } from '@tools/approval';
 import { AbsoluteFS, pathToLocation, WorkspaceFS } from '@utils/files';
 import {
-  getPreferKimiCode,
+  getGLMCodingPlan,
   getUseOpenRouter,
-  setPreferKimiCode,
+  setGLMCodingPlan,
 } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -600,10 +600,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       setPreferChatGptSubscription: async (enabled) => {
         await setPreferCodexSubscription(enabled);
       },
-      getPreferKimiCode,
-      setPreferKimiCode: async (enabled) => {
-        await setPreferKimiCode(enabled);
-      },
+      codingPlanToggles: [
+        {
+          exhaustionReason: 'glm-coding-plan',
+          getEnabled: getGLMCodingPlan,
+          setEnabled: async (enabled) => {
+            await setGLMCodingPlan(enabled);
+          },
+        },
+        {
+          exhaustionReason: 'kimi-code-subscription',
+          getEnabled: getPreferKimiCode,
+          setEnabled: async (enabled) => {
+            await setPreferKimiCode(enabled);
+          },
+        },
+      ],
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),

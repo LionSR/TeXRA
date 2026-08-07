@@ -40,7 +40,9 @@ describe('desktop workspace path', () => {
       await symlink(target, link, 'dir');
 
       expect(
-        resolveWorkspacePath({ argv: ['--texra-workspace-path', link] }),
+        await realpath(
+          resolveWorkspacePath({ argv: ['--texra-workspace-path', link] })!,
+        ),
       ).toBe(await realpath(target));
     } finally {
       await rm(root, { recursive: true, force: true });
