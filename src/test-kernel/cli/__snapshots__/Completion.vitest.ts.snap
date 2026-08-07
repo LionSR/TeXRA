@@ -197,7 +197,7 @@ complete -c texra -n '__fish_use_subcommand' -a 'resume' -d 'Continue (resume) a
 complete -c texra -n '__fish_use_subcommand' -a 'setup' -d 'Guided setup with the setup agent: environment, agent roster, and your first task (sign-in, ChatGPT, or API key first)'
 complete -c texra -n '__fish_use_subcommand' -a 'init' -d 'Bootstrap a .texra/config.json with sensible defaults'
 complete -c texra -n '__fish_use_subcommand' -a 'config' -d 'Inspect and change TeXRA configuration'
-complete -c texra -n '__fish_use_subcommand' -a 'install-github-action' -d 'Scaffold the TeXRA code-review GitHub Action and open a PR'
+complete -c texra -n '__fish_use_subcommand' -a 'install-github-action' -d 'Install the TeXRA GitHub App and scaffold code review'
 complete -c texra -n '__fish_use_subcommand' -a 'history' -d 'Inspect stored executions'
 complete -c texra -n '__fish_use_subcommand' -a 'memory' -d 'Inspect stored memories'
 complete -c texra -n '__fish_use_subcommand' -a 'agents' -d 'Inspect TeXRA agents'
