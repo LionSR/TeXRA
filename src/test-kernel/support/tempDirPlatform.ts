@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -18,12 +18,17 @@ import { createFakePlatform } from './FakePlatform';
 /**
  * Creates a fresh temp directory and records it on `tempDirs` for later
  * cleanup via `cleanupTempDirs`.
+ *
+ * Resolves the realpath so the returned path is canonical: on Windows CI the
+ * 8.3 short-name form of the temp dir (`RUNNER~1`) differs from the resolved
+ * long form (`runneradmin`), and production code that realpaths the temp dir
+ * would otherwise produce a path that never equals the one returned here.
  */
 export async function makeTempDir(
   prefix: string,
   tempDirs: string[],
 ): Promise<string> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
+  const tempDir = await realpath(await mkdtemp(path.join(os.tmpdir(), prefix)));
   tempDirs.push(tempDir);
   return tempDir;
 }
