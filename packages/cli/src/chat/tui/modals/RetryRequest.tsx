@@ -3,6 +3,7 @@ import { Text, useWindowSize } from 'ink';
 import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
+  isCliKimiCodeSubscriptionRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -47,16 +48,30 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const errorText = props.payload.errorMessage ?? props.payload.operation;
   const isSubscriptionLimit = isCliChatGptSubscriptionRetry(props.payload);
+  const isKimiCodeLimit = isCliKimiCodeSubscriptionRetry(props.payload);
   const isApiSwitchable = isCliApiSwitchableRetry(props.payload);
   const personalApiKeyAvailable = props.payload.personalApiKeyAvailable;
   const canSwitchToPersonalKey =
     isApiSwitchable && personalApiKeyAvailable === true;
   // Both switches flip the api-mode to personal keys so the retry uses the
-  // user's own key (not the relay JWT); the subscription switch additionally
-  // turns off the "prefer ChatGPT subscription" preference.
-  const switchDecision: ApprovalDecision = isSubscriptionLimit
-    ? { accepted: true, disableChatGptSubscription: true, apiMode: 'personal' }
-    : { accepted: true, apiMode: 'personal' };
+  // user's own key (not the relay JWT); the subscription switches additionally
+  // turn off the "prefer ChatGPT subscription" / "Prefer Kimi Code" preference.
+  let switchDecision: ApprovalDecision;
+  if (isSubscriptionLimit) {
+    switchDecision = {
+      accepted: true,
+      disableChatGptSubscription: true,
+      apiMode: 'personal',
+    };
+  } else if (isKimiCodeLimit) {
+    switchDecision = {
+      accepted: true,
+      disableKimiCode: true,
+      apiMode: 'personal',
+    };
+  } else {
+    switchDecision = { accepted: true, apiMode: 'personal' };
+  }
   let guidanceText: string | undefined;
   if (isApiSwitchable && personalApiKeyAvailable !== true) {
     const requestedProvider = props.payload.errorDetails?.provider;

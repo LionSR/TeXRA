@@ -5,6 +5,7 @@ import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
+  isKimiCodeSubscriptionLimitError,
   type AgentProposalPermission,
   type ExhaustionReason,
   type PlanApprovalPermission,
@@ -39,6 +40,9 @@ export const CLI_PERSONAL_API_RETRY_HINT =
 
 export const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your ChatGPT subscription to your own API keys.';
+
+export const CLI_KIMI_CODE_SUBSCRIPTION_RETRY_HINT =
+  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your Kimi Code subscription to your own Moonshot API keys.';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -75,10 +79,19 @@ export function isCliChatGptSubscriptionRetry(
   return isChatGptSubscriptionLimitError(payload.errorDetails);
 }
 
+/** Whether the failed retry was a Kimi Code subscription usage limit, so the
+ *  switch turns off the "Prefer Kimi Code" preference rather than relay access. */
+export function isCliKimiCodeSubscriptionRetry(
+  payload: RetryPermission,
+): boolean {
+  return isKimiCodeSubscriptionLimitError(payload.errorDetails);
+}
+
 export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
   const details = payload.errorDetails;
   if (!details) return false;
   if (isChatGptSubscriptionLimitError(details)) return true;
+  if (isKimiCodeSubscriptionLimitError(details)) return true;
   return (
     isCredentialExhausted(details) &&
     (details.isRelayError === true ||
