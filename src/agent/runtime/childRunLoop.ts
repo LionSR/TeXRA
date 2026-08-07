@@ -396,6 +396,23 @@ function mintChildTurnRef(
 }
 
 /**
+ * Why the child-run loop stopped, for the structured termination diagnostic.
+ */
+type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
+
+/**
+ * Resolve the loop's termination cause without a nested ternary.
+ */
+function resolveLoopTerminationCause(
+  interrupted: boolean,
+  turnFailed: boolean,
+): ChildLoopTerminationCause {
+  if (interrupted) return 'interrupted';
+  if (turnFailed) return 'turn_failed';
+  return 'terminal';
+}
+
+/**
  * Structured turn-lifecycle diagnostic (#9531): ties the execution, the turn's
  * logical identity, the follow-up queue owner/generation, and the interruption
  * cause into one event so a resumed/interrupted child's state is auditable.
@@ -408,7 +425,7 @@ function emitTurnDiagnostic(
     executionId: ExecutionId;
     turnRef?: ChildTurnRef;
     queueOwner?: FollowUpConsumerLease;
-    interruptionCause?: string;
+    interruptionCause?: ChildLoopTerminationCause;
   },
 ): void {
   const { executionId, turnRef, queueOwner, interruptionCause } = params;
@@ -863,11 +880,10 @@ export function startChildRunLoop<TTurn>(
       emitTurnDiagnostic(logger, 'loop.terminated', {
         executionId,
         queueOwner: queueLease,
-        interruptionCause: loop.isInterrupted()
-          ? 'interrupted'
-          : sawTurnFailure
-            ? 'turn_failed'
-            : 'terminal',
+        interruptionCause: resolveLoopTerminationCause(
+          loop.isInterrupted(),
+          sawTurnFailure,
+        ),
       });
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
       releaseSessionOwnershipOnce();

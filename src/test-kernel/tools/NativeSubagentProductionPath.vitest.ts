@@ -222,13 +222,14 @@ async function queueSecondAssertionFollowUp(
   parentContext: ReturnType<typeof createRunContext>,
   runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>,
   executionId: ExecutionId,
+  instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await runAsParentOwner(() =>
     withRunContext(parentContext, () =>
       new DelegateAgentTool().call({
         agent: null,
         model: null,
-        instruction: 'Now prove the second assertion.',
+        instruction,
         memories: [],
         working_directory: null,
         execution_id: executionId,
@@ -510,22 +511,19 @@ describe('native subagent production delivery path', () => {
     // The loop drains the follow-up batch (waitAndDrainAll) and runs one turn
     // with the combined batch, so both instructions reach the child in one
     // ordered turn rather than sharing/overwriting one turn result.
-    const submitFollowUp = (instruction: string) =>
-      runAsParentOwner(() =>
-        withRunContext(parentContext, () =>
-          new DelegateAgentTool().call({
-            agent: null,
-            model: null,
-            instruction,
-            memories: [],
-            working_directory: null,
-            execution_id: executionId,
-          }),
-        ),
-      );
     const [first, second] = await Promise.all([
-      submitFollowUp('Now prove the second assertion.'),
-      submitFollowUp('Now prove the third assertion.'),
+      queueSecondAssertionFollowUp(
+        parentContext,
+        runAsParentOwner,
+        executionId,
+        'Now prove the second assertion.',
+      ),
+      queueSecondAssertionFollowUp(
+        parentContext,
+        runAsParentOwner,
+        executionId,
+        'Now prove the third assertion.',
+      ),
     ]);
     expect(first.status).toBe('executed');
     expect(second.status).toBe('executed');
@@ -533,12 +531,15 @@ describe('native subagent production delivery path', () => {
     await waitForPersistedResult(executionId, 'Result B.');
     await waitForCompletedResumes(2);
 
-    // The child transcript has turn 1 (Result A) and the batch turn (Result B).
+    // The child transcript has turn 1 (Result A) and the batch turn (Result B),
+    // with BOTH follow-up instructions recorded as user messages in the batch.
     await session.transcripts.flush();
     const archivedChild = await readCompletedRunConversation(executionId);
     const childText = JSON.stringify(archivedChild.conversation);
     expect(childText.match(/Result A\./g)).toHaveLength(1);
     expect(childText.match(/Result B\./g)).toHaveLength(1);
+    expect(childText).toContain('second assertion');
+    expect(childText).toContain('third assertion');
 
     // The parent received each distinct result exactly once.
     const archivedParent =
