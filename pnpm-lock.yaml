@@ -105,9 +105,6 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
-      es-toolkit:
-        specifier: ^1.50.0
-        version: 1.50.0
       escape-string-regexp:
         specifier: ^5.0.0
         version: 5.0.0
@@ -487,9 +484,6 @@ importers:
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
-      es-toolkit:
-        specifier: ^1.50.0
-        version: 1.50.0
       escape-string-regexp:
         specifier: ^5.0.0
         version: 5.0.0
