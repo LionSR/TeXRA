@@ -32,9 +32,15 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, metadata } = inputs;
   const { identity, config } = metadata;
 
+  // A stream whose identity hasn't resolved yet (no `run.start` seen, no
+  // durable record hydrated) has nothing readable to show — never fall back
+  // to `streamId`, the opaque `agent#executionId` handle (never parsed back;
+  // see `src/agent/runtime/streamTab.ts`), which every consumer of `label`
+  // (this file's callers, `streamDisplayLabel()`, the desktop command
+  // palette, …) trusts as display-safe.
   const identityName = identity
     ? getCleanAgentName(runIdentityName(identity))
-    : streamId;
+    : 'Pending session';
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).
