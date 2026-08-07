@@ -4,14 +4,50 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-#### Breaking Changes
+## [0.40.1] - 2026-08-07
 
-- **The multi-agent orchestration tool is now `delegate_multi_agents`** —
-  the tool formerly named `delegate_workflow_script` has been renamed with
-  no compatibility alias. Custom agent YAML files that list
-  `delegate_workflow_script` in their tool list must use the new name.
-- **Retired Claude model selections now use the current default** — saved
-  Opus 4.7 or 4.8 selections are no longer translated to Opus 5.
+### CLI
+
+#### Features
+
+- **The TUI exit summary shows session cost and payment route** — leaving a
+  chat session now reports how much the session cost and how it was paid for.
+- **The model catalog is reachable from the TUI** — you can browse and enable
+  models without leaving the chat interface.
+
+#### Bug Fixes
+
+- **Live transcript updates are restored and Ctrl-T is closable** — the
+  transcript viewer no longer goes stale while a run streams, and the full
+  tool-output view opened with Ctrl-T can be dismissed again.
+- **TUI blocking UX defects are fixed and nested runs use one vocabulary** —
+  approval, retry, and login flows no longer block the interface, and nested
+  runs are consistently described as "background tasks".
+- **Doubled blank rows between transcript entries are gone** — adjacent
+  separators no longer spend two blank rows on one gap.
+- **Retired streams no longer re-activate after `/clear`** — a reset can no
+  longer resurrect a stream it just retired.
+- **The TUI interface review is applied** — hints are truthful, links are
+  reachable, and the chrome stays within its row budget.
+- **The approval-denied exit code is retired** — a denied approval gate is no
+  longer reported as a failed run, and the CLI warns once (on stderr) when a
+  gate is denied so a nonzero exit is diagnosable.
+- **TUI error and warning text have a non-colour cue** — errors and warnings
+  are distinguishable without relying on colour alone.
+- **Grok follow-ups work from the TUI** — Grok subscription sessions handle
+  follow-up messages correctly.
+- **CLI approval modes now govern Bash commands and file edits consistently** —
+  `never` denies them even when a prompt setting or stream bypass would allow
+  them, while automatic approval permits them without opening a prompt.
+
+### Extension (VS Code) and Desktop
+
+#### Features
+
+- **Desktop renderer accessibility and copy fixes** — icon-only buttons are
+  named, tab strips follow APG keys, terminal focus and screen-reader mode
+  are wired, the command palette is a proper combobox, and high-contrast
+  colours and placeholder contrast are repaired.
 
 #### Bug Fixes
 
@@ -49,9 +85,117 @@ All notable changes to this project will be documented in this file.
   agents.
 - **The agent and model pickers in the task input are narrower** — they no
   longer stretch to dominate the input row on wide sidebars.
-- **CLI approval modes now govern Bash commands and file edits consistently** —
-  `never` denies them even when a prompt setting or stream bypass would allow
-  them, while automatic approval permits them without opening a prompt.
+- **The session view and settings UI are decluttered** — the extension's
+  session view and settings are tidier and easier to scan.
+- **Nested runs are named "background tasks" in user-facing text** — the
+  extension, desktop, and CLI now use one consistent name for nested runs.
+- **Session labels are declared from RunIdentity** — agent and process names
+  come from the canonical run identity instead of derived labels, and
+  finished process children are no longer retained or listed.
+- **Review follow-ups are fixed** — file-row clicks dispatch correctly and
+  approvals are labelled with the run they belong to.
+- **Narrow panes stack and actions stay reachable** — the layout sweep keeps
+  settings, model rows, and approval actions usable at sidebar widths.
+- **Approve is the filled primary action and Account opens settings** — the
+  approval button reads as the primary action, and the Account control opens
+  the settings view.
+- **Every control is named and exposes its state, and the shared focus ring
+  is restored** — controls reach assistive technology and keyboard users see
+  a consistent focus ring.
+- **Variant token contrast and the light-terminal palette are repaired** —
+  text and diff colours stay legible on light and dark terminals.
+- **Muted and border-control tokens are consumed consistently** — de-emphasis
+  is a single colour step instead of compounded alphas.
+- **Every custom property actually resolves** — declarations that quietly
+  evaluated to nothing now take colour from the right role.
+- **Element opacity no longer stacks on tokens that already carry alpha** —
+  measured composites stay above contrast thresholds.
+- **The composer sizes from its content** — the follow-up input rests at two
+  lines and grows with the draft instead of standing six lines tall.
+- **The ExternalInquiryPanel Submit button is a primary action** — it keeps
+  its accent colour after the shared rule change.
+- **Approval Approve/Reject actions stay on screen** — request panels move
+  into a dedicated approval dock above the transcript, and command details
+  scroll while the action row stays visible.
+- **The high-contrast user-message border renders** — high-contrast themes
+  get the delineated bubble the rule always promised.
+- **The Followup collapsible is restored on VS Code** — the six-line composer
+  no longer permanently owns the footer.
+- **The shared focus ring and non-colour status cues are restored** — the
+  progress view uses the documented focus ring and adds non-colour status
+  cues.
+- **The WorktreeChip uses the shared visually-hidden helper** — screen
+  readers get consistent hidden text.
+- **The Background Tasks roster is no longer gated on the active stream** —
+  a background bash session that finishes while you are on another tab now
+  updates its status instead of rendering "Running" indefinitely.
+- **The approval flow is readable and correctly targeted** — approval
+  sections have headings and accessible names, arriving requests are
+  announced, and the flow is correctly targeted.
+- **The feedback label is associated with its textarea** — click-to-focus
+  and assistive-technology naming work for the feedback input.
+- **The approval policy is re-seeded on rollback/reset** — workspace
+  transition rollback and settings reset re-read the effective persisted
+  policy instead of leaving a stale value, and invalid values warn before
+  falling back.
+- **Missing optional external tools no longer toast** — optional tools
+  (Codex, Claude Code, GitHub Activity, …) stay inactive quietly when their
+  dependencies are not installed; setup remains on the Tools dashboard.
+- **`lean_inspect` failures are reachable** — a failed Lean inspection now
+  surfaces instead of being silently dropped.
+- **Custom LaTeX replacements reuse the canonical Zod schema** — the settings
+  view validates replacements with the same schema as the rest of the app.
+- **The retry error message is no longer clipped** — long provider messages
+  stay readable instead of being cut mid-sentence with no way to read the
+  rest.
+- **Model access has one name in every host** — the CLI, extension, and
+  desktop describe model access consistently.
+- **Small follow-up issues are fixed in a batch** — assorted minor fixes
+  across the surfaces.
+- **Vite 8 build warnings are resolved** — the build no longer emits
+  deprecation and chunk-size warnings.
+
+### Shared (all surfaces)
+
+#### Features
+
+- **Sign in with Grok (xAI SuperGrok) (Experimental)** — a new OAuth login
+  flow lets you use an xAI SuperGrok subscription for Grok models, alongside
+  the existing ChatGPT and Kimi Code subscription options.
+- **GitHub App OIDC for Actions reviews** — code-review workflows can now
+  authenticate through a GitHub App using OpenID Connect token exchange, so
+  reviews post as the app instead of requiring a personal access token.
+- **Per-stream call counts and subscription equivalent cost** — usage
+  tracking now records how many model calls each stream made and prices
+  subscription rounds at their list-price equivalent, so usage tables and
+  views reflect the real cost.
+- **DeepSeek V4 Flash (Thinking) joins the default model list** — the
+  thinking variant of DeepSeek V4 Flash is now available by default in the
+  model picker.
+
+#### Breaking Changes
+
+- **The multi-agent orchestration tool is now `delegate_multi_agents`** —
+  the tool formerly named `delegate_workflow_script` has been renamed with
+  no compatibility alias. Custom agent YAML files that list
+  `delegate_workflow_script` in their tool list must use the new name.
+- **Retired Claude model selections now use the current default** — saved
+  Opus 4.7 or 4.8 selections are no longer translated to Opus 5.
+
+#### Bug Fixes
+
+- **Transient-HTTP-status classification is shared with arxivProcessor** —
+  arXiv downloads and LaTeX processing now agree on which HTTP statuses are
+  transient, so retries behave consistently.
+- **`delegate_multi_agents` describes both workflow and tool-use agents** —
+  the tool's description and call guidance now cover both agent types it
+  drives.
+- **Legacy agent roster selection is repaired in place** — the old
+  pair-shaped roster format no longer warns on every CLI startup; it is
+  detected and normalized immediately.
+- **Duplicate side-effect tool calls share one result** — identical
+  side-effect calls in one batch execute once and share the result, so the
+  model does not see skip errors or re-run the same side effect.
 
 ## [0.40.0] - 2026-08-02
 
