@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import { normalizeFilePath } from '@utils/core';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import { getGitAPI } from './gitExtensionTypes';
 
