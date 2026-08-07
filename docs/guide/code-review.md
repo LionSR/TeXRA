@@ -14,8 +14,8 @@ TeXRA service; only a GitHub-signed workload identity is exchanged for a
 short-lived TeXRA GitHub App token.
 
 This page walks through the whole setup from zero — no prior GitHub Actions
-experience needed. If you just want the short version: install the TeXRA GitHub
-App, add one API key secret, add one workflow file, and open a PR.
+experience needed. Short version: from the repo, run
+`texra install-github-action`, then set one provider API key secret.
 
 ## What you'll see on a PR
 
@@ -51,216 +51,49 @@ If you haven't used GitHub Actions before, here is the whole picture:
 
 ## What you need
 
-- A GitHub repository you administer (you need access to its **Settings**
-  tab), with Actions enabled — it is enabled by default on GitHub.
-- The [TeXRA GitHub App](https://github.com/apps/texra-ai-bot) installed on
-  that repository.
+- A GitHub repository you administer, with Actions enabled (default on GitHub).
+- The [TeXRA CLI](./texra-cli.md) installed locally (`npm i -g @texra-ai/cli`),
+  plus [`gh`](https://cli.github.com/) authenticated for opening the workflow
+  PR (`gh auth login`).
 - An API key from at least one model provider (Anthropic, OpenAI, Google,
-  etc.). If you don't have one yet, Step 2 below covers it.
-- Nothing else — the workflow below already declares the GitHub permissions it
-  needs to read code and write review comments.
+  DeepSeek, OpenRouter, or xAI).
 
 ## Setup
 
-### 1. Install the TeXRA GitHub App
+### Quick setup (recommended)
 
-Open [github.com/apps/texra-ai-bot](https://github.com/apps/texra-ai-bot),
-click **Install**, and grant it access to the repository you want TeXRA to
-review. The App provides the `texra-ai-bot[bot]` identity; its private key is
-never stored in your repository.
+From a clone of the repository you want TeXRA to review:
 
-### 2. Get a model provider API key
-
-Sign up with the provider of your choice and create an API key in their
-console — for example
-[console.anthropic.com](https://console.anthropic.com) (Anthropic),
-[platform.openai.com](https://platform.openai.com) (OpenAI), or
-[aistudio.google.com](https://aistudio.google.com) (Google). The key is a long
-string starting with something like `sk-…`. Copy it somewhere safe for the
-next step — many consoles only show it once.
-
-You only need **one** provider key. TeXRA also supports DeepSeek, OpenRouter,
-and xAI keys.
-
-### 3. Save the key as a repository secret
-
-A _secret_ is an encrypted value that only your repo's Actions runs can read —
-it never appears in logs or in the repo itself.
-
-1. Open your repository on GitHub.
-2. Go to **Settings → Secrets and variables → Actions**.
-3. On the **Secrets** tab, click **New repository secret**.
-4. Enter the name for your provider from the table below — it must match
-   **exactly**, including capitalization — paste the key as the value, and
-   save.
-
-| Secret name          | Provider   |
-| -------------------- | ---------- |
-| `ANTHROPIC_API_KEY`  | Anthropic  |
-| `OPENAI_API_KEY`     | OpenAI     |
-| `GOOGLE_API_KEY`     | Google     |
-| `DEEPSEEK_API_KEY`   | DeepSeek   |
-| `OPENROUTER_API_KEY` | OpenRouter |
-| `XAI_API_KEY`        | xAI        |
-
-Without at least one of these, TeXRA can't talk to any model — the workflow
-posts no review and skips quietly (you'll see a "no model provider API key"
-notice on the run).
-
-### 4. Add the workflow file
-
-Create a file at exactly this path in your repository:
-
-```
-.github/workflows/texra-code-review.yml
+```bash
+texra install-github-action
 ```
 
-You can do this from the GitHub web UI (**Add file → Create new file** on the
-repo home page) or locally in your editor. Paste in the following — it works
-as-is, no edits required:
+That command:
 
-```yaml
-name: TeXRA Code Review
+1. Opens the [TeXRA GitHub App](https://github.com/apps/texra-ai-bot) installer
+   so you can grant access to the repo (reviews then post as `texra-ai-bot[bot]`).
+2. Writes `.github/workflows/texra-code-review.yml` on a branch.
+3. Pushes and opens a pull-request page for you to create (or use `--no-pr` to
+   stop after committing locally).
 
-on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+Then set **one** provider API key as a repository secret so the model can run:
 
-concurrency:
-  group: texra-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
-jobs:
-  review:
-    if: ${{ vars.TEXRA_REVIEW_ENABLED != 'false' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
-    steps:
-      # Provider keys are unavailable to pull_request runs from forks; skip
-      # gracefully instead of failing when no key is configured.
-      - name: Check provider key
-        id: keys
-        env:
-          KEYS: '${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.OPENROUTER_API_KEY }}${{ secrets.XAI_API_KEY }}'
-        run: |
-          if [ -n "$KEYS" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA review: no model provider key is configured."
-          fi
-
-      # Conflicted PRs have no merge preview to review; skip quietly
-      # instead of failing at checkout.
-      - name: Check pull request merge ref
-        if: steps.keys.outputs.present == 'true'
-        id: merge-ref
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          ref="pull/${PR_NUMBER}/merge"
-          if ! matches="$(gh api "repos/${REPOSITORY}/git/matching-refs/${ref}" --jq 'length')"; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA review: could not confirm that refs/${ref} is available."
-            exit 0
-          fi
-
-          if [ "$matches" != "0" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA review: refs/${ref} is not available."
-          fi
-
-      - name: Checkout pull request
-        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: TeXRA review
-        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        uses: texra-ai/texra-action/review@v1
-        with:
-          approval-policy: never
-          require-write-access: 'true'
-          allow-bots: dependabot[bot]
-          model: ${{ vars.TEXRA_REVIEW_MODEL }}
-          model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
-          texra-version: ${{ vars.TEXRA_CLI_VERSION }}
-          review-marker: '<!-- texra-review -->'
-          resolve-threads: 'true'
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          xai-api-key: ${{ secrets.XAI_API_KEY }}
+```bash
+gh secret set ANTHROPIC_API_KEY
 ```
 
-What each part does, in plain words:
+(Or `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`,
+`OPENROUTER_API_KEY`, or `XAI_API_KEY` — names must match exactly.)
 
-- **`on: pull_request`** — run whenever a PR is opened, gets new commits
-  (`synchronize`), leaves draft state, or is reopened.
-- **`concurrency` / `cancel-in-progress`** — if you push again while a review
-  is still running, the stale run is cancelled so only the newest commit gets
-  reviewed.
-- **`if: vars.TEXRA_REVIEW_ENABLED != 'false'`** — a kill switch you can flip
-  later without touching the file (see [Pausing reviews](#pausing-reviews)).
-- **`permissions`** — the job may read your code, write PR reviews, and request
-  a GitHub-signed OIDC identity token. The action exchanges that identity for
-  a one-hour App token restricted to this repository.
-- **Check provider key** — if no key secret is configured (which is also the
-  case for PRs from forks), the run skips quietly instead of failing.
-- **Check pull request merge ref** — if the PR has a merge conflict, GitHub
-  can't produce a merge preview, so there is nothing to review; the run skips
-  quietly instead of failing at checkout.
-- **Checkout pull request** — fetches the PR's merge result with full history
-  (`fetch-depth: 0`), which the action needs to compute the diff.
-- **TeXRA review** — the actual reviewer, delegated to the external
-  [`texra-ai/texra-action`](https://github.com/texra-ai/texra-action). The
-  unset inputs are harmless: secrets and variables you haven't created simply
-  come through empty and the action falls back to its defaults. This means
-  most later customizations on this page are just "add a secret or variable" —
-  only a [custom review prompt](#writing-your-own-review-prompt) needs
-  workflow edits.
-- **`require-write-access` / `allow-bots`** — only review PRs authored by
-  people with write access to the repo (plus bots you explicitly allow, like
-  Dependabot). Since the job runs with your API key, this keeps strangers from
-  spending it.
+Merge the install PR to your default branch. From then on, same-repo PRs get a
+TeXRA review. Open the PR checks (or the repo **Actions** tab) and click
+**TeXRA Code Review** to watch a run.
 
-::: tip Pin the action version for reproducible CI
-`@v1` tracks the latest v1.x release of the action. If you want PR review
-behavior to change only when you decide, pin a reviewed release commit instead
-— `uses: texra-ai/texra-action/review@<full-commit-sha>` — and bump that pin
-deliberately when adopting a new release.
+::: tip
+You must be able to install GitHub Apps on the repository and to add Actions
+secrets. If `gh pr create --web` fails with a workflow-scope error, run
+`gh auth refresh -h github.com -s workflow` and retry.
 :::
-
-This is the same workflow the TeXRA repository runs on its own pull requests,
-with documented differences: TeXRA pins the action to a release commit (the
-tip above), adds a custom prompt (see
-[Writing your own review prompt](#writing-your-own-review-prompt)), and
-triggers on PR open only — a `re-review` label requests a fresh run instead of
-reviewing every push.
-
-### 5. Open a pull request and watch it run
-
-Commit the workflow file to your **default branch** (usually `main`) — from
-then on, every new PR from a branch in the same repository gets a TeXRA review.
-If you added the file via its own PR, that PR itself usually already gets
-reviewed, which makes a convenient first test.
-
-To watch a run: open the PR, scroll to the checks section at the bottom (or use
-the repo's **Actions** tab) and click **TeXRA Code Review**. The log shows the
-model being called; after a minute or two, the review appears on the PR's
-**Conversation** and **Files changed** tabs.
 
 ::: warning Forks don't get reviewed
 PRs opened from a **fork** are not reviewed. GitHub deliberately doesn't share
@@ -268,6 +101,31 @@ your repo secrets with forks, so the workflow has nothing to talk to the model
 provider with and exits quietly. If a contributor needs a TeXRA review, push
 their branch into your repo (or to a topic branch you control) and reopen the
 PR from there.
+:::
+
+### Manual setup
+
+Use this when you can't run the CLI, when the installer fails, or when you want
+to review every YAML line yourself.
+
+1. Install the [TeXRA GitHub App](https://github.com/apps/texra-ai-bot) on the
+   repository.
+2. Add a provider API key under **Settings → Secrets and variables → Actions**
+   (see the secret names in [Quick setup](#quick-setup-recommended)).
+3. Add `.github/workflows/texra-code-review.yml` from the
+   [`texra-ai/texra-action` examples](https://github.com/texra-ai/texra-action/tree/main/examples)
+   (start with `pr-review.yml`), commit it to the default branch, and open a
+   test PR.
+
+The workflow needs `permissions.id-token: write` so the action can exchange a
+GitHub Actions OIDC token for a short-lived App installation token. Leave
+`github-token` unset unless you intentionally override App auth.
+
+::: tip Pin the action version for reproducible CI
+`@v1` tracks the latest v1.x release. To change review behavior only when you
+decide, pin a reviewed release commit —
+`uses: texra-ai/texra-action/review@<full-commit-sha>` — and bump it
+deliberately.
 :::
 
 ## Picking a model
@@ -298,7 +156,7 @@ To override, add a repo **variable** — same place as secrets, but the
   `{"deepseek":"deepseekproT","anthropic":"opus5T"}`. This explicitly opts
   Anthropic reviews into Opus 5; the action's built-in default remains `opus48T`.
 
-The workflow above already passes both variables through, so adding the
+The scaffolded workflow already passes both variables through, so adding the
 variable is all it takes.
 
 ::: info Migrating from older setups
@@ -368,16 +226,17 @@ unset it) to resume.
 
 ### Letting TeXRA resolve its own threads
 
-The workflow above sets `resolve-threads: 'true'`, so the installed TeXRA
-GitHub App can resolve fixed findings and reply to earlier threads under the
-same bot identity. No personal access token is needed.
+With `resolve-threads: 'true'` on the review step (as in the richer examples
+under [`texra-ai/texra-action`](https://github.com/texra-ai/texra-action)),
+the TeXRA GitHub App can resolve fixed findings and reply to earlier threads
+under the same bot identity. No personal access token is needed.
 
 ### Choosing whose PRs get reviewed
 
-The `require-write-access: 'true'` input limits reviews to PRs authored by
-users with write access to the repository, so outside accounts can't spend
-your API budget. Bots you trust can be allow-listed by name via `allow-bots`
-(comma-separated) — the workflow above allows `dependabot[bot]`.
+`require-write-access: 'true'` limits reviews to PRs authored by users with
+write access, so outside accounts can't spend your API budget. Allow-list
+trusted bots with `allow-bots` (comma-separated), for example
+`dependabot[bot]`.
 
 ## Troubleshooting
 
