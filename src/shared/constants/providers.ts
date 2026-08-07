@@ -5,6 +5,11 @@ import { ModelProvider } from 'llm-zoo';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 
+/** OpenAI-compatible base URL for the Kimi Code (Moonshot coding-subscription)
+ *  coding endpoint. Lives here (shared) so both the model routing layer and the
+ *  error-detection layer can reference it without a `common → model` edge. */
+export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
+
 // ============================================================================
 // Provider Registry — single source of truth for all provider metadata
 // ============================================================================

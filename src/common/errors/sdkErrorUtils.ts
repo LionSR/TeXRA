@@ -61,3 +61,8 @@ export {
   parseChatGptSubscriptionLimit,
   describeChatGptSubscriptionLimit,
 } from './sdkError/chatgptSubscriptionDetection';
+
+export {
+  parseKimiCodeSubscriptionLimit,
+  describeKimiCodeSubscriptionLimit,
+} from './sdkError/kimiCodeSubscriptionDetection';

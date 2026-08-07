@@ -3,6 +3,7 @@ import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
 } from '@model/codex/codexPreference';
+import { setPreferKimiCode } from '@utils/config/providerConfig';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 
@@ -28,4 +29,14 @@ export async function setCliCodexSubscription(
   const update = await setPreferCodexSubscription(enabled);
   refreshSubscriptionPreferenceViews();
   return update;
+}
+
+/**
+ * Flip the "Prefer Kimi Code" preference and refresh the TUI views. Shared by
+ * the retry "switch to your own Moonshot API key" path so the
+ * persist-then-refresh sequence lives in one place.
+ */
+export async function setCliKimiCode(enabled: boolean): Promise<void> {
+  await setPreferKimiCode(enabled);
+  refreshSubscriptionPreferenceViews();
 }

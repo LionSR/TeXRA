@@ -22,18 +22,21 @@ const IDLE_RESULT = {
   retried: false,
   disabledIncludedModelAccess: false,
   disabledChatGptSubscription: false,
+  disabledKimiCodeSubscription: false,
 };
 const RETRIED_WITH_OWN_KEY_RESULT = {
   proceeded: true,
   retried: true,
   disabledIncludedModelAccess: true,
   disabledChatGptSubscription: false,
+  disabledKimiCodeSubscription: false,
 };
 
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
   preferChatGptSubscription?: boolean;
+  preferKimiCode?: boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
 }
@@ -44,6 +47,7 @@ function createHarness(options: HarnessOptions = {}): {
   prompts: Array<ApiProvider | undefined>;
   includedAccessValues: boolean[];
   chatGptSubscriptionValues: boolean[];
+  kimiCodeSubscriptionValues: boolean[];
   invalidations: number;
   retries: string[];
 } {
@@ -55,7 +59,9 @@ function createHarness(options: HarnessOptions = {}): {
   const prompts: Array<ApiProvider | undefined> = [];
   const includedAccessValues: boolean[] = [];
   const chatGptSubscriptionValues: boolean[] = [];
+  const kimiCodeSubscriptionValues: boolean[] = [];
   let preferChatGptSubscription = options.preferChatGptSubscription ?? true;
+  let preferKimiCode = options.preferKimiCode ?? true;
   let invalidations = 0;
   const retries: string[] = [];
 
@@ -64,6 +70,7 @@ function createHarness(options: HarnessOptions = {}): {
     prompts,
     includedAccessValues,
     chatGptSubscriptionValues,
+    kimiCodeSubscriptionValues,
     get invalidations() {
       return invalidations;
     },
@@ -85,6 +92,11 @@ function createHarness(options: HarnessOptions = {}): {
       setPreferChatGptSubscription: async (enabled) => {
         preferChatGptSubscription = enabled;
         chatGptSubscriptionValues.push(enabled);
+      },
+      getPreferKimiCode: () => preferKimiCode,
+      setPreferKimiCode: async (enabled) => {
+        preferKimiCode = enabled;
+        kimiCodeSubscriptionValues.push(enabled);
       },
       invalidateModelOptionsCache: () => {
         invalidations += 1;
@@ -282,6 +294,7 @@ describe('ProgressApiKeyRetryController', () => {
       retried: true,
       disabledIncludedModelAccess: true,
       disabledChatGptSubscription: true,
+      disabledKimiCodeSubscription: false,
     });
     // The subscription quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
@@ -306,6 +319,53 @@ describe('ProgressApiKeyRetryController', () => {
     // No usable key exists, so the prompt is still shown (then declined here).
     assert.deepEqual(harness.prompts, ['openai']);
     assert.deepEqual(harness.chatGptSubscriptionValues, []);
+    assert.deepEqual(harness.retries, []);
+  });
+
+  it('disables the Kimi Code preference and retries with the existing Moonshot key, no prompt', async () => {
+    const harness = createHarness({
+      keys: { moonshot: 'stored-moonshot' },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi',
+      requestId: 'retry-kimi',
+      provider: 'moonshot',
+      exhaustionReason: 'kimi-code-subscription',
+    });
+
+    // The Kimi Code switch also drops relay so the retry reaches the stored
+    // Moonshot key rather than the relay JWT.
+    assert.deepEqual(result, {
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: false,
+      disabledKimiCodeSubscription: true,
+    });
+    // The subscription quota failed, not the key — a stored key is already
+    // usable, so "Use your own API key" must not jump to the key-input prompt.
+    assert.deepEqual(harness.prompts, []);
+    assert.deepEqual(harness.includedAccessValues, [false]);
+    assert.deepEqual(harness.kimiCodeSubscriptionValues, [false]);
+    assert.equal(harness.invalidations, 2);
+    assert.deepEqual(harness.retries, ['stream-kimi']);
+  });
+
+  it('does not disable the Kimi Code preference when no usable Moonshot key is available', async () => {
+    const harness = createHarness({ keys: {} });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi2',
+      requestId: 'retry-kimi2',
+      provider: 'moonshot',
+      exhaustionReason: 'kimi-code-subscription',
+    });
+
+    assert.deepEqual(result, IDLE_RESULT);
+    // No usable key exists, so the prompt is still shown (then declined here).
+    assert.deepEqual(harness.prompts, ['moonshot']);
+    assert.deepEqual(harness.kimiCodeSubscriptionValues, []);
     assert.deepEqual(harness.retries, []);
   });
 

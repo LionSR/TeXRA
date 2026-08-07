@@ -17,12 +17,15 @@ const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn(),
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
+  preferKimiCode: false,
   notify: vi.fn(),
   openRouter: false,
   retryCopyFailure: undefined as Error | undefined,
   secrets: {},
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
+  setCliKimiCode: vi.fn(),
+  setPreferKimiCode: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
 
@@ -61,7 +64,18 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   setCliCodexSubscription: mocks.setCliCodexSubscription,
+  setCliKimiCode: mocks.setCliKimiCode,
 }));
+
+vi.mock('@utils/config/providerConfig', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@utils/config/providerConfig')>();
+  return {
+    ...actual,
+    getPreferKimiCode: () => mocks.preferKimiCode,
+    setPreferKimiCode: mocks.setPreferKimiCode,
+  };
+});
 
 vi.mock('@model/apiProviders', async (importActual) => {
   const actual = await importActual<typeof import('@model/apiProviders')>();
