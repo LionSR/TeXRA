@@ -28,7 +28,7 @@ import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.
  * `StateSettingValueSchema`); the selected catalog entry's own schema performs
  * the narrower per-key validation backend-side.
  */
-export type StateSettingValue =
+type StateSettingValue =
   string | number | boolean | readonly string[] | Record<string, string> | null;
 
 /** Write one catalog key. `null` clears it back to the catalog default. */
@@ -48,7 +48,7 @@ export function catalogEnumChoices<T extends string>(
   return entry ? (settingEnumChoices<T>(entry) ?? []) : [];
 }
 
-export interface StateSettingToggleRowOptions {
+interface StateSettingToggleRowOptions {
   /** Canonical `texra.*` catalog key this switch writes. */
   readonly key: string;
   readonly label: string;

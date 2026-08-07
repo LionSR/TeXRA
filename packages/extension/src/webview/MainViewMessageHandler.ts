@@ -360,9 +360,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
 
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
-        this.diffManager.handleRequestRecentCommits(m),
+        this.diffManager.postRecentCommits(m.notifyWhenEmpty ?? undefined),
       [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: () =>
-        this.diffManager.handleRefreshCommits(),
+        this.diffManager.postRecentCommits(),
       [MAIN_VIEW_COMMANDS.LATEXDIFF]: (m) =>
         this.diffManager.handleLatexdiff(m),
       [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: (m) =>

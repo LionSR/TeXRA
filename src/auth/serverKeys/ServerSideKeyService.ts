@@ -431,14 +431,6 @@ export class ServerSideKeyService {
     return modelName ? this.canUseModelSync(modelName) : this.hasFullAccess();
   }
 
-  getAccessDescription(): string {
-    const userTier = this.access?.userTier;
-    if (!userTier) {
-      return 'No included model access';
-    }
-    return this.tierService.getAccessDescription(userTier);
-  }
-
   getAccessExpirationDate(): Date | null {
     return this.tierService.getExpirationDate();
   }

@@ -10,7 +10,7 @@ import type { StreamState } from './store';
 export type StreamBranchActivity = 'active' | 'finished' | 'unknown';
 export type StreamTreeExpansionOverride = 'expanded' | 'collapsed';
 
-export interface StreamTreeInputs {
+interface StreamTreeInputs {
   readonly streamStates: ReadonlyMap<StreamTabId, StreamState>;
   readonly childStreamsByParent: ReadonlyMap<string, readonly StreamTabInfo[]>;
 }

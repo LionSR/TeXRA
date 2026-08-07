@@ -9,8 +9,6 @@ export interface DesktopCrashReportingInitOptions {
   log?: Pick<Console, 'debug' | 'error'>;
 }
 
-type CrashEvent = ErrorEvent;
-
 function pathVariants(path: string): string[] {
   const trimmed = path.trim();
   if (!trimmed) return [];
@@ -53,19 +51,19 @@ function scrubValue(value: unknown, scrubbers: readonly RegExp[]): unknown {
 }
 
 export function scrubDesktopCrashEvent(
-  event: CrashEvent,
+  event: ErrorEvent,
   sensitivePaths: readonly (string | undefined)[],
-): CrashEvent | null {
+): ErrorEvent | null {
   return createDesktopCrashEventScrubber(sensitivePaths)(event);
 }
 
 function createDesktopCrashEventScrubber(
   sensitivePaths: readonly (string | undefined)[],
-): (event: CrashEvent) => CrashEvent | null {
+): (event: ErrorEvent) => ErrorEvent | null {
   const scrubbers = buildPathScrubbers(sensitivePaths);
   return (event) => {
     if (event.platform !== 'native') return null;
-    return scrubValue(event, scrubbers) as CrashEvent;
+    return scrubValue(event, scrubbers) as ErrorEvent;
   };
 }
 

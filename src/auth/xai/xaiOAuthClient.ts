@@ -5,6 +5,8 @@
  * {@link OAuthFormEndpoint} and pure helpers from `@auth/oauth`.
  */
 // Local imports
+import { isObject } from '@utils/core';
+
 import {
   exchangeAuthorizationCode as exchangeFormAuthorizationCode,
   oauthTokenErrorKind,
@@ -122,10 +124,7 @@ export async function pollDeviceToken(
   }
 
   const bodyRaw: unknown = await response.json().catch(() => ({}));
-  const body =
-    bodyRaw != null && typeof bodyRaw === 'object' && !Array.isArray(bodyRaw)
-      ? (bodyRaw as Record<string, unknown>)
-      : {};
+  const body: Record<string, unknown> = isObject(bodyRaw) ? bodyRaw : {};
   const oauthError = typeof body.error === 'string' ? body.error : undefined;
   const errorDescription =
     typeof body.error_description === 'string'
@@ -161,5 +160,3 @@ export async function pollDeviceToken(
     response.status,
   );
 }
-
-export type { XaiTokenResponse };

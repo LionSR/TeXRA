@@ -341,7 +341,7 @@ export interface BashDeliveryStreamExcerpt {
    * Only pass this (non-empty) when the stream was actually truncated — the
    * caller (bash.ts) preserves a small head budget alongside the tail so a
    * long run's first fatal error survives even once total output exceeds the
-   * tail budget. Unlike the tail preview (`lastNLines`), the head is emitted
+   * tail budget. Unlike the tail preview, the head is emitted
    * as-is and may end mid-line — it's a best-effort char-capped excerpt, not a
    * line-bounded preview, and a truncated trailing line is fine for an LLM
    * consumer to recover the error from.
@@ -389,7 +389,11 @@ export function formatBashDelivery(
         );
       }
     }
-    const preview = lastNLines(excerpt.tail, OUTPUT_PREVIEW_LINES);
+    const tailLines = splitContentLines(excerpt.tail);
+    const preview =
+      tailLines.length <= OUTPUT_PREVIEW_LINES
+        ? excerpt.tail
+        : tailLines.slice(-OUTPUT_PREVIEW_LINES).join('\n');
     if (preview) {
       lines.push(`<${name}-preview>${escapeText(preview)}</${name}-preview>`);
     }
@@ -420,11 +424,6 @@ export function formatBashError(
     },
     { message: toErrorMessage(err) },
   );
-}
-
-function lastNLines(text: string, n: number): string {
-  const lines = splitContentLines(text);
-  return lines.length <= n ? text : lines.slice(-n).join('\n');
 }
 
 /**

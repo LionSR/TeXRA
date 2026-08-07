@@ -23,7 +23,7 @@ function hashString(input: string): string {
   return (hash >>> 0).toString(36);
 }
 
-export interface ContentStore<T extends NonNullable<unknown>> {
+interface ContentStore<T extends NonNullable<unknown>> {
   register(value: T, explicitId?: string): string;
   get(id: string): T | undefined;
   clear(): void;

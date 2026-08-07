@@ -13,9 +13,8 @@ import { StreamTabIdSchema } from './identifiers';
 // Identifiers + session links (canonical home)
 // ============================================================================
 
-const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
 export const ExternalInquirySessionLinksSchema = z.array(
-  ExternalInquirySessionLinkSchema,
+  z.string().trim().min(1),
 );
 
 // Keep the 12-hex suffix aligned with hexId12(), the identifier-minting owner

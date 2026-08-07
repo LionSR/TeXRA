@@ -20,6 +20,7 @@ import {
   formatNoListableModelsMessage,
   listableModelAccessEntries,
   loadCliModelAccessEntry,
+  type CliModelAccess,
   type CliModelListOptions,
 } from '../runtime/modelAccess';
 
@@ -32,13 +33,11 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-type ModelAccessList = Awaited<ReturnType<typeof getCliModelAccessList>>;
-
 async function loadModelAccessList(
   context: CliContext,
   options: CliModelListOptions = {},
 ): Promise<
-  | { models: ModelAccessList; apiMode: CliContext['apiMode'] }
+  | { models: CliModelAccess[]; apiMode: CliContext['apiMode'] }
   | {
       error: string;
     }
@@ -96,7 +95,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  let entry: Awaited<ReturnType<typeof loadCliModelAccessEntry>>;
+  let entry: CliModelAccess | undefined;
   try {
     entry = await suppressCliFetchStackLogs(() =>
       loadCliModelAccessEntry(id, {

@@ -31,14 +31,11 @@ async function handleFollowUpResult(
       break;
     case 'queued': {
       emitQueuedFollowUpsChanged(streamId);
+      // A queued result presents as 'none' or an 'info' (resume-failed) note;
+      // the 'warning' presentation is only produced for 'dropped', which has
+      // its own case below.
       const presentation = presentFollowUpResult(result);
-      if (presentation.severity === 'none') break;
-      if (presentation.refreshQueuedFollowUps) {
-        emitQueuedFollowUpsChanged(streamId);
-      }
-      if (presentation.severity === 'warning') {
-        await vscode.window.showWarningMessage(presentation.message);
-      } else {
+      if (presentation.severity === 'info') {
         await vscode.window.showInformationMessage(presentation.message);
       }
       break;

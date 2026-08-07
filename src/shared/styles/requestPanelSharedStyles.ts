@@ -125,7 +125,6 @@ export const sp = {
   small: unsafeCSS('var(--wa-space-2xs)'),
   medium: unsafeCSS('var(--wa-space-xs)'),
   large: unsafeCSS('var(--wa-space-s)'),
-  xlarge: unsafeCSS('var(--wa-space-l)'),
 } as const;
 
 export const requestPanelSharedStyles: CSSResult = css`

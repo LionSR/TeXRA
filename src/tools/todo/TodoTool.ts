@@ -58,7 +58,7 @@ Keep the list current as you work; one task in_progress at a time.`,
       return {
         status: 'executed',
         summary: 'Updated todo list (no active session)',
-        output: this.formatTodoList(input.todos),
+        output: formatTodoList(input.todos),
         diagnostics: {
           warning: 'No active todo context - todos may not persist',
         },
@@ -77,25 +77,23 @@ Keep the list current as you work; one task in_progress at a time.`,
       `Todo list updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`,
     );
   }
+}
 
-  /**
-   * Format the todo list for display in the tool output.
-   */
-  private formatTodoList(todos: TodoItem[]): string {
-    if (todos.length === 0) {
-      return 'Todo list is empty.';
-    }
-
-    const lines: string[] = ['Current todo list:', ''];
-
-    for (const [i, todo] of todos.entries()) {
-      const { icon, label } = STATUS_DISPLAY[todo.status];
-      lines.push(`${i + 1}. ${icon} [${label}] ${todo.content}`);
-      if (todo.status === TODO_STATUS.IN_PROGRESS) {
-        lines.push(`   → ${todo.activeForm}...`);
-      }
-    }
-
-    return lines.join('\n');
+/** Format the todo list for display in the tool output. */
+function formatTodoList(todos: TodoItem[]): string {
+  if (todos.length === 0) {
+    return 'Todo list is empty.';
   }
+
+  const lines: string[] = ['Current todo list:', ''];
+
+  for (const [i, todo] of todos.entries()) {
+    const { icon, label } = STATUS_DISPLAY[todo.status];
+    lines.push(`${i + 1}. ${icon} [${label}] ${todo.content}`);
+    if (todo.status === TODO_STATUS.IN_PROGRESS) {
+      lines.push(`   → ${todo.activeForm}...`);
+    }
+  }
+
+  return lines.join('\n');
 }

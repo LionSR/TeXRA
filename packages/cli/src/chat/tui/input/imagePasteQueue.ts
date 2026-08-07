@@ -1,14 +1,3 @@
-import pTimeout from 'p-timeout';
-
-const IMAGE_PASTE_TIMEOUT_MS = 15_000;
-
-export function withImagePasteTimeout<T>(promise: Promise<T>): Promise<T> {
-  return pTimeout(promise, {
-    milliseconds: IMAGE_PASTE_TIMEOUT_MS,
-    message: 'Image paste timed out.',
-  });
-}
-
 export interface ImagePasteAttempt {
   readonly isCurrent: () => boolean;
 }

@@ -49,7 +49,7 @@ function messageTime(message: LogMessageData): number {
 }
 
 /** One reactive update of `groups` / `messages` / `terminal`. */
-export interface MessageIndexUpdate {
+interface MessageIndexUpdate {
   /** Terminal render mode is active for this update. */
   terminal: boolean;
   /** Terminal render mode was active for the previous update. */

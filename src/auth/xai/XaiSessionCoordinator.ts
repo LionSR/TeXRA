@@ -38,7 +38,7 @@ import {
 export type XaiSessionStorage = SubscriptionSessionStorage;
 export type XaiOAuthClient = SubscriptionOAuthClient;
 export type XaiSessionStatus = SubscriptionSessionStatus;
-export type XaiAuthorizeRequest = SubscriptionAuthorizeRequest;
+type XaiAuthorizeRequest = SubscriptionAuthorizeRequest;
 
 export interface XaiSessionCoordinatorInit {
   storage: XaiSessionStorage;

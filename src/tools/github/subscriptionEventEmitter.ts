@@ -1,6 +1,6 @@
 import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
 
-export type GitHubSubscriptionChangedEvent =
+type GitHubSubscriptionChangedEvent =
   | 'prSubscriptionsChanged'
   | 'repoSubscriptionsChanged'
   | 'issueSubscriptionsChanged'

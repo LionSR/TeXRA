@@ -204,8 +204,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         this.lastKnownInputTokens,
         () => this.compactConversation(client, rawMessages, signal),
       );
-    const messagesToUse = didCompact ? compactedMessages : rawMessages;
     const updatedMessages = didCompact ? compactedMessages : undefined;
+    const messagesToUse = updatedMessages ?? rawMessages;
 
     const useStreaming = this.getStreamingConfig();
 
@@ -300,7 +300,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           // Lift the accumulated partial text onto the error so the retry UI
           // can show the tail (parity with the other streaming providers).
           partialTail: () =>
-            takeTail(aggregator.partialContent, PARTIAL_TEXT_TAIL_MAX),
+            takeTail(aggregator.getFullContent(), PARTIAL_TEXT_TAIL_MAX),
         });
       }
     }

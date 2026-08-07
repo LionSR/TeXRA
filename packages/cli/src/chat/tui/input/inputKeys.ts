@@ -162,14 +162,6 @@ function parseKittyEnterInput(
   };
 }
 
-function isStandaloneMatch(
-  data: string,
-  sequence: string,
-  offset: number,
-): boolean {
-  return offset === 0 && sequence.length === data.length;
-}
-
 function isInkParsedStandaloneShiftEnterInput(
   data: string,
   sequence: string,
@@ -177,7 +169,8 @@ function isInkParsedStandaloneShiftEnterInput(
   input: KittyEnterInput,
 ): boolean {
   return (
-    isStandaloneMatch(data, sequence, offset) &&
+    offset === 0 &&
+    sequence.length === data.length &&
     input.delimiter === ';' &&
     input.key === 'mainEnter' &&
     input.modifierBits === KITTY_SHIFT_MODIFIER_BITS

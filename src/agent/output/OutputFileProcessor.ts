@@ -127,7 +127,8 @@ export class OutputFileProcessor {
     rawLocation: FileLocation,
   ): Promise<void> {
     await this.emitMissingOutputs(currRound, outputLocation);
-    await this.handleEmptyOutput(currRound, rawLocation);
+    this.ctx.setRoundOutputs(currRound, []);
+    await this.captureXmlSummary(currRound, rawLocation, []);
   }
 
   /** Logs and signals the UI that a round produced no extractable output files. */
@@ -160,14 +161,6 @@ export class OutputFileProcessor {
       missing: [],
       xmlFile: outputLocation.absolutePath,
     });
-  }
-
-  private handleEmptyOutput(
-    round: number,
-    rawLocation: FileLocation,
-  ): Promise<void> {
-    this.ctx.setRoundOutputs(round, []);
-    return this.captureXmlSummary(round, rawLocation, []);
   }
 
   private async captureXmlSummary(

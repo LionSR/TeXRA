@@ -45,11 +45,6 @@ export class ResidentStreamRegistry<TId, TState> {
     return this.records.get(id);
   }
 
-  /** Matches `Map.set` for tests that seed a stale resident record directly. */
-  set(id: TId, state: TState): void {
-    this.records.set(id, state);
-  }
-
   delete(id: TId): boolean {
     return this.records.delete(id);
   }

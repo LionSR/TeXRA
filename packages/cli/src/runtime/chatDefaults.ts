@@ -74,11 +74,6 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   };
 }
 
-async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
-  const loaded = await loadWorkspaceCliConfig(cwd);
-  return defaultsFromConfigValues(loaded.values);
-}
-
 async function loadUserDefaults(): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). Anything else — corrupt JSON, a permission
@@ -208,7 +203,9 @@ export async function resolveChatDefaults(
     // Workspace defaults use the same .texra/config.json reader as the CLI
     // context so startup does not depend on platform initialization.
     [workspace, user, history] = await Promise.all([
-      loadWorkspaceDefaults(init.cwd),
+      loadWorkspaceCliConfig(init.cwd).then((loaded) =>
+        defaultsFromConfigValues(loaded.values),
+      ),
       loadUserDefaults(),
       loadHistoryDefaults(),
     ]);

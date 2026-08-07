@@ -40,7 +40,7 @@ export interface BasePollSubscriptionState {
   skipPollUntilMs: number;
 }
 
-export interface PollingSourceConfig {
+interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */
   name: string;
   pollIntervalMs: number;

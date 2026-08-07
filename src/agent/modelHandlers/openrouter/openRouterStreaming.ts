@@ -45,12 +45,6 @@ export class OpenRouterStreamAggregator extends ChannelStreamAggregator {
   private id = '';
   private created = 0;
 
-  /** Text accumulated so far — read on stream failure so the retry UI can
-   *  show the partial tail (parity with the other streaming providers). */
-  get partialContent(): string {
-    return this.getFullContent();
-  }
-
   consumeChunk(chunk: ChatStreamChunk): {
     contentDelta: string;
     reasoningDelta: string;

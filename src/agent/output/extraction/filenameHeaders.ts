@@ -239,10 +239,6 @@ function safeDocumentName(source: string): string {
   );
 }
 
-function sameNormalizedPath(a: string, b: string): boolean {
-  return normalizeDocumentName(a) === normalizeDocumentName(b);
-}
-
 function stripDocumentsEnvelope(
   lines: readonly string[],
   wrapperTag: string,
@@ -378,7 +374,8 @@ export function extractFilenameHeaderDocuments(
     if (content) {
       if (
         coalesceRepeatedName &&
-        sameNormalizedPath(currentName, coalesceRepeatedName)
+        normalizeDocumentName(currentName) ===
+          normalizeDocumentName(coalesceRepeatedName)
       ) {
         appendCoalescedContent(currentName, content);
         mayStartAdjacentSoleOutputChunk = true;

@@ -174,15 +174,13 @@ export const workingDirectoryField = z
     return trimmed;
   });
 
-function isBibFile(filePath: string): boolean {
-  return hasExtension(filePath, '.bib');
-}
-
 /** Reject delegated workflow context that attaches oversized bibliography files. */
 export async function rejectOversizedBibAttachments(
   contextFiles: readonly string[],
 ): Promise<Extract<ToolResult, { status: 'error' }> | null> {
-  const bibFiles = contextFiles.filter(isNonEmptyString).filter(isBibFile);
+  const bibFiles = contextFiles
+    .filter(isNonEmptyString)
+    .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
     const stats = await WorkspaceFS.stat(bibFile);

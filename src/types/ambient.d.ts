@@ -25,7 +25,7 @@ declare module 'bibtex' {
 }
 
 /**
- * Type declarations for CSS and font imports.
+ * Type declarations for CSS imports.
  *
  * Supports Vite's ?inline suffix for importing CSS as string.
  * Webpack uses type: 'asset/source' to achieve the same result.
@@ -41,22 +41,6 @@ declare module '*.css?inline' {
 declare module '*.css' {
   const content: string;
   export default content;
-}
-
-// Font imports - returns URL (or base64 data URI if inlined)
-declare module '*.ttf' {
-  const url: string;
-  export default url;
-}
-
-declare module '*.woff' {
-  const url: string;
-  export default url;
-}
-
-declare module '*.woff2' {
-  const url: string;
-  export default url;
 }
 
 /** Embedded by every Node host through esbuild's binary loader. */
@@ -233,11 +217,6 @@ declare module 'monaco-editor/languages/register.all.js' {
 declare module '*?worker' {
   const WorkerConstructor: new () => Worker;
   export default WorkerConstructor;
-}
-
-declare module '*?inline' {
-  const content: string;
-  export default content;
 }
 
 declare module 'which' {

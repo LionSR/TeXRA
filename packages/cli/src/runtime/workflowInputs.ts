@@ -48,10 +48,6 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
     : absolutePath;
 }
 
-function isPathInsideCwd(candidate: string, cwd: string): boolean {
-  return isPathWithin(cwd, resolveAgainstCwd(candidate, cwd));
-}
-
 function normalizeCliInputPathForRun(
   candidate: string,
   cwd: string,
@@ -60,7 +56,7 @@ function normalizeCliInputPathForRun(
 ): string {
   if (
     options.requireWorkspaceFiles === true &&
-    !isPathInsideCwd(candidate, cwd)
+    !isPathWithin(cwd, resolveAgainstCwd(candidate, cwd))
   ) {
     throw new CliUsageError(
       `${flagLabel}: file is outside --cwd: ${candidate}`,

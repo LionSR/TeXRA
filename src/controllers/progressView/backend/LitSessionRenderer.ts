@@ -7,7 +7,6 @@ import {
   SessionState,
   type ActiveStreamId,
   type StreamBadgeSnapshot,
-  type StreamExecutionState,
 } from '@controllers/session/SessionState';
 import type {
   ConversationProgress,
@@ -293,10 +292,15 @@ export class LitSessionRenderer implements SessionRendererPort {
     // it stays pending until run.config or the snapshot seed supplies one.
     if (category === undefined) return;
 
-    const activeState = includeActiveState
-      ? this.toActiveStreamContentSync(
-          this.state.getOrCreateStreamState(stream, category),
-        )
+    const executionState = includeActiveState
+      ? this.state.getOrCreateStreamState(stream, category)
+      : undefined;
+    const activeState = executionState
+      ? {
+          conversationProgress: executionState.conversationProgress,
+          stage: executionState.stage ?? null,
+          badges: { subagents: executionState.subagents },
+        }
       : undefined;
 
     const shared = {
@@ -363,13 +367,5 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.webviewUpdater.updateConversationProgress(activeStream, progress);
     }
     this.pendingProgressUpdates.clear();
-  }
-
-  private toActiveStreamContentSync(state: StreamExecutionState) {
-    return {
-      conversationProgress: state.conversationProgress,
-      stage: state.stage ?? null,
-      badges: { subagents: state.subagents },
-    };
   }
 }

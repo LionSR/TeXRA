@@ -141,7 +141,8 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   }
 
   resolvePreset(presetId: string): TeamRosterPresetResolution {
-    const preset = this.getPreset(presetId);
+    const preset =
+      AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
     return {
       ok: true,
@@ -267,11 +268,5 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         category: 'toolUse',
         tools: ['delegate_agent'],
       }));
-  }
-
-  private getPreset(presetId: string): AgentModePreset | null {
-    return (
-      AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId)
-    );
   }
 }

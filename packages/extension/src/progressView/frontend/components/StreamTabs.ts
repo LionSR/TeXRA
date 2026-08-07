@@ -125,7 +125,7 @@ function buildTooltip(
  * on status updates to a single stream.
  */
 @customElement('stream-tab')
-export class StreamTab extends LitElement {
+class StreamTab extends LitElement {
   static override styles = [designTokens, streamTabStyles];
 
   @property({ attribute: false }) info!: StreamTabInfo;
@@ -417,35 +417,6 @@ export class StreamTabs extends LitElement {
     }
   }
 
-  private getStatus(name: StreamTabId): string {
-    return (
-      this.streamStates.get(name)?.status ?? DEFAULT_STREAM_METADATA_STATUS
-    );
-  }
-
-  private getSubstate(name: StreamTabId): StreamSubstate | undefined {
-    return this.streamStates.get(name)?.substate;
-  }
-
-  private getTimestamp(name: StreamTabId): number | undefined {
-    return this.streamStates.get(name)?.lastTimestamp;
-  }
-
-  private getBranchActivity(
-    streamId: StreamTabId,
-    visited: Set<string>,
-  ): StreamBranchActivity {
-    return getStreamBranchActivity(
-      {
-        streamStates: this.streamStates,
-        childStreamsByParent: this.childStreamsByParent,
-      },
-      streamId,
-      visited,
-      this.branchActivityByStream,
-    );
-  }
-
   private renderStreamNode(
     stream: StreamTabInfo,
     options: { compact: boolean; visited: Set<string> },
@@ -475,18 +446,27 @@ export class StreamTabs extends LitElement {
       !options.compact &&
       childCount > 0 &&
       this.expandedParents.has(stream.name);
+    const streamState = this.streamStates.get(stream.name);
     const isFinished =
       stream.parentStreamId != null &&
-      this.getBranchActivity(stream.name, options.visited) === 'finished';
+      getStreamBranchActivity(
+        {
+          streamStates: this.streamStates,
+          childStreamsByParent: this.childStreamsByParent,
+        },
+        stream.name,
+        options.visited,
+        this.branchActivityByStream,
+      ) === 'finished';
 
     return html`
       <stream-tab
         class=${classMap({ 'is-finished': isFinished })}
         .info=${stream}
         .compact=${options.compact}
-        .status=${this.getStatus(stream.name)}
-        .substate=${this.getSubstate(stream.name)}
-        .lastTimestamp=${this.getTimestamp(stream.name)}
+        .status=${streamState?.status ?? DEFAULT_STREAM_METADATA_STATUS}
+        .substate=${streamState?.substate}
+        .lastTimestamp=${streamState?.lastTimestamp}
         ?active=${stream.name === this.activeStreamId}
         .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}
         .childCount=${childCount}

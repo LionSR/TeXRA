@@ -248,11 +248,7 @@ const BashInputSchema = z.strictObject({
     ),
 });
 
-export type BashInput = z.infer<typeof BashInputSchema>;
-
-function usesShellLevelBackgrounding(command: string): boolean {
-  return SHELL_BACKGROUNDING_PATTERN.test(command);
-}
+type BashInput = z.infer<typeof BashInputSchema>;
 
 /**
  * Interrupt handle for a background bash run. Termination is delegated to
@@ -287,7 +283,7 @@ export class BashTool extends defineTool({
   protected async execute(input: BashInput): Promise<ToolResult> {
     if (
       !input.run_in_background &&
-      usesShellLevelBackgrounding(input.command)
+      SHELL_BACKGROUNDING_PATTERN.test(input.command)
     ) {
       throw new ToolError(SHELL_BACKGROUNDING_MESSAGE);
     }

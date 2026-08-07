@@ -91,10 +91,6 @@ interface ToolDisplayViewportLine {
   readonly maxRows?: number;
 }
 
-function toolDisplayLineRows(line: ToolDisplayLine): number {
-  return line.kind === 'patch' ? line.textLines.length : 1;
-}
-
 function toolDisplayViewport(
   lines: readonly ToolDisplayLine[],
   maxRows: number | undefined,
@@ -105,7 +101,8 @@ function toolDisplayViewport(
   let remainingRows = Math.max(1, Math.floor(maxRows));
   const visible: ToolDisplayViewportLine[] = [];
   for (const item of indexed.toReversed()) {
-    const lineRows = toolDisplayLineRows(item.line);
+    const lineRows =
+      item.line.kind === 'patch' ? item.line.textLines.length : 1;
     visible.unshift({
       ...item,
       ...(lineRows > remainingRows ? { maxRows: remainingRows } : {}),

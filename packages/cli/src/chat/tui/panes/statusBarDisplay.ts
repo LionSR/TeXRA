@@ -791,17 +791,6 @@ export function ctrlCActionForFocus({
     : 'stop';
 }
 
-function hasPendingOrLiveStream(
-  streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>,
-): boolean {
-  for (const stream of streams.values()) {
-    if (stream.status === undefined || isActivePhase(stream.status)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function rootActiveSegment(
   input: StatusBarDisplayInput,
 ): StatusBarSegment | undefined {
@@ -840,10 +829,6 @@ function approvalPolicySegment(
   }
 }
 
-interface StatusBarVisibleStream {
-  readonly status: StreamPhase | undefined;
-}
-
 interface StatusBarStreamTarget {
   readonly ctrlCAction: CtrlCAction;
   readonly displaySlice: StreamSlice | undefined;
@@ -878,9 +863,16 @@ export function statusBarStreamTarget({
     values: streams,
     canUseValue: (stream) => isActivePhase(stream.status),
   });
+  let hasPendingOrLiveStream = false;
+  for (const stream of streams.values()) {
+    if (stream.status === undefined || isActivePhase(stream.status)) {
+      hasPendingOrLiveStream = true;
+      break;
+    }
+  }
   const canStopVisibleRun =
     canStopActiveRun &&
-    (canStopPendingRunWithoutStream || hasPendingOrLiveStream(streams));
+    (canStopPendingRunWithoutStream || hasPendingOrLiveStream);
   const displayStreamId = activeSlice ? activeStreamId : liveAncestor?.streamId;
   return {
     ctrlCAction: ctrlCActionForFocus({

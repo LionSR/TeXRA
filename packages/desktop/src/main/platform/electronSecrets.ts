@@ -16,7 +16,7 @@ interface ElectronSecretsOptions {
 export const LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE =
   'TeXRA cannot store secrets securely because Electron is using Linux basic_text storage. Set up a system keyring such as GNOME Keyring/libsecret or KWallet, then restart TeXRA. Environment variables still work for API keys.';
 
-export const KEYCHAIN_DENIED_WARNING_MESSAGE =
+const KEYCHAIN_DENIED_WARNING_MESSAGE =
   'TeXRA could not decrypt its saved secrets. This usually happens when the system keychain prompt was denied, but it can also occur with corrupted entries or rotated encryption keys. Saved API keys and sign-in sessions will not be available until decryption succeeds. Restart TeXRA after granting keychain access (or re-saving secrets) to retry.';
 
 const SAFE_STORAGE_UNAVAILABLE_MESSAGE =

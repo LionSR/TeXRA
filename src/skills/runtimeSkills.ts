@@ -14,8 +14,6 @@ export interface RuntimeSkillCatalogResult {
   issues: SkillLoadIssue[];
 }
 
-export type { SkillLoadIssue } from './loadSkills';
-
 export function setRuntimeSkillSources(sources: readonly SkillSource[]): void {
   runtimeSkillSources = [...sources];
 }

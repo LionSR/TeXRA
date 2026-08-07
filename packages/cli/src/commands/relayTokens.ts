@@ -99,46 +99,11 @@ export function formatTokenListText(tokens: readonly RelayTokenInfo[]): string {
 }
 
 /**
- * Resolve a session access token for token management. When run
- * interactively without a session, starts the device-code sign-in (works on
- * SSH and containers) instead of dead-ending; headless runs get an error.
- */
-async function requireSessionAccessToken(
-  context: CliContext,
-): Promise<string | null> {
-  const existing = await getCliSessionAccessToken();
-  if (existing) return existing;
-
-  const canPrompt =
-    context.outputFormat === 'text' &&
-    interactiveTerminalFailure(context) === undefined &&
-    context.stdoutIsTty === true;
-  if (!canPrompt) {
-    writeTextStderr(
-      'Not signed in. Run `texra login` first (`texra login --device` works over SSH).',
-    );
-    return null;
-  }
-
-  // Sign-in progress is diagnostics, not the command's result: keep it on
-  // stderr so stdout stays reserved for the deliverable (the env line /
-  // minted-token output) even if the TTY gate above ever changes.
-  writeTextStderr('Not signed in — starting device-code sign-in first.');
-  await signInCliSupabaseDeviceCode({
-    onDeviceCode: (authorization) => {
-      writeTextStderr(formatCliDeviceAuthMessage(authorization));
-      writeTextStderr(
-        'Waiting for you to approve in the browser… (Ctrl-C cancels)',
-      );
-    },
-  });
-  return getCliSessionAccessToken();
-}
-
-/**
  * Initialize the platform, resolve a session token, and run one relay-token
- * operation. Returns undefined once the failure (no session, or a network /
- * edge-function error) has been reported on stderr.
+ * operation. When run interactively without a session, starts the device-code
+ * sign-in (works on SSH and containers) instead of dead-ending; headless runs
+ * get an error. Returns undefined once the failure (no session, or a
+ * network / edge-function error) has been reported on stderr.
  */
 async function withRelayTokenSession<T>(
   context: CliContext,
@@ -146,7 +111,33 @@ async function withRelayTokenSession<T>(
 ): Promise<{ value: T } | undefined> {
   await initCliPlatform({ ...context, quietLogs: true });
   try {
-    const accessToken = await requireSessionAccessToken(context);
+    let accessToken = await getCliSessionAccessToken();
+    if (!accessToken) {
+      const canPrompt =
+        context.outputFormat === 'text' &&
+        interactiveTerminalFailure(context) === undefined &&
+        context.stdoutIsTty === true;
+      if (!canPrompt) {
+        writeTextStderr(
+          'Not signed in. Run `texra login` first (`texra login --device` works over SSH).',
+        );
+        return undefined;
+      }
+
+      // Sign-in progress is diagnostics, not the command's result: keep it on
+      // stderr so stdout stays reserved for the deliverable (the env line /
+      // minted-token output) even if the TTY gate above ever changes.
+      writeTextStderr('Not signed in — starting device-code sign-in first.');
+      await signInCliSupabaseDeviceCode({
+        onDeviceCode: (authorization) => {
+          writeTextStderr(formatCliDeviceAuthMessage(authorization));
+          writeTextStderr(
+            'Waiting for you to approve in the browser… (Ctrl-C cancels)',
+          );
+        },
+      });
+      accessToken = await getCliSessionAccessToken();
+    }
     if (!accessToken) return undefined;
     return { value: await operation(accessToken) };
   } catch (error) {

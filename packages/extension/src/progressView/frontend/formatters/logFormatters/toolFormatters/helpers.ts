@@ -99,16 +99,6 @@ export function truncateHeaderSummary(text: string, maxLength: number): string {
   return truncateWithEllipsis(summary || oneLine, maxLength);
 }
 
-/** Build the banner content wrapper shared by tool-use and web-search entries. */
-function buildBannerContent(
-  message: Pick<LogMessageData, 'id' | 'groupId' | 'timestamp'>,
-  contentTemplate: TemplateResult,
-): TemplateResult {
-  const fullTimestamp = new Date(message.timestamp).toISOString();
-  // prettier-ignore
-  return html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(message.id)} data-group-id=${ifDefined(message.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
-}
-
 /**
  * Wrap formatted tool content in the collapsible banner shell shared by the
  * tool-use, web-search, and web-fetch entries. `extraClasses` and
@@ -124,7 +114,7 @@ export function buildToolUseDetails(opts: {
   extraClasses?: ClassInfo;
   extraContent?: TemplateResult;
 }): TemplateResult {
-  const bannerContentTemplate = buildBannerContent(opts.message, opts.content);
+  const fullTimestamp = new Date(opts.message.timestamp).toISOString();
   const classes: ClassInfo = {
     'banner-details': true,
     'tool-use-details': true,
@@ -132,7 +122,7 @@ export function buildToolUseDetails(opts: {
     ...opts.extraClasses,
   };
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}${bannerContentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.message.id)} data-group-id=${ifDefined(opts.message.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${opts.content}</div></wa-details>`;
 }
 
 /** Extract typed edits array from parsed tool output, if present. */
@@ -140,7 +130,7 @@ export function getOutputEdits<T>(output: unknown): T[] | undefined {
   return isObject(output) ? (output.edits as T[] | undefined) : undefined;
 }
 
-export type ToolSectionOptions = {
+type ToolSectionOptions = {
   toolName?: string;
   language?: string;
   extraClass?: string;

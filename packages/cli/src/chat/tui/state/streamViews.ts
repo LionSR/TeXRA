@@ -4,7 +4,7 @@
 // each rebuild them differently.
 
 // Local imports - shared schemas
-import type { StreamTabId } from '@shared/schemas';
+import type { RunIdentity, StreamTabId } from '@shared/schemas';
 import { groupBy } from '@utils/core';
 
 // Local imports - CLI state
@@ -21,7 +21,7 @@ export interface StreamView {
   readonly id: StreamTabId;
   readonly label: string;
   /** What owns the child stream, retained with the child execution. */
-  readonly identity?: import('@shared/schemas').RunIdentity;
+  readonly identity?: RunIdentity;
   /** Workflow-script phase owning this child, when its parent runs a script. */
   readonly workflowPhase?: string;
   readonly parentId?: StreamTabId;

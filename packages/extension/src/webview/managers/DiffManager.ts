@@ -6,13 +6,12 @@ import type {
   LatexdiffMessage,
   LatexdiffvcMessage,
   LatexdiffvcOperationMessage,
-  RequestRecentCommitsMessage,
 } from '@shared/schemas';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 export class DiffManager extends BaseWebviewManager {
-  protected readonly channel = 'DiffManager';
+  private readonly channel = 'DiffManager';
 
   handleLatexdiff(message: LatexdiffMessage): void {
     void vscode.commands.executeCommand(
@@ -42,17 +41,7 @@ export class DiffManager extends BaseWebviewManager {
     );
   }
 
-  async handleRequestRecentCommits(
-    message: RequestRecentCommitsMessage,
-  ): Promise<void> {
-    await this.postRecentCommits(message.notifyWhenEmpty ?? undefined);
-  }
-
-  async handleRefreshCommits(): Promise<void> {
-    await this.postRecentCommits();
-  }
-
-  private async postRecentCommits(notifyWhenEmpty?: boolean): Promise<void> {
+  async postRecentCommits(notifyWhenEmpty?: boolean): Promise<void> {
     const isGitRepo =
       (await vscode.commands.executeCommand<boolean>(
         'texra.isGitRepository',

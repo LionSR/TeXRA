@@ -10,9 +10,9 @@ async function readInstructionFile(
 ): Promise<string> {
   const trimmed = instructionFile?.trim();
   if (!trimmed) return '';
-  const absolutePath = path.isAbsolute(trimmed)
-    ? path.resolve(trimmed)
-    : path.resolve(cwd, trimmed);
+  // path.resolve drops all prior segments once it hits an absolute one, so
+  // this covers both the absolute and cwd-relative spellings.
+  const absolutePath = path.resolve(cwd, trimmed);
   try {
     return await readFile(absolutePath, 'utf8');
   } catch (error: unknown) {

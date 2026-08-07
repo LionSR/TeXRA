@@ -6,10 +6,6 @@
  */
 const TEXRA_PREFIX = 'texra.';
 
-export interface ConfigWatcherDisposable {
-  dispose(): void;
-}
-
 export function stripPrefix(key: string): string {
   return key.startsWith(TEXRA_PREFIX) ? key.slice(TEXRA_PREFIX.length) : key;
 }
@@ -49,7 +45,7 @@ function watcherMatches(
 }
 
 export function createWatcherRegistry(): {
-  add(watcher: ConfigWatcher): ConfigWatcherDisposable;
+  add(watcher: ConfigWatcher): { dispose(): void };
   notify(changedKey: string): void;
 } {
   const watchers = new Set<ConfigWatcher>();

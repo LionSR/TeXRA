@@ -532,7 +532,7 @@ export class ModelHandlerOpenAI<
    * @returns The final ChatCompletion response
    */
   protected async awaitFinalResponse(
-    stream: ReturnType<typeof OpenAI.prototype.chat.completions.stream>,
+    stream: ChatCompletionStream,
     aggregator: StreamingAggregator | null,
   ): Promise<ChatCompletion> {
     try {
@@ -623,8 +623,8 @@ export class ModelHandlerOpenAI<
         this.lastKnownInputTokens,
         () => this.compactConversation(client, rawMessages, signal),
       );
-    const messagesToUse = didCompact ? compactedMessages : rawMessages;
     const updatedMessages = didCompact ? compactedMessages : undefined;
+    const messagesToUse = updatedMessages ?? rawMessages;
 
     // Apply message normalization if subclass specifies options
     const messages = this.prepareNormalizedMessages(messagesToUse);
@@ -1073,10 +1073,6 @@ export class ModelHandlerOpenAI<
     return this.config.provider;
   }
 
-  protected parseArguments(raw: unknown, callId: string): unknown {
-    return parseToolInput(raw, callId, this.logger);
-  }
-
   extractToolUse(responseObject: ChatCompletion): TCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
@@ -1095,7 +1091,7 @@ export class ModelHandlerOpenAI<
       provider: this.toolCallProvider,
       callId: call.id,
       name: call.function.name,
-      input: this.parseArguments(call.function.arguments, call.id),
+      input: parseToolInput(call.function.arguments, call.id, this.logger),
       raw: call,
     })) as TCall[];
   }

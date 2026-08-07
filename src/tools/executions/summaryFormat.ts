@@ -20,7 +20,7 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 import {
   formatStatusInfo,
@@ -36,33 +36,23 @@ export interface ExecutionSummaryOptions {
 }
 
 /**
- * True when `handle` is a tool-use child whose parent stream is the calling
- * stream — i.e. the caller already receives this child's report
+ * Whether a report already auto-delivered to the caller should be elided from
+ * the summary: true when `handle` is a tool-use child whose parent stream is
+ * the calling stream — i.e. the caller already receives this child's report
  * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
  * Deliberately identity-kind-agnostic: background bash processes
  * (`kind: 'process'`, category ToolUse) auto-deliver their reports exactly
  * like delegated agents do, and must stay suppressed too.
  */
-function isCallerParentOfToolUseSubagent(
-  handle: unknown,
-  callerStreamId: StreamTabId | undefined,
-): boolean {
-  return (
-    handle instanceof AgentExecutionHandle &&
-    handle.category === 'toolUse' &&
-    handle.isOwnedBy(callerStreamId)
-  );
-}
-
-/** Whether a report already auto-delivered to the caller should be elided from the summary. */
 export function shouldSuppressAutoDeliveredSubagentReport(
   options: ExecutionSummaryOptions,
   handle: unknown,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
-  return isCallerParentOfToolUseSubagent(
-    handle,
-    getRunContextStreamId(tryUseRunContext()),
+  return (
+    handle instanceof AgentExecutionHandle &&
+    handle.category === 'toolUse' &&
+    handle.isOwnedBy(getRunContextStreamId(tryUseRunContext()))
   );
 }
 

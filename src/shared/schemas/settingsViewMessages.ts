@@ -12,15 +12,10 @@
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
-// Re-export Goal metadata from its shared leaf module so this file (consumed by
-// webview frontends) does not pull in GoalTool/GoalStore runtime modules.
-export {
-  formatGoalTime,
-  isGoalInFlight,
-  goalElapsedMs,
-  type Goal,
-  type GoalStatus,
-} from './goal';
+// Re-export the Goal type from its shared leaf module so this file (consumed by
+// webview frontends) does not pull in GoalTool/GoalStore runtime modules. The
+// goal helpers are imported from '@shared/schemas/goal' directly.
+export { type Goal } from './goal';
 
 // Re-export types (and one constant) from the individual view-message
 // modules so the historical settings surface (single import site) stays

@@ -79,7 +79,7 @@ import {
 } from '@shared/schemas/agentCliSettings';
 
 /** Target for the desktop-host "set provider key" modal. */
-export interface ProviderKeyModalTarget {
+interface ProviderKeyModalTarget {
   provider: string;
   displayName: string;
 }

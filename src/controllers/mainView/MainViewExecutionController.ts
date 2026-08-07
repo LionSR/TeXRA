@@ -18,10 +18,6 @@ export type MainViewExecutionPreparationResult =
   | { valid: true; request: ValidatedExecutionRequest }
   | { valid: false; message: string; docsCommand?: string };
 
-function mapMediaFile(file: string | null): string | null {
-  return file && isPastedImage(file) ? getPastedImageFullPath(file) : file;
-}
-
 export function prepareMainViewExecutionRequest(
   message: MainViewExecuteMessage,
 ): MainViewExecutionPreparationResult {
@@ -116,7 +112,9 @@ function buildMainViewExecutionRequest(
       outputFiles: [],
       toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (files.mediaFiles ?? [])
-        .map(mapMediaFile)
+        .map((file) =>
+          file && isPastedImage(file) ? getPastedImageFullPath(file) : file,
+        )
         .filter(filterNotNull),
       editedFile: null,
     },

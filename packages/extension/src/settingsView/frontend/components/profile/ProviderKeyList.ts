@@ -219,20 +219,6 @@ export class ProviderKeyList extends LitElement {
     `;
   }
 
-  private renderGlobalStreamingToggle(): TemplateResult {
-    return renderSettingsToggleRow({
-      label: 'Enable streaming',
-      description: 'Global default for all providers',
-      checked: this.globalStreamingDefault,
-      onChange: (e: Event) => {
-        const checked = (e.target as WaSwitch).checked;
-        postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
-          enabled: checked,
-        });
-      },
-    });
-  }
-
   override render(): TemplateResult {
     const rows = resolveProviderKeyRows(this.providerKeyStatuses);
 
@@ -248,7 +234,17 @@ export class ProviderKeyList extends LitElement {
           description,
           icon: 'key',
         })}
-        ${this.renderGlobalStreamingToggle()}
+        ${renderSettingsToggleRow({
+          label: 'Enable streaming',
+          description: 'Global default for all providers',
+          checked: this.globalStreamingDefault,
+          onChange: (e: Event) => {
+            const checked = (e.target as WaSwitch).checked;
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
+              enabled: checked,
+            });
+          },
+        })}
         <div class="settings-disclosure-list">
           ${rows.map((entry) => this.renderRow(entry))}
         </div>

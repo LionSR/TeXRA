@@ -46,12 +46,22 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import '@shared/wa/tabs';
 
 import './components/FileSelectGroup';
-import './components/BannerGroup';
+import './components/ApiKeyBanner';
+import './components/AgentConfigBanner';
+import './components/DependencyBanner';
+import './components/GettingStartedBanner';
+import './components/LoginBanner';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
 import './components/OnboardingWelcomeCard';
 import './components/OnboardingSetupCard';
 import { SESSION_TYPES } from './constants';
+import {
+  fileStateContext,
+  sessionContext,
+  type FileStateContextValue,
+  type SessionContextValue,
+} from './mainViewContexts';
 import {
   agentConfigBanner$,
   apiKeyBanner$,
@@ -59,29 +69,25 @@ import {
   debugMode$,
   dependencyBanner$,
   fileOptions$,
-  fileStateContext,
   fileStateContext$,
   gettingStartedDismissed$,
   gettingStartedVisible$,
   isGitRepo$,
   latexdiffsVisible$,
   loginBannerVisible$,
+  model$,
   multiFiles$,
   onboardingFunnelState$,
   resetMainViewState,
-  sessionContext,
   sessionContext$,
   sessionHintDismissed$,
   sessionType$,
   singleFiles$,
-  type FileStateContextValue,
-  type SessionContextValue,
 } from './mainViewState';
 import {
   addOpenedFiles,
   changeAgent,
   changeLaunchTarget,
-  changeModel,
   changeSessionType,
   changeTeam,
   changeWorkingDirectory,
@@ -98,8 +104,6 @@ import {
   runPanelAction,
   selectMultipleFiles,
   setBaseFile,
-  setCommit,
-  setEditedFile,
   setInstruction,
   updateCheckboxValue,
   updateMultiFiles,
@@ -424,7 +428,7 @@ export class MainApp extends MainAppBase {
         @agent-change=${({ detail }: CustomEvent<AgentChangeDetail>) =>
           changeAgent(detail.sessionType, detail.value)}
         @model-change=${({ detail }: CustomEvent<ModelChangeDetail>) =>
-          changeModel(detail.value)}
+          model$.set(detail.value)}
         @working-directory-change=${({
           detail,
         }: CustomEvent<WorkingDirectoryChangeDetail>) =>
@@ -451,14 +455,7 @@ export class MainApp extends MainAppBase {
     `;
 
     const banners = html`
-      <banner-group
-        .apiKeyBanner=${apiKeyBanner$.get()}
-        .agentConfigBanner=${agentConfigBanner$.get()}
-        .dependencyBanner=${dependencyBanner$.get()}
-        .gettingStartedVisible=${
-          gettingStartedVisible$.get() && !gettingStartedDismissed$.get()
-        }
-        .loginBannerVisible=${loginBannerVisible$.get()}
+      <div
         @api-key-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
           runApiKeyBannerAction(detail.action as 'set' | 'guide')}
         @agent-config-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
@@ -479,7 +476,21 @@ export class MainApp extends MainAppBase {
           postMessage(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
             action: detail.action,
           })}
-      ></banner-group>
+      >
+        <api-key-banner .state=${apiKeyBanner$.get()}></api-key-banner>
+        <agent-config-banner
+          .state=${agentConfigBanner$.get()}
+        ></agent-config-banner>
+        <dependency-banner
+          .state=${dependencyBanner$.get()}
+        ></dependency-banner>
+        <getting-started-banner
+          .visible=${
+            gettingStartedVisible$.get() && !gettingStartedDismissed$.get()
+          }
+        ></getting-started-banner>
+        <login-banner .visible=${loginBannerVisible$.get()}></login-banner>
+      </div>
     `;
 
     const fileSelectionGroup = html`
@@ -602,14 +613,17 @@ export class MainApp extends MainAppBase {
           @edited-file-change=${({
             detail,
           }: CustomEvent<EditedFileChangeDetail>) =>
-            setEditedFile(detail.value)}
+            singleFiles$.set({
+              ...singleFiles$.get(),
+              editedFile: detail.value,
+            })}
           @get-current-file=${({ detail }: CustomEvent<FileActionDetail>) =>
             getCurrentFile(detail.type)}
           @empty-file=${({ detail }: CustomEvent<FileActionDetail>) =>
             emptyFile(detail.type)}
           @refresh-edited-files=${() => refreshEditedFiles()}
           @commit-change=${({ detail }: CustomEvent<CommitChangeDetail>) =>
-            setCommit(detail.value)}
+            commit$.set(detail.value)}
           @refresh-commits=${() =>
             postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS)}
         ></latexdiffs-section>

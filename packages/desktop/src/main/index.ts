@@ -314,11 +314,6 @@ function createWindow(options: {
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
   } = {};
-  // Single source of truth for "does the user have a usable credential",
-  // shared by every host (extension, desktop, CLI) so this credential-gating
-  // logic can't drift between them.
-  const probeCredential = async (): Promise<boolean> =>
-    hasUsableSetupCredential(platform().secrets);
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
@@ -414,12 +409,6 @@ function createWindow(options: {
   const postToRenderer = (message: unknown): void => {
     ipcRef.current?.postToRenderer(message);
   };
-  const runSetupCommand = async (command: string): Promise<void> => {
-    postToRenderer({
-      command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
-      initialCommand: command,
-    });
-  };
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
@@ -511,8 +500,6 @@ function createWindow(options: {
     pendingWorkspaceRelaunch = undefined;
     continueQuitAfterWindowClose = undefined;
   });
-  const openLogsFolder = async () =>
-    previewHost.openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
@@ -764,7 +751,14 @@ function createWindow(options: {
         },
       },
       navigation: { openExternal: previewHost.openExternal },
-      commands: { run: runSetupCommand },
+      commands: {
+        run: async (command: string) => {
+          postToRenderer({
+            command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+            initialCommand: command,
+          });
+        },
+      },
       latexToolingController: new LatexToolingController({
         checkToolInstalled: (tool) => checkToolInstalled(tool, false),
         findPath: (tool) => BinaryResolver.findPath(tool),
@@ -883,7 +877,10 @@ function createWindow(options: {
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer },
     {
-      hasCredential: probeCredential,
+      // Single source of truth for "does the user have a usable credential",
+      // shared by every host (extension, desktop, CLI) so this credential-gating
+      // logic can't drift between them.
+      hasCredential: () => hasUsableSetupCredential(platform().secrets),
       selectSetupAgent: async () => {
         const entry = getAgent('setup', AgentCategory.ToolUse);
         ipcRef.current?.postToRenderer({
@@ -955,7 +952,7 @@ function createWindow(options: {
     {
       getCustomAgentDirectory: () => platform().agentDirectories.custom(),
       openExternalUrl: previewHost.openExternal,
-      openLogFolder: openLogsFolder,
+      openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
       openPath: previewHost.openPath,
       openWorkspaceFolder,
       signIn,

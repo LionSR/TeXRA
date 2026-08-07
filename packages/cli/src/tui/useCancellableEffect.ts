@@ -6,7 +6,7 @@
 
 import { useEffect } from 'react';
 
-export type IsEffectCancelled = () => boolean;
+type IsEffectCancelled = () => boolean;
 
 /**
  * Runs `effect` like a normal `useEffect`, but passes it an `isCancelled()`

@@ -92,14 +92,6 @@ import {
   type TuiRetryRequest,
 } from './approvalQueue';
 
-function settleTuiHumanInputDenial(
-  context: CliContext,
-): UserQuestionSettlement | undefined {
-  const denial = settleHumanInputDenial(context);
-  if (denial == null) return undefined;
-  return { action: 'reject', feedback: denial.userMessage };
-}
-
 // =========================================================================
 // Retry auto-switch: skip the modal when a usable personal key exists
 // =========================================================================
@@ -151,11 +143,7 @@ export function createTuiHostInteractions(
   return {
     emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
-      const decision = await decidePresentedApproval(
-        context,
-        'toolEdit',
-        request,
-      );
+      const decision = await decidePresentedApproval('toolEdit', request);
       if (
         decision.accepted &&
         decision.bypass === 'toolEdit' &&
@@ -166,7 +154,7 @@ export function createTuiHostInteractions(
       return toToolEditResult(decision, request.proposedContent);
     },
     requestBashApproval(request) {
-      return requestBashInteraction(request, context);
+      return requestBashInteraction(request);
     },
     requestPlanApproval(request) {
       return requestPlanInteraction(request, context);
@@ -256,7 +244,7 @@ function prepareRetryClient(
 async function decidePresentedApproval<
   K extends 'bash' | 'toolEdit' | 'planApproval' | 'proposal',
   P,
->(context: CliContext, kind: K, payload: P): Promise<ApprovalDecision> {
+>(kind: K, payload: P): Promise<ApprovalDecision> {
   try {
     return await enqueueTuiApproval({ kind, payload } as Extract<
       ApprovalPayload,
@@ -276,15 +264,14 @@ async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
   payload: P,
 ): Promise<ApprovalDecision> {
   const policy = settleExecutable(context);
-  return policy ?? decidePresentedApproval(context, kind, payload);
+  return policy ?? decidePresentedApproval(kind, payload);
 }
 
 async function requestBashInteraction(
   request: HostBashApprovalRequest,
-  context: CliContext,
 ): Promise<BashSettlement> {
   const payload = prepareBashApprovalPrompt(request);
-  const decision = await decidePresentedApproval(context, 'bash', payload);
+  const decision = await decidePresentedApproval('bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
@@ -461,8 +448,10 @@ async function requestUserQuestionInteraction(
   payload: HostUserQuestionRequest,
   context: CliContext,
 ): Promise<UserQuestionSettlement> {
-  const denial = settleTuiHumanInputDenial(context);
-  if (denial) return denial;
+  const denial = settleHumanInputDenial(context);
+  if (denial != null) {
+    return { action: 'reject', feedback: denial.userMessage };
+  }
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
   return decision.accepted && decision.userQuestionAnswers

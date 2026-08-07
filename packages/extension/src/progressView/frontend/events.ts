@@ -208,9 +208,6 @@ export const ProgressEvents = {
     decision: PermissionDecision<K>,
   ) => createEvent('permission-action', { ...permission, decision }),
 
-  groupToggle: (detail: { groupId: string; expanded: boolean }) =>
-    createEvent('group-toggle', detail),
-
   fileClick: (detail: { file: string; line?: number }) =>
     createEvent('file-click', detail),
 

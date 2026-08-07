@@ -24,7 +24,6 @@ import {
   type SpendingStatusError,
 } from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatResultCount } from '@utils/text/stringUtils';
 import {
   relayTierConfigUrl,
   SERVER_SIDE_CACHE_TTL_MS,
@@ -339,18 +338,6 @@ export class TierService {
    */
   getProviders(): string[] {
     return this.configSnapshot?.providers ?? [];
-  }
-
-  /**
-   * Get a user-friendly description of what's included in a tier.
-   */
-  getAccessDescription(tier: UserTier): string {
-    const tierConfig = this.getTierConfig(tier);
-    if (!tierConfig) return 'No included model access';
-    if (tierConfig.models === '*') return 'All models included';
-    const modelCount = tierConfig.models.length;
-    if (modelCount === 0) return 'No included model access';
-    return `${formatResultCount(modelCount, 'model')} included`;
   }
 
   // ===========================================================================

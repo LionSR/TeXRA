@@ -185,48 +185,6 @@ export class AgentSelectionPanel extends LitElement {
     }
   }
 
-  private handleOpenYaml(agent: AgentSelectionItem): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
-      agentName: agent.name,
-      agentSource: agent.source,
-    });
-  }
-
-  private handleCustomizeAgent(agent: AgentSelectionItem): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT, {
-      agentName: agent.name,
-      agentSource: agent.source,
-    });
-  }
-
-  private handleDeleteCustomAgent(agent: AgentSelectionItem): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
-      agentName: agent.name,
-    });
-  }
-
-  private handleViewRemotePrompt(agent: AgentSelectionItem): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT, {
-      agentName: agent.name,
-    });
-  }
-
-  private handleRevealAgentFile(agent: AgentSelectionItem): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE, {
-      agentName: agent.name,
-      agentSource: agent.source,
-    });
-  }
-
-  private handleToggleEnabled(agent: AgentSelectionItem): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
-      agentName: agent.name,
-      agentSource: agent.source,
-      category: this.category,
-      enabled: !agent.enabled,
-    });
-  }
-
   private handleSetAllEnabled(source: AgentSourceType, enabled: boolean): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, {
       category: this.category,
@@ -271,7 +229,12 @@ export class AgentSelectionPanel extends LitElement {
           ?checked=${agent.enabled}
           @click=${(e: Event) => {
             e.stopPropagation();
-            this.handleToggleEnabled(agent);
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
+              agentName: agent.name,
+              agentSource: agent.source,
+              category: this.category,
+              enabled: !agent.enabled,
+            });
           }}
           title="Show in agent selector"
         >
@@ -373,7 +336,11 @@ export class AgentSelectionPanel extends LitElement {
           label: 'Open agent YAML definition',
           className: 'agent-action-btn',
           kind: 'ghost',
-          onClick: () => this.handleOpenYaml(agent),
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
+              agentName: agent.name,
+              agentSource: agent.source,
+            }),
         },
       },
       {
@@ -389,7 +356,10 @@ export class AgentSelectionPanel extends LitElement {
           title: "View the remote agent's prompt definition (read-only)",
           className: 'agent-action-btn',
           kind: 'ghost',
-          onClick: () => this.handleViewRemotePrompt(agent),
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT, {
+              agentName: agent.name,
+            }),
         },
       },
       {
@@ -400,7 +370,11 @@ export class AgentSelectionPanel extends LitElement {
           title: 'Show this file in your system file explorer',
           className: 'agent-action-btn',
           kind: 'ghost',
-          onClick: () => this.handleRevealAgentFile(agent),
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE, {
+              agentName: agent.name,
+              agentSource: agent.source,
+            }),
         },
       },
       {
@@ -416,7 +390,11 @@ export class AgentSelectionPanel extends LitElement {
           appearance: 'filled',
           variant: 'brand',
           kind: 'primary',
-          onClick: () => this.handleCustomizeAgent(agent),
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT, {
+              agentName: agent.name,
+              agentSource: agent.source,
+            }),
         },
       },
       {
@@ -430,7 +408,10 @@ export class AgentSelectionPanel extends LitElement {
           title: 'Delete this custom agent',
           className: 'agent-action-btn',
           kind: 'danger',
-          onClick: () => this.handleDeleteCustomAgent(agent),
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
+              agentName: agent.name,
+            }),
         },
       },
     ];

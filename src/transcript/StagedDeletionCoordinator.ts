@@ -487,8 +487,9 @@ export class StagedDeletionCoordinator {
       }
     };
 
+    const canStage = canUseStreamDataDir(stream);
     try {
-      if (canUseStreamDataDir(stream)) {
+      if (canStage) {
         const hasStagedData = await storagePathExists(
           stagedStreamDataDir(stream),
         );
@@ -508,12 +509,9 @@ export class StagedDeletionCoordinator {
 
       await cancelWrites();
 
-      const canStage = canUseStreamDataDir(stream);
       const liveDir = canStage ? streamDataDir(stream) : undefined;
       const stagedDir = canStage ? stagedStreamDataDir(stream) : undefined;
-      const hasLiveData =
-        !liveDir || !stagedDir || (await storagePathExists(liveDir));
-      if (liveDir && stagedDir && hasLiveData) {
+      if (liveDir && stagedDir && (await storagePathExists(liveDir))) {
         await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
         state.phase = 'transitioning';
         await StorageFS.rename(liveDir, stagedDir);

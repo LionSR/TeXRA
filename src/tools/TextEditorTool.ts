@@ -179,7 +179,7 @@ const TextEditorInputSchema = z.discriminatedUnion('command', [
 ]);
 
 /** Derived from TextEditorInputSchema - single source of truth */
-export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
+type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
 
 /** Command type derived from TextEditorInputSchema */
 type EditorCommand = TextEditorInput['command'];

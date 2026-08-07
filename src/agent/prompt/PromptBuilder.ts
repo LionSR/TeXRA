@@ -89,6 +89,13 @@ export async function getSystemPromptWithRules(
   return parts.join('\n');
 }
 
+/** The rendered round-0 prompts: system prompt, user prefix, and initial request. */
+export interface InitialPrompts {
+  systemPrompt: string;
+  userPrefix: string;
+  userRequest: string;
+}
+
 /**
  * Centralises prompt construction logic for multi-round agents.
  *
@@ -114,11 +121,7 @@ export class PromptBuilder {
   /**
    * Render the initial system, prefix, and request prompts for round 0.
    */
-  public async buildInitialPrompts(): Promise<{
-    systemPrompt: string;
-    userPrefix: string;
-    userRequest: string;
-  }> {
+  public async buildInitialPrompts(): Promise<InitialPrompts> {
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
       getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
       this.buildUserRequest(0),
@@ -170,10 +173,6 @@ export class PromptBuilder {
     return undefined;
   }
 }
-
-export type InitialPrompts = Awaited<
-  ReturnType<PromptBuilder['buildInitialPrompts']>
->;
 
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
