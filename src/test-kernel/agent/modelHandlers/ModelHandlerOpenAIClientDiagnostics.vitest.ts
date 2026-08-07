@@ -12,7 +12,7 @@ import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpen
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
-import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';

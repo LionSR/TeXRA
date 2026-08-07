@@ -14,9 +14,11 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import {
   CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
+  CLI_KIMI_CODE_SUBSCRIPTION_RETRY_HINT,
   CLI_PERSONAL_API_RETRY_HINT,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
+  isCliKimiCodeSubscriptionRetry,
 } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
@@ -130,6 +132,9 @@ export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
   if (isCliChatGptSubscriptionRetry(payload)) {
     return [message, CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT].join('\n');
+  }
+  if (isCliKimiCodeSubscriptionRetry(payload)) {
+    return [message, CLI_KIMI_CODE_SUBSCRIPTION_RETRY_HINT].join('\n');
   }
   if (isCliApiSwitchableRetry(payload)) {
     return [message, CLI_PERSONAL_API_RETRY_HINT].join('\n');

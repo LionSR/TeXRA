@@ -4,13 +4,13 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import {
-  KIMI_CODE_BASE_URL,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
   kimiCodeRuntimeConfig,
   kimiCodeWireModelId,
   resolveKimiCodeRoute,
 } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import type { ModelConfig } from 'llm-zoo';
 
 const dual = {

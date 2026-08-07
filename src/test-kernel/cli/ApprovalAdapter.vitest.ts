@@ -667,4 +667,21 @@ describe('formatRetryRequestMessage', () => {
       '/api personal',
     );
   });
+
+  it('shows the Moonshot API-key switch for a Kimi Code subscription limit', () => {
+    const retry: RetryPermission = {
+      ...credentialExhaustedRetry,
+      errorDetails: {
+        exhaustionReason: 'kimi-code-subscription',
+        isRelayError: false,
+        statusCode: 429,
+      },
+    };
+
+    expect(isCliApiSwitchableRetry(retry)).toBe(true);
+    expect(formatRetryRequestMessage(retry)).toContain(
+      'Kimi Code subscription',
+    );
+    expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
+  });
 });
