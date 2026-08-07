@@ -85,9 +85,9 @@ function allPresets(
 /**
  * Read the canonical workspace selection. A value that does not parse is
  * tried against the legacy pair-shaped format (`{workflowAgentKeys,
- * toolUseAgentKeys}`) via the existing AgentDelegationScopeLegacySchema.
- * On a match the stored value is immediately repaired so the warning is a
- * one-time event per workspace.
+ * toolUseAgentKeys}`, with or without a stray `kind` field) via the existing
+ * AgentDelegationScopeLegacySchema. On a match the stored value is
+ * immediately repaired so the warning is a one-time event per workspace.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
@@ -114,7 +114,21 @@ function readAgentRosterSelection(
 }
 
 function repairLegacySelection(raw: unknown): AgentRosterSelection | undefined {
-  const legacy = AgentDelegationScopeLegacySchema.safeParse(raw);
+  // The legacy pair-shaped value may carry a stray `kind` field: an
+  // intermediate version wrote `{kind: 'custom', workflowAgentKeys,
+  // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION, which neither the
+  // canonical schema (missing `agentKeys`) nor the strict legacy schema
+  // (rejects `kind`) accepts. Drop the discriminant before parsing so both
+  // the pure and hybrid legacy shapes repair to the same canonical value.
+  const candidate =
+    raw !== null && typeof raw === 'object' && 'kind' in raw
+      ? Object.fromEntries(
+          Object.entries(raw as Record<string, unknown>).filter(
+            ([key]) => key !== 'kind',
+          ),
+        )
+      : raw;
+  const legacy = AgentDelegationScopeLegacySchema.safeParse(candidate);
   if (!legacy.success) return undefined;
   return {
     kind: 'custom',
