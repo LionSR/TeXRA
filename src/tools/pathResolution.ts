@@ -8,6 +8,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { ToolError } from '@shared/schemas/toolResult';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import {
   findExternalRoot,
@@ -20,7 +21,6 @@ import {
   isPathWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
-import { normalizeFilePath } from '@utils/core';
 
 export interface WorkspacePathResolution {
   relative: string;

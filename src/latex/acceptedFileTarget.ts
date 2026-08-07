@@ -10,8 +10,8 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
-import { getExtensionLowercase } from '@utils/core/pathCore';
 import { normalizeFilePath } from '@utils/core';
+import { getExtensionLowercase } from '@utils/core/pathCore';
 
 export type AcceptedFileTarget = {
   targetLocation: FileLocation;
