@@ -51,7 +51,11 @@ import {
   releaseStreamResources,
 } from '@tools/approval';
 import { AbsoluteFS, pathToLocation, WorkspaceFS } from '@utils/files';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
+import {
+  getPreferKimiCode,
+  getUseOpenRouter,
+  setPreferKimiCode,
+} from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ProgressViewProvider } from './ProgressViewProvider';
@@ -595,6 +599,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       getPreferChatGptSubscription: isPreferCodexSubscription,
       setPreferChatGptSubscription: async (enabled) => {
         await setPreferCodexSubscription(enabled);
+      },
+      getPreferKimiCode,
+      setPreferKimiCode: async (enabled) => {
+        await setPreferKimiCode(enabled);
       },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>

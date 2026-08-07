@@ -36,6 +36,7 @@ import {
 import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
+  isCliKimiCodeSubscriptionRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -111,6 +112,7 @@ function maybeAutoSwitchRetry(
 ): ApprovalDecision | undefined {
   if (!isCliApiSwitchableRetry(payload)) return undefined;
   if (isCliChatGptSubscriptionRetry(payload)) return undefined;
+  if (isCliKimiCodeSubscriptionRetry(payload)) return undefined;
 
   const details = payload.errorDetails;
   // Upstream credit depletion means the stored direct key IS the broken

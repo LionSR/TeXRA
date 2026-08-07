@@ -100,6 +100,10 @@ import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  getPreferKimiCode,
+  setPreferKimiCode,
+} from '@utils/config/providerConfig';
 
 import {
   postDesktopSettingsView,
@@ -506,6 +510,10 @@ export class DesktopProgressBridge {
       getPreferChatGptSubscription: isPreferCodexSubscription,
       setPreferChatGptSubscription: async (enabled) => {
         await setPreferCodexSubscription(enabled);
+      },
+      getPreferKimiCode,
+      setPreferKimiCode: async (enabled) => {
+        await setPreferKimiCode(enabled);
       },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
