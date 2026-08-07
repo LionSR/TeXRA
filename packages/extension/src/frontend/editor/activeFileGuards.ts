@@ -14,12 +14,6 @@ const CHANNEL = 'ActiveFileGuards';
 type ActiveFileGuardFailureReason =
   'noEditor' | 'unsupportedExtension' | 'saveFailed';
 
-interface ActiveFileGuardOptions {
-  allowedExtensions: string[];
-  resourceName: string;
-  saveDocument: boolean;
-}
-
 interface ActiveFileGuardSuccess {
   status: 'ok';
   editor: vscode.TextEditor;
@@ -30,34 +24,23 @@ type ActiveFileGuardResult =
   ActiveFileGuardSuccess | { status: ActiveFileGuardFailureReason };
 
 /**
- * Retrieve the active text editor when available and ensure the document
- * matches the required extension list. Optionally saves dirty documents.
+ * Retrieve the active text editor when it holds a `.tex` document, optionally
+ * saving it first when dirty.
  */
-async function getActiveEditorWithGuards(
-  options: ActiveFileGuardOptions,
+async function getActiveLatexEditor(
+  saveDocument: boolean,
 ): Promise<ActiveFileGuardResult> {
-  const { allowedExtensions, resourceName, saveDocument } = options;
-
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     await vscode.window.showWarningMessage(
-      `No active editor found. Open a ${resourceName} file in the editor and try again.`,
+      'No active editor found. Open a LaTeX file in the editor and try again.',
     );
     return { status: 'noEditor' };
   }
 
-  // Normalize extensions: ensure dot prefix and lowercase for comparison
-  const normalizedExtensions = allowedExtensions.map((ext) =>
-    (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase(),
-  );
-  const fileName = editor.document.fileName.toLowerCase();
-
-  if (
-    normalizedExtensions.length > 0 &&
-    !normalizedExtensions.some((extension) => fileName.endsWith(extension))
-  ) {
+  if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
     await vscode.window.showWarningMessage(
-      `This command only works with ${resourceName} files (${normalizedExtensions.join(', ')}).`,
+      'This command only works with LaTeX files (.tex).',
     );
     return { status: 'unsupportedExtension' };
   }
@@ -85,15 +68,13 @@ async function getActiveEditorWithGuards(
 /**
  * Log guard failure with standardized messages.
  * @param channel - Logger channel name
- * @param action - Description of the action being performed (e.g., "parse XML", "indent LaTeX document")
+ * @param action - Description of the action being performed (e.g., "indent LaTeX document")
  * @param reason - Reason for guard failure
- * @param resourceType - Resource type (e.g., "LaTeX", "XML", "YAML") for context
  */
 function logGuardFailure(
   channel: string,
   action: string,
   reason: ActiveFileGuardFailureReason,
-  resourceType: string,
 ): void {
   const prefix = `Cannot ${action}:`;
 
@@ -102,29 +83,22 @@ function logGuardFailure(
       logger.warn(channel, `${prefix} no active editor found.`);
       break;
     case 'unsupportedExtension':
-      logger.warn(
-        channel,
-        `${prefix} active document is not a ${resourceType} file.`,
-      );
+      logger.warn(channel, `${prefix} active document is not a LaTeX file.`);
       break;
     case 'saveFailed':
       logger.error(
         channel,
-        `${prefix} failed to save ${resourceType} document before running command.`,
+        `${prefix} failed to save LaTeX document before running command.`,
       );
       break;
   }
 }
 
-interface GuardedFileCommandOptions {
+interface GuardedLatexCommandOptions {
   /** The logging channel to use */
   channel: string;
-  /** Description of the action being performed (e.g. "parse YAML"). */
+  /** Description of the action being performed (e.g. "indent LaTeX document"). */
   action: string;
-  /** Human-readable resource label used in guard warnings and failure logs. */
-  resourceName: string;
-  /** Extensions the active document must match, dot-prefixed. */
-  allowedExtensions: string[];
   /** Whether to save the document before proceeding (default: false) */
   saveDocument?: boolean;
   /** Message surfaced and logged when the operation throws. */
@@ -133,32 +107,21 @@ interface GuardedFileCommandOptions {
 
 /**
  * Run a command against the active editor under the active-file guard: the
- * document must exist and match `allowedExtensions`, guard failures are logged
- * through the command's channel, and anything the operation throws is surfaced
- * once through that same channel.
+ * document must exist and be a `.tex` file, guard failures are logged through
+ * the command's channel, and anything the operation throws is surfaced once
+ * through that same channel.
  */
-async function runGuardedFileCommand(
-  options: GuardedFileCommandOptions,
+export async function runGuardedLatexCommand(
+  options: GuardedLatexCommandOptions,
   operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
 ): Promise<void> {
-  const {
-    channel,
-    action,
-    resourceName,
-    allowedExtensions,
-    saveDocument = false,
-    errorMessage,
-  } = options;
+  const { channel, action, saveDocument = false, errorMessage } = options;
 
   try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions,
-      resourceName,
-      saveDocument,
-    });
+    const guardResult = await getActiveLatexEditor(saveDocument);
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(channel, action, guardResult.status, resourceName);
+      logGuardFailure(channel, action, guardResult.status);
       return;
     }
 
@@ -166,20 +129,4 @@ async function runGuardedFileCommand(
   } catch (err) {
     await showLoggedErrorMessage(channel, errorMessage, err);
   }
-}
-
-type GuardedLatexCommandOptions = Omit<
-  GuardedFileCommandOptions,
-  'resourceName' | 'allowedExtensions'
->;
-
-/** {@link runGuardedFileCommand} bound to `.tex` documents. */
-export function runGuardedLatexCommand(
-  options: GuardedLatexCommandOptions,
-  operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
-): Promise<void> {
-  return runGuardedFileCommand(
-    { ...options, resourceName: 'LaTeX', allowedExtensions: ['.tex'] },
-    operation,
-  );
 }

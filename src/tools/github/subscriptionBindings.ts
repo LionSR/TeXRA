@@ -18,110 +18,64 @@ import {
 } from './RepoPollingSource';
 import {
   StreamSubscriptionRegistry,
+  type StreamSubscriptionRegistryOptions,
   type SubscriptionBinding,
 } from './StreamSubscriptionRegistry';
 
-const prSubscriptions = new StreamSubscriptionRegistry<
-  string,
-  PRSubscribeInput
->({
+/**
+ * Wire one polling source to a registry and expose its four operations as
+ * plain functions. `list` takes optional keys so the no-arg default stays
+ * owned by `StreamSubscriptionRegistry.list` (source.activeKeys()).
+ */
+function createSubscriptionBindings<K extends string, I>(
+  opts: StreamSubscriptionRegistryOptions<K, I>,
+): {
+  list: (keys?: readonly K[]) => SubscriptionBinding<K>[];
+  bind: (streamId: StreamTabId, input: I) => boolean;
+  unbind: (streamId: StreamTabId, input: I) => boolean;
+  unbindAll: (key: string) => number;
+} {
+  const registry = new StreamSubscriptionRegistry<K, I>(opts);
+  return {
+    list: (keys) => registry.list(keys),
+    bind: (streamId, input) => registry.bind(streamId, input),
+    unbind: (streamId, input) => registry.unbind(streamId, input),
+    unbindAll: (key) => registry.unbindAll(key),
+  };
+}
+
+export const {
+  list: listPRSubscriptionBindings,
+  bind: bindPRSubscription,
+  unbind: unbindPRSubscription,
+  unbindAll: unbindAllForPR,
+} = createSubscriptionBindings<string, PRSubscribeInput>({
   name: 'PRStreamSubscriptionRegistry',
   source: SharedPRPollingSource,
   keyOf: prKeyToString,
   bindingsChangedEvent: 'prSubscriptionBindingsChanged',
 });
 
-export type PRSubscriptionBinding = SubscriptionBinding<string>;
-
-export function listPRSubscriptionBindings(
-  keys: readonly string[] = SharedPRPollingSource.activeKeys(),
-): PRSubscriptionBinding[] {
-  return prSubscriptions.list(keys);
-}
-
-export function bindPRSubscription(
-  streamId: StreamTabId,
-  pr: PRSubscribeInput,
-): boolean {
-  return prSubscriptions.bind(streamId, pr);
-}
-
-export function unbindPRSubscription(
-  streamId: StreamTabId,
-  pr: PRSubscribeInput,
-): boolean {
-  return prSubscriptions.unbind(streamId, pr);
-}
-
-export function unbindAllForPR(key: string): number {
-  return prSubscriptions.unbindAll(key);
-}
-
-const repoSubscriptions = new StreamSubscriptionRegistry<
-  RepoKey,
-  RepoSubscribeInput
->({
+export const {
+  list: listRepoSubscriptionBindings,
+  bind: bindRepoSubscription,
+  unbind: unbindRepoSubscription,
+  unbindAll: unbindAllForRepo,
+} = createSubscriptionBindings<RepoKey, RepoSubscribeInput>({
   name: 'RepoStreamSubscriptionRegistry',
   source: SharedRepoPollingSource,
   keyOf: repoKeyToString,
   bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
 });
 
-export type RepoSubscriptionBinding = SubscriptionBinding<RepoKey>;
-
-export function listRepoSubscriptionBindings(
-  keys: readonly RepoKey[] = SharedRepoPollingSource.activeKeys(),
-): RepoSubscriptionBinding[] {
-  return repoSubscriptions.list(keys);
-}
-
-export function bindRepoSubscription(
-  streamId: StreamTabId,
-  input: RepoSubscribeInput,
-): boolean {
-  return repoSubscriptions.bind(streamId, input);
-}
-
-export function unbindRepoSubscription(
-  streamId: StreamTabId,
-  input: RepoSubscribeInput,
-): boolean {
-  return repoSubscriptions.unbind(streamId, input);
-}
-
-export function unbindAllForRepo(key: string): number {
-  return repoSubscriptions.unbindAll(key);
-}
-
-const issueSubscriptions = new StreamSubscriptionRegistry<string, IssueKey>({
+export const {
+  list: listIssueSubscriptionBindings,
+  bind: bindIssueSubscription,
+  unbind: unbindIssueSubscription,
+  unbindAll: unbindAllForIssue,
+} = createSubscriptionBindings<string, IssueKey>({
   name: 'IssueStreamSubscriptionRegistry',
   source: SharedIssuePollingSource,
   keyOf: issueKeyToString,
   bindingsChangedEvent: 'issueSubscriptionBindingsChanged',
 });
-
-export type IssueSubscriptionBinding = SubscriptionBinding<string>;
-
-export function listIssueSubscriptionBindings(
-  keys: readonly string[] = SharedIssuePollingSource.activeKeys(),
-): IssueSubscriptionBinding[] {
-  return issueSubscriptions.list(keys);
-}
-
-export function bindIssueSubscription(
-  streamId: StreamTabId,
-  issue: IssueKey,
-): boolean {
-  return issueSubscriptions.bind(streamId, issue);
-}
-
-export function unbindIssueSubscription(
-  streamId: StreamTabId,
-  issue: IssueKey,
-): boolean {
-  return issueSubscriptions.unbind(streamId, issue);
-}
-
-export function unbindAllForIssue(key: string): number {
-  return issueSubscriptions.unbindAll(key);
-}

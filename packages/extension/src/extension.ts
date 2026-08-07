@@ -89,18 +89,17 @@ import {
 } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { defaultSkillSources } from '@skills/skillSources';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import {
-  SharedPRPollingSource,
-  SharedRepoPollingSource,
-  SharedIssuePollingSource,
-} from '@tools/github';
 import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
+import { SharedIssuePollingSource } from '@tools/github/IssuePollingSource';
+import { SharedPRPollingSource } from '@tools/github/PRPollingSource';
+import { SharedRepoPollingSource } from '@tools/github/RepoPollingSource';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';

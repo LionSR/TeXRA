@@ -1,20 +1,18 @@
 // Third-party imports
-import ky, { HTTPError } from 'ky';
+import ky from 'ky';
 import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError, ToolResult } from '@shared/schemas/toolResult';
+import { ToolResult } from '@shared/schemas/toolResult';
 import {
-  isTimeoutError,
   joinAbortSignal,
   retryTransientFetch,
-  unwrapAbortError,
+  toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
@@ -126,26 +124,12 @@ export class WebSearchTool extends defineTool({
         { retries: DDG_RETRIES, minTimeout: 500, cancelSignal },
       );
     } catch (error) {
-      // Defensive: ensure the specific type checks below see the real error
-      // even if a p-retry AbortError wrapper reaches here (p-retry v8 already
-      // unwraps it to .originalError, so this is normally a no-op).
-      const err = unwrapAbortError(error);
-      if (isTimeoutError(err)) {
-        throw new ToolError(
-          `Web search timed out after ${DDG_TIMEOUT_MS / 1000}s. Retry the request.`,
-        );
-      }
-      if (err instanceof HTTPError) {
-        throw new ToolError(
-          `Web search failed: HTTP ${err.response.status} from DuckDuckGo.`,
-        );
-      }
-      if (err instanceof TypeError) {
-        throw new ToolError(
-          `Web search failed: network error — ${err.message}`,
-        );
-      }
-      throw new ToolError(`Web search failed: ${toErrorMessage(err)}`);
+      throw toFetchToolError(error, {
+        timeout: `Web search timed out after ${DDG_TIMEOUT_MS / 1000}s. Retry the request.`,
+        http: (status) => `Web search failed: HTTP ${status} from DuckDuckGo.`,
+        network: (message) => `Web search failed: network error — ${message}`,
+        fallback: (message) => `Web search failed: ${message}`,
+      });
     }
 
     const results: string[] = [];

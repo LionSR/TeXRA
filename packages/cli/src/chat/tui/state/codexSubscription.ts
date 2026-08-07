@@ -7,12 +7,12 @@ import {
 import { bumpCodexPreferenceVersion } from './cliState';
 
 /**
- * Single source of truth for reacting to a Codex / ChatGPT-subscription change
- * inside the running TUI: drop the cached model options and bump the preference
- * version so dependent views (model picker, status bar) re-render. Call after
- * any sign-in/out or preference flip.
+ * Single source of truth for reacting to a subscription change (ChatGPT, Grok,
+ * …) inside the running TUI: drop the cached model options and bump the
+ * preference version so dependent views (model picker, status bar) re-render.
+ * Call after any sign-in/out or preference flip.
  */
-export function refreshCodexPreferenceViews(): void {
+export function refreshSubscriptionPreferenceViews(): void {
   invalidateModelOptionsCache();
   bumpCodexPreferenceVersion();
 }
@@ -26,6 +26,6 @@ export async function setCliCodexSubscription(
   enabled: boolean,
 ): Promise<CodexSubscriptionPreferenceUpdate> {
   const update = await setPreferCodexSubscription(enabled);
-  refreshCodexPreferenceViews();
+  refreshSubscriptionPreferenceViews();
   return update;
 }
