@@ -19,7 +19,6 @@ import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { delay } from '@utils/core';
 import {
   createStubDesktopAgentExecutionHost,
   disposeAfterTest,
@@ -124,11 +123,11 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+/** Polls until `dir` is empty; fails the test if cleanup never completes. */
 async function waitForEmptyDir(dir: string): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    if ((await readdir(dir)).length === 0) return;
-    await delay(10);
-  }
+  await vi.waitFor(async () => {
+    expect(await readdir(dir)).toEqual([]);
+  });
 }
 
 async function loadApprovalModules(workspacePath = '/workspace') {

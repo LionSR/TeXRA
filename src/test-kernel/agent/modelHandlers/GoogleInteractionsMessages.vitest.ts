@@ -5,13 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports
 import { GOOGLE_INTERACTIONS_TEST_CONFIG } from './googleInteractionsTestUtils';
 
 // Third-party imports
-import type { Interactions } from '@google/genai';
+import type { GoogleGenAI, Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
 
@@ -43,38 +44,44 @@ function userStep(text: string): Step {
   return { type: 'user_input', content: [{ type: 'text', text }] };
 }
 
-/** Stub the media loader so no platform / filesystem is touched. */
-function stubImageMediaLoader(handler: ModelHandlerGoogleInteractions): void {
-  (
-    handler as unknown as {
-      createMediaMessage: (files: unknown[]) => Promise<Interactions.Content[]>;
-    }
-  ).createMediaMessage = async () => [
-    { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
-  ];
+/**
+ * A handler test double that stubs the media pipeline through typed seams:
+ * canned media replaces the filesystem-backed loader, a canned client
+ * replaces the credential-resolving factory, and the protected upload
+ * pipeline is exposed directly. A private-member rename now fails
+ * compilation instead of silently breaking the suite.
+ */
+class MediaProbeHandler extends ModelHandlerGoogleInteractions {
+  private stubbedMedia: Interactions.Content[] = [];
+
+  /** Canned media the loader override returns, so no platform/fs is touched. */
+  setMediaContent(content: Interactions.Content[]): void {
+    this.stubbedMedia = content;
+  }
+
+  /** Replace the client factory with a canned client (e.g. files.upload stub). */
+  setClient(client: GoogleGenAI): void {
+    this.getClient = () => Promise.resolve(client);
+  }
+
+  /** Invoke the media-upload pipeline directly. */
+  uploadEntries(entries: MediaEntry[]): Promise<Interactions.Content[]> {
+    return this.uploadMediaEntries(entries);
+  }
+
+  protected override async createMediaMessage(): Promise<
+    Interactions.Content[]
+  > {
+    return this.stubbedMedia;
+  }
 }
 
-/** Replace the client factory with a canned client (e.g. a files.upload stub). */
-function stubGetClient(
-  handler: ModelHandlerGoogleInteractions,
-  client: unknown,
-): void {
-  (handler as unknown as { getClient: () => Promise<unknown> }).getClient =
-    async () => client;
-}
-
-/** Reach the private media-upload pipeline directly. */
-function uploadMediaEntries(
-  handler: ModelHandlerGoogleInteractions,
-  entries: unknown[],
-): Promise<Interactions.Content[]> {
-  return (
-    handler as unknown as {
-      uploadMediaEntries: (
-        entries: unknown[],
-      ) => Promise<Interactions.Content[]>;
-    }
-  ).uploadMediaEntries(entries);
+function createMediaProbe(): MediaProbeHandler {
+  const handler = new MediaProbeHandler(
+    buildTestModelConfig(MESSAGES_TEST_CONFIG),
+  );
+  handler.setLogger({ ...noopTrace });
+  return handler;
 }
 
 describe('ModelHandlerGoogleInteractions message construction', () => {
@@ -140,10 +147,12 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
   });
 
   it('addMediaToUserMessage unshifts inline image content into the trailing user_input step', async () => {
-    const handler = createHandler();
+    const handler = createMediaProbe();
     const steps: Step[] = [userStep('caption')];
 
-    stubImageMediaLoader(handler);
+    handler.setMediaContent([
+      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
+    ]);
 
     await handler.addMediaToUserMessage(steps, [
       { absolutePath: '/x/fig.png' } as never,
@@ -155,12 +164,14 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
   });
 
   it('creates a new user turn for an image-only follow-up', async () => {
-    const handler = createHandler();
+    const handler = createMediaProbe();
     const steps: Step[] = [
       userStep('question'),
       { type: 'model_output', content: [{ type: 'text', text: 'answer' }] },
     ];
-    stubImageMediaLoader(handler);
+    handler.setMediaContent([
+      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
+    ]);
 
     await handler.createUserFollowUpMessages(steps, '');
     await handler.addMediaToUserMessage(steps, [
@@ -175,8 +186,10 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
   });
 
   it('initializeMessages includes typed media content when mediaFiles are provided', async () => {
-    const handler = createHandler();
-    stubImageMediaLoader(handler);
+    const handler = createMediaProbe();
+    handler.setMediaContent([
+      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
+    ]);
 
     const steps = await handler.initializeMessages('PREFIX', 'REQUEST', [
       { absolutePath: '/x/fig.png' } as never,
@@ -200,44 +213,46 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
   it('uploadMediaEntries inlines data under the limit and uploads (uri) over it', async () => {
     // A handler whose inline limit is 4 bytes so the boundary is exercised
     // without allocating a 20 MB payload.
-    class TinyInlineLimitHandler extends ModelHandlerGoogleInteractions {
+    class TinyInlineLimitProbe extends MediaProbeHandler {
       protected override getInlineUploadLimitBytes(): number {
         return 4;
       }
     }
-    const handler = new TinyInlineLimitHandler(
+    const handler = new TinyInlineLimitProbe(
       buildTestModelConfig(MESSAGES_TEST_CONFIG),
     );
     handler.setLogger({ ...noopTrace });
 
     let uploadCalls = 0;
-    stubGetClient(handler, {
+    handler.setClient({
       files: {
         upload: async () => {
           uploadCalls += 1;
           return { uri: 'files/abc', mimeType: 'image/png' };
         },
       },
-    });
+    } as unknown as GoogleGenAI);
 
-    const entries = [
+    const entries: MediaEntry[] = [
       // 2 bytes decoded (<= 4) → inline data.
       {
         file_name: 'small.png',
         media_type: 'image/png',
+        media_category: 'image',
         data: Buffer.from('hi').toString('base64'),
       },
       // 11 bytes decoded (> 4) → falls back to upload → uri.
       {
         file_name: 'big.png',
         media_type: 'image/png',
+        media_category: 'image',
         data: Buffer.from('hello world').toString('base64'),
         source_path: '/x/big.png',
         bytes_match_source: true,
       },
     ];
 
-    const content = await uploadMediaEntries(handler, entries);
+    const content = await handler.uploadEntries(entries);
 
     expect(content).toHaveLength(2);
     const inline = content[0] as Interactions.ImageContent;
@@ -255,34 +270,37 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
   });
 
   it('builds typed Interactions media content for audio, video, and documents', async () => {
-    const handler = createHandler();
-    stubGetClient(handler, {
+    const handler = createMediaProbe();
+    handler.setClient({
       files: {
         upload: async () => {
           throw new Error('expected inline media');
         },
       },
-    });
+    } as unknown as GoogleGenAI);
 
-    const entries = [
+    const entries: MediaEntry[] = [
       {
         file_name: 'sound.mp3',
         media_type: 'audio/mp3',
+        media_category: 'audio',
         data: Buffer.from('audio').toString('base64'),
       },
       {
         file_name: 'clip.mp4',
         media_type: 'video/mp4',
+        media_category: 'video',
         data: Buffer.from('video').toString('base64'),
       },
       {
         file_name: 'paper.pdf',
         media_type: 'application/pdf',
+        media_category: 'document',
         data: Buffer.from('pdf').toString('base64'),
       },
     ];
 
-    const content = await uploadMediaEntries(handler, entries);
+    const content = await handler.uploadEntries(entries);
 
     expect(content).toEqual([
       {

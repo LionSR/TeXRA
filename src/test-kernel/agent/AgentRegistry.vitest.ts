@@ -136,13 +136,18 @@ describe('agent registry', () => {
       },
     });
 
-    const pendingRefresh = refresh({ includeRemote: false });
-    await delay(0);
+    try {
+      const pendingRefresh = refresh({ includeRemote: false });
+      await delay(0);
 
-    expect(getAgent('assistant')?.name).toBe('assistant');
+      expect(getAgent('assistant')?.name).toBe('assistant');
 
-    builtInToolUseDir.resolve();
-    await pendingRefresh;
+      builtInToolUseDir.resolve();
+      await pendingRefresh;
+    } finally {
+      builtInToolUseDir.resolve();
+      useAgentDirectories();
+    }
   });
 
   it('forces a new remote fetch after an older initialization settles', async () => {
@@ -160,21 +165,24 @@ describe('agent registry', () => {
       return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
     });
 
-    const staleInitialization = loadAgents({ includeRemote: true });
-    await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalledOnce());
-    const forcedRefresh = refresh({ includeRemote: true });
+    try {
+      const staleInitialization = loadAgents({ includeRemote: true });
+      await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalledOnce());
+      const forcedRefresh = refresh({ includeRemote: true });
 
-    staleLoadGate.resolve();
-    await staleInitialization;
-    await forcedRefresh;
+      staleLoadGate.resolve();
+      await staleInitialization;
+      await forcedRefresh;
 
-    expect(listRemoteAgents).toHaveBeenCalledTimes(2);
-    expect(getAgent('freshAgent')?.source).toBe('remote');
-    expect(getAgent('staleAgent')).toBeUndefined();
-
-    listRemoteAgents.mockReset();
-    listRemoteAgents.mockResolvedValue([ORCHESTRATOR_AGENT]);
-    await refresh({ includeRemote: false });
+      expect(listRemoteAgents).toHaveBeenCalledTimes(2);
+      expect(getAgent('freshAgent')?.source).toBe('remote');
+      expect(getAgent('staleAgent')).toBeUndefined();
+    } finally {
+      staleLoadGate.resolve();
+      listRemoteAgents.mockReset();
+      listRemoteAgents.mockResolvedValue([ORCHESTRATOR_AGENT]);
+      await refresh({ includeRemote: false });
+    }
   });
 
   it('reloads local-only definitions after sign-out invalidation', async () => {
@@ -200,20 +208,22 @@ describe('agent registry', () => {
       },
     });
 
-    const invalidation = invalidateRemoteAgentsAfterSignOut();
-    expect(getAgentsBySource('remote')).toEqual([]);
-    await expect(invalidation).resolves.toBeUndefined();
-    expect(getAgentsBySource('remote')).toEqual([]);
-    expect(warn).toHaveBeenCalledWith(
-      'agentRegistry',
-      expect.stringContaining(
-        'Local agent catalog rebuild failed after sign-out',
-      ),
-    );
-
-    useAgentDirectories();
-    await refresh({ includeRemote: false });
-    warn.mockRestore();
+    try {
+      const invalidation = invalidateRemoteAgentsAfterSignOut();
+      expect(getAgentsBySource('remote')).toEqual([]);
+      await expect(invalidation).resolves.toBeUndefined();
+      expect(getAgentsBySource('remote')).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        'agentRegistry',
+        expect.stringContaining(
+          'Local agent catalog rebuild failed after sign-out',
+        ),
+      );
+    } finally {
+      useAgentDirectories();
+      await refresh({ includeRemote: false });
+      warn.mockRestore();
+    }
   });
 
   it('fences an in-flight remote load before rebuilding locally', async () => {
@@ -238,15 +248,22 @@ describe('agent registry', () => {
 
     const staleLoad = loadAgents({ includeRemote: true });
     await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalled());
-    const invalidation = invalidateRemoteAgentsAfterSignOut();
-    remoteLoad.resolve();
-    await staleLoad;
 
-    expect(getAgent('lateRemote')).toBeUndefined();
-    expect(getAgentsBySource('remote')).toEqual([]);
+    try {
+      const invalidation = invalidateRemoteAgentsAfterSignOut();
+      remoteLoad.resolve();
+      await staleLoad;
 
-    localRebuild.resolve();
-    await invalidation;
+      expect(getAgent('lateRemote')).toBeUndefined();
+      expect(getAgentsBySource('remote')).toEqual([]);
+
+      localRebuild.resolve();
+      await invalidation;
+    } finally {
+      remoteLoad.resolve();
+      localRebuild.resolve();
+      useAgentDirectories();
+    }
   });
 
   it('keeps the registry marked ready when a later refresh fails', async () => {
@@ -259,12 +276,14 @@ describe('agent registry', () => {
       },
     });
 
-    await expect(loadAgents()).rejects.toThrow('refresh failed');
+    try {
+      await expect(loadAgents()).rejects.toThrow('refresh failed');
 
-    expect(isAgentRegistryReady()).toBe(true);
-    expect(getAgent('assistant')?.name).toBe('assistant');
-
-    useAgentDirectories();
+      expect(isAgentRegistryReady()).toBe(true);
+      expect(getAgent('assistant')?.name).toBe('assistant');
+    } finally {
+      useAgentDirectories();
+    }
   });
 
   it('includes remote agents in launcher options after local-only startup load', async () => {

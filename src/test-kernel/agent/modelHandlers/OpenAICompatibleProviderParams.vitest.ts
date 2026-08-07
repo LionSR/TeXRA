@@ -91,7 +91,9 @@ function configureHandler<Handler extends CompatibleHandler>(
   handler: Handler,
 ): Handler {
   handler.setLogger({ ...noopTrace });
-  (handler as any).getStreamingConfig = () => false;
+  // Both members are public, so the stubs stay compile-checked: a rename or
+  // signature change fails typecheck instead of silently breaking the suite.
+  handler.getStreamingConfig = () => false;
   return handler;
 }
 
@@ -99,7 +101,7 @@ function configureHandler<Handler extends CompatibleHandler>(
 function configureKimiHandler<Handler extends ModelHandlerKimi>(
   handler: Handler,
 ): Handler {
-  (handler as any).estimateTokenCount = async () => 100;
+  handler.estimateTokenCount = async () => 100;
   return configureHandler(handler);
 }
 

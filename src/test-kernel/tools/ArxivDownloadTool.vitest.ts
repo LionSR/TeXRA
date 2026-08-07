@@ -27,54 +27,39 @@ declare module '@latex/arxivProcessor' {
   }
 }
 
-// Mutable references for stubbing
-const processor = arxivModule.ArxivProcessor as {
-  validateId: typeof arxivModule.ArxivProcessor.validateId;
-  downloadSource: typeof arxivModule.ArxivProcessor.downloadSource;
-};
-const wsFS = WorkspaceFS as unknown as {
-  relativePath: typeof WorkspaceFS.relativePath;
-  readDir: typeof WorkspaceFS.readDir;
-};
-
 describe('ArxivDownloadTool', () => {
-  const originalValidateId = processor.validateId;
-  const originalDownloadSource = processor.downloadSource;
-  const originalRelativePath = wsFS.relativePath;
-  const originalReadDir = wsFS.readDir;
-
   afterEach(() => {
-    processor.validateId = originalValidateId;
-    processor.downloadSource = originalDownloadSource;
-    wsFS.relativePath = originalRelativePath;
-    wsFS.readDir = originalReadDir;
+    // spyOn-registered stubs restore here even when a test body throws.
+    vi.restoreAllMocks();
     gitignoreMock.ignoredPaths.clear();
   });
 
   it('returns download summary and a listing of the extracted files', async () => {
     let receivedId: string | undefined;
     let receivedAutoIndent: boolean | undefined;
-    const validateId = vi.fn(() => null);
+    const validateId = vi
+      .spyOn(arxivModule.ArxivProcessor, 'validateId')
+      .mockReturnValue(null);
 
-    processor.validateId = validateId;
+    vi.spyOn(arxivModule.ArxivProcessor, 'downloadSource').mockImplementation(
+      async (id, options) => {
+        receivedId = id;
+        receivedAutoIndent = options?.autoIndent;
+        return { path: '/workspace/project/sample', alreadyExisted: false };
+      },
+    );
 
-    processor.downloadSource = async (id, options) => {
-      receivedId = id;
-      receivedAutoIndent = options?.autoIndent;
-      return { path: '/workspace/project/sample', alreadyExisted: false };
-    };
-
-    wsFS.relativePath = () => 'sample';
+    vi.spyOn(WorkspaceFS, 'relativePath').mockReturnValue('sample');
 
     gitignoreMock.ignoredPaths.add('sample/node_modules');
 
-    wsFS.readDir = async () => [
+    vi.spyOn(WorkspaceFS, 'readDir').mockResolvedValue([
       ['.git', FileType.Directory],
       ['.gitignore', FileType.File],
       ['main.tex', FileType.File],
       ['node_modules', FileType.Directory],
       ['src', FileType.Directory],
-    ];
+    ]);
 
     const tool = new ArxivDownloadTool();
     const result = await tool.call({ id: '2401.12345v2', autoIndent: false });
