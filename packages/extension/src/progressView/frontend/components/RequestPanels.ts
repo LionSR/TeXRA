@@ -50,6 +50,7 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
 import { getPermissionKey, type PermissionState } from '../permissionState';
+import { streamDisplayLabel } from '../utils';
 
 // Local imports - progress view contexts
 import {
@@ -369,7 +370,10 @@ export class RequestPanels extends LitElement {
     if (!this.multiRunPending) return panel;
     const streamId = permission.data.streamId;
     if (!streamId) return panel;
-    const label = this.streamById.get(streamId)?.label || streamId;
+    // If the run's tab was evicted, skip the group caption rather than
+    // show the raw `agent#executionId` handle.
+    const label = streamDisplayLabel(this.streamById.get(streamId));
+    if (!label) return panel;
     return html`
       <div class="request-run-group">
         <div class="request-run-group__label">${label}</div>
