@@ -15,7 +15,10 @@ import {
   setActiveSidebarView,
   type SidebarView,
 } from '@common/webview';
-import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
+import {
+  EXTENSION_CATEGORIES,
+  getFilterExtensions,
+} from '@common/files/fileTypeUtils';
 import {
   planOnboardingFunnelTransition,
   type OnboardingFunnelState,

@@ -2,46 +2,37 @@
  * Process-wide access to the Codex OAuth coordinator, backed by
  * `platform().secrets`.
  */
-import { tryPlatform } from '@platform/platform';
-
 import {
+  createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
   isSubscriptionSessionRoutable,
 } from '../oauth/sessionAccess';
 import { CODEX_SESSION_SECRET_KEY } from './codexConstants';
 import {
   CodexSessionCoordinator,
-  type CodexSessionStorage,
   type CodexSessionStatus,
 } from './CodexSessionCoordinator';
 import { CodexAuthError } from './codexSessionTypes';
 
 const CHANNEL = 'codexAuth';
 
-let singleton: CodexSessionCoordinator | null = null;
+const coordinatorAccess = createSecretBackedCoordinator({
+  secretKey: CODEX_SESSION_SECRET_KEY,
+  notInitializedMessage: 'Codex auth used before the platform was initialized.',
+  makeCoordinator: (storage) => new CodexSessionCoordinator({ storage }),
+});
 
 /**
  * The shared coordinator. Throws if the platform has not been initialized yet
  * (callers run after `initPlatform()`).
  */
 export function codexCoordinator(): CodexSessionCoordinator {
-  if (singleton) return singleton;
-  const platform = tryPlatform();
-  if (!platform) {
-    throw new Error('Codex auth used before the platform was initialized.');
-  }
-  const storage: CodexSessionStorage = {
-    get: () => platform.secrets.get(CODEX_SESSION_SECRET_KEY),
-    store: (value) => platform.secrets.set(CODEX_SESSION_SECRET_KEY, value),
-    delete: () => platform.secrets.delete(CODEX_SESSION_SECRET_KEY),
-  };
-  singleton = new CodexSessionCoordinator({ storage });
-  return singleton;
+  return coordinatorAccess.get();
 }
 
 /** Test seam: drop the cached coordinator. */
 export function resetCodexCoordinator(): void {
-  singleton = null;
+  coordinatorAccess.reset();
 }
 
 /** Signed-in status, safe to call before platform init (returns signed-out). */

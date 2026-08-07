@@ -1,15 +1,64 @@
 /**
  * Shared platform-backed access helpers for subscription OAuth coordinators.
  *
- * Codex and Grok each keep a one-line singleton factory; status + routability
- * logic lives here so a third provider does not re-copy the re-auth dance.
+ * The secret-backed storage adapter and singleton coordinator factory live
+ * here (with the status + routability probes) so a provider does not re-copy
+ * the platform dance.
  */
 import * as logger from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
-import type { SubscriptionSessionStatus } from './SubscriptionOAuthCoordinator';
+import type {
+  SubscriptionSessionStatus,
+  SubscriptionSessionStorage,
+} from './SubscriptionOAuthCoordinator';
+
+/** Secret-store slice the session-storage adapter needs. */
+export interface SessionSecretStore {
+  get(key: string): Promise<string | undefined>;
+  set(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
+/** Session storage over one key of a secret store. */
+export function secretBackedSessionStorage(
+  secrets: SessionSecretStore,
+  key: string,
+): SubscriptionSessionStorage {
+  return {
+    get: () => secrets.get(key),
+    store: (value) => secrets.set(key, value),
+    delete: () => secrets.delete(key),
+  };
+}
+
+/**
+ * Lazily-built process-wide coordinator backed by a platform secret. `get`
+ * throws before platform init; `reset` drops the cached instance (test seam).
+ */
+export function createSecretBackedCoordinator<C>(init: {
+  secretKey: string;
+  notInitializedMessage: string;
+  makeCoordinator: (storage: SubscriptionSessionStorage) => C;
+}): { get(): C; reset(): void } {
+  let singleton: C | null = null;
+  return {
+    get() {
+      if (singleton) return singleton;
+      const platform = tryPlatform();
+      if (!platform) throw new Error(init.notInitializedMessage);
+      singleton = init.makeCoordinator(
+        secretBackedSessionStorage(platform.secrets, init.secretKey),
+      );
+      return singleton;
+    },
+    reset() {
+      singleton = null;
+    },
+  };
+}
 
 /** Minimal coordinator surface used for status / routing probes. */
 export interface SessionAccessCoordinator {
