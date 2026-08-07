@@ -9,7 +9,7 @@ import {
 } from '@cli/onboarding/onboardingState';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
-  getOnboardingDeclined,
+  readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -19,21 +19,21 @@ const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 describe('onboarding decline flag', () => {
   it('defaults to false and round-trips through global state', async () => {
     const state = new MemoryStateStore();
-    expect(getOnboardingDeclined(state)).toBe(false);
+    expect(readOnboardingFlags(state).declined).toBe(false);
 
     await setOnboardingDeclined(state, true);
-    expect(getOnboardingDeclined(state)).toBe(true);
+    expect(readOnboardingFlags(state).declined).toBe(true);
     expect(state.get(ONBOARDING_DECLINED_KEY)).toBe(true);
 
     await setOnboardingDeclined(state, false);
-    expect(getOnboardingDeclined(state)).toBe(false);
+    expect(readOnboardingFlags(state).declined).toBe(false);
   });
 
   it('treats a non-boolean stored value as not-declined', async () => {
     const state = new MemoryStateStore();
     await state.update(ONBOARDING_DECLINED_KEY, 'yes');
 
-    expect(getOnboardingDeclined(state)).toBe(false);
+    expect(readOnboardingFlags(state).declined).toBe(false);
   });
 });
 

@@ -84,16 +84,6 @@ export async function selectFiles(
   return fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath));
 }
 
-/**
- * Convenience wrapper for single file selection.
- */
-export async function selectFile(
-  options: FileDialogOptions,
-): Promise<string | null> {
-  const paths = await selectFiles({ ...options, allowMany: false });
-  return paths?.[0] ?? null;
-}
-
 export interface FolderDialogOptions {
   /** Label for the open button */
   openLabel: string;
@@ -103,7 +93,7 @@ export interface FolderDialogOptions {
 
 /**
  * Generic helper to show a folder-picker dialog and return the selected
- * absolute path. Unlike {@link selectFile}/{@link selectFiles}, this never
+ * absolute path. Unlike {@link selectFiles}, this never
  * touches `WorkspaceFS`, so it's safe to call before a workspace (or
  * `platform()`) is available.
  */

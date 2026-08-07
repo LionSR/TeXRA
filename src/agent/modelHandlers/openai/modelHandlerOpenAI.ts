@@ -73,10 +73,7 @@ import { toOpenAITools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { ModelHandler } from '../ModelHandler';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
-import {
-  BaseReasoningStreamAggregator,
-  type StreamingAggregator,
-} from './BaseReasoningStreamAggregator';
+import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
@@ -238,19 +235,6 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Allows subclasses to provide a streaming aggregator implementation.
-   */
-  protected createStreamingAggregator(): StreamingAggregator | null {
-    if (
-      this.useReasoningStreamAggregator &&
-      this.capabilities.supportsReasoning
-    ) {
-      return new BaseReasoningStreamAggregator();
-    }
-    return null;
-  }
-
-  /**
    * Extracts reasoning text from a streaming chunk delta.
    * Override in subclasses to handle provider-specific reasoning fields.
    */
@@ -407,7 +391,10 @@ export class ModelHandlerOpenAI<
       stream_options: { include_usage: true },
     };
 
-    const streamingAggregator = this.createStreamingAggregator();
+    const streamingAggregator =
+      this.useReasoningStreamAggregator && this.capabilities.supportsReasoning
+        ? new BaseReasoningStreamAggregator()
+        : null;
     let requestId: string | undefined;
     let stream: ChatCompletionStream | undefined;
     const abortReconstructedStream = () => stream?.abort();
@@ -533,7 +520,7 @@ export class ModelHandlerOpenAI<
    */
   protected async awaitFinalResponse(
     stream: ChatCompletionStream,
-    aggregator: StreamingAggregator | null,
+    aggregator: BaseReasoningStreamAggregator | null,
   ): Promise<ChatCompletion> {
     try {
       const sdkFinalResponse = await stream.finalChatCompletion();

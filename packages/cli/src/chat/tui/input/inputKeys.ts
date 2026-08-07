@@ -65,18 +65,6 @@ export function metaChordInput(
     : undefined;
 }
 
-export function metaChordDigit(
-  input: string,
-  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
-): number | undefined {
-  const chord = metaChordInput(input, key);
-  if (!chord) return undefined;
-  const digit = Number(chord);
-  return Number.isInteger(digit) && digit >= 1 && digit <= 9
-    ? digit
-    : undefined;
-}
-
 // A return keypress that should act as Enter (submit / confirm / select).
 // Deliberately shift-agnostic: in modals, Select, and the child-control picker
 // Shift+Enter has no newline meaning and must still confirm. The text editor is
@@ -96,10 +84,7 @@ export function isPlainReturnInput(
 // (enabled in runChatTui for terminals that support it). On terminals without
 // it, Shift+Enter is byte-identical to Enter and falls through to submit, so
 // Ctrl-J remains the universal fallback.
-export function isShiftReturnInput(
-  input: string,
-  key: ReturnKeyInput,
-): boolean {
+function isShiftReturnInput(input: string, key: ReturnKeyInput): boolean {
   if (input === SYNTHETIC_SHIFT_RETURN_INPUT) return true;
   if (key.ctrl || key.meta || key.shift !== true) return false;
   return key.return === true || input === '\r' || input === '\n';

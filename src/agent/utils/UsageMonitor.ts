@@ -43,7 +43,7 @@ function resolveRoundCacheMissTokens(
  * the `runKind` derivation in `recordUsage` — a silent default would
  * misreport usage runs from a future caller that forgot to set it.
  */
-export interface UsageMonitorMetadata {
+interface UsageMonitorMetadata {
   /** Agent name for backend logging */
   agentName: string;
   /** Agent category: workflow or toolUse */
@@ -57,7 +57,7 @@ export interface UsageMonitorMetadata {
  * handler, so widening what usage accounting depends on is a visible edit here.
  * Fields are directly from ModelCapabilities and ModelConfig.
  */
-export interface UsageMonitorModelInfo {
+interface UsageMonitorModelInfo {
   capabilities: Pick<
     ModelCapabilities,
     | 'supportsPromptCaching'
@@ -84,7 +84,7 @@ export interface UsageMonitorModelInfo {
  * - storageKey: The storage key for this execution (immutable)
  * - streamId: For backend logging
  */
-export interface UsageMonitorContext {
+interface UsageMonitorContext {
   logger: AgentTrace;
   storageKey: StorageKey;
   streamId: StreamTabId;

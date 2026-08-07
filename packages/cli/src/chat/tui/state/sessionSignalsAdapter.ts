@@ -9,7 +9,6 @@ import type {
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
-import type { SessionRunFactEvent } from '@controllers/session/SessionFactApplier';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
 import {
   SessionState,
@@ -339,34 +338,30 @@ export function attachSessionSignalsAdapter({
   const detachResetHook = registerCliStateResetHook(() => {
     generation = getCliStateGeneration();
   });
-  const detachSessionFacts = events.subscribe(
-    (event) => {
-      if (generation !== getCliStateGeneration() || event.scope !== 'session') {
-        return;
-      }
-      // Status stays on `subscribeStreamStatus`: the shared applier's
-      // eviction keys off `SessionState.activeStream`, which is not the CLI
-      // focus id, and the old TUI ignored status facts here.
-      if (event.event.type === 'status') return;
-      const sessionStreamId = getSessionFactStreamId(event.event);
-      if (sessionStreamId) renderer.captureDispatchGeneration(sessionStreamId);
-      applier.handleSessionFact(event.event);
-    },
-    { scope: 'session' },
-  );
-  const detachRunFacts = events.subscribe(
-    (event) => {
+  const detachSessionFacts = events.subscribeSessionFacts((fact) => {
+    if (generation !== getCliStateGeneration()) {
+      return;
+    }
+    // Status stays on `subscribeStreamStatus`: the shared applier's
+    // eviction keys off `SessionState.activeStream`, which is not the CLI
+    // focus id, and the old TUI ignored status facts here.
+    if (fact.type === 'status') return;
+    const sessionStreamId = getSessionFactStreamId(fact);
+    if (sessionStreamId) renderer.captureDispatchGeneration(sessionStreamId);
+    applier.handleSessionFact(fact);
+  });
+  const detachRunFacts = events.subscribeRunFacts(
+    (runFact) => {
       if (
         generation !== getCliStateGeneration() ||
-        event.scope !== 'run' ||
-        isChildStreamRemoved(event.streamId)
+        isChildStreamRemoved(runFact.streamId)
       ) {
         return;
       }
-      renderer.captureDispatchGeneration(event.streamId);
-      applier.handleRunFact(event.streamId, event.event as SessionRunFactEvent);
+      renderer.captureDispatchGeneration(runFact.streamId);
+      applier.handleRunFact(runFact.streamId, runFact.event);
     },
-    { scope: 'run', types: RUN_FACT_EVENT_TYPES },
+    { types: RUN_FACT_EVENT_TYPES },
   );
 
   return () => {

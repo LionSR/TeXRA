@@ -12,8 +12,6 @@ import {
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
 
-export type DesktopTheme = DesktopThemeKind;
-
 export interface DesktopViewStateIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopThemeKind;

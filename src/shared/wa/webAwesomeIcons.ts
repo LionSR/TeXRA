@@ -324,11 +324,6 @@ export function registerTeXRAWebAwesomeIcons(): void {
   isRegistered = true;
 }
 
-/** Canonical names used to verify host-specific icon resolvers exhaustively. */
-export const TEXRA_ICON_NAMES = Object.freeze(
-  Object.keys(icons) as (keyof typeof icons)[],
-);
-
 interface WaIconOptions {
   readonly id?: string;
   readonly canvas?: 'auto' | 'fixed' | 'roomy' | 'square';

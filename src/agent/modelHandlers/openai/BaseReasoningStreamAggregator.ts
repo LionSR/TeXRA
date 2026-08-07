@@ -6,16 +6,6 @@ import type {
   ChatCompletionMessageFunctionToolCall,
 } from 'openai/resources/chat/completions';
 
-/**
- * The aggregator surface the handler drives per streaming request. Derived
- * from {@link BaseReasoningStreamAggregator} (the only implementation) so the
- * contract can never drift from the class.
- */
-export type StreamingAggregator = Pick<
-  BaseReasoningStreamAggregator,
-  'appendContent' | 'appendReasoning' | 'consumeChunk' | 'finalize'
->;
-
 type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
   reasoning_content?: string;
 };
@@ -24,10 +14,7 @@ type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
  * Base class for streaming aggregators that support reasoning models.
  * Used by DeepSeek, Kimi, and other OpenAI-compatible reasoning models.
  */
-export class BaseReasoningStreamAggregator
-  extends ChannelStreamAggregator
-  implements StreamingAggregator
-{
+export class BaseReasoningStreamAggregator extends ChannelStreamAggregator {
   private lastChunkWithChoices: ChatCompletionChunk | undefined;
   private usageChunk: ChatCompletionChunk | undefined;
 

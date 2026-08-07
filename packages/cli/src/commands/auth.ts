@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
+import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -10,7 +10,6 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import {
   githubSelectAccountWarning,
   hasLoginTransportConflict,
-  isCliLoginProvider,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   unsupportedLoginProviderMessage,
   type CliLoginInit,
@@ -140,7 +139,7 @@ async function runLogin(
   if (init.device) {
     return runDeviceLogin(context);
   }
-  if (!isCliLoginProvider(init.provider)) {
+  if (!isOAuthProvider(init.provider)) {
     writeTextStderr(unsupportedLoginProviderMessage(init.provider));
     return CliExitCode.Usage;
   }

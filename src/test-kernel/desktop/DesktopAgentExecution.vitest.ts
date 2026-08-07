@@ -113,8 +113,6 @@ type TestableBridge = Bridge & {
   ): Promise<void>;
   setActiveStream(streamId: StreamTabId): void;
   revealStream(streamId: StreamTabId): Promise<'revealed' | 'missing'>;
-  deleteStream(streamId: StreamTabId): Promise<void>;
-  deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
   streamLogs: {
     acquireWriter(
@@ -208,6 +206,27 @@ function bridgeInteractions(bridge: TestableBridge): BridgeInteractions {
 
 function bridgeStatus(bridge: TestableBridge): StreamStatusMachine {
   return bridgeSession(bridge).status;
+}
+
+/** Drive stream deletion through the same inbound command path the
+ * renderer uses, so these tests cover the production wiring. */
+async function deleteStreamViaInbound(
+  bridge: TestableBridge,
+  stream: StreamTabId,
+): Promise<void> {
+  const handler = assertSupported(
+    bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.DELETE_STREAM],
+  );
+  await handler({ command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream });
+}
+
+async function deleteAllStreamsViaInbound(
+  bridge: TestableBridge,
+): Promise<void> {
+  const handler = assertSupported(
+    bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.DELETE_ALL],
+  );
+  await handler({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
 }
 
 function bridgeFollowUps(bridge: TestableBridge): SessionHandle['followUps'] {
@@ -1752,7 +1771,7 @@ describe('DesktopProgressBridge', () => {
     await settleProgressEvents();
     messages.length = 0;
 
-    await bridge.deleteStream('second');
+    await deleteStreamViaInbound(bridge, 'second');
     await settleProgressEvents();
 
     await vi.waitFor(() =>
@@ -1810,7 +1829,7 @@ describe('DesktopProgressBridge', () => {
     await settleProgressEvents();
     messages.length = 0;
 
-    await bridge.deleteStream(stream);
+    await deleteStreamViaInbound(bridge, stream);
     await settleProgressEvents();
 
     expect(lastStreamSync(messages)).toMatchObject({ activeStream: stream });
@@ -1840,7 +1859,7 @@ describe('DesktopProgressBridge', () => {
       data: { approvalId: 'plan-cancel-on-delete' },
     });
 
-    await bridge.deleteStream('plan-delete-stream' as StreamTabId);
+    await deleteStreamViaInbound(bridge, 'plan-delete-stream' as StreamTabId);
 
     // This promise must settle through releaseStreamResources, which owns
     // stream-scoped interaction cleanup.
@@ -1863,7 +1882,7 @@ describe('DesktopProgressBridge', () => {
 
     emitSearchRunConfig(bridge);
 
-    await bridge.deleteStream('stream-1');
+    await deleteStreamViaInbound(bridge, 'stream-1');
     emitSearchRunConfig(bridge);
     await expect(tryResumeStream('stream-1')).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
@@ -1879,7 +1898,7 @@ describe('DesktopProgressBridge', () => {
     try {
       activateStream(bridge, stream);
 
-      await bridge.deleteStream(stream);
+      await deleteStreamViaInbound(bridge, stream);
 
       expect(bridgeGoalStore.getForStream(stream)).toBeNull();
     } finally {
@@ -1898,7 +1917,7 @@ describe('DesktopProgressBridge', () => {
     bridge.setActiveStream('second');
     messages.length = 0;
 
-    const deletePromise = bridge.deleteStream('second');
+    const deletePromise = deleteStreamViaInbound(bridge, 'second');
     bridge.setActiveStream('third');
     await deletePromise;
 
@@ -1923,7 +1942,7 @@ describe('DesktopProgressBridge', () => {
     bridge.setActiveStream('first');
     messages.length = 0;
 
-    const deletePromise = bridge.deleteStream('second');
+    const deletePromise = deleteStreamViaInbound(bridge, 'second');
     activateStream(bridge, 'second');
     await deletePromise;
 
@@ -1948,7 +1967,7 @@ describe('DesktopProgressBridge', () => {
     await settleProgressEvents();
     messages.length = 0;
 
-    await bridge.deleteAllStreams();
+    await deleteAllStreamsViaInbound(bridge);
 
     expect(
       messages.map((message) => (message as ProgressMessage).command),
@@ -1993,7 +2012,7 @@ describe('DesktopProgressBridge', () => {
     bridge.setActiveStream(deletedStream);
     messages.length = 0;
 
-    await bridge.deleteAllStreams();
+    await deleteAllStreamsViaInbound(bridge);
     await settleProgressEvents();
 
     expect(lastStreamSync(messages)).toMatchObject({
@@ -2017,7 +2036,7 @@ describe('DesktopProgressBridge', () => {
 
     await waitForShownPermission(messages, { kind: PERMISSION_KIND.BASH });
 
-    await bridge.deleteAllStreams();
+    await deleteAllStreamsViaInbound(bridge);
 
     // This promise must settle through releaseStreamResources, which owns
     // stream-scoped interaction cleanup.
@@ -3152,7 +3171,7 @@ describe('DesktopProgressBridge', () => {
           data: { approvalId: 'plan-rebound-delete' },
         });
 
-        await bridgeB.deleteStream(streamId);
+        await deleteStreamViaInbound(bridgeB, streamId);
 
         await expect(planPromise).resolves.toEqual(STREAM_RELEASED_REJECTION);
         expectPermissionResolved(

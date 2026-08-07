@@ -39,8 +39,6 @@ function usableConfiguredAgent(value: string | undefined): string | undefined {
   return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
 }
 
-export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
-
 export interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
@@ -159,7 +157,7 @@ function buildChatDefaults(init: {
   const modelSource = init.modelSource ?? 'builtin-default';
   return {
     agent: init.agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
-    model: init.model ?? BUILTIN_DEFAULT_CHAT_MODEL,
+    model: init.model ?? CLI_BUILTIN_DEFAULT_MODEL,
     source: deriveSource({ agent: agentSource, model: modelSource }),
     agentSource,
     modelSource,
@@ -231,7 +229,7 @@ export async function resolveChatDefaults(
     { model: workspace.model, reason: 'workspace-config' },
     { model: user.model, reason: 'user-config' },
     { model: history.model, reason: 'history' },
-    { model: BUILTIN_DEFAULT_CHAT_MODEL, reason: 'builtin-default' },
+    { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
   ]);
 
   return buildChatDefaults({

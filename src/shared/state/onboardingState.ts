@@ -10,7 +10,7 @@ import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
 
-export function getOnboardingDeclined(state: StateStore): boolean {
+function getOnboardingDeclined(state: StateStore): boolean {
   return state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true;
 }
 

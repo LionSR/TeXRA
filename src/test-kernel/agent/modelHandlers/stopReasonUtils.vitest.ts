@@ -8,13 +8,11 @@ import {
   isTokenLimitStopReason,
   MCP_STOP,
   OPENAI_CHAT_FINISH,
-  OPENAI_COMPLETION_FINISH,
 } from '@agent/types/StopReasonTypes';
 
 describe('isTokenLimitStopReason', () => {
   it.each([
     OPENAI_CHAT_FINISH.LENGTH,
-    OPENAI_COMPLETION_FINISH.LENGTH,
     ANTHROPIC_STOP.MAX_TOKENS,
     ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
     MCP_STOP.MAX_TOKENS,

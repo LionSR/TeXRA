@@ -62,23 +62,8 @@ export interface RestartRepairOptions {
 }
 
 export interface RestartRepairResult {
-  waitingStreams: StreamTabId[];
-  failedStreams: StreamTabId[];
-  closedWaitingGroups: StreamTabId[];
-  closedFailedGroups: StreamTabId[];
-  outcomeUpdated: ExecutionId[];
   /** Earliest time a fresh lease skipped at startup can be checked again. */
   nextLeaseCheckAt?: number;
-}
-
-function createRestartRepairResult(): RestartRepairResult {
-  return {
-    waitingStreams: [],
-    failedStreams: [],
-    closedWaitingGroups: [],
-    closedFailedGroups: [],
-    outcomeUpdated: [],
-  };
 }
 
 /** Owns the single delayed retry used to revisit leases left fresh by a crash. */
@@ -179,7 +164,7 @@ function repairToWaiting(
   streamId: StreamTabId,
   statusEmitOptions: StreamStatusEmitOptions | undefined,
   logger: RestartRepairLogger | undefined,
-): boolean {
+): void {
   if (
     streamStatus.transition(
       streamId,
@@ -189,10 +174,9 @@ function repairToWaiting(
     )
   ) {
     logger?.debug(`Stream ${streamId} restored to WAITING after restart`);
-    return true;
+    return;
   }
   logger?.warn(`Failed to repair stream ${streamId} to WAITING after restart`);
-  return false;
 }
 
 /**
@@ -244,7 +228,7 @@ async function writeFailedOutcome(
 export async function repairRestartedStreams(
   options: RestartRepairOptions,
 ): Promise<RestartRepairResult> {
-  const result = createRestartRepairResult();
+  const result: RestartRepairResult = {};
   const now = options.now ?? Date.now();
 
   for (const streamId of repairCandidates(
@@ -277,21 +261,14 @@ export async function repairRestartedStreams(
               settlement.outcome,
               now,
             );
-            return { kind: 'settled' as const, settlement };
+            return { kind: 'settled' as const };
           }
         }
         if (options.signal?.aborted) {
           return { kind: 'cancelled' as const };
         }
-        return {
-          kind: 'repaired' as const,
-          result: await repairRestartedStream(
-            options,
-            streamId,
-            executionId,
-            now,
-          ),
-        };
+        await repairRestartedStream(options, streamId, executionId, now);
+        return { kind: 'repaired' as const };
       };
       const repaired = executionId
         ? await (
@@ -318,12 +295,6 @@ export async function repairRestartedStreams(
         );
         continue;
       }
-      const streamResult = repaired.value.result;
-      result.waitingStreams.push(...streamResult.waitingStreams);
-      result.failedStreams.push(...streamResult.failedStreams);
-      result.closedWaitingGroups.push(...streamResult.closedWaitingGroups);
-      result.closedFailedGroups.push(...streamResult.closedFailedGroups);
-      result.outcomeUpdated.push(...streamResult.outcomeUpdated);
     } catch (error) {
       if (repairStarted) throw error;
       options.logger?.warn(
@@ -340,52 +311,43 @@ async function repairRestartedStream(
   streamId: StreamTabId,
   executionId: ExecutionId | undefined,
   now: number,
-): Promise<RestartRepairResult> {
-  const waitingStreams: StreamTabId[] = [];
-  const failedStreams: StreamTabId[] = [];
-  const waitingGroupStreams: StreamTabId[] = [];
-  const failedGroupStreams: StreamTabId[] = [];
-  if (options.signal?.aborted) return createRestartRepairResult();
+): Promise<void> {
+  if (options.signal?.aborted) return;
   const currentStatus = options.streamStatus.get(streamId);
   const isWaitingStream = options.waitingStreams.has(streamId);
+  let closeWaitingGroup = false;
+  let closeFailedGroup = false;
+  let markedFailed = false;
 
   if (currentStatus == null) {
     if (isWaitingStream) {
-      waitingGroupStreams.push(streamId);
-      if (
-        repairToWaiting(
-          options.streamStatus,
-          streamId,
-          options.statusEmitOptions,
-          options.logger,
-        )
-      ) {
-        waitingStreams.push(streamId);
-      }
+      closeWaitingGroup = true;
+      repairToWaiting(
+        options.streamStatus,
+        streamId,
+        options.statusEmitOptions,
+        options.logger,
+      );
     } else {
-      failedGroupStreams.push(streamId);
+      closeFailedGroup = true;
     }
   } else if (
     options.retryFailedStreams === true &&
     currentStatus === STREAM_PHASE.FAILED &&
     !isWaitingStream
   ) {
-    failedStreams.push(streamId);
-    failedGroupStreams.push(streamId);
+    markedFailed = true;
+    closeFailedGroup = true;
   } else if (!RESTART_REPAIR_PHASES.has(currentStatus)) {
-    if (isWaitingStream) waitingGroupStreams.push(streamId);
+    if (isWaitingStream) closeWaitingGroup = true;
   } else if (isWaitingStream) {
-    waitingGroupStreams.push(streamId);
-    if (
-      repairToWaiting(
-        options.streamStatus,
-        streamId,
-        options.statusEmitOptions,
-        options.logger,
-      )
-    ) {
-      waitingStreams.push(streamId);
-    }
+    closeWaitingGroup = true;
+    repairToWaiting(
+      options.streamStatus,
+      streamId,
+      options.statusEmitOptions,
+      options.logger,
+    );
   } else if (
     options.streamStatus.transitionToTerminal(
       streamId,
@@ -394,8 +356,8 @@ async function repairRestartedStream(
       options.statusEmitOptions,
     )
   ) {
-    failedStreams.push(streamId);
-    failedGroupStreams.push(streamId);
+    markedFailed = true;
+    closeFailedGroup = true;
     options.logger?.debug(
       `Stream ${streamId} set to FAILED during restart repair`,
     );
@@ -403,35 +365,18 @@ async function repairRestartedStream(
     options.logger?.warn(`Failed to repair stream ${streamId} after restart`);
   }
 
-  const closedWaitingGroups = waitingGroupStreams.length
-    ? await options.closeRunningGroups(
-        waitingGroupStreams,
-        RUN_OUTCOME.CANCELLED,
-        now,
-      )
-    : [];
-  const closedFailedGroups = failedGroupStreams.length
-    ? await options.closeRunningGroups(
-        failedGroupStreams,
-        RUN_OUTCOME.FAILED,
-        now,
-      )
-    : [];
-  const outcomeUpdated: ExecutionId[] = [];
-  if (failedStreams.length > 0 && executionId) {
-    const persisted = await writeFailedOutcome(
+  if (closeWaitingGroup) {
+    await options.closeRunningGroups([streamId], RUN_OUTCOME.CANCELLED, now);
+  }
+  if (closeFailedGroup) {
+    await options.closeRunningGroups([streamId], RUN_OUTCOME.FAILED, now);
+  }
+  if (markedFailed && executionId) {
+    await writeFailedOutcome(
       streamId,
       executionId,
       options.finalizeExecution ?? defaultFinalizeExecution,
       options.logger,
     );
-    if (persisted) outcomeUpdated.push(executionId);
   }
-  return {
-    waitingStreams,
-    failedStreams,
-    closedWaitingGroups: [...closedWaitingGroups],
-    closedFailedGroups: [...closedFailedGroups],
-    outcomeUpdated,
-  };
 }

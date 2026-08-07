@@ -18,11 +18,9 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
  * `media_category`, and is already shared across both Google handlers via
  * `uploadGoogleMediaEntries`.
  */
-export type MediaKind = 'image' | 'audio' | 'pdf' | 'unsupported';
-
 export function classifyMediaEntry(
   entry: Pick<MediaEntry, 'media_category' | 'media_type'>,
-): MediaKind {
+): 'image' | 'audio' | 'pdf' | 'unsupported' {
   if (entry.media_category === 'image') {
     return entry.media_type === 'application/pdf' ? 'pdf' : 'image';
   }

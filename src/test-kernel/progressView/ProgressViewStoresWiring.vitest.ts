@@ -22,6 +22,6 @@ describe('SessionState session-store wiring', () => {
 
     await expect(state.stores.deleteStream(stream)).resolves.toBe('deleted');
 
-    expect(session.status.has(stream)).toBe(false);
+    expect(session.status.get(stream)).toBeUndefined();
   });
 });
