@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   REPO_ROOT,
   sourceFilesUnder as sharedSourceFilesUnder,
+  stripComments,
   toRepoPath,
 } from '../support/repoScan';
 
@@ -81,21 +82,6 @@ const HOST_LAYER_IMPORT_PREFIXES = [
   '@cli/',
   '@desktop/',
 ] as const;
-
-/** Drop comments so a prose mention like "do not import from 'vscode'" can't
- *  trip the import patterns. Naive `//` stripping is fine here: a real import
- *  precedes any trailing comment, and cutting mid-string only matters on lines
- *  that never contain a `vscode` import anyway. */
-function stripComments(source: string): string {
-  return source
-    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => {
-      const commentStart = line.indexOf('//');
-      return commentStart === -1 ? line : line.slice(0, commentStart);
-    })
-    .join('\n');
-}
 
 function sourceFilesUnder(
   zone: string,

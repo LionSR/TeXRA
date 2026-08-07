@@ -47,3 +47,27 @@ export function sourceFilesUnder(
     )
     .map((file) => (opts?.repoRelative ? toRepoPath(file) : file));
 }
+
+/** repo-relative, test-kernel-excluded source files under `root`, missing dir -> []. */
+export function productionFilesUnder(root: string): string[] {
+  return sourceFilesUnder(resolve(REPO_ROOT, root), {
+    missingDirReturnsEmpty: true,
+    repoRelative: true,
+    excludeTestKernel: true,
+  });
+}
+
+/** Drop comments so a prose mention like "do not import from 'vscode'" can't
+ *  trip a source-pattern check. Naive `//` stripping is fine here: a real
+ *  import precedes any trailing comment, and cutting mid-string only matters
+ *  on lines that never contain the pattern being checked for anyway. */
+export function stripComments(source: string): string {
+  return source
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => {
+      const commentStart = line.indexOf('//');
+      return commentStart === -1 ? line : line.slice(0, commentStart);
+    })
+    .join('\n');
+}
