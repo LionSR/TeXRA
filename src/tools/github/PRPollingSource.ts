@@ -126,7 +126,7 @@ function isSubmittedReview(review: GhReview): boolean {
   return review.state !== 'PENDING';
 }
 
-export interface PRKey {
+interface PRKey {
   owner: string;
   repo: string;
   pullNumber: number;

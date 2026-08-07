@@ -255,7 +255,12 @@ export function createDirectLspLeanAdapter(
       column: number,
     ): Promise<LspResult<PlainGoal>> {
       return positionRequest<PlainGoal>(filePath, (session) =>
-        session.getPlainGoal(filePath, line, column),
+        session.requestSettled<PlainGoal | null>(
+          filePath,
+          line,
+          column,
+          '$/lean/plainGoal',
+        ),
       );
     },
 
@@ -265,7 +270,12 @@ export function createDirectLspLeanAdapter(
       column: number,
     ): Promise<LspResult<PlainTermGoal>> {
       return positionRequest<PlainTermGoal>(filePath, (session) =>
-        session.getPlainTermGoal(filePath, line, column),
+        session.requestSettled<PlainTermGoal | null>(
+          filePath,
+          line,
+          column,
+          '$/lean/plainTermGoal',
+        ),
       );
     },
 
@@ -275,13 +285,16 @@ export function createDirectLspLeanAdapter(
       column: number,
     ): Promise<LspResult<LspHover>> {
       return positionRequest<LspHover>(filePath, (session) =>
-        session.getHover(filePath, line, column),
+        session.requestSettled<LspHover | null>(
+          filePath,
+          line,
+          column,
+          'textDocument/hover',
+        ),
       );
     },
 
-    async dispose(): Promise<void> {
-      await disposeAll();
-    },
+    dispose: disposeAll,
   };
 
   async function positionRequest<T>(

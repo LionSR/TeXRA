@@ -249,12 +249,6 @@ export function createFlushableDebounce(
   };
 }
 
-/** Minimal read/write cache shape satisfied by LRUCache and plain Maps. */
-export interface AsyncCoalesceStore<Key, Value> {
-  get(key: Key): Value | undefined;
-  set(key: Key, value: Value): void;
-}
-
 /**
  * Coalesce concurrent async requests for the same key: return a resolved
  * value from `resolved` if present, otherwise share one in-flight promise
@@ -264,9 +258,15 @@ export interface AsyncCoalesceStore<Key, Value> {
  * an external `pending.clear()`/`resolved.clear()` invalidation racing the
  * in-flight computation, which would otherwise let a stale result get
  * cached after the fact.
+ *
+ * `resolved` is the minimal read/write cache shape satisfied by LRUCache
+ * and plain Maps.
  */
 export async function coalesceAsync<Key, Value>(
-  resolved: AsyncCoalesceStore<Key, Value>,
+  resolved: {
+    get(key: Key): Value | undefined;
+    set(key: Key, value: Value): void;
+  },
   pending: Map<Key, Promise<Value>>,
   key: Key,
   compute: () => Promise<Value>,

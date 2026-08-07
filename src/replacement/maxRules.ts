@@ -76,7 +76,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       'infty', 'top',
       'N', 'M', 'S',
       '0','1','2',
-      'tit', 'wtit', 'tif', 'ttf', 'ttauf', 'tze', 'tzero', 'tone', 'tauf', 'tf', 'ttau', 'tau', 'ttf',
+      'tit', 'wtit', 'tif', 'ttf', 'ttauf', 'tze', 'tzero', 'tone', 'tauf', 'tf', 'ttau', 'tau',
       'bu', 'ta'
     ];
 

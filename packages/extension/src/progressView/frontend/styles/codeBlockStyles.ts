@@ -49,8 +49,7 @@ export const codeBlockStyles = css`
     min-width: 0;
   }
 
-  .code-block pre.tool-command-input,
-  .code-block pre.hljs.tool-command-input {
+  .code-block pre.tool-command-input {
     overflow-x: hidden;
     white-space: pre-wrap;
     overflow-wrap: anywhere;

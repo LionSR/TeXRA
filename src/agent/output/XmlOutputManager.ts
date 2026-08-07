@@ -113,11 +113,6 @@ export class XmlOutputManager {
     return null;
   }
 
-  /** Count document tag occurrences with name attributes (case-sensitive to match extraction). */
-  private countDocumentTags(content: string): number {
-    return content.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
-  }
-
   private warnPartialExtraction(
     outputLocation: FileLocation,
     round: number,
@@ -248,7 +243,10 @@ export class XmlOutputManager {
     baseFiles: readonly FileLocation[] = [],
   ): Promise<OutputFileInfo[]> {
     const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    const expectedDocumentCount = this.countDocumentTags(rawOutputContent);
+    // Count document tag occurrences with name attributes (case-sensitive to
+    // match extraction).
+    const expectedDocumentCount =
+      rawOutputContent.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
 
     // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
     // parser treats thinking/document bodies as opaque text); the header and

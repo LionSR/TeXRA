@@ -220,15 +220,12 @@ export function generateNestedDecoratorShortcuts(
   outerPrefix: string,
   innerPrefix: string,
 ): PatternDict {
-  return createPatterns(letters, (letter) => {
-    const displayLetter = /^[A-Z]/.test(letter) ? letter : letter.toLowerCase();
-    return [
-      [
-        `\\${outerDecorator}{\\${innerCommand}{${displayLetter}}}`,
-        `\\${outerPrefix}${innerPrefix}${displayLetter}`,
-      ],
-    ];
-  });
+  return createPatterns(letters, (letter) => [
+    [
+      `\\${outerDecorator}{\\${innerCommand}{${letter}}}`,
+      `\\${outerPrefix}${innerPrefix}${letter}`,
+    ],
+  ]);
 }
 
 /**

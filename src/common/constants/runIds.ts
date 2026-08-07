@@ -8,8 +8,6 @@
  * ## When NOT to use normalizeRunId()
  * - For tool-use agents: Use executionId directly as the runId
  * - For ExecutionId values: Never normalize - they are always valid by design
- *
- * @see IdentifierTypes.ts for the full execution model documentation
  */
 import type { StorageKey } from '@shared/schemas';
 

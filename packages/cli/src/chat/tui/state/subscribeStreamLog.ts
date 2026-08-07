@@ -201,14 +201,10 @@ function transcriptMessageTypesForStream(
     : TRANSCRIPT_MESSAGE_TYPES;
 }
 
-function logEntryHasText(entry: StreamLogEntry): boolean {
-  return (entry.text ?? '').trim().length > 0;
-}
-
 function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
   const data = entry.data;
   if (typeof data !== 'object' || data === null || !('status' in data)) {
-    return logEntryHasText(entry);
+    return (entry.text ?? '').trim().length > 0;
   }
   return data.status === 'running';
 }

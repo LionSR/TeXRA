@@ -243,12 +243,6 @@ function errorTextForDisplay(toolUse: NormalizedToolUse): string {
   return toolUse.isError ? toolUse.errorText || '(error)' : '';
 }
 
-function errorPreviewWouldTruncate(toolUse: NormalizedToolUse): boolean {
-  return (
-    collapseWhitespace(errorTextForDisplay(toolUse)).length > MAX_ERROR_PREVIEW
-  );
-}
-
 function outputDuplicatesError(
   toolUse: NormalizedToolUse,
   options: { readonly keepWhenErrorPreviewTruncates?: boolean } = {},
@@ -257,7 +251,7 @@ function outputDuplicatesError(
   const errorText = errorTextForDisplay(toolUse);
   if (
     options.keepWhenErrorPreviewTruncates &&
-    errorPreviewWouldTruncate(toolUse)
+    collapseWhitespace(errorText).length > MAX_ERROR_PREVIEW
   ) {
     return false;
   }

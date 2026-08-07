@@ -126,25 +126,6 @@ export type SharedStateMigrationResult =
   | { success: true; data: ToolUseRunShared; migrated: boolean }
   | { success: false; error: z.ZodError };
 
-export function findLastAssistantText(
-  messages: ProviderMessage[],
-  extractAssistantText: (message: ProviderMessage) => string | undefined,
-): string | undefined {
-  for (const message of messages.toReversed()) {
-    const text = extractAssistantText(message);
-    if (text !== undefined) return text;
-  }
-  return undefined;
-}
-
-export function assertPreparedShared(
-  shared: ToolUseRunShared,
-): asserts shared is PreparedShared {
-  if (shared.stateSlices === null) {
-    throw new Error('PrepareNode must run before CycleNode');
-  }
-}
-
 /**
  * Parse persisted shared state once, normalizing the workspace snapshot and
  * pre-`modelId` model identity before live flow code sees it.

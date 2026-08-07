@@ -10,13 +10,6 @@ import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
 
-export interface OnboardingFlags {
-  /** The user saw the credential picker and chose "Skip for now". */
-  declined: boolean;
-  /** A run has completed or the setup agent handed off. */
-  firstRunDone: boolean;
-}
-
 export function getOnboardingDeclined(state: StateStore): boolean {
   return state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true;
 }
@@ -54,7 +47,12 @@ export async function setDefaultTeamId(
   await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
 }
 
-export function readOnboardingFlags(state: StateStore): OnboardingFlags {
+export function readOnboardingFlags(state: StateStore): {
+  /** The user saw the credential picker and chose "Skip for now". */
+  declined: boolean;
+  /** A run has completed or the setup agent handed off. */
+  firstRunDone: boolean;
+} {
   return {
     declined: getOnboardingDeclined(state),
     firstRunDone: getFirstRunDone(state),

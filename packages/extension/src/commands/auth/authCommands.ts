@@ -15,18 +15,6 @@ const CHANNEL = 'authCommands';
 
 type AuthMethod = OAuthProvider | 'github-browser';
 
-async function getExistingSession(
-  authReady?: boolean,
-): Promise<vscode.AuthenticationSession | undefined> {
-  // Skip VS Code auth API if auth system not ready to avoid timeout
-  if (!(authReady ?? (await SupabaseClient.isReady()))) {
-    return undefined;
-  }
-  return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
-    silent: true,
-  });
-}
-
 interface SignInOption {
   label: string;
   description: string;
@@ -104,7 +92,13 @@ export async function signIn(): Promise<boolean> {
     }
 
     if (storedSessionState === 'authenticated') {
-      const existing = await getExistingSession(authReady);
+      // Auth readiness was established above, so the VS Code auth API is safe
+      // to consult here (calling it before readiness can hang on a timeout).
+      const existing = await vscode.authentication.getSession(
+        AUTH_PROVIDER_ID,
+        [],
+        { silent: true },
+      );
       if (existing) {
         await showSignedInMessage('Already signed in as', false);
         return true;

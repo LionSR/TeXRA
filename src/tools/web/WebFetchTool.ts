@@ -101,15 +101,7 @@ export class WebFetchTool extends defineTool({
     'Fetch content from a URL and return it as clean text. Uses the native provider fetch tool when available; falls back to fetching HTML and converting to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',
   schema: WebFetchInputSchema,
 }) {
-  private readonly turndown: TurndownService;
-
-  constructor(turndownOptions?: TurndownService.Options) {
-    super();
-    this.turndown = new TurndownService({
-      headingStyle: 'atx',
-      ...turndownOptions,
-    });
-  }
+  private readonly turndown = new TurndownService({ headingStyle: 'atx' });
 
   protected async execute(input: WebFetchInput): Promise<ToolResult> {
     const { url, prompt } = input;

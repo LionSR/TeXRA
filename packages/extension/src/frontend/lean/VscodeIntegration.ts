@@ -14,10 +14,7 @@ import * as vscode from 'vscode';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import {
-  waitForDiagnosticsChange,
-  DiagnosticSeverity,
-} from '@frontend/vscode/vscodeDiagnostics';
+import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import {
   LEAN4_EXTENSION_ID,
   type LeanDiagnostic,
@@ -401,7 +398,7 @@ export async function navigateToFirstError(
   diagnostics: LeanDiagnostic[],
 ): Promise<void> {
   const firstError = diagnostics.find(
-    (d) => d.severity === DiagnosticSeverity.Error,
+    (d) => d.severity === vscode.DiagnosticSeverity.Error,
   );
   if (firstError) {
     await openFileInEditor(filePath, { line: firstError.range.start.line + 1 });

@@ -6,7 +6,6 @@ import { access, stat } from 'node:fs/promises';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
-import type { StoredSessionState } from '@auth/TokenProvider';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   probeLatexToolchain,
@@ -34,7 +33,7 @@ import {
 } from './logSinks';
 import { getCliModelAccessList } from './modelAccess';
 import { createCliStyle } from './style';
-import { getCliAuthProfile } from './supabaseAuth';
+import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';
@@ -52,13 +51,6 @@ interface DoctorCheck {
 export interface DoctorReport {
   readonly ok: boolean;
   readonly checks: readonly DoctorCheck[];
-}
-
-interface CliAuthProfile {
-  readonly authenticated: boolean;
-  readonly sessionState?: StoredSessionState;
-  readonly accountLabel?: string;
-  readonly tier?: string;
 }
 
 interface DirectoryStat {
@@ -79,12 +71,6 @@ type ResolvedDoctorDependencies = Required<DoctorDependencies>;
 
 const EMAIL_LIKE_DIAGNOSTIC_PATTERN =
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-
-function isSupportedNodeVersion(version: string): boolean {
-  return semverSatisfies(version, TEXRA_CLI_SUPPORTED_NODE_RANGE, {
-    loose: true,
-  });
-}
 
 function maskIdentifierPart(part: string): string {
   return part ? `${part.at(0)}***` : '***';
@@ -166,7 +152,9 @@ function failFromError(
 }
 
 function checkNode(version: string): DoctorCheck {
-  if (isSupportedNodeVersion(version)) {
+  if (
+    semverSatisfies(version, TEXRA_CLI_SUPPORTED_NODE_RANGE, { loose: true })
+  ) {
     return pass('node', 'Node.js', `Node ${version}`);
   }
   return fail(

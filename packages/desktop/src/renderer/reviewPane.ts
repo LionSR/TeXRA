@@ -21,7 +21,6 @@ interface DiffViewElement extends HTMLElement {
 }
 
 interface ReviewEntry extends DesktopShowDiffMessage {
-  readonly key: string;
   readonly path: string;
 }
 
@@ -40,7 +39,7 @@ export function createReviewPane(): ReviewPaneController {
   diffView.fill = true;
 
   const entries = new Map<string, ReviewEntry>();
-  let selectedKey: string | undefined;
+  let selectedPath: string | undefined;
   let filter = '';
 
   function visibleEntries(): readonly ReviewEntry[] {
@@ -53,7 +52,7 @@ export function createReviewPane(): ReviewPaneController {
   }
 
   function select(entry: ReviewEntry): void {
-    selectedKey = entry.key;
+    selectedPath = entry.path;
     diffView.originalText = entry.originalText;
     diffView.proposedText = entry.proposedText;
     diffView.language = entry.language;
@@ -83,7 +82,7 @@ export function createReviewPane(): ReviewPaneController {
       }
       const entry = entries.get(node.path);
       if (!entry) return html``;
-      const active = entry.key === selectedKey;
+      const active = entry.path === selectedPath;
       return html`
         <wa-button
           type="button"
@@ -104,7 +103,7 @@ export function createReviewPane(): ReviewPaneController {
 
   function rerender(): void {
     const visible = visibleEntries();
-    const selected = selectedKey ? entries.get(selectedKey) : undefined;
+    const selected = selectedPath ? entries.get(selectedPath) : undefined;
     let additions = 0;
     let deletions = 0;
     for (const entry of entries.values()) {
@@ -181,7 +180,7 @@ export function createReviewPane(): ReviewPaneController {
                           path: entry.path,
                           isDirectory: false,
                         })),
-                      ).nodes,
+                      ),
                     )
                   : html`
                       <div class="desktop-review-no-results">
@@ -204,12 +203,12 @@ export function createReviewPane(): ReviewPaneController {
     element,
     clear() {
       entries.clear();
-      selectedKey = undefined;
+      selectedPath = undefined;
       rerender();
     },
     open(payload) {
       const path = payload.displayPath;
-      const entry = { ...payload, key: path, path };
+      const entry = { ...payload, path };
       entries.set(path, entry);
       select(entry);
     },

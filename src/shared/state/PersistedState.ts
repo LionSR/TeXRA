@@ -67,8 +67,10 @@ export function createWebviewStorage(hostBridge: {
  * - Backend: `createBackendStorage(workspaceSM)` → workspace-scoped, persists across sessions
  * - Frontend: `createWebviewStorage(hostBridge)` → webview-scoped, transient UI state
  *
- * Schemas should use .prefault() or .catch() for fields to provide defaults.
- * If storage returns undefined or invalid data, falls back to schema defaults.
+ * Schemas should use .prefault() for fields to provide defaults — never
+ * .catch(), which would swallow invalid stored data before this class's loud
+ * warn-and-reset path can see it. If storage returns undefined or invalid
+ * data, falls back to schema defaults.
  *
  * @example
  * // Backend (user preferences - persist across sessions)

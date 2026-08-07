@@ -261,12 +261,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   attachInterruptHandler(handler: ExecutionInterruptHandler): () => void {
     this.interruptHandler = handler;
-    return () => this.detachInterruptHandler(handler);
-  }
-
-  detachInterruptHandler(handler?: ExecutionInterruptHandler): void {
-    if (handler !== undefined && this.interruptHandler !== handler) return;
-    this.interruptHandler = undefined;
+    return () => {
+      if (this.interruptHandler === handler) this.interruptHandler = undefined;
+    };
   }
 
   interrupt(): boolean {

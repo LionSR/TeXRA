@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 // Local imports
 import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import type { Action } from '@agent/node';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
@@ -539,7 +540,7 @@ export async function runToolUseFlow<C = unknown>(
       ...(input.drainedFollowUps ?? []),
       ...attachmentFollowUps,
     ];
-    let finalAction: Awaited<ReturnType<ToolUsePersistedFlow<C>['run']>>;
+    let finalAction: Action | undefined;
     do {
       const prepareNode = new ToolUsePrepareNode<C>();
       const cycleNode = new ToolUseCycleNode<C>();

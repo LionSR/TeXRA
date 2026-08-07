@@ -16,11 +16,6 @@ export class ToggleStateStore {
     return this.states.get(id);
   }
 
-  clearAll(): void {
-    this.states.clear();
-    this.saveCallback?.();
-  }
-
   entries(): [string, boolean][] {
     return [...this.states.entries()];
   }

@@ -49,11 +49,6 @@ export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
 
-function inquiryThreadUpdateSession(session?: SessionHandle): SessionHandle {
-  const owner = session ?? getRunContextSession(tryUseRunContext());
-  return owner?.events ? owner : defaultSession();
-}
-
 function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
   const lines = ['', 'Still open on this stream:'];
@@ -122,7 +117,8 @@ async function emitInquiryThreadUpdate(
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
-  inquiryThreadUpdateSession(session).events.emit({
+  const owner = session ?? getRunContextSession(tryUseRunContext());
+  (owner?.events ? owner : defaultSession()).events.emit({
     scope: 'session',
     event: { type: 'inquiryThreadUpdated', payload },
   });
@@ -139,12 +135,6 @@ function mapSubmissionToInquiryOutcome(
   // unreachable; it maps to 'queued' (already admitted) by construction.
   if (result.status === 'duplicate') return 'queued';
   return result.continuation === 'resumed' ? 'resumed' : 'queued';
-}
-
-function mapInjectionOutcomeToResumeOutcome(
-  outcome: InjectionOutcome,
-): InquiryResumeOutcome {
-  return outcome === 'archived' ? 'parent_finished' : outcome;
 }
 
 async function deliverContinuation(params: {
@@ -173,7 +163,9 @@ async function deliverContinuation(params: {
 
   await emitInquiryThreadUpdate(
     params.threadId,
-    { resumeOutcome: mapInjectionOutcomeToResumeOutcome(outcome) },
+    {
+      resumeOutcome: outcome === 'archived' ? 'parent_finished' : outcome,
+    },
     params.session,
   );
   return outcome;

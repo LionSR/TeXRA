@@ -51,10 +51,6 @@ export interface ExecutionStopOptions {
   readonly detachActiveChildren?: boolean;
 }
 
-export interface TrackAgentExecutionOptions {
-  readonly status?: StreamPhase;
-}
-
 /**
  * A child loop that has started synchronously but whose first run handle is
  * still being constructed.
@@ -134,7 +130,7 @@ export class ExecutionRegistry {
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private disposeStatusSubscription = (): void => undefined;
   private readonly streamStatus: StreamStatusMachine;
-  private events: SessionEventHub | undefined;
+  private events: SessionEventHub;
   private approvals: SessionApprovals | undefined;
   /**
    * Publishes a synthesized terminal `result` event to the owning session's
@@ -166,6 +162,7 @@ export class ExecutionRegistry {
 
   constructor(options: ExecutionRegistryInit = {}) {
     const events = options.events ?? new SessionEventHub();
+    this.events = events;
     this.streamStatus = options.streamStatus ?? new StreamStatusMachine(events);
     this.attachSessionEvents(events);
   }
@@ -262,7 +259,7 @@ export class ExecutionRegistry {
    */
   trackAgentExecution(
     handle: AgentExecutionHandle,
-    options: TrackAgentExecutionOptions = {},
+    options: { readonly status?: StreamPhase } = {},
   ): void {
     this.assertActive();
     if (options.status) {
@@ -555,10 +552,10 @@ export class ExecutionRegistry {
   }
 
   /** Interrupt all active subagents of a parent stream, including descendants. */
-  interruptActiveChildren(
+  private interruptActiveChildren(
     parentStreamId: StreamTabId,
-    visited: Set<string> = new Set(),
-    options: TerminateOptions = { cascadeChildren: true },
+    visited: Set<string>,
+    options: TerminateOptions,
   ): void {
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
@@ -681,7 +678,7 @@ export class ExecutionRegistry {
   }
 
   private emitChildActivity(parentStreamId: StreamTabId): void {
-    this.requireSessionEvents().emit({
+    this.events.emit({
       scope: 'run',
       streamId: parentStreamId,
       event: {
@@ -696,7 +693,7 @@ export class ExecutionRegistry {
     readonly childStreamId: StreamTabId;
     readonly parentStreamId: StreamTabId | null;
   }): void {
-    this.requireSessionEvents().emit({
+    this.events.emit({
       scope: 'session',
       event: {
         type: 'setParentStream',
@@ -706,15 +703,6 @@ export class ExecutionRegistry {
         },
       },
     });
-  }
-
-  private requireSessionEvents(): SessionEventHub {
-    if (!this.events) {
-      throw new Error(
-        'ExecutionRegistry child updates require SessionEventHub',
-      );
-    }
-    return this.events;
   }
 
   /** Get active subagent children for a parent stream. */
@@ -748,8 +736,8 @@ export class ExecutionRegistry {
 
   private terminate(
     handle: ExecutionHandle,
-    visited: Set<string> = new Set(),
-    options: TerminateOptions = {},
+    visited: Set<string>,
+    options: TerminateOptions,
   ): boolean {
     if (visited.has(handle.executionId)) return false;
     visited.add(handle.executionId);

@@ -95,14 +95,6 @@ function boundedAgentProposalInstructionLines(
   });
 }
 
-function optionalAgentProposalLine(
-  label: string,
-  value: string | undefined,
-): string[] {
-  const trimmed = value?.trim();
-  return trimmed ? [`${label}: ${trimmed}`] : [];
-}
-
 function formatAgentProposalFileGroup(
   label: string,
   files: readonly string[],
@@ -113,30 +105,22 @@ function formatAgentProposalFileGroup(
   return `${label}: ${visibleFiles.join(', ')}${suffix}`;
 }
 
-function agentProposalFileGroupLines(
-  proposal: AgentProposalPermission,
-): string[] {
-  return getProposalFileGroups(proposal).map((group) =>
-    formatAgentProposalFileGroup(group.label, group.files),
-  );
-}
-
 export function formatAgentProposalApprovalSummary(
   proposal: AgentProposalPermission,
 ): string {
   const instructionLines = boundedAgentProposalInstructionLines(
     proposal.instruction,
   );
+  const workingDirectory = proposal.workingDirectory?.trim();
   return [
     `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
       proposal.agentCategory,
     )})`,
     `Model: ${proposal.model}`,
-    ...optionalAgentProposalLine(
-      'Working directory',
-      proposal.workingDirectory ?? undefined,
+    ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
+    ...getProposalFileGroups(proposal).map((group) =>
+      formatAgentProposalFileGroup(group.label, group.files),
     ),
-    ...agentProposalFileGroupLines(proposal),
     'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');

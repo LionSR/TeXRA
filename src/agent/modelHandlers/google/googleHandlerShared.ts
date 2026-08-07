@@ -107,8 +107,9 @@ interface UploadGoogleMediaEntriesOptions<T> {
 type GoogleMediaUploadSummary = Pick<MediaFileResult, 'path' | 'ok'>;
 
 /**
- * Shared media-attachment pipeline for the two Google handlers. Entries are
- * sent inline when small enough, otherwise uploaded through the File API.
+ * Media-attachment pipeline for the Interactions handler, kept here alongside
+ * the client setup so the handler file stays focused on wire logic. Entries
+ * are sent inline when small enough, otherwise uploaded through the File API.
  */
 export async function uploadGoogleMediaEntries<T>(
   entries: MediaEntry[],

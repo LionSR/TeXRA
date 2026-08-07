@@ -11,7 +11,6 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
-import { findLastAssistantText } from './types';
 import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
@@ -37,13 +36,19 @@ export class ToolUseWaitNode<C> extends Node<
     // Only a wired `onIdle` reads the response text (a host projecting the
     // transcript before the flow blocks). A suspended subagent turn's facts
     // are read off the flow result by the child-run loop, not from here.
+    let lastResponse: string | undefined;
+    if (onIdle) {
+      for (const message of shared.messages.toReversed()) {
+        const text = modelHandler.extractAssistantText(message);
+        if (text !== undefined) {
+          lastResponse = text;
+          break;
+        }
+      }
+    }
     return {
       afterError: !!(shared.lastError || shared.userCancelledRetry),
-      lastResponse: onIdle
-        ? findLastAssistantText(shared.messages, (m) =>
-            modelHandler.extractAssistantText(m),
-          )
-        : undefined,
+      lastResponse,
     };
   }
 

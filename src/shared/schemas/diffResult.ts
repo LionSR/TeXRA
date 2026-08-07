@@ -99,16 +99,12 @@ function getDisplayName(
   return 'unknown';
 }
 
-/** Parse a diff result entry, or null if it doesn't match the canonical shape. */
-const ParsedDiffResultEntrySchema =
-  DiffResultDisplaySchema.nullable().catch(null);
-
 /** Parse an array of diff result entries, skipping invalid ones */
 export function parseDiffResultEntries(data: unknown): DiffResultDisplay[] {
   if (!Array.isArray(data)) return [];
 
   return data.flatMap((entry) => {
-    const parsed = ParsedDiffResultEntrySchema.parse(entry);
-    return parsed ? [parsed] : [];
+    const parsed = DiffResultDisplaySchema.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
   });
 }

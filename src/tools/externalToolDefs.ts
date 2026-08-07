@@ -203,10 +203,6 @@ function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
     : { extensionAvailable: false, lakeAvailable: false };
 }
 
-function resolveBooleanProbe(probeResult: unknown): boolean | undefined {
-  return typeof probeResult === 'boolean' ? probeResult : undefined;
-}
-
 /** True when an SDK import failure means the package simply isn't installed. */
 function isMissingPackageError(message: string): boolean {
   return (
@@ -552,7 +548,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     hideFromCli: true,
     ...prerequisitesChecks<boolean | undefined>({
       probe: probeTexraCli,
-      resolve: resolveBooleanProbe,
+      resolve: (probeResult) =>
+        typeof probeResult === 'boolean' ? probeResult : undefined,
       check: (detected) => detected ?? false,
       statusLabel: (detected) =>
         detected ? 'Detected; integration coming soon' : undefined,

@@ -503,26 +503,10 @@ export class StreamSnapshotStore {
   }
 
   private handleSessionUsageEvent(payload: UpdateStreamUsagePayload): void {
-    const {
-      inputTokens,
-      outputTokens,
-      cost,
-      cacheReadInputTokens,
-      cacheMissInputTokens,
-      cacheCreationInputTokens,
-      reasoningTokens,
-      usageRoute,
-    } = payload.usage;
-    void this.addUsage(payload.streamId, payload.storageKey, {
-      inputTokens,
-      outputTokens,
-      cost,
-      cacheReadInputTokens,
-      cacheMissInputTokens,
-      cacheCreationInputTokens,
-      reasoningTokens,
-      usageRoute,
-    });
+    // `addUsage`'s safeParse owns the wire→domain narrowing: it strips the
+    // extended wire fields (elapsedTime/percentageCached/toolUseTokens), so
+    // restating the base field list here would duplicate the schema.
+    void this.addUsage(payload.streamId, payload.storageKey, payload.usage);
   }
 
   /**

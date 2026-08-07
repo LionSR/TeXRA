@@ -38,9 +38,8 @@ const CHANNEL = 'StreamSnapshotStore';
 
 /** The canonical empty work plan (no todos, no plan). Single source for the
  *  "no durable plan yet" value, reused by the store's in-memory default. */
-const EMPTY_TODOS = Object.freeze([]) as unknown as TodoItem[];
 export const EMPTY_WORK_PLAN = Object.freeze({
-  todos: EMPTY_TODOS,
+  todos: Object.freeze([]) as unknown as TodoItem[],
   plan: null,
   planSummary: null,
 }) as WorkPlanSnapshot;

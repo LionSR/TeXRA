@@ -1,7 +1,5 @@
 import * as path from 'node:path';
 
-import { z } from 'zod';
-
 import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
@@ -18,16 +16,11 @@ import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
-// ============================================================================
-// LaTeXdiff Result Schemas
-// ============================================================================
-
-const LaTeXdiffResultSchema = z.object({
-  success: z.boolean(),
-  diffFileName: z.string().optional(),
-  message: z.string().optional(),
-});
-export type LaTeXdiffResult = z.infer<typeof LaTeXdiffResultSchema>;
+export interface LaTeXdiffResult {
+  success: boolean;
+  diffFileName?: string;
+  message?: string;
+}
 
 function hasDocumentEnvironment(content: string): boolean {
   return (

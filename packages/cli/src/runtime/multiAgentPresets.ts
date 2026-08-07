@@ -22,11 +22,11 @@ import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 export type CliMultiAgentPreset = TeamPreset;
 export type CliMultiAgentPresetRunPlan = TeamRunPlan<AgentEntry>;
 
-export interface CliMultiAgentPresetFormatOptions {
+interface CliMultiAgentPresetFormatOptions {
   readonly includeLoginHint?: boolean;
 }
 
-export interface CliMultiAgentTeamLaunchBlockMessageOptions {
+interface CliMultiAgentTeamLaunchBlockMessageOptions {
   readonly requestedPreset?: string;
   readonly followUpAdvice?: string;
 }

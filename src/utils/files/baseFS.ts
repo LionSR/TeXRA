@@ -236,10 +236,6 @@ export abstract class BaseFS {
     fs.mkdirSync(this.preparePath(target), options);
   }
 
-  public static readDirSync(this: typeof BaseFS, target: string): string[] {
-    return fs.readdirSync(this.preparePath(target));
-  }
-
   public static statSync(this: typeof BaseFS, target: string): fs.Stats {
     return fs.statSync(this.preparePath(target));
   }
