@@ -1,6 +1,6 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
-import { refreshCodexPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
+import { refreshSubscriptionPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -110,7 +110,7 @@ export async function applyCliProviderApiKey(
 /** Set the session API mode and refresh access-dependent TUI views. */
 export function setCliSessionApiMode(apiMode: ApiAccessMode): void {
   patchSessionMeta({ apiMode });
-  refreshCodexPreferenceViews();
+  refreshSubscriptionPreferenceViews();
 }
 
 async function applyCliModelAccessSelectionWithSignal(

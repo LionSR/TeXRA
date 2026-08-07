@@ -19,7 +19,7 @@ import {
 } from '@shared/schemas/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { refreshCodexPreferenceViews } from '../state/codexSubscription';
+import { refreshSubscriptionPreferenceViews } from '../state/codexSubscription';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
 import {
@@ -85,7 +85,7 @@ export function createCliConfigFormProps(
           const openRouter = stateSettingByKey(GlobalStateKey.USE_OPENROUTER);
           if (openRouter) await writeSetting(openRouter, false, stores, 'cli');
         }
-        refreshCodexPreferenceViews();
+        refreshSubscriptionPreferenceViews();
         if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
           await props.onApiModePersonal?.();
         }
@@ -95,7 +95,7 @@ export function createCliConfigFormProps(
       await resetSetting(entry, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
-        refreshCodexPreferenceViews();
+        refreshSubscriptionPreferenceViews();
       }
     },
     formLinks: [

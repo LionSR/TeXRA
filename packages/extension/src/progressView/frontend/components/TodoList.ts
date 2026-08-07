@@ -1,13 +1,6 @@
 // Third-party imports
-import {
-  LitElement,
-  html,
-  css,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -22,11 +15,11 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { ELEMENT_IDS } from '../constants';
 
-// Web Awesome native components
-import '@awesome.me/webawesome/dist/components/details/details.js';
+// Local imports - base class
+import { CollapsiblePanel } from './CollapsiblePanel';
 
 @customElement('todo-list')
-export class TodoList extends LitElement {
+export class TodoList extends CollapsiblePanel {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -94,21 +87,6 @@ export class TodoList extends LitElement {
 
   @property({ attribute: false }) todos: TodoItem[] = [];
 
-  /** When this key changes, the panel collapses. Used by the parent to reset
-   *  open state on context switches (e.g. switching streams). */
-  @property({ type: String }) collapseKey = '';
-
-  @state() private open = false;
-
-  protected override willUpdate(changed: PropertyValues): void {
-    if (
-      changed.has('collapseKey') &&
-      changed.get('collapseKey') !== undefined
-    ) {
-      this.open = false;
-    }
-  }
-
   override render(): TemplateResult | typeof nothing {
     if (this.todos.length === 0) {
       return nothing;
@@ -119,15 +97,10 @@ export class TodoList extends LitElement {
     ).length;
     const total = this.todos.length;
 
-    return html`
-      <wa-details
-        id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
-        class="panel-collapsible is-boxed"
-        summary=${`Todos (${completed}/${total})`}
-        ?open=${this.open}
-        @wa-show=${this.handleShow}
-        @wa-hide=${this.handleHide}
-      >
+    return this.renderCollapsibleDetails({
+      id: ELEMENT_IDS.TODO_LIST_CONTAINER,
+      summary: `Todos (${completed}/${total})`,
+      body: html`
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
             this.todos,
@@ -135,8 +108,8 @@ export class TodoList extends LitElement {
             (todo) => this.renderTodo(todo),
           )}
         </div>
-      </wa-details>
-    `;
+      `,
+    });
   }
 
   private renderTodo(todo: TodoItem): TemplateResult {
@@ -164,16 +137,5 @@ export class TodoList extends LitElement {
         <span class="todo-item__content">${content}</span>
       </div>
     `;
-  }
-
-  private handleShow(e: Event): void {
-    // Ignore bubbled events from nested wa-details
-    if (e.target !== e.currentTarget) return;
-    this.open = true;
-  }
-
-  private handleHide(e: Event): void {
-    if (e.target !== e.currentTarget) return;
-    this.open = false;
   }
 }

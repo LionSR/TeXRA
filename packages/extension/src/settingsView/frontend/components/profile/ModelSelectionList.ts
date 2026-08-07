@@ -10,7 +10,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
-  renderSetStatusIcon,
+  renderKeyStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
@@ -266,18 +266,11 @@ export class ModelSelectionList extends LitElement {
     const keyStatus = this.getProviderKeyStatus(group.provider);
     // Key status is read-only here. Setting, fetching, and removing keys all
     // live in the API Configuration section above; mirroring those actions in
-    // this list produced two competing key UIs. Labels match that section.
+    // this list produced two competing key UIs.
     const providerKeyStatus = keyStatus
       ? html`
           <span class="provider-group-key-status">
-            ${renderSetStatusIcon({
-              status: keyStatus.status,
-              title: 'Key set',
-              fallbacks: {
-                env: { label: 'Env' },
-                'not-set': { label: 'Not set' },
-              },
-            })}
+            ${renderKeyStatusIcon(keyStatus.status)}
           </span>
         `
       : nothing;

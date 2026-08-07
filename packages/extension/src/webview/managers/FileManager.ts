@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
-import { ExtensionCategory, getIncludedExtensions } from '@common/files';
+import {
+  ExtensionCategory,
+  getIncludedExtensions,
+} from '@common/files/fileTypeUtils';
 import {
   planCurrentFileAsBase,
   planCurrentFileAsEdited,

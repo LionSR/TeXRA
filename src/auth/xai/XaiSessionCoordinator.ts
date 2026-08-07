@@ -4,10 +4,7 @@
  * Thin policy over {@link SubscriptionOAuthCoordinator} — only authorize URL,
  * claims, and JWT-exp refresh differ from ChatGPT/Codex.
  */
-import {
-  rethrowAsProviderAuthError,
-  wrapProviderOAuthClient,
-} from '../oauth/providerAuthBridge';
+import { wrapProviderOAuthClient } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionAuthorizeRequest,
@@ -15,7 +12,6 @@ import {
   type SubscriptionOAuthPolicy,
   type SubscriptionSessionStatus,
   type SubscriptionSessionStorage,
-  type SubscriptionTokenResponse,
 } from '../oauth/SubscriptionOAuthCoordinator';
 import {
   XAI_AUTHORIZE_URL,
@@ -48,10 +44,6 @@ export interface XaiSessionCoordinatorInit {
   storage: XaiSessionStorage;
   client?: XaiOAuthClient;
   now?: () => number;
-}
-
-function toXaiError(error: unknown): never {
-  rethrowAsProviderAuthError(error, XaiAuthError);
 }
 
 const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
@@ -107,84 +99,27 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   },
 };
 
-function wrapClient(client: XaiOAuthClient): SubscriptionOAuthClient {
-  return wrapProviderOAuthClient(client, XaiAuthError);
-}
-
-export class XaiSessionCoordinator {
-  private readonly inner: SubscriptionOAuthCoordinator<XaiSession>;
-
+export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSession> {
   constructor(init: XaiSessionCoordinatorInit) {
     const client = init.client ?? {
       exchangeAuthorizationCode: defaultExchange,
       refreshTokens: defaultRefresh,
     };
-    this.inner = new SubscriptionOAuthCoordinator({
+    super({
       storage: init.storage,
       policy: XAI_POLICY,
-      client: wrapClient(client),
+      client: wrapProviderOAuthClient(client, XaiAuthError),
       now: init.now,
+      errorType: XaiAuthError,
     });
-  }
-
-  loadSession(): Promise<XaiSession | null> {
-    return this.inner.loadSession();
-  }
-
-  async signOut(): Promise<void> {
-    try {
-      await this.inner.signOut();
-    } catch (error) {
-      toXaiError(error);
-    }
-  }
-
-  getStatus(): Promise<XaiSessionStatus> {
-    return this.inner.getStatus();
   }
 
   buildAuthorizeRequest(_port?: number): XaiAuthorizeRequest {
     // Port is fixed by the Grok-CLI registration; policy ignores the argument.
-    return this.inner.buildAuthorizeRequest(0);
+    return super.buildAuthorizeRequest(0);
   }
 
-  async completeLoginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Promise<XaiSession> {
-    try {
-      return await this.inner.completeLoginWithCode(params);
-    } catch (error) {
-      toXaiError(error);
-    }
-  }
-
-  async completeDeviceLogin(tokens: XaiTokenResponse): Promise<XaiSession> {
-    try {
-      return await this.inner.storeTokens(tokens);
-    } catch (error) {
-      toXaiError(error);
-    }
-  }
-
-  isExpiringSoon(session: XaiSession): boolean {
-    return this.inner.isExpiringSoon(session);
-  }
-
-  async getFreshAccessToken(forceRefresh = false): Promise<string> {
-    try {
-      return await this.inner.getFreshAccessToken(forceRefresh);
-    } catch (error) {
-      toXaiError(error);
-    }
-  }
-
-  async getFreshSession(forceRefresh = false): Promise<XaiSession> {
-    try {
-      return await this.inner.getFreshSession(forceRefresh);
-    } catch (error) {
-      toXaiError(error);
-    }
+  completeDeviceLogin(tokens: XaiTokenResponse): Promise<XaiSession> {
+    return this.storeTokens(tokens);
   }
 }

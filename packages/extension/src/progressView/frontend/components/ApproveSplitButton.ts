@@ -5,12 +5,10 @@ import { css, html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
-// Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+// Side-effect imports - register WA components used by this template
+// (the split-button caret/menu registrations come from @shared/wa/splitButton)
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles + helpers
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -18,6 +16,7 @@ import { splitButtonStyles } from '@shared/styles/controlStyles';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import { createEvent } from '@shared/utils/events';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSplitButtonMenu } from '@shared/wa/splitButton';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 /** Internal dropdown-item value for the edit/bash session-bypass entry. */
@@ -122,53 +121,37 @@ export class ApproveSplitButton extends LitElement {
     return html`
       <div class="approve-split split-button">
         ${approveButton}
-        <wa-dropdown
-          class="approve-split-menu split-button-menu"
-          placement="bottom-end"
-          @wa-select=${this.handleSelect}
-        >
-          <wa-button
-            id="approve-split-trigger-button"
-            slot="trigger"
-            class="approve-split-trigger split-button-trigger"
-            appearance="plain"
-            variant="neutral"
-            size="s"
-            type="button"
-            aria-label="More approve options"
-          >
-            ${waIcon('chevron-down')}
-          </wa-button>
-          ${when(
-            this.canBypass,
-            () =>
-              html`<wa-dropdown-item value=${YOLO_VALUE}>
-                ${waIcon('shield')} ${this.bypassAction}
-              </wa-dropdown-item>`,
-          )}
-          ${when(
-            this.canApproveAllDelegatedWork,
-            () =>
-              html`<wa-dropdown-item value=${DELEGATED_WORK_VALUE}>
-                ${waIcon('rocket')}
-                ${DELEGATION_APPROVAL_COPY.progressViewAction}
-              </wa-dropdown-item>`,
-          )}
-        </wa-dropdown>
-        <wa-tooltip for="approve-split-trigger-button">
-          ${
-            this.canApproveAllDelegatedWork
-              ? `${DELEGATION_APPROVAL_COPY.progressViewExplanation} (a)`
-              : `${this.bypassAction} (a)`
-          }
-        </wa-tooltip>
+        ${renderSplitButtonMenu({
+          classPrefix: 'approve-split',
+          triggerId: 'approve-split-trigger-button',
+          triggerAriaLabel: 'More approve options',
+          tooltip: this.canApproveAllDelegatedWork
+            ? `${DELEGATION_APPROVAL_COPY.progressViewExplanation} (a)`
+            : `${this.bypassAction} (a)`,
+          items: html`
+            ${when(
+              this.canBypass,
+              () =>
+                html`<wa-dropdown-item value=${YOLO_VALUE}>
+                  ${waIcon('shield')} ${this.bypassAction}
+                </wa-dropdown-item>`,
+            )}
+            ${when(
+              this.canApproveAllDelegatedWork,
+              () =>
+                html`<wa-dropdown-item value=${DELEGATED_WORK_VALUE}>
+                  ${waIcon('rocket')}
+                  ${DELEGATION_APPROVAL_COPY.progressViewAction}
+                </wa-dropdown-item>`,
+            )}
+          `,
+          onSelect: this.handleSelect,
+        })}
       </div>
     `;
   }
 
-  private handleSelect = (event: CustomEvent<{ item: HTMLElement }>): void => {
-    const value =
-      (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
+  private handleSelect = (value: string): void => {
     if (value === YOLO_VALUE) {
       this.emit('approve-session');
     } else if (value === DELEGATED_WORK_VALUE) {

@@ -1,10 +1,9 @@
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   setPreferXaiSubscription,
   type XaiSubscriptionPreferenceUpdate,
 } from '@model/xai/xaiPreference';
 
-import { bumpCodexPreferenceVersion } from './cliState';
+import { refreshSubscriptionPreferenceViews } from './codexSubscription';
 
 /**
  * Flip the "prefer Grok subscription" preference and refresh TUI views that
@@ -15,7 +14,6 @@ export async function setCliXaiSubscription(
   enabled: boolean,
 ): Promise<XaiSubscriptionPreferenceUpdate> {
   const update = await setPreferXaiSubscription(enabled);
-  invalidateModelOptionsCache();
-  bumpCodexPreferenceVersion();
+  refreshSubscriptionPreferenceViews();
   return update;
 }

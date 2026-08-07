@@ -14,7 +14,7 @@ import {
   renderSettingsToggleRow,
 } from '@shared/wa/settingsSection';
 import {
-  renderSetStatusIcon,
+  renderKeyStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
 
@@ -208,14 +208,7 @@ export class ProviderKeyList extends LitElement {
             <span class="provider-name">${entry.displayName}</span>
           </wa-button>
           <span class="settings-disclosure-status">
-            ${renderSetStatusIcon({
-              status: entry.status,
-              title: 'Key set',
-              fallbacks: {
-                env: { label: 'Env' },
-                'not-set': { label: 'Not set' },
-              },
-            })}
+            ${renderKeyStatusIcon(entry.status)}
           </span>
           <div class="settings-disclosure-actions">
             ${this.renderActions(entry)}
