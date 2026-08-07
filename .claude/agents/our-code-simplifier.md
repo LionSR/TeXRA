@@ -197,6 +197,29 @@ anything big.
   `supabase/functions/**` tree, required-peer exceptions like the MCP SDK —
   record those, don't delete them).
 
+## Cross-host consistency (CLI / extension / desktop share one core)
+
+Three hosts, one host-agnostic core — that is the architecture. When you see
+the same POLICY implemented per host, the simplification is to hoist it:
+
+- **Policy belongs to the core; wiring belongs to the host.** Approval
+  policy, queue semantics, run/session lifecycle, model-access resolution,
+  retry/classification rules: one owner in `src/` (host-agnostic), hosts
+  reach it through typed `Platform` ports. Three host copies of one policy
+  are three future divergences.
+- **Host-prefixed names are a smell detector, not a verdict.**
+  `cliXxx`/`desktopXxx`/`vscodeXxx` on *policy* logic (e.g. a
+  `cliApiFallbackSelection` with no shared counterpart) = hoist candidate.
+  The same prefix on *wiring/presentation* (`cliContext`, `cliState`,
+  terminal rendering, `vscodeSecrets`/`electronSecrets` as thin port
+  adapters) = legitimate host surface — leave it.
+- **The adjudicated KEEP line**: per-host *vocabulary* isolation (#7622) and
+  Platform ports are deliberate — never unify UI strings across hosts and
+  never collapse a port. Share logic, not grammar.
+- The ratchets bound HOW you hoist: no new `@agent/*` deep-import specifier
+  from a host (type-only included) — route through the existing alias
+  surface or extend the port.
+
 ## Concurrency discipline (this repo merges dozens of PRs a day)
 
 - Before starting: check in-flight PRs touching your surface. Duplicate
