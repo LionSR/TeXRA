@@ -13,11 +13,7 @@ import type {
   DiffRunOutcome,
   DiffRunResult,
 } from '@latex/latexdiff/types';
-import type {
-  FileLocation,
-  OutputFileInfo,
-  RoundIndexed,
-} from '@shared/schemas';
+import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import {
   AbsoluteFS,
   createExternalLocation,
@@ -60,12 +56,6 @@ export interface DesktopLatexdiffRunContext {
   workspaceScan?: DesktopLatexdiffWorkspaceScan;
 }
 
-function toFileLocation(filePath: string): FileLocation {
-  return path.isAbsolute(filePath)
-    ? createExternalLocation(filePath)
-    : pathToLocation(filePath);
-}
-
 export class DesktopProgressFileActions {
   constructor(
     private readonly ui: DesktopProgressFileActionUi,
@@ -73,7 +63,11 @@ export class DesktopProgressFileActions {
   ) {}
 
   openFileCompile(filePath: string): Promise<void> {
-    return this.ui.openBuildDisplay(toFileLocation(filePath));
+    return this.ui.openBuildDisplay(
+      path.isAbsolute(filePath)
+        ? createExternalLocation(filePath)
+        : pathToLocation(filePath),
+    );
   }
 
   async compareFiles(baseFile: string, editedFile: string): Promise<void> {

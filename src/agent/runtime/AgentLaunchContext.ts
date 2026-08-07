@@ -242,7 +242,7 @@ function beginRunStage(
 }
 
 async function assembleAgentLaunchContext(
-  input: AgentLaunchInput,
+  input: AgentLaunchInput & { session: SessionHandle },
   executionId: ExecutionId,
   interactions: SessionHostInteractions,
   streamId: StreamTabId,
@@ -293,9 +293,10 @@ async function assembleAgentLaunchContext(
     agentCategory: setting.agentCategory,
   };
 
-  // A delegated launch runs inside the parent run's context and therefore
-  // inherits its session policy; a root launch resolves the process default.
-  const session = input.session ?? currentSession();
+  // The session is resolved once at the boundary (buildAgentLaunchContext)
+  // and carried in, so a delegated launch inherits the parent run's session
+  // policy and a root launch gets the process default exactly once.
+  const session = input.session;
   const modelHandlerCompatibilityKey =
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));

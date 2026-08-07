@@ -190,7 +190,6 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
 
   private handleMenuSelect = (action: string): void => {
     switch (action) {
-      case 'openDiff':
       case 'showLatexdiff':
       case 'previewProposed':
         this.emitAction({ action });

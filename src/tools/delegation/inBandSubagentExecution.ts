@@ -307,16 +307,6 @@ async function throwRetryableDurabilityError(
   throw error;
 }
 
-async function persistReportBestEffort(
-  executionId: ExecutionId,
-  report: string,
-): Promise<void> {
-  const result = await persistChildRunReport(executionId, report);
-  if (result.kind === 'failed') {
-    logPersistenceFailure('report', executionId, result.err);
-  }
-}
-
 async function persistDeliveryBestEffort(
   executionId: ExecutionId,
   delivery: string,
@@ -556,7 +546,7 @@ async function executeInBand(
             { cause: error },
           );
         }
-        await persistReportBestEffort(
+        const reportResult = await persistChildRunReport(
           executionId,
           formatSubagentError(executionId, options.agentName, error, {
             wallTimeMs: Date.now() - startedAt,
@@ -564,6 +554,9 @@ async function executeInBand(
             memoryMisses: flowResult.memoryMisses,
           }),
         );
+        if (reportResult.kind === 'failed') {
+          logPersistenceFailure('report', executionId, reportResult.err);
+        }
         throw error;
       }
 

@@ -36,13 +36,6 @@ export interface SessionStoresOptions {
   onCanonicalStreamDeleted?: (stream: StreamTabId) => void | Promise<void>;
 }
 
-function throwAdjacentCleanupFailures(failures: readonly unknown[]): void {
-  if (failures.length === 1) throw failures[0];
-  if (failures.length > 1) {
-    throw new AggregateError(failures, 'Multiple adjacent cleanups failed');
-  }
-}
-
 export interface DeleteAllStreamsResult {
   readonly active: ReadonlySet<StreamTabId>;
   readonly failed: ReadonlySet<StreamTabId>;
@@ -376,7 +369,13 @@ export class SessionStores {
           async () => {
             const cleanup = await this.deleteAdjacentStreamStates(streams);
             failedAdjacentStreams = cleanup.failed;
-            throwAdjacentCleanupFailures(cleanup.failures);
+            if (cleanup.failures.length === 1) throw cleanup.failures[0];
+            if (cleanup.failures.length > 1) {
+              throw new AggregateError(
+                cleanup.failures,
+                'Multiple adjacent cleanups failed',
+              );
+            }
           },
         );
 

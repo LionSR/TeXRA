@@ -1,9 +1,6 @@
 // Local imports - shared utilities
 import { clampIndex } from '@utils/core';
 
-// Local imports - progress view component types
-import { permissionId, type PermissionState } from '../permissionState';
-
 /** Keep a selected inquiry by key, choosing its nearest successor if removed. */
 export function selectExternalInquiryKey(
   selectedKey: string | null,
@@ -29,8 +26,4 @@ export function isTextInput(el: Element | null): boolean {
   if (tagName.includes('textarea') || tagName.includes('input')) return true;
 
   return isTextInput(el.shadowRoot?.activeElement ?? null);
-}
-
-export function getPermissionKey(permission: PermissionState): string {
-  return `${permission.kind}:${permissionId(permission)}`;
 }

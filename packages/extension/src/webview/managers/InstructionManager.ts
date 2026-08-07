@@ -24,8 +24,6 @@ type ClipboardImageMessage = Extract<
 >;
 
 export class InstructionManager extends BaseWebviewManager {
-  protected readonly channel = CHANNEL;
-
   constructor() {
     super();
     setTimeout(async () => {
@@ -44,7 +42,7 @@ export class InstructionManager extends BaseWebviewManager {
   async handlePolishInstructionText(
     message: PolishInstructionMessage,
   ): Promise<void> {
-    if (!this.getWebview()) {
+    if (!this.webview) {
       return;
     }
     try {
@@ -94,7 +92,7 @@ export class InstructionManager extends BaseWebviewManager {
   }
 
   async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
-    if (!this.getWebview()) {
+    if (!this.webview) {
       return;
     }
     try {

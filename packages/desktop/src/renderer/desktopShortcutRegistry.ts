@@ -138,7 +138,6 @@ export function createDesktopShortcutRegistry(
 
   view?.addEventListener('keydown', handleKeydown, { capture: true });
 
-  let uninstallService = (): void => {};
   const registry: DesktopShortcutRegistry = {
     entries,
     subscribe(
@@ -156,7 +155,7 @@ export function createDesktopShortcutRegistry(
       uninstallService();
     },
   };
-  uninstallService = installDesktopShortcutService(registry);
+  const uninstallService = installDesktopShortcutService(registry);
   return registry;
 }
 

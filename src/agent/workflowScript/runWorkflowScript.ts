@@ -508,18 +508,21 @@ export async function runWorkflowScript(
     ): { payload: string | undefined; normalizedResult: unknown } => {
       try {
         const payload = serializeBridgeValue(value, valueLabel);
-        return { payload, normalizedResult: deserializeBridgeValue(payload) };
+        return {
+          payload,
+          normalizedResult:
+            payload === undefined ? undefined : JSON.parse(payload),
+        };
       } catch (error) {
         emitFailedEnd(error, metadata);
         throw error;
       }
     };
 
+    // `key` still holds journalKey(prompt, callOptions, dependencyFingerprint)
+    // here: refreshDependencyIdentity only runs at launch time, below.
     const prior = priorEntries.get(index);
-    const priorKey = prior
-      ? journalKey(prompt, callOptions, dependencyFingerprint)
-      : undefined;
-    if (prior && prior.key === priorKey) {
+    if (prior && prior.key === key) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
         'Cached agent() result',
@@ -841,10 +844,6 @@ function serializeBridgeValue(
     );
   }
   return payload;
-}
-
-function deserializeBridgeValue(payload: string | undefined): unknown {
-  return payload === undefined ? undefined : JSON.parse(payload);
 }
 
 function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {

@@ -115,19 +115,19 @@ interface ExternalInquiryExecutionMirrorPaths {
   answerPath: string;
 }
 
-export interface ExternalInquiryThreadMirrorPaths {
+interface ExternalInquiryThreadMirrorPaths {
   executionId: ExecutionId;
   threadPath: string;
   manifestPath: string;
 }
 
-export interface PersistedOpenTurn {
+interface PersistedOpenTurn {
   threadId: ExternalInquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
   turn: OpenInquiryTurn;
 }
 
-export interface PersistedAnsweredTurn {
+interface PersistedAnsweredTurn {
   threadId: ExternalInquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
   turn: AnsweredInquiryTurn;

@@ -86,14 +86,6 @@ export function getDelegationAgents(category: AgentCategory): AgentEntry[] {
   return resolveDelegationScopeAgents(activeDelegationScope(), category);
 }
 
-/** Resolve delegation targets from an explicitly captured run scope. */
-export function getDelegationAgentsForScope(
-  category: AgentCategory,
-  scope: AgentDelegationScope,
-): AgentEntry[] {
-  return resolveDelegationScopeAgents(scope, category);
-}
-
 /** Resolve one target from an explicitly captured run scope. */
 export function getDelegationAgentForScope(
   category: AgentCategory,
@@ -101,7 +93,7 @@ export function getDelegationAgentForScope(
   scope: AgentDelegationScope,
 ): AgentEntry | undefined {
   return findAgentByIdentifier(
-    getDelegationAgentsForScope(category, scope),
+    resolveDelegationScopeAgents(scope, category),
     identifier,
   );
 }

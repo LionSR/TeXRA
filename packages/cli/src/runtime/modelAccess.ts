@@ -92,9 +92,6 @@ export interface CliNoAvailableModelsRecoveryOptions {
   readonly configureKeyAction?: string;
 }
 
-export type CliNoRunnableModelsMessageOptions =
-  CliNoAvailableModelsRecoveryOptions;
-
 export type NoRunnableModelAccessReason =
   ApiAccessMode | 'includedLoginRequired';
 
@@ -228,7 +225,7 @@ export function formatCliNoRunnableModelsLaunchBlock(
 
 function formatCliNoRunnableModelsRecovery(
   reason: NoRunnableModelAccessReason,
-  options: CliNoRunnableModelsMessageOptions = {},
+  options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
   const {
     includedModeAction,
@@ -248,7 +245,7 @@ function formatCliNoRunnableModelsRecovery(
 
 export function formatCliNoRunnableModelsMessage(
   reason: NoRunnableModelAccessReason,
-  options: CliNoRunnableModelsMessageOptions = {},
+  options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
   return `${NO_RUNNABLE_MODEL_ACCESS_COPY[reason]}. ${formatCliNoRunnableModelsRecovery(reason, options)}`;
 }
@@ -317,7 +314,7 @@ export function modelAccessLaunchBlockDescriptionForCliMode(
 export function emptyModelListMessageForCliMode(
   models: readonly CliModelAccess[],
   apiMode: ApiAccessMode,
-  options: CliNoRunnableModelsMessageOptions = {},
+  options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
   return formatCliNoRunnableModelsMessage(
     noRunnableModelAccessReason(models, apiMode),
@@ -492,16 +489,6 @@ export function formatCliModelDetails(
   return lines.join('\n');
 }
 
-function withModelAccess(
-  models: readonly CliModelAccess[],
-  entry: CliModelAccess | undefined,
-): readonly CliModelAccess[] {
-  if (!entry || findCliModelAccessEntry(models, entry.model.value)) {
-    return models;
-  }
-  return [...models, entry];
-}
-
 async function loadCliModelAccessList(
   options: CliModelAccessEntryOptions,
 ): Promise<readonly CliModelAccess[]> {
@@ -617,10 +604,13 @@ export async function selectCliRunnableModel(
     const model = requestedModels[index];
     if (!model) continue;
     if (result.status === 'fulfilled') {
-      modelsWithHiddenEntry = withModelAccess(
-        modelsWithHiddenEntry,
-        result.value,
-      );
+      const entry = result.value;
+      if (
+        entry &&
+        !findCliModelAccessEntry(modelsWithHiddenEntry, entry.model.value)
+      ) {
+        modelsWithHiddenEntry = [...modelsWithHiddenEntry, entry];
+      }
     } else {
       entryErrorByModel.set(model, result.reason);
     }

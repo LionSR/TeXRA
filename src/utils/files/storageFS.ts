@@ -22,7 +22,7 @@ export class StorageFS extends RelativeFS {
 
 /**
  * GlobalStorageFS provides operations for global storage (shared across workspaces).
- * Extends StorageFS but uses global storage paths instead of workspace storage.
+ * Uses the platform's global storage path instead of the workspace storage path.
  */
 export class GlobalStorageFS extends RelativeFS {
   protected static override getBasePath(): string {

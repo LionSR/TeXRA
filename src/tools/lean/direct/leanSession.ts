@@ -28,10 +28,7 @@ import { JsonRpcConnection } from './jsonRpc';
 import type {
   LeanDiagnostic,
   LspDiagnostic,
-  LspHover,
   LspPublishDiagnosticsParams,
-  PlainGoal,
-  PlainTermGoal,
 } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
@@ -164,45 +161,6 @@ export class LeanSession {
     await this.ensureFileOpen(absolute, { forceReload: false });
     await this.waitForDiagnosticsQuiet(absolute);
     return absolute;
-  }
-
-  getPlainGoal(
-    filePath: string,
-    line: number,
-    column: number,
-  ): Promise<PlainGoal | null> {
-    return this.requestSettled<PlainGoal | null>(
-      filePath,
-      line,
-      column,
-      '$/lean/plainGoal',
-    );
-  }
-
-  getPlainTermGoal(
-    filePath: string,
-    line: number,
-    column: number,
-  ): Promise<PlainTermGoal | null> {
-    return this.requestSettled<PlainTermGoal | null>(
-      filePath,
-      line,
-      column,
-      '$/lean/plainTermGoal',
-    );
-  }
-
-  getHover(
-    filePath: string,
-    line: number,
-    column: number,
-  ): Promise<LspHover | null> {
-    return this.requestSettled<LspHover | null>(
-      filePath,
-      line,
-      column,
-      'textDocument/hover',
-    );
   }
 
   private async spawnAndInitialize(): Promise<void> {

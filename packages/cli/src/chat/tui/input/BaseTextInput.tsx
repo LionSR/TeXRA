@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
+import pTimeout from 'p-timeout';
 
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
@@ -27,13 +28,11 @@ import {
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
-import {
-  ImagePasteQueue,
-  withImagePasteTimeout,
-  type ImagePasteAttempt,
-} from './imagePasteQueue';
+import { ImagePasteQueue, type ImagePasteAttempt } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
 import { textDisplayWidth } from '../render/terminalText';
+
+const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
 const ESC_SLASH_PREFIX = '\u001B/';
 
@@ -597,8 +596,12 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // resolves (read from a ref, not a keypress-time snapshot) so typing
         // during the probe isn't clobbered.
         const attempt = imagePasteQueue.beginAttempt();
-        const paste = withImagePasteTimeout(
+        const paste = pTimeout(
           Promise.resolve().then(() => props.onImagePaste?.(attempt) ?? null),
+          {
+            milliseconds: IMAGE_PASTE_TIMEOUT_MS,
+            message: 'Image paste timed out.',
+          },
         )
           .then((chip) => {
             if (!chip || !attempt.isCurrent()) return;

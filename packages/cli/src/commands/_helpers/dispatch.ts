@@ -13,6 +13,7 @@ import {
 import stripAnsi from 'strip-ansi';
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
+import { ensureArray } from '@utils/core';
 import {
   editDistance,
   typoSuggestionThreshold,
@@ -425,13 +426,6 @@ interface CommandFlagSpecs {
   readonly short: Map<string, FlagSpec>;
 }
 
-function toStringArray(
-  value: string | string[] | undefined,
-): readonly string[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
-}
-
 function kebabCaseFlagName(name: string): string {
   return name
     .replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2')
@@ -458,7 +452,8 @@ function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
 
   const spec = { takesValue: def.type !== 'boolean' };
   addLongFlag(specs, name, spec);
-  const aliases = toStringArray((def as { alias?: string | string[] }).alias);
+  const aliasDef = (def as { alias?: string | string[] }).alias;
+  const aliases = aliasDef === undefined ? [] : ensureArray(aliasDef);
   for (const alias of aliases) {
     if (alias.length === 1) {
       specs.short.set(`-${alias}`, spec);

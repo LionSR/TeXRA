@@ -8,7 +8,6 @@ import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerC
 import { runAgent } from '@agent/runtime/runAgent';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import * as logger from '@logger/logUtils';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
@@ -45,7 +44,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     const copilotRouteOverride = z
       .literal('direct')
       .optional()
-      .parse(wrapped?.copilotRouteOverride) as CopilotRouteOverride | undefined;
+      .parse(wrapped?.copilotRouteOverride);
 
     await runAgent(
       { config, executionId: wrapped?.executionId },

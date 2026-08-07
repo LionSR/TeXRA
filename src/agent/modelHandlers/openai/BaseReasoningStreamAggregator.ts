@@ -6,12 +6,15 @@ import type {
   ChatCompletionMessageFunctionToolCall,
 } from 'openai/resources/chat/completions';
 
-export interface StreamingAggregator {
-  appendContent(delta: string): void;
-  appendReasoning(delta: string): void;
-  consumeChunk(chunk: ChatCompletionChunk): void;
-  finalize(fallback?: ChatCompletion): ChatCompletion;
-}
+/**
+ * The aggregator surface the handler drives per streaming request. Derived
+ * from {@link BaseReasoningStreamAggregator} (the only implementation) so the
+ * contract can never drift from the class.
+ */
+export type StreamingAggregator = Pick<
+  BaseReasoningStreamAggregator,
+  'appendContent' | 'appendReasoning' | 'consumeChunk' | 'finalize'
+>;
 
 type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
   reasoning_content?: string;

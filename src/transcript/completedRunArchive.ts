@@ -18,7 +18,6 @@ import {
   type ExecutionId,
   type StreamLogEntry,
   type StreamTabId,
-  type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
 import { ToolResultSchema } from '@shared/schemas/toolResult';
@@ -33,13 +32,6 @@ export interface CompletedRunTodosReadResult {
   readonly todos: TodoEntry[];
   readonly source: CompletedRunTodosSource;
   readonly streamId?: StreamTabId;
-}
-
-function todoItemToEntry(todo: TodoItem): TodoEntry {
-  return {
-    content: todo.content,
-    status: todo.status,
-  };
 }
 
 /**
@@ -57,7 +49,10 @@ export async function readCompletedRunTodos(
   if (streamId && (await snapshotStore.hasPersistedWorkPlan(streamId))) {
     const snapshot = await snapshotStore.read(streamId);
     return {
-      todos: snapshot.todos.map(todoItemToEntry),
+      todos: snapshot.todos.map((todo): TodoEntry => ({
+        content: todo.content,
+        status: todo.status,
+      })),
       source: 'streamData',
       streamId,
     };

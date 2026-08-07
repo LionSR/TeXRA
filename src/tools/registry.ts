@@ -179,7 +179,7 @@ const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  * agent's load already resolved, or one an embedder registered as a value, the
  * only way to attach the runtime-only fields no YAML can express.
  */
-export type RawToolConfig = string | ToolDefinition;
+type RawToolConfig = string | ToolDefinition;
 
 function differsFrom(declared: unknown, registered: unknown): boolean {
   if (declared === undefined || declared === registered) return false;

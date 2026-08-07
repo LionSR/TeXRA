@@ -159,5 +159,3 @@ export async function pollDeviceToken(
     'Device authorization returned an unexpected response',
   );
 }
-
-export type { CodexTokenResponse };

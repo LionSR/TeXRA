@@ -106,17 +106,11 @@ export class AgentsTab extends LitElement {
     });
   }
 
-  private handleCreateAgent(category: AgentCategory): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, {
-      category,
-    });
-  }
-
-  private handleCreateFromTemplate(category: AgentCategory): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, {
-      category,
-      mode: 'template',
-    });
+  private handleCreateAgent(category: AgentCategory, template = false): void {
+    postMessage(
+      SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
+      template ? { category, mode: 'template' } : { category },
+    );
   }
 
   private handleChangeCustomDir(): void {
@@ -149,7 +143,7 @@ export class AgentsTab extends LitElement {
             text: 'From template',
             kind: 'secondary',
             appearance: 'outlined',
-            onClick: () => this.handleCreateFromTemplate(category),
+            onClick: () => this.handleCreateAgent(category, true),
           })}
           ${renderLabeledActionButton({
             icon: 'plus',

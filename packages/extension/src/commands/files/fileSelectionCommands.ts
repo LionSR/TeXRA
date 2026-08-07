@@ -57,19 +57,6 @@ function createMultiPicker(
     );
 }
 
-function createSinglePicker(
-  options: PickerOptions,
-): (currentFile?: string) => Promise<string | null> {
-  return (currentFile) =>
-    announceSelection(() =>
-      selectFile({
-        currentFile,
-        openLabel: options.openLabel,
-        filters: options.filters(),
-      }),
-    );
-}
-
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ): void {
@@ -125,10 +112,14 @@ const selectOutputFiles = createMultiPicker({
   filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
 });
 
-const selectEditedFile = createSinglePicker({
-  openLabel: 'Select Edited File',
-  filters: () => ({}),
-});
+const selectEditedFile = (currentFile?: string) =>
+  announceSelection(() =>
+    selectFile({
+      currentFile,
+      openLabel: 'Select Edited File',
+      filters: {},
+    }),
+  );
 
 async function getCurrentFile(): Promise<string | null> {
   // Try activeTextEditor first (for text files)

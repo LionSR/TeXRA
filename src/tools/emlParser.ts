@@ -13,7 +13,7 @@ export interface EmlImageAttachment {
   bytes: Uint8Array;
 }
 
-export interface EmlParseResult {
+interface EmlParseResult {
   /** Human-readable representation of the email (plain text, or Markdown when falling back from an HTML-only body) */
   text: string;
   /** Image attachments extracted from the email */

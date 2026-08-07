@@ -137,9 +137,6 @@ export const DEFAULT_CORE_SETTINGS = {
   },
 };
 
-const stringArray = (defaultValue: string[], description: string) =>
-  z.array(z.string()).describe(description).prefault(defaultValue);
-
 const stringRecord = (
   defaultValue: Record<string, string>,
   description: string,

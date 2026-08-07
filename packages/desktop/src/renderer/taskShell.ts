@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
@@ -47,7 +48,7 @@ export interface TaskSidebarCallbacks {
 }
 
 function sidebarAction(options: {
-  icon: Parameters<typeof waIcon>[0];
+  icon: TeXRAIconName;
   label: string;
   onClick: () => void;
   primary?: boolean;
@@ -74,8 +75,7 @@ export function taskSidebarTemplate(
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  let projectDisclosureIcon: Parameters<typeof waIcon>[0] =
-    'arrow-up-right-from-square';
+  let projectDisclosureIcon: TeXRAIconName = 'arrow-up-right-from-square';
   if (model.hasWorkspace) {
     projectDisclosureIcon = model.filesExpanded
       ? 'chevron-down'

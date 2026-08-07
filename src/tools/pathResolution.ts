@@ -92,16 +92,6 @@ export function resolveWorkspaceRelativePath(
 ): WorkspacePathResolution {
   const trimmed = targetPath?.trim();
   const input = !trimmed || trimmed === '.' ? '' : trimmed;
-  let restrictPaths: boolean | undefined;
-  const pathsAreRestricted = (): boolean => {
-    // This setting deliberately uses the same workspaceState slot in every
-    // host. Do not add a CLI-specific store without also making host identity
-    // explicit at this enforcement boundary.
-    restrictPaths ??= readPlatformSetting<boolean>(
-      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-    );
-    return restrictPaths;
-  };
 
   /**
    * Resolve an absolute path that sits outside the containing root: honour a
@@ -118,7 +108,15 @@ export function resolveWorkspaceRelativePath(
     match: MatchedExternalRoot | null | undefined,
     outsideMessage: string,
   ): WorkspacePathResolution => {
-    if (!match && pathsAreRestricted()) {
+    // This setting deliberately uses the same workspaceState slot in every
+    // host. Do not add a CLI-specific store without also making host identity
+    // explicit at this enforcement boundary.
+    if (
+      !match &&
+      readPlatformSetting<boolean>(
+        WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+      )
+    ) {
       throw new ToolError(outsideMessage);
     }
     return {

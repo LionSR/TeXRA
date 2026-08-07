@@ -19,8 +19,8 @@ import {
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export type NotificationHandler = (params: unknown) => void;
-export type ServerRequestHandler = (params: unknown) => Promise<unknown>;
+type NotificationHandler = (params: unknown) => void;
+type ServerRequestHandler = (params: unknown) => Promise<unknown>;
 
 export class JsonRpcConnection {
   private readonly conn: MessageConnection;

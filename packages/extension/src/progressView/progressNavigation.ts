@@ -6,12 +6,9 @@ import {
   type ProgressStreamRevealResult,
 } from './ProgressViewProvider';
 
-export type ProgressNavigationRevealResult =
-  ProgressStreamRevealResult | 'unavailable';
-
 export async function revealProgressStream(
   streamId: StreamTabId,
-): Promise<ProgressNavigationRevealResult> {
+): Promise<ProgressStreamRevealResult | 'unavailable'> {
   const provider = ProgressViewProvider.getInstance();
   return provider ? provider.revealStream(streamId) : 'unavailable';
 }

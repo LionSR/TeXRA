@@ -386,17 +386,6 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
 }
 
 /**
- * Build the SDK-native function schema used by Google token counting. Unlike
- * `parametersJsonSchema`, `parameters` is normalized locally by @google/genai
- * and does not invoke Google's server-side JSON-Schema flattening path.
- */
-function convertGoogleFunctionParameters(
-  def: ToolDefinition,
-): GeminiSchema | null {
-  return convertGoogleToolSchema(def) as GeminiSchema | null;
-}
-
-/**
  * OpenAI tool payloads should always carry an explicit schema object when a
  * tool has no declared parameters to avoid null/omitted ambiguity.
  */
@@ -603,10 +592,14 @@ export function toAnthropicTools(
 export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) return [];
 
+  // The SDK-native `parameters` field (unlike `parametersJsonSchema`) is
+  // normalized locally by @google/genai and does not invoke Google's
+  // server-side JSON-Schema flattening path.
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parameters: convertGoogleFunctionParameters(d) ?? undefined,
+    parameters:
+      (convertGoogleToolSchema(d) as GeminiSchema | null) ?? undefined,
   }));
 
   return [{ functionDeclarations: declarations }];

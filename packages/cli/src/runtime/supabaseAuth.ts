@@ -261,7 +261,7 @@ export async function resolveCliUsageTier(
 }
 
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
-  initializeCliSupabaseAuth();
+  const authCoordinator = initializeCliSupabaseAuth();
 
   // A configured CI relay token authenticates relay calls without a session;
   // report it as the active credential so `texra auth status` / `texra
@@ -306,7 +306,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     };
   }
 
-  const session = await initializeCliSupabaseAuth().loadSession();
+  const session = await authCoordinator.loadSession();
   let tier = 'free';
   try {
     tier = await SupabaseClient.getUserTier();

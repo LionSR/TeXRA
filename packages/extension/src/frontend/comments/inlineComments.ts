@@ -12,12 +12,10 @@
  * list. The agent reads the user's replies back with the tool's "list" command.
  */
 
-// Third-party imports
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 
-// Local imports
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import * as logger from '@logger/logUtils';
 import type {

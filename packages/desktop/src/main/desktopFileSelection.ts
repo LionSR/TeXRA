@@ -132,23 +132,15 @@ export function createDesktopFileSelection(
     });
   }
 
-  function postMultiFileList(fileType: DesktopMultiFileType, files: string[]) {
-    options.postToRenderer({
-      command: MULTI_SET_COMMAND_BY_FILE_TYPE[fileType],
-      files,
-    });
-  }
-
   function list(fileType: ListableFileType): Promise<string[]> {
     return listDesktopWorkspaceFiles(fileType, getWorkspacePath());
   }
 
-  async function requestSingleFileList(
-    fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
-    preserveBaseFile = false,
-  ) {
-    const files = await list(fileType === 'base' ? 'input' : fileType);
-    postFileList(fileType, files, preserveBaseFile);
+  // The base file is listed from the input rules: base is a single-slot view
+  // over the input list.
+  async function requestBaseFileList(preserveBaseFile: boolean) {
+    const files = await list('input');
+    postFileList('base', files, preserveBaseFile);
   }
 
   // Multi-list categories (input/context/media) are user-owned and only
@@ -226,10 +218,12 @@ export function createDesktopFileSelection(
       ],
     });
     if (!selectedFiles) return;
-    postMultiFileList(
-      fileType,
-      selectedFiles.map((file) => toWorkspaceRelative(workspacePath, file)),
-    );
+    options.postToRenderer({
+      command: MULTI_SET_COMMAND_BY_FILE_TYPE[fileType],
+      files: selectedFiles.map((file) =>
+        toWorkspaceRelative(workspacePath, file),
+      ),
+    });
   }
 
   function handleMessage(message: DesktopCommandMessage): boolean {
@@ -238,9 +232,7 @@ export function createDesktopFileSelection(
         runAsync(selectMultipleFiles(message));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
-        runAsync(
-          requestSingleFileList('base', message.preserveBaseFile === true),
-        );
+        runAsync(requestBaseFileList(message.preserveBaseFile === true));
         return true;
       case MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES:
         runAsync(refreshDiskBackedDropdowns());

@@ -151,11 +151,7 @@ const ProviderErrorObjectSchema = z.object({
    *  at runtime, so size enforcement is the producer's responsibility. */
   partialText: z.string().optional(),
 });
-const ProviderErrorSchema = z.preprocess(
-  normalizeLegacyProviderErrorFields,
-  ProviderErrorObjectSchema,
-);
-export type ProviderError = z.infer<typeof ProviderErrorSchema>;
+export type ProviderError = z.infer<typeof ProviderErrorObjectSchema>;
 
 /** Context about where/when the error occurred */
 const ErrorContextSchema = z.object({

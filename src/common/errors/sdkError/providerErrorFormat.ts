@@ -381,10 +381,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   };
 }
 
-function detectCachedProviderError(err: unknown): ProviderError | undefined {
-  return findInCauseChain(err, providerErrorMetadata.detect);
-}
-
 /**
  * Normalize an upstream or SDK error. If a structured `ProviderError` was
  * explicitly attached at a provider/flow boundary (possibly on a deeper
@@ -393,7 +389,7 @@ function detectCachedProviderError(err: unknown): ProviderError | undefined {
  * layers only read the shape.
  */
 export function normalizeProviderError(err: unknown): ProviderError {
-  const cached = detectCachedProviderError(err);
+  const cached = findInCauseChain(err, providerErrorMetadata.detect);
   if (cached) {
     // A cached error may have been attached before the legacy retryable/
     // exhaustion-flag migration ran (e.g. a resumed flow's raw persisted

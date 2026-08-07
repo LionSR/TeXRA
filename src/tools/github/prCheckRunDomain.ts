@@ -72,7 +72,7 @@ export function computeNewCheckFailures(
 }
 
 /** The mutations the caller applies to its annotation queue, plus the next key set. */
-export interface AnnotationQueuePlan {
+interface AnnotationQueuePlan {
   /** Newly-appeared annotated runs to append to the pending queue. */
   toAppend: GhCheckRun[];
   /**

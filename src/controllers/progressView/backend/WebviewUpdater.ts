@@ -73,27 +73,6 @@ export class WebviewUpdater {
     this.send(message);
   }
 
-  /**
-   * Update stream tabs in the webview.
-   * Optionally includes lightweight stream metadata (backend-owned fields only).
-   */
-  private updateStreams(
-    streams: StreamTabInfo[],
-    activeStream: ActiveStreamId,
-    streamStates?: Record<StreamTabId, StreamMetadata>,
-  ): void {
-    const unsupportedCommands = this.getUnsupportedCommands?.();
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      streams,
-      activeStream,
-      unsupportedCommands: unsupportedCommands
-        ? [...unsupportedCommands]
-        : undefined,
-      streamStates,
-    });
-  }
-
   updateStreamMetadata(
     state: StreamMetadataSource,
     streamId: StreamTabId,
@@ -213,13 +192,6 @@ export class WebviewUpdater {
       stream,
       runId,
       usage,
-    });
-  }
-
-  private updateTheme(theme: 'dark' | 'light'): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
-      theme,
     });
   }
 
@@ -369,7 +341,10 @@ export class WebviewUpdater {
     }
 
     if (theme) {
-      this.updateTheme(theme);
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.THEME_SET,
+        theme,
+      });
     }
 
     // Send lightweight metadata — only backend-owned fields the frontend merges.
@@ -382,7 +357,17 @@ export class WebviewUpdater {
       );
     }
 
-    this.updateStreams(streams, activeStream, streamMetadata);
+    // Full stream-tabs refresh, carrying the per-stream metadata patch.
+    const unsupportedCommands = this.getUnsupportedCommands?.();
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      streams,
+      activeStream,
+      unsupportedCommands: unsupportedCommands
+        ? [...unsupportedCommands]
+        : undefined,
+      streamStates: streamMetadata,
+    });
 
     return activeStream;
   }

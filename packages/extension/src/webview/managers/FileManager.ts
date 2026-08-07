@@ -16,7 +16,6 @@ import {
   MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES,
   normalizeMainViewFileExtension,
   planMainViewDroppedFileAttachments,
-  type MainViewAllowedDropExtensions,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import { getFileLister } from '@frontend/files/fileLister';
 import {
@@ -95,8 +94,6 @@ const UPDATE_TO_SET_COMMAND = {
 } as const satisfies Record<UpdateFilesMessage['command'], SetFilesCommand>;
 
 export class FileManager extends BaseWebviewManager {
-  protected readonly channel = CHANNEL;
-
   async handleEditedFileSelection(): Promise<void> {
     const editedFile = await vscode.commands.executeCommand<string>(
       FILE_SELECTION_COMMAND_IDS.selectEditedFile,
@@ -115,7 +112,10 @@ export class FileManager extends BaseWebviewManager {
     const files = message.baseFile
       ? await getFileLister().listEditedFiles(getFileStem(message.baseFile))
       : [];
-    this.postEditedFiles(files, Boolean(message.notifyWhenEmpty));
+    if (message.notifyWhenEmpty && files.length === 0) {
+      logger.debug(CHANNEL, 'No edited files were found during refresh.');
+    }
+    this.postMessage({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
@@ -310,7 +310,11 @@ export class FileManager extends BaseWebviewManager {
     );
     const plan = planMainViewDroppedFileAttachments({
       paths,
-      allowedExtensions: this.getAllowedDropExtensions(),
+      allowedExtensions: {
+        input: getIncludedExtensions('input'),
+        context: getIncludedExtensions('context'),
+        media: getIncludedExtensions('media'),
+      },
       target: message.target ?? undefined,
     });
 
@@ -335,13 +339,6 @@ export class FileManager extends BaseWebviewManager {
       `Updating ${message.fileType} with ${message.files?.length ?? 0} files`,
     );
     this.postMessage({ command: setCommand, files: message.files ?? [] });
-  }
-
-  private postEditedFiles(files: string[], notifyWhenEmpty: boolean): void {
-    if (notifyWhenEmpty && files.length === 0) {
-      logger.debug(CHANNEL, 'No edited files were found during refresh.');
-    }
-    this.postMessage({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
   }
 
   private postBaseFiles(
@@ -422,14 +419,6 @@ export class FileManager extends BaseWebviewManager {
     } catch {
       return trimmed;
     }
-  }
-
-  private getAllowedDropExtensions(): MainViewAllowedDropExtensions {
-    return {
-      input: getIncludedExtensions('input'),
-      context: getIncludedExtensions('context'),
-      media: getIncludedExtensions('media'),
-    };
   }
 
   private showDroppedFilesResult(

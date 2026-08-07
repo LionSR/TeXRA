@@ -35,7 +35,6 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { type RunRecord } from '@agent/core/definition/RunRecord';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
@@ -377,7 +376,7 @@ const ExecutionsToolInputSchema = z.strictObject({
     ),
 });
 
-export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
+type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -1135,12 +1134,29 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       store.readRunRecord(),
       store.readWorkspaceFiles(),
     ]);
-    const recordedPaths = this.recordedWorkspacePathSet(record, paths);
-    const resolved = this.resolveRecordedWorkspaceFile(
-      record,
-      recordedPaths,
-      filePath,
+    const recordedPaths = new Set(
+      paths.flatMap((candidate) => {
+        const resolvedCandidate = resolveExecutionWorkspaceFilePath(
+          record,
+          candidate,
+        );
+        return resolvedCandidate ? [resolvedCandidate.path] : [];
+      }),
     );
+    // The listing renders recorded paths under a `workspace/` display prefix,
+    // so a read in that display form retries against the stripped path.
+    const direct = resolveExecutionWorkspaceFilePath(record, filePath);
+    let resolved =
+      direct && recordedPaths.has(direct.path) ? direct : undefined;
+    const displayPrefix = 'workspace/';
+    if (!resolved && filePath.startsWith(displayPrefix)) {
+      const stripped = resolveExecutionWorkspaceFilePath(
+        record,
+        filePath.slice(displayPrefix.length),
+      );
+      resolved =
+        stripped && recordedPaths.has(stripped.path) ? stripped : undefined;
+    }
     if (!resolved) {
       throw new ToolError(
         `Workspace file not found: /executions/${executionId}/workspace-files/${filePath}`,
@@ -1161,35 +1177,5 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       viewRange,
       maxLines: Infinity,
     });
-  }
-
-  private resolveRecordedWorkspaceFile(
-    config: RunRecord | null,
-    recordedPaths: ReadonlySet<string>,
-    filePath: string,
-  ): { readonly absolutePath: string; readonly path: string } | undefined {
-    const direct = resolveExecutionWorkspaceFilePath(config, filePath);
-    if (direct && recordedPaths.has(direct.path)) {
-      return direct;
-    }
-    const displayPrefix = 'workspace/';
-    if (!filePath.startsWith(displayPrefix)) return undefined;
-    const stripped = resolveExecutionWorkspaceFilePath(
-      config,
-      filePath.slice(displayPrefix.length),
-    );
-    return stripped && recordedPaths.has(stripped.path) ? stripped : undefined;
-  }
-
-  private recordedWorkspacePathSet(
-    config: RunRecord | null,
-    paths: readonly string[],
-  ): Set<string> {
-    return new Set(
-      paths.flatMap((candidate) => {
-        const resolved = resolveExecutionWorkspaceFilePath(config, candidate);
-        return resolved ? [resolved.path] : [];
-      }),
-    );
   }
 }

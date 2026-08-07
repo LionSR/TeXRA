@@ -100,11 +100,6 @@ function StepFrame(props: {
   );
 }
 
-function firstAvailableIndex(models: readonly CliModelAccess[]): number {
-  const index = models.findIndex((model) => model.available);
-  return index >= 0 ? index : 0;
-}
-
 export function initWizardModelSelectItems(
   models: readonly CliModelAccess[],
 ): ReadonlyArray<SelectItem<string>> {
@@ -197,7 +192,10 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       picker = (
         <Select
           key={step}
-          initialIndex={firstAvailableIndex(props.options.models)}
+          initialIndex={Math.max(
+            0,
+            props.options.models.findIndex((model) => model.available),
+          )}
           items={initWizardModelSelectItems(props.options.models)}
           onSelect={(model) => commit({ model })}
           onCancel={cancel}

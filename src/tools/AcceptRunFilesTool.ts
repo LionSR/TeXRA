@@ -123,7 +123,7 @@ Parameters map directly to subagent-result delivery attributes:
       files.map(async (mapping) => {
         assertNoParentTraversal(mapping.path);
 
-        const { sourceAbsolute, sourceLocation } = await this.resolveSourceFile(
+        const sourceLocation = await this.resolveSourceFile(
           executionId,
           mapping.path,
         );
@@ -155,7 +155,7 @@ Parameters map directly to subagent-result delivery attributes:
           : undefined;
         const isSameFile =
           sourceLocation.kind === 'workspace' &&
-          sourceAbsolute === dest.absolutePath;
+          sourceLocation.absolutePath === dest.absolutePath;
         let originalContent: string;
         if (snapshotContent !== undefined) {
           originalContent = snapshotContent;
@@ -306,14 +306,11 @@ Parameters map directly to subagent-result delivery attributes:
   private async resolveSourceFile(
     executionId: ExecutionId,
     runPath: string,
-  ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
+  ): Promise<FileLocation> {
     const entry = await inspectRunStorageEntry(executionId, runPath);
     switch (entry.kind) {
       case 'file':
-        return {
-          sourceAbsolute: entry.location.absolutePath,
-          sourceLocation: entry.location,
-        };
+        return entry.location;
       case 'symlink':
         throw new ToolError(
           `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
@@ -335,13 +332,7 @@ Parameters map directly to subagent-result delivery attributes:
       wsLoc.kind !== 'external' &&
       (await WorkspaceFS.exists(wsLoc.relativePath))
     ) {
-      return {
-        sourceAbsolute: wsLoc.absolutePath,
-        sourceLocation: createWorkspaceLocation(
-          wsLoc.absolutePath,
-          wsLoc.relativePath,
-        ),
-      };
+      return createWorkspaceLocation(wsLoc.absolutePath, wsLoc.relativePath);
     }
 
     throw new ToolError(

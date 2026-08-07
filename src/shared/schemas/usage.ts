@@ -42,18 +42,14 @@ export const TokenUsageStatsBaseSchema = z.strictObject({
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsBaseSchema>;
 
-const TokenUsageStatsInputSchema = TokenUsageStatsBaseSchema.extend({
+export const TokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
   viaChatGptSubscription: z.boolean().optional(),
+}).transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
+  const usageRoute =
+    usage.usageRoute ??
+    (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
+  return usageRoute == null ? usage : { ...usage, usageRoute };
 });
-
-export const TokenUsageStatsSchema = TokenUsageStatsInputSchema.transform(
-  ({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
-    const usageRoute =
-      usage.usageRoute ??
-      (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
-    return usageRoute == null ? usage : { ...usage, usageRoute };
-  },
-);
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;

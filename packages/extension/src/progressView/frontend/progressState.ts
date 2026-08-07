@@ -46,7 +46,7 @@ import {
   type StreamContextValue,
   type StreamLogContextValue,
 } from './streamContexts';
-import { permissionId, type PermissionState } from './permissionState';
+import { getPermissionKey, type PermissionState } from './permissionState';
 
 // ---------------------------------------------------------------------------
 // Stable empty references — avoid allocating new arrays/maps per read.
@@ -210,7 +210,7 @@ export function diffStatusAnnouncement(
 
   const permissionKeys = new Set<string>();
   for (const permission of permissions) {
-    const key = `${permission.kind}:${permissionId(permission)}`;
+    const key = getPermissionKey(permission);
     permissionKeys.add(key);
     if (previousKeys.has(key)) continue;
     const noun = PERMISSION_ANNOUNCEMENT_NOUN[permission.kind];

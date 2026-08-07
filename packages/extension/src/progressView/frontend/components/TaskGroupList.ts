@@ -283,10 +283,6 @@ export class TaskGroupList extends LitElement {
     this.groupMessageWindows = new Map();
   }
 
-  private groupMessageScope(groupId: string): string {
-    return `group:${groupId}`;
-  }
-
   private renderRevealButton(options: {
     hiddenCount: number;
     step: number;
@@ -495,7 +491,7 @@ export class TaskGroupList extends LitElement {
   private renderGroupBody(node: GroupTree): TemplateResult {
     return html`${this.renderMessageEntries(
       node.messages,
-      this.groupMessageScope(node.group.id),
+      `group:${node.group.id}`,
     )}${repeat(
       node.children,
       (c) => c.group.id,

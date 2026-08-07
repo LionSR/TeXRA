@@ -332,11 +332,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     if (!selectedPath) return;
 
     await this.directoryController.setCustomDir(selectedPath);
-    await Promise.all([
-      this.postCustomAgentDir(),
-      this.postAgentSelectionData(),
-      this.postMainAgentAndTeamOptionsData(),
-    ]);
+    await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
   /**
@@ -346,19 +342,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    */
   private async refreshAfterAgentMutation(): Promise<void> {
     await this.registry.refreshAgents();
-    await Promise.all([
-      this.postAgentSelectionData(),
-      this.postMainAgentAndTeamOptionsData(),
-    ]);
+    await this.refreshCatalogData();
   }
 
   private async resetCustomAgentDir(): Promise<void> {
     await this.directoryController.resetCustomDir();
-    await Promise.all([
-      this.postCustomAgentDir(),
-      this.postAgentSelectionData(),
-      this.postMainAgentAndTeamOptionsData(),
-    ]);
+    await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
   private async openAgentFolder(): Promise<void> {

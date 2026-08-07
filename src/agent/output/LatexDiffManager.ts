@@ -92,10 +92,6 @@ export class LatexDiffManager {
     });
   }
 
-  private getDisplayLabel(location: FileLocation): string {
-    return path.basename(getComparablePath(location));
-  }
-
   private async ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
@@ -121,153 +117,148 @@ export class LatexDiffManager {
     mapping: RoundFileMapping,
     stage?: StageHandle,
   ): Promise<CompiledPdfArtifact[]> {
-    const execute = () => this.performLatexdiffOperations(currRound, mapping);
+    const execute = async (): Promise<CompiledPdfArtifact[]> => {
+      if (!(await checkToolInstalled('latexdiff'))) {
+        this.logger.warn(
+          'Skipping latexdiff operations - latexdiff not installed',
+        );
+        return [];
+      }
+
+      const outputFiles = this.getOutputFiles()[currRound] ?? [];
+      if (outputFiles.length === 0) {
+        this.logger.warn(
+          `No output files found for round ${currRound}, skipping latexdiff operations`,
+        );
+        return [];
+      }
+
+      // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
+      // relative \input{} resolution works when its cwd is runDir/r{round}.
+      await this.fileService.ensureMirroredInRoundDir(currRound);
+      await this.fileService.ensureMirroredInDiffRoundDir(currRound);
+      const relativePath = path.join('diff', `r${currRound}`);
+      const diffDirectory: DiffOutputDirectory = {
+        absolutePath: path.join(this.fileService.runDirectory, relativePath),
+        relativePath,
+        executionId: this.fileService.executionId,
+      };
+
+      const outputByPath = new Map(
+        outputFiles.map((f) => [getComparablePath(f.location), f]),
+      );
+
+      this.logger.debug('Base files', {
+        data: this.baseFiles.map((f) => f.absolutePath),
+      });
+      this.logger.debug(`r${currRound} output files`, {
+        data: outputFiles.map((f) => f.location.absolutePath),
+      });
+
+      const aggregated: DiffResult[] = [];
+      const artifacts: CompiledPdfArtifact[] = [];
+      const collect = (outcome: SingleDiffOutcome | null): void => {
+        if (!outcome) return;
+        aggregated.push(outcome.diffResult);
+        if (outcome.artifact) artifacts.push(outcome.artifact);
+      };
+      const collectPairs = (
+        pick: (entry: RoundFileEntry) => FileLocation | undefined,
+      ): [string, FileLocation][] => {
+        const pairs: [string, FileLocation][] = [];
+        for (const [outputPath, entry] of mapping) {
+          const location = pick(entry);
+          if (location) pairs.push([outputPath, location]);
+        }
+        return pairs;
+      };
+
+      if (this.agentSetting.isRewrite) {
+        const basePairs = collectPairs((entry) => entry.base);
+        this.logPairMatches(basePairs, 'base files to output files');
+
+        for (const [outputPath, baseLocation] of basePairs) {
+          collect(
+            await this.runSingleDiff({
+              outputPath,
+              baseLocation,
+              outputByPath,
+              originalLocation: baseLocation,
+              baseRound: null,
+              runDiff: (base, revised, cwd) =>
+                this.latexdiffService.runDiffForRound(
+                  base,
+                  revised,
+                  currRound,
+                  undefined,
+                  { cwd, outputDirectory: diffDirectory.absolutePath },
+                ),
+              label: 'round-diff',
+              pdfStemSuffix: '-diff',
+              diffDirectory,
+            }),
+          );
+        }
+      }
+
+      const generateBetweenRoundDiffs = readPlatformSetting<boolean>(
+        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      );
+
+      if (generateBetweenRoundDiffs && currRound > 0) {
+        const prevPairs = collectPairs((entry) => entry.prev);
+        this.logPairMatches(
+          prevPairs,
+          'previous round files to current round files',
+        );
+
+        for (const [outputPath, prevLocation] of prevPairs) {
+          const originalLocation = mapping.get(outputPath)?.origin ?? null;
+          collect(
+            await this.runSingleDiff({
+              outputPath,
+              baseLocation: prevLocation,
+              outputByPath,
+              originalLocation,
+              baseRound: currRound - 1,
+              runDiff: (base, revised, cwd) =>
+                this.latexdiffService.runDiffBetweenRounds(
+                  base,
+                  revised,
+                  currRound - 1,
+                  currRound,
+                  undefined,
+                  {
+                    cwd,
+                    outputDirectory: diffDirectory.absolutePath,
+                  },
+                ),
+              label: 'between-rounds-diff',
+              pdfStemSuffix: '-round-diff',
+              diffDirectory,
+            }),
+          );
+        }
+      } else if (!generateBetweenRoundDiffs) {
+        this.logger.debug(
+          'Skipping between-round latexdiff operations: disabled in settings',
+        );
+      }
+
+      if (aggregated.length > 0) {
+        logLatexdiff(this.logger, aggregated);
+      } else {
+        this.logger.debug('No latexdiff results to report');
+      }
+
+      return artifacts;
+    };
     return tryOperation(() => (stage ? stage.within(execute) : execute()), {
       logger: this.logger,
       level: 'error',
       label: 'Error during latexdiff processing',
       recover: () => [],
     });
-  }
-
-  private async performLatexdiffOperations(
-    currRound: number,
-    mapping: RoundFileMapping,
-  ): Promise<CompiledPdfArtifact[]> {
-    if (!(await checkToolInstalled('latexdiff'))) {
-      this.logger.warn(
-        'Skipping latexdiff operations - latexdiff not installed',
-      );
-      return [];
-    }
-
-    const outputFiles = this.getOutputFiles()[currRound] ?? [];
-    if (outputFiles.length === 0) {
-      this.logger.warn(
-        `No output files found for round ${currRound}, skipping latexdiff operations`,
-      );
-      return [];
-    }
-
-    // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
-    // relative \input{} resolution works when its cwd is runDir/r{round}.
-    await this.fileService.ensureMirroredInRoundDir(currRound);
-    await this.fileService.ensureMirroredInDiffRoundDir(currRound);
-    const relativePath = path.join('diff', `r${currRound}`);
-    const diffDirectory: DiffOutputDirectory = {
-      absolutePath: path.join(this.fileService.runDirectory, relativePath),
-      relativePath,
-      executionId: this.fileService.executionId,
-    };
-
-    const outputByPath = new Map(
-      outputFiles.map((f) => [getComparablePath(f.location), f]),
-    );
-
-    this.logger.debug('Base files', {
-      data: this.baseFiles.map((f) => f.absolutePath),
-    });
-    this.logger.debug(`r${currRound} output files`, {
-      data: outputFiles.map((f) => f.location.absolutePath),
-    });
-
-    const aggregated: DiffResult[] = [];
-    const artifacts: CompiledPdfArtifact[] = [];
-    const collect = (outcome: SingleDiffOutcome | null): void => {
-      if (!outcome) return;
-      aggregated.push(outcome.diffResult);
-      if (outcome.artifact) artifacts.push(outcome.artifact);
-    };
-    const collectPairs = (
-      pick: (entry: RoundFileEntry) => FileLocation | undefined,
-    ): [string, FileLocation][] => {
-      const pairs: [string, FileLocation][] = [];
-      for (const [outputPath, entry] of mapping) {
-        const location = pick(entry);
-        if (location) pairs.push([outputPath, location]);
-      }
-      return pairs;
-    };
-
-    if (this.agentSetting.isRewrite) {
-      const basePairs = collectPairs((entry) => entry.base);
-      this.logPairMatches(basePairs, 'base files to output files');
-
-      for (const [outputPath, baseLocation] of basePairs) {
-        collect(
-          await this.runSingleDiff({
-            outputPath,
-            baseLocation,
-            outputByPath,
-            originalLocation: baseLocation,
-            baseRound: null,
-            runDiff: (base, revised, cwd) =>
-              this.latexdiffService.runDiffForRound(
-                base,
-                revised,
-                currRound,
-                undefined,
-                { cwd, outputDirectory: diffDirectory.absolutePath },
-              ),
-            label: 'round-diff',
-            pdfStemSuffix: '-diff',
-            diffDirectory,
-          }),
-        );
-      }
-    }
-
-    const generateBetweenRoundDiffs = readPlatformSetting<boolean>(
-      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-    );
-
-    if (generateBetweenRoundDiffs && currRound > 0) {
-      const prevPairs = collectPairs((entry) => entry.prev);
-      this.logPairMatches(
-        prevPairs,
-        'previous round files to current round files',
-      );
-
-      for (const [outputPath, prevLocation] of prevPairs) {
-        const originalLocation = mapping.get(outputPath)?.origin ?? null;
-        collect(
-          await this.runSingleDiff({
-            outputPath,
-            baseLocation: prevLocation,
-            outputByPath,
-            originalLocation,
-            baseRound: currRound - 1,
-            runDiff: (base, revised, cwd) =>
-              this.latexdiffService.runDiffBetweenRounds(
-                base,
-                revised,
-                currRound - 1,
-                currRound,
-                undefined,
-                {
-                  cwd,
-                  outputDirectory: diffDirectory.absolutePath,
-                },
-              ),
-            label: 'between-rounds-diff',
-            pdfStemSuffix: '-round-diff',
-            diffDirectory,
-          }),
-        );
-      }
-    } else if (!generateBetweenRoundDiffs) {
-      this.logger.debug(
-        'Skipping between-round latexdiff operations: disabled in settings',
-      );
-    }
-
-    if (aggregated.length > 0) {
-      logLatexdiff(this.logger, aggregated);
-    } else {
-      this.logger.debug('No latexdiff results to report');
-    }
-
-    return artifacts;
   }
 
   private logPairMatches(
@@ -278,7 +269,7 @@ export class LatexDiffManager {
       this.logger.debug(`Matched ${description}`, {
         data: pairs.map(
           ([outputPath, loc]) =>
-            `${this.getDisplayLabel(loc)} -> ${path.basename(outputPath)}`,
+            `${path.basename(getComparablePath(loc))} -> ${path.basename(outputPath)}`,
         ),
       });
     } else if (this.baseFiles.length > 0) {

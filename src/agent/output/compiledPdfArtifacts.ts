@@ -15,9 +15,6 @@ import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
 export interface CompiledPdfArtifact {
-  round: number;
-  displayName: string;
-  source: FileLocation;
   pdf: RunStorageFileLocation;
   latestPdf: RunStorageFileLocation;
 }
@@ -114,9 +111,6 @@ export async function publishCompiledPdfArtifact(
   await copyArtifactFile(roundAbsolutePath, latestAbsolutePath);
 
   return {
-    round: options.round,
-    displayName: options.displayName,
-    source: options.source,
     pdf: createRunStorageLocation(
       roundAbsolutePath,
       roundRelativePath,
