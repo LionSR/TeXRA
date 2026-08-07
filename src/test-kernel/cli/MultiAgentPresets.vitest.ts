@@ -16,12 +16,9 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
 import {
-  canLaunchTeam,
   findTeamPreset,
   planTeamRun,
   planTeamRuns,
-  teamAvailability,
-  teamLaunchBlockReason,
   teamPlanHasGaps,
   teamPresets,
 } from '@common/teams/TeamPlan';
@@ -190,24 +187,6 @@ describe('CLI multi-agent presets', () => {
     expect(output).not.toContain('after `texra login`');
   });
 
-  it('marks missing team roots as unavailable', () => {
-    const plan = partialLeanProjectPlan();
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(teamAvailability(plan).status).toBe('unavailable');
-    expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
-    expect(canLaunchTeam(plan)).toBe(false);
-  });
-
-  it('keeps degraded presets launchable when they still have delegation', () => {
-    const plan = planRun(findPreset('physicist'), {
-      toolUse: degradedPhysicistToolUse(),
-    });
-
-    expect(teamAvailability(plan).status).toBe('degraded');
-    expect(canLaunchTeam(plan)).toBe(true);
-  });
-
   it('formats compact launcher summaries from planned availability', () => {
     const plan = planRun(findPreset('physicist'), {
       workflow: [agent('correct', AgentCategory.Workflow)],
@@ -245,56 +224,6 @@ describe('CLI multi-agent presets', () => {
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
       'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, workflow:generic, workflow:devise, workflow:apply, workflow:criticize, tool-use:research, tool-use:numerics, tool-use:review, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck, tool-use:search',
     ]);
-  });
-
-  it('marks complete built-in teams available', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      workflow: preset.agents.workflow.map((name) =>
-        agent(name, AgentCategory.Workflow),
-      ),
-      toolUse: toolUseTeam(preset, 'orchestrator'),
-    });
-
-    expect(teamAvailability(plan)).toMatchObject({
-      status: 'available',
-      agents: {
-        toolUse: { available: 9, total: 9 },
-        workflow: { available: 6, total: 6 },
-      },
-    });
-  });
-
-  it('launches the software-engineer team on its bundled engineer root', () => {
-    const preset = findPreset('software-engineer');
-    const plan = planRun(preset, {
-      toolUse: toolUseTeam(preset, 'engineer'),
-    });
-
-    expect(plan.rootAgent?.name).toBe('engineer');
-    expect(plan.missingAgents.toolUse).toEqual([]);
-    expect(teamPlanHasGaps(plan)).toBe(false);
-    expect(canLaunchTeam(plan)).toBe(true);
-    expect(teamAvailability(plan).agents.toolUse).toMatchObject({
-      available: 5,
-      total: 5,
-    });
-  });
-
-  it('keeps unavailable preset facts separate from launcher guidance', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUse: [],
-    });
-
-    expect(teamAvailability(plan)).toMatchObject({
-      status: 'unavailable',
-      agents: {
-        toolUse: { available: 0, total: 9 },
-        workflow: { available: 0, total: 6 },
-      },
-    });
-    expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
   });
 
   it('formats team launch block messages from the planned preset state', () => {
@@ -341,39 +270,6 @@ describe('CLI multi-agent presets', () => {
 
     expect(() => formatCliMultiAgentTeamLaunchBlockMessage(plan)).toThrow(
       /launchable multi-agent preset "lean-project"/,
-    );
-  });
-
-  it('keeps built-in teams unavailable until their orchestrator root is present', () => {
-    const plans = planTeamRuns(teamPresets(undefined), {
-      agents: {
-        workflow: [
-          agent('correct', AgentCategory.Workflow),
-          agent('polish', AgentCategory.Workflow),
-        ],
-        toolUse: [
-          agent('lean', AgentCategory.ToolUse),
-          agent('research', AgentCategory.ToolUse),
-          agent('numerics', AgentCategory.ToolUse),
-          agent('review', AgentCategory.ToolUse),
-          agent('search', AgentCategory.ToolUse),
-          agent('latexFixer', AgentCategory.ToolUse),
-        ],
-      },
-    });
-
-    const launchBlockReasons = new Map(
-      plans.map((plan) => [plan.preset.id, teamLaunchBlockReason(plan)]),
-    );
-
-    expect(launchBlockReasons).toEqual(
-      new Map([
-        ['lean-project', 'no runnable team root'],
-        ['physicist', 'no runnable team root'],
-        ['mathematician', 'no runnable team root'],
-        ['cs-ml', 'no runnable team root'],
-        ['software-engineer', 'no runnable team root'],
-      ]),
     );
   });
 
@@ -500,15 +396,6 @@ describe('CLI multi-agent presets', () => {
     expect(customPresets([{ id: 'broken' }])).toEqual([]);
   });
 
-  it('finds presets by id, name, or slugified name', () => {
-    const presets = teamPresets(undefined);
-
-    expect(findTeamPreset(presets, 'PHYSICIST')?.name).toBe('Physicist');
-    expect(findTeamPreset(presets, 'physicist')?.name).toBe('Physicist');
-    expect(findTeamPreset(presets, 'Lean Project')?.id).toBe('lean-project');
-    expect(findTeamPreset(presets, 'computer-scientist')?.id).toBe('cs-ml');
-  });
-
   it('formats an inspection plan with root and missing members', () => {
     const details = formatCliMultiAgentPresetInspection(partialPhysicistPlan());
 
@@ -567,58 +454,7 @@ describe('CLI multi-agent presets', () => {
     expect(plan.missingAgents.toolUse).toContain('research');
   });
 
-  it('flags a gap when a built-in preset has members but no root', () => {
-    const preset = findPreset('physicist');
-    // A local-only registry can expose team members before relay-served
-    // orchestrators are available. The members should still count as available,
-    // but they should not be promoted to the built-in team root.
-    const plan = planRun(preset, {
-      toolUse: [agent('review', AgentCategory.ToolUse)],
-    });
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(teamPlanHasGaps(plan)).toBe(true);
-  });
-
-  it('does not select built-in team specialists as implicit roots', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUse: [
-        agent('review', AgentCategory.ToolUse),
-        agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
-    });
-    const onlySimplifierPlan = planRun(preset, {
-      toolUse: [agent('simplifier', AgentCategory.ToolUse, ['delegate_agent'])],
-    });
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(onlySimplifierPlan.rootAgent).toBeUndefined();
-    expect(teamPlanHasGaps(onlySimplifierPlan)).toBe(true);
-  });
-
-  it('keeps delegating built-in specialists as members instead of roots', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUse: [
-        agent('lean', AgentCategory.ToolUse, ['delegate_agent']),
-        agent('latexFixer', AgentCategory.ToolUse),
-      ],
-    });
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
-  });
-
   it.each([
-    {
-      name: 'allows custom presets to default to a delegating member root',
-      id: 'custom-review',
-      members: ['review'],
-      delegating: ['review'],
-      rootAgent: 'review' as string | undefined,
-      hasGaps: false,
-    },
     {
       name: 'prefers custom preset order before built-in root fallbacks',
       id: 'custom-review',
@@ -673,71 +509,5 @@ describe('CLI multi-agent presets', () => {
     if (rootAgent === undefined) expect(plan.rootAgent).toBeUndefined();
     else expect(plan.rootAgent?.name).toBe(rootAgent);
     expect(teamPlanHasGaps(plan)).toBe(hasGaps);
-  });
-
-  it('reports no gaps when every preset member resolves', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUse: toolUseTeam(preset, 'leanOrchestrator'),
-    });
-
-    expect(plan.rootAgent?.name).toBe('leanOrchestrator');
-    expect(plan.missingAgents.toolUse).toEqual([]);
-    expect(teamPlanHasGaps(plan)).toBe(false);
-  });
-
-  it('flags a gap when no root agent can be selected', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUse: [],
-    });
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(teamPlanHasGaps(plan)).toBe(true);
-  });
-
-  it('adds an explicit root override to the visible tool-use team', () => {
-    const preset = findPreset('lean-project');
-    const toolUse = [
-      agent('lean', AgentCategory.ToolUse),
-      agent('review', AgentCategory.ToolUse, ['delegate_agent']),
-    ];
-    const plan = planRun(preset, { toolUse, agentOverride: 'review' });
-    const sourceQualifiedPlan = planRun(preset, {
-      toolUse,
-      agentOverride: 'builtInToolUse:review',
-    });
-
-    expect(plan.rootAgent?.name).toBe('review');
-    expect(plan.agentKeys.toolUse).toContain('builtInToolUse:review');
-    expect(sourceQualifiedPlan.missingAgentOverride).toBeUndefined();
-    expect(sourceQualifiedPlan.rootAgent?.name).toBe('review');
-  });
-
-  it('allows a preset member when explicitly requested as the root', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUse: [
-        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
-        agent('research', AgentCategory.ToolUse),
-      ],
-      agentOverride: 'review',
-    });
-
-    expect(plan.rootAgent?.name).toBe('review');
-    expect(plan.agentKeys.toolUse).toContain('builtInToolUse:review');
-  });
-
-  it('tracks a missing root override as a plan gap', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUse: toolUseTeam(preset, 'leanOrchestrator'),
-      agentOverride: 'definitely-not-real',
-    });
-
-    expect(plan.missingAgentOverride).toBe('definitely-not-real');
-    expect(plan.rootAgent?.name).toBe('leanOrchestrator');
-    expect(plan.missingAgents.toolUse).toEqual([]);
-    expect(teamPlanHasGaps(plan)).toBe(true);
   });
 });

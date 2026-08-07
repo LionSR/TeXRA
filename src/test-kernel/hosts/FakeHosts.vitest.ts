@@ -46,11 +46,12 @@ describe('FakeHosts', () => {
 
   it('does not return queued input rejected by validation', async () => {
     const hosts = createFakeUIHosts({ inputResponses: ['bad-name'] });
+    const validateInput = (value: string) =>
+      value.includes(' ') ? undefined : 'Enter at least two words';
 
     const input = await hosts.prompt.input({
       prompt: 'Name',
-      validateInput: (value) =>
-        value.includes(' ') ? undefined : 'Enter at least two words',
+      validateInput,
     });
 
     assert.equal(input, undefined);
@@ -58,7 +59,7 @@ describe('FakeHosts', () => {
       {
         options: {
           prompt: 'Name',
-          validateInput: hosts.prompt.inputs[0]?.options.validateInput,
+          validateInput,
         },
       },
     ]);

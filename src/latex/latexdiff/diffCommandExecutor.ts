@@ -35,7 +35,7 @@ export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = Object.freeze([
   'smartcite\\*?',
 ] as const);
 
-export function buildLatexdiffTextCommandExclusionFlag(): string {
+function buildLatexdiffTextCommandExclusionFlag(): string {
   return `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`;
 }
 

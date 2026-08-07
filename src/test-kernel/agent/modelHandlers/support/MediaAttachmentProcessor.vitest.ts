@@ -1,7 +1,6 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { strict as assert } from 'node:assert';
 
@@ -20,6 +19,7 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { AbsoluteFS, getComparablePath, pathToLocation } from '@utils/files';
 
 interface MediaLogRecorder extends AgentTrace {
@@ -63,6 +63,7 @@ describe('MediaAttachmentProcessor', () => {
   };
   const originalExists = absoluteFsAny.exists;
   const originalStat = absoluteFsAny.stat;
+  const tempDirs: string[] = [];
 
   // Real node fs is required because fixtures live in os.tmpdir().
   setupPlatform({}, { fs: nodeFilesystem });
@@ -89,9 +90,10 @@ describe('MediaAttachmentProcessor', () => {
     };
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     absoluteFsAny.exists = originalExists;
     absoluteFsAny.stat = originalStat;
+    await cleanupTempDirs(tempDirs);
   });
 
   function createProcessor(
@@ -110,10 +112,11 @@ describe('MediaAttachmentProcessor', () => {
     });
   }
 
-  function createTempFile(fileName: string, contents: Buffer): string {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'media-processor-test-'),
-    );
+  async function createTempFile(
+    fileName: string,
+    contents: Buffer,
+  ): Promise<string> {
+    const directory = await makeTempDir('media-processor-test-', tempDirs);
     const filePath = path.join(directory, fileName);
     fs.writeFileSync(filePath, contents);
     return filePath;
@@ -156,15 +159,15 @@ describe('MediaAttachmentProcessor', () => {
     return Buffer.concat([header, pcmData]);
   }
 
-  function createAudioFixture(): string {
+  async function createAudioFixture(): Promise<string> {
     return createTempFile('fixture.wav', createSilenceWavBuffer());
   }
 
-  function createRawAudioFixture(extension: string): string {
+  async function createRawAudioFixture(extension: string): Promise<string> {
     return createTempFile(`fixture${extension}`, Buffer.alloc(128));
   }
 
-  function createEmptyFixture(): string {
+  async function createEmptyFixture(): Promise<string> {
     return createTempFile('empty.bin', Buffer.alloc(0));
   }
 
@@ -241,7 +244,7 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   it('processes native audio fixtures into audio media entries', async () => {
-    const audioPath = createAudioFixture();
+    const audioPath = await createAudioFixture();
     const audioLocation = pathToLocation(audioPath);
     const stub = createMediaLogRecorder();
     const processor = createProcessor(
@@ -309,7 +312,7 @@ describe('MediaAttachmentProcessor', () => {
   ] as const)(
     'processes %s audio with provider-supported MIME type',
     async (extension, mediaType) => {
-      const audioPath = createRawAudioFixture(extension);
+      const audioPath = await createRawAudioFixture(extension);
       const audioLocation = pathToLocation(audioPath);
       const stub = createMediaLogRecorder();
       const processor = createProcessor(
@@ -337,7 +340,7 @@ describe('MediaAttachmentProcessor', () => {
   );
 
   it('reports empty media fixtures as failed loads', async () => {
-    const emptyPath = createEmptyFixture();
+    const emptyPath = await createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);
     const displayPath = getComparablePath(emptyLocation);
     const stub = createMediaLogRecorder();
@@ -361,7 +364,10 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   it('keeps SDK-specific media load errors in the visible log message', async () => {
-    const mediaPath = createTempFile('sdk-error.png', Buffer.from('not-png'));
+    const mediaPath = await createTempFile(
+      'sdk-error.png',
+      Buffer.from('not-png'),
+    );
     const mediaLocation = pathToLocation(mediaPath);
     const displayPath = getComparablePath(mediaLocation);
     const stub = createMediaLogRecorder();

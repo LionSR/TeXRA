@@ -101,9 +101,18 @@ describe('registerResumeAgentCommand', () => {
       parentStreamId: PARENT_STREAM,
     };
     mocks.retrieveSessionResumeData.mockResolvedValue(canonical);
+    // Model the guard semantically: a stream reads as resuming once a resume
+    // has been dispatched for it, so the overlapping command loses the race
+    // regardless of how many times the handler consults the status.
+    let resumeDispatched = false;
+    mocks.resumeQueuedToolUseFromResumeData.mockImplementation(async () => {
+      resumeDispatched = true;
+      return true;
+    });
     const status = defaultSession().status;
-    const statusSpy = vi.spyOn(status, 'isActiveOrResuming');
-    statusSpy.mockImplementation(() => statusSpy.mock.calls.length === 4);
+    const statusSpy = vi
+      .spyOn(status, 'isActiveOrResuming')
+      .mockImplementation(() => resumeDispatched);
     const handler = registerHandler();
 
     await expect(

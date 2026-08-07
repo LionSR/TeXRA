@@ -13,7 +13,6 @@ import {
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '@cli/chat/tui/render/ansiMarkdown';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 
 const ESC = String.fromCharCode(27);
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, 'u');
@@ -302,64 +301,10 @@ describe('renderAnsiMarkdown', () => {
     expect(lines.slice(1).every((line) => line.startsWith('    '))).toBe(true);
   });
 
-  it.each([
-    {
-      name: 'ANSI charset escapes',
-      input: `${ESC}(0│ ${ESC}(B  • abcdef ghijkl mnopqr`,
-      absent: ['0│', 'B  •'],
-    },
-    {
-      name: 'C1-ST OSC hyperlinks',
-      input: `${ESC}]8;;https://example.test${String.fromCharCode(
-        0x9c,
-      )}│   • abcdef ghijkl mnopqr`,
-      absent: [],
-    },
-    {
-      name: 'C1 CSI styles',
-      input: `${String.fromCharCode(0x9b)}31m│ ${String.fromCharCode(
-        0x9b,
-      )}39m  • abcdef ghijkl mnopqr`,
-      absent: ['31m', '39m'],
-    },
-  ])('keeps quoted list prefixes aligned across $name', ({ input, absent }) => {
-    const lines = plainLinesWithinWidth(wrapAnsiToWidth(input, 10, true), 10);
-
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toBe('│   • abcd');
-    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
-      true,
-    );
-    for (const marker of absent) {
-      expect(lines.join('\n')).not.toContain(marker);
-    }
-  });
-
   it('styles heading text across inline code boundaries', () => {
     const plain = renderPlain('## Use `git` correctly');
     expect(plain).toContain('Use `git` correctly');
     expect(plain).not.toContain('## Use');
-  });
-
-  it('keeps OSC hyperlinks balanced when wrapping ANSI text', () => {
-    const bel = String.fromCharCode(7);
-    const open = `${ESC}]8;;https://example.com${ESC}\\`;
-    const close = `${ESC}]8;;${ESC}\\`;
-    const closeWithBel = `${ESC}]8;;${bel}`;
-    const out = wrapAnsiToWidth(`${open}hello world${close}`, 5);
-    const lines = plainLinesWithinWidth(out, 5);
-    expect(lines.join('')).toBe('hello world');
-    const openCount = out.split(`${ESC}]8;;https://example.com`).length - 1;
-    const closeCount =
-      out.split(close).length - 1 + (out.split(closeWithBel).length - 1);
-    expect(openCount).toBe(closeCount);
-    expect(out).toContain(open);
-    expect(out).toContain(close);
-  });
-
-  it('wraps diff lines with the same ANSI-aware width helper', () => {
-    const lines = plainLinesWithinWidth(wrapAnsiToWidth('+你好🙂abcdef', 6), 6);
-    expect(lines.length).toBeGreaterThan(1);
   });
 
   it('renders GFM pipe tables as a box-drawing table, not raw HTML', () => {

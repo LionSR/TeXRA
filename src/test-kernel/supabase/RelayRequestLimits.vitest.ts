@@ -120,10 +120,6 @@ describe('relay free-tier request limits', () => {
     return slot;
   }
 
-  it('allows four concurrent free-tier requests', () => {
-    assert.equal(getRequestLimits('free').concurrent, 4);
-  });
-
   it('reads accepted request streams without changing bytes', async () => {
     const result = await readRequestBodyWithinSizeLimit(
       byteStream([bytes(0, 255), bytes(1)]),
@@ -146,7 +142,9 @@ describe('relay free-tier request limits', () => {
     assert.equal(result.requestBytes, 4);
   });
 
-  it('uses a loose default limit for normal research requests', () => {
+  // Change detector for production free-tier limits: update deliberately.
+  it('pins production free-tier limits and their formatting', () => {
+    assert.equal(getRequestLimits('free').concurrent, 4);
     assert.equal(FREE_TIER_REQUEST_BODY_LIMIT_BYTES, 2 * 1024 * 1024);
     assert.equal(
       formatRequestBytes(FREE_TIER_REQUEST_BODY_LIMIT_BYTES),
