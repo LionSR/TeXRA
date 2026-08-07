@@ -89,7 +89,7 @@ fix: Owner packages/extension/src/commands/latex: add a `value: label` field to 
 - **AgentReviewService.issuePath falls back to path.join('',file); clear() never resets reviewRoot**
   evidence: Facts verified: packages/extension/src/frontend/review/AgentReviewService.ts:139 `path.join(this.reviewRoot ?? '', issue.file)` and clear() at :456-462 resets issues/dismissed/summary/pendingCommitRev
   fix: Owner packages/extension/src/frontend/review: small loud-degradation tidy — either clear reviewRoot in clear() or drop the `?? ''` and have issuePath require reviewRoot; NOT the lead's 'derive from presence of issues' co
-- _*store.ts MULTI_FILE_LIST_BY_SET_COMMAND typed Record<string, ...|undefined> forces runtime guard; type over exact SET_* union instead_*
+- `store.ts` MULTI_FILE_LIST_BY_SET_COMMAND typed `Record<string, ...|undefined>` forces a runtime guard; type over the exact `SET_*` union instead
   evidence: Accurate: store.ts:120-122 casts Object.fromEntries to Record<string, MultiFileList | undefined>, forcing `if (!list) return` at the sole consumer documentSlice.ts:45-46. The guard is statically unnee
   fix: Owner packages/extension/src/webview/frontend: tighten the cast to Record<SetMultipleFilesMessage['command'], MultiFileList> (honest — all four keys provably present) and delete the guard; typing-only change, no schema t
 - **store.ts MULTI_FILE_LIST_BY_SET_COMMAND Object.fromEntries+cast forces narrowing guard; derive record type from entries keys**
