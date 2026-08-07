@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   invalidateRuntimeModelRegistry: vi.fn(),
   requestRuntimeModelAccess: vi.fn(),
   safeExecuteCommand: vi.fn(async () => undefined),
-  sendModelSelectionData: vi.fn(async () => undefined),
   setCopilotRoutePreference: vi.fn(async () => undefined),
   showLoggedErrorMessage: vi.fn(async () => undefined),
   showLoggedInfoMessage: vi.fn(async () => undefined),
@@ -56,81 +55,136 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
   };
 });
 
+// The shared vscode stub predates workspace-folder listeners; the handler's
+// constructor subscribes to folder changes to re-register its history watcher.
+vi.mock('vscode', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vscode')>();
+  return {
+    ...actual,
+    workspace: {
+      ...actual.workspace,
+      onDidChangeWorkspaceFolders: () => ({ dispose: () => {} }),
+    },
+  };
+});
+
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type * as vscode from 'vscode';
 
-type CopilotPreferenceHarness = {
-  handleRequestModelAccess(modelName: string): Promise<void>;
-  handleClearCopilotRoute(modelName: string): Promise<void>;
+/** Private method type surface used only to stub the post-action refresh. */
+type RefreshSurface = {
+  sendModelSelectionData(webview: vscode.Webview): Promise<void>;
 };
 
-function createHarness(): CopilotPreferenceHarness {
-  const handler = Object.create(SettingsViewMessageHandler.prototype);
-  Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
-  Reflect.set(handler, 'viewName', 'SettingsView');
-  Reflect.set(handler, 'sendModelSelectionData', mocks.sendModelSelectionData);
-  Reflect.set(
-    handler,
-    'withActiveWebview',
-    vi.fn(async (fn: (webview: object) => Promise<void>) => fn({})),
+/**
+ * The real constructor wires channel/viewName, the command registry, and the
+ * history watcher from the extension context; the fake context only needs the
+ * subscriptions sink and an extension path for handler delegates.
+ */
+function createHandler(): SettingsViewMessageHandler {
+  return new SettingsViewMessageHandler({
+    subscriptions: [],
+    extensionPath: '/ext',
+  } as unknown as vscode.ExtensionContext);
+}
+
+function createWebviewView(): vscode.WebviewView {
+  return {
+    webview: { postMessage: vi.fn(async () => true) },
+  } as unknown as vscode.WebviewView;
+}
+
+function requestModelAccess(
+  handler: SettingsViewMessageHandler,
+  modelName: string,
+): Promise<void> {
+  return handler.handleMessage(
+    { command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, modelName },
+    createWebviewView(),
   );
-  return handler as CopilotPreferenceHarness;
+}
+
+function clearCopilotRoute(
+  handler: SettingsViewMessageHandler,
+  modelName: string,
+): Promise<void> {
+  return handler.handleMessage(
+    { command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, modelName },
+    createWebviewView(),
+  );
 }
 
 describe('Copilot route preference handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The refresh fan-out after a route change re-sends the full model
+    // selection payload; it is orthogonal to the routing decision under test.
+    // A prototype spy fails loudly on rename, unlike an injected field.
+    vi.spyOn(
+      SettingsViewMessageHandler.prototype as unknown as RefreshSurface,
+      'sendModelSelectionData',
+    ).mockResolvedValue(undefined);
   });
 
   it('revalidates and persists an allowed opt-in', async () => {
     mocks.requestRuntimeModelAccess.mockResolvedValueOnce('already-allowed');
-    const handler = createHarness();
+    const handler = createHandler();
 
-    await handler.handleRequestModelAccess('sonnet46');
+    await requestModelAccess(handler, 'sonnet46');
 
+    await vi.waitFor(() => {
+      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
+        'sonnet46',
+        true,
+      );
+    });
     expect(mocks.requestRuntimeModelAccess).toHaveBeenCalledWith('sonnet46');
-    expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-      'sonnet46',
-      true,
-    );
     expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
   });
 
   it('uses the current consent flow before persisting a stale allowed opt-in', async () => {
     mocks.requestRuntimeModelAccess.mockResolvedValueOnce('requested');
-    const handler = createHarness();
+    const handler = createHandler();
 
-    await handler.handleRequestModelAccess('sonnet46');
+    await requestModelAccess(handler, 'sonnet46');
 
+    await vi.waitFor(() => {
+      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
+        'sonnet46',
+        true,
+      );
+    });
     expect(mocks.requestRuntimeModelAccess).toHaveBeenCalledWith('sonnet46');
-    expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-      'sonnet46',
-      true,
-    );
   });
 
   it('rejects an opt-in that has become unavailable with actionable feedback', async () => {
     mocks.requestRuntimeModelAccess.mockResolvedValueOnce('unavailable');
-    const handler = createHarness();
+    const handler = createHandler();
 
-    await handler.handleRequestModelAccess('sonnet46');
+    await requestModelAccess(handler, 'sonnet46');
 
+    await vi.waitFor(() => {
+      expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
+        'SettingsViewMessageHandler',
+        'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+      );
+    });
     expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
-    expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
-      'SettingsViewMessageHandler',
-      'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
-    );
   });
 
   it('allows opt-out without consulting current Copilot access', async () => {
-    const handler = createHarness();
+    const handler = createHandler();
 
-    await handler.handleClearCopilotRoute('sonnet46');
+    await clearCopilotRoute(handler, 'sonnet46');
 
+    await vi.waitFor(() => {
+      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
+        'sonnet46',
+        false,
+      );
+    });
     expect(mocks.requestRuntimeModelAccess).not.toHaveBeenCalled();
-    expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-      'sonnet46',
-      false,
-    );
   });
 });

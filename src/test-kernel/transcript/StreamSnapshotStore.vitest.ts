@@ -1477,27 +1477,27 @@ describe('StreamSnapshotStore', () => {
 
   it('drains writes that arrive as rollback replay returns', async () => {
     const { store, deletion } = await stageDeletionWithBufferedClear();
-    type ReplayHarness = {
-      replayStagedWrites: (
-        stream: StreamTabId,
-        state: unknown,
-      ) => Promise<void>;
-    };
-    // The replay/drain loop lives on the store's StagedDeletionCoordinator.
-    const replayHarness = (store as unknown as { deletions: ReplayHarness })
-      .deletions;
-    const replay = replayHarness.replayStagedWrites.bind(replayHarness);
-    const replaySpy = vi
-      .spyOn(replayHarness, 'replayStagedWrites')
-      .mockImplementationOnce(async (stream, state) => {
-        await replay(stream, state);
-        snapshotFacts(store).setTodos(STREAM, [TODO]);
-      })
-      .mockImplementation(replay);
+    // A write landing while rollback replays the buffered clear must be
+    // drained by the same rollback instead of leaking past it. Inject through
+    // the write seam the replay drains into: when the replayed workPlan write
+    // reaches disk, a newer todo arrives and is diverted into the staged
+    // deletion's buffer, forcing a second replay pass.
+    const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    const streamPlanPath = path.join(streamDataDir(STREAM), 'workPlan.json');
+    let injected = false;
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockImplementation(async (target, data) => {
+        await writeAtomic(target, data);
+        if (!injected && target === streamPlanPath) {
+          injected = true;
+          snapshotFacts(store).setTodos(STREAM, [TODO]);
+        }
+      });
 
     await deletion.rollback();
 
-    replaySpy.mockRestore();
+    writeSpy.mockRestore();
     expect(await reloadWorkPlan()).toMatchObject({
       plan: null,
       todos: [TODO],

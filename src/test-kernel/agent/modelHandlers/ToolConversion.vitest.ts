@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
+import { extractToolNames } from '@agent/index/agentYamlScanner';
 import {
   convertGoogleToolSchema,
   toAnthropicTools,
@@ -9,6 +14,8 @@ import {
   toOpenAIResponseTools,
 } from '@agent/modelHandlers/toolConversion';
 import type { ToolDefinition } from '@model/ToolDefinition';
+import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { REPO_ROOT } from '@test/support/repoScan';
 import { resolveToolDefinitions } from '@tools/registry';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { BashTool } from '@tools/bash';
@@ -759,27 +766,25 @@ describe('toGoogleTools', () => {
   });
 
   it('generates finite schemas for the scientific review tool roster', () => {
-    const reviewTools = resolveToolDefinitions([
-      'wolfram',
-      'todo_write',
-      'bash',
-      'read_file',
-      'write_file',
-      'edit_file',
-      'glob',
-      'grep',
-      'extract_figures',
-      'extract_bib_entries',
-      'extract_tikz_figures',
-      'texcount',
-      'arxiv_search',
-      'arxiv_metadata',
-      'crossref_search',
-      'diagnostics',
-      'delegate_multi_agents',
-    ]);
+    // The roster lives in the review agent YAML (plus the delegation tool the
+    // runtime injects) — derive it from there so a roster change doesn't
+    // break this conversion test.
+    const reviewYamlPath = resolve(
+      REPO_ROOT,
+      'packages/extension/resources/tool_use_agents/review.yaml',
+    );
+    const reviewYaml = parseYaml(readFileSync(reviewYamlPath, 'utf8')) as {
+      tools?: unknown[];
+    };
+    const reviewToolNames = [
+      ...(extractToolNames(reviewYaml.tools) ?? []),
+      DELEGATE_MULTI_AGENTS_TOOL_NAME,
+    ];
+    const reviewTools = resolveToolDefinitions(reviewToolNames);
 
-    expect(reviewTools).toHaveLength(17);
+    expect(reviewTools.map((definition) => definition.name)).toEqual(
+      reviewToolNames,
+    );
     for (const definition of reviewTools) {
       for (const schema of Object.values(googleSchemasFor(definition))) {
         const serialized = JSON.stringify(schema);
