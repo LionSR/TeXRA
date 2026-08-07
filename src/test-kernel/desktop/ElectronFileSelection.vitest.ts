@@ -29,6 +29,13 @@ const BASE_FILE_OPTIONS = [
   'templates/main.tex',
 ];
 
+/** Lets microtasks and a macrotask queued via `runAsync` settle. */
+function flushAsyncWork(): Promise<void> {
+  return new Promise((resolve) =>
+    setImmediate(() => setImmediate(() => resolve())),
+  );
+}
+
 /**
  * Post W4-collapse the desktop file selection module routes only single-slot
  * base/edited dropdowns + the disk-listing refresh; input/context/media are
@@ -201,7 +208,11 @@ describe('desktop file selection', () => {
         }),
       ).toBe(true);
 
-      await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
+      // The picker path is async (dispatched via runAsync), so let queued
+      // work settle before asserting the picker stayed closed — a negative
+      // vi.waitFor would pass on its first poll without observing anything.
+      await flushAsyncWork();
+      expect(showOpenFileDialog).not.toHaveBeenCalled();
     },
   );
 

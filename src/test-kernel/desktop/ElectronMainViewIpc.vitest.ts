@@ -262,61 +262,52 @@ async function createMainViewHarness(
   };
 }
 
+type MainViewIpcOptions = Parameters<
+  MainViewIpcModule['installDesktopMainViewIpc']
+>[1];
+
+type MainViewHarness = Awaited<ReturnType<typeof createMainViewHarness>>;
+
+/**
+ * Installs the IPC router over a fresh harness with the default (all
+ * unhandled) capabilities plus the given overrides. The startup catalog
+ * loader is stubbed empty so only the behavior under test posts to the
+ * renderer.
+ */
+function installMainView(
+  harness: MainViewHarness,
+  overrides: Partial<MainViewIpcOptions> = {},
+): {
+  capabilities: ReturnType<typeof createMainViewCommandCapabilities>;
+  ipc: ReturnType<MainViewIpcModule['installDesktopMainViewIpc']>;
+} {
+  const capabilities = createMainViewCommandCapabilities();
+  const ipc = harness.installDesktopMainViewIpc(harness.window, {
+    ...capabilities,
+    loadStartupOptions: emptyStartupOptionsLoader([]),
+    ...overrides,
+  });
+  return { capabilities, ipc };
+}
+
 describe('desktop main-view IPC', () => {
-  it('pushes theme and debug state over the fixed host bridge channel', async () => {
-    let themeListener: (() => void) | undefined;
-    const {
-      installDesktopMainViewIpc,
-      ipcMain,
-      nativeTheme,
-      sends,
-      window,
-      closedListeners,
-      getRendererListener,
-      sendFromRenderer,
-    } = await createMainViewHarness({
-      shouldUseDarkColors: true,
-      onUpdated: (listener) => {
-        themeListener = listener;
-      },
-    });
-    const fileSelection = {
-      handleMessage: vi.fn(
-        (message: { command: string }) =>
-          message.command === MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-      ),
-    };
-    const settings = {
-      handleMessage: vi.fn(
-        (message: { command: string }) =>
-          message.command === SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-      ),
-    };
-    const progress = {
-      handleMessage: vi.fn(
-        (message: { command: string }) =>
-          message.command === PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
-      ),
-    };
-    const executeAgent = vi.fn(async (_message: unknown) => {});
+  it('registers one listener on the fixed host bridge channel', async () => {
+    const harness = await createMainViewHarness();
+    installMainView(harness);
 
-    const capabilities = createMainViewCommandCapabilities();
-    const ipc = installDesktopMainViewIpc(window, {
-      ...capabilities,
-      debugMode: true,
-      fileSelection,
-      settings,
-      progress,
-      executeAgent,
-      // This test only cares about theme/debug pushes; keep the startup
-      // catalog loader (which reads platform workspace state) out of scope.
-      loadStartupOptions: emptyStartupOptionsLoader([]),
-    });
-
-    expect(ipcMain.on).toHaveBeenCalledWith(
+    expect(harness.ipcMain.on).toHaveBeenCalledWith(
       ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
-      getRendererListener(),
+      harness.getRendererListener(),
     );
+  });
+
+  it('defers theme and debug pushes until the main view signals ready', async () => {
+    const harness = await createMainViewHarness({
+      shouldUseDarkColors: true,
+    });
+    installMainView(harness, { debugMode: true });
+    const { sends, sendFromRenderer } = harness;
+
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_THEME }, {});
     expect(sends).toEqual([]);
 
@@ -348,6 +339,30 @@ describe('desktop main-view IPC', () => {
         message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
       },
     ]);
+  });
+
+  it('routes file-selection, settings, and progress messages to their handlers', async () => {
+    const harness = await createMainViewHarness();
+    const fileSelection = {
+      handleMessage: vi.fn(
+        (message: { command: string }) =>
+          message.command === MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+      ),
+    };
+    const settings = {
+      handleMessage: vi.fn(
+        (message: { command: string }) =>
+          message.command === SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      ),
+    };
+    const progress = {
+      handleMessage: vi.fn(
+        (message: { command: string }) =>
+          message.command === PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+      ),
+    };
+    installMainView(harness, { fileSelection, settings, progress });
+    const { sendFromRenderer } = harness;
 
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE });
     expect(fileSelection.handleMessage).toHaveBeenCalledWith({
@@ -373,13 +388,31 @@ describe('desktop main-view IPC', () => {
       command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
       stream: 'run-1',
     });
+  });
 
-    sends.length = 0;
+  it('routes recent-commit requests to the shell without renderer pushes', async () => {
+    const harness = await createMainViewHarness();
+    const { capabilities } = installMainView(harness);
+    const { sends, sendFromRenderer } = harness;
+
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS });
     expect(capabilities.shellActions.sendRecentCommits).toHaveBeenCalledOnce();
     expect(sends).toEqual([]);
+  });
 
+  it('answers GET_THEME with the current native theme', async () => {
+    const harness = await createMainViewHarness({
+      shouldUseDarkColors: true,
+    });
+    installMainView(harness);
+    const { nativeTheme, sends, sendFromRenderer } = harness;
+
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
     sends.length = 0;
+
     nativeTheme.shouldUseDarkColors = false;
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_THEME });
     expect(sends).toEqual([
@@ -388,8 +421,19 @@ describe('desktop main-view IPC', () => {
         message: { command: COMMON_COMMANDS.THEME_SET, theme: 'light' },
       },
     ]);
+  });
 
+  it('answers GET_DEBUG_MODE with the configured flag', async () => {
+    const harness = await createMainViewHarness();
+    installMainView(harness, { debugMode: true });
+    const { sends, sendFromRenderer } = harness;
+
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
     sends.length = 0;
+
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_DEBUG_MODE });
     expect(sends).toEqual([
       {
@@ -397,16 +441,26 @@ describe('desktop main-view IPC', () => {
         message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
       },
     ]);
+  });
 
-    sends.length = 0;
+  it('routes SWITCH_VIEW to the launcher without renderer pushes', async () => {
+    const harness = await createMainViewHarness();
+    const { capabilities } = installMainView(harness);
+    const { sends, sendFromRenderer } = harness;
+
     sendFromRenderer({
       command: COMMON_COMMANDS.SWITCH_VIEW,
       view: 'main',
     });
     expect(capabilities.shellActions.showLauncher).toHaveBeenCalledOnce();
     expect(sends).toEqual([]);
+  });
 
-    sends.length = 0;
+  it('routes settings and agent-directory commands to shell actions', async () => {
+    const harness = await createMainViewHarness();
+    const { capabilities } = installMainView(harness);
+    const { sends, sendFromRenderer } = harness;
+
     sendFromRenderer({
       command: COMMON_COMMANDS.SWITCH_VIEW,
       view: 'dashboard',
@@ -437,7 +491,6 @@ describe('desktop main-view IPC', () => {
     );
     expect(sends).toEqual([]);
 
-    sends.length = 0;
     sendFromRenderer({
       command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
       customDirSet: true,
@@ -446,6 +499,13 @@ describe('desktop main-view IPC', () => {
       true,
     );
     expect(sends).toEqual([]);
+  });
+
+  it('forwards EXECUTE messages to the injected executor', async () => {
+    const harness = await createMainViewHarness();
+    const executeAgent = vi.fn(async (_message: unknown) => {});
+    installMainView(harness, { executeAgent });
+    const { sendFromRenderer } = harness;
 
     const executeMessage = {
       command: MAIN_VIEW_COMMANDS.EXECUTE,
@@ -455,6 +515,23 @@ describe('desktop main-view IPC', () => {
     sendFromRenderer(executeMessage);
     await Promise.resolve();
     expect(executeAgent).toHaveBeenCalledWith(executeMessage);
+  });
+
+  it('pushes the new theme when the native theme changes', async () => {
+    let themeListener: (() => void) | undefined;
+    const harness = await createMainViewHarness({
+      shouldUseDarkColors: true,
+      onUpdated: (listener) => {
+        themeListener = listener;
+      },
+    });
+    installMainView(harness);
+    const { nativeTheme, sends, sendFromRenderer } = harness;
+
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
 
     nativeTheme.shouldUseHighContrastColors = true;
     themeListener?.();
@@ -465,17 +542,35 @@ describe('desktop main-view IPC', () => {
         theme: 'high-contrast',
       },
     });
+  });
+
+  it('relays postToRenderer over the push channel', async () => {
+    const harness = await createMainViewHarness();
+    const { ipc } = installMainView(harness);
+    const { sends } = harness;
 
     ipc.postToRenderer({ command: 'customPush' });
     expect(sends.at(-1)).toEqual({
       channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
       message: { command: 'customPush' },
     });
+  });
+
+  it('disposes listeners idempotently', async () => {
+    let themeListener: (() => void) | undefined;
+    const harness = await createMainViewHarness({
+      onUpdated: (listener) => {
+        themeListener = listener;
+      },
+    });
+    const { capabilities, ipc } = installMainView(harness);
+    const { closedListeners, ipcMain, nativeTheme } = harness;
 
     ipc.dispose();
     expect(nativeTheme.off).toHaveBeenCalledWith('updated', themeListener);
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
     expect(capabilities.prompt.dispose).toHaveBeenCalledOnce();
+
     closedListeners.forEach((listener) => listener());
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
     expect(capabilities.prompt.dispose).toHaveBeenCalledOnce();

@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { buildStreamInfos } from '@controllers/session/streamInfoUtils';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
+import { setOutputChannelFactory } from '@logger/logUtils';
 import {
   AgentCategory,
   type ActiveChildInfo,
@@ -524,10 +525,6 @@ describe('ProgressBackend', () => {
   it('applies session run facts through the fact-native handler', async () => {
     const target = createListeningBackend();
     const { backend } = target;
-    const handleRunFact = vi.spyOn(
-      SessionFactApplier.prototype,
-      'handleRunFact',
-    );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const updateMissingOutputs = vi.spyOn(
       backend.webviewUpdater,
@@ -584,7 +581,6 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.Workflow,
     });
     for (const spy of [
-      handleRunFact,
       updateFiles,
       updateMissingOutputs,
       updateCompileFailures,
@@ -634,7 +630,6 @@ describe('ProgressBackend', () => {
       streamId,
     });
 
-    expect(handleRunFact).toHaveBeenCalledTimes(7);
     expect(updateFiles).toHaveBeenCalledTimes(1);
     expect(updateFiles).toHaveBeenCalledWith(streamId, {
       rounds: { 1: [outputFile] },
@@ -706,10 +701,6 @@ describe('ProgressBackend', () => {
   it('no-ops session output-file run facts after dispose', async () => {
     const target = createListeningBackend();
     const { backend } = target;
-    const handleRunFact = vi.spyOn(
-      SessionFactApplier.prototype,
-      'handleRunFact',
-    );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const streamId = 'session:output-files-after-dispose' as StreamTabId;
     const outputFile = paperOutputFile();
@@ -719,7 +710,6 @@ describe('ProgressBackend', () => {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
-    handleRunFact.mockClear();
     updateFiles.mockClear();
     backend.dispose();
 
@@ -729,7 +719,6 @@ describe('ProgressBackend', () => {
       filesByRound: { 1: [outputFile] },
     });
 
-    expect(handleRunFact).not.toHaveBeenCalled();
     expect(updateFiles).not.toHaveBeenCalled();
     // The presentation no-ops, but the sidecar store is session-owned, so it
     // keeps recording: disposing one window/webview must not stop the runtime
@@ -1021,38 +1010,46 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('propagates async fact-handler promises to the error wrapper', async () => {
-    const { backend } = createRecordingBackend();
-    const stream = 'tool-stream' as StreamTabId;
-
-    // A tracking thenable: `withEventErrorHandling` does
-    // `Promise.resolve(result).catch(...)`, which adopts (calls `.then` on) the
-    // handler's result only when the dispatch wrapper actually RETURNED it. A
-    // block-bodied handler that discarded the promise would hand
-    // `withEventErrorHandling` `undefined`, leaving this untouched — and a
-    // post-await rejection would then escape logging as an unhandled rejection.
-    let adopted = 0;
-    const tracking: PromiseLike<void> = {
-      then(onFulfilled, onRejected) {
-        adopted += 1;
-        return Promise.resolve().then(onFulfilled, onRejected);
+  it('logs a rejecting async fact handler through the SessionFacts channel', async () => {
+    // The observable contract of the dispatch wrapper returning handler
+    // promises to `withEventErrorHandling`: a post-await rejection reaches the
+    // SessionFacts error log instead of escaping as an unhandled rejection. A
+    // block-bodied handler that discarded its promise would leave this line
+    // unwritten (and the run would flag an unhandled rejection instead).
+    const lines: string[] = [];
+    setOutputChannelFactory(() => ({
+      appendLine: (line: string) => {
+        lines.push(line);
       },
-    };
-    vi.spyOn(SessionFactApplier.prototype, 'setStreamStatus').mockReturnValue(
-      tracking as Promise<void>,
-    );
+    }));
+    try {
+      const { backend } = createRecordingBackend();
+      const stream = 'tool-stream' as StreamTabId;
+      const failure = new Error('status application exploded');
+      vi.spyOn(
+        SessionFactApplier.prototype,
+        'setStreamStatus',
+      ).mockRejectedValue(failure);
 
-    backend.applySessionFact({
-      type: 'status',
-      streamId: stream,
-      phase: STREAM_PHASE.RUNNING,
-      cause: 'lifecycle',
-    });
+      backend.applySessionFact({
+        type: 'status',
+        streamId: stream,
+        phase: STREAM_PHASE.RUNNING,
+        cause: 'lifecycle',
+      });
 
-    // Thenable adoption runs on a microtask; flush before asserting.
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(adopted).toBe(1);
+      await vi.waitFor(() => {
+        expect(
+          lines.some(
+            (line) =>
+              line.startsWith('ERROR') &&
+              line.includes('[SessionFacts] failed to handle status fact'),
+          ),
+        ).toBe(true);
+      });
+    } finally {
+      setOutputChannelFactory(null);
+    }
   });
 
   it('keeps snapshot metadata canonical across rendering and sync content', () => {
