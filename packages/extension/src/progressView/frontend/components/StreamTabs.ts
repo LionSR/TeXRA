@@ -48,7 +48,11 @@ import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
-import { getComposedPathElement, setsEqual } from '../utils';
+import {
+  getComposedPathElement,
+  setsEqual,
+  streamDisplayLabel,
+} from '../utils';
 import {
   computeStreamTreeProjection,
   getStreamBranchActivity,
@@ -96,7 +100,7 @@ function buildTooltip(
     ? runIdentityDisplayName(info.identity)
     : undefined;
   const mainLine = [
-    identityDisplay || info.label || info.name,
+    identityDisplay || streamDisplayLabel(info),
     `Status: ${statusLabel}`,
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -184,7 +188,7 @@ class StreamTab extends LitElement {
       : phaseGlyph;
     // Also names the delete button: one "Delete" repeated down the rail tells
     // a screen-reader user nothing about which session it destroys.
-    const streamTitle = stream.description || stream.label || stream.name;
+    const streamTitle = stream.description || streamDisplayLabel(stream);
     const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
     const showCompactChildHint = this.childCount > 0 && this.compact;
@@ -271,6 +275,11 @@ class StreamTab extends LitElement {
               : html`
                   <div id="stream-tab-meta" class="tab-meta">
                     ${
+                      metaAgentName
+                        ? html`<span class="agent-name">${metaAgentName}</span>`
+                        : nothing
+                    }
+                    ${
                       stream.worktree
                         ? html`<worktree-chip
                             .info=${stream.worktree}
@@ -315,13 +324,7 @@ class StreamTab extends LitElement {
         ${
           this.compact
             ? nothing
-            : html`${
-                  metaAgentName
-                    ? html`<wa-tooltip for="stream-tab-meta"
-                        >Agent: ${metaAgentName}</wa-tooltip
-                      >`
-                    : nothing
-                }<wa-tooltip for="stream-tab-kind"
+            : html`<wa-tooltip for="stream-tab-kind"
                   >${
                     // Only agent runs have an execution-mode category; other
                     // stream kinds (and pending streams) show their label bare.
