@@ -13,7 +13,11 @@ import {
   sumUsageStats,
   type StreamTabId,
   type TokenUsageStats,
+  type UsageRoute,
 } from '@shared/schemas';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 import {
   childExecutionLabel,
@@ -75,6 +79,46 @@ function usageHasTokens(usage: TokenUsageStats): boolean {
   );
 }
 
+/** User-facing label for how a session's model calls were paid for. */
+function usageRouteLabel(route: UsageRoute): string {
+  switch (route) {
+    case 'chatgpt-subscription':
+      return 'ChatGPT';
+    case 'xai-subscription':
+      return 'Grok';
+    case 'kimi-code-subscription':
+      return 'Kimi Code';
+    case 'relay':
+      return INCLUDED_ACCESS.inline;
+    case 'api-key':
+      return OWN_API_KEYS.inline;
+  }
+}
+
+/** Whether a usage route means model calls were covered by a subscription. */
+function isSubscriptionRoute(route: UsageRoute): boolean {
+  return (
+    route === 'chatgpt-subscription' ||
+    route === 'xai-subscription' ||
+    route === 'kimi-code-subscription'
+  );
+}
+
+/** Session-level cost line — mirrors the extension UsagePanel's cost+route
+ *  label so the CLI and extension bill the same way. Empty when there is no
+ *  cost to report and no known route to attribute. */
+function formatSessionCost(usage: TokenUsageStats): string | undefined {
+  const route = usage.usageRoute;
+  if (route != null) {
+    const label = usageRouteLabel(route);
+    if (isSubscriptionRoute(route) && usage.cost === 0) {
+      return `free via ${label}`;
+    }
+    return `${formatCostUsd(usage.cost)} via ${label}`;
+  }
+  return usage.cost > 0 ? formatCostUsd(usage.cost) : undefined;
+}
+
 export function collectResumeUsage(
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
 ): TokenUsageStats | undefined {
@@ -105,7 +149,10 @@ export function formatResumeUsage(
   if (cached > 0) lines.push(`(+ ${formatInteger(cached)} cached)`);
   lines.push(`output=${formatInteger(usage.outputTokens)}`);
   if (reasoning > 0) lines.push(`(reasoning ${formatInteger(reasoning)})`);
-  return `Token usage: ${lines.join(' ')}`;
+  const costLine = formatSessionCost(usage);
+  return costLine
+    ? `Token usage: ${lines.join(' ')}\nSession cost: ${costLine}`
+    : `Token usage: ${lines.join(' ')}`;
 }
 
 /** The main session followed by each tool-use subagent (any depth), deduped by

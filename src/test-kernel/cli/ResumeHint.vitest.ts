@@ -338,4 +338,61 @@ describe('formatResumeUsage', () => {
       formatResumeUsage({ inputTokens: 0, outputTokens: 0, cost: 0 }),
     ).toBeUndefined();
   });
+
+  it('appends the session cost with the relay route label', () => {
+    expect(
+      formatResumeUsage({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 0.012,
+        usageRoute: 'relay',
+      }),
+    ).toBe(
+      'Token usage: total=120 input=100 output=20\n' +
+        'Session cost: $0.012 via included access',
+    );
+  });
+
+  it('shows a covered subscription as free', () => {
+    expect(
+      formatResumeUsage({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 0,
+        usageRoute: 'chatgpt-subscription',
+      }),
+    ).toBe(
+      'Token usage: total=120 input=100 output=20\n' +
+        'Session cost: free via ChatGPT',
+    );
+  });
+
+  it('labels your own API keys', () => {
+    expect(
+      formatResumeUsage({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 0.5,
+        usageRoute: 'api-key',
+      }),
+    ).toBe(
+      'Token usage: total=120 input=100 output=20\n' +
+        'Session cost: $0.500 via your own API keys',
+    );
+  });
+
+  it('shows the bare cost when no route is stamped', () => {
+    expect(
+      formatResumeUsage({ inputTokens: 100, outputTokens: 20, cost: 0.3 }),
+    ).toBe(
+      'Token usage: total=120 input=100 output=20\n' + 'Session cost: $0.300',
+    );
+  });
+
+  it('omits the cost line when there is no cost and no route', () => {
+    const usage = { inputTokens: 100, outputTokens: 20, cost: 0 };
+    expect(formatResumeUsage(usage)).toBe(
+      'Token usage: total=120 input=100 output=20',
+    );
+  });
 });
