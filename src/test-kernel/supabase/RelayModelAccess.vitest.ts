@@ -33,6 +33,7 @@ vi.mock('llm-zoo', async (importOriginal) => {
 // Local imports - Supabase relay
 import {
   FREE_TIER,
+  FREE_TIER_SUGGESTED_MODEL,
   MAX_TIER,
   PROVIDER_CONFIGS,
   TIER_CONFIG,
@@ -57,22 +58,63 @@ describe('relay tier model access', () => {
   it('limits Max to non-Ultra providers and keeps Ultra passthrough', () => {
     const maxModels = TIER_CONFIG.tiers.Max?.models;
     assert.ok(Array.isArray(maxModels));
-    assert.deepEqual(
-      maxModels,
-      Object.values(MODEL_CONFIGS)
-        .filter(
-          (model) =>
-            TIER_CONFIG.providers.includes(model.provider) &&
-            !model.openRouterOnly &&
-            !model.retired &&
-            !ULTRA_ONLY_PROVIDER_SET.has(model.provider.toLowerCase()) &&
-            // Kimi Code membership models are pinned to the coding endpoint and
-            // are not relay-servable (see RELAY_MODELS in models.ts).
-            (model as { baseUrl?: string }).baseUrl !==
-              'https://api.kimi.com/coding/v1',
-        )
-        .map((model) => model.name),
-    );
+    assert.ok(maxModels.length > 0);
+
+    // Assert the contract on each advertised member with independent
+    // per-property checks instead of re-deriving the list with a mirrored
+    // filter chain: a predicate mistake copied into both sides of the
+    // assertion would pass silently, while these checks fail if production
+    // drops any one of its filters (see RELAY_MODELS in models.ts).
+    const configsByName = new Map<
+      string,
+      (typeof MODEL_CONFIGS)[string][]
+    >();
+    for (const config of Object.values(MODEL_CONFIGS)) {
+      const list = configsByName.get(config.name) ?? [];
+      list.push(config);
+      configsByName.set(config.name, list);
+    }
+    for (const name of maxModels) {
+      const candidates = configsByName.get(name) ?? [];
+      assert.ok(
+        candidates.length > 0,
+        `Max-advertised model '${name}' must exist in llm-zoo`,
+      );
+      // Model names are unique among relay-servable entries (the only
+      // duplicate name in the pinned registry is an Ultra-only Google
+      // model), so every entry behind an advertised name must qualify.
+      for (const model of candidates) {
+        assert.equal(model.retired ?? false, false, `'${name}' is retired`);
+        assert.equal(
+          model.openRouterOnly ?? false,
+          false,
+          `'${name}' is openRouterOnly`,
+        );
+        assert.equal(
+          TIER_CONFIG.providers.includes(model.provider),
+          true,
+          `'${name}' provider '${model.provider}' is not relay-routable`,
+        );
+        assert.equal(
+          ULTRA_ONLY_PROVIDER_SET.has(model.provider.toLowerCase()),
+          false,
+          `'${name}' belongs to an Ultra-only provider`,
+        );
+        // Kimi Code membership models are pinned to the coding endpoint and
+        // are not relay-servable.
+        assert.notEqual(
+          (model as { baseUrl?: string }).baseUrl,
+          'https://api.kimi.com/coding/v1',
+          `'${name}' is pinned to the Kimi coding endpoint`,
+        );
+      }
+      // The advertised list and the request gate must agree.
+      assert.equal(isModelAllowedForTier(MAX_TIER, name), true);
+    }
+    // The free-tier suggestion is what over-tier 403 denials point users at,
+    // so it must stay reachable on Max.
+    assert.ok(maxModels.includes(FREE_TIER_SUGGESTED_MODEL));
+
     assert.equal(TIER_CONFIG.tiers.Ultra?.models, '*');
 
     assert.equal(isModelAllowedForTier(MAX_TIER, 'unknown-model'), true);

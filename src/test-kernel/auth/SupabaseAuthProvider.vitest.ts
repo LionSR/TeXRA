@@ -9,12 +9,31 @@ const providerMocks = vi.hoisted(() => ({
   signOut: vi.fn(async () => {}),
 }));
 
+// Test doubles installed through the module seams the provider's constructor
+// already depends on, so tests build a real provider instead of fabricating
+// one from its prototype and private fields.
+const testDoubles = vi.hoisted(() => ({
+  coordinator: null as Record<string, ReturnType<typeof vi.fn>> | null,
+  emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
+}));
+
 vi.mock('vscode', () => ({
   EventEmitter: class {
     readonly event = vi.fn();
     dispose = vi.fn();
     fire = vi.fn();
+    constructor() {
+      testDoubles.emitters.push(this);
+    }
   },
+}));
+
+vi.mock('@platform/platform', () => ({
+  platform: () => ({ secrets: {} }),
+}));
+
+vi.mock('@auth/SupabaseAuthCoordinator', () => ({
+  createHostAuthCoordinator: () => testDoubles.coordinator,
 }));
 
 vi.mock('@auth/SupabaseClient', () => ({
@@ -44,12 +63,10 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 // Local imports
-import type {
-  SupabaseSession,
-  SupabaseSessionCoordinator,
-} from '@auth/SupabaseSession';
+import type { SupabaseSession } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 
 function createProvider(options: {
   expiresAt: number;
@@ -57,6 +74,7 @@ function createProvider(options: {
 }): {
   provider: SupabaseAuthProvider;
   session: SupabaseSession;
+  coordinator: Record<string, ReturnType<typeof vi.fn>>;
   fire: ReturnType<typeof vi.fn>;
   clearSessionIfCurrent: ReturnType<typeof vi.fn>;
   getStoredSessionState: ReturnType<typeof vi.fn>;
@@ -67,7 +85,6 @@ function createProvider(options: {
     async () => 'invalid',
   );
   const showSignInPrompt = vi.fn();
-  const fire = vi.fn();
   const session: SupabaseSession = {
     id: 'user-id',
     accessToken: 'expired-access',
@@ -83,24 +100,23 @@ function createProvider(options: {
     getStoredSessionState,
     getLastRefreshFailure: vi.fn(() => options.failure ?? null),
     clearSessionIfCurrent,
+    createSessionFromCallback: vi.fn(),
   };
-  const provider = Object.create(
-    SupabaseAuthProvider.prototype,
-  ) as SupabaseAuthProvider;
-  Object.assign(provider, {
-    _onDidChangeSessions: { fire },
-    sessionCoordinator: coordinator as unknown as SupabaseSessionCoordinator,
-    notifier: {
-      showError: vi.fn(),
-      showInfo: vi.fn(),
-      showSignInPrompt,
-    },
+  testDoubles.coordinator = coordinator;
+  testDoubles.emitters.length = 0;
+  const provider = new SupabaseAuthProvider({
+    showError: vi.fn(),
+    showInfo: vi.fn(),
+    showSignInPrompt,
   });
+  const emitter = testDoubles.emitters[0];
+  if (!emitter) throw new Error('provider did not create a session emitter');
 
   return {
     provider,
     session,
-    fire,
+    coordinator,
+    fire: emitter.fire,
     clearSessionIfCurrent,
     getStoredSessionState,
     showSignInPrompt,
@@ -216,15 +232,30 @@ describe('SupabaseAuthProvider model availability', () => {
   // Listeners recompute model options from the session-change event, so an
   // event published ahead of the invalidation serves the stale option list.
   it('invalidates model availability before publishing a new session', async () => {
-    const { provider, session, fire } = createUnexpiredProvider();
+    const { provider, session, coordinator, fire } = createUnexpiredProvider();
 
-    // The login path stores through a private method; no public entry point
-    // reaches it without a live OAuth round trip.
-    await (
-      provider as unknown as {
-        storeSession(session: SupabaseSession): Promise<void>;
-      }
-    ).storeSession(session);
+    // Drive the login path through its public seams: a late OAuth callback
+    // delivered to the registered URI handler stores the session.
+    coordinator.loadSession.mockResolvedValueOnce(null);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session,
+    });
+    let authCallback:
+      | ((uri: { path: string; query: string }) => unknown)
+      | undefined;
+    const handler = {
+      onDidReceiveCallback: (
+        listener: (uri: { path: string; query: string }) => unknown,
+      ) => {
+        authCallback = listener;
+        return { dispose: vi.fn() };
+      },
+      handleUri: vi.fn(),
+    } as unknown as SupabaseUriHandler;
+    provider.setUriHandler(handler);
+
+    await authCallback?.({ path: '/auth-callback', query: 'code=test' });
 
     expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(
@@ -248,12 +279,7 @@ describe('SupabaseAuthProvider model availability', () => {
   // scope, on every device. Sign-out clears local storage only, as on desktop
   // and the CLI.
   it('clears the stored session without a remote revocation', async () => {
-    const { provider, session } = createUnexpiredProvider();
-    const coordinator = (
-      provider as unknown as {
-        sessionCoordinator: { clearSession: ReturnType<typeof vi.fn> };
-      }
-    ).sessionCoordinator;
+    const { provider, session, coordinator } = createUnexpiredProvider();
 
     await provider.removeSession(session.id);
 

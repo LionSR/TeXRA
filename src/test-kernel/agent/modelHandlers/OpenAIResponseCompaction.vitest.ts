@@ -40,8 +40,9 @@ function configureHandler(
     error: vi.fn(),
     domain: vi.fn(),
   });
-  (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
-    false;
+  // getStreamingConfig is public on ModelHandlerOpenAIResponse; stub it
+  // rather than poking a private-typed cast.
+  vi.spyOn(handler, 'getStreamingConfig').mockReturnValue(false);
   return handler;
 }
 

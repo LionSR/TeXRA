@@ -10,15 +10,31 @@ import type { StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
+// The shared vscode stub predates workspace-folder listeners; the handler's
+// constructor subscribes to folder changes to re-register its history watcher.
+vi.mock('vscode', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vscode')>();
+  return {
+    ...actual,
+    workspace: {
+      ...actual.workspace,
+      onDidChangeWorkspaceFolders: () => ({ dispose: () => {} }),
+    },
+  };
+});
+
 const STREAM_ID = 'stream:settings-goal-list' as StreamTabId;
 const GOAL_KEY = `goals:byStream:${STREAM_ID}`;
 
-type GoalListHarness = Pick<SettingsViewMessageHandler, 'sendGoalList'>;
-
-function createHandlerHarness(): GoalListHarness {
-  const handler = Object.create(SettingsViewMessageHandler.prototype);
-  Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
-  return handler as GoalListHarness;
+/**
+ * The real constructor wires channel/viewName and the history watcher from
+ * the extension context; the fake context only needs the subscriptions sink.
+ */
+function createHandler(): SettingsViewMessageHandler {
+  return new SettingsViewMessageHandler({
+    subscriptions: [],
+    extensionPath: '/ext',
+  } as unknown as vscode.ExtensionContext);
 }
 
 function createWebview(): vscode.Webview {
@@ -38,7 +54,7 @@ async function expectSendGoalListFailure(
   const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
 
   await expect(
-    createHandlerHarness().sendGoalList(webview),
+    createHandler().sendGoalList(webview),
   ).resolves.toBeUndefined();
 
   expect(showErrorMessage).toHaveBeenCalledWith(expectedError);
@@ -53,7 +69,7 @@ describe('settings goal list', () => {
     const goal = await GoalStore.start(STREAM_ID, 'Finish the settings fix.');
     const webview = createWebview();
 
-    await createHandlerHarness().sendGoalList(webview);
+    await createHandler().sendGoalList(webview);
 
     expect(webview.postMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,

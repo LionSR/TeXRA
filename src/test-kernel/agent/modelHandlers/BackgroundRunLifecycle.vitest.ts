@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import { BackgroundRunLifecycle } from '@agent/modelHandlers/openai/BackgroundRunLifecycle';
-import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
@@ -104,9 +103,9 @@ describe('BackgroundRunLifecycle.tryResume', () => {
       },
     } as unknown as OpenAI;
 
-    // Simulate a prior poll having remembered a pending id.
-    (lifecycle as unknown as { pendingResponseId: string }).pendingResponseId =
-      'resp-done';
+    // A prior poll remembers the id as pending through the public path.
+    await lifecycle.retrieveAndRemember(client, 'resp-done', undefined, undefined);
+    vi.mocked(client.responses.retrieve).mockClear();
 
     const result = await lifecycle.tryResume(client);
 
@@ -129,8 +128,12 @@ describe('BackgroundRunLifecycle.tryResume', () => {
         })),
       },
     } as unknown as OpenAI;
-    (lifecycle as unknown as { pendingResponseId: string }).pendingResponseId =
-      'resp-failed';
+    await lifecycle.retrieveAndRemember(
+      client,
+      'resp-failed',
+      undefined,
+      undefined,
+    );
 
     const result = await lifecycle.tryResume(client);
 
@@ -240,16 +243,10 @@ describe('BackgroundRunLifecycle.waitForCompletion', () => {
   });
 
   it('throws a terminal error when polling ends in a non-completed status', async () => {
+    // Fake timers carry the test past the real poll interval deterministically
+    // instead of swapping in a fast poller through the private field.
+    vi.useFakeTimers();
     const lifecycle = createLifecycle();
-    // Swap in a fast poller so the test doesn't wait on the real 15s interval.
-    (
-      lifecycle as unknown as { backgroundPoller: BackgroundPoller<Response> }
-    ).backgroundPoller = new BackgroundPoller({
-      pollIntervalMs: 0,
-      maxDurationMs: 1000,
-      isPending: (r) => lifecycle.isPending(r),
-      logger: spiedTrace(),
-    });
     const client = {
       responses: {
         retrieve: vi.fn(async () => ({
@@ -260,12 +257,14 @@ describe('BackgroundRunLifecycle.waitForCompletion', () => {
       },
     } as unknown as OpenAI;
 
-    await expect(
-      lifecycle.waitForCompletion(client, {
-        id: 'resp-terminal',
-        status: 'in_progress',
-      } as Response),
-    ).rejects.toThrow();
+    const completion = lifecycle.waitForCompletion(client, {
+      id: 'resp-terminal',
+      status: 'in_progress',
+    } as Response);
+    const rejection = expect(completion).rejects.toThrow();
+    // One step well past the first poll interval, far short of the deadline.
+    await vi.advanceTimersByTimeAsync(60_000);
+    await rejection;
     expect(lifecycle.hasPendingResume()).toBe(false);
   });
 });

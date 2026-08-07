@@ -119,11 +119,28 @@ async function clientDiagnostics(
   return messages;
 }
 
-function expectBothHandlers(messages: string[], expected: string): void {
+interface ExpectedDiagnostics {
+  /** Credential owner label, e.g. "moonshot API key". */
+  owner: string;
+  model: string;
+  baseUrl: string;
+}
+
+function expectBothHandlers(
+  messages: string[],
+  expected: ExpectedDiagnostics,
+): void {
   const clientConfigMessages = messages.filter((message) =>
-    message.includes('. Model:'),
+    message.includes('Base URL:'),
   );
-  expect(clientConfigMessages).toEqual([expected, expected]);
+  // One client-config diagnostic per handler (chat + responses), each
+  // reporting the credential owner, the wire model, and the endpoint.
+  expect(clientConfigMessages).toHaveLength(2);
+  for (const message of clientConfigMessages) {
+    expect(message).toContain(expected.owner);
+    expect(message).toContain(`Model: ${expected.model}`);
+    expect(message).toContain(`Base URL: ${expected.baseUrl}`);
+  }
   expect(messages.join('\n')).not.toContain(TEST_API_KEY);
 }
 
@@ -150,10 +167,11 @@ describe('OpenAI-compatible client diagnostics', () => {
       buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG),
     );
 
-    expectBothHandlers(
-      messages,
-      `Using moonshot API key. Model: kimi-k2.5. Base URL: ${MOONSHOT_BASE_URL}`,
-    );
+    expectBothHandlers(messages, {
+      owner: 'moonshot API key',
+      model: 'kimi-k2.5',
+      baseUrl: MOONSHOT_BASE_URL,
+    });
   });
 
   it('reports the Kimi Code credential owner and final k3 wire model', async () => {
@@ -166,10 +184,11 @@ describe('OpenAI-compatible client diagnostics', () => {
       }),
     );
 
-    expectBothHandlers(
-      messages,
-      `Using kimiCode API key. Model: k3. Base URL: ${KIMI_CODE_BASE_URL}`,
-    );
+    expectBothHandlers(messages, {
+      owner: 'kimiCode API key',
+      model: 'k3',
+      baseUrl: KIMI_CODE_BASE_URL,
+    });
   });
 
   it('reports the exclusive Kimi Code alias without rewriting its wire model', async () => {
@@ -183,10 +202,11 @@ describe('OpenAI-compatible client diagnostics', () => {
       }),
     );
 
-    expectBothHandlers(
-      messages,
-      `Using kimiCode API key. Model: kimi-for-coding. Base URL: ${KIMI_CODE_BASE_URL}`,
-    );
+    expectBothHandlers(messages, {
+      owner: 'kimiCode API key',
+      model: 'kimi-for-coding',
+      baseUrl: KIMI_CODE_BASE_URL,
+    });
   });
 
   it('reports OpenRouter credentials and endpoint for OpenRouter-only models', async () => {
@@ -199,10 +219,11 @@ describe('OpenAI-compatible client diagnostics', () => {
       }),
     );
 
-    expectBothHandlers(
-      messages,
-      `Using OpenRouter API key. Model: moonshotai/kimi-k2.5. Base URL: ${OPENROUTER_BASE_URL}`,
-    );
+    expectBothHandlers(messages, {
+      owner: 'OpenRouter API key',
+      model: 'moonshotai/kimi-k2.5',
+      baseUrl: OPENROUTER_BASE_URL,
+    });
   });
 
   it('reports the relay access token and relay endpoint', async () => {
@@ -223,10 +244,11 @@ describe('OpenAI-compatible client diagnostics', () => {
       { useRelay: true },
     );
 
-    expectBothHandlers(
-      messages,
-      `Using TeXRA relay access token. Model: gpt-test. Base URL: ${RELAY_BASE_URL}`,
-    );
+    expectBothHandlers(messages, {
+      owner: 'TeXRA relay access token',
+      model: 'gpt-test',
+      baseUrl: RELAY_BASE_URL,
+    });
   });
 
   it('reports the OpenAI client default when no base URL is configured', async () => {
@@ -240,10 +262,11 @@ describe('OpenAI-compatible client diagnostics', () => {
       }),
     );
 
-    expectBothHandlers(
-      messages,
-      `Using openai API key. Model: gpt-test. Base URL: ${OPENAI_DEFAULT_BASE_URL}`,
-    );
+    expectBothHandlers(messages, {
+      owner: 'openai API key',
+      model: 'gpt-test',
+      baseUrl: OPENAI_DEFAULT_BASE_URL,
+    });
     expect(messages.join('\n')).not.toContain('Base URL: null');
   });
 });

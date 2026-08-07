@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
+import * as logger from '@logger/logUtils';
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
@@ -90,16 +91,11 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     snapshots,
     pickValidActiveStream: vi.fn(() => ''),
     waitForOwnedExecutionRelease: vi.fn(async () => undefined),
-    clearStream: vi.fn(async (_stream: StreamTabId) => 'deleted' as const),
-    clearAll: vi.fn(async () => ({
-      active: new Set<StreamTabId>(),
-      failed: new Set<StreamTabId>(),
-    })),
   };
   return {
     state,
     backend: {
-      deleteStream: (stream: StreamTabId) => state.clearStream(stream),
+      deleteStream: vi.fn(),
       deleteAllStreams: vi.fn(),
       stopStream: vi.fn(),
     },
@@ -477,16 +473,30 @@ describe('progress-view onboarding refresh wiring', () => {
     await expect(provider.refreshOnboardingFunnel()).resolves.toBeUndefined();
   });
 
-  it('returns deletion failures from host removeStream handling', async () => {
+  it('logs deletion failures from stream removal instead of a raw rejection', async () => {
     const provider = createProgressViewProvider();
     const deletionError = new Error('delete failed');
-    const clearStream = provider.state.clearStream as ReturnType<typeof vi.fn>;
-    clearStream.mockRejectedValue(deletionError);
+    const deleteStream = provider.backend
+      .deleteStream as unknown as ReturnType<typeof vi.fn>;
+    deleteStream.mockRejectedValue(deletionError);
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const handler = createMessageHandler(provider);
 
-    const result = provider.backend.deleteStream('missing' as StreamTabId);
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: 'missing' as StreamTabId,
+      },
+      createWebviewView(),
+    );
 
-    expect(result).toBeInstanceOf(Promise);
-    await expect(result).rejects.toBe(deletionError);
-    expect(clearStream).toHaveBeenCalledWith('missing');
+    expect(deleteStream).toHaveBeenCalledWith('missing');
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        'ProgressViewMessageHandler',
+        'Error handling message',
+        expect.objectContaining({ data: deletionError }),
+      );
+    });
   });
 });

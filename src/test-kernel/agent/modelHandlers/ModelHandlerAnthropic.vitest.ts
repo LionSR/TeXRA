@@ -354,7 +354,8 @@ function stubHandlerForTest(
   loggerOverrides?: Partial<Record<string, unknown>>,
 ): void {
   handler.setLogger({ ...noopTrace, ...loggerOverrides } as AgentTrace);
-  (handler as any).getStreamingConfig = () => false;
+  // getStreamingConfig is public, so this stub stays compile-checked.
+  handler.getStreamingConfig = () => false;
 }
 
 /** A minimal successful Anthropic message response. */
@@ -2461,7 +2462,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsReasoning: false,
     });
     handler.setLogger(logger ?? { ...noopTrace });
-    (handler as any).getStreamingConfig = () => true;
+    handler.getStreamingConfig = () => true;
     return handler;
   }
 
