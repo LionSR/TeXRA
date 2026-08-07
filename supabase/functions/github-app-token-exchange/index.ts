@@ -19,6 +19,13 @@ import {
   type GitHubAppClient,
 } from './githubApp.ts';
 
+/**
+ * Callers treat this code as "skip the run", not "fail": it means the workflow
+ * requesting the token differs from the copy on the default branch, which is
+ * the normal state of a pull request that edits its own workflow file.
+ */
+const UNTRUSTED_WORKFLOW_CODE = 'workflow_not_on_default_branch';
+
 interface ExchangeDependencies {
   verifyToken(token: string): Promise<GitHubActionsClaims>;
   createAppClient(input: {
@@ -93,9 +100,12 @@ export async function handleExchangeRequest(
       claims.workflowSha,
     );
     if (!trustedWorkflow) {
-      return errorResponse(
+      return jsonResponse(
         req,
-        'TeXRA workflow must match the repository default branch',
+        {
+          error: 'TeXRA workflow must match the repository default branch',
+          code: UNTRUSTED_WORKFLOW_CODE,
+        },
         403,
       );
     }

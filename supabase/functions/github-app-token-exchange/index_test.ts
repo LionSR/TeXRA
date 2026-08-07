@@ -98,5 +98,6 @@ Deno.test(
     );
     strictEqual(response.status, 403);
     strictEqual(minted, false);
+    strictEqual((await response.json()).code, 'workflow_not_on_default_branch');
   },
 );
