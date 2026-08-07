@@ -774,10 +774,10 @@ describe('toGoogleTools', () => {
       'packages/extension/resources/tool_use_agents/review.yaml',
     );
     const reviewYaml = parseYaml(readFileSync(reviewYamlPath, 'utf8')) as {
-      tools?: unknown[];
+      settings?: { tools?: unknown[] };
     };
     const reviewToolNames = [
-      ...(extractToolNames(reviewYaml.tools) ?? []),
+      ...(extractToolNames(reviewYaml.settings?.tools) ?? []),
       DELEGATE_MULTI_AGENTS_TOOL_NAME,
     ];
     const reviewTools = resolveToolDefinitions(reviewToolNames);
