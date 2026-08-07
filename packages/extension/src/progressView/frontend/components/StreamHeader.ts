@@ -49,6 +49,7 @@ import {
   type StreamByIdMap,
 } from '../streamContexts';
 import { ProgressEvents } from '../events';
+import { streamDisplayLabel } from '../utils';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
   renderProgressBadgeContent,
@@ -438,7 +439,7 @@ export class StreamHeader extends LitElement {
             id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
             data-stream=${this.stream.name}
           >
-            ${this.stream.label || this.stream.name}
+            ${streamDisplayLabel(this.stream)}
           </span>
           ${
             this.stream.label
@@ -552,9 +553,13 @@ export class StreamHeader extends LitElement {
     const parentStreamId = this.stream?.parentStreamId;
     if (!parentStreamId) return nothing;
 
-    // The parent's own tab info owns its display label; never parse the id.
+    // The parent's own tab info owns its display label. A missing entry
+    // means the parent tab was evicted while this child still references
+    // it — fall back to a neutral label, never the raw
+    // `agent#executionId` handle.
     const displayName =
-      this.streamById.get(parentStreamId)?.label ?? parentStreamId;
+      streamDisplayLabel(this.streamById.get(parentStreamId)) ??
+      'Parent session';
 
     return html`
       <span

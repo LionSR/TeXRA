@@ -106,7 +106,8 @@ export const streamTabStyles = css`
   }
 
   /* Reveal the metadata line on hover, focus, or selection. The agent name
-     rides a tooltip on this line when the title is the AI session one-liner. */
+     renders as inline text on this line, alongside the worktree chip,
+     timestamp, and model, when the title is the AI session one-liner. */
   .tab-container:hover .tab-meta,
   .tab-container:focus-within .tab-meta,
   .tab-container.is-active .tab-meta {
@@ -267,5 +268,15 @@ export const streamTabStyles = css`
      truncating instead of wrapping. */
   .tab-meta worktree-chip {
     flex-shrink: 1;
+  }
+
+  /* A custom agent name is unbounded length — truncate rather than crowd
+     out the worktree chip/timestamp/model sharing this row. */
+  .tab-meta .agent-name {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 `;
