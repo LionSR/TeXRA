@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - tools
 import { isTransientHttpError } from '@tools/timeouts';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 
 function kyErrorWithStatus(status: number): HTTPError {
   return new HTTPError(
@@ -76,4 +77,14 @@ describe('isTransientHttpError', () => {
       expect(isTransientHttpError(value)).toBe(false);
     },
   );
+});
+
+describe('isTransientHttpError / isTransientHttpStatus parity', () => {
+  it('agrees on ky HTTPError status codes', () => {
+    for (const status of [400, 404, 408, 429, 500, 503]) {
+      expect(isTransientHttpStatus(status)).toBe(
+        isTransientHttpError(kyErrorWithStatus(status)),
+      );
+    }
+  });
 });
