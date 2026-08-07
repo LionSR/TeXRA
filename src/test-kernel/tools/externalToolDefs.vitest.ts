@@ -1,6 +1,3 @@
-// Node.js built-in imports
-import * as assert from 'node:assert';
-
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,10 +25,10 @@ function installToolAvailability(isTexraCliEntrypoint: boolean) {
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
     const zotero = findExternalToolDef('zotero');
+    if (!zotero) throw new Error('Zotero tool definition should exist');
 
-    assert.ok(zotero, 'Zotero tool definition should exist');
-    assert.strictEqual(zotero.toggleable, true);
-    assert.deepStrictEqual(zotero.tools, [
+    expect(zotero.toggleable).toBe(true);
+    expect(zotero.tools).toEqual([
       'zotero_collections',
       'zotero_search',
       'zotero_add',
@@ -41,40 +38,39 @@ describe('external tool definitions', () => {
 
   it('keeps the workflow script tool as a user-toggleable, always-available group', async () => {
     const workflowScript = findExternalToolDef('workflow-script');
+    if (!workflowScript) {
+      throw new Error('Workflow script tool definition should exist');
+    }
 
-    assert.ok(workflowScript, 'Workflow script tool definition should exist');
-    assert.strictEqual(workflowScript.toggleable, true);
-    assert.deepStrictEqual(workflowScript.tools, ['delegate_multi_agents']);
-    assert.strictEqual(await workflowScript.check(), true);
+    expect(workflowScript.toggleable).toBe(true);
+    expect(workflowScript.tools).toEqual(['delegate_multi_agents']);
+    expect(await workflowScript.check()).toBe(true);
   });
 
   it('shows TeXRA CLI as a detected but inactive integration', () => {
     const texraCli = findExternalToolDef('texra-cli');
+    if (!texraCli) throw new Error('TeXRA CLI tool definition should exist');
 
-    assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
-    assert.strictEqual(texraCli.category, 'ai-agents');
-    assert.strictEqual(texraCli.comingSoon, true);
-    assert.strictEqual(texraCli.hideFromCli, true);
-    assert.strictEqual(texraCli.toggleable, undefined);
-    assert.deepStrictEqual(texraCli.tools, []);
-    assert.ok(
-      texraCli.installGuide?.includes('requires Node.js >=22.9.0'),
-      'TeXRA CLI install guide should match the published Node engine range',
-    );
+    expect(texraCli.category).toBe('ai-agents');
+    expect(texraCli.comingSoon).toBe(true);
+    expect(texraCli.hideFromCli).toBe(true);
+    expect(texraCli.toggleable).toBeUndefined();
+    expect(texraCli.tools).toEqual([]);
+    // The install guide must match the published Node engine range.
+    expect(texraCli.installGuide).toContain('requires Node.js >=22.9.0');
   });
 
   it('detects the current TeXRA CLI process through the host checker', async () => {
     const texraCli = findExternalToolDef('texra-cli');
-    assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
+    if (!texraCli) throw new Error('TeXRA CLI tool definition should exist');
     await installToolAvailability(true);
 
     try {
       const probeResult = await texraCli.probe?.();
 
-      assert.strictEqual(probeResult, true);
-      assert.strictEqual(await texraCli.check(probeResult), true);
-      assert.strictEqual(
-        await texraCli.statusLabel?.(probeResult),
+      expect(probeResult).toBe(true);
+      expect(await texraCli.check(probeResult)).toBe(true);
+      expect(await texraCli.statusLabel?.(probeResult)).toBe(
         'Detected; integration coming soon',
       );
     } finally {
@@ -84,7 +80,7 @@ describe('external tool definitions', () => {
 
   it('detects Lean direct mode from the lake binary without running lake', async () => {
     const lean = findExternalToolDef('lean4');
-    assert.ok(lean, 'Lean tool definition should exist');
+    if (!lean) throw new Error('Lean tool definition should exist');
     const findPath = vi
       .spyOn(BinaryResolver, 'findPath')
       .mockReturnValue('/usr/local/bin/lake');

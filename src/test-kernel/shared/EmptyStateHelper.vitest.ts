@@ -122,9 +122,10 @@ describe('renderEmptyState shared helper', () => {
       ...container.querySelectorAll('.empty-state-actions wa-button'),
     ];
     expect(buttons[0]?.getAttribute('size')).toBe('s');
-    // No `size` supplied: falls through to <wa-button>'s own default
-    // (m), matching ProgressApp's unsized action buttons.
-    expect(buttons[1]?.getAttribute('size')).not.toBe('small');
+    // No `size` supplied: the helper omits the attribute (via ifDefined), so
+    // <wa-button> falls back to its own default and reflects size="m",
+    // matching ProgressApp's unsized action buttons.
+    expect(buttons[1]?.getAttribute('size')).toBe('m');
   });
 
   it('renders no actions container when actions is omitted', async () => {

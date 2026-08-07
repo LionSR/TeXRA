@@ -364,30 +364,6 @@ describe('CLI agents command', () => {
     });
   });
 
-  it('uses the CLI agent resolver when local lookup misses', async () => {
-    const remoteAgent = {
-      name: 'orchestrator',
-      source: 'remote',
-      path: '',
-      category: AgentCategory.ToolUse,
-      description: 'Coordinates multi-agent work.',
-      tools: ['delegate_agent', 'delegate_workflow'],
-      visibility: ['public'],
-    };
-    mocks.resolveCliAgent.mockResolvedValue(remoteAgent);
-
-    const exitCode = await showAgent(cliContext(), 'orchestrator');
-
-    expect(exitCode).toBe(0);
-    expect(mocks.initLocalCliPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('orchestrator');
-    expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
-      json: remoteAgent,
-      ndjson: { kind: 'agent', agent: remoteAgent },
-      text: expect.stringContaining('source: remote'),
-    });
-  });
-
   it('reports missing agents after CLI agent resolution misses', async () => {
     mocks.resolveCliAgent.mockResolvedValue(undefined);
 

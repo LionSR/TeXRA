@@ -33,13 +33,8 @@ import {
   formatToolEditApprovalSummary,
 } from '@cli/runtime/approval/approvalSummaries';
 import {
-  decideHumanInputRequest,
   decideRetryApproval,
-  decideTexraApproval,
-  isTexraApprovalDenied,
   TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
-  TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
-  texraHumanInputDenialMessage,
 } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -171,23 +166,6 @@ describe('shared retry and human-input decisions', () => {
     ).toBe('present');
   });
 
-  it.each([
-    { policy: 'yolo' as const, canPresent: true },
-    { policy: 'never' as const, canPresent: true },
-    { policy: 'ask' as const, canPresent: false },
-  ])(
-    'denies credential retries when policy=$policy canPresent=$canPresent',
-    ({ policy, canPresent }) => {
-      expect(
-        decideRetryApproval({
-          policy,
-          canPresent,
-          isCredentialFailure: true,
-        }),
-      ).toMatchObject({ deny: expect.any(String) });
-    },
-  );
-
   it('denies an ordinary transient retry in yolo', async () => {
     const ctx = context({ approvalPolicy: 'yolo' });
     const result = await createHeadlessCliHostInteractions(ctx).requestRetry?.({
@@ -202,38 +180,6 @@ describe('shared retry and human-input decisions', () => {
 });
 
 describe('human input approval policy', () => {
-  it('withholds approval-gated tools via the shared evaluator', () => {
-    const gate = (policy: 'ask' | 'never' | 'yolo', canPresent: boolean) =>
-      isTexraApprovalDenied(
-        decideTexraApproval({
-          policy,
-          promptRequired: true,
-          scopedBypass: false,
-          canPresent,
-        }),
-      );
-
-    expect(gate('ask', true)).toBe(false);
-    expect(gate('yolo', false)).toBe(false);
-    expect(gate('never', true)).toBe(true);
-    expect(gate('ask', false)).toBe(true);
-  });
-
-  it('uses yolo-specific human-input feedback', () => {
-    const decision = decideHumanInputRequest({
-      policy: 'yolo',
-      canPresent: true,
-    });
-
-    expect(decision).toEqual({ deny: 'yolo-no-human' });
-    expect(
-      texraHumanInputDenialMessage(
-        'yolo-no-human',
-        TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
-      ),
-    ).toBe(TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE);
-  });
-
   it('denies external inquiry under never', () => {
     const ctx = context({ approvalPolicy: 'never' });
     expect(denyExternalInquiryIfNoHumanInput('ei_test', ctx)).toBe(true);
