@@ -6,8 +6,9 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  productionFilesUnder,
   REPO_ROOT,
-  sourceFilesUnder as sharedSourceFilesUnder,
+  stripComments,
 } from '../support/repoScan';
 
 const SCAN_ROOTS = [
@@ -58,25 +59,6 @@ const SET_APPROVAL_POLICY_CALL = /\bsetApprovalPolicy\s*\(/;
 const POLICY_VOCABULARY_DEFINITION =
   /\b(?:const|type)\s+(?:TEXRA_APPROVAL_POLICIES|TexraApprovalPolicySchema)\b/;
 
-function sourceFilesUnder(root: string): string[] {
-  return sharedSourceFilesUnder(resolve(REPO_ROOT, root), {
-    missingDirReturnsEmpty: true,
-    repoRelative: true,
-    excludeTestKernel: true,
-  });
-}
-
-function stripComments(source: string): string {
-  return source
-    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => {
-      const commentStart = line.indexOf('//');
-      return commentStart === -1 ? line : line.slice(0, commentStart);
-    })
-    .join('\n');
-}
-
 function readProductionSource(file: string): string {
   return stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8'));
 }
@@ -85,7 +67,7 @@ function offendersMatching(
   pattern: RegExp,
   allowlist: ReadonlySet<string>,
 ): string[] {
-  return SCAN_ROOTS.flatMap(sourceFilesUnder)
+  return SCAN_ROOTS.flatMap(productionFilesUnder)
     .filter((file) => !allowlist.has(file))
     .filter((file) => pattern.test(readProductionSource(file)))
     .toSorted();
@@ -125,7 +107,7 @@ describe('approval policy authority ratchet', () => {
 
   it('actually scans the production source roots', () => {
     const scanned = SCAN_ROOTS.reduce(
-      (total, root) => total + sourceFilesUnder(root).length,
+      (total, root) => total + productionFilesUnder(root).length,
       0,
     );
     expect(scanned).toBeGreaterThan(100);
