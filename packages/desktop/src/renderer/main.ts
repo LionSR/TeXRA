@@ -1310,8 +1310,15 @@ function installShellSignalWatcher(): void {
       shellRerenderQueued = false;
       // Read the pending computed so the watcher re-tracks its dependencies.
       for (const pending of shellWatcher.getPending()) pending.get();
-      rerenderShell();
-      shellWatcher.watch();
+      // Re-arm in `finally`: a Watcher fires once and stays dormant until
+      // `watch()` runs again, so letting a throw from `rerenderShell()` skip
+      // it would freeze the whole shell on stale data with no error and no
+      // recovery (same defect fixed in the CLI's `subscribeToSignalChanges`).
+      try {
+        rerenderShell();
+      } finally {
+        shellWatcher.watch();
+      }
     });
   });
   shellWatcher.watch(shellDeps);
