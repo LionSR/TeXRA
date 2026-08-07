@@ -55,8 +55,9 @@ If you haven't used GitHub Actions before, here is the whole picture:
 - The [TeXRA CLI](./texra-cli.md) installed locally (`npm i -g @texra-ai/cli`),
   plus [`gh`](https://cli.github.com/) authenticated for opening the workflow
   PR (`gh auth login`).
-- An API key from at least one model provider (Anthropic, OpenAI, Google,
-  DeepSeek, OpenRouter, or xAI).
+- An API key from at least one model provider. Prefer open-weight options
+  when you can (DeepSeek, OpenRouter); Anthropic, OpenAI, Google, and xAI
+  also work.
 
 ## Setup
 
@@ -76,14 +77,15 @@ That command:
 3. Pushes and opens a pull-request page for you to create (or use `--no-pr` to
    stop after committing locally).
 
-Then set **one** provider API key as a repository secret so the model can run:
+Then set **one** provider API key as a repository secret so the model can run.
+Prefer an open-weight option when you can:
 
 ```bash
-gh secret set ANTHROPIC_API_KEY
+gh secret set DEEPSEEK_API_KEY
 ```
 
-(Or `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`,
-`OPENROUTER_API_KEY`, or `XAI_API_KEY` — names must match exactly.)
+(Or `OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, or `XAI_API_KEY` — names must match exactly.)
 
 Merge the install PR to your default branch. From then on, same-repo PRs get a
 TeXRA review. Open the PR checks (or the repo **Actions** tab) and click
