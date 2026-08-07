@@ -180,12 +180,10 @@ describe('stream-tab expand chevron', () => {
         ?.querySelector('wa-tooltip[for="stream-tab-kind"]')
         ?.textContent?.trim(),
     ).toBe('Multi-Agent Workflow');
-    expect(
-      tab?.shadowRoot?.querySelector('wa-tooltip[for="stream-tab-meta"]'),
-    ).toBeNull();
+    expect(tab?.shadowRoot?.querySelector('.agent-name')).toBeNull();
   });
 
-  it('surfaces the agent name on the metadata hover when the title is a summary', async () => {
+  it('surfaces the agent name inline on the metadata line when the title is a summary', async () => {
     const tabs = await mountTabs({
       streams: [
         {
@@ -205,14 +203,12 @@ describe('stream-tab expand chevron', () => {
     expect(shadow?.querySelector('.model')?.textContent?.trim()).toBe(
       'Grok 4.5',
     );
-    expect(
-      shadow
-        ?.querySelector('wa-tooltip[for="stream-tab-meta"]')
-        ?.textContent?.trim(),
-    ).toBe('Agent: engineer');
+    expect(shadow?.querySelector('.agent-name')?.textContent?.trim()).toBe(
+      'engineer',
+    );
   });
 
-  it('reads the agent tooltip from RunIdentity, not the derived tab label', async () => {
+  it('reads the inline agent name from RunIdentity, not the derived tab label', async () => {
     const tabs = await mountTabs({
       streams: [
         {
@@ -230,9 +226,29 @@ describe('stream-tab expand chevron', () => {
     expect(
       tabs.shadowRoot
         ?.querySelector('stream-tab')
-        ?.shadowRoot?.querySelector('wa-tooltip[for="stream-tab-meta"]')
+        ?.shadowRoot?.querySelector('.agent-name')
         ?.textContent?.trim(),
-    ).toBe('Agent: engineer');
+    ).toBe('engineer');
+  });
+
+  it('omits the inline agent name when the title already is that same identity', async () => {
+    const tabs = await mountTabs({
+      streams: [
+        {
+          ...makeStream('engineer'),
+          agentCategory: AgentCategory.ToolUse,
+          // No `description`: the title falls back to the identity name
+          // itself, so repeating it on the metadata line would just echo
+          // the title back.
+        },
+      ],
+    });
+
+    const shadow = tabs.shadowRoot?.querySelector('stream-tab')?.shadowRoot;
+    expect(shadow?.querySelector('#stream-tab-title')?.textContent).toContain(
+      'engineer',
+    );
+    expect(shadow?.querySelector('.agent-name')).toBeNull();
   });
 
   it('hides finished process children from the Sessions tree', async () => {
