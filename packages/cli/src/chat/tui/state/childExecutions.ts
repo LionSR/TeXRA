@@ -506,6 +506,14 @@ export function retainedChildStreamsFor(
  * Retained order is primary; active metadata overlays the matching retained
  * row, and active children not yet retained are appended as a partial-state
  * fallback. Composition only — not cached in another signal.
+ *
+ * The data model intentionally keeps two overlapping collections — retained
+ * children (a historical snapshot, ordered) and active children (current
+ * topology) — because a child can be both retained and still active. Dedup
+ * belongs here at the merge site: retained order wins, and an active child
+ * already present in retained is overlaid rather than duplicated. Normalizing
+ * to a single source upstream would couple the two producers' ordering, which
+ * is not worth it for a pure display projection.
  */
 export function visibleSubagentRows(
   parentStreamId: StreamTabId,
