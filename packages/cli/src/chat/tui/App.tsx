@@ -470,24 +470,27 @@ export function App(props: AppProps): React.JSX.Element {
         return activeApprovalVisible && pending ? (
           <ApprovalModal pending={pending} availableRows={availableRows} />
         ) : null;
-      case 'transcriptReader':
-        return transcriptReaderStreamId ? (
+      case 'transcriptReader': {
+        if (!transcriptReaderStreamId) return null;
+        const title = transcriptReaderTitle(
+          streamDisplayLabel({
+            childStreamEntries,
+            parentStream,
+            streamId: transcriptReaderStreamId,
+            streams,
+          }),
+        );
+        return (
           <TranscriptReader
             availableRows={availableRows}
             executionLabels={subagentExecutionLabels}
             onClose={closeTranscriptReader}
             onPrintToScrollback={printStreamOutput}
             streamId={transcriptReaderStreamId}
-            title={transcriptReaderTitle(
-              streamDisplayLabel({
-                childStreamEntries,
-                parentStream,
-                streamId: transcriptReaderStreamId,
-                streams,
-              }),
-            )}
+            title={title}
           />
-        ) : null;
+        );
+      }
       case undefined:
         return null;
     }

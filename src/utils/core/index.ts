@@ -246,12 +246,12 @@ export function createFlushableDebounce(
 
   return {
     schedule() {
-      if (timer !== undefined) clearTimeout(timer);
+      cancel();
       timer = setTimeout(invoke, waitMs);
     },
     flush() {
       if (timer === undefined) return;
-      clearTimeout(timer);
+      cancel();
       invoke();
     },
     cancel,

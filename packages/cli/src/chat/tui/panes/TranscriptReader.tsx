@@ -14,6 +14,7 @@ import { useInput, useWindowSize } from 'ink';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
@@ -27,7 +28,6 @@ import { streams as streamsSignal } from '../state/cliState';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 
-const READER_HORIZONTAL_CHROME_COLUMNS = 4;
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 
 export function transcriptReaderTitle(label: string | undefined): string {
@@ -52,7 +52,8 @@ export function TranscriptReader({
   const { columns } = useWindowSize();
   const streams = useSignal(streamsSignal);
   const slice = streams.get(streamId);
-  const width = formFrameWidth(columns) - READER_HORIZONTAL_CHROME_COLUMNS;
+  const frameWidth = formFrameWidth(columns);
+  const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
 
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
@@ -78,7 +79,7 @@ export function TranscriptReader({
     <BorderedPanel
       color={COLOR_HINT}
       title={title}
-      width={formFrameWidth(columns)}
+      width={frameWidth}
       footer={
         <KeyHints
           hints={[
@@ -97,6 +98,7 @@ export function TranscriptReader({
           columns,
           title,
         })}
+        preWrapped
         resetKey={streamId}
         scrollHint="scroll transcript"
         showScrollHints={false}
