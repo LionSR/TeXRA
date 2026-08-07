@@ -14,6 +14,9 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { usageRouteBadge } from '@shared/copy/modelAccess';
+
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 import {
   childExecutionLabel,
@@ -75,6 +78,20 @@ function usageHasTokens(usage: TokenUsageStats): boolean {
   );
 }
 
+/** Session-level cost line — reuses the shared usage-route badge so the
+ *  CLI and extension attribute payment the same way. Empty when there is no
+ *  cost to report and no known route to attribute. */
+function formatSessionCost(usage: TokenUsageStats): string | undefined {
+  const badge = usageRouteBadge(usage.usageRoute);
+  if (badge) {
+    if (badge.subscription && usage.cost === 0) {
+      return `free via ${badge.label}`;
+    }
+    return `${formatCostUsd(usage.cost)} via ${badge.label}`;
+  }
+  return usage.cost > 0 ? formatCostUsd(usage.cost) : undefined;
+}
+
 export function collectResumeUsage(
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
 ): TokenUsageStats | undefined {
@@ -105,7 +122,10 @@ export function formatResumeUsage(
   if (cached > 0) lines.push(`(+ ${formatInteger(cached)} cached)`);
   lines.push(`output=${formatInteger(usage.outputTokens)}`);
   if (reasoning > 0) lines.push(`(reasoning ${formatInteger(reasoning)})`);
-  return `Token usage: ${lines.join(' ')}`;
+  const costLine = formatSessionCost(usage);
+  return costLine
+    ? `Token usage: ${lines.join(' ')}\nSession cost: ${costLine}`
+    : `Token usage: ${lines.join(' ')}`;
 }
 
 /** The main session followed by each tool-use subagent (any depth), deduped by

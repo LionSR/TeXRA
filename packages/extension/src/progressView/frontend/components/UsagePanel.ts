@@ -13,7 +13,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { usageRouteBadge } from '@shared/copy/modelAccess';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -24,11 +24,6 @@ import { formatCostUsd } from '@utils/text/stringUtils';
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants';
 import type { ContextStateData } from '../store';
-
-type UsageRouteBadge = {
-  label: string;
-  subscription: boolean;
-};
 
 /** One token counter in the usage strip: icon, count, and its tooltip. */
 type TokenStat = {
@@ -50,40 +45,6 @@ function fillColor(percent: number): string {
   if (percent <= 65) return 'var(--color-success)';
   if (percent <= 80) return 'var(--color-warning)';
   return 'var(--color-status-error)';
-}
-
-function usageRouteBadge(
-  route: UsageRoute | undefined,
-): UsageRouteBadge | undefined {
-  switch (route) {
-    case 'chatgpt-subscription':
-      return {
-        label: 'ChatGPT',
-        subscription: true,
-      };
-    case 'xai-subscription':
-      return {
-        label: 'Grok',
-        subscription: true,
-      };
-    case 'kimi-code-subscription':
-      return {
-        label: 'Kimi Code',
-        subscription: true,
-      };
-    case 'relay':
-      return {
-        label: INCLUDED_ACCESS.inline,
-        subscription: false,
-      };
-    case 'api-key':
-      return {
-        label: OWN_API_KEYS.inline,
-        subscription: false,
-      };
-    default:
-      return undefined;
-  }
 }
 
 function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
