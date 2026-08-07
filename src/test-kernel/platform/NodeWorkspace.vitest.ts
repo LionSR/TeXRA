@@ -40,8 +40,13 @@ describe('Node workspace identity', () => {
 
   it('preserves a missing tail beneath its physical ancestor', async () => {
     const missing = join(tmpdir(), `texra-missing-${Date.now()}`);
+    // Canonicalize both sides so the comparison is robust to whether realpath
+    // resolves the Windows 8.3 short-name form of the temp dir (RUNNER~1 vs
+    // runneradmin) — canonicalizeWorkspacePath and realpath may differ there.
     expect(canonicalizeWorkspacePath(missing)).toBe(
-      join(await realpath(tmpdir()), basename(missing)),
+      canonicalizeWorkspacePath(
+        join(await realpath(tmpdir()), basename(missing)),
+      ),
     );
   });
 
