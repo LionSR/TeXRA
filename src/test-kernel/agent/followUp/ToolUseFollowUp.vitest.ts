@@ -201,19 +201,6 @@ describe('submitFollowUp', () => {
     expect(tryResumeStream).toHaveBeenCalledTimes(1);
   });
 
-  it('makes recovery-vs-child claims exclusive in either order', () => {
-    const streamId = id('stream:claim-race');
-    const recoveryFirst = new ToolUseFollowUpQueue();
-    expect(
-      recoveryFirst.submit(streamId, { text: 'recover' }, 'recoverable').kind,
-    ).toBe('recovery');
-    expect(recoveryFirst.claimLive(streamId, 'child')).toBeUndefined();
-
-    const childFirst = new ToolUseFollowUpQueue();
-    expect(childFirst.claimLive(streamId, 'child')).toBeDefined();
-    expect(childFirst.claimRecovery(streamId)).toBeUndefined();
-  });
-
   it('enqueues live notifications for children-running parent without recovery', async () => {
     const streamId = id('stream:children-running-notification');
     const session = fakeSession({
@@ -355,7 +342,24 @@ describe('submitFollowUp', () => {
     ).resolves.toEqual({ status: 'dropped' });
     expect(tryResumeStream).not.toHaveBeenCalled();
   });
+});
 
+describe('ToolUseFollowUpQueue claim exclusivity', () => {
+  it('makes recovery-vs-child claims exclusive in either order', () => {
+    const streamId = id('stream:claim-race');
+    const recoveryFirst = new ToolUseFollowUpQueue();
+    expect(
+      recoveryFirst.submit(streamId, { text: 'recover' }, 'recoverable').kind,
+    ).toBe('recovery');
+    expect(recoveryFirst.claimLive(streamId, 'child')).toBeUndefined();
+
+    const childFirst = new ToolUseFollowUpQueue();
+    expect(childFirst.claimLive(streamId, 'child')).toBeDefined();
+    expect(childFirst.claimRecovery(streamId)).toBeUndefined();
+  });
+});
+
+describe('presentFollowUpResult', () => {
   it('maps merged host outcomes without ownership checks', () => {
     expect(presentFollowUpResult({ status: 'sent' })).toEqual({
       severity: 'none',

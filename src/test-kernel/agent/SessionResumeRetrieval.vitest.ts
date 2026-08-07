@@ -16,7 +16,6 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
-  PersistedFlow,
   PersistedFlowStateError,
   flowKey,
   type FlowRecord,
@@ -936,8 +935,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     expect(detached).toHaveLength(1);
   });
 
-  it('releases follow-ups while preserving the record after a persistence read failure', async () => {
-    for (const resume of [true, false]) {
+  it.each([
+    { name: 'resumed run', resume: true },
+    { name: 'fresh launch', resume: false },
+  ])(
+    'releases follow-ups while preserving the record after a persistence read failure: $name',
+    async ({ resume }) => {
       const suffix = resume ? 'resume' : 'fresh';
       const executionId = `abc-flow-read-failure-${suffix}` as ExecutionId;
       const streamId =
@@ -977,30 +980,34 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         deleteSpy.mockRestore();
         session.followUps.terminalize(streamId);
       }
-    }
-  });
+    },
+  );
 
   it('preserves the structured flow error when teardown also fails', async () => {
     const executionId = 'abc-flow-primary-and-teardown-failure' as ExecutionId;
     const streamId =
       'chat@gpt54#abc-flow-primary-and-teardown-failure' as StreamTabId;
-    const snapshot = buildToolUseResumeData(executionId, streamId);
-    const session = createTestSession();
-    const teardownFailure = new Error('flow detachment failed');
+    const base = buildToolUseResumeData(executionId, streamId);
     const failedShared = {
-      ...snapshot.shared,
+      ...base.shared,
       lastError: {
         message: 'provider failed after partial output',
         userRetryable: true,
       },
       lastResponse: 'partial assistant response',
     };
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockResolvedValueOnce(FlowTransition.COMPLETE);
-    const sharedSpy = vi
-      .spyOn(PersistedFlow.prototype, 'getShared')
-      .mockResolvedValue(failedShared);
+    const snapshot: ToolUseResumeData = {
+      ...base,
+      shared: failedShared,
+      sourceShared: structuredClone(failedShared),
+    };
+    // A terminal cursor makes the resumed flow exit COMPLETE without stepping
+    // any node, leaving the failed shared state exactly as persisted.
+    await writeFlowRecord(executionId, failedShared, {
+      cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
+    });
+    const session = createTestSession();
+    const teardownFailure = new Error('flow detachment failed');
     const releaseSpy = vi.spyOn(session.followUps, 'release');
     const errorLogSpy = vi
       .spyOn(noopTrace, 'error')
@@ -1028,8 +1035,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         expect.any(Object),
       );
     } finally {
-      runSpy.mockRestore();
-      sharedSpy.mockRestore();
       releaseSpy.mockRestore();
       errorLogSpy.mockRestore();
     }
@@ -1077,32 +1082,26 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         },
       }),
     };
+    // A terminal cursor makes the resumed flow exit COMPLETE without stepping
+    // any node, so the run completes without a structured result.
+    await writeFlowRecord(executionId, snapshot.sourceShared, {
+      cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
+    });
     const session = createTestSession();
     const teardownFailure = new Error('flow detachment failed');
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockResolvedValueOnce(FlowTransition.COMPLETE);
-    const sharedSpy = vi
-      .spyOn(PersistedFlow.prototype, 'getShared')
-      .mockResolvedValue(snapshot.shared);
 
-    try {
-      await expect(
-        runPersistedFlow(executionId, streamId, snapshot, {
-          attachment: {
-            detach: () => {
-              throw teardownFailure;
-            },
+    await expect(
+      runPersistedFlow(executionId, streamId, snapshot, {
+        attachment: {
+          detach: () => {
+            throw teardownFailure;
           },
-          session,
-        }),
-      ).rejects.toThrow(
-        'Structured-output run completed without calling submit_output.',
-      );
-    } finally {
-      runSpy.mockRestore();
-      sharedSpy.mockRestore();
-    }
+        },
+        session,
+      }),
+    ).rejects.toThrow(
+      'Structured-output run completed without calling submit_output.',
+    );
   });
 
   it.each([
@@ -1320,21 +1319,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, shared, {
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockResolvedValueOnce(FlowTransition.COMPLETE);
 
-    try {
-      const result = await runPersistedFlow(executionId, streamId, undefined);
+    // The terminal cursor makes the flow exit COMPLETE without stepping any
+    // node, leaving the declined-retry marker for the outcome derivation.
+    const result = await runPersistedFlow(executionId, streamId, undefined);
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(await readFlowRecord(executionId)).toMatchObject({
-        cursor: { nextNodeId: 'start' },
-        shared: { shouldSkipCycle: true, userCancelledRetry: true },
-      });
-    } finally {
-      runSpy.mockRestore();
-    }
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(await readFlowRecord(executionId)).toMatchObject({
+      cursor: { nextNodeId: 'start' },
+      shared: { shouldSkipCycle: true, userCancelledRetry: true },
+    });
   });
 
   it('preserves an established flow when provider cancellation rejects the run', async () => {
@@ -1350,11 +1344,27 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
     await writeFlowRecord(executionId, storedShared);
     const abortError = createAbortError();
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockImplementationOnce(async () => {
-        flowContext?.interrupt();
-        throw abortError;
+    // Reject the flow's first node-step persist with the provider's abort:
+    // the run then fails mid-flight through the public storage boundary, the
+    // same way a real cancellation reaches `runToolUseFlow` out of the flow.
+    // Only step writes carry a cursor, so the resume boundary's self-heal
+    // write passes through untouched.
+    const realWrite = store.write.bind(store);
+    let abortFired = false;
+    const writeSpy = vi
+      .spyOn(store, 'write')
+      .mockImplementation(async (key, value) => {
+        if (
+          !abortFired &&
+          value !== null &&
+          typeof value === 'object' &&
+          'cursor' in value
+        ) {
+          abortFired = true;
+          flowContext?.interrupt();
+          throw abortError;
+        }
+        return realWrite(key, value);
       });
     const deleteSpy = vi.spyOn(store, 'delete');
     const dispositions: Array<'preserve' | 'delete'> = [];
@@ -1367,6 +1377,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
               flowContext = context;
             },
           },
+          modelHandler: responseModelHandler([]),
           onFlowRecordDisposition: (value) => dispositions.push(value),
         }),
       ).rejects.toBe(abortError);
@@ -1377,7 +1388,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         shared: { shouldSkipCycle: true },
       });
     } finally {
-      runSpy.mockRestore();
+      writeSpy.mockRestore();
       deleteSpy.mockRestore();
     }
   });
@@ -1441,14 +1452,30 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // never drops the owner's queued input, whatever the run's own outcome.
     const recovery = session.followUps.claimRecovery(streamId, true);
     expect(recovery).toBeDefined();
+    const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const abortError = createAbortError();
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockImplementationOnce(async () => {
-        flowContext?.session.appendFollowUp({ text: 'late active-turn input' });
-        flowContext?.interrupt();
-        throw abortError;
+    // The late input lands while the cancelled turn is mid-flight, modelled at
+    // the flow's first node-step persist (the only writes carrying a cursor).
+    const realWrite = store.write.bind(store);
+    let abortFired = false;
+    const writeSpy = vi
+      .spyOn(store, 'write')
+      .mockImplementation(async (key, value) => {
+        if (
+          !abortFired &&
+          value !== null &&
+          typeof value === 'object' &&
+          'cursor' in value
+        ) {
+          abortFired = true;
+          flowContext?.session.appendFollowUp({
+            text: 'late active-turn input',
+          });
+          flowContext?.interrupt();
+          throw abortError;
+        }
+        return realWrite(key, value);
       });
 
     try {
@@ -1459,6 +1486,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
               flowContext = context;
             },
           },
+          modelHandler: responseModelHandler([]),
           session,
           takePendingFollowUps: () => [],
         }),
@@ -1467,7 +1495,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         'late active-turn input',
       ]);
     } finally {
-      runSpy.mockRestore();
+      writeSpy.mockRestore();
       session.followUps.terminalize(streamId);
     }
   });
@@ -1489,14 +1517,29 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, storedShared);
     const childLease = session.followUps.claimLive(streamId, 'child');
     expect(childLease).toBeDefined();
+    const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const abortError = createAbortError();
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockImplementationOnce(async () => {
-        flowContext?.session.appendFollowUp({ text: 'queued for next turn' });
-        flowContext?.interrupt();
-        throw abortError;
+    // The queued input lands while the interrupted turn is mid-flight,
+    // modelled at the flow's first node-step persist (the only writes
+    // carrying a cursor).
+    const realWrite = store.write.bind(store);
+    let abortFired = false;
+    const writeSpy = vi
+      .spyOn(store, 'write')
+      .mockImplementation(async (key, value) => {
+        if (
+          !abortFired &&
+          value !== null &&
+          typeof value === 'object' &&
+          'cursor' in value
+        ) {
+          abortFired = true;
+          flowContext?.session.appendFollowUp({ text: 'queued for next turn' });
+          flowContext?.interrupt();
+          throw abortError;
+        }
+        return realWrite(key, value);
       });
 
     try {
@@ -1507,6 +1550,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
               flowContext = context;
             },
           },
+          modelHandler: responseModelHandler([]),
           session,
         }),
       ).rejects.toBe(abortError);
@@ -1514,7 +1558,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         'queued for next turn',
       ]);
     } finally {
-      runSpy.mockRestore();
+      writeSpy.mockRestore();
       session.followUps.terminalize(streamId);
     }
   });

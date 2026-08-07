@@ -82,11 +82,10 @@ describe('CLI edit approval layout', () => {
     ).toBe(3);
   });
 
-  it('uses compact diff rows on short terminals', () => {
-    expect(COMPACT_EDIT_APPROVAL_MAX_ROWS).toBe(9);
+  it('uses compact diff rows at the compact-card row threshold', () => {
     expect(
       editApprovalDiffRowsBudget({
-        availableRows: 9,
+        availableRows: COMPACT_EDIT_APPROVAL_MAX_ROWS,
         columns: 80,
         title: 'Apply edit to draft.tex?',
       }),

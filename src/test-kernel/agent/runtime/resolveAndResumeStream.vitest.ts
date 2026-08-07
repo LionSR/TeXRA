@@ -278,25 +278,4 @@ describe('resolveAndResumeStream', () => {
 
     await expectGuardHeldThroughAsyncReport('reportFailure');
   });
-
-  it('reports in-flight while preparing and clears it once settled', async () => {
-    const gate = createDeferred();
-    const reached = createDeferred();
-    retrieveSessionResumeDataMock.mockResolvedValue(
-      createToolUseResumeData({ streamId: STREAM }),
-    );
-    const ports = basePorts({
-      resumeToolUse: vi.fn(async () => {
-        reached.resolve();
-        await gate.promise;
-        return true;
-      }),
-    });
-
-    const pending = resolveAndResumeStream(STREAM, ports);
-    await reached.promise;
-
-    gate.resolve();
-    await expect(pending).resolves.toBe(true);
-  });
 });

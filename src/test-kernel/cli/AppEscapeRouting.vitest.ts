@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { App, type AppProps } from '@cli/chat/tui/App';
+import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -52,6 +53,14 @@ const ARROW_KEYS = {
   Right: '\u001B[C',
   Left: '\u001B[D',
 } as const;
+
+// Chord-window brackets derive from the production delay so a duration change
+// cannot silently invalidate the within-window/expired distinction.
+const WITHIN_CHORD_WINDOW_MS = Math.max(
+  30,
+  Math.floor(ESC_META_CHORD_INTERRUPT_DELAY_MS / 10),
+);
+const CHORD_WINDOW_EXPIRED_MS = ESC_META_CHORD_INTERRUPT_DELAY_MS + 100;
 
 function setRunning(...streamIds: StreamTabId[]): void {
   for (const streamId of streamIds) {
@@ -164,7 +173,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await waitFor(() => infoPane.get() === undefined);
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
@@ -420,10 +429,10 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       openInfoPane('Late reference', 'Foreground content');
       await waitFor(() => infoPane.get()?.title === 'Late reference');
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late reference');
@@ -440,10 +449,10 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
       await waitFor(() => activeStreamId.get() === ROOT);
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(ROOT);
       expect(onInterruptStream).not.toHaveBeenCalled();
@@ -459,7 +468,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
       await waitFor(() => activeStreamId.get() === ROOT);
       stdin.write(ESC);
@@ -478,9 +487,9 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       setParentStream(CHILD, null);
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
@@ -496,7 +505,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       setParentStream(CHILD, null);
       stdin.write(ESC);
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
@@ -515,7 +524,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       openInfoPane('Late failed-chord reference', 'Foreground content');
       await waitFor(
         () => infoPane.get()?.title === 'Late failed-chord reference',
@@ -531,11 +540,24 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('preserves a printable failed chord when back enables parent input', async () => {
+  it.each([
+    {
+      // Completed child: its input is disabled, so the printable key fails the
+      // chord and must be preserved into the parent input that back enables.
+      name: 'preserves a printable failed chord when back enables parent input',
+      childStatus: STREAM_PHASE.COMPLETED,
+    },
+    {
+      // Running child: its input is enabled, so the printable key must not be
+      // duplicated into the parent input when back resolves.
+      name: 'does not duplicate a printable failed chord from enabled input',
+      childStatus: STREAM_PHASE.RUNNING,
+    },
+  ])('$name', async ({ childStatus }) => {
     seedChildHierarchy();
     setStreamStatusInCliState({
       streamId: CHILD,
-      status: STREAM_PHASE.COMPLETED,
+      status: childStatus,
     });
     focusStream(CHILD);
     const onSubmit = vi.fn();
@@ -545,30 +567,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
-      stdin.write('q');
-      await waitFor(() => activeStreamId.get() === ROOT);
-      stdin.write('\r');
-      await waitFor(() => onSubmit.mock.calls.length === 1);
-
-      expect(onSubmit).toHaveBeenCalledWith('q', undefined);
-      expect(onInterruptStream).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('does not duplicate a printable failed chord from enabled input', async () => {
-    seedChildHierarchy();
-    focusStream(CHILD);
-    const onSubmit = vi.fn();
-    const { instance, stdin, onInterruptStream } = await renderWithInterrupt({
-      onSubmit,
-    });
-
-    try {
-      stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write('q');
       await waitFor(() => activeStreamId.get() === ROOT);
       stdin.write('\r');
@@ -597,7 +596,7 @@ describe('App foreground Escape ownership', () => {
 
       try {
         stdin.write(ESC);
-        await sleep(50);
+        await sleep(WITHIN_CHORD_WINDOW_MS);
         stdin.write(arrowInput);
         await waitFor(() => activeStreamId.get() === ROOT);
         stdin.write('\r');
@@ -618,7 +617,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
       await waitFor(() => activeStreamId.get() === ROOT);
       stdin.write('x');
@@ -638,7 +637,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       setParentStream(CHILD, null);
       stdin.write('x');
       await sleep(50);
@@ -657,11 +656,11 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       openInfoPane('Late chord reference', 'Foreground content');
       await waitFor(() => infoPane.get()?.title === 'Late chord reference');
       stdin.write('1');
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late chord reference');
@@ -678,7 +677,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write(ESC);
       await waitFor(() => activeStreamId.get() === CHILD);
       await waitFor(() => activeStreamId.get() === ROOT);
@@ -696,10 +695,10 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write(ESC);
       await waitFor(() => onInterruptStream.mock.calls.length >= 1);
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(ROOT);
       expect(onInterruptStream).toHaveBeenCalledOnce();
@@ -716,10 +715,10 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write('1');
       await waitFor(() => activeStreamId.get() === GRANDCHILD);
-      await sleep(600);
+      await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(GRANDCHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
@@ -812,7 +811,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await sleep(50);
+      await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write(ARROW_KEYS.Up);
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
       await waitFor(() => stdout.output.includes('latest prompt'));

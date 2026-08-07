@@ -4,8 +4,6 @@
 // disagree on which rows exist or in what order, the keyboard silently points
 // at a row other than the highlighted one. These tests pin the agreement.
 
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import { describe, expect, it, vi } from 'vitest';
 
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
@@ -17,7 +15,10 @@ import {
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  pollForCondition,
+  waitForCondition as waitFor,
+} from '@test/support/asyncTestUtils';
 
 const ROOT = 'workflow-root' as StreamTabId;
 const WIDE_COLUMNS = 100;
@@ -123,12 +124,17 @@ async function navigate(
   try {
     await waitFor(() => stdin.listenerCount('readable') > 0);
     for (const key of keys) {
+      const movesBefore = visited.length;
       stdin.write(key);
-      // A press either moves or deliberately clamps, so settle on elapsed time
-      // rather than on a move that may never come.
-      await sleep(25);
+      // A press either moves (onSelectionChange fires synchronously once Ink
+      // dispatches the key) or deliberately clamps, in which case no move ever
+      // comes — so wait for the move event and treat a bounded quiet window as
+      // a clamp rather than sleeping a fixed wall-clock delay per key.
+      await pollForCondition(() => visited.length > movesBefore, {
+        timeoutMs: 250,
+        intervalMs: 5,
+      });
     }
-    await sleep(25);
     return visited;
   } finally {
     instance.unmount();

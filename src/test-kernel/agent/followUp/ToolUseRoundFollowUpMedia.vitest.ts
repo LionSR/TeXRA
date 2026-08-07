@@ -13,6 +13,162 @@ import { withTestRunContext } from '../progressTestUtils';
 import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 
+function toolResultMessage(callId: string): ProviderMessage {
+  return {
+    type: 'function_call_output',
+    call_id: callId,
+    output: 'tool completed',
+  } as ProviderMessage;
+}
+
+function interactionsFunctionResultMessage(callId: string): ProviderMessage {
+  return {
+    type: 'function_result',
+    call_id: callId,
+    result: [{ type: 'text', text: 'tool completed' }],
+  } as ProviderMessage;
+}
+
+function vscodeLmToolResultMessage(callId: string): ProviderMessage {
+  return {
+    role: 'user',
+    content: [{ kind: 'toolResult', callId, text: 'tool completed' }],
+  } as ProviderMessage;
+}
+
+function createShared(
+  messages: ProviderMessage[],
+  systemPrompt?: string,
+): ToolUseRoundShared {
+  return {
+    messages,
+    shouldStop: false,
+    endTurn: false,
+    response: undefined,
+    responseTimeMs: undefined,
+    stopReason: undefined,
+    lastError: undefined,
+    toolCalls: undefined,
+    text: undefined,
+    roundIndex: 0,
+    roundResponseTimeMs: 0,
+    roundNormalizedUsage: undefined,
+    systemPrompt,
+  };
+}
+
+function runRound(
+  services: ToolUseRoundServices,
+  shared: ToolUseRoundShared,
+): Promise<string | undefined> {
+  return withTestRunContext(services.runScope, () =>
+    createToolUseRoundFlow().setServices(services).run(shared),
+  );
+}
+
+function createBlankTurnServices(
+  responses: Array<{ id: string; text?: string; toolCall?: boolean }>,
+): {
+  createResponse: ReturnType<typeof vi.fn>;
+  createUserFollowUpMessages: ReturnType<typeof vi.fn>;
+  services: ToolUseRoundServices;
+} {
+  const createUserFollowUpMessages = vi.fn(
+    async (messages: ProviderMessage[], userMessage: string) =>
+      [
+        ...messages,
+        { type: 'message', role: 'user', content: userMessage },
+      ] as ProviderMessage[],
+  );
+  const createResponse = vi.fn(async () => ({
+    response: responses.shift() ?? { id: 'unexpected-blank', text: '' },
+  }));
+  const createToolUseFollowUpMessages = vi.fn(
+    async (_client, call: { callId: string; name: string }) =>
+      [
+        {
+          type: 'function_call',
+          call_id: call.callId,
+          name: call.name,
+          arguments: '{}',
+        },
+        toolResultMessage(call.callId),
+      ] as ProviderMessage[],
+  );
+
+  const services = {
+    ...baseRoundServices('ToolUseRoundBlankToolResult'),
+    modelCell: testModelCell(
+      roundModelHandler({
+        createResponse,
+        createToolUseFollowUpMessages,
+        createUserFollowUpMessages,
+        extractResponse: (response: { text?: string; toolCall?: boolean }) => ({
+          text: response.text ?? '',
+          usage: null,
+          stopReason: response.toolCall ? 'tool_calls' : 'stop',
+        }),
+        extractToolUse: (response: { toolCall?: boolean }) =>
+          response.toolCall
+            ? [
+                {
+                  callId: 'again-1',
+                  input: {},
+                  name: 'again',
+                  provider: 'test',
+                  raw: {},
+                },
+              ]
+            : [],
+      }),
+    ),
+    session: {
+      hasQueuedFollowUp: () => false,
+    },
+    setting: { temperature: 0, tools: [{ name: 'again' }] },
+    toolRegistry: new MapToolRegistry({
+      again: {
+        call: vi.fn(async () => ({
+          status: 'executed',
+          output: 'again result',
+        })),
+        definition: { name: 'again' },
+      } as never,
+    }),
+  } as unknown as ToolUseRoundServices;
+
+  return { createResponse, createUserFollowUpMessages, services };
+}
+
+function createSystemPromptServices(requiresPerCallSystemPrompt: boolean): {
+  createResponse: ReturnType<typeof vi.fn>;
+  services: ToolUseRoundServices;
+} {
+  const createResponse = vi.fn(async () => ({
+    response: { id: 'r1', text: 'done' },
+  }));
+
+  const services = {
+    ...baseRoundServices('ToolUseRoundSystemPrompt'),
+    modelCell: testModelCell(
+      roundModelHandler({
+        createResponse,
+        extractResponse: (response: { text?: string }) => ({
+          text: response.text ?? '',
+          usage: null,
+          stopReason: 'stop',
+        }),
+        requiresPerCallSystemPrompt,
+      }),
+    ),
+    session: { hasQueuedFollowUp: () => false },
+    setting: { temperature: 0, tools: [] },
+    toolRegistry: new MapToolRegistry({}),
+  } as unknown as ToolUseRoundServices;
+
+  return { createResponse, services };
+}
+
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {
     const createUserFollowUpMessages = vi.fn(
@@ -67,137 +223,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       { absolutePath: '/tmp/figure.png' },
     ]);
   });
+});
 
-  function toolResultMessage(callId: string): ProviderMessage {
-    return {
-      type: 'function_call_output',
-      call_id: callId,
-      output: 'tool completed',
-    } as ProviderMessage;
-  }
-
-  function interactionsFunctionResultMessage(callId: string): ProviderMessage {
-    return {
-      type: 'function_result',
-      call_id: callId,
-      result: [{ type: 'text', text: 'tool completed' }],
-    } as ProviderMessage;
-  }
-
-  function vscodeLmToolResultMessage(callId: string): ProviderMessage {
-    return {
-      role: 'user',
-      content: [{ kind: 'toolResult', callId, text: 'tool completed' }],
-    } as ProviderMessage;
-  }
-
-  function createShared(
-    messages: ProviderMessage[],
-    systemPrompt?: string,
-  ): ToolUseRoundShared {
-    return {
-      messages,
-      shouldStop: false,
-      endTurn: false,
-      response: undefined,
-      responseTimeMs: undefined,
-      stopReason: undefined,
-      lastError: undefined,
-      toolCalls: undefined,
-      text: undefined,
-      roundIndex: 0,
-      roundResponseTimeMs: 0,
-      roundNormalizedUsage: undefined,
-      systemPrompt,
-    };
-  }
-
-  function runRound(
-    services: ToolUseRoundServices,
-    shared: ToolUseRoundShared,
-  ): Promise<string | undefined> {
-    return withTestRunContext(services.runScope, () =>
-      createToolUseRoundFlow().setServices(services).run(shared),
-    );
-  }
-
-  function createBlankTurnServices(
-    responses: Array<{ id: string; text?: string; toolCall?: boolean }>,
-  ): {
-    createResponse: ReturnType<typeof vi.fn>;
-    createUserFollowUpMessages: ReturnType<typeof vi.fn>;
-    services: ToolUseRoundServices;
-  } {
-    const createUserFollowUpMessages = vi.fn(
-      async (messages: ProviderMessage[], userMessage: string) =>
-        [
-          ...messages,
-          { type: 'message', role: 'user', content: userMessage },
-        ] as ProviderMessage[],
-    );
-    const createResponse = vi.fn(async () => ({
-      response: responses.shift() ?? { id: 'unexpected-blank', text: '' },
-    }));
-    const createToolUseFollowUpMessages = vi.fn(
-      async (_client, call: { callId: string; name: string }) =>
-        [
-          {
-            type: 'function_call',
-            call_id: call.callId,
-            name: call.name,
-            arguments: '{}',
-          },
-          toolResultMessage(call.callId),
-        ] as ProviderMessage[],
-    );
-
-    const services = {
-      ...baseRoundServices('ToolUseRoundBlankToolResult'),
-      modelCell: testModelCell(
-        roundModelHandler({
-          createResponse,
-          createToolUseFollowUpMessages,
-          createUserFollowUpMessages,
-          extractResponse: (response: {
-            text?: string;
-            toolCall?: boolean;
-          }) => ({
-            text: response.text ?? '',
-            usage: null,
-            stopReason: response.toolCall ? 'tool_calls' : 'stop',
-          }),
-          extractToolUse: (response: { toolCall?: boolean }) =>
-            response.toolCall
-              ? [
-                  {
-                    callId: 'again-1',
-                    input: {},
-                    name: 'again',
-                    provider: 'test',
-                    raw: {},
-                  },
-                ]
-              : [],
-        }),
-      ),
-      session: {
-        hasQueuedFollowUp: () => false,
-      },
-      setting: { temperature: 0, tools: [{ name: 'again' }] },
-      toolRegistry: new MapToolRegistry({
-        again: {
-          call: vi.fn(async () => ({
-            status: 'executed',
-            output: 'again result',
-          })),
-          definition: { name: 'again' },
-        } as never,
-      }),
-    } as unknown as ToolUseRoundServices;
-
-    return { createResponse, createUserFollowUpMessages, services };
-  }
-
+describe('ToolUseRoundFlow blank tool-result continuation', () => {
   it.each([
     { name: 'a tool result', createToolResult: toolResultMessage },
     {
@@ -294,36 +322,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     });
     expect(shared.endTurn).toBe(true);
   });
+});
 
-  function createSystemPromptServices(requiresPerCallSystemPrompt: boolean): {
-    createResponse: ReturnType<typeof vi.fn>;
-    services: ToolUseRoundServices;
-  } {
-    const createResponse = vi.fn(async () => ({
-      response: { id: 'r1', text: 'done' },
-    }));
-
-    const services = {
-      ...baseRoundServices('ToolUseRoundSystemPrompt'),
-      modelCell: testModelCell(
-        roundModelHandler({
-          createResponse,
-          extractResponse: (response: { text?: string }) => ({
-            text: response.text ?? '',
-            usage: null,
-            stopReason: 'stop',
-          }),
-          requiresPerCallSystemPrompt,
-        }),
-      ),
-      session: { hasQueuedFollowUp: () => false },
-      setting: { temperature: 0, tools: [] },
-      toolRegistry: new MapToolRegistry({}),
-    } as unknown as ToolUseRoundServices;
-
-    return { createResponse, services };
-  }
-
+describe('ToolUseRoundFlow per-call systemPrompt', () => {
   it.each([
     {
       requiresPerCallSystemPrompt: true,

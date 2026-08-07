@@ -140,7 +140,7 @@ function compactExecutionsEntry(
   };
 }
 
-describe('CLI conversation transcript splitting', () => {
+describe('CLI conversation transcript', () => {
   it('keeps only explicit finalized entries in scrollback', () => {
     const user = entry('u1', 'user', '1+1', true);
     const assistant = entry('a1', 'assistant', '2', false);
