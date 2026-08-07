@@ -476,8 +476,9 @@ describe('progress-view onboarding refresh wiring', () => {
   it('logs deletion failures from stream removal instead of a raw rejection', async () => {
     const provider = createProgressViewProvider();
     const deletionError = new Error('delete failed');
-    const deleteStream = provider.backend
-      .deleteStream as unknown as ReturnType<typeof vi.fn>;
+    const deleteStream = provider.backend.deleteStream as unknown as ReturnType<
+      typeof vi.fn
+    >;
     deleteStream.mockRejectedValue(deletionError);
     const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const handler = createMessageHandler(provider);

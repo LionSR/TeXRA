@@ -104,7 +104,12 @@ describe('BackgroundRunLifecycle.tryResume', () => {
     } as unknown as OpenAI;
 
     // A prior poll remembers the id as pending through the public path.
-    await lifecycle.retrieveAndRemember(client, 'resp-done', undefined, undefined);
+    await lifecycle.retrieveAndRemember(
+      client,
+      'resp-done',
+      undefined,
+      undefined,
+    );
     vi.mocked(client.responses.retrieve).mockClear();
 
     const result = await lifecycle.tryResume(client);

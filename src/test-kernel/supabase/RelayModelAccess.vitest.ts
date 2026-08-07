@@ -65,10 +65,7 @@ describe('relay tier model access', () => {
     // filter chain: a predicate mistake copied into both sides of the
     // assertion would pass silently, while these checks fail if production
     // drops any one of its filters (see RELAY_MODELS in models.ts).
-    const configsByName = new Map<
-      string,
-      (typeof MODEL_CONFIGS)[string][]
-    >();
+    const configsByName = new Map<string, (typeof MODEL_CONFIGS)[string][]>();
     for (const config of Object.values(MODEL_CONFIGS)) {
       const list = configsByName.get(config.name) ?? [];
       list.push(config);

@@ -242,8 +242,7 @@ describe('SupabaseAuthProvider model availability', () => {
       session,
     });
     let authCallback:
-      | ((uri: { path: string; query: string }) => unknown)
-      | undefined;
+      ((uri: { path: string; query: string }) => unknown) | undefined;
     const handler = {
       onDidReceiveCallback: (
         listener: (uri: { path: string; query: string }) => unknown,

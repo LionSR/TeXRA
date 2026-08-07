@@ -53,9 +53,7 @@ async function expectSendGoalListFailure(
 ): Promise<void> {
   const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
 
-  await expect(
-    createHandler().sendGoalList(webview),
-  ).resolves.toBeUndefined();
+  await expect(createHandler().sendGoalList(webview)).resolves.toBeUndefined();
 
   expect(showErrorMessage).toHaveBeenCalledWith(expectedError);
 }
