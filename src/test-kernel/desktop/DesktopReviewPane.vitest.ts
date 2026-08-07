@@ -10,6 +10,13 @@ async function loadReviewPane(): Promise<ReviewPaneModule> {
   return import('@desktop/renderer/reviewPane');
 }
 
+type ReviewPane = ReturnType<ReviewPaneModule['createReviewPane']>;
+
+async function newReviewPane(): Promise<ReviewPane> {
+  const { createReviewPane } = await loadReviewPane();
+  return createReviewPane();
+}
+
 function reviewPayload(path: string, additions = 1, deletions = 1) {
   return {
     command: 'desktop:showDiff' as const,
@@ -23,25 +30,27 @@ function reviewPayload(path: string, additions = 1, deletions = 1) {
   };
 }
 
+function fileButtons(controller: ReviewPane): NodeListOf<Element> {
+  return controller.element.querySelectorAll('wa-button.desktop-review-file');
+}
+
+function countsText(controller: ReviewPane): string | null | undefined {
+  return controller.element.querySelector('.desktop-review-counts')
+    ?.textContent;
+}
+
 describe('desktop review pane', () => {
   useLitComponentTestDom(loadReviewPane);
 
   it('renders cumulative counts and a changed-file tree', async () => {
-    const { createReviewPane } = await loadReviewPane();
-    const controller = createReviewPane();
+    const controller = await newReviewPane();
 
     controller.open(reviewPayload('packages/desktop/src/main.ts', 4, 2));
     controller.open(reviewPayload('packages/desktop/src/styles.css', 3, 1));
 
-    expect(
-      controller.element.querySelector('.desktop-review-counts')?.textContent,
-    ).toContain('+7');
-    expect(
-      controller.element.querySelector('.desktop-review-counts')?.textContent,
-    ).toContain('-3');
-    expect(
-      controller.element.querySelectorAll('wa-button.desktop-review-file'),
-    ).toHaveLength(2);
+    expect(countsText(controller)).toContain('+7');
+    expect(countsText(controller)).toContain('-3');
+    expect(fileButtons(controller)).toHaveLength(2);
     expect(
       controller.element.querySelectorAll('wa-details.desktop-review-directory')
         .length,
@@ -49,23 +58,17 @@ describe('desktop review pane', () => {
   });
 
   it('updates an existing file instead of duplicating it', async () => {
-    const { createReviewPane } = await loadReviewPane();
-    const controller = createReviewPane();
+    const controller = await newReviewPane();
 
     controller.open(reviewPayload('src/main.ts'));
     controller.open(reviewPayload('src/main.ts', 8, 5));
 
-    expect(
-      controller.element.querySelectorAll('wa-button.desktop-review-file'),
-    ).toHaveLength(1);
-    expect(
-      controller.element.querySelector('.desktop-review-counts')?.textContent,
-    ).toContain('+8');
+    expect(fileButtons(controller)).toHaveLength(1);
+    expect(countsText(controller)).toContain('+8');
   });
 
   it('clears retained reviews and propagates theme changes', async () => {
-    const { createReviewPane } = await loadReviewPane();
-    const controller = createReviewPane();
+    const controller = await newReviewPane();
     controller.open(reviewPayload('src/main.ts'));
 
     controller.setTheme(DESKTOP_THEME_KIND.LIGHT);

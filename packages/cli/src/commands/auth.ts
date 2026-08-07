@@ -63,9 +63,10 @@ type LoginCommandArgs = {
 
 export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   const provider = optString(args.providerArg)?.trim();
+  const providerExplicit = isNonEmptyString(provider);
   return {
-    provider: isNonEmptyString(provider) ? provider : DEFAULT_OAUTH_PROVIDER,
-    providerExplicit: isNonEmptyString(provider),
+    provider: providerExplicit ? provider : DEFAULT_OAUTH_PROVIDER,
+    providerExplicit,
     noBrowser: booleanArg(args, 'no-browser'),
     device: args.device === true,
     selectAccount: booleanArg(args, 'select-account'),

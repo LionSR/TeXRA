@@ -123,6 +123,25 @@ function readOutput(
   });
 }
 
+/** Register a process-identity bash execution and return its stream id. */
+async function registerProcessExecution(
+  instruction: string,
+): Promise<{ executionId: string; streamId: StreamTabId }> {
+  const executionId = generateExecutionId();
+  const streamId = `bash@tool#${executionId}` as StreamTabId;
+  await registerExecution(
+    executionId,
+    AgentConfigSchema.parse({
+      agent: 'bash',
+      instruction,
+      agentCategory: AgentCategory.ToolUse,
+    }),
+    'bash',
+    { streamId, identity: { kind: 'process', tool: 'bash' } },
+  );
+  return { executionId, streamId };
+}
+
 describe('ExecutionsTool /executions/{id}/output', () => {
   setupPlatform({
     workspacePath: '/workspace',
@@ -234,21 +253,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('renders consecutive untagged legacy rows standalone', async () => {
-    const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      AgentConfigSchema.parse({
-        agent: 'bash',
-        instruction: 'legacy command',
-        agentCategory: AgentCategory.ToolUse,
-      }),
-      'bash',
-      {
-        streamId: `bash@tool#${executionId}` as StreamTabId,
-        identity: { kind: 'process', tool: 'bash' },
-      },
-    );
-    const streamId = `bash@tool#${executionId}` as StreamTabId;
+    const { executionId, streamId } =
+      await registerProcessExecution('legacy command');
     const transcripts = defaultSession().transcripts;
     transcripts.ensureStream(streamId);
     const writer = transcripts.acquireWriter(streamId, 'legacy-output-test');
@@ -358,28 +364,14 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('points at /report when a process execution has no retained stream log', async () => {
-    const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      AgentConfigSchema.parse({
-        agent: 'bash',
-        instruction: 'sleep 1',
-        agentCategory: AgentCategory.ToolUse,
-      }),
-      'bash',
-      {
-        streamId: `bash@tool#${executionId}` as StreamTabId,
-        identity: { kind: 'process', tool: 'bash' },
-      },
-    );
+    const { executionId } = await registerProcessExecution('sleep 1');
 
     const result = await readOutput(executionId);
 
     assert.equal(result.status, 'executed');
-    assert.ok((result.output ?? '').includes('No retained output'));
-    assert.ok(
-      (result.output ?? '').includes(`/executions/${executionId}/report`),
-    );
+    const output = result.output ?? '';
+    assert.ok(output.includes('No retained output'));
+    assert.ok(output.includes(`/executions/${executionId}/report`));
   });
 
   it('points a non-process execution at /conversation instead of dumping its transcript', async () => {

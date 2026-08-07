@@ -7,18 +7,46 @@ import {
 } from '@cli/chat/tui/modals/EditApproval';
 import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
 
-describe('CLI edit approval layout', () => {
-  it('reserves footer rows when the approval title wraps', () => {
-    const title =
-      'Apply edit to /private/tmp/texra-queued-transcript-gZNBeZ/bolzano_weierstrass.tex?';
+type BudgetInput = Parameters<typeof editApprovalDiffRowsBudget>[0];
 
-    expect(
-      editApprovalDiffRowsBudget({
+describe('CLI edit approval layout', () => {
+  it.each<{ name: string; input: BudgetInput; expected: number }>([
+    {
+      name: 'reserves footer rows when the approval title wraps',
+      input: {
         availableRows: 16,
         columns: 80,
-        title,
-      }),
-    ).toBe(6);
+        title:
+          'Apply edit to /private/tmp/texra-queued-transcript-gZNBeZ/bolzano_weierstrass.tex?',
+      },
+      expected: 6,
+    },
+    {
+      name: 'reserves feedback input rows while collecting a rejection note',
+      input: {
+        availableRows: 16,
+        columns: 80,
+        feedbackMode: true,
+        title: 'Apply edit to proof.tex?',
+      },
+      expected: 5,
+    },
+    {
+      name: 'keeps a usable diff line on very short terminals',
+      input: {
+        availableRows: 7,
+        columns: 40,
+        title: 'Apply edit to proof.tex?',
+      },
+      expected: 1,
+    },
+    {
+      name: 'preserves the generous fallback when terminal rows are unknown',
+      input: { columns: 80, title: 'Apply edit to proof.tex?' },
+      expected: 30,
+    },
+  ])('$name', ({ input, expected }) => {
+    expect(editApprovalDiffRowsBudget(input)).toBe(expected);
   });
 
   it('includes the pulse prefix when a dynamic edit title reaches the width boundary', () => {
@@ -32,17 +60,6 @@ describe('CLI edit approval layout', () => {
         title,
       }),
     ).toBe(6);
-  });
-
-  it('reserves feedback input rows while collecting a rejection note', () => {
-    expect(
-      editApprovalDiffRowsBudget({
-        availableRows: 16,
-        columns: 80,
-        feedbackMode: true,
-        title: 'Apply edit to proof.tex?',
-      }),
-    ).toBe(5);
   });
 
   it('accounts for wrapped feedback placeholders on narrow terminals', () => {
@@ -74,25 +91,6 @@ describe('CLI edit approval layout', () => {
         title: 'Apply edit to draft.tex?',
       }),
     ).toBe(3);
-  });
-
-  it('keeps a usable diff line on very short terminals', () => {
-    expect(
-      editApprovalDiffRowsBudget({
-        availableRows: 7,
-        columns: 40,
-        title: 'Apply edit to proof.tex?',
-      }),
-    ).toBe(1);
-  });
-
-  it('preserves the generous fallback when terminal rows are unknown', () => {
-    expect(
-      editApprovalDiffRowsBudget({
-        columns: 80,
-        title: 'Apply edit to proof.tex?',
-      }),
-    ).toBe(30);
   });
 
   it('pluralizes the hunk count in the summary line', () => {

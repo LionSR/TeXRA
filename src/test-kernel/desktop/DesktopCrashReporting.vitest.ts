@@ -1,23 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
-describe('desktop crash reporting', () => {
-  it('drops non-native events for the v1 crash-reporting scope', async () => {
-    const { scrubDesktopCrashEvent } = await loadSourceModule(
-      '@desktop/main/desktopCrashReporting',
-    );
+type ScrubDesktopCrashEvent =
+  (typeof import('@desktop/main/desktopCrashReporting'))['scrubDesktopCrashEvent'];
 
+describe('desktop crash reporting', () => {
+  let scrubDesktopCrashEvent: ScrubDesktopCrashEvent;
+
+  beforeAll(async () => {
+    ({ scrubDesktopCrashEvent } = await loadSourceModule(
+      '@desktop/main/desktopCrashReporting',
+    ));
+  });
+
+  it('drops non-native events for the v1 crash-reporting scope', () => {
     expect(
       scrubDesktopCrashEvent({ type: undefined, platform: 'javascript' }, []),
     ).toBeNull();
   });
 
-  it('scrubs workspace and app paths from native crash events', async () => {
-    const { scrubDesktopCrashEvent } = await loadSourceModule(
-      '@desktop/main/desktopCrashReporting',
-    );
-
+  it('scrubs workspace and app paths from native crash events', () => {
     const scrubbed = scrubDesktopCrashEvent(
       {
         type: undefined,
@@ -43,9 +46,10 @@ describe('desktop crash reporting', () => {
       ['/Users/alice/paper', 'C:\\Users\\Alice\\TeXRA\\workspace'],
     );
 
-    expect(JSON.stringify(scrubbed)).toContain('<redacted-path>');
-    expect(JSON.stringify(scrubbed)).not.toContain('/Users/alice/paper');
-    expect(JSON.stringify(scrubbed)).not.toContain('C:\\\\Users\\\\Alice');
+    const serialized = JSON.stringify(scrubbed);
+    expect(serialized).toContain('<redacted-path>');
+    expect(serialized).not.toContain('/Users/alice/paper');
+    expect(serialized).not.toContain('C:\\\\Users\\\\Alice');
     expect(Object.keys(scrubbed?.extra as Record<string, unknown>)).toContain(
       '<redacted-path>/output.pdf',
     );

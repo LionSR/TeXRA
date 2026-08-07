@@ -7,6 +7,10 @@ import { AbsoluteFS } from '@utils/files';
 
 const CONFIG = { workingDirectory: '/workspace' };
 
+function statError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
 describe('listExecutionWorkspaceFiles', () => {
   setupPlatform({ workspacePath: '/workspace' });
   afterEach(() => vi.restoreAllMocks());
@@ -42,9 +46,7 @@ describe('listExecutionWorkspaceFiles', () => {
   });
 
   it('omits a path whose intermediate component is not a directory', async () => {
-    const error = Object.assign(new Error('parent path is not a directory'), {
-      code: 'ENOTDIR',
-    });
+    const error = statError('ENOTDIR', 'parent path is not a directory');
     vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
     await expect(
@@ -53,9 +55,7 @@ describe('listExecutionWorkspaceFiles', () => {
   });
 
   it('propagates operational stat failures', async () => {
-    const error = Object.assign(new Error('workspace file is unreadable'), {
-      code: 'EACCES',
-    });
+    const error = statError('EACCES', 'workspace file is unreadable');
     vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
     await expect(

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { TraceEmitter } from '@agent/trace';
+import { type AgentTrace, TraceEmitter } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   ExecutionId,
@@ -55,6 +55,27 @@ async function createLogStore(): Promise<StreamLogStore> {
   return store;
 }
 
+async function createLogger(): Promise<{
+  store: StreamLogStore;
+  logger: AgentTrace;
+}> {
+  const store = await createLogStore();
+  return { store, logger: createRunTrace(streamId, store).trace };
+}
+
+function turnCompleted(inputTokens: number, outputTokens: number): ThreadEvent {
+  return {
+    type: 'turn.completed',
+    usage: {
+      input_tokens: inputTokens,
+      cached_input_tokens: 0,
+      cache_write_input_tokens: 0,
+      output_tokens: outputTokens,
+      reasoning_output_tokens: 0,
+    },
+  };
+}
+
 function threadOf(events: ThreadEvent[]): Thread {
   return {
     runStreamed: async () => ({ events: streamEvents(events) }),
@@ -103,8 +124,7 @@ describe('codex progress events', () => {
   });
 
   it('updates in-flight Codex command items in place', async () => {
-    const store = await createLogStore();
-    const logger = createRunTrace(streamId, store).trace;
+    const { store, logger } = await createLogger();
     const startedCommand: CommandExecutionItem = {
       id: 'cmd-1',
       type: 'command_execution',
@@ -134,16 +154,7 @@ describe('codex progress events', () => {
           text: 'Build succeeded.',
         },
       },
-      {
-        type: 'turn.completed',
-        usage: {
-          input_tokens: 12,
-          cached_input_tokens: 0,
-          cache_write_input_tokens: 0,
-          output_tokens: 4,
-          reasoning_output_tokens: 0,
-        },
-      },
+      turnCompleted(12, 4),
     ]);
 
     const result = await runStreamedTurn(
@@ -168,8 +179,7 @@ describe('codex progress events', () => {
   });
 
   it('emits Codex thread and turn cards across the turn lifecycle', async () => {
-    const store = await createLogStore();
-    const logger = createRunTrace(streamId, store).trace;
+    const { store, logger } = await createLogger();
     const thread = threadOf([
       { type: 'thread.started', thread_id: 'thread_abc' },
       { type: 'turn.started' },
@@ -177,16 +187,7 @@ describe('codex progress events', () => {
         type: 'item.completed',
         item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
       },
-      {
-        type: 'turn.completed',
-        usage: {
-          input_tokens: 5,
-          cached_input_tokens: 0,
-          cache_write_input_tokens: 0,
-          output_tokens: 2,
-          reasoning_output_tokens: 0,
-        },
-      },
+      turnCompleted(5, 2),
     ]);
 
     const result = await runStreamedTurn(
@@ -223,8 +224,7 @@ describe('codex progress events', () => {
   });
 
   it('finalizes the running turn card when the stream errors', async () => {
-    const store = await createLogStore();
-    const logger = createRunTrace(streamId, store).trace;
+    const { store, logger } = await createLogger();
     const thread = threadOf([
       { type: 'turn.started' },
       { type: 'error', message: 'boom' },
@@ -244,8 +244,7 @@ describe('codex progress events', () => {
   });
 
   it('finalizes the running turn card when the stream ends without a terminal turn event', async () => {
-    const store = await createLogStore();
-    const logger = createRunTrace(streamId, store).trace;
+    const { store, logger } = await createLogger();
     // No turn.completed / turn.failed — the loop exits with the card open.
     const thread = threadOf([{ type: 'turn.started' }]);
 

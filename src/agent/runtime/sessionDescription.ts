@@ -106,9 +106,6 @@ export async function generateSessionDescription(
     const instruction = getDisplayedInstruction(config);
     if (!instruction) return;
 
-    const agentEntry = getAgent(config.agent, AgentCategory.ToolUse);
-    const agentDescription = agentEntry?.description;
-
     const helperResult = await createHelperModelKit(session);
     if (!helperResult.kit) {
       warnWithoutRejecting(helperResult.reason);
@@ -117,7 +114,7 @@ export async function generateSessionDescription(
 
     const userPrompt = buildUserPrompt(
       config.agent,
-      agentDescription,
+      getAgent(config.agent, AgentCategory.ToolUse)?.description,
       instruction,
     );
     const text = await runHelperModelCompletion(helperResult.kit, {

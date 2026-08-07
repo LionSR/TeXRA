@@ -13,6 +13,7 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type Plan,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -56,6 +57,36 @@ function lifecycleCase(): {
   };
 }
 
+function requestApproval(
+  session: SessionHandle,
+  approvalId: string,
+  streamId: StreamTabId,
+) {
+  return session.interactions.requestPlanApproval({
+    approvalId,
+    streamId,
+    plan,
+    goalEnabled: false,
+  });
+}
+
+function toolUseRun<Outcome extends RunOutcome | typeof STREAM_PHASE.WAITING>(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  outcome: Outcome,
+) {
+  return { category: 'toolUse' as const, outcome, executionId, streamId };
+}
+
+async function expectRunEndedRejection(
+  pending: Promise<unknown>,
+): Promise<void> {
+  await expect(pending).resolves.toEqual({
+    action: 'reject',
+    feedback: 'Run ended.',
+  });
+}
+
 /**
  * The run lifecycle is the single owner of the end-of-run host-interaction
  * cancel (stage 7 item 2). Both flows used to run an identical
@@ -70,35 +101,23 @@ describe('run lifecycle host-interaction cancel', () => {
 
   it('settles a pending approval when the run completes', async () => {
     const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = session.interactions.requestPlanApproval({
-      approvalId: 'approval:completed-run',
+    const pending = requestApproval(
+      session,
+      'approval:completed-run',
       streamId,
-      plan,
-      goalEnabled: false,
-    });
+    );
 
-    await runFlowWithLifecycle(ctx, async () => ({
-      category: 'toolUse',
-      outcome: RUN_OUTCOME.COMPLETED,
-      executionId,
-      streamId,
-    }));
+    await runFlowWithLifecycle(ctx, async () =>
+      toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+    );
 
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Run ended.',
-    });
+    await expectRunEndedRejection(pending);
     session.dispose();
   });
 
   it('settles a pending approval when the runner throws', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = session.interactions.requestPlanApproval({
-      approvalId: 'approval:failed-run',
-      streamId,
-      plan,
-      goalEnabled: false,
-    });
+    const { session, ctx, streamId } = lifecycleCase();
+    const pending = requestApproval(session, 'approval:failed-run', streamId);
 
     await expect(
       runFlowWithLifecycle(ctx, async () => {
@@ -106,57 +125,39 @@ describe('run lifecycle host-interaction cancel', () => {
       }),
     ).rejects.toThrow('flow exploded');
 
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Run ended.',
-    });
+    await expectRunEndedRejection(pending);
     session.dispose();
   });
 
   it('settles a pending approval when the run parks at WAITING', async () => {
     const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = session.interactions.requestPlanApproval({
-      approvalId: 'approval:waiting-run',
-      streamId,
-      plan,
-      goalEnabled: false,
-    });
+    const pending = requestApproval(session, 'approval:waiting-run', streamId);
 
-    const result = await runFlowWithLifecycle(ctx, async () => ({
-      category: 'toolUse',
-      outcome: STREAM_PHASE.WAITING,
-      executionId,
-      streamId,
-    }));
+    const result = await runFlowWithLifecycle(ctx, async () =>
+      toolUseRun(executionId, streamId, STREAM_PHASE.WAITING),
+    );
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Run ended.',
-    });
+    await expectRunEndedRejection(pending);
     session.dispose();
   });
 
   it("leaves another stream's pending approval untouched", async () => {
     const { session, ctx, executionId, streamId } = lifecycleCase();
     const otherStreamId = `${streamId}:sibling` as StreamTabId;
-    const sibling = session.interactions.requestPlanApproval({
-      approvalId: 'approval:sibling-stream',
-      streamId: otherStreamId,
-      plan,
-      goalEnabled: false,
-    });
+    const sibling = requestApproval(
+      session,
+      'approval:sibling-stream',
+      otherStreamId,
+    );
     let settled = false;
     void sibling.then(() => {
       settled = true;
     });
 
-    await runFlowWithLifecycle(ctx, async () => ({
-      category: 'toolUse',
-      outcome: RUN_OUTCOME.COMPLETED,
-      executionId,
-      streamId,
-    }));
+    await runFlowWithLifecycle(ctx, async () =>
+      toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+    );
     await Promise.resolve();
 
     expect(settled).toBe(false);
@@ -176,12 +177,7 @@ describe('run lifecycle host-interaction cancel', () => {
     try {
       await runFlowWithLifecycle(ctx, async () => {
         try {
-          return {
-            category: 'toolUse' as const,
-            outcome: RUN_OUTCOME.COMPLETED,
-            executionId,
-            streamId,
-          };
+          return toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED);
         } finally {
           order.push('flow-teardown');
         }
@@ -200,22 +196,16 @@ describe('run lifecycle host-interaction cancel', () => {
 
   it('is harmless after an interrupt-time cancel already settled the approval', async () => {
     const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = session.interactions.requestPlanApproval({
-      approvalId: 'approval:interrupted-run',
+    const pending = requestApproval(
+      session,
+      'approval:interrupted-run',
       streamId,
-      plan,
-      goalEnabled: false,
-    });
+    );
 
     const result = await runFlowWithLifecycle(ctx, async () => {
       // What `flowContext.interrupt` does while the flow is still live.
       session.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      return {
-        category: 'toolUse' as const,
-        outcome: RUN_OUTCOME.CANCELLED,
-        executionId,
-        streamId,
-      };
+      return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -238,12 +228,9 @@ describe('run lifecycle host-interaction cancel', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        })),
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(session.status.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
       // The disposal below must not resurrect the throwing adapter's failure.

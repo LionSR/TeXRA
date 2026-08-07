@@ -17,7 +17,7 @@ import {
 } from './helpers';
 
 // Greek letter shortcut mappings
-const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
+const GREEK_LETTER_SHORTCUTS: Record<string, string> = {
   alpha: 'al',
   beta: 'bt',
   gamma: 'ga',
@@ -109,9 +109,6 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
   // Vector Variables: \vec{p} -> \vp, \vec{x} -> \vx
   const vectorLetters = [...'pqvxyz'];
 
-  // Greek Letters (Regular): exclude Delta to prevent it from being shortened to De
-  const { Delta: _, ...greekShortcuts } = GREEK_LETTER_SHORTCUTS;
-
   // Greek Letters (Bold): bold Greek letters with \b prefix
   // prettier-ignore
   const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
@@ -199,7 +196,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     ...generateCommandShortcuts(calculusCommandMap),
     // Vector variables: \vec{x} -> \vx
     ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
-    ...generateCommandShortcuts(greekShortcuts),
+    ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
     ...generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
     // Mathcal: \mathcal{X} -> \cX
     ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),

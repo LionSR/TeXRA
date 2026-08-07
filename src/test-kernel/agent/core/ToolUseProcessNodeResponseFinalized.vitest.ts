@@ -49,11 +49,22 @@ function buildShared(): ToolUseRoundShared {
   } as unknown as ToolUseRoundShared;
 }
 
+function setup(): {
+  services: ToolUseRoundServices<unknown>;
+  node: ToolUseProcessNode<unknown>;
+  shared: ToolUseRoundShared;
+} {
+  const services = buildServices();
+  return {
+    services,
+    node: new ToolUseProcessNode().setServices(services),
+    shared: buildShared(),
+  };
+}
+
 describe('ToolUseProcessNode.post responseFinalized (#7086)', () => {
   it('emits responseFinalized with the authoritative text on a streamed, turn-ending round', async () => {
-    const services = buildServices();
-    const node = new ToolUseProcessNode().setServices(services);
-    const shared = buildShared();
+    const { services, node, shared } = setup();
 
     const transition = await node.post(
       shared,
@@ -75,9 +86,7 @@ describe('ToolUseProcessNode.post responseFinalized (#7086)', () => {
   });
 
   it('does not emit responseFinalized for a non-streaming round (exec() already logged it)', async () => {
-    const services = buildServices();
-    const node = new ToolUseProcessNode().setServices(services);
-    const shared = buildShared();
+    const { services, node, shared } = setup();
 
     await node.post(
       shared,
@@ -95,9 +104,7 @@ describe('ToolUseProcessNode.post responseFinalized (#7086)', () => {
   });
 
   it('does not emit responseFinalized for a round that continues with tool calls', async () => {
-    const services = buildServices();
-    const node = new ToolUseProcessNode().setServices(services);
-    const shared = buildShared();
+    const { services, node, shared } = setup();
 
     const transition = await node.post(
       shared,

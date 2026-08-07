@@ -77,6 +77,18 @@ function createFakeHost(): FakeHost {
   return { host, calls, persisted, control };
 }
 
+function setupCoordinator(): Omit<FakeHost, 'host'> & {
+  coordinator: StagedDeletionCoordinator;
+} {
+  const { host, calls, persisted, control } = createFakeHost();
+  return {
+    coordinator: new StagedDeletionCoordinator(host),
+    calls,
+    persisted,
+    control,
+  };
+}
+
 /** A stream whose live sidecar directory already holds a persisted plan. */
 async function writeLivePlan(value: unknown = { todos: [] }): Promise<void> {
   const dir = streamDataDir(STREAM);
@@ -97,8 +109,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('cancels and invalidates queued writes before the staging rename', async () => {
-    const { host, calls } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { calls, coordinator } = setupCoordinator();
     await writeLivePlan();
 
     await coordinator.stage(STREAM);
@@ -111,8 +122,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('drops the in-memory record and the staged copy only on commit', async () => {
-    const { host, calls } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { calls, coordinator } = setupCoordinator();
     await writeLivePlan();
 
     const deletion = await coordinator.stage(STREAM);
@@ -126,8 +136,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('buffers writes while staged and replays them after rollback restores the live namespace', async () => {
-    const { host, persisted } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { coordinator, persisted } = setupCoordinator();
     await writeLivePlan();
     const deletion = await coordinator.stage(STREAM);
 
@@ -147,8 +156,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('discards buffered writes when the deletion commits', async () => {
-    const { host, persisted } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { coordinator, persisted } = setupCoordinator();
     await writeLivePlan();
     const deletion = await coordinator.stage(STREAM);
 
@@ -159,8 +167,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('leaves a write unbuffered when no deletion owns the stream', () => {
-    const { host, persisted } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { coordinator, persisted } = setupCoordinator();
 
     expect(coordinator.bufferWrite(STREAM, PLAN_KEY, { todos: [] })).toBe(
       false,
@@ -169,8 +176,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('keeps a buffered value over a cancelled dirty write for the same sidecar', async () => {
-    const { host, persisted } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { coordinator, persisted } = setupCoordinator();
     await writeLivePlan();
     const deletion = await coordinator.stage(STREAM);
 
@@ -195,8 +201,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('reset drops in-memory ownership while on-disk staging residue still blocks a new deletion', async () => {
-    const { host } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { coordinator } = setupCoordinator();
     await writeLivePlan();
     await coordinator.stage(STREAM);
 
@@ -210,8 +215,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('reconcile restores a crash-left staged directory and invalidates cached KV handles', async () => {
-    const { host, calls } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { calls, coordinator } = setupCoordinator();
     const stagedDir = stagedStreamDataDir(STREAM);
     await StorageFS.ensureDir(stagedDir);
     await StorageFS.write(
@@ -236,8 +240,7 @@ describe('StagedDeletionCoordinator', () => {
   });
 
   it('recoverPendingRollbacks replays writes stranded by a failed rollback', async () => {
-    const { host, persisted, control } = createFakeHost();
-    const coordinator = new StagedDeletionCoordinator(host);
+    const { coordinator, persisted, control } = setupCoordinator();
     await writeLivePlan();
     const deletion = await coordinator.stage(STREAM);
     coordinator.bufferWrite(STREAM, PLAN_KEY, { todos: ['stranded'] });

@@ -90,60 +90,64 @@ describe('desktop command surface', () => {
       expect(entry.label).toBe(catalogEntry.shortTitle ?? catalogEntry.title);
       expect(entry.category).toBe(catalogEntry.category);
     }
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
-      label: 'Save',
-      category: 'File',
-      icon: 'floppy-disk',
-      accelerator: 'Command+S',
-    });
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-      label: 'Open Folder',
-      category: 'File',
-      icon: 'folder-open',
-      accelerator: 'Command+O',
-    });
-    expect(entries).toContainEqual({
-      id: 'texra.showMainView',
-      label: 'Show Launcher',
-      category: 'TeXRA',
-      icon: 'pencil',
-      accelerator: 'Command+Option+M',
-    });
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-      label: 'Desktop Documentation',
-      category: 'Help',
-      icon: 'book',
-    });
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-      label: 'Show Logs',
-      category: 'TeXRA',
-      icon: 'file-lines',
-    });
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
-      label: 'Toggle Bottom Bar',
-      category: 'View',
-      icon: 'window-maximize',
-      accelerator: 'Command+J',
-    });
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-      label: 'Toggle Side Panel',
-      category: 'View',
-      icon: 'picture-in-picture',
-      accelerator: 'Command+Alt+B',
-    });
-    expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
-      label: 'Toggle Summary Bar',
-      category: 'View',
-      icon: 'list-ul',
-      accelerator: 'Command+Alt+S',
-    });
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        {
+          id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+          label: 'Save',
+          category: 'File',
+          icon: 'floppy-disk',
+          accelerator: 'Command+S',
+        },
+        {
+          id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+          label: 'Open Folder',
+          category: 'File',
+          icon: 'folder-open',
+          accelerator: 'Command+O',
+        },
+        {
+          id: 'texra.showMainView',
+          label: 'Show Launcher',
+          category: 'TeXRA',
+          icon: 'pencil',
+          accelerator: 'Command+Option+M',
+        },
+        {
+          id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+          label: 'Desktop Documentation',
+          category: 'Help',
+          icon: 'book',
+        },
+        {
+          id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+          label: 'Show Logs',
+          category: 'TeXRA',
+          icon: 'file-lines',
+        },
+        {
+          id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+          label: 'Toggle Bottom Bar',
+          category: 'View',
+          icon: 'window-maximize',
+          accelerator: 'Command+J',
+        },
+        {
+          id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+          label: 'Toggle Side Panel',
+          category: 'View',
+          icon: 'picture-in-picture',
+          accelerator: 'Command+Alt+B',
+        },
+        {
+          id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+          label: 'Toggle Summary Bar',
+          category: 'View',
+          icon: 'list-ul',
+          accelerator: 'Command+Alt+S',
+        },
+      ]),
+    );
     const firstHelpIndex = entries.findIndex(
       (entry) => entry.category === 'Help',
     );
@@ -199,12 +203,16 @@ describe('desktop command surface', () => {
     );
     const ids = getDesktopCommandMenuEntries().map((entry) => entry.id);
 
-    expect(ids).not.toContain('texra.execute');
-    expect(ids).not.toContain('texra.runSetupAssistant');
-    expect(ids).not.toContain('texra.showImportOptions');
-    expect(ids).not.toContain('texra.openGettingStarted');
-    expect(ids).not.toContain('texra.cleanOutput');
-    expect(ids).not.toContain('texra.cleanBuild');
+    for (const vscodeOnlyId of [
+      'texra.execute',
+      'texra.runSetupAssistant',
+      'texra.showImportOptions',
+      'texra.openGettingStarted',
+      'texra.cleanOutput',
+      'texra.cleanBuild',
+    ]) {
+      expect(ids).not.toContain(vscodeOnlyId);
+    }
   });
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {

@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -53,6 +51,17 @@ const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
 const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
 const setupRetryExecutionId = 'c11120' as ExecutionId;
 const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
+const allChildStreamIds = [
+  childStreamId,
+  orderingChildStreamId,
+  loopChildStreamId,
+  stoppedChildStreamId,
+  cancelledChildStreamId,
+  failedChildStreamId,
+  noProjectionAutoCloseChildStreamId,
+  workflowRelaunchChildStreamId,
+  setupRetryChildStreamId,
+];
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -75,6 +84,17 @@ function startCodexChild(executionId: ExecutionId, description: string) {
     description,
     config,
   });
+}
+
+/** Collect session-scope facts from the default session hub until detached. */
+function collectSessionFacts(onlyType?: string) {
+  const facts: unknown[] = [];
+  const detach = defaultSession().events.subscribe((event) => {
+    if (event.scope !== 'session') return;
+    if (onlyType != null && event.event.type !== onlyType) return;
+    facts.push(event);
+  });
+  return { facts, detach };
 }
 
 /**
@@ -100,17 +120,7 @@ function withSessionEventRecording<T>(run: () => T): T {
 
 describe('child stream progress events', () => {
   afterEach(() => {
-    for (const streamId of [
-      childStreamId,
-      orderingChildStreamId,
-      loopChildStreamId,
-      stoppedChildStreamId,
-      cancelledChildStreamId,
-      failedChildStreamId,
-      noProjectionAutoCloseChildStreamId,
-      workflowRelaunchChildStreamId,
-      setupRetryChildStreamId,
-    ]) {
+    for (const streamId of allChildStreamIds) {
       clearStreamStatusForTest(defaultSession().status, streamId);
     }
   });
@@ -382,12 +392,7 @@ describe('child stream progress events', () => {
 
   it('publishes child stream activation through the session fact hub', async () => {
     const active = createRecordingHost();
-    const facts: unknown[] = [];
-    const detachFacts = defaultSession().events.subscribe((event) => {
-      if (event.scope === 'session' && event.event.type === 'setActiveStream') {
-        facts.push(event);
-      }
-    });
+    const { facts, detach } = collectSessionFacts('setActiveStream');
 
     try {
       const childStream = startBashChild(executionId);
@@ -409,18 +414,13 @@ describe('child stream progress events', () => {
 
       await childStream.finalize();
     } finally {
-      detachFacts();
+      detach();
     }
   });
 
   it('publishes child stream auto-close as a session fact without direct host emission', async () => {
     const active = createRecordingHost();
-    const facts: unknown[] = [];
-    const detachFacts = defaultSession().events.subscribe((event) => {
-      if (event.scope === 'session') {
-        facts.push(event);
-      }
-    });
+    const { facts, detach } = collectSessionFacts();
 
     try {
       const childStream = startBashChild(noProjectionAutoCloseExecutionId);
@@ -436,7 +436,7 @@ describe('child stream progress events', () => {
         },
       });
     } finally {
-      detachFacts();
+      detach();
     }
   });
 

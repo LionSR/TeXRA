@@ -15,6 +15,7 @@ import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
+
 import {
   causeChain,
   findInCauseChain,
@@ -489,10 +490,12 @@ export function classifyModelRateLimitFailure(
   error: Error,
 ): { retryAfterMs?: number } | undefined {
   const chain = causeChain(error);
-  return detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
-    'model'
-    ? { retryAfterMs: detectRetryAfterMs(chain) }
-    : undefined;
+  const scope = detectRateLimitScope(
+    error,
+    detectRouteStatusCode(error, chain),
+  );
+  if (scope !== 'model') return undefined;
+  return { retryAfterMs: detectRetryAfterMs(chain) };
 }
 
 /** Whether an upstream rate limit proves the relay request gate admitted the call. */

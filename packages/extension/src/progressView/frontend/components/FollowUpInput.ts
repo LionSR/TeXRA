@@ -584,9 +584,7 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitPolish(): void {
-    if (!this.value.trim()) {
-      return;
-    }
+    if (!this.value.trim()) return;
     this.polishing = true;
     this.dispatchEvent(ProgressEvents.followupPolish());
   }

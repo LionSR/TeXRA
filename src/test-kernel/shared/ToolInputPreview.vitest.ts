@@ -5,45 +5,56 @@ import { describe, expect, it } from 'vitest';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 
 describe('deriveToolInputPreview', () => {
-  it('reads the command field for bash', () => {
-    expect(deriveToolInputPreview('bash', { command: 'npm test' })).toBe(
-      'npm test',
-    );
-  });
-
-  it('reads the prompt field for codex', () => {
-    expect(
-      deriveToolInputPreview('codex', { prompt: 'Summarize this proof.' }),
-    ).toBe('Summarize this proof.');
-  });
-
-  it('composes action and path for executions', () => {
-    expect(
-      deriveToolInputPreview('executions', {
-        action: 'view',
-        path: '/executions/process-1',
-      }),
-    ).toBe('view /executions/process-1');
-  });
-
-  it('defaults the executions action when omitted', () => {
-    expect(
-      deriveToolInputPreview('executions', { path: '/executions/abc' }),
-    ).toBe('view /executions/abc');
-  });
-
-  it('normalizes a provider-namespaced name before the lookup', () => {
-    expect(deriveToolInputPreview('claude:Bash', { command: 'npm test' })).toBe(
-      'npm test',
-    );
-  });
-
-  it('returns an empty string for unmapped tools', () => {
-    expect(deriveToolInputPreview('read_file', { path: 'paper.tex' })).toBe('');
-  });
-
-  it('returns an empty string for non-object input', () => {
-    expect(deriveToolInputPreview('bash', 'npm test')).toBe('');
-    expect(deriveToolInputPreview('bash', undefined)).toBe('');
+  it.each([
+    {
+      label: 'reads the command field for bash',
+      tool: 'bash',
+      input: { command: 'npm test' },
+      expected: 'npm test',
+    },
+    {
+      label: 'reads the prompt field for codex',
+      tool: 'codex',
+      input: { prompt: 'Summarize this proof.' },
+      expected: 'Summarize this proof.',
+    },
+    {
+      label: 'composes action and path for executions',
+      tool: 'executions',
+      input: { action: 'view', path: '/executions/process-1' },
+      expected: 'view /executions/process-1',
+    },
+    {
+      label: 'defaults the executions action when omitted',
+      tool: 'executions',
+      input: { path: '/executions/abc' },
+      expected: 'view /executions/abc',
+    },
+    {
+      label: 'normalizes a provider-namespaced name before the lookup',
+      tool: 'claude:Bash',
+      input: { command: 'npm test' },
+      expected: 'npm test',
+    },
+    {
+      label: 'returns an empty string for unmapped tools',
+      tool: 'read_file',
+      input: { path: 'paper.tex' },
+      expected: '',
+    },
+    {
+      label: 'returns an empty string for non-object input',
+      tool: 'bash',
+      input: 'npm test',
+      expected: '',
+    },
+    {
+      label: 'returns an empty string for missing input',
+      tool: 'bash',
+      input: undefined,
+      expected: '',
+    },
+  ])('$label', ({ tool, input, expected }) => {
+    expect(deriveToolInputPreview(tool, input)).toBe(expected);
   });
 });

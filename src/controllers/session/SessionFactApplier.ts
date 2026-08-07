@@ -188,7 +188,7 @@ export class SessionFactApplier {
         case 'goalStateChanged':
           return this.handleGoalStateChanged(fact.payload.streamId);
         case 'inquiryThreadUpdated':
-          return this.handleInquiryThreadUpdated(fact.payload);
+          return this.renderer.onInquiryThreadUpdated(fact.payload);
         case 'clearMissingOutputs':
           return this.handleClearMissingOutputs(fact.payload);
         case 'updateQueuedFollowUps':
@@ -234,12 +234,6 @@ export class SessionFactApplier {
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
     withEventErrorHandling('SessionFacts', context, handle);
-  }
-
-  private handleInquiryThreadUpdated(
-    thread: Parameters<SessionRendererPort['onInquiryThreadUpdated']>[0],
-  ): void {
-    this.renderer.onInquiryThreadUpdated(thread);
   }
 
   private handleUpdateStreamDescription({

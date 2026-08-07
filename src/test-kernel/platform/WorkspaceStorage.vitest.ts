@@ -44,6 +44,10 @@ async function readWorkspaceMarker(
 describe('workspace storage defaults', () => {
   const tempDirs: string[] = [];
 
+  function makeStorageRoot(): Promise<string> {
+    return makeTempDir('texra-workspace-storage-', tempDirs);
+  }
+
   afterEach(async () => {
     await cleanupTempDirs(tempDirs);
   });
@@ -62,7 +66,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('snapshots global, workspace, memory, and run storage layout paths', async () => {
-    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const root = await makeStorageRoot();
     const workspacePath = '/workspace/a';
 
     expect([
@@ -88,7 +92,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('creates workspace-scoped storage roots on demand', async () => {
-    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const root = await makeStorageRoot();
     let workspacePath: string | undefined = '/workspace/a';
     const provider = new WorkspaceStorageProvider(root, () => workspacePath);
     const firstStoragePath = provider.getStoragePath();
@@ -115,7 +119,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('restores the previous root after a failed workspace replacement', async () => {
-    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const root = await makeStorageRoot();
     let workspacePath: string | undefined = '/workspace/a';
     const provider = new WorkspaceStorageProvider(root, () => workspacePath);
     const firstStoragePath = provider.getStoragePath();
@@ -131,7 +135,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('migrates legacy hash-only workspace storage when possible', async () => {
-    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const root = await makeStorageRoot();
     const workspacePath = '/workspace/Legacy Project';
     const legacyStoragePath = join(
       root,
@@ -159,7 +163,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('initializes each workspace storage root only once', async () => {
-    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const root = await makeStorageRoot();
     const workspacePath = '/workspace/a';
     const provider = new WorkspaceStorageProvider(root, workspacePath);
     const storagePath = provider.getStoragePath();
@@ -171,7 +175,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('uses the same workspace storage rule for node hosts', async () => {
-    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const root = await makeStorageRoot();
     const workspacePath = '/workspace/a';
     const provider = createNodeStorageProvider({
       storageRoot: root,

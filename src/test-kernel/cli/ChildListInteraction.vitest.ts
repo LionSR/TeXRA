@@ -18,6 +18,7 @@ import {
   loadInk,
   renderInteractive,
   renderOutputAtTerminalSize,
+  type FakeStdin,
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -32,6 +33,65 @@ function session(id: StreamTabId, active = false): StreamView {
 /** Every mount in this suite renders the child list at 100 columns. */
 function renderChildList(ink: any, node: any): InkRenderHandles {
   return renderInteractive(ink, node, { columns: 100 });
+}
+
+/** Wait until the mounted list has attached its stdin input listener. */
+function waitForInput(stdin: FakeStdin): Promise<void> {
+  return waitFor(() => stdin.listenerCount('readable') > 0);
+}
+
+/**
+ * A controlled SubagentList whose selection lives in React state, mirroring
+ * the app's wiring. `current()` reads the latest selection; `reset()` moves
+ * the initial value before a remount.
+ */
+function controlledList(
+  React: any,
+  initial: ChildListValue,
+  props: Record<string, unknown>,
+): {
+  Harness: () => any;
+  current: () => ChildListValue;
+  reset: (next: ChildListValue) => void;
+} {
+  let selected = initial;
+  function Harness() {
+    const [value, setValue] = React.useState(selected) as [
+      ChildListValue,
+      (next: ChildListValue) => void,
+    ];
+    return React.createElement(SubagentList, {
+      ...props,
+      onSelectionChange: (next: ChildListValue) => {
+        (
+          props.onSelectionChange as ((v: ChildListValue) => void) | undefined
+        )?.(next);
+        selected = next;
+        setValue(next);
+      },
+      selectedValue: value,
+    });
+  }
+  return {
+    Harness,
+    current: () => selected,
+    reset: (next: ChildListValue) => {
+      selected = next;
+    },
+  };
+}
+
+function workflowRootSlice(entries: StreamSlice['entries']): StreamSlice {
+  return {
+    ...emptySlice(root),
+    agent: 'workflow',
+    identity: {
+      kind: 'multiAgentWorkflow' as const,
+      workflowName: 'workflow',
+    },
+    category: AgentCategory.Workflow,
+    entries,
+  };
 }
 
 describe('CLI child list interaction', () => {
@@ -58,29 +118,20 @@ describe('CLI child list interaction', () => {
     const onKillExecution = vi.fn();
     const onPrintStream = vi.fn();
     const onCancel = vi.fn();
-    let selected = childStreamListValue(root);
-
-    function Harness() {
-      const [value, setValue] = React.useState(selected) as [
-        ChildListValue,
-        (next: ChildListValue) => void,
-      ];
-      return React.createElement(SubagentList, {
+    const { Harness, current } = controlledList(
+      React,
+      childStreamListValue(root),
+      {
         activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
         keyboardActive: true,
         maxRows: 5,
         onCancel,
         onFocusStream,
         onKillExecution,
-        onSelectionChange: (next: ChildListValue) => {
-          selected = next;
-          setValue(next);
-        },
         onPrintStream,
-        selectedValue: value,
         sessions: [session(root, true), session(child)],
-      });
-    }
+      },
+    );
 
     const { instance, stdin } = renderChildList(
       ink,
@@ -88,9 +139,9 @@ describe('CLI child list interaction', () => {
     );
 
     try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
+      await waitForInput(stdin);
       stdin.write('\u001B[B');
-      await waitFor(() => selected === childStreamListValue(child));
+      await waitFor(() => current() === childStreamListValue(child));
       stdin.write('v');
       await waitFor(() => onPrintStream.mock.calls.length === 1);
       stdin.write('k');
@@ -130,7 +181,7 @@ describe('CLI child list interaction', () => {
     );
 
     try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
+      await waitForInput(stdin);
       stdin.write('s');
       await waitFor(() => onSkipExecution.mock.calls.length === 1);
       stdin.write('r');
@@ -148,25 +199,16 @@ describe('CLI child list interaction', () => {
     const onCancel = vi.fn();
     const onFocusStream = vi.fn();
     const onSelectionChange = vi.fn();
-    let selected = childStreamListValue(root);
-
-    function Harness() {
-      const [value, setValue] = React.useState(selected) as [
-        ChildListValue,
-        (next: ChildListValue) => void,
-      ];
-      return React.createElement(SubagentList, {
+    const { Harness, current } = controlledList(
+      React,
+      childStreamListValue(root),
+      {
         keyboardActive: true,
         listRootStreamId: root,
         maxRows: 5,
         onCancel,
         onFocusStream,
-        onSelectionChange: (next: ChildListValue) => {
-          onSelectionChange(next);
-          selected = next;
-          setValue(next);
-        },
-        selectedValue: value,
+        onSelectionChange,
         sessions: [
           session(root, true),
           {
@@ -175,8 +217,8 @@ describe('CLI child list interaction', () => {
             workflowPhase: 'Map:review|draft',
           },
         ],
-      });
-    }
+      },
+    );
 
     const { instance, stdin, stdout } = renderChildList(
       ink,
@@ -193,16 +235,16 @@ describe('CLI child list interaction', () => {
       stdin.write('\u001B[A');
       stdin.write('\u001B[A');
       await sleep(30);
-      expect(selected).toBe(childStreamListValue(root));
+      expect(current()).toBe(childStreamListValue(root));
       expect(onSelectionChange).not.toHaveBeenCalled();
 
       stdin.write('\u001B[B');
-      await waitFor(() => selected === childStreamListValue(child));
+      await waitFor(() => current() === childStreamListValue(child));
       expect(onSelectionChange).toHaveBeenCalledOnce();
       stdin.write('\u001B[B');
       stdin.write('\u001B[B');
       await sleep(30);
-      expect(selected).toBe(childStreamListValue(child));
+      expect(current()).toBe(childStreamListValue(child));
       expect(onSelectionChange).toHaveBeenCalledOnce();
       expect(onCancel).not.toHaveBeenCalled();
 
@@ -241,7 +283,7 @@ describe('CLI child list interaction', () => {
     );
 
     try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
+      await waitForInput(stdin);
       for (const input of ['v', 'k', 's', 'r', '\r']) stdin.write(input);
       await sleep(30);
 
@@ -253,36 +295,43 @@ describe('CLI child list interaction', () => {
     }
   });
 
-  it('clamps repeated ↓ presses at the last row without cancelling', async () => {
-    const { ink, React } = await loadInk();
-    const onCancel = vi.fn();
-    const onSelectionChange = vi.fn();
+  it.each([
+    { direction: '↓', key: '\u001B[B', boundary: child },
+    { direction: '↑', key: '\u001B[A', boundary: root },
+  ])(
+    'clamps repeated $direction presses at the boundary row without cancelling',
+    async ({ key, boundary }) => {
+      const { ink, React } = await loadInk();
+      const onCancel = vi.fn();
+      const onSelectionChange = vi.fn();
 
-    const { instance, stdin } = renderChildList(
-      ink,
-      React.createElement(SubagentList, {
-        keyboardActive: true,
-        maxRows: 5,
-        onCancel,
-        onSelectionChange,
-        selectedValue: childStreamListValue(child),
-        sessions: [session(root, true), session(child)],
-      }),
-    );
+      const { instance, stdin } = renderChildList(
+        ink,
+        React.createElement(SubagentList, {
+          keyboardActive: true,
+          maxRows: 5,
+          onCancel,
+          onSelectionChange,
+          selectedValue: childStreamListValue(boundary),
+          sessions: [session(root, true), session(child)],
+        }),
+      );
 
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('\u001b[B');
-      stdin.write('\u001b[B');
-      stdin.write('\u001b[B');
-      await sleep(30);
+      try {
+        await waitForInput(stdin);
+        stdin.write(key);
+        stdin.write(key);
+        stdin.write(key);
+        // No state change to await for a no-op; give the event loop a turn.
+        await sleep(30);
 
-      expect(onCancel).not.toHaveBeenCalled();
-      expect(onSelectionChange).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
+        expect(onCancel).not.toHaveBeenCalled();
+        expect(onSelectionChange).not.toHaveBeenCalled();
+      } finally {
+        instance.unmount();
+      }
+    },
+  );
 
   it('enters and leaves wide workflow tasks and ignores no-child Enter', async () => {
     const { ink, React } = await loadInk();
@@ -290,98 +339,76 @@ describe('CLI child list interaction', () => {
     const phaseValue = workflowPhaseListValue('phase-map');
     const childTaskValue = workflowTaskListValue('task-child');
     const plannedTaskValue = workflowTaskListValue('task-planned');
-    const rootSlice: StreamSlice = {
-      ...emptySlice(root),
-      agent: 'workflow',
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'workflow',
+    const rootSlice = workflowRootSlice([
+      {
+        id: 'phase-map',
+        role: 'phase',
+        text: 'Map',
+        finalized: true,
+        phaseLabel: 'Map',
+        phaseIndex: 0,
+        phaseTotal: 1,
       },
-      category: AgentCategory.Workflow,
-      entries: [
-        {
-          id: 'phase-map',
-          role: 'phase',
-          text: 'Map',
-          finalized: true,
-          phaseLabel: 'Map',
-          phaseIndex: 0,
-          phaseTotal: 1,
+      {
+        id: 'task-child',
+        role: 'workflowTask',
+        text: 'Running: Inspect',
+        finalized: false,
+        task: {
+          id: 'inspect',
+          label: 'Inspect',
+          phase: 'Map',
+          status: 'running',
+          childStreamId: child,
         },
-        {
-          id: 'task-child',
-          role: 'workflowTask',
-          text: 'Running: Inspect',
-          finalized: false,
-          task: {
-            id: 'inspect',
-            label: 'Inspect',
-            phase: 'Map',
-            status: 'running',
-            childStreamId: child,
-          },
+      },
+      {
+        id: 'task-planned',
+        role: 'workflowTask',
+        text: 'Planned: Summarize',
+        finalized: false,
+        task: {
+          id: 'summarize',
+          label: 'Summarize',
+          phase: 'Map',
+          status: 'planned',
         },
-        {
-          id: 'task-planned',
-          role: 'workflowTask',
-          text: 'Planned: Summarize',
-          finalized: false,
-          task: {
-            id: 'summarize',
-            label: 'Summarize',
-            phase: 'Map',
-            status: 'planned',
-          },
-        },
+      },
+    ]);
+    const { Harness, current, reset } = controlledList(React, phaseValue, {
+      keyboardActive: true,
+      listRootStreamId: root,
+      listRootSlice: rootSlice,
+      maxRows: 6,
+      onCancel: vi.fn(),
+      onFocusStream,
+      sessions: [
+        { id: root, label: 'workflow', active: true, slice: rootSlice },
       ],
-    };
-    let selected = phaseValue;
-
-    function Harness() {
-      const [value, setValue] = React.useState(selected) as [
-        ChildListValue,
-        (next: ChildListValue) => void,
-      ];
-      return React.createElement(SubagentList, {
-        keyboardActive: true,
-        listRootStreamId: root,
-        listRootSlice: rootSlice,
-        maxRows: 6,
-        onCancel: vi.fn(),
-        onFocusStream,
-        onSelectionChange: (next: ChildListValue) => {
-          selected = next;
-          setValue(next);
-        },
-        selectedValue: value,
-        sessions: [
-          { id: root, label: 'workflow', active: true, slice: rootSlice },
-        ],
-        streams: new Map([
-          [root, rootSlice],
-          [child, emptySlice(child)],
-        ]),
-      });
-    }
+      streams: new Map([
+        [root, rootSlice],
+        [child, emptySlice(child)],
+      ]),
+    });
 
     const { instance, stdin } = renderChildList(
       ink,
       React.createElement(Harness),
     );
     try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('\u001b[C');
-      await waitFor(() => selected === childTaskValue);
-      stdin.write('\u001b[D');
-      await waitFor(() => selected === phaseValue);
+      await waitForInput(stdin);
+      stdin.write('\u001B[C');
+      await waitFor(() => current() === childTaskValue);
+      stdin.write('\u001B[D');
+      await waitFor(() => current() === phaseValue);
       stdin.write('\r');
-      await waitFor(() => selected === childTaskValue);
+      await waitFor(() => current() === childTaskValue);
       stdin.write('\r');
       await waitFor(() => onFocusStream.mock.calls.length === 1);
       expect(onFocusStream).toHaveBeenCalledWith(child);
 
-      stdin.write('\u001b[B');
-      await waitFor(() => selected === plannedTaskValue);
+      stdin.write('\u001B[B');
+      await waitFor(() => current() === plannedTaskValue);
       stdin.write('\r');
       await sleep(30);
       expect(onFocusStream).toHaveBeenCalledOnce();
@@ -389,21 +416,21 @@ describe('CLI child list interaction', () => {
       instance.unmount();
     }
 
-    selected = childTaskValue;
+    reset(childTaskValue);
     onFocusStream.mockClear();
     const narrow = renderInteractive(ink, React.createElement(Harness), {
       columns: 99,
     });
     try {
-      await waitFor(() => narrow.stdin.listenerCount('readable') > 0);
-      narrow.stdin.write('\u001b[B');
-      await waitFor(() => selected === plannedTaskValue);
+      await waitForInput(narrow.stdin);
+      narrow.stdin.write('\u001B[B');
+      await waitFor(() => current() === plannedTaskValue);
       narrow.stdin.write('\r');
       await sleep(30);
       expect(onFocusStream).not.toHaveBeenCalled();
 
-      narrow.stdin.write('\u001b[A');
-      await waitFor(() => selected === childTaskValue);
+      narrow.stdin.write('\u001B[A');
+      await waitFor(() => current() === childTaskValue);
       narrow.stdin.write('\r');
       await waitFor(() => onFocusStream.mock.calls.length === 1);
       expect(onFocusStream).toHaveBeenCalledWith(child);
@@ -417,130 +444,75 @@ describe('CLI child list interaction', () => {
     const onFocusStream = vi.fn();
     const onPrintStream = vi.fn();
     const onSkipExecution = vi.fn();
-    const rootSlice: StreamSlice = {
-      ...emptySlice(root),
-      agent: 'workflow',
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'workflow',
-      },
-      category: AgentCategory.Workflow,
-      entries: [
-        ...['first', 'second'].map((id) => ({
-          id: `task-${id}`,
-          role: 'workflowTask' as const,
-          text: `Running: ${id}`,
-          finalized: false,
-          task: {
-            id,
-            label: id,
-            status: 'running' as const,
-            childStreamId: child,
-          },
-        })),
-        {
-          id: 'task-missing',
-          role: 'workflowTask',
-          text: 'Running: missing',
-          finalized: false,
-          task: {
-            id: 'missing',
-            label: 'missing',
-            status: 'running',
-            childStreamId: 'missing-child' as StreamTabId,
-          },
+    const rootSlice = workflowRootSlice([
+      ...['first', 'second'].map((id) => ({
+        id: `task-${id}`,
+        role: 'workflowTask' as const,
+        text: `Running: ${id}`,
+        finalized: false,
+        task: {
+          id,
+          label: id,
+          status: 'running' as const,
+          childStreamId: child,
         },
-      ],
-    };
-    const { instance, stdin } = renderChildList(
-      ink,
-      React.createElement(SubagentList, {
-        activeSubagentExecutionIds: new Map([[child, 'shared-exec']]),
-        keyboardActive: true,
-        listRootStreamId: root,
-        listRootSlice: rootSlice,
-        maxRows: 6,
-        onCancel: vi.fn(),
-        onFocusStream,
-        onPrintStream,
-        onSkipExecution,
-        selectedValue: workflowTaskListValue('task-first'),
-        sessions: [],
-        streams: new Map([
-          [root, rootSlice],
-          [child, emptySlice(child)],
-        ]),
-      }),
-    );
+      })),
+      {
+        id: 'task-missing',
+        role: 'workflowTask',
+        text: 'Running: missing',
+        finalized: false,
+        task: {
+          id: 'missing',
+          label: 'missing',
+          status: 'running',
+          childStreamId: 'missing-child' as StreamTabId,
+        },
+      },
+    ]);
 
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      for (const input of ['\r', 'v', 's']) stdin.write(input);
-      await sleep(30);
-      expect(onFocusStream).not.toHaveBeenCalled();
-      expect(onPrintStream).not.toHaveBeenCalled();
-      expect(onSkipExecution).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
+    async function expectControlsInert(
+      props: Record<string, unknown>,
+    ): Promise<void> {
+      const { instance, stdin } = renderChildList(
+        ink,
+        React.createElement(SubagentList, {
+          keyboardActive: true,
+          listRootStreamId: root,
+          listRootSlice: rootSlice,
+          maxRows: 6,
+          onCancel: vi.fn(),
+          onFocusStream,
+          onPrintStream,
+          onSkipExecution,
+          sessions: [],
+          ...props,
+        }),
+      );
+      try {
+        await waitForInput(stdin);
+        for (const input of ['\r', 'v', 's']) stdin.write(input);
+        await sleep(30);
+        expect(onFocusStream).not.toHaveBeenCalled();
+        expect(onPrintStream).not.toHaveBeenCalled();
+        expect(onSkipExecution).not.toHaveBeenCalled();
+      } finally {
+        instance.unmount();
+      }
     }
 
-    const missing = renderChildList(
-      ink,
-      React.createElement(SubagentList, {
-        keyboardActive: true,
-        listRootStreamId: root,
-        listRootSlice: rootSlice,
-        maxRows: 6,
-        onCancel: vi.fn(),
-        onFocusStream,
-        onPrintStream,
-        onSkipExecution,
-        selectedValue: workflowTaskListValue('task-missing'),
-        sessions: [],
-        streams: new Map([[root, rootSlice]]),
-      }),
-    );
-    try {
-      await waitFor(() => missing.stdin.listenerCount('readable') > 0);
-      for (const input of ['\r', 'v', 's']) missing.stdin.write(input);
-      await sleep(30);
-      expect(onFocusStream).not.toHaveBeenCalled();
-      expect(onPrintStream).not.toHaveBeenCalled();
-      expect(onSkipExecution).not.toHaveBeenCalled();
-    } finally {
-      missing.instance.unmount();
-    }
-  });
+    await expectControlsInert({
+      activeSubagentExecutionIds: new Map([[child, 'shared-exec']]),
+      selectedValue: workflowTaskListValue('task-first'),
+      streams: new Map([
+        [root, rootSlice],
+        [child, emptySlice(child)],
+      ]),
+    });
 
-  it('clamps repeated ↑ presses at the first row without cancelling', async () => {
-    const { ink, React } = await loadInk();
-    const onCancel = vi.fn();
-    const onSelectionChange = vi.fn();
-
-    const { instance, stdin } = renderChildList(
-      ink,
-      React.createElement(SubagentList, {
-        keyboardActive: true,
-        maxRows: 5,
-        onCancel,
-        onSelectionChange,
-        selectedValue: childStreamListValue(root),
-        sessions: [session(root, true), session(child)],
-      }),
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('\u001b[A');
-      stdin.write('\u001b[A');
-      stdin.write('\u001b[A');
-      // No state change to await for a no-op; give the event loop a turn.
-      await sleep(30);
-
-      expect(onCancel).not.toHaveBeenCalled();
-      expect(onSelectionChange).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
+    await expectControlsInert({
+      selectedValue: workflowTaskListValue('task-missing'),
+      streams: new Map([[root, rootSlice]]),
+    });
   });
 });

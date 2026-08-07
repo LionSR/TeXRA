@@ -132,11 +132,8 @@ const SDK_ERROR_KIND_BY_FALLBACK_STATUS = new Map(
 export function sdkErrorKindFromStatusCode(
   statusCode: number | undefined,
 ): SdkErrorKind {
-  return (
-    (statusCode === undefined
-      ? undefined
-      : SDK_ERROR_KIND_BY_FALLBACK_STATUS.get(statusCode)) ?? 'api_error'
-  );
+  if (statusCode === undefined) return 'api_error';
+  return SDK_ERROR_KIND_BY_FALLBACK_STATUS.get(statusCode) ?? 'api_error';
 }
 
 /** Server errors (5xx), conflicts (409), rate limits (429), and request timeouts

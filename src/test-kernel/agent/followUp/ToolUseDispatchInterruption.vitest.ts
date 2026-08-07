@@ -30,18 +30,14 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
   const abort = (): void =>
     controller.abort(new DOMException('Run interrupted', 'AbortError'));
 
-  const toolACall = vi.fn(async () => ({
-    status: 'executed' as const,
-    output: 'toolA done',
-  }));
+  const executedTool = (output: string) =>
+    vi.fn(async () => ({ status: 'executed' as const, output }));
+  const toolACall = executedTool('toolA done');
+  const toolCCall = executedTool('toolC done');
   const toolBCall = vi.fn(async () => {
     if (abortOn === 'tool-b') abort();
     return { status: 'executed' as const, output: 'toolB done' };
   });
-  const toolCCall = vi.fn(async () => ({
-    status: 'executed' as const,
-    output: 'toolC done',
-  }));
 
   const createResponse = vi.fn(async () => ({
     response: { id: 'round-1', toolCalls: true },
@@ -84,31 +80,12 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
         }),
         extractToolUse: (response: { toolCalls?: boolean }) => {
           if (abortOn === 'tool-call-extraction') abort();
-          return response.toolCalls
-            ? [
-                {
-                  callId: 'call-a',
-                  input: {},
-                  name: 'toolA',
-                  provider: 'test',
-                  raw: {},
-                },
-                {
-                  callId: 'call-b',
-                  input: {},
-                  name: 'toolB',
-                  provider: 'test',
-                  raw: {},
-                },
-                {
-                  callId: 'call-c',
-                  input: {},
-                  name: 'toolC',
-                  provider: 'test',
-                  raw: {},
-                },
-              ]
-            : [];
+          if (!response.toolCalls) return [];
+          return [
+            { callId: 'call-a', name: 'toolA' },
+            { callId: 'call-b', name: 'toolB' },
+            { callId: 'call-c', name: 'toolC' },
+          ].map((call) => ({ ...call, input: {}, provider: 'test', raw: {} }));
         },
       }),
     ),
@@ -162,6 +139,34 @@ function messagesOfType(
   ) as unknown as (FunctionCallMessage & { output: string })[];
 }
 
+const ALL_CALL_IDS = ['call-a', 'call-b', 'call-c'];
+
+/**
+ * Asserts the persisted history pairs every requested tool_use with a
+ * tool_result, and that each call in `cancelledCallIds` carries a synthesized
+ * "cancelled" result rather than a real one.
+ */
+function expectPairedToolResults(
+  shared: ToolUseRoundShared,
+  cancelledCallIds: string[],
+): void {
+  const functionCalls = messagesOfType(shared, 'function_call');
+  const functionResults = messagesOfType(shared, 'function_call_output');
+
+  expect(functionCalls).toHaveLength(3);
+  expect(functionResults).toHaveLength(3);
+  for (const messages of [functionCalls, functionResults]) {
+    expect(messages.map((m) => m.call_id).sort()).toEqual(ALL_CALL_IDS);
+  }
+
+  // Aborted mid-flight and never started both surface as cancelled.
+  for (const callId of cancelledCallIds) {
+    const cancelledResult = functionResults.find((m) => m.call_id === callId);
+    expect(cancelledResult?.output).toContain('"status":"error"');
+    expect(cancelledResult?.output.toLowerCase()).toContain('cancelled');
+  }
+}
+
 /**
  * Regression test for https://github.com/LionSR/TeXRA/issues/7163.
  *
@@ -198,34 +203,15 @@ describe('ToolUseDispatchNode interruption', () => {
     expect(toolCCall).not.toHaveBeenCalled();
     expect(shared.shouldStop).toBe(true);
 
-    const functionCalls = messagesOfType(shared, 'function_call');
-    const functionResults = messagesOfType(shared, 'function_call_output');
-
     // Every tool_use block the model requested must be paired with a
     // tool_result, even though only one of them kept a real result.
-    expect(functionCalls).toHaveLength(3);
-    expect(functionResults).toHaveLength(3);
-    expect(functionCalls.map((m) => m.call_id).sort()).toEqual([
-      'call-a',
-      'call-b',
-      'call-c',
-    ]);
-    expect(functionResults.map((m) => m.call_id).sort()).toEqual([
-      'call-a',
-      'call-b',
-      'call-c',
-    ]);
+    expectPairedToolResults(shared, ['call-b', 'call-c']);
 
     // The call that finished before the interrupt keeps its real output.
-    const executedResult = functionResults.find((m) => m.call_id === 'call-a');
+    const executedResult = messagesOfType(shared, 'function_call_output').find(
+      (m) => m.call_id === 'call-a',
+    );
     expect(executedResult?.output).toContain('toolA done');
-
-    // Aborted mid-flight and never started both surface as cancelled.
-    for (const callId of ['call-b', 'call-c']) {
-      const cancelledResult = functionResults.find((m) => m.call_id === callId);
-      expect(cancelledResult?.output).toContain('"status":"error"');
-      expect(cancelledResult?.output.toLowerCase()).toContain('cancelled');
-    }
   });
 
   it('synthesizes cancelled tool_results for every requested call when interruption is detected in dispatch prep() before any call executes', async () => {
@@ -253,28 +239,8 @@ describe('ToolUseDispatchNode interruption', () => {
     // The pending calls must be cleared, not left dangling on shared state.
     expect(shared.toolCalls).toEqual([]);
 
-    const functionCalls = messagesOfType(shared, 'function_call');
-    const functionResults = messagesOfType(shared, 'function_call_output');
-
     // Every tool_use block the model requested must still be paired with a
     // tool_result, even though prep() never dispatched any of them.
-    expect(functionCalls).toHaveLength(3);
-    expect(functionResults).toHaveLength(3);
-    expect(functionCalls.map((m) => m.call_id).sort()).toEqual([
-      'call-a',
-      'call-b',
-      'call-c',
-    ]);
-    expect(functionResults.map((m) => m.call_id).sort()).toEqual([
-      'call-a',
-      'call-b',
-      'call-c',
-    ]);
-
-    for (const callId of ['call-a', 'call-b', 'call-c']) {
-      const cancelledResult = functionResults.find((m) => m.call_id === callId);
-      expect(cancelledResult?.output).toContain('"status":"error"');
-      expect(cancelledResult?.output.toLowerCase()).toContain('cancelled');
-    }
+    expectPairedToolResults(shared, ALL_CALL_IDS);
   });
 });

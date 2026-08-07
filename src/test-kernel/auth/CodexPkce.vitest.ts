@@ -48,8 +48,9 @@ describe('codex PKCE', () => {
   it('derives the challenge as base64url(SHA-256(verifier))', () => {
     const verifier = 'fixed-test-verifier-value';
     const expected = createHash('sha256').update(verifier).digest('base64url');
-    expect(computeCodeChallenge(verifier)).toBe(expected);
-    expect(computeCodeChallenge(verifier)).toMatch(BASE64URL);
+    const challenge = computeCodeChallenge(verifier);
+    expect(challenge).toBe(expected);
+    expect(challenge).toMatch(BASE64URL);
   });
 
   it('produces a matching S256 pair', () => {
@@ -78,24 +79,22 @@ describe('codex model eligibility', () => {
   // deprecation exceptions) inferred serving status from proxies and broke
   // when they diverged: GPT-5.6 ships with a `medium` default effort, failed
   // the tier gate, and silently fell back to the user's API key.
-  it('accepts an OpenAI model the registry flags as Codex-served', () => {
-    expect(
-      isCodexSubscriptionEligible(
-        openAIModel({
+  it.each<{ name: string; overrides: Partial<ModelConfig>; eligible: boolean }>(
+    [
+      {
+        name: 'accepts an OpenAI model the registry flags as Codex-served',
+        overrides: {
           fullName: 'gpt-5.6-sol',
           shortName: 'gpt-5.6',
           codexSubscription: true,
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it('accepts a flagged model regardless of reasoning-effort tier', () => {
-    // GPT-5.6's registry default effort is medium — the exact case the old
-    // top-tier heuristic misrouted to the API-key path.
-    expect(
-      isCodexSubscriptionEligible(
-        openAIModel({
+        },
+        eligible: true,
+      },
+      {
+        // GPT-5.6's registry default effort is medium — the exact case the old
+        // top-tier heuristic misrouted to the API-key path.
+        name: 'accepts a flagged model regardless of reasoning-effort tier',
+        overrides: {
           fullName: 'gpt-5.6-sol',
           shortName: 'gpt-5.6',
           codexSubscription: true,
@@ -103,72 +102,63 @@ describe('codex model eligibility', () => {
             ...DEFAULT_MODEL_CAPABILITIES,
             reasoningEffort: ReasoningEffort.MEDIUM,
           },
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it('accepts a flagged model regardless of deprecation status', () => {
-    // gpt-5.5 is marked deprecated in the registry but the Codex backend
-    // still serves it — the flag records serving status directly, so no
-    // deprecated-exception table is needed.
-    expect(
-      isCodexSubscriptionEligible(
-        openAIModel({
+        },
+        eligible: true,
+      },
+      {
+        // gpt-5.5 is marked deprecated in the registry but the Codex backend
+        // still serves it — the flag records serving status directly, so no
+        // deprecated-exception table is needed.
+        name: 'accepts a flagged model regardless of deprecation status',
+        overrides: {
           fullName: 'gpt-5.5-2026-04-23',
           shortName: 'gpt-5.5',
           deprecated: true,
           codexSubscription: true,
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it('rejects an unflagged model even when every old-heuristic proxy matches', () => {
-    // Top reasoning tier + `codex` name + live: everything the old heuristic
-    // trusted. Absent the registry flag, it must not route to Codex.
-    expect(
-      isCodexSubscriptionEligible(
-        openAIModel({
+        },
+        eligible: true,
+      },
+      {
+        // Top reasoning tier + `codex` name + live: everything the old heuristic
+        // trusted. Absent the registry flag, it must not route to Codex.
+        name: 'rejects an unflagged model even when every old-heuristic proxy matches',
+        overrides: {
           fullName: 'gpt-5.9-codex',
           shortName: 'gpt-5.9-codex',
           capabilities: {
             ...DEFAULT_MODEL_CAPABILITIES,
             reasoningEffort: ReasoningEffort.MAX,
           },
-        }),
-      ),
-    ).toBe(false);
-  });
-
-  it('rejects the API-only gpt-5.4-nano (unflagged in the registry)', () => {
-    expect(
-      isCodexSubscriptionEligible(
-        openAIModel({
+        },
+        eligible: false,
+      },
+      {
+        name: 'rejects the API-only gpt-5.4-nano (unflagged in the registry)',
+        overrides: {
           fullName: 'gpt-5.4-nano-2026-03-17',
           shortName: 'gpt-5.4-nano',
           capabilities: {
             ...DEFAULT_MODEL_CAPABILITIES,
             reasoningEffort: ReasoningEffort.XHIGH,
           },
-        }),
-      ),
-    ).toBe(false);
-  });
-
-  // The provider guard must live inside the function itself, not only in
-  // callers — a non-OpenAI ModelConfig must never resolve eligible, even if
-  // a future registry mistake flags one.
-  it('rejects a non-OpenAI model even when flagged', () => {
-    expect(
-      isCodexSubscriptionEligible(
-        openAIModel({
+        },
+        eligible: false,
+      },
+      {
+        // The provider guard must live inside the function itself, not only in
+        // callers — a non-OpenAI ModelConfig must never resolve eligible, even if
+        // a future registry mistake flags one.
+        name: 'rejects a non-OpenAI model even when flagged',
+        overrides: {
           provider: ModelProvider.ANTHROPIC,
           fullName: 'claude-codex-lookalike',
           shortName: 'claude-codex-lookalike',
           codexSubscription: true,
-        }),
-      ),
-    ).toBe(false);
+        },
+        eligible: false,
+      },
+    ],
+  )('$name', ({ overrides, eligible }) => {
+    expect(isCodexSubscriptionEligible(openAIModel(overrides))).toBe(eligible);
   });
 });

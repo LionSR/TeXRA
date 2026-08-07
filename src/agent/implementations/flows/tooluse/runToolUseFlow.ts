@@ -535,7 +535,7 @@ export async function runToolUseFlow<C = unknown>(
     // confirmed or a present record passed its migration boundary.
     persistenceRecoveryPending = false;
 
-    let resumedFollowUps = [
+    let resumedFollowUps: readonly FollowUpQueueBatchItem[] = [
       ...(input.drainedFollowUps ?? []),
       ...attachmentFollowUps,
     ];
@@ -589,7 +589,7 @@ export async function runToolUseFlow<C = unknown>(
       // reporting `sent`; the immediately following drain therefore cannot
       // miss input in a gap between its empty check and final teardown.
       liveAttachment.detach();
-      resumedFollowUps = [...(input.takePendingFollowUps?.() ?? [])];
+      resumedFollowUps = input.takePendingFollowUps?.() ?? [];
       if (resumedFollowUps.length > 0) liveAttachment.attach();
     } while (resumedFollowUps.length > 0);
 
@@ -689,28 +689,22 @@ export async function runToolUseFlow<C = unknown>(
   // reach the caller; only an otherwise successful exit surfaces a teardown
   // failure as the run's failure.
   const carriedError = shared.lastError;
-  if (primaryFailure || carriedError) {
-    for (const failure of teardownFailures) {
-      logSdkError(
-        logger,
-        `Tool-use teardown failed while ${failure.operation}`,
-        failure.error,
-      );
-    }
-    if (primaryFailure) throw primaryFailure.error;
-  } else {
-    const [firstTeardownFailure, ...additionalTeardownFailures] =
-      teardownFailures;
-    for (const failure of additionalTeardownFailures) {
-      logSdkError(
-        logger,
-        `Tool-use teardown failed while ${failure.operation}`,
-        failure.error,
-      );
-    }
-    if (firstTeardownFailure) {
-      throw firstTeardownFailure.error;
-    }
+  const runAlreadyFailed =
+    primaryFailure !== undefined || carriedError !== undefined;
+  const [firstTeardownFailure, ...restTeardownFailures] = teardownFailures;
+  const failuresToLog = runAlreadyFailed
+    ? teardownFailures
+    : restTeardownFailures;
+  for (const failure of failuresToLog) {
+    logSdkError(
+      logger,
+      `Tool-use teardown failed while ${failure.operation}`,
+      failure.error,
+    );
+  }
+  if (primaryFailure) throw primaryFailure.error;
+  if (!runAlreadyFailed && firstTeardownFailure) {
+    throw firstTeardownFailure.error;
   }
   if (earlyResult) return earlyResult;
 

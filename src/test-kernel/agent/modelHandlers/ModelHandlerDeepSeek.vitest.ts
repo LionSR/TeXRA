@@ -32,6 +32,12 @@ function createHandler(overrides: ConfigOverrides = {}): ModelHandlerDeepSeek {
   );
 }
 
+function reasoningHandler(): ModelHandlerDeepSeek {
+  return createHandler({
+    capabilities: { supportsReasoning: true, supportsVision: false },
+  });
+}
+
 function thinkingFor(
   fullName: string,
   supportsReasoning: boolean,
@@ -48,6 +54,34 @@ function supportsForcedToolChoice(supportsReasoning: boolean): boolean {
     fullName: supportsReasoning ? 'deepseek-v4-pro' : 'deepseek-chat',
     capabilities: { supportsReasoning },
   }).supportsForcedToolChoice;
+}
+
+function thinkingWorkspace(...blocks: string[]) {
+  return {
+    reasoning: {
+      thinkingBlocks: blocks.map((thinking) => ({
+        type: 'thinking',
+        thinking,
+      })),
+    },
+    resetReasoning() {
+      this.reasoning.thinkingBlocks = [];
+    },
+  };
+}
+
+function executedToolEntry(callId: string, toolName: string, output: string) {
+  return {
+    call: {
+      raw: {
+        id: callId,
+        type: 'function',
+        function: { name: toolName, arguments: '{}' },
+      },
+    },
+    result: { status: 'executed', output },
+    attachments: [],
+  };
 }
 
 /**
@@ -258,51 +292,15 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('passes back content and reasoning_content in tool-call messages', async () => {
-    const handler = createHandler({
-      capabilities: {
-        supportsReasoning: true,
-        supportsVision: false,
-      },
-    });
-    const workspace = {
-      reasoning: {
-        thinkingBlocks: [
-          { type: 'thinking', thinking: 'Need to call both tools.' },
-        ],
-      },
-      resetReasoning() {
-        this.reasoning.thinkingBlocks = [];
-      },
-    };
-
-    const messages = await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: {
-            raw: {
-              id: 'call_1',
-              type: 'function',
-              function: { name: 'first_tool', arguments: '{}' },
-            },
-          },
-          result: { status: 'executed', output: 'first result' },
-          attachments: [],
-        },
-        {
-          call: {
-            raw: {
-              id: 'call_2',
-              type: 'function',
-              function: { name: 'second_tool', arguments: '{}' },
-            },
-          },
-          result: { status: 'executed', output: 'second result' },
-          attachments: [],
-        },
-      ] as any,
-      workspace as any,
-      '',
-    );
+    const messages =
+      await reasoningHandler().createBatchedToolUseFollowUpMessages(
+        [
+          executedToolEntry('call_1', 'first_tool', 'first result'),
+          executedToolEntry('call_2', 'second_tool', 'second result'),
+        ] as any,
+        thinkingWorkspace('Need to call both tools.') as any,
+        '',
+      );
 
     assert.equal(messages.length, 3);
     assert.equal(messages[0].role, 'assistant');
@@ -318,38 +316,12 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('includes empty reasoning_content in tool-call messages when model generated none', async () => {
-    const handler = createHandler({
-      capabilities: {
-        supportsReasoning: true,
-        supportsVision: false,
-      },
-    });
-    const workspace = {
-      reasoning: {
-        thinkingBlocks: [] as Array<{ type: string; thinking: string }>,
-      },
-      resetReasoning() {
-        this.reasoning.thinkingBlocks = [];
-      },
-    };
-
-    const messages = await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: {
-            raw: {
-              id: 'call_1',
-              type: 'function',
-              function: { name: 'some_tool', arguments: '{}' },
-            },
-          },
-          result: { status: 'executed', output: 'result' },
-          attachments: [],
-        },
-      ] as any,
-      workspace as any,
-      '',
-    );
+    const messages =
+      await reasoningHandler().createBatchedToolUseFollowUpMessages(
+        [executedToolEntry('call_1', 'some_tool', 'result')] as any,
+        thinkingWorkspace() as any,
+        '',
+      );
 
     assert.equal(messages.length, 2);
     assert.equal(messages[0].role, 'assistant');
@@ -358,12 +330,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('passes back response reasoning_content on final assistant messages', () => {
-    const handler = createHandler({
-      capabilities: {
-        supportsReasoning: true,
-        supportsVision: false,
-      },
-    });
     const response = {
       choices: [
         {
@@ -376,7 +342,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       ],
     };
 
-    const message = handler.createAssistantMessageFromResponse(
+    const message = reasoningHandler().createAssistantMessageFromResponse(
       response as any,
       'final answer',
     );
@@ -390,12 +356,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('includes empty reasoning_content on final assistant messages when model generated none', () => {
-    const handler = createHandler({
-      capabilities: {
-        supportsReasoning: true,
-        supportsVision: false,
-      },
-    });
     const response = {
       choices: [
         {
@@ -408,7 +368,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       ],
     };
 
-    const message = handler.createAssistantMessageFromResponse(
+    const message = reasoningHandler().createAssistantMessageFromResponse(
       response as any,
       'final answer',
     );

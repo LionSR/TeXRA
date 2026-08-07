@@ -270,7 +270,7 @@ export async function requestToolEditApproval(
     };
   }
 
-  return session.approvals.toolEdit.enqueue(streamId ?? undefined, {
+  return session.approvals.toolEdit.enqueue(streamId, {
     prompt: async () => {
       const hostInteraction =
         session.interactions.requestToolEditApproval(preparedRequest);

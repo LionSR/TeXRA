@@ -92,14 +92,6 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
   });
 });
 
-function buildResumeShared() {
-  return createToolUseResumeShared({
-    messages: [
-      { role: 'system', content: [{ type: 'text', text: 'stale system' }] },
-    ],
-  });
-}
-
 describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
   it('keeps the persisted message prefix while rebuilding the per-call system prompt', async () => {
     // Rewriting the persisted system message on every resume to reflect
@@ -109,7 +101,11 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     // a mid-run agent-config edit does not propagate into an
     // already-suspended run's prefix. The separate per-call system prompt,
     // however, must still be rebuilt from the current prompt configuration.
-    const resumeShared = buildResumeShared();
+    const resumeShared = createToolUseResumeShared({
+      messages: [
+        { role: 'system', content: [{ type: 'text', text: 'stale system' }] },
+      ],
+    });
     const services = buildServices({ resumeShared });
     const node = new ToolUsePrepareNode().setServices(services);
     const resolvedToolNames = services.setting.tools.map((tool) => tool.name);

@@ -99,7 +99,7 @@ describe('createWorkflowScriptStrategy', () => {
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
-        createRunAgent: (hooks) => billingRunAgent(hooks),
+        createRunAgent: billingRunAgent,
       }),
     );
     expect(strategy.isTerminal({} as never)).toBe(true);
@@ -112,7 +112,7 @@ describe('createWorkflowScriptStrategy', () => {
       strategyParams({
         name: 'strategy-test',
         deliveryMode: 'persistOnly',
-        createRunAgent: (hooks) => billingRunAgent(hooks),
+        createRunAgent: billingRunAgent,
       }),
     );
 
@@ -125,7 +125,7 @@ describe('createWorkflowScriptStrategy', () => {
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
-        createRunAgent: (hooks) => billingRunAgent(hooks),
+        createRunAgent: billingRunAgent,
       }),
     );
 
@@ -191,7 +191,7 @@ describe('createWorkflowScriptStrategy', () => {
 }
 return args`,
         args: { question: 'What is conserved?' },
-        createRunAgent: (hooks) => billingRunAgent(hooks),
+        createRunAgent: billingRunAgent,
       }),
     );
 
@@ -220,7 +220,7 @@ return args`;
         name: 'retained-arguments',
         script: `${argsScript}\n// revised retry`,
         args: null,
-        createRunAgent: (hooks) => billingRunAgent(hooks),
+        createRunAgent: billingRunAgent,
       }),
     );
 
@@ -240,7 +240,7 @@ return args`;
 for (let index = 0; index < 100; index += 1) log('line-' + index)
 log('oversized\\n' + 'x'.repeat(2_000))
 return 'done'`,
-        createRunAgent: (hooks) => billingRunAgent(hooks),
+        createRunAgent: billingRunAgent,
       }),
     );
 

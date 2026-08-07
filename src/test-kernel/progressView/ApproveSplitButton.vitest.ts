@@ -39,6 +39,21 @@ function recordEvents(element: ApproveSplitButton): string[] {
   return events;
 }
 
+function clickApproveButton(element: ApproveSplitButton): void {
+  element.shadowRoot
+    ?.querySelector<HTMLElement>('wa-button[data-action="approve"]')
+    ?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
+}
+
+function selectMenuItem(element: ApproveSplitButton, value: string): void {
+  element.shadowRoot?.querySelector('.approve-split-menu')?.dispatchEvent(
+    new CustomEvent('wa-select', {
+      detail: { item: { value } },
+      bubbles: true,
+    }),
+  );
+}
+
 describe('approve-split-button', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/ApproveSplitButton'),
@@ -51,11 +66,11 @@ describe('approve-split-button', () => {
     expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
     expect(element.shadowRoot?.querySelector('wa-dropdown-item')).toBeFalsy();
 
-    const approve = element.shadowRoot?.querySelector<HTMLElement>(
+    const approve = element.shadowRoot?.querySelector(
       'wa-button[data-action="approve"]',
     );
     expect(approve).toBeTruthy();
-    approve?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
+    clickApproveButton(element);
     expect(events).toEqual(['approve']);
   });
 
@@ -85,10 +100,7 @@ describe('approve-split-button', () => {
     const element = await mount({ canBypass: true });
     const events = recordEvents(element);
 
-    const approve = element.shadowRoot?.querySelector<HTMLElement>(
-      'wa-button[data-action="approve"]',
-    );
-    approve?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
+    clickApproveButton(element);
     expect(events).toEqual(['approve']);
   });
 
@@ -99,20 +111,10 @@ describe('approve-split-button', () => {
     expect(menu).toBeTruthy();
 
     // An unrecognized menu value is a no-op.
-    menu?.dispatchEvent(
-      new CustomEvent('wa-select', {
-        detail: { item: { value: 'nope' } },
-        bubbles: true,
-      }),
-    );
+    selectMenuItem(element, 'nope');
     expect(events).toEqual([]);
 
-    menu?.dispatchEvent(
-      new CustomEvent('wa-select', {
-        detail: { item: { value: 'approve-session' } },
-        bubbles: true,
-      }),
-    );
+    selectMenuItem(element, 'approve-session');
     expect(events).toEqual(['approve-session']);
   });
 
@@ -131,13 +133,7 @@ describe('approve-split-button', () => {
       DELEGATION_APPROVAL_COPY.progressViewExplanation,
     );
     expect(tooltip?.textContent).not.toMatch(/stream|yolo/i);
-    const menu = element.shadowRoot?.querySelector('.approve-split-menu');
-    menu?.dispatchEvent(
-      new CustomEvent('wa-select', {
-        detail: { item: { value: 'approve-all-delegated-work' } },
-        bubbles: true,
-      }),
-    );
+    selectMenuItem(element, 'approve-all-delegated-work');
     expect(events).toEqual(['approve-all-delegated-work']);
   });
 });

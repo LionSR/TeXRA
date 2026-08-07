@@ -115,44 +115,42 @@ describe('settings history handlers', () => {
     expect(message.historyItems.map((item) => item.id)).toEqual(['abc123']);
   });
 
-  it('reports a resumable run as resumable rather than by its terminal outcome', async () => {
+  it.each([
+    [
+      'reports a resumable run as resumable rather than by its terminal outcome',
+      {
+        resumable: true,
+        cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+        flowRecord: { flowName: 'tooluse', params: {}, shared: {}, nodes: [] },
+        outcome: RUN_OUTCOME.CANCELLED,
+      },
+      HISTORY_RUN_STATUS.RESUMABLE,
+    ],
+    [
+      'keeps cancelled distinct from failed and completed',
+      {
+        resumable: false,
+        cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+        outcome: RUN_OUTCOME.CANCELLED,
+      },
+      HISTORY_RUN_STATUS.CANCELLED,
+    ],
+    [
+      // Crash-masking guard, matching the CLI: an absent outcome means the
+      // run never reached its terminal write (crash, kill, old build).
+      'reports a run whose terminal write never landed as unknown, not completed',
+      {
+        resumable: false,
+        cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      },
+      HISTORY_RUN_STATUS.UNKNOWN,
+    ],
+  ])('%s', async (_name, resumability, expectedStatus) => {
     mocks.listExecutions.mockResolvedValue([toolUseExecution]);
-    mocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
-      flowRecord: { flowName: 'tooluse', params: {}, shared: {}, nodes: [] },
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
+    mocks.deriveResumability.mockResolvedValue(resumability);
 
     const message = await buildHistoryMessage();
 
-    expect(message.historyItems[0]?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-  });
-
-  it('keeps cancelled distinct from failed and completed', async () => {
-    mocks.listExecutions.mockResolvedValue([toolUseExecution]);
-    mocks.deriveResumability.mockResolvedValue({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-
-    const message = await buildHistoryMessage();
-
-    expect(message.historyItems[0]?.status).toBe(HISTORY_RUN_STATUS.CANCELLED);
-  });
-
-  it('reports a run whose terminal write never landed as unknown, not completed', async () => {
-    // Crash-masking guard, matching the CLI: an absent outcome means the run
-    // never reached its terminal write (crash, kill, old build).
-    mocks.listExecutions.mockResolvedValue([toolUseExecution]);
-    mocks.deriveResumability.mockResolvedValue({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
-    });
-
-    const message = await buildHistoryMessage();
-
-    expect(message.historyItems[0]?.status).toBe(HISTORY_RUN_STATUS.UNKNOWN);
+    expect(message.historyItems[0]?.status).toBe(expectedStatus);
   });
 });

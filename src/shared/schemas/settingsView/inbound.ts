@@ -54,7 +54,7 @@ const SubmittedApiKeySchema = z
   .string()
   .trim()
   .optional()
-  .transform((v) => (v ? v : undefined));
+  .transform((v) => v || undefined);
 
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
@@ -327,7 +327,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
   [
     // Lifecycle
     WebviewReadyMessageSchema,
-    // Navigation messages
     // Tool dashboard messages
     OpenToolInstallUrlMessageSchema,
     InstallToolExtensionMessageSchema,

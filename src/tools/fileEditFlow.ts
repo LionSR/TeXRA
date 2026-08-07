@@ -177,10 +177,10 @@ export function replaceLiteralMatches({
   const lineNumbers = findOccurrenceLineNumbers(content, search);
   const firstMatchIndex = content.indexOf(search);
   if (mode === 'unique' && count > 1) {
-    if (!multipleMatchesError) {
-      throw new ToolError('The text to replace must be unique.');
-    }
-    throw new ToolError(multipleMatchesError({ count, lineNumbers }));
+    throw new ToolError(
+      multipleMatchesError?.({ count, lineNumbers }) ??
+        'The text to replace must be unique.',
+    );
   }
 
   return {

@@ -32,6 +32,13 @@ import type { StreamLogStore } from '@transcript';
 const streamA = 'stream-a' as StreamTabId;
 const streamB = 'stream-b' as StreamTabId;
 
+function streamEntryTexts(streamId: StreamTabId): string[] | undefined {
+  return streams
+    .get()
+    .get(streamId)
+    ?.entries.map((e) => e.text);
+}
+
 function appendUserMessage(
   store: StreamLogStore,
   streamId: StreamTabId,
@@ -77,12 +84,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     appendUserMessage(store, streamB, 'b-1', 'world');
     vi.advanceTimersByTime(11);
 
-    expect(
-      streams
-        .get()
-        .get(streamA)
-        ?.entries.map((e) => e.text),
-    ).toEqual(['hello']);
+    expect(streamEntryTexts(streamA)).toEqual(['hello']);
     expect(streams.get().get(streamB)).toMatchObject({
       latestLine: 'world',
       entries: [],
@@ -113,12 +115,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     appendUserMessage(store, streamA, 'a-1', 'hello again');
     vi.advanceTimersByTime(16);
 
-    expect(
-      streams
-        .get()
-        .get(streamA)
-        ?.entries.map((e) => e.text),
-    ).toEqual(['hello again']);
+    expect(streamEntryTexts(streamA)).toEqual(['hello again']);
 
     secondDispose();
   });

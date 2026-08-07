@@ -39,6 +39,14 @@ function createToolEditApprovals() {
   };
 }
 
+const STREAM_A = 'stream-a' as StreamTabId;
+const STREAM_B = 'stream-b' as StreamTabId;
+
+const NORMALIZATION_QUESTION = {
+  question: 'Which normalization should be used?',
+  options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
+};
+
 const testSessions: SessionHandle[] = [];
 
 afterEach(() => {
@@ -164,42 +172,39 @@ describe('createExtensionHostInteractions', () => {
       session,
     });
 
-    const initiatingProposal = interactions.requestAgentProposal?.({
-      proposalId: 'proposal-current',
-      streamId: 'stream-a' as StreamTabId,
-      agent: 'assistant',
-      model: 'gpt-5',
-      instruction: 'Begin the calculation.',
-      memories: [],
-      workingDirectory: null,
-      agentSource: null,
-      agentCategory: 'toolUse',
-    });
-    const parallelProposal = interactions.requestAgentProposal?.({
-      proposalId: 'proposal-parallel',
-      streamId: 'stream-a' as StreamTabId,
-      agent: 'assistant',
-      model: 'gpt-5',
-      instruction: 'Check the calculation.',
-      memories: [],
-      workingDirectory: null,
-      agentSource: null,
-      agentCategory: 'toolUse',
-    });
+    function requestProposal(proposalId: string, instruction: string) {
+      return interactions.requestAgentProposal?.({
+        proposalId,
+        streamId: STREAM_A,
+        agent: 'assistant',
+        model: 'gpt-5',
+        instruction,
+        memories: [],
+        workingDirectory: null,
+        agentSource: null,
+        agentCategory: 'toolUse',
+      });
+    }
+
+    const initiatingProposal = requestProposal(
+      'proposal-current',
+      'Begin the calculation.',
+    );
+    const parallelProposal = requestProposal(
+      'proposal-parallel',
+      'Check the calculation.',
+    );
     const parallelBash = interactions.requestBashApproval?.({
       command: 'lake build',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
     });
     const otherStream = interactions.requestBashApproval?.({
       command: 'npm test',
-      streamId: 'stream-b' as StreamTabId,
+      streamId: STREAM_B,
     });
 
     await expect(
-      interactions.approvePendingDelegatedWork(
-        'stream-a' as StreamTabId,
-        'proposal-current',
-      ),
+      interactions.approvePendingDelegatedWork(STREAM_A, 'proposal-current'),
     ).resolves.toBeUndefined();
     await expect(parallelProposal).resolves.toEqual({ action: 'approve' });
     await expect(parallelBash).resolves.toEqual({ action: 'approve' });
@@ -246,7 +251,7 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.requestPlanApproval?.({
       approvalId: 'plan-a',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       goalEnabled: true,
       plan: { objective: 'Prove the compactness lemma.' },
     });
@@ -305,7 +310,7 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.requestPlanApproval?.({
       approvalId: 'plan-show-failure',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       goalEnabled: false,
       plan: { objective: 'Fail before becoming pending.' },
     });
@@ -363,37 +368,28 @@ describe('createExtensionHostInteractions', () => {
     });
     const first = interactions.requestRetry?.({
       requestId: 'retry:first',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       operation: 'First model invocation',
     });
     const replacement = interactions.requestRetry?.({
       requestId: 'retry:replacement',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       operation: 'Replacement model invocation',
     });
 
     await expect(first).resolves.toEqual({ action: 'cancel' });
     expect(
-      interactions.submitRetryDecision(
-        'stream-a' as StreamTabId,
-        'retry:first',
-        {
-          action: 'retry',
-        },
-      ),
+      interactions.submitRetryDecision(STREAM_A, 'retry:first', {
+        action: 'retry',
+      }),
     ).toBe(false);
+    expect(interactions.isRetryPending(STREAM_A, 'retry:replacement')).toBe(
+      true,
+    );
     expect(
-      interactions.isRetryPending(
-        'stream-a' as StreamTabId,
-        'retry:replacement',
-      ),
-    ).toBe(true);
-    expect(
-      interactions.submitRetryDecision(
-        'stream-a' as StreamTabId,
-        'retry:replacement',
-        { action: 'retry' },
-      ),
+      interactions.submitRetryDecision(STREAM_A, 'retry:replacement', {
+        action: 'retry',
+      }),
     ).toBe(true);
     await expect(replacement).resolves.toEqual({ action: 'retry' });
   });
@@ -407,7 +403,7 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.requestRetry?.({
       requestId: 'retry:removed-stream',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       operation: 'Model invocation',
     });
 
@@ -422,7 +418,7 @@ describe('createExtensionHostInteractions', () => {
     const { interactions, toolEditApprovals } = createInteractions({ session });
     const selector = {
       kind: 'toolEdit' as const,
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       cause: 'Stream resources released.',
     };
 
@@ -438,11 +434,11 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.requestBashApproval?.({
       command: 'rm -rf build',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
     });
 
     interactions.cancel({
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       cause: 'Stream resources released.',
     });
 
@@ -460,7 +456,7 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.requestBashApproval?.({
       command: 'echo hi',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
     });
     const requestId = firstShowRequestId(handlers.transport.bash.show);
 
@@ -485,12 +481,12 @@ describe('createExtensionHostInteractions', () => {
 
     const retryPromise = interactions.requestRetry?.({
       requestId: 'retry:scoped-cancel',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       operation: 'Model invocation',
     });
     const planPromise = interactions.requestPlanApproval?.({
       approvalId: 'plan-a',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       goalEnabled: false,
       plan: { objective: 'Survive a retry-scoped cancel.' },
     });
@@ -498,7 +494,7 @@ describe('createExtensionHostInteractions', () => {
     // The stop-stream path: clear the retry panel without disturbing other
     // pending interactions on the same stream.
     interactions.cancel({
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
       kind: 'retry',
       cause: 'Retry request cleared.',
     });
@@ -528,7 +524,7 @@ describe('createExtensionHostInteractions', () => {
         threadId: 'thread-a',
         question: 'Which convention should be used?',
         allowBypass: false,
-        streamId: 'stream-a' as StreamTabId,
+        streamId: STREAM_A,
         mode: 'new',
       }),
     ).resolves.toEqual({ threadId: 'thread-a' });
@@ -554,12 +550,7 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.askUserQuestion?.({
       requestId: 'question-a',
-      questions: [
-        {
-          question: 'Which normalization should be used?',
-          options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
-        },
-      ],
+      questions: [NORMALIZATION_QUESTION],
       allowBypass: false,
       streamId: '',
     });
@@ -594,14 +585,9 @@ describe('createExtensionHostInteractions', () => {
 
     const resultPromise = interactions.askUserQuestion?.({
       requestId: 'question-submit',
-      questions: [
-        {
-          question: 'Which normalization should be used?',
-          options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
-        },
-      ],
+      questions: [NORMALIZATION_QUESTION],
       allowBypass: false,
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
     });
     const answers = { normalization: 'unit volume' };
 
@@ -631,7 +617,7 @@ describe('createExtensionHostInteractions', () => {
       originalContent: 'A',
       proposedContent: 'B',
       sourceTool: 'edit',
-      streamId: 'stream-a' as StreamTabId,
+      streamId: STREAM_A,
     };
 
     await expect(interactions.requestToolEditApproval?.(request)).resolves.toBe(

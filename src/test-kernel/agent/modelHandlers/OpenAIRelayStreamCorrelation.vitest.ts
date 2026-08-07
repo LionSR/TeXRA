@@ -48,24 +48,42 @@ function createHandler(): TestModelHandlerOpenAI {
   return handler;
 }
 
+const PARTIAL_CHUNK = new TextEncoder().encode(
+  'data: {"id":"chatcmpl-test","object":"chat.completion.chunk","created":0,"model":"gpt-test","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}\n\n',
+);
+
+type FetchFn = NonNullable<ConstructorParameters<typeof OpenAI>[0]>['fetch'];
+
+function relayClient(fetch: FetchFn): OpenAI {
+  return new OpenAI({
+    apiKey: 'test-key',
+    baseURL: 'https://relay.test/openai/v1',
+    maxRetries: 0,
+    fetch,
+  });
+}
+
+async function captureError(run: Promise<unknown>): Promise<unknown> {
+  try {
+    await run;
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
+
 describe('OpenAI relay stream correlation', () => {
   it('retains the relay request id when the response body fails', async () => {
     const bodyError = new Error('response body failed');
-    const chunk = new TextEncoder().encode(
-      'data: {"id":"chatcmpl-test","object":"chat.completion.chunk","created":0,"model":"gpt-test","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}\n\n',
-    );
     let pullCount = 0;
-    const client = new OpenAI({
-      apiKey: 'test-key',
-      baseURL: 'https://relay.test/openai/v1',
-      maxRetries: 0,
-      fetch: async () =>
+    const client = relayClient(
+      async () =>
         new Response(
           new ReadableStream<Uint8Array>({
             pull(controller) {
               if (pullCount === 0) {
                 pullCount += 1;
-                controller.enqueue(chunk);
+                controller.enqueue(PARTIAL_CHUNK);
                 return;
               }
               controller.error(bodyError);
@@ -79,14 +97,9 @@ describe('OpenAI relay stream correlation', () => {
             },
           },
         ),
-    });
+    );
 
-    let caught: unknown;
-    try {
-      await createHandler().runStreaming(client);
-    } catch (error) {
-      caught = error;
-    }
+    const caught = await captureError(createHandler().runStreaming(client));
 
     expect(caught).toMatchObject({ request_id: 'relay-123' });
     expect(normalizeProviderError(caught).requestId).toBe('relay-123');
@@ -98,55 +111,39 @@ describe('OpenAI relay stream correlation', () => {
     const firstChunk = new Promise<void>((resolve) => {
       resolveFirstChunk = resolve;
     });
-    const chunk = new TextEncoder().encode(
-      'data: {"id":"chatcmpl-test","object":"chat.completion.chunk","created":0,"model":"gpt-test","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}\n\n',
-    );
     let sentChunk = false;
-    const client = new OpenAI({
-      apiKey: 'test-key',
-      baseURL: 'https://relay.test/openai/v1',
-      maxRetries: 0,
-      fetch: async (_input, init) => {
-        let bodyController:
-          ReadableStreamDefaultController<Uint8Array> | undefined;
-        const body = new ReadableStream<Uint8Array>({
-          start(controller) {
-            bodyController = controller;
-          },
-          pull(controller) {
-            if (!sentChunk) {
-              sentChunk = true;
-              controller.enqueue(chunk);
-              resolveFirstChunk?.();
-              return;
-            }
-            return new Promise<void>(() => {});
-          },
-        });
-        init?.signal?.addEventListener(
-          'abort',
-          () =>
-            bodyController?.error(new DOMException('aborted', 'AbortError')),
-          { once: true },
-        );
-        return new Response(body, {
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-        });
-      },
+    const client = relayClient(async (_input, init) => {
+      let bodyController:
+        ReadableStreamDefaultController<Uint8Array> | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          bodyController = controller;
+        },
+        pull(controller) {
+          if (!sentChunk) {
+            sentChunk = true;
+            controller.enqueue(PARTIAL_CHUNK);
+            resolveFirstChunk?.();
+            return;
+          }
+          return new Promise<void>(() => {});
+        },
+      });
+      init?.signal?.addEventListener(
+        'abort',
+        () => bodyController?.error(new DOMException('aborted', 'AbortError')),
+        { once: true },
+      );
+      return new Response(body, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
     });
 
     const run = createHandler().runStreaming(client, abortController.signal);
     await firstChunk;
     abortController.abort();
 
-    let caught: unknown;
-    try {
-      await run;
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(isUserAbort(caught)).toBe(true);
+    expect(isUserAbort(await captureError(run))).toBe(true);
   });
 });

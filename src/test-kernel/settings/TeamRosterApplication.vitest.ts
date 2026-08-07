@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
+import {
+  applyTeamRosterWithPreflight,
+  type TeamRosterApplicationDeps,
+} from '@common/teams/TeamRosterApplication';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
 const preset: AgentModePreset = {
@@ -31,6 +34,27 @@ const resolved = {
   unresolvedNames: [],
 };
 
+function makeDeps(
+  overrides: Partial<Omit<TeamRosterApplicationDeps, 'catalog'>> & {
+    catalog?: Partial<TeamRosterApplicationDeps['catalog']>;
+  } = {},
+): TeamRosterApplicationDeps {
+  const { catalog, ...rest } = overrides;
+  return {
+    catalog: {
+      resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
+      commitPresetResolution: vi.fn(),
+      ...catalog,
+    },
+    loadLocalCatalog: async () => {},
+    canAccessRemoteCatalog: async () => false,
+    choose: async () => 'cancel',
+    signIn: async () => false,
+    forceRefreshRemoteCatalog: async () => {},
+    ...rest,
+  };
+}
+
 describe('team roster application', () => {
   it('signs in, forces one refresh, and commits exactly once', async () => {
     const calls: string[] = [];
@@ -39,32 +63,34 @@ describe('team roster application', () => {
       calls.push('commit');
     });
 
-    const result = await applyTeamRosterWithPreflight('research', {
-      catalog: {
-        resolvePreset: () => ({
-          ok: true,
-          preset,
-          resolution: refreshed ? resolved : unresolved,
-        }),
-        commitPresetResolution,
-      },
-      loadLocalCatalog: async () => {
-        calls.push('local-load');
-      },
-      canAccessRemoteCatalog: async () => false,
-      choose: async () => {
-        calls.push('choose');
-        return 'sign-in';
-      },
-      signIn: async () => {
-        calls.push('sign-in');
-        return true;
-      },
-      forceRefreshRemoteCatalog: async () => {
-        calls.push('forced-refresh');
-        refreshed = true;
-      },
-    });
+    const result = await applyTeamRosterWithPreflight(
+      'research',
+      makeDeps({
+        catalog: {
+          resolvePreset: () => ({
+            ok: true,
+            preset,
+            resolution: refreshed ? resolved : unresolved,
+          }),
+          commitPresetResolution,
+        },
+        loadLocalCatalog: async () => {
+          calls.push('local-load');
+        },
+        choose: async () => {
+          calls.push('choose');
+          return 'sign-in';
+        },
+        signIn: async () => {
+          calls.push('sign-in');
+          return true;
+        },
+        forceRefreshRemoteCatalog: async () => {
+          calls.push('forced-refresh');
+          refreshed = true;
+        },
+      }),
+    );
 
     expect(result).toEqual({
       status: 'applied',
@@ -87,17 +113,14 @@ describe('team roster application', () => {
     const forceRefreshRemoteCatalog = vi.fn();
     const signIn = vi.fn();
 
-    const result = await applyTeamRosterWithPreflight('research', {
-      catalog: {
-        resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-        commitPresetResolution,
-      },
-      loadLocalCatalog: async () => {},
-      canAccessRemoteCatalog: async () => false,
-      choose: async () => 'cancel',
-      signIn,
-      forceRefreshRemoteCatalog,
-    });
+    const result = await applyTeamRosterWithPreflight(
+      'research',
+      makeDeps({
+        catalog: { commitPresetResolution },
+        signIn,
+        forceRefreshRemoteCatalog,
+      }),
+    );
 
     expect(result).toEqual({ status: 'cancelled', preset });
     expect(signIn).not.toHaveBeenCalled();
@@ -121,27 +144,26 @@ describe('team roster application', () => {
     );
     const commitPresetResolution = vi.fn();
 
-    const result = await applyTeamRosterWithPreflight('legacy', {
-      catalog: {
-        resolvePreset: () => ({
-          ok: true,
-          preset: legacyPreset,
-          resolution: {
-            keys: {
-              workflow: [],
-              toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+    const result = await applyTeamRosterWithPreflight(
+      'legacy',
+      makeDeps({
+        catalog: {
+          resolvePreset: () => ({
+            ok: true,
+            preset: legacyPreset,
+            resolution: {
+              keys: {
+                workflow: [],
+                toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+              },
+              unresolvedNames: ['remoteSpecialist'],
             },
-            unresolvedNames: ['remoteSpecialist'],
-          },
-        }),
-        commitPresetResolution,
-      },
-      loadLocalCatalog: async () => {},
-      canAccessRemoteCatalog: async () => false,
-      choose: async (_preset, names) => choose(names),
-      signIn: async () => false,
-      forceRefreshRemoteCatalog: async () => {},
-    });
+          }),
+          commitPresetResolution,
+        },
+        choose: async (_preset, names) => choose(names),
+      }),
+    );
 
     expect(result.status).toBe('cancelled');
     expect(choose).toHaveBeenCalledWith(['remoteSpecialist']);
@@ -163,27 +185,25 @@ describe('team roster application', () => {
       async (_names: readonly string[]) => 'cancel' as const,
     );
 
-    await applyTeamRosterWithPreflight('mixed-legacy', {
-      catalog: {
-        resolvePreset: () => ({
-          ok: true,
-          preset: legacyPreset,
-          resolution: {
-            keys: {
-              workflow: ['generic'],
-              toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+    await applyTeamRosterWithPreflight(
+      'mixed-legacy',
+      makeDeps({
+        catalog: {
+          resolvePreset: () => ({
+            ok: true,
+            preset: legacyPreset,
+            resolution: {
+              keys: {
+                workflow: ['generic'],
+                toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+              },
+              unresolvedNames: ['generic', 'remoteSpecialist'],
             },
-            unresolvedNames: ['generic', 'remoteSpecialist'],
-          },
-        }),
-        commitPresetResolution: vi.fn(),
-      },
-      loadLocalCatalog: async () => {},
-      canAccessRemoteCatalog: async () => false,
-      choose: async (_preset, names) => choose(names),
-      signIn: async () => false,
-      forceRefreshRemoteCatalog: async () => {},
-    });
+          }),
+        },
+        choose: async (_preset, names) => choose(names),
+      }),
+    );
 
     expect(choose).toHaveBeenCalledWith(['generic', 'remoteSpecialist']);
     expect(legacyPreset).not.toHaveProperty('texraHostedAgents');
@@ -194,18 +214,15 @@ describe('team roster application', () => {
     const signIn = vi.fn();
     const commitPresetResolution = vi.fn();
 
-    const result = await applyTeamRosterWithPreflight('research', {
-      catalog: {
-        resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-        commitPresetResolution,
-      },
-      loadLocalCatalog: async () => {},
-      canAccessRemoteCatalog: async () => false,
-      providedChoice: 'continue',
-      choose,
-      signIn,
-      forceRefreshRemoteCatalog: async () => {},
-    });
+    const result = await applyTeamRosterWithPreflight(
+      'research',
+      makeDeps({
+        catalog: { commitPresetResolution },
+        providedChoice: 'continue',
+        choose,
+        signIn,
+      }),
+    );
 
     expect(result).toEqual({
       status: 'applied',

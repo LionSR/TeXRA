@@ -26,18 +26,35 @@ const proposal = {
   memories: [],
 } satisfies AgentProposalPermission;
 
+function recordingHandlers(
+  messages: ProgressViewOutboundMessage[],
+  overrides: Parameters<typeof buildApprovalRequestHandlerSet>[0]['overrides'],
+): ApprovalRequestHandlerSet {
+  return buildApprovalRequestHandlerSet({
+    webviewUpdater: new WebviewUpdater(
+      (message) => messages.push(message),
+      () => true,
+    ),
+    canSend: () => true,
+    overrides,
+  });
+}
+
+/** A handler set whose only real member per kind is one spied method. */
+function spyHandlerSet(
+  method: string,
+  spies: Record<string, ReturnType<typeof vi.fn>>,
+): ApprovalRequestHandlerSet {
+  return Object.fromEntries(
+    Object.entries(spies).map(([kind, spy]) => [kind, { [method]: spy }]),
+  ) as unknown as ApprovalRequestHandlerSet;
+}
+
 describe('ApprovalRequestHandlerSet helpers', () => {
   it('uses the built-in permission transport for agent proposals by default', () => {
     const messages: ProgressViewOutboundMessage[] = [];
-    const handlers = buildApprovalRequestHandlerSet({
-      webviewUpdater: new WebviewUpdater(
-        (message) => messages.push(message),
-        () => true,
-      ),
-      canSend: () => true,
-      overrides: {
-        retry: { show: vi.fn(), dismiss: vi.fn() },
-      },
+    const handlers = recordingHandlers(messages, {
+      retry: { show: vi.fn(), dismiss: vi.fn() },
     });
 
     handlers.proposal.show(proposal);
@@ -60,16 +77,9 @@ describe('ApprovalRequestHandlerSet helpers', () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const show = vi.fn();
     const dismiss = vi.fn();
-    const handlers = buildApprovalRequestHandlerSet({
-      webviewUpdater: new WebviewUpdater(
-        (message) => messages.push(message),
-        () => true,
-      ),
-      canSend: () => true,
-      overrides: {
-        retry: { show: vi.fn(), dismiss: vi.fn() },
-        proposal: { show, dismiss },
-      },
+    const handlers = recordingHandlers(messages, {
+      retry: { show: vi.fn(), dismiss: vi.fn() },
+      proposal: { show, dismiss },
     });
 
     handlers.proposal.show(proposal);
@@ -97,12 +107,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
         return predicate(request, cancellationScope) ? 1 : 0;
       });
     }
-    const handlers = Object.fromEntries(
-      Object.entries(cancelWhere).map(([key, cancel]) => [
-        key,
-        { cancelWhere: cancel },
-      ]),
-    ) as unknown as ApprovalRequestHandlerSet;
+    const handlers = spyHandlerSet('cancelWhere', cancelWhere);
     const kinds = [
       'bash',
       'planApproval',
@@ -145,11 +150,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       keyof ApprovalRequestHandlerSet,
       ReturnType<typeof vi.fn>
     >;
-    const handlers = Object.fromEntries(
-      Object.entries(replayCalls).map(([key, replay]) => [key, { replay }]),
-    ) as {
-      [K in keyof typeof replayCalls]: { replay: (typeof replayCalls)[K] };
-    };
+    const handlers = spyHandlerSet('replay', replayCalls);
 
     await replayApprovalRequestHandlers(handlers);
 
@@ -171,12 +172,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       keyof ApprovalRequestHandlerSet,
       ReturnType<typeof vi.fn>
     >;
-    const handlers = Object.fromEntries(
-      Object.entries(hasPendingCalls).map(([key, hasPendingForStream]) => [
-        key,
-        { hasPendingForStream },
-      ]),
-    ) as unknown as ApprovalRequestHandlerSet;
+    const handlers = spyHandlerSet('hasPendingForStream', hasPendingCalls);
 
     const { hasPendingPermissions } = createProgressBackendUiConfig({
       handlers,

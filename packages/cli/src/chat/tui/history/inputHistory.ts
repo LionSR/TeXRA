@@ -4,7 +4,6 @@
 // single-JSON-blob format so partial writes never corrupt the history; the
 // session reader skips malformed lines silently.
 
-// Local imports - filesystem
 import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';

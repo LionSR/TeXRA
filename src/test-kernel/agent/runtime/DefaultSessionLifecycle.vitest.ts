@@ -20,6 +20,13 @@ beforeEach(() => {
   channelTraceMocks.warn.mockReset();
 });
 
+/** Fresh module instances per test (beforeEach resets the module registry). */
+async function importSessionRuntime() {
+  const sessionModule = await import('@agent/runtime/SessionHandle');
+  const { StreamLogStore } = await import('@transcript');
+  return { ...sessionModule, StreamLogStore };
+}
+
 describe('default session lifecycle', () => {
   it('warns once only when a non-default session is live at resolution', async () => {
     const {
@@ -27,8 +34,8 @@ describe('default session lifecycle', () => {
       defaultSession,
       initializeDefaultSession,
       teardownDefaultSession,
-    } = await import('@agent/runtime/SessionHandle');
-    const { StreamLogStore } = await import('@transcript');
+      StreamLogStore,
+    } = await importSessionRuntime();
     const processDefault = initializeDefaultSession({
       transcripts: StreamLogStore.ephemeral('process default'),
     });
@@ -72,8 +79,8 @@ describe('default session lifecycle', () => {
       defaultSession,
       initializeDefaultSession,
       teardownDefaultSession,
-    } = await import('@agent/runtime/SessionHandle');
-    const { StreamLogStore } = await import('@transcript');
+      StreamLogStore,
+    } = await importSessionRuntime();
     const processDefault = initializeDefaultSession({
       transcripts: StreamLogStore.ephemeral('process default'),
     });
@@ -92,9 +99,12 @@ describe('default session lifecycle', () => {
   });
 
   it('rejects access before explicit initialization', async () => {
-    const { defaultSession, initializeDefaultSession, teardownDefaultSession } =
-      await import('@agent/runtime/SessionHandle');
-    const { StreamLogStore } = await import('@transcript');
+    const {
+      defaultSession,
+      initializeDefaultSession,
+      teardownDefaultSession,
+      StreamLogStore,
+    } = await importSessionRuntime();
 
     expect(() => defaultSession()).toThrow(
       'The default session has not been initialized',
@@ -133,11 +143,10 @@ describe('default session lifecycle', () => {
   });
 
   it('resolves an explicitly threaded session without a process default', async () => {
-    const { SessionHandle, currentSession, tryDefaultSession } =
-      await import('@agent/runtime/SessionHandle');
+    const { SessionHandle, currentSession, tryDefaultSession, StreamLogStore } =
+      await importSessionRuntime();
     const { createRunContext, withRunContext } =
       await import('@agent/runtime/RunContext');
-    const { StreamLogStore } = await import('@transcript');
     const owned = new SessionHandle({
       transcripts: StreamLogStore.ephemeral('explicitly threaded session'),
     });
@@ -161,8 +170,8 @@ describe('default session lifecycle', () => {
       initializeDefaultSession,
       teardownDefaultSession,
       tryDefaultSession,
-    } = await import('@agent/runtime/SessionHandle');
-    const { StreamLogStore } = await import('@transcript/StreamLogStore');
+      StreamLogStore,
+    } = await importSessionRuntime();
 
     const first = initializeDefaultSession({
       transcripts: StreamLogStore.ephemeral('first activation'),

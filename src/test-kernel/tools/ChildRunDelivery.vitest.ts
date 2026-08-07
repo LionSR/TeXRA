@@ -86,25 +86,28 @@ describe('child run delivery', () => {
   });
 
   it('classifies missing and terminal parents', async () => {
+    function deliverToParent(followUp: {
+      text: string;
+    }): ReturnType<typeof deliverChildRunFollowUp> {
+      return deliverChildRunFollowUp({
+        targetStreamId: 'parent' as StreamTabId,
+        followUp,
+        session: {} as never,
+      });
+    }
+
     mocks.submitFollowUp.mockResolvedValueOnce({
       status: 'no_session',
       streamStatus: 'completed',
     });
-    await expect(
-      deliverChildRunFollowUp({
-        targetStreamId: 'parent' as StreamTabId,
-        followUp: { text: 'done' },
-        session: {} as never,
-      }),
-    ).resolves.toEqual({ kind: 'no_session', streamStatus: 'completed' });
+    await expect(deliverToParent({ text: 'done' })).resolves.toEqual({
+      kind: 'no_session',
+      streamStatus: 'completed',
+    });
 
     mocks.submitFollowUp.mockResolvedValueOnce({ status: 'dropped' });
-    await expect(
-      deliverChildRunFollowUp({
-        targetStreamId: 'parent' as StreamTabId,
-        followUp: { text: 'late' },
-        session: {} as never,
-      }),
-    ).resolves.toEqual({ kind: 'dropped' });
+    await expect(deliverToParent({ text: 'late' })).resolves.toEqual({
+      kind: 'dropped',
+    });
   });
 });

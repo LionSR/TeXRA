@@ -131,28 +131,27 @@ describe('ChatGPT subscription model routing', () => {
     resetCodexCoordinator();
   });
 
+  function subscriptionCapabilities(
+    useOpenRouter: boolean,
+    category?: AgentCategory,
+  ) {
+    return resolveCodexSubscriptionCapabilitiesForAgentCategory(
+      MODEL_CONFIGS.gpt55,
+      useOpenRouter,
+      category,
+    );
+  }
+
   it('keeps eligible OpenAI models on the direct API route when the preference is off', async () => {
     await installPlatform();
 
-    expect(
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        MODEL_CONFIGS.gpt55,
-        false,
-        AgentCategory.ToolUse,
-      ),
-    ).toBeNull();
+    expect(subscriptionCapabilities(false, AgentCategory.ToolUse)).toBeNull();
   });
 
   it('does not override OpenRouter routing', async () => {
     await installSubscriptionPlatform({ useOpenRouter: true });
 
-    expect(
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        MODEL_CONFIGS.gpt55,
-        true,
-        AgentCategory.ToolUse,
-      ),
-    ).toBeNull();
+    expect(subscriptionCapabilities(true, AgentCategory.ToolUse)).toBeNull();
     await expect(
       isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
     ).resolves.toBe(false);
@@ -162,11 +161,7 @@ describe('ChatGPT subscription model routing', () => {
     await installSubscriptionPlatform();
 
     expect(
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        MODEL_CONFIGS.gpt55,
-        false,
-        AgentCategory.ToolUse,
-      ),
+      subscriptionCapabilities(false, AgentCategory.ToolUse),
     ).not.toBeNull();
   });
 
@@ -174,19 +169,9 @@ describe('ChatGPT subscription model routing', () => {
     await installSubscriptionPlatform();
 
     expect(
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        MODEL_CONFIGS.gpt55,
-        false,
-        AgentCategory.Workflow,
-      ),
+      subscriptionCapabilities(false, AgentCategory.Workflow),
     ).not.toBeNull();
-    expect(
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        MODEL_CONFIGS.gpt55,
-        false,
-        undefined,
-      ),
-    ).not.toBeNull();
+    expect(subscriptionCapabilities(false, undefined)).not.toBeNull();
     await expect(
       isCodexSubscriptionActive('gpt55', AgentCategory.Workflow),
     ).resolves.toBe(true);

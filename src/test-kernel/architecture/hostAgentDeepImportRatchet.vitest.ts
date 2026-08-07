@@ -40,6 +40,10 @@ const HOST_DIRS: Record<Host, string> = {
 
 const AGENT_DEEP_IMPORT = /^@agent\//;
 
+function sortedSpecifiers(specifiers: Iterable<string>): string[] {
+  return [...specifiers].toSorted((a, b) => a.localeCompare(b));
+}
+
 function moduleSpecifiers(node: ts.Node): string[] {
   if (
     (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
@@ -105,7 +109,7 @@ function collectHostAgentDeepImportSpecifiers(host: Host): string[] {
       specifiers.add(specifier);
     }
   }
-  return [...specifiers].toSorted((a, b) => a.localeCompare(b));
+  return sortedSpecifiers(specifiers);
 }
 
 function collectCurrentHosts(): Record<Host, string[]> {
@@ -155,9 +159,7 @@ describe('R-b host deep-import width ratchet', () => {
     for (const host of HOSTS) {
       // Sorted AND distinct: a duplicated entry would inflate the allowed
       // count and silently weaken the ratchet.
-      const sortedUnique = [...new Set(baseline.hosts[host])].toSorted((a, b) =>
-        a.localeCompare(b),
-      );
+      const sortedUnique = sortedSpecifiers(new Set(baseline.hosts[host]));
       expect(baseline.hosts[host], `${BASELINE_FILE} hosts.${host}`).toEqual(
         sortedUnique,
       );

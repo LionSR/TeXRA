@@ -9,6 +9,19 @@ import {
 } from '@agent/prompt/PromptBuilder';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 
+function buildMemoryPrompts() {
+  return buildInitialToolUsePrompts(
+    {
+      systemPrompt: 'system',
+      userPrefix: '',
+      userRequest: 'request',
+    } as AgentPrompt,
+    {},
+    undefined,
+    { resolvedToolNames: ['memory'] },
+  );
+}
+
 describe('PromptBuilder', () => {
   it('uses array-based userRequest entries for reflections', async () => {
     const prompt: AgentPrompt = {
@@ -45,16 +58,7 @@ describe('PromptBuilder', () => {
   });
 
   it('keeps memory checks relevant and points view at the memory root', async () => {
-    const prompts = await buildInitialToolUsePrompts(
-      {
-        systemPrompt: 'system',
-        userPrefix: '',
-        userRequest: 'request',
-      } as AgentPrompt,
-      {},
-      undefined,
-      { resolvedToolNames: ['memory'] },
-    );
+    const prompts = await buildMemoryPrompts();
 
     assert.match(
       prompts.instructionSuffix,
@@ -67,16 +71,7 @@ describe('PromptBuilder', () => {
     // Regression test for #7957: relevance gating (added in #7855) must not
     // silently drop pinned memories, which are documented as loading every
     // session (docs/guide/memory.md, MemoryTool's description).
-    const prompts = await buildInitialToolUsePrompts(
-      {
-        systemPrompt: 'system',
-        userPrefix: '',
-        userRequest: 'request',
-      } as AgentPrompt,
-      {},
-      undefined,
-      { resolvedToolNames: ['memory'] },
-    );
+    const prompts = await buildMemoryPrompts();
 
     // Behavioral contract, not exact prose (review note on #7959): pinned
     // files must be individually viewed at session start — a directory

@@ -39,12 +39,12 @@ import { deleteExecution } from '@agent/storage/executionListing';
 beforeEach(() => {
   mocks.exists.mockReset();
   mocks.clear.mockReset();
+  mocks.clear.mockResolvedValue(undefined);
 });
 
 describe('deleteExecution', () => {
   it('reports not-found without calling clear when the execution directory is missing', async () => {
     mocks.exists.mockResolvedValue(false);
-    mocks.clear.mockResolvedValue(undefined);
 
     await expect(
       deleteExecution('deadbeef0000' as ExecutionId),
@@ -62,7 +62,6 @@ describe('deleteExecution', () => {
 
   it('reports deletion and clears storage when the execution directory exists', async () => {
     mocks.exists.mockResolvedValue(true);
-    mocks.clear.mockResolvedValue(undefined);
 
     await expect(
       deleteExecution('a73039a36ec9' as ExecutionId),
@@ -75,7 +74,6 @@ describe('deleteExecution', () => {
 
   it('runs required cleanup before removing execution storage', async () => {
     mocks.exists.mockResolvedValue(true);
-    mocks.clear.mockResolvedValue(undefined);
     const beforeDelete = vi.fn(async () => {
       expect(mocks.clear).not.toHaveBeenCalled();
     });
@@ -92,7 +90,6 @@ describe('deleteExecution', () => {
 
   it('preserves execution storage when required cleanup fails', async () => {
     mocks.exists.mockResolvedValue(true);
-    mocks.clear.mockResolvedValue(undefined);
 
     await expect(
       deleteExecution('a73039a36ec7' as ExecutionId, {

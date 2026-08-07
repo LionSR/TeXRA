@@ -4,6 +4,7 @@ import { TraceEmitter } from '@agent/trace';
 import {
   SessionEventHub,
   type SessionEvent,
+  type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { type StorageKey, type StreamTabId } from '@shared/schemas';
@@ -213,12 +214,9 @@ describe('SessionEventHub', () => {
     detachTrace();
   });
 
-  it('routes stream descriptions as session facts', () => {
-    const hub = new SessionEventHub();
-    const recorded = recordSessionEvents(hub, { scope: 'session' });
-
-    hub.emit({
-      scope: 'session',
+  it.each([
+    {
+      label: 'stream descriptions',
       event: {
         type: 'updateStreamDescription',
         payload: {
@@ -226,29 +224,9 @@ describe('SessionEventHub', () => {
           description: 'Checking proof outline',
         },
       },
-    });
-
-    expect(recorded.events).toEqual([
-      {
-        scope: 'session',
-        event: {
-          type: 'updateStreamDescription',
-          payload: {
-            streamId,
-            description: 'Checking proof outline',
-          },
-        },
-      },
-    ]);
-    recorded.detach();
-  });
-
-  it('routes parent-stream links as session facts', () => {
-    const hub = new SessionEventHub();
-    const recorded = recordSessionEvents(hub, { scope: 'session' });
-
-    hub.emit({
-      scope: 'session',
+    },
+    {
+      label: 'parent-stream links',
       event: {
         type: 'setParentStream',
         payload: {
@@ -256,22 +234,19 @@ describe('SessionEventHub', () => {
           parentStreamId: streamId,
         },
       },
-    });
+    },
+  ] satisfies ReadonlyArray<{ label: string; event: SessionFact }>)(
+    'routes $label as session facts',
+    ({ event }) => {
+      const hub = new SessionEventHub();
+      const recorded = recordSessionEvents(hub, { scope: 'session' });
 
-    expect(recorded.events).toEqual([
-      {
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: {
-            childStreamId: otherStreamId,
-            parentStreamId: streamId,
-          },
-        },
-      },
-    ]);
-    recorded.detach();
-  });
+      hub.emit({ scope: 'session', event });
+
+      expect(recorded.events).toEqual([{ scope: 'session', event }]);
+      recorded.detach();
+    },
+  );
 
   it('detaches session hub subscriptions cleanly', () => {
     const trace = new TraceEmitter();

@@ -18,6 +18,22 @@ afterEach(async () => {
   await cleanupTempDirs(tempRoots);
 });
 
+type DiscoveryOutcome = {
+  skills: Array<{ skill: { name: string } }>;
+  errors: readonly unknown[];
+};
+
+function skillNames(result: DiscoveryOutcome): string[] {
+  return result.skills.map(({ skill }) => skill.name);
+}
+
+function expectReportedIssue(
+  result: DiscoveryOutcome,
+  issue: Record<string, unknown>,
+): void {
+  expect(result.errors).toContainEqual(expect.objectContaining(issue));
+}
+
 describe('discoverSkills', () => {
   it('loads valid SKILL.md packages', async () => {
     const root = await createTempRoot();
@@ -53,12 +69,10 @@ describe('discoverSkills', () => {
     const result = await discoverSkills(root);
 
     expect(result.skills).toEqual([]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'error',
-        code: 'missing_description',
-      }),
-    );
+    expectReportedIssue(result, {
+      severity: 'error',
+      code: 'missing_description',
+    });
   });
 
   it('loads name-mismatched skills with a warning', async () => {
@@ -70,16 +84,12 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
-      'frontmatter-name',
-    ]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'warning',
-        code: 'name_mismatch',
-        name: 'frontmatter-name',
-      }),
-    );
+    expect(skillNames(result)).toEqual(['frontmatter-name']);
+    expectReportedIssue(result, {
+      severity: 'warning',
+      code: 'name_mismatch',
+      name: 'frontmatter-name',
+    });
   });
 
   it('reports invalid YAML frontmatter without aborting discovery', async () => {
@@ -97,15 +107,11 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
-      'valid-skill',
-    ]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'error',
-        code: 'invalid_frontmatter',
-      }),
-    );
+    expect(skillNames(result)).toEqual(['valid-skill']);
+    expectReportedIssue(result, {
+      severity: 'error',
+      code: 'invalid_frontmatter',
+    });
   });
 
   it('deduplicates symlinked skill packages by real path', async () => {
@@ -122,15 +128,11 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
-      'actual-skill',
-    ]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'warning',
-        code: 'duplicate_realpath',
-      }),
-    );
+    expect(skillNames(result)).toEqual(['actual-skill']);
+    expectReportedIssue(result, {
+      severity: 'warning',
+      code: 'duplicate_realpath',
+    });
   });
 
   it('keeps the first skill when names collide', async () => {
@@ -149,13 +151,11 @@ describe('discoverSkills', () => {
     expect(result.skills.map(({ skill }) => skill.description)).toEqual([
       'The first skill with this name.',
     ]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'warning',
-        code: 'duplicate_name',
-        name: 'repeated-name',
-      }),
-    );
+    expectReportedIssue(result, {
+      severity: 'warning',
+      code: 'duplicate_name',
+      name: 'repeated-name',
+    });
   });
 });
 
@@ -189,13 +189,11 @@ describe('discoverSkillSources', () => {
       'bundled',
       'project',
     ]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'warning',
-        code: 'duplicate_name',
-        name: 'shared-skill',
-      }),
-    );
+    expectReportedIssue(result, {
+      severity: 'warning',
+      code: 'duplicate_name',
+      name: 'shared-skill',
+    });
   });
 
   it('reports missing required sources without treating optional roots as errors', async () => {

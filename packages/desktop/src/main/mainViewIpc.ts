@@ -63,7 +63,7 @@ export function installDesktopMainViewIpc(
 ): DesktopMainViewIpc {
   let disposed = false;
 
-  function handleRendererMessage(message: unknown) {
+  function handleRendererMessage(message: unknown): void {
     if (!isDesktopCommandMessage(message)) return;
     for (const handler of messageHandlers) {
       if (handler.handleMessage(message)) return;

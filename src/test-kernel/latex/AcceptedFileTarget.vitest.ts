@@ -13,6 +13,30 @@ import {
 import type { FileLocation } from '@shared/schemas';
 import { createWorkspaceLocation } from '@utils/files';
 
+/** The canonical base/edited pair most cases below are built on. */
+function paperPair(): { base: FileLocation; edited: FileLocation } {
+  return {
+    base: createWorkspaceLocation('/ws/paper.tex', 'paper.tex'),
+    edited: createWorkspaceLocation(
+      '/ws/paper_correct.tex',
+      'paper_correct.tex',
+    ),
+  };
+}
+
+function recordingDelete(): {
+  deleted: FileLocation[];
+  deleteFile: (location: FileLocation) => Promise<void>;
+} {
+  const deleted: FileLocation[] = [];
+  return {
+    deleted,
+    deleteFile: async (location) => {
+      deleted.push(location);
+    },
+  };
+}
+
 describe('diffFileLocation', () => {
   it('computes the stale _diff sibling for a base/edited pair', () => {
     const base = createWorkspaceLocation(
@@ -32,17 +56,10 @@ describe('diffFileLocation', () => {
 
 describe('cleanupStaleDiffFile', () => {
   it('deletes the derived diff location when it differs from the target', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
-    const deleted: FileLocation[] = [];
+    const { base } = paperPair();
+    const { deleted, deleteFile } = recordingDelete();
 
-    await cleanupStaleDiffFile(
-      base,
-      '/ws/paper_correct.tex',
-      base,
-      async (location) => {
-        deleted.push(location);
-      },
-    );
+    await cleanupStaleDiffFile(base, '/ws/paper_correct.tex', base, deleteFile);
 
     assert.strictEqual(deleted.length, 1);
     assert.strictEqual(deleted[0].absolutePath, '/ws/paper_correct_diff.tex');
@@ -53,35 +70,26 @@ describe('cleanupStaleDiffFile', () => {
       '/ws/paper_diff.tex',
       'paper_diff.tex',
     );
-    const deleted: FileLocation[] = [];
+    const { deleted, deleteFile } = recordingDelete();
 
-    await cleanupStaleDiffFile(
-      base,
-      '/ws/paper.tex',
-      base,
-      async (location) => {
-        deleted.push(location);
-      },
-    );
+    await cleanupStaleDiffFile(base, '/ws/paper.tex', base, deleteFile);
 
     assert.strictEqual(deleted.length, 0);
   });
 
   it('skips deletion when the target is not the base itself (copy/sibling write)', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const { base } = paperPair();
     const sibling = createWorkspaceLocation(
       '/ws/paper_copy.tex',
       'paper_copy.tex',
     );
-    const deleted: FileLocation[] = [];
+    const { deleted, deleteFile } = recordingDelete();
 
     await cleanupStaleDiffFile(
       base,
       '/ws/paper_correct.tex',
       sibling,
-      async (location) => {
-        deleted.push(location);
-      },
+      deleteFile,
     );
 
     assert.strictEqual(deleted.length, 0);
@@ -92,7 +100,7 @@ describe('acceptEditedFileReplace', () => {
   function buildPorts(
     overrides: Partial<AcceptEditedFileReplacePorts> = {},
   ): AcceptEditedFileReplacePorts & { deleted: FileLocation[] } {
-    const deleted: FileLocation[] = [];
+    const { deleted, deleteFile } = recordingDelete();
     return {
       exists: async () => false,
       readFile: async () => 'edited content',
@@ -100,20 +108,14 @@ describe('acceptEditedFileReplace', () => {
       confirm: async () => true,
       emitWritten: () => undefined,
       showInfo: async () => undefined,
-      deleteFile: async (location) => {
-        deleted.push(location);
-      },
+      deleteFile,
       deleted,
       ...overrides,
     };
   }
 
   it('cleans up the stale diff file after a successful accept', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
-    const edited = createWorkspaceLocation(
-      '/ws/paper_correct.tex',
-      'paper_correct.tex',
-    );
+    const { base, edited } = paperPair();
     const ports = buildPorts();
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
@@ -127,11 +129,7 @@ describe('acceptEditedFileReplace', () => {
   });
 
   it('does not clean up when the user declines the confirmation', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
-    const edited = createWorkspaceLocation(
-      '/ws/paper_correct.tex',
-      'paper_correct.tex',
-    );
+    const { base, edited } = paperPair();
     const ports = buildPorts({ confirm: async () => false });
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
@@ -160,7 +158,7 @@ describe('acceptEditedFileReplace', () => {
   it('does not clean up the base diff when accepting into a new sibling (extension mismatch)', async () => {
     // Different extensions -> getAcceptedFileTarget resolves to a new
     // sibling file, leaving base untouched, so its diff is still accurate.
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const { base } = paperPair();
     const edited = createWorkspaceLocation('/ws/notes.md', 'notes.md');
     const ports = buildPorts();
 
@@ -202,11 +200,7 @@ describe('commitAcceptedFile', () => {
     copy: FileLocation;
   } {
     return {
-      base: createWorkspaceLocation('/ws/paper.tex', 'paper.tex'),
-      edited: createWorkspaceLocation(
-        '/ws/paper_correct.tex',
-        'paper_correct.tex',
-      ),
+      ...paperPair(),
       copy: createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex'),
     };
   }
@@ -250,12 +244,8 @@ describe('commitAcceptedFile', () => {
 
   it('leaves the copy target untouched by diff cleanup (save-as-copy leaves base intact)', async () => {
     const { base, edited, copy } = buildCommitLocations();
-    const deleted: FileLocation[] = [];
-    const ports = buildCommitPorts({
-      deleteFile: async (location) => {
-        deleted.push(location);
-      },
-    });
+    const { deleted, deleteFile } = recordingDelete();
+    const ports = buildCommitPorts({ deleteFile });
 
     await commitAcceptedFile(
       base,

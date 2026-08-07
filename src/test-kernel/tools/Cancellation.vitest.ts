@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { ToolError } from '@shared/schemas/toolResult';
 import { abandonOnAbort } from '@tools/citation/rateLimiter';
 
-const delay = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 describe('abandonOnAbort', () => {
   it('passes the operation through when no signal is provided', async () => {

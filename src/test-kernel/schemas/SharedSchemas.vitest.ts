@@ -34,12 +34,12 @@ describe('work plan schema helpers', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseCodexApprovalPolicy', () => {
-  it('accepts SDK approval policies', () => {
-    expect(parseCodexApprovalPolicy('never')).toBe('never');
-    expect(parseCodexApprovalPolicy('on-request')).toBe('on-request');
-    expect(parseCodexApprovalPolicy('on-failure')).toBe('on-failure');
-    expect(parseCodexApprovalPolicy('untrusted')).toBe('untrusted');
-  });
+  it.each(['never', 'on-request', 'on-failure', 'untrusted'])(
+    'accepts the SDK approval policy %s',
+    (policy) => {
+      expect(parseCodexApprovalPolicy(policy)).toBe(policy);
+    },
+  );
 
   it('defaults to automatic approval for invalid persisted values', () => {
     expect(parseCodexApprovalPolicy('ask')).toBe('never');
@@ -120,11 +120,8 @@ describe('web tool URL sanitization (issue #7230)', () => {
       'javascript:alert(1)  ', // trailing whitespace likewise
     ];
 
-    it.each(dangerous)('strips %s from web_search results', (url) => {
+    it.each(dangerous)('strips %s from web_search and web_fetch', (url) => {
       expect(parseSearchUrl(url)).toBeUndefined();
-    });
-
-    it.each(dangerous)('strips %s from web_fetch payloads', (url) => {
       expect(parseFetchUrl(url)).toBeUndefined();
     });
   });
@@ -152,13 +149,13 @@ describe('web tool URL sanitization (issue #7230)', () => {
       '  https://example.com/padded  ', // whitespace-padded but otherwise safe
     ];
 
-    it.each(safe)('keeps %s as a live href for web_search', (url) => {
-      expect(parseSearchUrl(url)).toBe(url.trim());
-    });
-
-    it.each(safe)('keeps %s as a live href for web_fetch', (url) => {
-      expect(parseFetchUrl(url)).toBe(url.trim());
-    });
+    it.each(safe)(
+      'keeps %s as a live href for web_search and web_fetch',
+      (url) => {
+        expect(parseSearchUrl(url)).toBe(url.trim());
+        expect(parseFetchUrl(url)).toBe(url.trim());
+      },
+    );
   });
 
   it('keeps anchor-only fragments as-is', () => {
@@ -176,11 +173,8 @@ describe('web tool URL sanitization (issue #7230)', () => {
       '/local/path',
     ];
 
-    it.each(rootRelative)('strips %s from web_search results', (url) => {
+    it.each(rootRelative)('strips %s from web_search and web_fetch', (url) => {
       expect(parseSearchUrl(url)).toBeUndefined();
-    });
-
-    it.each(rootRelative)('strips %s from web_fetch payloads', (url) => {
       expect(parseFetchUrl(url)).toBeUndefined();
     });
   });

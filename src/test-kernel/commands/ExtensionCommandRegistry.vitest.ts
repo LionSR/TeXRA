@@ -21,46 +21,50 @@ import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 // `extensionCommandSurface.ts`, which wires the real actions against VS Code
 // APIs, needs the extension host.
 
+function asyncNoop() {
+  return vi.fn().mockResolvedValue(undefined);
+}
+
 function makeActions(): ExtensionCommandActions {
   return {
-    showSettings: vi.fn().mockResolvedValue(undefined),
-    resetMainView: vi.fn().mockResolvedValue(undefined),
-    cleanBuild: vi.fn().mockResolvedValue(undefined),
-    cleanOutput: vi.fn().mockResolvedValue(undefined),
-    pack: vi.fn().mockResolvedValue(undefined),
-    packSingle: vi.fn().mockResolvedValue(undefined),
-    packMultiple: vi.fn().mockResolvedValue(undefined),
-    clean: vi.fn().mockResolvedValue(undefined),
-    cleanSingle: vi.fn().mockResolvedValue(undefined),
-    cleanMultiple: vi.fn().mockResolvedValue(undefined),
-    compare: vi.fn().mockResolvedValue(undefined),
+    showSettings: asyncNoop(),
+    resetMainView: asyncNoop(),
+    cleanBuild: asyncNoop(),
+    cleanOutput: asyncNoop(),
+    pack: asyncNoop(),
+    packSingle: asyncNoop(),
+    packMultiple: asyncNoop(),
+    clean: asyncNoop(),
+    cleanSingle: asyncNoop(),
+    cleanMultiple: asyncNoop(),
+    compare: asyncNoop(),
     acceptEdited: vi.fn().mockResolvedValue(true),
-    indentTeX: vi.fn().mockResolvedValue(undefined),
+    indentTeX: asyncNoop(),
     signIn: vi.fn().mockResolvedValue(false),
     signInChatGpt: vi.fn().mockResolvedValue(false),
     signInGrok: vi.fn().mockResolvedValue(false),
-    signOut: vi.fn().mockResolvedValue(undefined),
-    runSetupAssistant: vi.fn().mockResolvedValue(undefined),
-    openGettingStarted: vi.fn().mockReturnValue(Promise.resolve()),
-    createSampleProject: vi.fn().mockResolvedValue(undefined),
-    downloadArXivSource: vi.fn().mockResolvedValue(undefined),
-    openProgressViewInTab: vi.fn().mockResolvedValue(undefined),
-    openDoc: vi.fn().mockResolvedValue(undefined),
+    signOut: asyncNoop(),
+    runSetupAssistant: asyncNoop(),
+    openGettingStarted: asyncNoop(),
+    createSampleProject: asyncNoop(),
+    downloadArXivSource: asyncNoop(),
+    openProgressViewInTab: asyncNoop(),
+    openDoc: asyncNoop(),
     stopAgent: vi.fn(),
-    compactResponse: vi.fn().mockResolvedValue(undefined),
-    indentCurrentTeX: vi.fn().mockResolvedValue(undefined),
-    fixCompilation: vi.fn().mockResolvedValue(undefined),
-    getTeXCount: vi.fn().mockResolvedValue(undefined),
-    extractTikzFigures: vi.fn().mockResolvedValue(undefined),
-    compileTikzFigures: vi.fn().mockResolvedValue(undefined),
-    cloneOverleafProject: vi.fn().mockResolvedValue(undefined),
-    removeApiKey: vi.fn().mockResolvedValue(undefined),
-    showImportOptions: vi.fn().mockResolvedValue(undefined),
-    toggleView: vi.fn().mockResolvedValue(undefined),
-    showProgressView: vi.fn().mockResolvedValue(undefined),
-    setApiKey: vi.fn().mockResolvedValue(undefined),
-    createAgentWithAI: vi.fn().mockResolvedValue(undefined),
-    execute: vi.fn().mockResolvedValue(undefined),
+    compactResponse: asyncNoop(),
+    indentCurrentTeX: asyncNoop(),
+    fixCompilation: asyncNoop(),
+    getTeXCount: asyncNoop(),
+    extractTikzFigures: asyncNoop(),
+    compileTikzFigures: asyncNoop(),
+    cloneOverleafProject: asyncNoop(),
+    removeApiKey: asyncNoop(),
+    showImportOptions: asyncNoop(),
+    toggleView: asyncNoop(),
+    showProgressView: asyncNoop(),
+    setApiKey: asyncNoop(),
+    createAgentWithAI: asyncNoop(),
+    execute: asyncNoop(),
   };
 }
 
@@ -233,6 +237,21 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   });
 
   describe('typed file-operation arguments', () => {
+    const WORKSPACE_INPUT = {
+      kind: 'workspace' as const,
+      absolutePath: '/workspace/main.tex',
+      relativePath: 'main.tex',
+    };
+    const BASE_FILE = {
+      kind: 'external' as const,
+      absolutePath: '/tmp/base.tex',
+    };
+    const EDITED_FILE = {
+      kind: 'external' as const,
+      absolutePath: '/tmp/edited.tex',
+    };
+    const COPY_META = { agent: 'editor', model: 'gpt-5', round: 2 };
+
     it('normalizes and forwards pack/clean config objects', async () => {
       const actions = makeActions();
       const config = {
@@ -343,101 +362,89 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
 
     it('forwards compare and accept arguments without collapsing them', async () => {
       const actions = makeActions();
-      const input = {
-        kind: 'workspace' as const,
-        absolutePath: '/workspace/main.tex',
-        relativePath: 'main.tex',
-      };
-      const base = {
-        kind: 'external' as const,
-        absolutePath: '/tmp/base.tex',
-      };
-      const edited = {
-        kind: 'external' as const,
-        absolutePath: '/tmp/edited.tex',
-      };
-      const copyMeta = { agent: 'editor', model: 'gpt-5', round: 2 };
 
       await expect(
-        dispatchAsync(actions, 'texra.compare', input, base, edited),
+        dispatchAsync(
+          actions,
+          'texra.compare',
+          WORKSPACE_INPUT,
+          BASE_FILE,
+          EDITED_FILE,
+        ),
       ).resolves.toBe(true);
       await expect(
         dispatchAsync(
           actions,
           'texra.acceptEdited',
-          input,
-          base,
-          edited,
-          copyMeta,
+          WORKSPACE_INPUT,
+          BASE_FILE,
+          EDITED_FILE,
+          COPY_META,
         ),
       ).resolves.toBe(true);
       expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        input,
-        base,
-        edited,
+        WORKSPACE_INPUT,
+        BASE_FILE,
+        EDITED_FILE,
       );
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        input,
-        base,
-        edited,
-        copyMeta,
+        WORKSPACE_INPUT,
+        BASE_FILE,
+        EDITED_FILE,
+        COPY_META,
       );
     });
 
     it('forwards accept arguments when copy metadata is omitted', async () => {
       const actions = makeActions();
-      const input = {
-        kind: 'workspace' as const,
-        absolutePath: '/workspace/main.tex',
-        relativePath: 'main.tex',
-      };
-      const base = {
-        kind: 'external' as const,
-        absolutePath: '/tmp/base.tex',
-      };
-      const edited = {
-        kind: 'external' as const,
-        absolutePath: '/tmp/edited.tex',
-      };
 
       await expect(
-        dispatchAsync(actions, 'texra.acceptEdited', input, base, edited),
+        dispatchAsync(
+          actions,
+          'texra.acceptEdited',
+          WORKSPACE_INPUT,
+          BASE_FILE,
+          EDITED_FILE,
+        ),
       ).resolves.toBe(true);
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        input,
-        base,
-        edited,
+        WORKSPACE_INPUT,
+        BASE_FILE,
+        EDITED_FILE,
         undefined,
       );
     });
 
     it('preserves the input-location fallback when base is omitted', async () => {
       const actions = makeActions();
-      const input = {
-        kind: 'workspace' as const,
-        absolutePath: '/workspace/main.tex',
-        relativePath: 'main.tex',
-      };
-      const edited = {
-        kind: 'external' as const,
-        absolutePath: '/tmp/edited.tex',
-      };
 
       await expect(
-        dispatchAsync(actions, 'texra.compare', input, undefined, edited),
+        dispatchAsync(
+          actions,
+          'texra.compare',
+          WORKSPACE_INPUT,
+          undefined,
+          EDITED_FILE,
+        ),
       ).resolves.toBe(true);
       await expect(
-        dispatchAsync(actions, 'texra.acceptEdited', input, undefined, edited),
+        dispatchAsync(
+          actions,
+          'texra.acceptEdited',
+          WORKSPACE_INPUT,
+          undefined,
+          EDITED_FILE,
+        ),
       ).resolves.toBe(true);
       expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        input,
+        WORKSPACE_INPUT,
         undefined,
-        edited,
+        EDITED_FILE,
       );
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        input,
+        WORKSPACE_INPUT,
         undefined,
-        edited,
+        EDITED_FILE,
         undefined,
       );
     });

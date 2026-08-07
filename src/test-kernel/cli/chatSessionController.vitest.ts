@@ -202,6 +202,10 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
   return session;
 }
 
+function makePresentationHost(): CliRuntimeHost {
+  return { emit: vi.fn() } as unknown as CliRuntimeHost;
+}
+
 function makeSessionContext(): CliContext {
   return createTestCliContext({
     cwd: '/tmp/test',
@@ -679,12 +683,9 @@ describe('createChatSessionController', () => {
   });
 
   it('reads the shared detach-subagents setting key when stopping an active stream', () => {
-    const presentationHost = {
-      emit: vi.fn(),
-    } as unknown as CliRuntimeHost;
     const session = makeSession({
       streamId: 'stream-1',
-      presentationHost,
+      presentationHost: makePresentationHost(),
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -701,12 +702,9 @@ describe('createChatSessionController', () => {
   });
 
   it('stops the focused root while preserving its agent children', () => {
-    const presentationHost = {
-      emit: vi.fn(),
-    } as unknown as CliRuntimeHost;
     const session = makeSession({
       streamId: 'root-stream',
-      presentationHost,
+      presentationHost: makePresentationHost(),
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -725,12 +723,9 @@ describe('createChatSessionController', () => {
   });
 
   it('stops one focused child without stopping the root session', () => {
-    const presentationHost = {
-      emit: vi.fn(),
-    } as unknown as CliRuntimeHost;
     const session = makeSession({
       streamId: 'root-stream',
-      presentationHost,
+      presentationHost: makePresentationHost(),
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 

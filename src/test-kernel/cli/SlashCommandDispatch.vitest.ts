@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Slash command execution dispatch.
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/apiModeCommands';
@@ -123,6 +123,68 @@ function localEntries(): readonly ConversationEntry[] {
   return streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? [];
 }
 
+function transcriptJson(): string {
+  return JSON.stringify([...streams.get().values()]);
+}
+
+async function expectFormOpens(
+  line: string,
+  commandName: string,
+  context: SlashCommandContext = createContext(),
+): Promise<void> {
+  expect(await handleTuiSlashCommand(line, context)).toBe(true);
+  expect(activeForm.get()?.commandName).toBe(commandName);
+}
+
+function silentOutput(): SlashCommandOutput {
+  return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
+}
+
+/** A sign-in mock whose promise rejects when its abort signal fires. */
+function abortRejection(): {
+  mock: (options: { signal?: AbortSignal }) => Promise<never>;
+  receivedSignal: () => AbortSignal | undefined;
+} {
+  let receivedSignal: AbortSignal | undefined;
+  return {
+    receivedSignal: () => receivedSignal,
+    mock: (options) => {
+      receivedSignal = options.signal;
+      return new Promise((_resolve, reject) => {
+        options.signal?.addEventListener(
+          'abort',
+          () => reject(options.signal?.reason),
+          { once: true },
+        );
+      });
+    },
+  };
+}
+
+function mockSignOuts(): {
+  signOutSupabase: MockInstance<typeof supabaseAuth.signOutCliSupabase>;
+  signOutChatGpt: MockInstance<typeof chatGptLogin.signOutCliChatGpt>;
+} {
+  const signOutSupabase = vi
+    .spyOn(supabaseAuth, 'signOutCliSupabase')
+    .mockResolvedValue(undefined);
+  const signOutChatGpt = vi
+    .spyOn(chatGptLogin, 'signOutCliChatGpt')
+    .mockResolvedValue({
+      preferenceUpdate: { effective: false, target: 'global' },
+    });
+  mockModelAccessOverview();
+  return { signOutSupabase, signOutChatGpt };
+}
+
+function expectAccessStatusText(text: string | undefined): void {
+  expect(text).toContain('ChatGPT: preferred');
+  expect(text).toContain('Kimi Code: not preferred');
+  expect(text).toContain('Otherwise: Included access');
+  expect(text).toContain('Researcher');
+  expect(text).toContain('included usage this month: 25% used, 75% remaining');
+}
+
 describe('handleTuiSlashCommand', () => {
   it('opens reference commands without leaving transcript rows', async () => {
     registerBuiltinSlashCommands();
@@ -209,40 +271,26 @@ describe('handleTuiSlashCommand', () => {
   it('opens /models as the enable/disable catalog (not the active-model picker)', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand('/models', createContext());
-
-    expect(handled).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('models');
+    await expectFormOpens('/models', 'models');
   });
 
   it('opens /model as the active-model picker', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand('/model', createContext());
-
-    expect(handled).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('model');
+    await expectFormOpens('/model', 'model');
   });
 
   it('opens the login form for bare /login', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand('/login', createContext());
-
-    expect(handled).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('login');
+    await expectFormOpens('/login', 'login');
   });
 
   it('opens /approval status without an early transcript echo', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand(
-      '/approval status',
-      createContext(),
-    );
+    await expectFormOpens('/approval status', 'approval');
 
-    expect(handled).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('approval');
     expect(localEntries()).toEqual([]);
   });
 
@@ -250,28 +298,23 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
     const context = createContext();
 
-    expect(await handleTuiSlashCommand('/key', context)).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('key');
+    await expectFormOpens('/key', 'key', context);
 
     activeForm.set(undefined);
-    expect(await handleTuiSlashCommand('/keys', context)).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('key');
+    await expectFormOpens('/keys', 'key', context);
   });
 
   it('discards inline key arguments without recording the secret', async () => {
     registerBuiltinSlashCommands();
     const secret = 'sk-private-test-value';
 
-    expect(
-      await handleTuiSlashCommand(`/keys ${secret}`, createContext()),
-    ).toBe(true);
+    await expectFormOpens(`/keys ${secret}`, 'key');
 
-    expect(activeForm.get()?.commandName).toBe('key');
     expect(JSON.stringify(activeForm.get())).not.toContain(secret);
     expect(transientNotice.get()?.text).toContain(
       'does not accept a key as an argument',
     );
-    expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
+    expect(transcriptJson()).not.toContain(secret);
   });
 
   it('keeps malformed and mistyped key commands out of the transcript', async () => {
@@ -293,16 +336,12 @@ describe('handleTuiSlashCommand', () => {
       `/key${malformedSecrets[3]}`,
       `/kye:${malformedSecrets[4]}`,
     ]) {
-      expect(await handleTuiSlashCommand(line, context)).toBe(true);
-      expect(activeForm.get()?.commandName).toBe('key');
+      await expectFormOpens(line, 'key', context);
       activeForm.set(undefined);
     }
 
-    expect(await handleTuiSlashCommand(`/ky ${typoSecret}`, context)).toBe(
-      true,
-    );
-    expect(activeForm.get()?.commandName).toBe('key');
-    const transcript = JSON.stringify([...streams.get().values()]);
+    await expectFormOpens(`/ky ${typoSecret}`, 'key', context);
+    const transcript = transcriptJson();
     for (const secret of [...malformedSecrets, typoSecret]) {
       expect(transcript).not.toContain(secret);
     }
@@ -339,19 +378,15 @@ describe('handleTuiSlashCommand', () => {
       true,
     );
     expect(activeForm.get()).toBeUndefined();
-    expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
+    expect(transcriptJson()).not.toContain(secret);
   });
 
   it('routes the normalized /apikey spelling to the protected form', async () => {
     registerBuiltinSlashCommands();
 
-    expect(
-      await handleTuiSlashCommand('/apikey private-value', createContext()),
-    ).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('key');
-    expect(JSON.stringify([...streams.get().values()])).not.toContain(
-      'private-value',
-    );
+    await expectFormOpens('/apikey private-value', 'key');
+
+    expect(transcriptJson()).not.toContain('private-value');
   });
 
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
@@ -381,29 +416,15 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('exposes cancellation for an interactive sign-in', async () => {
-    let receivedSignal: AbortSignal | undefined;
+    const abort = abortRejection();
     vi.spyOn(chatGptLogin, 'signInCliChatGpt').mockImplementation(
-      (_args, options) => {
-        receivedSignal = options.signal;
-        return new Promise((_resolve, reject) => {
-          options.signal?.addEventListener(
-            'abort',
-            () => reject(options.signal?.reason),
-            { once: true },
-          );
-        });
-      },
+      (_args, options) => abort.mock(options),
     );
-    const output: SlashCommandOutput = {
-      appendOutcome: vi.fn(),
-      setNotice: vi.fn(),
-      writeProgress: vi.fn(),
-    };
 
     const completion = loginFromChat(
       'chatgpt --no-browser',
       createCliContext(),
-      output,
+      silentOutput(),
     );
     const rejection = expect(completion).rejects.toMatchObject({
       name: 'AbortError',
@@ -411,7 +432,7 @@ describe('handleTuiSlashCommand', () => {
     completion.abort();
 
     await rejection;
-    expect(receivedSignal?.aborted).toBe(true);
+    expect(abort.receivedSignal()?.aborted).toBe(true);
   });
 
   it('derives /auth and /api status from the same access overview', async () => {
@@ -428,23 +449,11 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/auth', context);
     const authStatusText = lastEntryText();
-    expect(authStatusText).toContain('ChatGPT: preferred');
-    expect(authStatusText).toContain('Kimi Code: not preferred');
-    expect(authStatusText).toContain('Otherwise: Included access');
-    expect(authStatusText).toContain('Researcher');
-    expect(authStatusText).toContain(
-      'included usage this month: 25% used, 75% remaining',
-    );
+    expectAccessStatusText(authStatusText);
 
     await handleTuiSlashCommand('/api status', context);
     const apiStatusText = lastEntryText();
-    expect(apiStatusText).toContain('ChatGPT: preferred');
-    expect(apiStatusText).toContain('Kimi Code: not preferred');
-    expect(apiStatusText).toContain('Otherwise: Included access');
-    expect(apiStatusText).toContain('Researcher');
-    expect(apiStatusText).toContain(
-      'included usage this month: 25% used, 75% remaining',
-    );
+    expectAccessStatusText(apiStatusText);
     expect(apiStatusText).toBe(authStatusText);
     expect(overview).toHaveBeenCalledTimes(2);
   });
@@ -483,25 +492,13 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('exposes cancellation while model access is signing in to ChatGPT', async () => {
-    let receivedSignal: AbortSignal | undefined;
+    const abort = abortRejection();
     vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockImplementation(
       (_context, _selection, options) => {
         if (!options) throw new Error('Expected selection options');
-        receivedSignal = options.signal;
-        return new Promise((_resolve, reject) => {
-          options.signal?.addEventListener(
-            'abort',
-            () => reject(options.signal?.reason),
-            { once: true },
-          );
-        });
+        return abort.mock(options);
       },
     );
-    const output: SlashCommandOutput = {
-      appendOutcome: vi.fn(),
-      setNotice: vi.fn(),
-      writeProgress: vi.fn(),
-    };
     const completion = applyCliModelAccessSelection(
       {
         kind: 'subscription-preference',
@@ -509,7 +506,7 @@ describe('handleTuiSlashCommand', () => {
         state: 'on',
       },
       createContext(),
-      output,
+      silentOutput(),
     );
     const rejection = expect(completion).rejects.toMatchObject({
       name: 'AbortError',
@@ -518,20 +515,12 @@ describe('handleTuiSlashCommand', () => {
     completion.abort();
 
     await rejection;
-    expect(receivedSignal?.aborted).toBe(true);
+    expect(abort.receivedSignal()?.aborted).toBe(true);
   });
 
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {
     registerBuiltinSlashCommands();
-    const signOutSupabase = vi
-      .spyOn(supabaseAuth, 'signOutCliSupabase')
-      .mockResolvedValue(undefined);
-    const signOutChatGpt = vi
-      .spyOn(chatGptLogin, 'signOutCliChatGpt')
-      .mockResolvedValue({
-        preferenceUpdate: { effective: false, target: 'global' },
-      });
-    mockModelAccessOverview();
+    const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
     const handled = await handleTuiSlashCommand('/logout all', createContext());
 
@@ -548,23 +537,12 @@ describe('handleTuiSlashCommand', () => {
   it('opens an account-specific sign-out chooser for bare /logout', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand('/logout', createContext());
-
-    expect(handled).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('logout');
+    await expectFormOpens('/logout', 'logout');
   });
 
   it('signs out of only the requested account', async () => {
     registerBuiltinSlashCommands();
-    const signOutSupabase = vi
-      .spyOn(supabaseAuth, 'signOutCliSupabase')
-      .mockResolvedValue(undefined);
-    const signOutChatGpt = vi
-      .spyOn(chatGptLogin, 'signOutCliChatGpt')
-      .mockResolvedValue({
-        preferenceUpdate: { effective: false, target: 'global' },
-      });
-    mockModelAccessOverview();
+    const { signOutSupabase, signOutChatGpt } = mockSignOuts();
     const previousPreferenceVersion = codexPreferenceVersion.get();
 
     await handleTuiSlashCommand('/logout texra', createContext());
@@ -642,7 +620,7 @@ describe('handleTuiSlashCommand', () => {
     session.executionId = 'exec-1' as ExecutionId;
     activeStreamId.set(streamId);
     setStreamStatusInCliState({
-      streamId: streamId,
+      streamId,
       status: STREAM_PHASE.WAITING,
     });
 
@@ -675,7 +653,7 @@ describe('handleTuiSlashCommand', () => {
       },
     }));
     setStreamStatusInCliState({
-      streamId: streamId,
+      streamId,
       status: STREAM_PHASE.WAITING,
     });
 
@@ -712,7 +690,7 @@ describe('handleTuiSlashCommand', () => {
     activeStreamId.set(streamId);
     patchSessionMeta({ transcriptMode: 'ephemeral' });
     setStreamStatusInCliState({
-      streamId: streamId,
+      streamId,
       status: STREAM_PHASE.WAITING,
     });
 

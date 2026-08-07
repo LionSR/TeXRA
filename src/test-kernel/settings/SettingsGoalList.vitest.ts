@@ -27,6 +27,23 @@ function createWebview(): vscode.Webview {
   } as unknown as vscode.Webview;
 }
 
+/**
+ * sendGoalList must report a failure through showErrorMessage and resolve
+ * without throwing, never surfacing a raw rejection to the message handler.
+ */
+async function expectSendGoalListFailure(
+  webview: vscode.Webview,
+  expectedError: unknown,
+): Promise<void> {
+  const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
+
+  await expect(
+    createHandlerHarness().sendGoalList(webview),
+  ).resolves.toBeUndefined();
+
+  expect(showErrorMessage).toHaveBeenCalledWith(expectedError);
+}
+
 describe('settings goal list', () => {
   setupPlatform();
 
@@ -50,48 +67,40 @@ describe('settings goal list', () => {
     await platform().workspaceState.update('goals:index', [STREAM_ID]);
     await platform().workspaceState.update(GOAL_KEY, malformed);
     const webview = createWebview();
-    const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
 
-    await expect(
-      createHandlerHarness().sendGoalList(webview),
-    ).resolves.toBeUndefined();
-
-    expect(showErrorMessage).toHaveBeenCalledWith(
+    await expectSendGoalListFailure(
+      webview,
       expect.stringContaining(
         `Failed to load goals: Failed to parse persisted goal for stream "${STREAM_ID}"`,
       ),
     );
+
     expect(webview.postMessage).not.toHaveBeenCalled();
     expect(platform().workspaceState.get(GOAL_KEY)).toEqual(malformed);
   });
 
-  it('reports a dropped goal-list delivery through the same boundary', async () => {
-    const webview = createWebview();
-    vi.mocked(webview.postMessage).mockResolvedValue(false);
-    const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
+  it.each([
+    {
+      scenario: 'dropped',
+      mockDelivery: (webview: vscode.Webview) =>
+        vi.mocked(webview.postMessage).mockResolvedValue(false),
+      error: 'Failed to load goals: settings webview is no longer available',
+    },
+    {
+      scenario: 'rejected',
+      mockDelivery: (webview: vscode.Webview) =>
+        vi
+          .mocked(webview.postMessage)
+          .mockRejectedValue(new Error('webview disposed')),
+      error: 'Failed to load goals: webview disposed',
+    },
+  ])(
+    'reports a $scenario goal-list delivery through the same boundary',
+    async ({ mockDelivery, error }) => {
+      const webview = createWebview();
+      mockDelivery(webview);
 
-    await expect(
-      createHandlerHarness().sendGoalList(webview),
-    ).resolves.toBeUndefined();
-
-    expect(showErrorMessage).toHaveBeenCalledWith(
-      'Failed to load goals: settings webview is no longer available',
-    );
-  });
-
-  it('reports rejected goal-list deliveries through the same boundary', async () => {
-    const webview = createWebview();
-    vi.mocked(webview.postMessage).mockRejectedValue(
-      new Error('webview disposed'),
-    );
-    const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
-
-    await expect(
-      createHandlerHarness().sendGoalList(webview),
-    ).resolves.toBeUndefined();
-
-    expect(showErrorMessage).toHaveBeenCalledWith(
-      'Failed to load goals: webview disposed',
-    );
-  });
+      await expectSendGoalListFailure(webview, error);
+    },
+  );
 });

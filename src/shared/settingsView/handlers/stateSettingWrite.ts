@@ -8,8 +8,10 @@
 //   - null explicitly resets a setting while an omitted value remains a no-op,
 //   - only catalog rows tagged for a settings-view snapshot are writable.
 
-import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
-import type { SettingsViewStateSettingEntry } from '@shared/schemas/stateSettings';
+import {
+  settingsViewSettingByKey,
+  type SettingsViewStateSettingEntry,
+} from '@shared/schemas/stateSettings';
 
 /**
  * A validated state-setting write/reset, a rejected catalog value, or `null`

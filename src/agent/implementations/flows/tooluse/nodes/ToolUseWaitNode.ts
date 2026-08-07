@@ -99,7 +99,7 @@ export class ToolUseWaitNode<C> extends Node<
     // every later WAITING suspension resume with the identical batch.
     const drainedFollowUps = this.drainedFollowUps;
     this.drainedFollowUps = undefined;
-    if (drainedFollowUps && drainedFollowUps.length > 0) {
+    if (drainedFollowUps?.length) {
       return {
         kind: 'continue',
         followUps: drainedFollowUps,
@@ -111,7 +111,7 @@ export class ToolUseWaitNode<C> extends Node<
     // here. The child-run loop formats and delivers this cycle's turn facts
     // after suspension, then owns the next queue wait. This keeps every
     // ordinary suspension symmetric and leaves one delivery site.
-    if (isSubagent === true) {
+    if (isSubagent) {
       ownerSession.status.transitionToWaiting(streamId, 'wait', {
         trace: this.services.logger,
       });

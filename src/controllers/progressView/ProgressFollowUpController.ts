@@ -252,9 +252,9 @@ export class ProgressFollowUpController {
     modelOptions: readonly ProgressFollowUpModelOption[],
     model: string,
   ): boolean {
-    return modelOptions.some((option) => {
-      return option.value === model && !option.disabled;
-    });
+    return modelOptions.some(
+      (option) => option.value === model && !option.disabled,
+    );
   }
 
   private selectWorkflowModel(
@@ -275,7 +275,8 @@ export class ProgressFollowUpController {
       ],
       (model) => this.hasEnabledModel(modelOptions, model),
     );
-    return decision?.unavailable ? null : (decision?.model ?? null);
+    if (!decision || decision.unavailable) return null;
+    return decision.model;
   }
 
   private buildWorkflowToolUseFollowupInstruction(

@@ -14,6 +14,12 @@ function streamEntries(store: StreamLogStore): StreamLogEntry[] {
   return store.get('stream')?.getRange(0) ?? [];
 }
 
+function openDeferredThinking(
+  logger: AgentTrace,
+): ReturnType<AgentTrace['openStream']> {
+  return logger.openStream(MESSAGE_TYPES.THINKING, { deferStart: true });
+}
+
 /** Run against a fresh, test-local store. */
 function withStore(
   run: (
@@ -110,9 +116,7 @@ describe('AgentTrace stream output', () => {
 
   it('emits nothing for a deferred stream until the first chunk', () => {
     withStore((store, logger, flushPending) => {
-      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
-        deferStart: true,
-      });
+      const thinking = openDeferredThinking(logger);
 
       expect(store.get('stream')).toBeUndefined();
 
@@ -133,9 +137,7 @@ describe('AgentTrace stream output', () => {
 
   it('leaves no trace for a deferred stream finalized without content', () => {
     withStore((store, logger) => {
-      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
-        deferStart: true,
-      });
+      const thinking = openDeferredThinking(logger);
 
       expect(thinking.finalize()).toBe('');
       expect(store.get('stream')).toBeUndefined();
@@ -144,9 +146,7 @@ describe('AgentTrace stream output', () => {
 
   it('materializes a deferred stream finalized with reasoning text', () => {
     withStore((store, logger) => {
-      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
-        deferStart: true,
-      });
+      const thinking = openDeferredThinking(logger);
 
       // Mirrors providers that only return reasoning in the final response.
       expect(thinking.finalize('final reasoning')).toBe('final reasoning');

@@ -146,11 +146,11 @@ export function formatLogEntry(
   const { messageType } = logMessage;
 
   // Determine if details should be open (undefined = no preference)
-  const isOpen =
-    options.preservedOpen ??
-    (options.defaultOpen && messageType && AUTO_EXPANDED_TYPES.has(messageType)
-      ? true
-      : undefined);
+  const autoExpand =
+    options.defaultOpen === true &&
+    messageType !== undefined &&
+    AUTO_EXPANDED_TYPES.has(messageType);
+  const isOpen = options.preservedOpen ?? (autoExpand || undefined);
   // While the entry is still streaming in, skip markdown parsing (cheap
   // per-chunk repaint) but keep the same banner shell — never fall back to
   // the plain log-line template, or thinking blocks flash as generic info

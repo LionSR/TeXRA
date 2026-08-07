@@ -103,35 +103,17 @@ describe('CLI TUI text input editing', () => {
       submit: false,
     };
 
-    const rewritten = rewriteKittyEnterInput(
+    for (const chunk of [
       `alpha${ESC}[13;2ubeta`,
-      NEWLINE_MODE,
-    );
-
-    expect(rewritten).toBe(batched);
-    expect(applyTerminalInputChunk('', 0, rewritten ?? '')).toEqual(
-      insertedNewline,
-    );
-
-    const colonRewritten = rewriteKittyEnterInput(
       `alpha${ESC}[13:2ubeta`,
-      NEWLINE_MODE,
-    );
-
-    expect(colonRewritten).toBe(batched);
-    expect(applyTerminalInputChunk('', 0, colonRewritten ?? '')).toEqual(
-      insertedNewline,
-    );
-
-    const associatedTextRewritten = rewriteKittyEnterInput(
       `alpha${ESC}[13;2;13ubeta`,
-      NEWLINE_MODE,
-    );
-
-    expect(associatedTextRewritten).toBe(batched);
-    expect(
-      applyTerminalInputChunk('', 0, associatedTextRewritten ?? ''),
-    ).toEqual(insertedNewline);
+    ]) {
+      const rewritten = rewriteKittyEnterInput(chunk, NEWLINE_MODE);
+      expect(rewritten).toBe(batched);
+      expect(applyTerminalInputChunk('', 0, rewritten ?? '')).toEqual(
+        insertedNewline,
+      );
+    }
 
     const pressEventRewritten = rewriteKittyEnterInput(
       `alpha${ESC}[13;2:1ubeta`,

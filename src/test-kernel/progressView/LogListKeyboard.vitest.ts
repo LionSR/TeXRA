@@ -1,10 +1,6 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress view component types
 import type { LogList } from '@progressView/frontend/components/LogList';
-
-// Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(

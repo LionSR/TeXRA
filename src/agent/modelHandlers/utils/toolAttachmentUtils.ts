@@ -274,13 +274,8 @@ export function formatToolResultAsText(
   // error, userInstruction, or attachmentSummary. All current tools set at least summary.
   const combined = textPieces.join('\n\n') || 'OK';
 
-  // Check if result exceeds maximum length - return error message if so
-  const limitError = checkToolResultTextLimit(combined);
-  if (limitError) {
-    return limitError;
-  }
-
-  return combined;
+  // Truncate with a head+tail replacement if the result exceeds the limit.
+  return checkToolResultTextLimit(combined) ?? combined;
 }
 
 /**

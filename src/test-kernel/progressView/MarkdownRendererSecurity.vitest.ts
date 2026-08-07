@@ -53,13 +53,16 @@ describe('processMarkdownContent renders math and code', () => {
     expect(doc.querySelector('.katex')).not.toBeNull();
   });
 
+  const CRITERION_FORMULA =
+    'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).';
+
   it.each([
     {
       context: 'prose',
       markdown: [
         'The coefficient is',
         '\\[',
-        'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        CRITERION_FORMULA,
         '\\]',
         'The next paragraph follows.',
       ].join('\n'),
@@ -69,7 +72,7 @@ describe('processMarkdownContent renders math and code', () => {
       markdown: [
         '### Exact criterion',
         '\\[',
-        'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        CRITERION_FORMULA,
         '\\]',
         'The next paragraph follows.',
       ].join('\n'),
@@ -79,7 +82,7 @@ describe('processMarkdownContent renders math and code', () => {
       markdown: [
         '- The coefficient is',
         '  \\[',
-        '  c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        `  ${CRITERION_FORMULA}`,
         '  \\]',
         '  The next paragraph follows.',
       ].join('\n'),
@@ -89,7 +92,7 @@ describe('processMarkdownContent renders math and code', () => {
       markdown: [
         '> The coefficient is',
         '> \\[',
-        '> c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        `> ${CRITERION_FORMULA}`,
         '> \\]',
         '> The next paragraph follows.',
       ].join('\n'),

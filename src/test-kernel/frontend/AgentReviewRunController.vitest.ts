@@ -34,19 +34,37 @@ function createRunHarness() {
   return { bind, session, stopAgentStream };
 }
 
+function startBoundRun(
+  controller: AgentReviewRunController,
+  harness: ReturnType<typeof createRunHarness>,
+  executionId: string,
+): AgentReviewRunToken {
+  const run = controller.start(harness.session);
+  harness.bind(controller, run, executionId);
+  return run;
+}
+
+function reviewCollection(...changedFiles: string[]) {
+  return {
+    repoRoot: '/repo',
+    baseDescription: 'main branch',
+    changedFiles,
+  };
+}
+
 describe('AgentReviewRunController', () => {
   it('latches a stop requested before the execution handle arrives', () => {
     const controller = new AgentReviewRunController();
-    const { bind, session, stopAgentStream } = createRunHarness();
-    const run = controller.start(session);
+    const harness = createRunHarness();
+    const run = controller.start(harness.session);
 
     expect(controller.requestStop()).toBe(true);
     expect(controller.isActive).toBe(true);
-    bind(controller, run, 'review-a');
+    harness.bind(controller, run, 'review-a');
 
-    expect(stopAgentStream).toHaveBeenCalledOnce();
+    expect(harness.stopAgentStream).toHaveBeenCalledOnce();
     expect(controller.requestStop()).toBe(false);
-    expect(stopAgentStream).toHaveBeenCalledOnce();
+    expect(harness.stopAgentStream).toHaveBeenCalledOnce();
     expect(controller.isActive).toBe(true);
     expect(controller.finish(run)).toBe(true);
     expect(controller.isActive).toBe(false);
@@ -55,13 +73,11 @@ describe('AgentReviewRunController', () => {
   it('ignores a stale finalizer and stops only the current run', () => {
     const controller = new AgentReviewRunController();
     const first = createRunHarness();
-    const runA = controller.start(first.session);
-    first.bind(controller, runA, 'review-a');
+    const runA = startBoundRun(controller, first, 'review-a');
     expect(controller.finish(runA)).toBe(true);
 
     const second = createRunHarness();
-    const runB = controller.start(second.session);
-    second.bind(controller, runB, 'review-b');
+    startBoundRun(controller, second, 'review-b');
 
     expect(controller.finish(runA)).toBe(false);
     expect(controller.requestStop()).toBe(true);
@@ -73,11 +89,7 @@ describe('AgentReviewRunController', () => {
     const controller = new AgentReviewRunController();
     const { session } = createRunHarness();
     const run = controller.start(session);
-    const collection = {
-      repoRoot: '/repo',
-      baseDescription: 'main branch',
-      changedFiles: ['src/a.ts'],
-    };
+    const collection = reviewCollection('src/a.ts');
 
     expect(controller.collection).toBeUndefined();
     controller.collect(run, collection);
@@ -91,29 +103,20 @@ describe('AgentReviewRunController', () => {
 
   it('discards a running review without releasing the slot', () => {
     const controller = new AgentReviewRunController();
-    const { bind, session, stopAgentStream } = createRunHarness();
-    const run = controller.start(session);
-    bind(controller, run, 'review-a');
-    controller.collect(run, {
-      repoRoot: '/repo',
-      baseDescription: 'main branch',
-      changedFiles: ['src/a.ts'],
-    });
+    const harness = createRunHarness();
+    const run = startBoundRun(controller, harness, 'review-a');
+    controller.collect(run, reviewCollection('src/a.ts'));
 
     controller.discard();
 
-    expect(stopAgentStream).toHaveBeenCalledOnce();
+    expect(harness.stopAgentStream).toHaveBeenCalledOnce();
     // The execution settles on its own schedule, so the slot stays claimed
     // while its results and any further reports are dropped.
     expect(controller.isActive).toBe(true);
     expect(controller.isCurrent(run)).toBe(false);
     expect(controller.collection).toBeUndefined();
 
-    controller.collect(run, {
-      repoRoot: '/repo',
-      baseDescription: 'main branch',
-      changedFiles: ['src/b.ts'],
-    });
+    controller.collect(run, reviewCollection('src/b.ts'));
     expect(controller.collection).toBeUndefined();
 
     expect(controller.finish(run)).toBe(true);
@@ -123,8 +126,7 @@ describe('AgentReviewRunController', () => {
   it('leaves a later run current after an earlier one was discarded', () => {
     const controller = new AgentReviewRunController();
     const first = createRunHarness();
-    const runA = controller.start(first.session);
-    first.bind(controller, runA, 'review-a');
+    const runA = startBoundRun(controller, first, 'review-a');
     controller.discard();
     expect(controller.finish(runA)).toBe(true);
 

@@ -1,8 +1,5 @@
-// Node imports
-import { strict as assert } from 'node:assert';
-
 // Third-party imports
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { logUserMessage, type AgentTrace } from '@agent/trace';
@@ -30,36 +27,33 @@ describe('logUserMessage', () => {
     disposeTrace();
   });
 
-  const capturedEntries = () => {
+  function capturedEntries() {
     const log = store.get('TestUserMessageLogger');
     return log?.getRange(0, log.head) ?? [];
-  };
+  }
 
   it('logs a plain userMessage row with no data when there are no attachments', () => {
     logUserMessage(logger, 'Fix the lemma.');
 
     const entries = capturedEntries();
-    assert.equal(entries.length, 1);
-    assert.equal(entries[0].messageType, MESSAGE_TYPES.USER_MESSAGE);
-    assert.equal(entries[0].text, 'Fix the lemma.');
-    assert.equal(entries[0].data, undefined);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].messageType).toBe(MESSAGE_TYPES.USER_MESSAGE);
+    expect(entries[0].text).toBe('Fix the lemma.');
+    expect(entries[0].data).toBeUndefined();
   });
 
   it('omits data when the attachments array is empty', () => {
     logUserMessage(logger, 'Fix the lemma.', []);
 
-    const entries = capturedEntries();
-    assert.equal(entries[0].data, undefined);
+    expect(capturedEntries()[0].data).toBeUndefined();
   });
 
   it('records attachment kinds (not bytes) on the row data', () => {
     logUserMessage(logger, 'See the attached figure.', ['image', 'document']);
 
     const entries = capturedEntries();
-    assert.equal(entries.length, 1);
-    assert.equal(entries[0].messageType, MESSAGE_TYPES.USER_MESSAGE);
-    assert.deepEqual(entries[0].data, {
-      attachments: ['image', 'document'],
-    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].messageType).toBe(MESSAGE_TYPES.USER_MESSAGE);
+    expect(entries[0].data).toEqual({ attachments: ['image', 'document'] });
   });
 });

@@ -76,7 +76,6 @@ export class WolframTool extends defineTool({
       return executed(result.output ?? '', wolframRunSummary(input.code));
     }
 
-    // Build informative error message with all available context
     const parts: string[] = [];
     if (result.timedOut) {
       parts.push(

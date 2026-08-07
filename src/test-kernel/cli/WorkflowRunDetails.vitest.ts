@@ -36,11 +36,41 @@ const COMPILE_FAILURE: CompileFailure = {
   logRelativePath: 'paper.log',
 };
 
-function detailLines(
-  facts: Parameters<typeof selectWorkflowRunDetailLines>[0],
-  maxRows = Number.MAX_SAFE_INTEGER,
+const COMPILE_FAILURES_BY_ROUND = { 0: [COMPILE_FAILURE] };
+
+function completedRound(
+  index: number,
+  total: number,
+  startTime: number,
+  endTime: number,
 ) {
-  return selectWorkflowRunDetailLines(facts, maxRows);
+  return {
+    id: `r${index}`,
+    name: `r${index}`,
+    kind: 'round' as const,
+    index,
+    total,
+    startTime,
+    endTime,
+    status: STREAM_PHASE.COMPLETED,
+  };
+}
+
+function generatedFile(
+  relativePath: string,
+  diff: { added: number; removed: number } | null,
+) {
+  return {
+    source: 'paper.tex',
+    round: 0,
+    location: {
+      kind: 'workspace' as const,
+      absolutePath: `/workspace/${relativePath}`,
+      relativePath,
+    },
+    lineage: null,
+    diff,
+  };
 }
 
 afterEach(() => {
@@ -49,47 +79,27 @@ afterEach(() => {
 
 describe('selectWorkflowRunDetailLines', () => {
   it('joins lifecycle, planned rounds, generated files, and warnings', () => {
-    const lines = detailLines({
-      taskGroups: [
-        {
-          id: 'run',
-          name: 'Repository audit',
-          kind: 'run',
-          startTime: 1_000,
-          endTime: 10_000,
-          status: STREAM_PHASE.COMPLETED,
-        },
-        {
-          id: 'r0',
-          name: 'r0',
-          kind: 'round',
-          index: 0,
-          total: 2,
-          startTime: 2_000,
-          endTime: 9_200,
-          status: STREAM_PHASE.COMPLETED,
-        },
-      ],
-      outputFilesByRound: {
-        0: [
+    const lines = selectWorkflowRunDetailLines(
+      {
+        taskGroups: [
           {
-            source: 'paper.tex',
-            round: 0,
-            location: {
-              kind: 'workspace',
-              absolutePath: '/workspace/output/paper.tex',
-              relativePath: 'output/paper.tex',
-            },
-            lineage: null,
-            diff: { added: 12, removed: 3 },
+            id: 'run',
+            name: 'Repository audit',
+            kind: 'run',
+            startTime: 1_000,
+            endTime: 10_000,
+            status: STREAM_PHASE.COMPLETED,
           },
+          completedRound(0, 2, 2_000, 9_200),
         ],
+        outputFilesByRound: {
+          0: [generatedFile('output/paper.tex', { added: 12, removed: 3 })],
+        },
+        missingOutputsByRound: { 0: ['appendix.tex'] },
+        compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
       },
-      missingOutputsByRound: { 0: ['appendix.tex'] },
-      compileFailuresByRound: {
-        0: [COMPILE_FAILURE],
-      },
-    });
+      100,
+    );
 
     expect(lines.map((line) => line.text)).toEqual([
       '✓ Repository audit Finished · 9s',
@@ -112,22 +122,25 @@ describe('selectWorkflowRunDetailLines', () => {
   });
 
   it('renders a normalized rN round and sanitizes terminal controls', () => {
-    const lines = detailLines({
-      taskGroups: projectTaskGroupsFromStreamLog([
-        {
-          seqNo: 1,
-          id: 'legacy-r3',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: LOG_LEVELS.INFO,
-          timestamp: 0,
-          text: 'r3',
-          data: { status: STREAM_PHASE.RUNNING },
-        },
-      ]),
-      outputFilesByRound: {},
-      missingOutputsByRound: { 3: ['bad\u001b[31m.tex'] },
-      compileFailuresByRound: {},
-    });
+    const lines = selectWorkflowRunDetailLines(
+      {
+        taskGroups: projectTaskGroupsFromStreamLog([
+          {
+            seqNo: 1,
+            id: 'legacy-r3',
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+            level: LOG_LEVELS.INFO,
+            timestamp: 0,
+            text: 'r3',
+            data: { status: STREAM_PHASE.RUNNING },
+          },
+        ]),
+        outputFilesByRound: {},
+        missingOutputsByRound: { 3: ['bad\u001b[31m.tex'] },
+        compileFailuresByRound: {},
+      },
+      100,
+    );
 
     expect(lines.map((line) => line.text)).toEqual([
       '● r4 Running',
@@ -136,7 +149,7 @@ describe('selectWorkflowRunDetailLines', () => {
   });
 
   it('shows a round-qualified alert when only one detail row fits', () => {
-    const [line] = detailLines(
+    const [line] = selectWorkflowRunDetailLines(
       {
         taskGroups: [
           {
@@ -151,9 +164,7 @@ describe('selectWorkflowRunDetailLines', () => {
         ],
         outputFilesByRound: {},
         missingOutputsByRound: { 0: ['missing.tex'] },
-        compileFailuresByRound: {
-          0: [COMPILE_FAILURE],
-        },
+        compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
       },
       1,
     );
@@ -169,22 +180,25 @@ describe('selectWorkflowRunDetailLines', () => {
     ['round without an index', 'round'],
     ['session stage', 'session'],
   ] as const)('keeps a %s lifecycle group visible', (_case, kind) => {
-    const lines = detailLines({
-      taskGroups: projectTaskGroupsFromStreamLog([
-        {
-          seqNo: 1,
-          id: 'legacy-round',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          level: LOG_LEVELS.INFO,
-          timestamp: 0,
-          text: 'Round 3',
-          data: { status: 'stopped', endTime: 1_000, kind },
-        },
-      ]),
-      outputFilesByRound: {},
-      missingOutputsByRound: {},
-      compileFailuresByRound: {},
-    });
+    const lines = selectWorkflowRunDetailLines(
+      {
+        taskGroups: projectTaskGroupsFromStreamLog([
+          {
+            seqNo: 1,
+            id: 'legacy-round',
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            level: LOG_LEVELS.INFO,
+            timestamp: 0,
+            text: 'Round 3',
+            data: { status: 'stopped', endTime: 1_000, kind },
+          },
+        ]),
+        outputFilesByRound: {},
+        missingOutputsByRound: {},
+        compileFailuresByRound: {},
+      },
+      100,
+    );
 
     expect(lines.map((line) => line.text)).toEqual(['✓ Round 3 Finished · 1s']);
   });
@@ -240,39 +254,14 @@ describe('selectWorkflowRunDetailLines', () => {
   });
 
   it('keeps warning context ahead of generated files and future plans', () => {
-    const lines = detailLines(
+    const lines = selectWorkflowRunDetailLines(
       {
-        taskGroups: [
-          {
-            id: 'r0',
-            name: 'r0',
-            kind: 'round',
-            index: 0,
-            total: 2,
-            startTime: 0,
-            endTime: 1,
-            status: STREAM_PHASE.COMPLETED,
-          },
-        ],
+        taskGroups: [completedRound(0, 2, 0, 1)],
         outputFilesByRound: {
-          0: [
-            {
-              source: 'paper.tex',
-              round: 0,
-              location: {
-                kind: 'workspace',
-                absolutePath: '/workspace/paper.tex',
-                relativePath: 'paper.tex',
-              },
-              lineage: null,
-              diff: null,
-            },
-          ],
+          0: [generatedFile('paper.tex', null)],
         },
         missingOutputsByRound: {},
-        compileFailuresByRound: {
-          0: [COMPILE_FAILURE],
-        },
+        compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
       },
       3,
     );

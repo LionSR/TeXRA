@@ -47,6 +47,18 @@ function dispatchEnter(
   return event;
 }
 
+function dispatchChange(element: HTMLElement): void {
+  element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+}
+
+function countExecutes(element: InstructionPanel): () => number {
+  let count = 0;
+  element.addEventListener('execute', () => {
+    count += 1;
+  });
+  return () => count;
+}
+
 describe('instruction-panel desktop composer', () => {
   useLitComponentTestDom(loadInstructionPanelModules);
 
@@ -77,9 +89,6 @@ describe('instruction-panel desktop composer', () => {
     );
     expect(desktop.shadowRoot?.querySelector('#sessionTypeToggle')).toBeNull();
     expect(desktop.shadowRoot?.querySelector('#launchTargetToggle')).toBeNull();
-    expect(query(desktop, '#desktopLaunchMode').getAttribute('size')).toBe(
-      'xs',
-    );
     for (const id of ['#desktopLaunchMode', '#toolUseAgent', '#model']) {
       expect(query(desktop, id).getAttribute('size')).toBe('xs');
     }
@@ -134,7 +143,7 @@ describe('instruction-panel desktop composer', () => {
     });
 
     mode.value = 'team';
-    mode.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    dispatchChange(mode);
 
     expect(changes).toEqual([
       { event: 'session-type-change', value: 'toolUse' },
@@ -143,7 +152,7 @@ describe('instruction-panel desktop composer', () => {
 
     changes.length = 0;
     mode.value = 'workflow';
-    mode.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    dispatchChange(mode);
 
     expect(changes).toEqual([
       { event: 'session-type-change', value: 'workflow' },
@@ -183,9 +192,7 @@ describe('instruction-panel desktop composer', () => {
     ).toHaveLength(2);
 
     picker.value = '/workspace/figures';
-    picker.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
+    dispatchChange(picker);
 
     expect(selected).toBe('/workspace/figures');
   });
@@ -193,30 +200,24 @@ describe('instruction-panel desktop composer', () => {
   it('sends on Enter in desktop mode and preserves Shift+Enter for a newline', async () => {
     const element = await mountPanel(true);
     const textarea = query(element, '#instruction');
-    let executeCount = 0;
-    element.addEventListener('execute', () => {
-      executeCount += 1;
-    });
+    const executeCount = countExecutes(element);
 
     const newlineEvent = dispatchEnter(textarea, { shiftKey: true });
     expect(newlineEvent.defaultPrevented).toBe(false);
-    expect(executeCount).toBe(0);
+    expect(executeCount()).toBe(0);
 
     const sendEvent = dispatchEnter(textarea);
     expect(sendEvent.defaultPrevented).toBe(true);
-    expect(executeCount).toBe(1);
+    expect(executeCount()).toBe(1);
   });
 
   it('leaves plain Enter untouched in the extension panel', async () => {
     const element = await mountPanel(false);
-    let executeCount = 0;
-    element.addEventListener('execute', () => {
-      executeCount += 1;
-    });
+    const executeCount = countExecutes(element);
 
     const event = dispatchEnter(query(element, '#instruction'));
     expect(event.defaultPrevented).toBe(false);
-    expect(executeCount).toBe(0);
+    expect(executeCount()).toBe(0);
   });
 
   it('keeps send disabled until the request and required selections exist', async () => {
@@ -225,13 +226,10 @@ describe('instruction-panel desktop composer', () => {
       instruction: '',
     });
     const executeButton = query(element, '#executeButton');
-    let executeCount = 0;
-    element.addEventListener('execute', () => {
-      executeCount += 1;
-    });
+    const executeCount = countExecutes(element);
 
     expect(executeButton.hasAttribute('disabled')).toBe(true);
     dispatchEnter(query(element, '#instruction'));
-    expect(executeCount).toBe(0);
+    expect(executeCount()).toBe(0);
   });
 });

@@ -46,16 +46,24 @@ function createTokenProvider(
   };
 }
 
+function relayCiToken(label: string): string {
+  return `${RELAY_CI_TOKEN_PREFIX}${label}`;
+}
+
+/** Provider holding a refreshable session pair for `accessToken`. */
+function sessionTokenProvider(accessToken: string): AuthTokenProvider {
+  return createTokenProvider({
+    ensureFreshToken: async () => accessToken,
+    getSessionTokens: async () => ({
+      accessToken,
+      refreshToken: 'refresh-token',
+    }),
+  });
+}
+
 /** Registers a signed-in provider and a profile row carrying `tier`. */
 function stubProfileTier(tier: unknown): void {
-  SupabaseClient.setAuthProvider(
-    createTokenProvider({
-      getSessionTokens: async () => ({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      }),
-    }),
-  );
+  SupabaseClient.setAuthProvider(sessionTokenProvider('access-token'));
   vi.spyOn(SupabaseClient, 'getClient').mockReturnValue({
     auth: { setSession: vi.fn(async () => {}) },
     from: vi.fn(() => ({
@@ -74,14 +82,7 @@ describe('SupabaseClient', () => {
   });
 
   it('reads session tokens through the registered token provider', async () => {
-    const provider = createTokenProvider({
-      getSessionTokens: async () => ({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      }),
-    });
-
-    SupabaseClient.setAuthProvider(provider);
+    SupabaseClient.setAuthProvider(sessionTokenProvider('access-token'));
 
     assert.deepEqual(await SupabaseClient.getSessionTokens(), {
       accessToken: 'access-token',
@@ -90,17 +91,10 @@ describe('SupabaseClient', () => {
   });
 
   it('keeps session tokens separate from CI relay bearer tokens', async () => {
-    const relayToken = `${RELAY_CI_TOKEN_PREFIX}abcdef`;
-    const provider = createTokenProvider({
-      ensureFreshToken: async () => 'session-token',
-      getSessionTokens: async () => ({
-        accessToken: 'session-token',
-        refreshToken: 'refresh-token',
-      }),
-    });
+    const relayToken = relayCiToken('abcdef');
 
     await withRelayTokenEnv(relayToken, async () => {
-      SupabaseClient.setAuthProvider(provider);
+      SupabaseClient.setAuthProvider(sessionTokenProvider('session-token'));
 
       assert.equal(await SupabaseClient.getAccessToken(), 'session-token');
       assert.equal(await SupabaseClient.getRelayAccessToken(), relayToken);
@@ -110,7 +104,7 @@ describe('SupabaseClient', () => {
   });
 
   it('keeps relay-only model auth separate from remote catalog access', async () => {
-    const relayToken = `${RELAY_CI_TOKEN_PREFIX}relayonly`;
+    const relayToken = relayCiToken('relayonly');
     const provider = createTokenProvider({
       ensureFreshToken: async () => null,
     });
@@ -126,7 +120,7 @@ describe('SupabaseClient', () => {
   });
 
   it('classifies a stored session independently of relay authentication', async () => {
-    const relayToken = `${RELAY_CI_TOKEN_PREFIX}maskedsession`;
+    const relayToken = relayCiToken('maskedsession');
     const provider = createTokenProvider({
       ensureFreshToken: async () => null,
       getSessionTokens: async () => null,
@@ -143,17 +137,10 @@ describe('SupabaseClient', () => {
   });
 
   it('falls back to the session once the relay token is known-rejected', async () => {
-    const relayToken = `${RELAY_CI_TOKEN_PREFIX}rejected`;
-    const provider = createTokenProvider({
-      ensureFreshToken: async () => 'session-token',
-      getSessionTokens: async () => ({
-        accessToken: 'session-token',
-        refreshToken: 'refresh-token',
-      }),
-    });
+    const relayToken = relayCiToken('rejected');
 
     await withRelayTokenEnv(relayToken, async () => {
-      SupabaseClient.setAuthProvider(provider);
+      SupabaseClient.setAuthProvider(sessionTokenProvider('session-token'));
 
       // Observe the rejection (tier-config answers without userStatus for
       // unrecognized credentials); the settled status is cached.
@@ -173,7 +160,7 @@ describe('SupabaseClient', () => {
   });
 
   it('treats a relay-401 refresh as rejection of a static CI token', async () => {
-    const relayToken = `${RELAY_CI_TOKEN_PREFIX}got401`;
+    const relayToken = relayCiToken('got401');
     const provider = createTokenProvider({
       ensureFreshToken: async () => 'session-token',
     });

@@ -84,42 +84,34 @@ describe('WolframTool approval', () => {
     expect(execute).toHaveBeenCalledWith('1+1', { timeout: 30000 });
   });
 
-  it('does not execute wolframscript when approval is rejected', async () => {
-    const streamId = 'stream:wolfram-rejected' as StreamTabId;
-    const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
-
-    const { explicit, result, show } = await dispatchWolfram(streamId, '2+2');
-    expect(
-      explicit.decisions.submitBash(show.payload.requestId, {
-        action: 'reject',
-        feedback: 'Use the requested node check instead.',
-      }),
-    ).toBe(true);
-
-    await expect(result).resolves.toMatchObject({
-      status: 'error',
-      userInstruction: 'Use the requested node check instead.',
-    });
-    expect(execute).not.toHaveBeenCalled();
-  });
-
-  it('tells the model not to retry after rejection without feedback', async () => {
-    const streamId = 'stream:wolfram-rejected-default' as StreamTabId;
+  it.each([
+    {
+      name: 'does not execute wolframscript when approval is rejected',
+      feedback: 'Use the requested node check instead.',
+      expectedInstruction: 'Use the requested node check instead.',
+    },
+    {
+      name: 'tells the model not to retry after rejection without feedback',
+      feedback: undefined,
+      expectedInstruction: expect.stringContaining('Do not retry'),
+    },
+  ])('$name', async ({ feedback, expectedInstruction }) => {
     const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
 
     const { explicit, result, show } = await dispatchWolfram(
-      streamId,
+      'stream:wolfram-rejected' as StreamTabId,
       'Factor[n^7 - n]',
     );
     expect(
       explicit.decisions.submitBash(show.payload.requestId, {
         action: 'reject',
+        ...(feedback === undefined ? {} : { feedback }),
       }),
     ).toBe(true);
 
     await expect(result).resolves.toMatchObject({
       status: 'error',
-      userInstruction: expect.stringContaining('Do not retry'),
+      userInstruction: expectedInstruction,
     });
     expect(execute).not.toHaveBeenCalled();
   });
@@ -150,10 +142,12 @@ describe('wolframRunSummary', () => {
     expect(out.length).toBe('Executed: '.length + 60);
   });
 
-  it('falls back to plain "Executed" when the code is empty or blank', () => {
-    expect(wolframRunSummary('')).toBe('Executed');
-    expect(wolframRunSummary('   \n  \t ')).toBe('Executed');
-  });
+  it.each(['', '   \n  \t '])(
+    'falls back to plain "Executed" for blank code %j',
+    (code) => {
+      expect(wolframRunSummary(code)).toBe('Executed');
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

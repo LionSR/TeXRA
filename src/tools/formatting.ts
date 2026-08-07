@@ -102,7 +102,7 @@ export function formatFileView({
 
   // -- output ---------------------------------------------------------------
   const segments: string[] = [];
-  if (visibleLines.length > 0) {
+  if (visibleCount > 0) {
     segments.push(formatLinesWithNumbers(visibleLines, startLine).join('\n'));
   }
   if (truncated) {

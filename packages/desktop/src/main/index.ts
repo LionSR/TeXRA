@@ -544,16 +544,14 @@ function createWindow(options: {
       // external-editor flow, so diffs never silently disappear.
       postToRenderer: (message) => {
         const ipc = ipcRef.current;
-        if (!ipc) return false;
-        if (window.isDestroyed()) return false;
+        if (!ipc || window.isDestroyed()) return false;
         ipc.postToRenderer(message);
         return true;
       },
     }).openDiff,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file' }),
-    chooseTeamAvailability: (unavailableNames) =>
-      chooseTeamAvailability(unavailableNames),
+    chooseTeamAvailability,
     signInForRemoteAgentCatalog,
     showInfoMessage,
     showWarningMessage,
@@ -657,9 +655,7 @@ function createWindow(options: {
         return result.canceled ? undefined : result.filePaths[0];
       },
       openPath: previewHost.openPath,
-      revealPath: async (filePath) => {
-        shell.showItemInFolder(filePath);
-      },
+      revealPath: async (filePath) => shell.showItemInFolder(filePath),
     },
     renderer: {
       postToRenderer,
@@ -1047,9 +1043,7 @@ function createWindow(options: {
     logs: {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: options.workspacePath }),
-      copyLog: async (text) => {
-        clipboard.writeText(text);
-      },
+      copyLog: async (text) => clipboard.writeText(text),
       exportLog: async (text) => {
         const result = await dialog.showSaveDialog(window, {
           title: 'Export TeXRA Desktop Log',
@@ -1280,9 +1274,7 @@ if (protocolLifecycle.shouldContinue) {
         }
 
         app.on('activate', () => {
-          if (BrowserWindow.getAllWindows().length === 0) {
-            reopenMainWindow?.();
-          }
+          if (BrowserWindow.getAllWindows().length === 0) reopenMainWindow?.();
         });
       } catch (error) {
         await lifecycle.runShutdown();

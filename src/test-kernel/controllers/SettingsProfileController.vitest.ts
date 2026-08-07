@@ -10,6 +10,10 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
+const MAX_ATTEMPTS_KEY = 'texra.model.retry.maxAttempts';
+const INVALID_MAX_ATTEMPTS = [2.5, 6];
+const COMPACTION_KEY = 'texra.model.compactionThresholdPercent';
+
 const providerSettings = {
   openai: [
     {
@@ -201,7 +205,7 @@ describe('SettingsProfileController', () => {
     const { controller, config, invalidations } = createController();
 
     const result = await controller.setProviderSetting({
-      key: 'texra.model.retry.maxAttempts',
+      key: MAX_ATTEMPTS_KEY,
       value: 3,
     });
 
@@ -209,11 +213,11 @@ describe('SettingsProfileController', () => {
       kind: 'updated',
       affectsModelAvailability: false,
     });
-    expect(config['texra.model.retry.maxAttempts']).toBe(3);
+    expect(config[MAX_ATTEMPTS_KEY]).toBe(3);
     expect(invalidations.count).toBe(0);
     expect(controller.getReliabilitySettings()).toContainEqual(
       expect.objectContaining({
-        key: 'texra.model.retry.maxAttempts',
+        key: MAX_ATTEMPTS_KEY,
         label: 'Automatic retries',
         min: 0,
         max: 5,
@@ -223,34 +227,34 @@ describe('SettingsProfileController', () => {
     );
   });
 
-  it.each([2.5, 6])(
+  it.each(INVALID_MAX_ATTEMPTS)(
     'rejects invalid automatic retry value %s at the settings boundary',
     async (value) => {
       const { controller, config } = createController();
 
       const result = await controller.setProviderSetting({
-        key: 'texra.model.retry.maxAttempts',
+        key: MAX_ATTEMPTS_KEY,
         value,
       });
 
       expect(result).toEqual({
         kind: 'rejected',
-        key: 'texra.model.retry.maxAttempts',
+        key: MAX_ATTEMPTS_KEY,
       });
-      expect(config).not.toHaveProperty('texra.model.retry.maxAttempts');
+      expect(config).not.toHaveProperty(MAX_ATTEMPTS_KEY);
     },
   );
 
-  it.each([2.5, 6])(
+  it.each(INVALID_MAX_ATTEMPTS)(
     'shows the default when persisted automatic retries are invalid (%s)',
     (value) => {
       const { controller } = createController({
-        config: { 'texra.model.retry.maxAttempts': value },
+        config: { [MAX_ATTEMPTS_KEY]: value },
       });
 
       expect(controller.getReliabilitySettings()).toContainEqual(
         expect.objectContaining({
-          key: 'texra.model.retry.maxAttempts',
+          key: MAX_ATTEMPTS_KEY,
           value: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
         }),
       );
@@ -259,12 +263,12 @@ describe('SettingsProfileController', () => {
 
   it('does not mask a compaction value that runtime still reads directly', () => {
     const { controller } = createController({
-      config: { 'texra.model.compactionThresholdPercent': 101 },
+      config: { [COMPACTION_KEY]: 101 },
     });
 
     expect(controller.getReliabilitySettings()).toContainEqual(
       expect.objectContaining({
-        key: 'texra.model.compactionThresholdPercent',
+        key: COMPACTION_KEY,
         value: 101,
       }),
     );
@@ -274,7 +278,7 @@ describe('SettingsProfileController', () => {
     const { controller, config } = createController();
 
     const result = await controller.setProviderSetting({
-      key: 'texra.model.compactionThresholdPercent',
+      key: COMPACTION_KEY,
       value: 101,
     });
 
@@ -282,7 +286,7 @@ describe('SettingsProfileController', () => {
       kind: 'updated',
       affectsModelAvailability: false,
     });
-    expect(config['texra.model.compactionThresholdPercent']).toBe(101);
+    expect(config[COMPACTION_KEY]).toBe(101);
   });
 
   it('defaults reliability settings to DEFAULT_CORE_SETTINGS.model.retry (no drift from the catalog)', () => {
@@ -292,7 +296,7 @@ describe('SettingsProfileController', () => {
 
     expect(reliabilitySettings).toContainEqual(
       expect.objectContaining({
-        key: 'texra.model.retry.maxAttempts',
+        key: MAX_ATTEMPTS_KEY,
         value: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
       }),
     );

@@ -23,6 +23,10 @@ export interface CriticismAnnotation {
 const MACRO = '\\criticize';
 const INTEGER = /^\d+$/;
 
+function parseIntegerOrNaN(text: string): number {
+  return INTEGER.test(text) ? Number.parseInt(text, 10) : NaN;
+}
+
 function readBraceGroup(
   source: string,
   index: number,
@@ -113,14 +117,8 @@ export function parseCriticismAnnotations(
       continue;
     }
 
-    const severityText = arg2.content.trim();
-    const confidenceText = arg3.content.trim();
-    const severity = INTEGER.test(severityText)
-      ? Number.parseInt(severityText, 10)
-      : NaN;
-    const confidence = INTEGER.test(confidenceText)
-      ? Number.parseInt(confidenceText, 10)
-      : NaN;
+    const severity = parseIntegerOrNaN(arg2.content.trim());
+    const confidence = parseIntegerOrNaN(arg3.content.trim());
     if (
       Number.isFinite(severity) &&
       Number.isFinite(confidence) &&

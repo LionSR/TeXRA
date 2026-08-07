@@ -45,35 +45,43 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
     assert.equal(result.text, `the document body\n${END_TAG}`);
   });
 
-  it('does not forge an end tag for an o-series reasoning model (no stop configured)', () => {
-    // o-series reasoning models never configure `stop`, so a natural STOP does
-    // not imply the provider stripped the tag — forging it could mask
-    // genuinely incomplete output as complete.
-    const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig({
-        provider: ModelProvider.OPENAI,
-        capabilities: { supportsReasoning: true, supportsVision: false },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
+  // Reasoning models never configure `stop`, so a natural STOP does not imply
+  // the provider stripped the tag — forging it could mask genuinely incomplete
+  // output as complete. ModelHandlerXAI inherits the gated behavior via
+  // super.extractResponse().
+  it.each([
+    {
+      name: 'an o-series reasoning model',
+      build: (): ModelHandlerOpenAI =>
+        new ModelHandlerOpenAI(
+          buildTestModelConfig({
+            provider: ModelProvider.OPENAI,
+            capabilities: { supportsReasoning: true, supportsVision: false },
+          }),
+        ),
+    },
+    {
+      name: 'a Grok reasoning model',
+      build: (): ModelHandlerOpenAI =>
+        new ModelHandlerXAI(
+          buildTestModelConfig({
+            provider: ModelProvider.XAI,
+            capabilities: { supportsReasoning: true, supportsVision: false },
+          }),
+        ),
+    },
+  ])(
+    'does not forge an end tag for $name (no stop configured)',
+    ({ build }) => {
+      const handler = build();
+      handler.setLogger({ ...noopTrace });
 
-    const result = handler.extractResponse(completionWithoutEndTag(), END_TAG);
+      const result = handler.extractResponse(
+        completionWithoutEndTag(),
+        END_TAG,
+      );
 
-    assert.equal(result.text, 'the document body');
-  });
-
-  it('does not forge an end tag for a Grok reasoning model (no stop configured)', () => {
-    // ModelHandlerXAI inherits the gated behavior via super.extractResponse().
-    const handler = new ModelHandlerXAI(
-      buildTestModelConfig({
-        provider: ModelProvider.XAI,
-        capabilities: { supportsReasoning: true, supportsVision: false },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-
-    const result = handler.extractResponse(completionWithoutEndTag(), END_TAG);
-
-    assert.equal(result.text, 'the document body');
-  });
+      assert.equal(result.text, 'the document body');
+    },
+  );
 });

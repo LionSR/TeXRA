@@ -84,7 +84,7 @@ export function prepareBashApprovalPrompt(
   return {
     requestId: `bash-${generateShortId()}`,
     command: request.command,
-    ...(cwd ? { cwd } : {}),
+    ...(cwd && { cwd }),
     allowBypass: !isBypassed,
     streamId: streamId ?? '',
   };
@@ -123,7 +123,7 @@ export async function requestBashApproval(
     prompt: () =>
       session.interactions.requestBashApproval({
         command: request.command,
-        ...(request.cwd ? { cwd: request.cwd } : {}),
+        ...(request.cwd && { cwd: request.cwd }),
         streamId,
       }),
     bypassed: () => ({ action: 'approve' }),

@@ -121,19 +121,17 @@ describe('NdjsonStdoutSink', () => {
 });
 
 describe('CLI pipe errors', () => {
+  function errorWithCode(message: string, code: string): Error {
+    return Object.assign(new Error(message), { code });
+  }
+
   it('recognizes pipe closure errors as non-fatal output events', () => {
+    expect(isCliPipeClosureError(errorWithCode('write EPIPE', 'EPIPE'))).toBe(
+      true,
+    );
     expect(
       isCliPipeClosureError(
-        Object.assign(new Error('write EPIPE'), {
-          code: 'EPIPE',
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      isCliPipeClosureError(
-        Object.assign(new Error('stream destroyed'), {
-          code: 'ERR_STREAM_DESTROYED',
-        }),
+        errorWithCode('stream destroyed', 'ERR_STREAM_DESTROYED'),
       ),
     ).toBe(true);
     expect(isCliPipeClosureError(new Error('disk full'))).toBe(false);

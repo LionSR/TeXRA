@@ -24,20 +24,18 @@ describe('check-guidance-refs Markdown links', () => {
     expect(result.stdout).toContain('AGENTS.md, src/README.md');
   });
 
-  it('reports broken inline, full-reference, and shortcut links', () => {
+  it('reports broken inline, reference, and shortcut links plus broken images', () => {
     const result = runFixture('broken');
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('agent/core/missing.md');
-    expect(result.stderr).toContain('missing.md');
-    expect(result.stderr).toContain('nowhere.md');
-    expect(result.stderr).toContain('collapsed.md');
-  });
-
-  it('reports broken reference-style images', () => {
-    const result = runFixture('broken');
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('nowhere.png');
+    for (const missing of [
+      'agent/core/missing.md',
+      'missing.md',
+      'nowhere.md',
+      'collapsed.md',
+      'nowhere.png',
+    ]) {
+      expect(result.stderr).toContain(missing);
+    }
   });
 });

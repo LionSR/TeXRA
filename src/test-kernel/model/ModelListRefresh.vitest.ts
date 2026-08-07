@@ -106,11 +106,12 @@ describe('migrateCopilotModelRouteSelections', () => {
     ).toBeUndefined();
   });
 
-  it('keeps a pre-existing canonical reasoning override over the copilot one', async () => {
-    for (const levels of [
-      { 'copilot:sonnet46': 'high', sonnet46: 'low' },
-      { sonnet46: 'low', 'copilot:sonnet46': 'high' },
-    ]) {
+  it.each([
+    { 'copilot:sonnet46': 'high', sonnet46: 'low' },
+    { sonnet46: 'low', 'copilot:sonnet46': 'high' },
+  ])(
+    'keeps a pre-existing canonical reasoning override over the copilot one (%#)',
+    async (levels) => {
       const state = new FakeStateStore({
         [GlobalStateKey.REASONING_LEVELS]: levels,
       });
@@ -120,6 +121,6 @@ describe('migrateCopilotModelRouteSelections', () => {
       expect(
         state.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {}),
       ).toEqual({ sonnet46: 'low' });
-    }
-  });
+    },
+  );
 });

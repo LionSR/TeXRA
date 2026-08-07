@@ -56,6 +56,23 @@ function externalInquiryPayload(streamId: string): ApprovalPayload {
   };
 }
 
+function decideForeground(accepted: boolean): void {
+  currentApproval.get()?.decide({ accepted });
+}
+
+async function waitForForeground(payload: ApprovalPayload): Promise<void> {
+  await vi.waitFor(() => {
+    expect(currentApproval.get()?.payload).toBe(payload);
+  });
+}
+
+function promoteStream(
+  streamId: string,
+  options?: { includeSessionWide: boolean },
+): void {
+  promoteApprovalsForStream(streamId as StreamTabId, options);
+}
+
 afterEach(() => {
   clearApprovals();
   notifyMock.mockClear();
@@ -70,9 +87,7 @@ describe('CLI approval queue', () => {
     const firstResult = enqueueApproval(first, {
       onPresent: () => presented.push('child-1'),
     });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(first);
-    });
+    await waitForForeground(first);
     expect(presented).toEqual(['child-1']);
 
     const secondResult = enqueueApproval(second, {
@@ -82,14 +97,12 @@ describe('CLI approval queue', () => {
     expect(currentApproval.get()?.payload).toBe(first);
     expect(presented).toEqual(['child-1']);
 
-    currentApproval.get()?.decide({ accepted: true });
+    decideForeground(true);
     await expect(firstResult).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(second);
-    });
+    await waitForForeground(second);
     expect(presented).toEqual(['child-1', 'child-2']);
 
-    currentApproval.get()?.decide({ accepted: false });
+    decideForeground(false);
     await expect(secondResult).resolves.toEqual({ accepted: false });
     expect(currentApproval.get()).toBeUndefined();
   });
@@ -102,11 +115,9 @@ describe('CLI approval queue', () => {
       depth: 1,
       kind: 'question',
     });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(question);
-    });
+    await waitForForeground(question);
 
-    currentApproval.get()?.decide({ accepted: true });
+    decideForeground(true);
     await expect(questionResult).resolves.toEqual({ accepted: true });
     expect(approvalQueueStatus.get()).toEqual({
       depth: 0,
@@ -122,17 +133,15 @@ describe('CLI approval queue', () => {
       depth: 2,
       kind: 'request',
     });
-    currentApproval.get()?.decide({ accepted: false });
+    decideForeground(false);
     await expect(approvalResult).resolves.toEqual({ accepted: false });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(mixedQuestion);
-    });
+    await waitForForeground(mixedQuestion);
     expect(approvalQueueStatus.get()).toEqual({
       depth: 1,
       kind: 'question',
     });
 
-    currentApproval.get()?.decide({ accepted: false });
+    decideForeground(false);
     await expect(mixedQuestionResult).resolves.toEqual({ accepted: false });
   });
 
@@ -142,9 +151,7 @@ describe('CLI approval queue', () => {
     const firstResult = enqueueApproval(first);
     const secondResult = enqueueApproval(second);
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(first);
-    });
+    await waitForForeground(first);
     expect(approvalQueueStatus.get()).toEqual({
       depth: 2,
       kind: 'approval',
@@ -162,11 +169,9 @@ describe('CLI approval queue', () => {
 
     const next = bashPayload('child-3');
     const nextResult = enqueueApproval(next);
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(next);
-    });
+    await waitForForeground(next);
 
-    currentApproval.get()?.decide({ accepted: true });
+    decideForeground(true);
     await expect(nextResult).resolves.toEqual({ accepted: true });
 
     const cancelledDuringPresentation = enqueueApproval(
@@ -184,9 +189,7 @@ describe('CLI approval queue', () => {
 
     try {
       const firstResult = enqueueTuiApproval(first);
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toBe(first);
-      });
+      await waitForForeground(first);
       expect(emit).toHaveBeenNthCalledWith(1, {
         scope: 'session',
         event: {
@@ -203,11 +206,9 @@ describe('CLI approval queue', () => {
       expect(currentApproval.get()?.payload).toBe(first);
       expect(notifyMock).toHaveBeenCalledTimes(1);
 
-      currentApproval.get()?.decide({ accepted: true });
+      decideForeground(true);
       await expect(firstResult).resolves.toEqual({ accepted: true });
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toBe(second);
-      });
+      await waitForForeground(second);
       expect(emit).toHaveBeenNthCalledWith(2, {
         scope: 'session',
         event: {
@@ -219,7 +220,7 @@ describe('CLI approval queue', () => {
         kind: 'approvalNeeded',
       });
 
-      currentApproval.get()?.decide({ accepted: false });
+      decideForeground(false);
       await expect(secondResult).resolves.toEqual({ accepted: false });
     } finally {
       emit.mockRestore();
@@ -274,9 +275,7 @@ describe('CLI approval queue', () => {
       onPresent: () => presented.push('untouched'),
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(planPayload);
-    });
+    await waitForForeground(planPayload);
 
     clearApprovalsWhere(
       (payload) => approvalPayloadStreamId(payload) === 'stream-a',
@@ -286,11 +285,9 @@ describe('CLI approval queue', () => {
     await expect(staleResult).resolves.toEqual(INTERRUPTED);
 
     // stream-b was never touched and now becomes the foreground modal.
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(untouched);
-    });
+    await waitForForeground(untouched);
     expect(presented).toEqual(['plan', 'untouched']);
-    currentApproval.get()?.decide({ accepted: true });
+    decideForeground(true);
     await expect(untouchedResult).resolves.toEqual({ accepted: true });
   });
 
@@ -324,11 +321,9 @@ describe('CLI approval queue', () => {
     const secondResult = enqueueApproval(second, {
       onPresent: () => presented.push('child-2'),
     });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(first);
-    });
+    await waitForForeground(first);
 
-    promoteApprovalsForStream('child-2' as StreamTabId);
+    promoteStream('child-2');
 
     // The promoted item is foregrounded; nothing was settled or resolved.
     expect(currentApproval.get()?.payload).toBe(second);
@@ -343,7 +338,7 @@ describe('CLI approval queue', () => {
     ]);
 
     // Promoting an absent stream is a no-op.
-    promoteApprovalsForStream('missing' as StreamTabId);
+    promoteStream('missing');
     expect(currentApproval.get()?.payload).toBe(second);
 
     // A matching head does not short-circuit gathering the stream's later
@@ -351,7 +346,7 @@ describe('CLI approval queue', () => {
     // trailing item up behind the head without re-projecting the foreground.
     const third = bashPayload('child-2');
     const thirdResult = enqueueApproval(third);
-    promoteApprovalsForStream('child-2' as StreamTabId);
+    promoteStream('child-2');
     expect(currentApproval.get()?.payload).toBe(second);
     expect(pendingApprovalSummaries.get()).toEqual([
       { streamKey: 'child-2', kind: 'bash' },
@@ -361,19 +356,15 @@ describe('CLI approval queue', () => {
     // Settling the promoted head presents the pulled-up item next; the
     // demoted item re-presents last, but its presentation side effects do
     // not fire a second time.
-    currentApproval.get()?.decide({ accepted: true });
+    decideForeground(true);
     await expect(secondResult).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(third);
-    });
-    currentApproval.get()?.decide({ accepted: true });
+    await waitForForeground(third);
+    decideForeground(true);
     await expect(thirdResult).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(first);
-    });
+    await waitForForeground(first);
     expect(presented).toEqual(['child-1', 'child-2']);
 
-    currentApproval.get()?.decide({ accepted: false });
+    decideForeground(false);
     await expect(firstResult).resolves.toEqual({ accepted: false });
   });
 
@@ -384,13 +375,9 @@ describe('CLI approval queue', () => {
     const childResult = enqueueApproval(childItem);
     const sessionWideResult = enqueueApproval(sessionWide);
     const rootResult = enqueueApproval(rootItem);
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(childItem);
-    });
+    await waitForForeground(childItem);
 
-    promoteApprovalsForStream('root' as StreamTabId, {
-      includeSessionWide: true,
-    });
+    promoteStream('root', { includeSessionWide: true });
 
     // Session-wide and root items lead, preserving their relative order.
     expect(pendingApprovalSummaries.get()).toEqual([
@@ -400,17 +387,13 @@ describe('CLI approval queue', () => {
     ]);
     expect(currentApproval.get()?.payload).toBe(sessionWide);
 
-    currentApproval.get()?.decide({ accepted: true });
+    decideForeground(true);
     await expect(sessionWideResult).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(rootItem);
-    });
-    currentApproval.get()?.decide({ accepted: true });
+    await waitForForeground(rootItem);
+    decideForeground(true);
     await expect(rootResult).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toBe(childItem);
-    });
-    currentApproval.get()?.decide({ accepted: false });
+    await waitForForeground(childItem);
+    decideForeground(false);
     await expect(childResult).resolves.toEqual({ accepted: false });
   });
 });

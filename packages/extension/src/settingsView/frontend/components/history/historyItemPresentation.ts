@@ -42,7 +42,12 @@ export function getHistoryItemPresentation(item: HistoryItem) {
   const description = item.description?.trim() || null;
   const sections: HistoryConfigSection[] = [];
 
-  if (config.agentCategory === AgentCategory.Workflow) {
+  if (isToolUse) {
+    sections.push({
+      label: 'Edited files',
+      entries: [['Files', config.editedFiles]],
+    });
+  } else {
     sections.push(
       { label: 'Context', entries: [['ContextFiles', config.contextFiles]] },
       { label: 'Output files', entries: [['Files', config.outputFiles]] },
@@ -54,11 +59,6 @@ export function getHistoryItemPresentation(item: HistoryItem) {
         entries: Object.entries(config.toolConfig),
       });
     }
-  } else {
-    sections.push({
-      label: 'Edited files',
-      entries: [['Files', config.editedFiles]],
-    });
   }
 
   return {
@@ -77,14 +77,8 @@ export function getHistoryItemPresentation(item: HistoryItem) {
       instruction && description && description !== instruction
         ? description
         : null,
-    inputFiles:
-      config.agentCategory === AgentCategory.Workflow
-        ? (config.inputFiles ?? [])
-        : [],
-    mediaFiles:
-      config.agentCategory === AgentCategory.Workflow
-        ? (config.mediaFiles ?? [])
-        : [],
+    inputFiles: isToolUse ? [] : (config.inputFiles ?? []),
+    mediaFiles: isToolUse ? [] : (config.mediaFiles ?? []),
     sections,
   };
 }

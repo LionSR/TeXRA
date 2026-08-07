@@ -4,6 +4,8 @@ import { describe, it } from 'vitest';
 import {
   computeStreamTreeProjection,
   getStreamBranchActivity,
+  type StreamTreeExpansionOverride,
+  type StreamTreeProjection,
 } from '@progressView/frontend/streamTree';
 import type { StreamState } from '@progressView/frontend/store';
 import {
@@ -30,15 +32,23 @@ function streamState(status: StreamLifecycleStatus): StreamState {
   return createStreamState(AgentCategory.ToolUse, { status });
 }
 
+function project(
+  childStreamsByParent: Map<string, StreamTabInfo[]>,
+  streamStates: Map<string, StreamState> = new Map(),
+  userOverrides: Map<string, StreamTreeExpansionOverride> = new Map(),
+): StreamTreeProjection {
+  return computeStreamTreeProjection({
+    streamStates,
+    childStreamsByParent,
+    userOverrides,
+  });
+}
+
 describe('progress stream tree policy', () => {
   it('keeps a parent expanded while a child has not reported status yet', () => {
     const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
 
-    const projection = computeStreamTreeProjection({
-      streamStates: new Map(),
-      childStreamsByParent,
-      userOverrides: new Map(),
-    });
+    const projection = project(childStreamsByParent);
 
     assert.equal(projection.expandedParents.has('root'), true);
     assert.equal(
@@ -59,11 +69,7 @@ describe('progress stream tree policy', () => {
       ['child-b', streamState(STREAM_PHASE.FAILED)],
     ]);
 
-    const projection = computeStreamTreeProjection({
-      streamStates,
-      childStreamsByParent,
-      userOverrides: new Map(),
-    });
+    const projection = project(childStreamsByParent, streamStates);
 
     assert.equal(projection.expandedParents.has('root'), false);
     assert.equal(projection.branchActivityByStream.get('child-a'), 'finished');
@@ -80,11 +86,7 @@ describe('progress stream tree policy', () => {
       ['grandchild', streamState(STREAM_STATUS.RUNNING)],
     ]);
 
-    const projection = computeStreamTreeProjection({
-      streamStates,
-      childStreamsByParent,
-      userOverrides: new Map(),
-    });
+    const projection = project(childStreamsByParent, streamStates);
 
     assert.equal(projection.expandedParents.has('root'), true);
     assert.equal(projection.expandedParents.has('child'), true);
@@ -98,14 +100,14 @@ describe('progress stream tree policy', () => {
       ['child', streamState(STREAM_STATUS.RUNNING)],
     ]);
 
-    const projection = computeStreamTreeProjection({
-      streamStates,
+    const projection = project(
       childStreamsByParent,
-      userOverrides: new Map([
+      streamStates,
+      new Map([
         ['root', 'collapsed'],
         ['stale-parent', 'expanded'],
       ]),
-    });
+    );
 
     assert.equal(projection.expandedParents.has('root'), false);
     assert.deepEqual([...projection.userOverrides], [['root', 'collapsed']]);
@@ -117,11 +119,11 @@ describe('progress stream tree policy', () => {
       ['child', streamState(STREAM_PHASE.CANCELLED)],
     ]);
 
-    const projection = computeStreamTreeProjection({
-      streamStates,
+    const projection = project(
       childStreamsByParent,
-      userOverrides: new Map([['root', 'expanded']]),
-    });
+      streamStates,
+      new Map([['root', 'expanded']]),
+    );
 
     assert.equal(projection.expandedParents.has('root'), true);
   });

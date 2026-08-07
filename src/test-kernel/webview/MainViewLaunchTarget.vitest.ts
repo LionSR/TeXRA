@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
-import type { TeamOptionData } from '@shared/schemas';
+import type { SessionType, TeamOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 
 // Local imports - main-view actions, catalog slice, state, and test utilities
@@ -68,6 +68,10 @@ async function flushAnnouncements(): Promise<void> {
   await Promise.resolve();
 }
 
+function stashDraft(sessionType: SessionType, text: string): void {
+  instructionDrafts$.set({ ...instructionDrafts$.get(), [sessionType]: text });
+}
+
 describe('main-view launch target', () => {
   beforeEach(() => {
     resetMainViewState();
@@ -97,14 +101,8 @@ describe('main-view launch target', () => {
   describe('changeLaunchTarget', () => {
     it('switches workflow to interactive team mode atomically, stashing the workflow draft', async () => {
       sessionType$.set('workflow');
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        workflow: 'workflow draft',
-      });
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        toolUse: 'interactive draft',
-      });
+      stashDraft('workflow', 'workflow draft');
+      stashDraft('toolUse', 'interactive draft');
 
       changeLaunchTarget('team');
       await flushAnnouncements();
@@ -122,10 +120,7 @@ describe('main-view launch target', () => {
 
     it('keeps the interactive draft when selecting Team from an interactive session', async () => {
       sessionType$.set('toolUse');
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        toolUse: 'interactive draft',
-      });
+      stashDraft('toolUse', 'interactive draft');
 
       changeLaunchTarget('team');
       await flushAnnouncements();
@@ -198,10 +193,7 @@ describe('main-view launch target', () => {
     it('leaves the session interactive when switching Team back to Agent', async () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        toolUse: 'team draft',
-      });
+      stashDraft('toolUse', 'team draft');
 
       changeLaunchTarget('agent');
       await flushAnnouncements();
@@ -224,14 +216,8 @@ describe('main-view launch target', () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
       selectedTeamId$.set('physicist');
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        toolUse: 'interactive draft',
-      });
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        workflow: 'workflow draft',
-      });
+      stashDraft('toolUse', 'interactive draft');
+      stashDraft('workflow', 'workflow draft');
 
       changeSessionType('workflow');
       await flushAnnouncements();
@@ -260,14 +246,8 @@ describe('main-view launch target', () => {
   describe('per-mode instruction drafts', () => {
     it('follows the active session mode without a stash step', () => {
       sessionType$.set('workflow');
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        workflow: 'workflow draft',
-      });
-      instructionDrafts$.set({
-        ...instructionDrafts$.get(),
-        toolUse: 'interactive draft',
-      });
+      stashDraft('workflow', 'workflow draft');
+      stashDraft('toolUse', 'interactive draft');
 
       expect(instruction$.get()).toBe('workflow draft');
 

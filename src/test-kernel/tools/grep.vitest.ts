@@ -32,21 +32,13 @@ describe('buildArguments', () => {
     assert.ok(args.includes('--fixed-strings'));
   });
 
-  it('omits --fixed-strings when literal is false or nullish', () => {
-    const argsWithFalse = buildArguments(
-      { ...baseInput, literal: false },
-      'content',
-    );
-    const argsWithNull = buildArguments(
-      { ...baseInput, literal: null },
-      'content',
-    );
-    const argsWithUndefined = buildArguments(baseInput, 'content');
-
-    assert.ok(!argsWithFalse.includes('--fixed-strings'));
-    assert.ok(!argsWithNull.includes('--fixed-strings'));
-    assert.ok(!argsWithUndefined.includes('--fixed-strings'));
-  });
+  it.each([false, null, undefined])(
+    'omits --fixed-strings when literal is %s',
+    (literal) => {
+      const args = buildArguments({ ...baseInput, literal }, 'content');
+      assert.ok(!args.includes('--fixed-strings'));
+    },
+  );
 });
 
 describe('GrepTool execution', () => {
@@ -55,6 +47,14 @@ describe('GrepTool execution', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  function mockWorkspaceGitignore(): void {
+    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
+      hasRules: true,
+      ignores: () => false,
+      ignoreFiles: ['/workspace/.gitignore'],
+    });
+  }
 
   it('preserves total-count and offset/head_limit pagination semantics', async () => {
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
@@ -128,11 +128,7 @@ describe('GrepTool execution', () => {
   });
 
   it('does not apply workspace ignore files to unrestricted external searches', async () => {
-    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
-      hasRules: true,
-      ignores: () => false,
-      ignoreFiles: ['/workspace/.gitignore'],
-    });
+    mockWorkspaceGitignore();
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
       stdout: '/outside/dist/external.tex:external\n',
@@ -164,11 +160,7 @@ describe('GrepTool execution', () => {
   });
 
   it('retains workspace ignore files for an explicit working directory', async () => {
-    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
-      hasRules: true,
-      ignores: () => false,
-      ignoreFiles: ['/workspace/.gitignore'],
-    });
+    mockWorkspaceGitignore();
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
       stdout: null,

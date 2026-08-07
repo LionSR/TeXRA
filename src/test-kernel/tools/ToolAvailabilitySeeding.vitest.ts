@@ -29,27 +29,22 @@ describe('seedDisabledToolDefaults', () => {
     );
   });
 
-  it('does not seed for a host with a prior-install version marker', async () => {
-    await installPlatform({
+  it.each([
+    {
+      name: 'a host with a prior-install version marker',
       globalState: { [VERSION_KEY]: '1.2.3' },
-    });
-
-    await seedDisabledToolDefaults(VERSION_KEY);
-
-    expect(
-      platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
-    ).toBeUndefined();
-  });
-
-  it('never overwrites an already-seeded DISABLED_TOOLS list, even an empty one', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] },
-    });
+    },
+    {
+      name: 'an already-seeded DISABLED_TOOLS list, even an empty one',
+      globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
+    },
+  ])('does not seed for $name', async ({ globalState }) => {
+    await installPlatform({ globalState });
 
     await seedDisabledToolDefaults(VERSION_KEY);
 
     expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-      [],
+      globalState[GlobalStateKey.DISABLED_TOOLS],
     );
   });
 });

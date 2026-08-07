@@ -253,14 +253,13 @@ export class SessionHandle {
       this.transcripts.mode.kind === 'persistent' &&
       init.restartRepair !== 'deferred'
     ) {
-      const startupRepair = this.enqueueRestartRepair(() =>
+      this.restartRepairPromise = this.enqueueRestartRepair(() =>
         this.repairStoresAfterRestart(this.storageGeneration),
       );
-      this.restartRepairPromise = startupRepair;
       // Construction cannot be awaited. Hosts observe the same promise
       // through waitUntilReady(); this branch only prevents a rejection from
       // becoming unhandled before the host reaches that boundary.
-      void startupRepair.catch(() => undefined);
+      void this.restartRepairPromise.catch(() => undefined);
     }
   }
 
@@ -308,11 +307,9 @@ export class SessionHandle {
       return Promise.resolve(false);
     }
     const hasPendingStorageChange =
-      hooks === undefined
-        ? platform().storage.hasPendingWorkspaceStorageChange?.()
-        : platform().storage.hasPendingWorkspaceStorageChange?.({
-            workspacePath: hooks.workspacePath,
-          });
+      platform().storage.hasPendingWorkspaceStorageChange?.(
+        hooks && { workspacePath: hooks.workspacePath },
+      );
     if (hasPendingStorageChange === false) return Promise.resolve(false);
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
@@ -460,12 +457,9 @@ export class SessionHandle {
       return false;
     }
     const storage = platform().storage;
-    const storageRootChanged =
-      transitionHooks === undefined
-        ? storage.commitWorkspaceStorageChange?.()
-        : storage.commitWorkspaceStorageChange?.({
-            workspacePath: transitionHooks.workspacePath,
-          });
+    const storageRootChanged = storage.commitWorkspaceStorageChange?.(
+      transitionHooks && { workspacePath: transitionHooks.workspacePath },
+    );
     if (storageRootChanged === false) {
       try {
         await transitionHooks?.afterStorageCommit();

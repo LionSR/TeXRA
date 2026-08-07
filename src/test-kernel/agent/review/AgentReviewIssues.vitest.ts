@@ -60,12 +60,12 @@ describe('createReviewIssue', () => {
 });
 
 describe('normalizeReviewFilePath', () => {
-  it('strips diff prefixes and normalizes separators', () => {
-    expect(normalizeReviewFilePath('a/src/x.ts')).toBe('src/x.ts');
-    expect(normalizeReviewFilePath('b/src/x.ts')).toBe('src/x.ts');
-    expect(normalizeReviewFilePath('./src/x.ts')).toBe('src/x.ts');
-    expect(normalizeReviewFilePath('src\\x.ts')).toBe('src/x.ts');
-  });
+  it.each(['a/src/x.ts', 'b/src/x.ts', './src/x.ts', 'src\\x.ts'])(
+    'strips diff prefixes and normalizes separators: %s',
+    (input) => {
+      expect(normalizeReviewFilePath(input)).toBe('src/x.ts');
+    },
+  );
 });
 
 describe('buildReviewInstruction', () => {

@@ -16,6 +16,10 @@ import {
 // structuredOutput.ts; assert against the literal here.
 const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 
+function makeCapture() {
+  return vi.fn<(value: unknown) => void>();
+}
+
 describe('normalizeStructuredOutputSchema', () => {
   it('normalizes a JSON Schema object through the pinned Zod API', async () => {
     const jsonSchema = {
@@ -29,7 +33,7 @@ describe('normalizeStructuredOutputSchema', () => {
     };
 
     const normalized = normalizeStructuredOutputSchema(jsonSchema);
-    const capture = vi.fn<(value: unknown) => void>();
+    const capture = makeCapture();
     const tool = buildTerminalTool(jsonSchema, capture);
 
     expect(normalized.jsonSchema).toMatchObject(jsonSchema);
@@ -154,7 +158,7 @@ describe('buildTerminalTool', () => {
   const schema = z.strictObject({ title: z.string(), count: z.number() });
 
   it('captures already-validated input and returns a success result', async () => {
-    const capture = vi.fn<(value: unknown) => void>();
+    const capture = makeCapture();
     const tool = buildTerminalTool(schema, capture);
 
     expect(tool.definition.name).toBe(SUBMIT_OUTPUT_TOOL_NAME);
@@ -166,7 +170,7 @@ describe('buildTerminalTool', () => {
   });
 
   it('rejects invalid input via its own schema before execute (repair path)', async () => {
-    const capture = vi.fn<(value: unknown) => void>();
+    const capture = makeCapture();
     const tool = buildTerminalTool(schema, capture);
 
     const result = await tool.call({ title: 'Lemma', count: 'two' });
@@ -182,7 +186,7 @@ describe('buildTerminalTool', () => {
   });
 
   it('supports async Zod validation through the canonical tool boundary', async () => {
-    const capture = vi.fn<(value: unknown) => void>();
+    const capture = makeCapture();
     const tool = buildTerminalTool(
       z.strictObject({
         title: z.string().refine(async (value) => value === 'accepted'),
@@ -199,7 +203,7 @@ describe('buildTerminalTool', () => {
   });
 
   it('rejects transformed values that cannot cross the JSON boundary', async () => {
-    const capture = vi.fn<(value: unknown) => void>();
+    const capture = makeCapture();
     const tool = buildTerminalTool(
       z.strictObject({ value: z.string().transform(() => 1n) }),
       capture,
@@ -212,7 +216,7 @@ describe('buildTerminalTool', () => {
   });
 
   it('accepts only one structured result per run', async () => {
-    const capture = vi.fn<(value: unknown) => void>();
+    const capture = makeCapture();
     const tool = buildTerminalTool(schema, capture);
 
     await expect(
@@ -225,8 +229,8 @@ describe('buildTerminalTool', () => {
   });
 
   it('binds capture per instance so concurrent runs never share a sink', async () => {
-    const captureA = vi.fn<(value: unknown) => void>();
-    const captureB = vi.fn<(value: unknown) => void>();
+    const captureA = makeCapture();
+    const captureB = makeCapture();
     const toolA = buildTerminalTool(schema, captureA);
     const toolB = buildTerminalTool(schema, captureB);
 
@@ -239,18 +243,21 @@ describe('buildTerminalTool', () => {
 
 describe('buildOverlayToolRegistry', () => {
   const schema = z.strictObject({ title: z.string() });
-  const tool = (name: string) =>
-    ({
+
+  function stubTool(name: string): ITool {
+    return {
       definition: { name, description: name, parameters: {} },
-    }) as ITool;
+    } as ITool;
+  }
+
   const realTool = {
     definition: { name: 'read_file', description: 'read', parameters: {} },
   } as ITool;
   const base = new MapToolRegistry({ read_file: realTool });
 
   it('resolves every run-scoped tool while delegating other lookups', () => {
-    const first = tool('first');
-    const second = tool('second');
+    const first = stubTool('first');
+    const second = stubTool('second');
     const terminalTool = buildTerminalTool(schema, vi.fn());
     const overlay = buildOverlayToolRegistry(base, [
       first,
@@ -267,8 +274,8 @@ describe('buildOverlayToolRegistry', () => {
   });
 
   it('isolates concurrent overlays without mutating the shared base', () => {
-    const first = tool('first');
-    const second = tool('second');
+    const first = stubTool('first');
+    const second = stubTool('second');
     const firstRun = buildOverlayToolRegistry(base, [first]);
     const secondRun = buildOverlayToolRegistry(base, [second]);
 
@@ -281,8 +288,8 @@ describe('buildOverlayToolRegistry', () => {
   });
 
   it('lets the last run-scoped tool win a name collision', () => {
-    const first = tool('read_file');
-    const second = tool('read_file');
+    const first = stubTool('read_file');
+    const second = stubTool('read_file');
     const overlay = buildOverlayToolRegistry(base, [first, second]);
 
     expect(overlay.get('read_file')).toBe(second);

@@ -33,7 +33,7 @@ interface EntryErrorBoundaryState {
 }
 
 export function formatRenderError(error: unknown): string {
-  let message = '';
+  let message: string;
   try {
     message = toErrorMessage(error);
   } catch {
@@ -41,8 +41,7 @@ export function formatRenderError(error: unknown): string {
   }
   // The marker is a single line: collapse whitespace and cap length so a long
   // or multi-line message can't reflow the transcript.
-  const oneLine = message.replaceAll(/\s+/g, ' ').trim();
-  return truncateWithEllipsis(oneLine, 120);
+  return truncateWithEllipsis(message.replaceAll(/\s+/g, ' ').trim(), 120);
 }
 
 export class EntryErrorBoundary extends Component<

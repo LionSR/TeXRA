@@ -106,36 +106,34 @@ describe('execution lifecycle', () => {
     });
   });
 
-  it('rolls back lease ownership when fresh registration fails', async () => {
+  it.each([
+    {
+      name: 'fresh registration fails',
+      fail: () =>
+        mocks.writeRunRecord.mockRejectedValueOnce(
+          new Error('config write failed'),
+        ),
+      error: 'config write failed',
+    },
+    {
+      name: 'registration preparation throws',
+      fail: () =>
+        mocks.getExecutionStore.mockImplementationOnce(() => {
+          throw new Error('store construction failed');
+        }),
+      error: 'store construction failed',
+    },
+  ])('rolls back lease ownership when $name', async ({ fail, error }) => {
     const executionId = 'abc124' as ExecutionId;
-    mocks.writeRunRecord.mockRejectedValueOnce(
-      new Error('config write failed'),
-    );
+    fail();
 
     await expect(
       registerExecution(executionId, baseConfig, 'chat', {
         streamId: 'chat@deepseekT#abc124' as StreamTabId,
         identity: { kind: 'agent', agent: 'chat' },
       }),
-    ).rejects.toThrow('config write failed');
+    ).rejects.toThrow(error);
 
-    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'missing',
-    });
-  });
-
-  it('rolls back lease ownership when registration preparation throws', async () => {
-    const executionId = 'abc125' as ExecutionId;
-    mocks.getExecutionStore.mockImplementationOnce(() => {
-      throw new Error('store construction failed');
-    });
-
-    await expect(
-      registerExecution(executionId, baseConfig, 'chat', {
-        streamId: 'chat@deepseekT#abc125' as StreamTabId,
-        identity: { kind: 'agent', agent: 'chat' },
-      }),
-    ).rejects.toThrow('store construction failed');
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
       status: 'missing',
     });

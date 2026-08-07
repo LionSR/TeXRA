@@ -37,6 +37,26 @@ function workspaceRoster(): AgentRosterSelection | undefined {
   );
 }
 
+function applyTeam(
+  input: Parameters<ApplyTeamTool['call']>[0],
+): ReturnType<ApplyTeamTool['call']> {
+  return new ApplyTeamTool().call(input);
+}
+
+function expectNoTeamState(): void {
+  expect(workspaceRoster()).toBeUndefined();
+  expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
+}
+
+function mockSignedInCatalogAccess(canAccessCatalog: boolean): void {
+  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+  vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
+    canAccessCatalog,
+  );
+  vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
+}
+
 async function clearOnboardingState(): Promise<void> {
   __resetSetupPlatformForTests();
   setSetupPlatform(createFakeSetupPlatform());
@@ -81,7 +101,7 @@ describe('apply_team', () => {
   beforeEach(clearOnboardingState);
 
   it('applies the starter team as the canonical workspace selection', async () => {
-    const result = await new ApplyTeamTool().call({
+    const result = await applyTeam({
       teamId: 'starter',
       unavailableAction: 'continue',
     });
@@ -91,13 +111,13 @@ describe('apply_team', () => {
   });
 
   it('records the user-level default team id', async () => {
-    await new ApplyTeamTool().call({
+    await applyTeam({
       teamId: 'starter',
       unavailableAction: 'continue',
     });
     expect(getDefaultTeamId(platform().globalState)).toBe('starter');
 
-    await new ApplyTeamTool().call({
+    await applyTeam({
       teamId: 'physicist',
       unavailableAction: 'continue',
     });
@@ -105,7 +125,7 @@ describe('apply_team', () => {
   });
 
   it('reports the relay-served orchestrator as available after sign-in', async () => {
-    const result = await new ApplyTeamTool().call({
+    const result = await applyTeam({
       teamId: 'starter',
       unavailableAction: 'continue',
     });
@@ -117,24 +137,22 @@ describe('apply_team', () => {
   });
 
   it('rejects an unknown teamId without writing any state', async () => {
-    const result = await new ApplyTeamTool().call({ teamId: 'astrologer' });
+    const result = await applyTeam({ teamId: 'astrologer' });
 
     expect(result.status).toBe('error');
-    expect(workspaceRoster()).toBeUndefined();
-    expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
+    expectNoTeamState();
   });
 
   it('performs no writes before an unresolved-team choice', async () => {
-    const result = await new ApplyTeamTool().call({ teamId: 'starter' });
+    const result = await applyTeam({ teamId: 'starter' });
 
     expect(result.status).toBe('executed');
     expect(result.output).toMatch(/Sign in to TeXRA/);
-    expect(workspaceRoster()).toBeUndefined();
-    expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
+    expectNoTeamState();
   });
 
   it('applies a preset declared local-only without prompting for sign-in', async () => {
-    const result = await new ApplyTeamTool().call({
+    const result = await applyTeam({
       teamId: 'software-engineer',
     });
 
@@ -146,7 +164,7 @@ describe('apply_team', () => {
   });
 
   it('cancels without writing roster or default-team state', async () => {
-    const result = await new ApplyTeamTool().call({
+    const result = await applyTeam({
       teamId: 'starter',
       unavailableAction: 'cancel',
     });
@@ -155,19 +173,13 @@ describe('apply_team', () => {
     expect(result.output).toMatch(
       /No roster or default-team state was written/,
     );
-    expect(workspaceRoster()).toBeUndefined();
-    expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
+    expectNoTeamState();
   });
 
   it('honors an explicit continuation when catalog access is available', async () => {
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
-      true,
-    );
-    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
+    mockSignedInCatalogAccess(true);
 
-    const result = await new ApplyTeamTool().call({
+    const result = await applyTeam({
       teamId: 'starter',
       unavailableAction: 'continue',
     });
@@ -180,15 +192,10 @@ describe('apply_team', () => {
 
   it('uses the host setup sign-in capability before its forced retry', async () => {
     const signIn = vi.fn(async () => true);
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
-      false,
-    );
-    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
+    mockSignedInCatalogAccess(false);
     setSetupPlatform(createFakeSetupPlatform({ signIn }));
 
-    const result = await new ApplyTeamTool().call({
+    const result = await applyTeam({
       teamId: 'starter',
       unavailableAction: 'sign-in',
     });

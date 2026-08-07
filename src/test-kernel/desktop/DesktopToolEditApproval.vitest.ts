@@ -1,5 +1,3 @@
-// Test support imports
-
 import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -98,11 +96,9 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 }
 
 function createRecordingRuntimeHost(): RecordingRuntimeHost {
-  const shownToolEditPermissions: ToolEditPermission[] = [];
-  const resolvedToolEditPermissions: Array<{ requestId: string }> = [];
   return {
-    shownToolEditPermissions,
-    resolvedToolEditPermissions,
+    shownToolEditPermissions: [],
+    resolvedToolEditPermissions: [],
     emit: vi.fn(),
   };
 }
@@ -142,21 +138,21 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     | { kind: 'workspace'; absolutePath: string; relativePath: string }
     | { kind: 'external'; absolutePath: string };
   const toMockLocation = (filePath: string): MockLocation => {
-    if (path.isAbsolute(filePath)) {
-      return filePath.startsWith(`${workspacePath}/`)
-        ? {
-            kind: 'workspace',
-            absolutePath: filePath,
-            relativePath: filePath.slice(`${workspacePath}/`.length),
-          }
-        : { kind: 'external', absolutePath: filePath };
+    if (!path.isAbsolute(filePath)) {
+      return {
+        kind: 'workspace',
+        absolutePath: path.join(workspacePath, filePath),
+        relativePath: filePath,
+      };
     }
-
-    return {
-      kind: 'workspace',
-      absolutePath: path.join(workspacePath, filePath),
-      relativePath: filePath,
-    };
+    if (filePath.startsWith(`${workspacePath}/`)) {
+      return {
+        kind: 'workspace',
+        absolutePath: filePath,
+        relativePath: filePath.slice(`${workspacePath}/`.length),
+      };
+    }
+    return { kind: 'external', absolutePath: filePath };
   };
   mocks.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn(() => 'sameDirectory'),
@@ -256,6 +252,7 @@ async function createApprovalFixture(
   options: {
     ui?: DesktopAgentExecutionHost;
     workspacePath?: string;
+    callbacks?: Partial<ReturnType<typeof controllerHostCallbacks>>;
   } = {},
 ): Promise<
   ApprovalModules & {
@@ -272,6 +269,7 @@ async function createApprovalFixture(
   const controller = createApprovalController(modules, {
     interactions,
     ...controllerHostCallbacks(interactions),
+    ...options.callbacks,
     session,
     ui: options.ui ?? createStubDesktopAgentExecutionHost(),
     tempRoot,
@@ -289,17 +287,7 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'approves pending edits only in the selected stream',
     async () => {
-      const tempRoot = await createTempRoot();
-      const modules = await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const session = disposeAfterTest(createTestSession());
-      const controller = createApprovalController(modules, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session,
-        ui: createStubDesktopAgentExecutionHost(),
-        tempRoot,
-      });
+      const { controller, interactions } = await createApprovalFixture();
 
       const target = controller.requestApproval({
         path: '/workspace/target.txt',
@@ -345,22 +333,16 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'isolates host-local prompt failures from the approval result',
     async () => {
-      const tempRoot = await createTempRoot();
-      const modules = await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const session = disposeAfterTest(createTestSession());
       let shown: ToolEditPermission | undefined;
-      const controller = createApprovalController(modules, {
-        interactions,
-        session,
-        ui: createStubDesktopAgentExecutionHost(),
-        tempRoot,
-        showToolEditPermission: (payload) => {
-          shown = payload;
-          throw new Error('show failed');
-        },
-        resolveToolEditPermission: () => {
-          throw new Error('resolve failed');
+      const { controller } = await createApprovalFixture({
+        callbacks: {
+          showToolEditPermission: (payload) => {
+            shown = payload;
+            throw new Error('show failed');
+          },
+          resolveToolEditPermission: () => {
+            throw new Error('resolve failed');
+          },
         },
       });
 
@@ -561,8 +543,10 @@ describe('desktop tool edit approval', () => {
             },
           }),
         });
-      const { shownToolEditPermissions: shown } = interactions;
-      const { resolvedToolEditPermissions: resolved } = interactions;
+      const {
+        shownToolEditPermissions: shown,
+        resolvedToolEditPermissions: resolved,
+      } = interactions;
 
       const resultPromise = requestToolEditApproval({
         path: '/workspace/notes.txt',
@@ -767,8 +751,10 @@ describe('desktop tool edit approval', () => {
     async () => {
       const { requestToolEditApproval, controller, interactions, tempRoot } =
         await createApprovalFixture();
-      const { shownToolEditPermissions: shown } = interactions;
-      const { resolvedToolEditPermissions: resolved } = interactions;
+      const {
+        shownToolEditPermissions: shown,
+        resolvedToolEditPermissions: resolved,
+      } = interactions;
 
       const cancelledPromise = requestToolEditApproval({
         path: '/workspace/cancelled.tex',
@@ -835,8 +821,10 @@ describe('desktop tool edit approval', () => {
           controller.requestApproval(request),
         cancel: (selector) => controller.cancel(selector),
       });
-      const { shownToolEditPermissions: shown } = interactions;
-      const { resolvedToolEditPermissions: resolved } = interactions;
+      const {
+        shownToolEditPermissions: shown,
+        resolvedToolEditPermissions: resolved,
+      } = interactions;
 
       const resultPromise = session.interactions.requestToolEditApproval({
         path: '/workspace/cleanup.tex',

@@ -40,17 +40,13 @@ export function shouldSkipWait(executionId: string): boolean {
   // isn't very useful (only the user can unblock it), but the subagent is still
   // technically active so we don't skip — avoids misreporting it as done.
   // Non-subagent WAITING = human input needed, keep blocking.
-  if (
+  return (
     status === STREAM_PHASE.WAITING &&
     handle instanceof AgentExecutionHandle &&
     handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
     handle.isChildExecution
-  ) {
-    return true;
-  }
-
-  return false;
+  );
 }
 
 /**

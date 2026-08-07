@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import {
   appState,
   resetProgressState,
@@ -48,18 +51,44 @@ afterEach(async () => {
   await cleanupTempDirs(tempDirs);
 });
 
+type TraceEntry = TraceDocument['entries'][number];
+
+function parseConfig(category: AgentCategory): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent: 'correct',
+    model: 'gemini35f',
+    agentCategory: category,
+  });
+}
+
+// Fills in the level/messageType boilerplate every stage row shares; groupId
+// is omitted entirely (not set to undefined) when absent, matching real
+// archived traces.
+function stageEntry(
+  entry: Pick<
+    TraceEntry,
+    'seqNo' | 'id' | 'type' | 'timestamp' | 'text' | 'data'
+  > &
+    Partial<Pick<TraceEntry, 'groupId'>>,
+): TraceEntry {
+  const { groupId, ...rest } = entry;
+  return {
+    ...rest,
+    level: LOG_LEVELS.INFO,
+    messageType: MESSAGE_TYPES.DEFAULT,
+    ...(groupId === undefined ? {} : { groupId }),
+  };
+}
+
 function legacyTrace(
   snapshotStatus: 'error' | 'stopped' | undefined,
+  category: AgentCategory = AgentCategory.Workflow,
 ): TraceDocument {
   const streamId = 'stream:legacy-trace' as StreamTabId;
   return {
     executionId: 'abc123' as ExecutionId,
     streamId,
-    config: AgentConfigSchema.parse({
-      agent: 'correct',
-      model: 'gemini35f',
-      agentCategory: AgentCategory.Workflow,
-    }),
+    config: parseConfig(category),
     // Legacy meta: no description, nothing replayTrace needs beyond the
     // optional `description` read.
     meta: null,
@@ -94,11 +123,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     const workflow = legacyTrace(undefined);
     const trace: TraceDocument = {
       ...workflow,
-      config: AgentConfigSchema.parse({
-        agent: 'correct',
-        model: 'gemini35f',
-        agentCategory: AgentCategory.ToolUse,
-      }),
+      config: parseConfig(AgentCategory.ToolUse),
       snapshot: StreamSnapshotSchema.parse({
         streamId: workflow.streamId,
         todos: [
@@ -124,14 +149,11 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
   it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
     const executionId = 'abc124' as ExecutionId;
-    const config = AgentConfigSchema.parse({
-      agent: 'correct',
-      model: 'gemini35f',
-      agentCategory: AgentCategory.Workflow,
-    });
+    const config = parseConfig(AgentCategory.Workflow);
     const streamId = getStreamTabId(config.agent, { executionId });
-    await getExecutionStore(executionId).writeRunRecord(config);
-    await getExecutionStore(executionId).writeMeta({
+    const executionStore = getExecutionStore(executionId);
+    await executionStore.writeRunRecord(config);
+    await executionStore.writeMeta({
       timestamp: '2026-07-06T00:00:00.000Z',
       streamId,
     });
@@ -167,38 +189,32 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       entries: [
-        {
+        stageEntry({
           seqNo: 1,
           id: 'root-run',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: LOG_LEVELS.INFO,
           timestamp: 100,
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'Run',
           data: { status: 'running' },
-        },
-        {
+        }),
+        stageEntry({
           seqNo: 2,
           id: 'inner-round',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: LOG_LEVELS.INFO,
           timestamp: 110,
           groupId: 'root-run',
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'Round',
           data: { status: 'running' },
-        },
-        {
+        }),
+        stageEntry({
           seqNo: 3,
           id: 'inner-round',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          level: LOG_LEVELS.INFO,
           timestamp: 120,
           groupId: 'root-run',
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'Round',
           data: { status: 'stopped', endTime: 120 },
-        },
+        }),
       ],
     };
 
@@ -216,37 +232,28 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     // stage's own GROUP_END. Only `data.kind` (preserved through the
     // stage.end merge by TexraTranscriptRecorder) tells them apart.
     const trace: TraceDocument = {
-      ...legacyTrace(undefined),
-      config: AgentConfigSchema.parse({
-        agent: 'correct',
-        model: 'gemini35f',
-        agentCategory: AgentCategory.ToolUse,
-      }),
+      ...legacyTrace(undefined, AgentCategory.ToolUse),
       entries: [
-        {
+        stageEntry({
           seqNo: 1,
           id: 'root-run',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: LOG_LEVELS.INFO,
           timestamp: 100,
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'Run: correct',
           data: { status: 'running', kind: 'run' },
           // No matching GROUP_END: the root run stage never closed (crash
           // mid-run), so this entry stays a GROUP_START forever.
-        },
-        {
+        }),
+        stageEntry({
           seqNo: 2,
           id: 'r0',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          level: LOG_LEVELS.INFO,
           timestamp: 120,
           // No groupId — the bug: rounds have no ambient parent, so this is
           // indistinguishable from a root stage by groupId alone.
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'r0',
           data: { status: 'stopped', endTime: 120, kind: 'round' },
-        },
+        }),
       ],
     };
 
@@ -270,36 +277,27 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     // deliberately non-canonical ("Legacy run" / "Round 0", not "Run: ...")
     // to prove the fallback doesn't key on label text either.
     const trace: TraceDocument = {
-      ...legacyTrace(undefined),
-      config: AgentConfigSchema.parse({
-        agent: 'correct',
-        model: 'gemini35f',
-        agentCategory: AgentCategory.ToolUse,
-      }),
+      ...legacyTrace(undefined, AgentCategory.ToolUse),
       entries: [
-        {
+        stageEntry({
           seqNo: 1,
           id: 'root-run',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: LOG_LEVELS.INFO,
           timestamp: 100,
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'Legacy run',
           // Legacy trace predates stage kinds entirely, so even the
           // GROUP_START row carries no `kind`.
           data: { status: 'running' },
           // No matching GROUP_END: the root run stage never closed (crash
           // mid-run), so this entry stays a GROUP_START forever.
-        },
-        {
+        }),
+        stageEntry({
           seqNo: 2,
           id: 'r0',
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          level: LOG_LEVELS.INFO,
           timestamp: 120,
           // No groupId — rounds have no ambient parent, so this is
           // indistinguishable from a root stage by groupId alone.
-          messageType: MESSAGE_TYPES.DEFAULT,
           text: 'Round 0',
           // No `kind` — the legacy shape this fix must handle: the round
           // closed cleanly before TexraTranscriptRecorder preserved `kind`
@@ -307,7 +305,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
           // position (second top-level stage entry, opened after root) to
           // distinguish it from root.
           data: { status: 'stopped', endTime: 120 },
-        },
+        }),
       ],
     };
 
@@ -317,29 +315,25 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
-  it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
-    const trace = legacyTrace('error');
+  // STOPPED folds into the canonical COMPLETED phase (the same collapse
+  // `streamStatusToLifecycleStatus` performs everywhere else in the app) — the
+  // point of these regressions is that a terminal snapshot status must not
+  // silently become READY, not that the literal legacy string survives.
+  it.each([
+    { snapshotStatus: 'error', expected: 'failed' },
+    { snapshotStatus: 'stopped', expected: 'completed' },
+  ] as const)(
+    'derives "$expected" from snapshot.status "$snapshotStatus" instead of defaulting to ready',
+    ({ snapshotStatus, expected }) => {
+      const trace = legacyTrace(snapshotStatus);
 
-    replayTrace(trace);
+      replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
-    expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
-    expect(replayed?.status).toBe('failed');
-  });
-
-  it('derives a non-ready status from snapshot.status "stopped" instead of defaulting to ready', () => {
-    const trace = legacyTrace('stopped');
-
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
-    // STOPPED folds into the canonical COMPLETED phase (the same collapse
-    // `streamStatusToLifecycleStatus` performs everywhere else in the app) —
-    // the point of this regression is that it must not silently become
-    // READY, not that the literal legacy string survives.
-    expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
-    expect(replayed?.status).toBe('completed');
-  });
+      const replayed = appState.get().streamStates.get(trace.streamId);
+      expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
+      expect(replayed?.status).toBe(expected);
+    },
+  );
 
   it('still reports READY when neither terminalStatus nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);

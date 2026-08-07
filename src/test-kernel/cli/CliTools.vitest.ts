@@ -101,48 +101,41 @@ describe('CLI tools runtime', () => {
     expect(readCliToolGuide('texra-cli', 'install')).toBeUndefined();
   });
 
-  it('formats interactive tool descriptions with human state labels', () => {
-    expect(
-      formatToolDescriptionForTui(
-        record({
-          enabled: null,
-          detected: true,
-          toggleable: false,
-          status: 'available',
-        }),
-      ),
-    ).toBe('always on · detected · Ready');
-
-    expect(
-      formatToolDescriptionForTui(
-        record({
-          enabled: true,
-          detected: false,
-          status: 'not-found',
-        }),
-      ),
-    ).toBe('enabled · not detected · Needs setup');
-
-    expect(
-      formatToolDescriptionForTui(
-        record({
-          enabled: true,
-          detected: null,
-          status: 'unknown',
-        }),
-      ),
-    ).toBe('enabled · Not checked');
-
-    expect(
-      formatToolDescriptionForTui(
-        record({
-          enabled: null,
-          detected: true,
-          toggleable: false,
-          comingSoon: true,
-          status: 'coming-soon',
-        }),
-      ),
-    ).toBe('coming soon');
-  });
+  it.each<{
+    overrides: Partial<CliToolStatusRecord>;
+    expected: string;
+  }>([
+    {
+      overrides: {
+        enabled: null,
+        detected: true,
+        toggleable: false,
+        status: 'available',
+      },
+      expected: 'always on · detected · Ready',
+    },
+    {
+      overrides: { enabled: true, detected: false, status: 'not-found' },
+      expected: 'enabled · not detected · Needs setup',
+    },
+    {
+      overrides: { enabled: true, detected: null, status: 'unknown' },
+      expected: 'enabled · Not checked',
+    },
+    {
+      overrides: {
+        enabled: null,
+        detected: true,
+        toggleable: false,
+        comingSoon: true,
+        status: 'coming-soon',
+      },
+      expected: 'coming soon',
+    },
+  ])(
+    'formats interactive tool description as $expected',
+    ({ overrides, expected }) => {
+      expect(formatToolDescriptionForTui(record(overrides))).toBe(expected);
+    },
+  );
 });

@@ -71,6 +71,25 @@ function completedRun(ctx: AgentLaunchContext) {
   } as const;
 }
 
+/** The flow throws a model failure. */
+async function explodedRun(): Promise<never> {
+  throw new Error('model exploded');
+}
+
+/** Assert the run emitted exactly one result matching the given fields. */
+function expectSingleResult(
+  results: ResultEvent[],
+  ctx: AgentLaunchContext,
+  expected: Record<string, unknown>,
+): void {
+  expect(results).toHaveLength(1);
+  expect(results[0]).toMatchObject({
+    type: 'result',
+    executionId: ctx.runScope.executionId,
+    ...expected,
+  });
+}
+
 describe('terminal result event', () => {
   setupPlatform({
     globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
@@ -80,11 +99,8 @@ describe('terminal result event', () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await runFlowWithLifecycle(ctx, async () => completedRun(ctx));
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        type: 'result',
+      expectSingleResult(results, ctx, {
         outcome: 'completed',
-        executionId: ctx.runScope.executionId,
         category: 'toolUse',
         isSubagent: false,
       });
@@ -111,8 +127,7 @@ describe('terminal result event', () => {
       await expect(
         runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      expect(results).toHaveLength(1);
-      expect(results[0].outcome).toBe('completed');
+      expectSingleResult(results, ctx, { outcome: 'completed' });
     } finally {
       off();
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
@@ -130,11 +145,7 @@ describe('terminal result event', () => {
         runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
 
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        outcome: 'completed',
-        executionId: ctx.runScope.executionId,
-      });
+      expectSingleResult(results, ctx, { outcome: 'completed' });
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
@@ -163,46 +174,28 @@ describe('terminal result event', () => {
     }
   });
 
-  it('keeps running when onRun throws synchronously', async () => {
+  it.each([
+    {
+      name: 'throws synchronously',
+      onRun: () => {
+        throw new Error('onRun boom');
+      },
+    },
+    {
+      name: 'rejects asynchronously',
+      onRun: async () => {
+        throw new Error('onRun async boom');
+      },
+    },
+  ])('keeps running when onRun $name', async ({ onRun }) => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-          onRun: () => {
-            throw new Error('onRun boom');
-          },
-        }),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        type: 'result',
-        outcome: 'completed',
-        executionId: ctx.runScope.executionId,
-      });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
-  it('keeps running when onRun rejects asynchronously', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    try {
-      await expect(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-          onRun: async () => {
-            throw new Error('onRun async boom');
-          },
-        }),
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx), { onRun }),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       await Promise.resolve();
 
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        type: 'result',
-        outcome: 'completed',
-        executionId: ctx.runScope.executionId,
-      });
+      expectSingleResult(results, ctx, { outcome: 'completed' });
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
@@ -212,25 +205,15 @@ describe('terminal result event', () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
-        runFlowWithLifecycle(
-          ctx,
-          async () => {
-            throw new Error('model exploded');
+        runFlowWithLifecycle(ctx, explodedRun, {
+          isSubagent: true,
+          onError: () => {
+            throw new Error('delivery hook boom');
           },
-          {
-            isSubagent: true,
-            onError: () => {
-              throw new Error('delivery hook boom');
-            },
-          },
-        ),
+        }),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.FAILED });
 
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        outcome: 'failed',
-        executionId: ctx.runScope.executionId,
-      });
+      expectSingleResult(results, ctx, { outcome: 'failed' });
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
@@ -244,17 +227,11 @@ describe('terminal result event', () => {
       }
     });
     try {
-      await expect(
-        runFlowWithLifecycle(ctx, async () => {
-          throw new Error('model exploded');
-        }),
-      ).rejects.toThrow('model exploded');
+      await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
+        'model exploded',
+      );
 
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        outcome: 'failed',
-        executionId: ctx.runScope.executionId,
-      });
+      expectSingleResult(results, ctx, { outcome: 'failed' });
     } finally {
       off();
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
@@ -268,17 +245,11 @@ describe('terminal result event', () => {
     });
 
     try {
-      await expect(
-        runFlowWithLifecycle(ctx, async () => {
-          throw new Error('model exploded');
-        }),
-      ).rejects.toThrow('model exploded');
+      await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
+        'model exploded',
+      );
 
-      expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
-        outcome: 'failed',
-        executionId: ctx.runScope.executionId,
-      });
+      expectSingleResult(results, ctx, { outcome: 'failed' });
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
@@ -319,8 +290,7 @@ describe('terminal result event', () => {
         executionId: ctx.runScope.executionId,
         streamId: ctx.runScope.streamId,
       }));
-      expect(results).toHaveLength(1);
-      expect(results[0].outcome).toBe('cancelled');
+      expectSingleResult(results, ctx, { outcome: 'cancelled' });
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
@@ -332,8 +302,7 @@ describe('terminal result event', () => {
       await runFlowWithLifecycle(ctx, async () => {
         throw new DOMException('Request aborted', 'AbortError');
       });
-      expect(results).toHaveLength(1);
-      expect(results[0].outcome).toBe('cancelled');
+      expectSingleResult(results, ctx, { outcome: 'cancelled' });
       expect(results[0].error?.kind).toBe('abort');
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
@@ -345,13 +314,10 @@ describe('terminal result event', () => {
     // Record one round of usage so the failed result still carries totals.
     await ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({}));
     try {
-      await expect(
-        runFlowWithLifecycle(ctx, async () => {
-          throw new Error('model exploded');
-        }),
-      ).rejects.toThrow('model exploded');
-      expect(results).toHaveLength(1);
-      expect(results[0].outcome).toBe('failed');
+      await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
+        'model exploded',
+      );
+      expectSingleResult(results, ctx, { outcome: 'failed' });
       expect(results[0].error?.kind).toBeDefined();
       expect(results[0].usage).toBeDefined();
     } finally {

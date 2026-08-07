@@ -15,8 +15,25 @@ import {
   setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
+
+/** A never-answered approval prompt, holding a session's prompt slot open. */
+const pendingApproval = (): Promise<never> => new Promise(() => {});
+
+function toolEditRequest(
+  path: string,
+  streamId?: StreamTabId,
+): ToolEditApprovalRequest {
+  return {
+    path,
+    originalContent: 'old',
+    proposedContent: 'new',
+    sourceTool: 'edit_file',
+    ...(streamId ? { streamId } : {}),
+  };
+}
 
 describe('approval cleanup scope', () => {
   it("per-stream cleanup leaves another stream's approval state intact", () => {
@@ -46,16 +63,12 @@ describe('approval cleanup scope', () => {
     const streamId = sid('s:cause-swallow');
     const cancel = vi.fn();
     session.useHostInteractions({
-      requestToolEditApproval: () => new Promise(() => {}),
+      requestToolEditApproval: pendingApproval,
       cancel,
     });
-    const pending = session.interactions.requestToolEditApproval({
-      path: 'paper.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit_file',
-      streamId,
-    });
+    const pending = session.interactions.requestToolEditApproval(
+      toolEditRequest('paper.tex', streamId),
+    );
 
     try {
       cleanupApprovalsForStream(streamId, session);
@@ -77,7 +90,6 @@ describe('approval cleanup scope', () => {
     const sessionB = createTestSession();
     const cancelA = vi.fn();
     const cancelB = vi.fn();
-    const pendingApproval = (): Promise<never> => new Promise(() => {});
     sessionA.useHostInteractions({
       requestToolEditApproval: pendingApproval,
       requestBashApproval: pendingApproval,
@@ -88,23 +100,27 @@ describe('approval cleanup scope', () => {
       requestBashApproval: pendingApproval,
       cancel: cancelB,
     });
+    const streamlessCleanupSettlements = [
+      {
+        accepted: false,
+        userMessage: 'Streamless approval cleanup.',
+      },
+      {
+        action: 'reject',
+        feedback: 'Streamless approval cleanup.',
+      },
+    ];
 
     try {
-      const toolA = sessionA.interactions.requestToolEditApproval({
-        path: 'a.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit_file',
-      });
+      const toolA = sessionA.interactions.requestToolEditApproval(
+        toolEditRequest('a.tex'),
+      );
       const bashA = sessionA.interactions.requestBashApproval({
         command: 'echo a',
       });
-      const toolB = sessionB.interactions.requestToolEditApproval({
-        path: 'b.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit_file',
-      });
+      const toolB = sessionB.interactions.requestToolEditApproval(
+        toolEditRequest('b.tex'),
+      );
       const bashB = sessionB.interactions.requestBashApproval({
         command: 'echo b',
       });
@@ -115,16 +131,9 @@ describe('approval cleanup scope', () => {
 
       cleanupUnscopedApprovals(sessionA);
 
-      await expect(Promise.all([toolA, bashA])).resolves.toEqual([
-        {
-          accepted: false,
-          userMessage: 'Streamless approval cleanup.',
-        },
-        {
-          action: 'reject',
-          feedback: 'Streamless approval cleanup.',
-        },
-      ]);
+      await expect(Promise.all([toolA, bashA])).resolves.toEqual(
+        streamlessCleanupSettlements,
+      );
       expect(sessionBSettled).toBe(false);
       expect(cancelA).toHaveBeenCalledWith({
         streamId: null,
@@ -133,16 +142,9 @@ describe('approval cleanup scope', () => {
 
       cleanupUnscopedApprovals(sessionB);
 
-      await expect(Promise.all([toolB, bashB])).resolves.toEqual([
-        {
-          accepted: false,
-          userMessage: 'Streamless approval cleanup.',
-        },
-        {
-          action: 'reject',
-          feedback: 'Streamless approval cleanup.',
-        },
-      ]);
+      await expect(Promise.all([toolB, bashB])).resolves.toEqual(
+        streamlessCleanupSettlements,
+      );
       expect(cancelB).toHaveBeenCalledWith({
         streamId: null,
         cause: 'Streamless approval cleanup.',
@@ -212,7 +214,7 @@ describe('session-owned approval state (#8144)', () => {
     try {
       // Session A's prompt slot is occupied by a never-answered approval.
       void sessionA.approvals.bash.enqueue(undefined, {
-        prompt: () => new Promise(() => {}),
+        prompt: pendingApproval,
         bypassed: () => 'never bypassed',
       });
 
@@ -232,16 +234,12 @@ describe('session-owned approval state (#8144)', () => {
     const session = createTestSession();
     const streamId = sid('s:appr-dispose');
     session.useHostInteractions({
-      requestToolEditApproval: () => new Promise(() => {}),
+      requestToolEditApproval: pendingApproval,
       cancel: vi.fn(),
     });
-    const pending = session.interactions.requestToolEditApproval({
-      path: 'dispose.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit_file',
-      streamId,
-    });
+    const pending = session.interactions.requestToolEditApproval(
+      toolEditRequest('dispose.tex', streamId),
+    );
     setBashApprovalSessionBypass(streamId, true, {
       silent: true,
       session,

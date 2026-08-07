@@ -34,6 +34,10 @@ import {
   isRetiredGoogleGenerateContentPath,
 } from '../../../supabase/functions/relay/paths';
 
+function bytes(...values: number[]): Uint8Array {
+  return new Uint8Array(values);
+}
+
 function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
@@ -41,6 +45,15 @@ function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
         controller.enqueue(chunk);
       }
       controller.close();
+    },
+  });
+}
+
+/** A stream whose first read fails with `error`, like a broken upstream body. */
+function failingStream(error: Error): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      controller.error(error);
     },
   });
 }
@@ -98,13 +111,22 @@ describe('relay free-tier request limits', () => {
     vi.useRealTimers();
   });
 
+  async function acquireSlot(client: GateClient) {
+    const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
+      ratePerMinute: 20,
+      concurrent: 2,
+    });
+    assert.ok(slot.allowed, 'expected slot to be allowed');
+    return slot;
+  }
+
   it('allows four concurrent free-tier requests', () => {
     assert.equal(getRequestLimits('free').concurrent, 4);
   });
 
   it('reads accepted request streams without changing bytes', async () => {
     const result = await readRequestBodyWithinSizeLimit(
-      byteStream([new Uint8Array([0, 255]), new Uint8Array([1])]),
+      byteStream([bytes(0, 255), bytes(1)]),
       3,
     );
 
@@ -115,7 +137,7 @@ describe('relay free-tier request limits', () => {
 
   it('stops reading request streams after the cap is exceeded', async () => {
     const result = await readRequestBodyWithinSizeLimit(
-      byteStream([new Uint8Array([0, 1]), new Uint8Array([2, 3])]),
+      byteStream([bytes(0, 1), bytes(2, 3)]),
       3,
     );
 
@@ -326,26 +348,17 @@ describe('relay free-tier request limits', () => {
   it('releases request slots when the upstream stream closes', async () => {
     let releases = 0;
     const wrapped = await releaseWhenStreamCloses(
-      byteStream([new Uint8Array([1]), new Uint8Array([2])]),
+      byteStream([bytes(1), bytes(2)]),
       async () => {
         releases += 1;
       },
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     const reader = wrapped.getReader();
-    assert.deepEqual(await reader.read(), {
-      done: false,
-      value: new Uint8Array([1]),
-    });
-    assert.deepEqual(await reader.read(), {
-      done: false,
-      value: new Uint8Array([2]),
-    });
-    assert.deepEqual(await reader.read(), {
-      done: true,
-      value: undefined,
-    });
+    assert.deepEqual(await reader.read(), { done: false, value: bytes(1) });
+    assert.deepEqual(await reader.read(), { done: false, value: bytes(2) });
+    assert.deepEqual(await reader.read(), { done: true, value: undefined });
     assert.equal(releases, 1);
   });
 
@@ -413,7 +426,7 @@ describe('relay free-tier request limits', () => {
   it('measures buffered relay request bytes without reading content', () => {
     assert.equal(getRelayRequestBytes('a€😀', null), 8);
     assert.equal(getRelayRequestBytes('\ud800', null), 3);
-    assert.equal(getRelayRequestBytes(new Uint8Array([0, 1, 2]), '999'), 3);
+    assert.equal(getRelayRequestBytes(bytes(0, 1, 2), '999'), 3);
     assert.equal(getRelayRequestBytes(byteStream([]), '60000'), 60_000);
     assert.equal(getRelayRequestBytes(byteStream([]), null), null);
     assert.equal(getRelayRequestBytes(undefined, null), 0);
@@ -453,13 +466,8 @@ describe('relay free-tier request limits', () => {
   it('reports upstream response-body failures and releases the slot', async () => {
     const upstreamError = new Error('response body failed');
     let releases = 0;
-    const failingBody = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        controller.error(upstreamError);
-      },
-    });
     const wrapped = await releaseWhenStreamCloses(
-      failingBody,
+      failingStream(upstreamError),
       async () => {
         releases += 1;
       },
@@ -467,7 +475,7 @@ describe('relay free-tier request limits', () => {
       () => {},
       0,
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     await assert.rejects(wrapped.getReader().read(), upstreamError);
     assert.equal(releases, 1);
@@ -486,14 +494,9 @@ describe('relay free-tier request limits', () => {
     const upstreamError = new Error('response body failed');
     const observerError = new Error('sensitive observer details');
     let releases = 0;
-    const failingBody = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        controller.error(upstreamError);
-      },
-    });
 
     const wrapped = await releaseWhenStreamCloses(
-      failingBody,
+      failingStream(upstreamError),
       async () => {
         releases += 1;
       },
@@ -503,7 +506,7 @@ describe('relay free-tier request limits', () => {
       },
       0,
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     await assert.rejects(wrapped.getReader().read(), upstreamError);
     assert.equal(releases, 1);
@@ -514,16 +517,14 @@ describe('relay free-tier request limits', () => {
 
   it('preserves upstream errors when slot release also fails', async () => {
     const upstreamError = new Error('response body failed');
-    const failingBody = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        controller.error(upstreamError);
-      },
-    });
 
-    const wrapped = await releaseWhenStreamCloses(failingBody, async () => {
-      throw new Error('release failed');
-    });
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    const wrapped = await releaseWhenStreamCloses(
+      failingStream(upstreamError),
+      async () => {
+        throw new Error('release failed');
+      },
+    );
+    assert.ok(wrapped, 'expected wrapped stream');
 
     await assert.rejects(wrapped.getReader().read(), upstreamError);
     assert.deepEqual(errorLogs, [['[RELAY] Failed to release request slot']]);
@@ -535,11 +536,7 @@ describe('relay free-tier request limits', () => {
       onCall: (name, args) => calls.push({ name, args }),
     });
 
-    const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
-      ratePerMinute: 20,
-      concurrent: 2,
-    });
-    if (!slot.allowed) assert.fail('expected slot to be allowed');
+    const slot = await acquireSlot(client);
 
     const slotId = calls[0].args.p_slot_id;
     assert.equal(typeof slotId, 'string');
@@ -558,11 +555,7 @@ describe('relay free-tier request limits', () => {
   it('rejects refreshes when the request slot is already gone', async () => {
     const client = createGateClient({ refreshed: false });
 
-    const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
-      ratePerMinute: 20,
-      concurrent: 2,
-    });
-    if (!slot.allowed) assert.fail('expected slot to be allowed');
+    const slot = await acquireSlot(client);
 
     await assert.rejects(
       slot.refresh(),
@@ -575,11 +568,7 @@ describe('relay free-tier request limits', () => {
     let refreshes = 0;
     let releases = 0;
     const wrapped = await releaseWhenStreamCloses(
-      byteStream([
-        new Uint8Array([1]),
-        new Uint8Array([2]),
-        new Uint8Array([3]),
-      ]),
+      byteStream([bytes(1), bytes(2), bytes(3)]),
       async () => {
         releases += 1;
       },
@@ -589,7 +578,7 @@ describe('relay free-tier request limits', () => {
       undefined,
       10,
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     await vi.advanceTimersByTimeAsync(35);
     assert.equal(refreshes, 3);
@@ -607,7 +596,7 @@ describe('relay free-tier request limits', () => {
     let refreshes = 0;
     let releases = 0;
     const wrapped = await releaseWhenStreamCloses(
-      byteStream([new Uint8Array([1])]),
+      byteStream([bytes(1)]),
       async () => {
         releases += 1;
       },
@@ -618,21 +607,15 @@ describe('relay free-tier request limits', () => {
       undefined,
       10,
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     await vi.advanceTimersByTimeAsync(30);
     assert.equal(refreshes, 3);
     assert.equal(releases, 0);
 
     const reader = wrapped.getReader();
-    assert.deepEqual(await reader.read(), {
-      done: false,
-      value: new Uint8Array([1]),
-    });
-    assert.deepEqual(await reader.read(), {
-      done: true,
-      value: undefined,
-    });
+    assert.deepEqual(await reader.read(), { done: false, value: bytes(1) });
+    assert.deepEqual(await reader.read(), { done: true, value: undefined });
     assert.equal(releases, 1);
 
     await vi.advanceTimersByTimeAsync(30);
@@ -646,11 +629,7 @@ describe('relay free-tier request limits', () => {
       refreshed: false,
       onCall: (name) => calls.push(name),
     });
-    const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
-      ratePerMinute: 20,
-      concurrent: 2,
-    });
-    if (!slot.allowed) assert.fail('expected slot to be allowed');
+    const slot = await acquireSlot(client);
 
     let upstreamBodyFailures = 0;
     const pendingBody = new ReadableStream<Uint8Array>({
@@ -668,7 +647,7 @@ describe('relay free-tier request limits', () => {
       },
       10,
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     const reader = wrapped.getReader();
     const pendingRead = reader.read();
@@ -690,12 +669,12 @@ describe('relay free-tier request limits', () => {
   it('releases request slots when the upstream stream is canceled', async () => {
     let releases = 0;
     const wrapped = await releaseWhenStreamCloses(
-      byteStream([new Uint8Array([1])]),
+      byteStream([bytes(1)]),
       async () => {
         releases += 1;
       },
     );
-    if (wrapped === null) assert.fail('expected wrapped stream');
+    assert.ok(wrapped, 'expected wrapped stream');
 
     const reader = wrapped.getReader();
     await reader.cancel();

@@ -15,6 +15,15 @@ function rowKey(row: CompactTodosPlanRow): string {
   }
 }
 
+function expectRows(
+  display: ReturnType<typeof compactTodosPlanRows>,
+  keys: string[],
+  hiddenCount: number,
+): void {
+  expect(display.rows.map(rowKey)).toEqual(keys);
+  expect(display.hiddenCount).toBe(hiddenCount);
+}
+
 describe('CLI TodosPlanPanel display model', () => {
   const todos: TodoItem[] = [
     {
@@ -44,23 +53,29 @@ describe('CLI TodosPlanPanel display model', () => {
   it('keeps active todo rows visible in a constrained mixed panel', () => {
     const display = compactTodosPlanRows({ maxRows: 3, plan, todos });
 
-    expect(display.rows.map(rowKey)).toEqual([
-      'todo:Ask leanSolver to verify the finite case',
-      'todo:Merge subagent conclusions into final answer',
-    ]);
-    expect(display.hiddenCount).toBe(2);
+    expectRows(
+      display,
+      [
+        'todo:Ask leanSolver to verify the finite case',
+        'todo:Merge subagent conclusions into final answer',
+      ],
+      2,
+    );
   });
 
   it('uses all rows when the todo and plan content fits', () => {
     const display = compactTodosPlanRows({ maxRows: 4, plan, todos });
 
-    expect(display.rows.map(rowKey)).toEqual([
-      'todo:Split theorem into algebraic and analytic checks',
-      'todo:Ask leanSolver to verify the finite case',
-      'todo:Merge subagent conclusions into final answer',
-      'plan:summary',
-    ]);
-    expect(display.hiddenCount).toBe(0);
+    expectRows(
+      display,
+      [
+        'todo:Split theorem into algebraic and analytic checks',
+        'todo:Ask leanSolver to verify the finite case',
+        'todo:Merge subagent conclusions into final answer',
+        'plan:summary',
+      ],
+      0,
+    );
 
     // The plan row shows the document's first non-empty line.
     const summaryRow = display.rows.find((row) => row.kind === 'planSummary');
@@ -72,10 +87,7 @@ describe('CLI TodosPlanPanel display model', () => {
   it('uses the single available row for the highest-signal item', () => {
     const display = compactTodosPlanRows({ maxRows: 1, plan, todos });
 
-    expect(display.rows.map(rowKey)).toEqual([
-      'todo:Ask leanSolver to verify the finite case',
-    ]);
-    expect(display.hiddenCount).toBe(3);
+    expectRows(display, ['todo:Ask leanSolver to verify the finite case'], 3);
   });
 
   it('drops the plan summary before todo rows under pressure', () => {
@@ -85,9 +97,10 @@ describe('CLI TodosPlanPanel display model', () => {
       todos: [todos[0]],
     });
 
-    expect(display.rows.map(rowKey)).toEqual([
-      'todo:Split theorem into algebraic and analytic checks',
-    ]);
-    expect(display.hiddenCount).toBe(1);
+    expectRows(
+      display,
+      ['todo:Split theorem into algebraic and analytic checks'],
+      1,
+    );
   });
 });

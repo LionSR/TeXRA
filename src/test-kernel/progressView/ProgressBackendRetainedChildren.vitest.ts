@@ -13,6 +13,7 @@ import type { ProgressBackend } from '@controllers/progressView/backend/Progress
 import {
   AgentCategory,
   type ActiveChildInfo,
+  type ProgressViewOutboundMessage,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -25,7 +26,6 @@ import { snapshotFacts } from '@test/support/storeTestDrivers';
 import {
   createIsolatedRecordingBackend,
   createRecordingBackend,
-  track,
 } from './progressBackendHarness';
 
 describe('retained finished children', () => {
@@ -73,6 +73,19 @@ describe('retained finished children', () => {
     backend.state.switchActiveStream(PARENT);
   }
 
+  function parentRoster(backend: ProgressBackend): ActiveChildInfo[] {
+    return backend.state.getStreamState(PARENT)?.subagents ?? [];
+  }
+
+  function badgePushes(
+    messages: ProgressViewOutboundMessage[],
+  ): ProgressViewOutboundMessage[] {
+    return messages.filter(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+    );
+  }
+
   it('keeps a vanished child as a row stamped with finishedAt', () => {
     const { backend } = createRecordingBackend();
     seedParent(backend);
@@ -80,7 +93,7 @@ describe('retained finished children', () => {
     applyRoster(backend, PARENT, [subagent('a'), subagent('b')]);
     applyRoster(backend, PARENT, [subagent('a')]);
 
-    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const roster = parentRoster(backend);
     expect(roster).toHaveLength(2);
     expect(roster.find((c) => c.executionId === 'a')?.finishedAt).toBe(
       undefined,
@@ -107,10 +120,7 @@ describe('retained finished children', () => {
 
     applyRoster(backend, PARENT, []);
 
-    const badgeMessages = messages.filter(
-      (message) =>
-        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-    );
+    const badgeMessages = badgePushes(messages);
     expect(badgeMessages).toHaveLength(1);
     expect(badgeMessages[0]).toMatchObject({ stream: PARENT });
   });
@@ -120,25 +130,28 @@ describe('retained finished children', () => {
     seedParent(backend);
     const child = subagent('resumed');
 
+    const expectSingleRow = (finished: boolean): ActiveChildInfo[] => {
+      const roster = parentRoster(backend);
+      expect(roster).toHaveLength(1);
+      if (finished) {
+        expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+      } else {
+        expect(roster[0]?.finishedAt).toBeUndefined();
+      }
+      return roster;
+    };
+
     applyRoster(backend, PARENT, [child]);
-    let roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-    expect(roster).toHaveLength(1);
-    expect(roster[0]?.finishedAt).toBeUndefined();
+    expectSingleRow(false);
 
     applyRoster(backend, PARENT, []);
-    roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-    expect(roster).toHaveLength(1);
-    expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+    expectSingleRow(true);
 
     applyRoster(backend, PARENT, [child]);
-    roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-    expect(roster).toHaveLength(1);
-    expect(roster[0]?.finishedAt).toBeUndefined();
+    expectSingleRow(false);
 
     applyRoster(backend, PARENT, []);
-    roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-    expect(roster).toHaveLength(1);
-    expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+    const roster = expectSingleRow(true);
     expect(new Set(roster.map((entry) => entry.executionId)).size).toBe(1);
   });
 
@@ -148,7 +161,7 @@ describe('retained finished children', () => {
 
     applyRoster(backend, PARENT, [subagent('a')]);
 
-    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const roster = parentRoster(backend);
     expect(roster.map((c) => c.executionId)).toEqual(['a']);
     expect(roster[0]?.finishedAt).toBeUndefined();
   });
@@ -197,10 +210,7 @@ describe('retained finished children', () => {
     );
     await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);
 
-    const badges = messages.filter(
-      (message) =>
-        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-    );
+    const badges = badgePushes(messages);
     expect(badges.at(-1)).toMatchObject({
       stream: PARENT,
       subagents: [
@@ -286,7 +296,7 @@ describe('retained finished children', () => {
     // child is still tracked, so it arrives as a live row carrying `running`.
     applyRoster(backend, PARENT, [live]);
 
-    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const roster = parentRoster(backend);
     expect(roster).toEqual([
       expect.objectContaining({
         executionId: 'stale',
@@ -296,12 +306,7 @@ describe('retained finished children', () => {
     expect(roster[0]?.finishedAt).toBeUndefined();
     // No further status fact arrives for a terminal child, so the badge push
     // driven by the stale roster is the last word on the wire.
-    expect(
-      messages.findLast(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-      ),
-    ).toMatchObject({
+    expect(badgePushes(messages).at(-1)).toMatchObject({
       stream: PARENT,
       subagents: [
         expect.objectContaining({
@@ -325,7 +330,7 @@ describe('retained finished children', () => {
       subagent('requeued', { childStreamId, status: STREAM_PHASE.RUNNING }),
     ]);
 
-    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const roster = parentRoster(backend);
     expect(roster).toEqual([
       expect.objectContaining({
         executionId: 'requeued',
@@ -429,7 +434,7 @@ describe('retained finished children', () => {
     }
     vi.restoreAllMocks();
 
-    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const roster = parentRoster(backend);
     const retained = roster.filter((c) => c.finishedAt !== undefined);
     expect(roster.filter((c) => c.finishedAt === undefined)).toEqual([live]);
     expect(retained).toHaveLength(cap);
@@ -473,7 +478,7 @@ describe('retained finished children', () => {
     applyRoster(backend, PARENT, [agent, bash]);
     applyRoster(backend, PARENT, []);
 
-    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const roster = parentRoster(backend);
     expect(roster).toHaveLength(1);
     expect(roster[0]?.executionId).toBe('reviewer');
     expect(roster[0]?.finishedAt).toBeGreaterThan(0);

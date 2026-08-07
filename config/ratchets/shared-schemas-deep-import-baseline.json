@@ -2,8 +2,9 @@
   "semantics": "Production statements that reach past the published '@shared/schemas' barrel into a leaf module, keyed by specifier, valued by the importing file ('(type-only)' marks an `import type` statement, so a file that splits its value and type imports contributes two distinct entries). 'forced' statements name at least one symbol the barrel does not re-export: they are a report that a leaf module is missing from the published surface, and only a NEW off-surface specifier fails the ratchet. 'gratuitous' statements could have used the barrel verbatim; their per-specifier count may not grow. Classification is computed against src/shared/schemas/index.ts at test time, so widening the barrel reclassifies statements automatically (and requires regenerating this file in the same PR). The leaf-aware published-surface snapshot preserves the exact type/value bindings used by baseline gratuitous imports, so those bindings may not contract even if their importers move. Scan covers repo-root src/ and every packages/*/src directory, excluding src/test-kernel/ and the surface interior src/shared/schemas/.",
   "surface": {
     "@shared/schemas/agent": {
-      "type": ["AgentCategory", "AgentSource", "AgentSourceType"],
+      "type": ["AgentCategory", "AgentSource", "AgentSourceType", "ByCategory"],
       "value": [
+        "AGENT_CATEGORIES",
         "AGENT_SOURCE",
         "AgentCategory",
         "AgentCategorySchema",
@@ -13,6 +14,7 @@
         "agentName",
         "AgentNameSchema",
         "AgentSourceSchema",
+        "byCategory",
         "getCleanAgentName"
       ]
     },
@@ -47,18 +49,14 @@
         "AgentRosterSelection"
       ],
       "value": [
+        "AgentDelegationScopeLegacySchema",
         "AgentDelegationScopeSchema",
         "AgentRosterSelectionSchema",
         "INHERITED_AGENT_ROSTER"
       ]
     },
     "@shared/schemas/commonViewMessages": {
-      "type": [
-        "DesktopThemeKind",
-        "StateRestoreMessage",
-        "SwitchViewTarget",
-        "Theme"
-      ],
+      "type": ["DesktopThemeKind", "StateRestoreMessage", "Theme"],
       "value": [
         "CommonViewMessageSchema",
         "DESKTOP_THEME_KIND",
@@ -182,7 +180,9 @@
         "CodexApprovalPolicy",
         "CodexReasoningEffort",
         "CodexSandboxMode",
+        "CopilotRouteInfo",
         "Goal",
+        "GrokAuthStatus",
         "LatexConfigValues",
         "LatexSettingsStatus",
         "MemoryPreview",
@@ -201,7 +201,6 @@
         "ToolCategory",
         "ToolCommandKind",
         "ToolDashboardItem",
-        "ToolInfo",
         "ToolStatus",
         "UpdateAgentModePresetsMessage",
         "UpdateAgentSelectionMessage",
@@ -261,7 +260,7 @@
       "value": ["DEFAULT_TOOL_CONFIG", "ToolConfigSchema"]
     },
     "@shared/schemas/usage": {
-      "type": ["TokenUsageStats"],
+      "type": [],
       "value": ["UsageProviderSchema", "UsageRouteSchema"]
     },
     "@shared/schemas/workPlan": {
@@ -287,7 +286,6 @@
       "src/tools/setup/ApplyTeamTool.ts"
     ],
     "@shared/schemas/agentSkills": [
-      "packages/cli/src/commands/orchestrate.ts",
       "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
       "src/agent/utils/userVars.ts",
@@ -301,12 +299,14 @@
     ],
     "@shared/schemas/coreSettings": [
       "packages/cli/src/schemas/knownKeys.ts",
+      "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts",
       "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
       "src/agent/core/flows/RetryState.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
       "src/agent/runtime/ModelFactory.ts",
       "src/controllers/settingsView/SettingsProfileController.ts",
+      "src/platform/defaults/jsonConfigProvider.ts",
       "src/replacement/engine.ts",
       "src/shared/settingsView/handlers/approvalHandlers.ts",
       "src/shared/settingsView/handlers/telemetrySettingsHandlers.ts",
@@ -314,12 +314,13 @@
       "src/tools/approval/latexPreview.ts"
     ],
     "@shared/schemas/historyViewMessages": [
+      "packages/cli/src/runtime/history.ts",
       "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
       "src/controllers/settingsView/HistoryMessageBuilder.ts"
     ],
     "@shared/schemas/opResults": [
       "packages/cli/src/runtime/gitOps.ts (type-only)",
-      "packages/desktop/src/main/desktopAgentExecution.ts",
+      "packages/desktop/src/main/desktopAgentExecution.ts (type-only)",
       "packages/extension/src/commands/housekeeping/cleanCommands.ts",
       "packages/extension/src/commands/housekeeping/packCommands.ts",
       "src/housekeeping/clean.ts (type-only)",
@@ -363,15 +364,13 @@
       "packages/cli/src/commands/config.ts",
       "packages/cli/src/schemas/knownKeys.ts",
       "packages/desktop/src/main/desktopSettingsIpc.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/components/shared/stateSettingRows.ts",
       "packages/extension/src/settingsView/frontend/settingsState.ts",
-      "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts",
       "packages/extension/src/settingsView/frontend/tabs/GitTab.ts",
-      "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts",
       "packages/extension/src/settingsView/SettingsViewMessageHandler.ts (type-only)",
       "src/shared/config/settingsAccess.ts (type-only)",
       "src/shared/settingsView/handlers/approvalHandlers.ts",
       "src/shared/settingsView/handlers/stateSettingWrite.ts",
-      "src/shared/settingsView/handlers/stateSettingWrite.ts (type-only)",
       "src/utils/config/platformSettings.ts",
       "src/utils/system/gitAuthorSettings.ts"
     ],
@@ -410,6 +409,7 @@
       "src/tools/comment/InlineCommentTool.ts",
       "src/tools/contextHelpers.ts",
       "src/tools/core/base.ts",
+      "src/tools/core/result.ts (type-only)",
       "src/tools/delegation/DelegationTools.ts (type-only)",
       "src/tools/delegation/inputFields.ts (type-only)",
       "src/tools/delegation/proposalFlow.ts (type-only)",
@@ -497,8 +497,6 @@
       "packages/extension/src/frontend/agents/register.ts (type-only)",
       "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
       "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts",
-      "packages/extension/src/settingsView/frontend/settingsState.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/tabs/AgentsTab.ts (type-only)",
       "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
       "packages/extension/src/webview/frontend/slices/catalogSlice.ts",
       "packages/extension/src/webview/MainViewProvider.ts",
@@ -537,12 +535,13 @@
       "src/model/computeModelOptions.ts",
       "src/model/providerCapabilities.ts (type-only)",
       "src/model/setupCredentialAccess.ts",
+      "src/model/ToolDefinition.ts",
       "src/shared/constants/workflowOutput.ts",
       "src/telemetry/UsageLogTypes.ts",
       "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
+      "src/tools/executionFormatters.ts (type-only)",
       "src/tools/setup/ApplyTeamTool.ts",
-      "src/tools/setup/platform.ts",
-      "src/transcript/StreamSnapshotStore.ts"
+      "src/tools/setup/platform.ts"
     ],
     "@shared/schemas/agentCliSettings": [
       "packages/extension/src/settingsView/frontend/settingsState.ts",
@@ -568,7 +567,6 @@
       "src/tools/delegation/proposalFlow.ts (type-only)"
     ],
     "@shared/schemas/commonViewMessages": [
-      "packages/desktop/src/main/desktopShellIpc.ts (type-only)",
       "packages/desktop/src/main/desktopViewStateIpc.ts",
       "packages/desktop/src/renderer/main.ts",
       "packages/extension/src/progressView/frontend/components/TexraDiffView.ts",
@@ -736,7 +734,6 @@
       "src/latex/LatexMediaManager.ts"
     ],
     "@shared/schemas/usage": [
-      "packages/extension/src/frontend/statusBar/StatusBarUsageTracker.ts (type-only)",
       "src/agent/utils/UsageMonitor.ts",
       "src/telemetry/UsageLogTypes.ts"
     ],

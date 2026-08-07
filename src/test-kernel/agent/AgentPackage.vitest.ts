@@ -141,11 +141,9 @@ describe('agent package run lifecycle', () => {
   it('attaches a run-event subscriber before starting the runtime', async () => {
     await runAgent(INPUT).result;
 
-    const subscribeOrder = mocks.subscribe.mock.invocationCallOrder.at(0);
-    const runOrder = mocks.runValidatedAgent.mock.invocationCallOrder.at(0);
-    expect(subscribeOrder).toBeDefined();
-    expect(runOrder).toBeDefined();
-    expect(subscribeOrder ?? Infinity).toBeLessThan(runOrder ?? -Infinity);
+    const [subscribeOrder] = mocks.subscribe.mock.invocationCallOrder;
+    const [runOrder] = mocks.runValidatedAgent.mock.invocationCallOrder;
+    expect(subscribeOrder).toBeLessThan(runOrder);
   });
 
   it('discards trace events when the caller only awaits the result', async () => {
@@ -218,10 +216,9 @@ describe('agent package run lifecycle', () => {
     expect(mocks.interruptClaudeAgentSessions).toHaveBeenCalledWith(
       sessionExecutions,
     );
-    const killOrder =
-      mocks.killBackgroundProcesses.mock.invocationCallOrder.at(0);
-    const disposeOrder = mocks.disposeSession.mock.invocationCallOrder.at(0);
-    expect(killOrder ?? Infinity).toBeLessThan(disposeOrder ?? -Infinity);
+    const [killOrder] = mocks.killBackgroundProcesses.mock.invocationCallOrder;
+    const [disposeOrder] = mocks.disposeSession.mock.invocationCallOrder;
+    expect(killOrder).toBeLessThan(disposeOrder);
   });
 
   it('still disposes the session when the background drain fails', async () => {

@@ -146,12 +146,14 @@ async function seedStreams(
   return snapshots;
 }
 
+type LogRow = Parameters<StreamLogStore['append']>[1];
+
 let entryCounter = 0;
 
 function logRow(
   messageType: string,
   fields: { text?: string; data?: unknown },
-): Parameters<StreamLogStore['append']>[1] {
+): LogRow {
   entryCounter += 1;
   return {
     id: `entry-${entryCounter}`,
@@ -163,12 +165,19 @@ function logRow(
   };
 }
 
+/** Persist transcript rows for one stream through the writer path. */
+async function appendRows(
+  streamId: StreamTabId,
+  rows: readonly LogRow[],
+): Promise<void> {
+  const logs = await StreamLogStore.open();
+  for (const row of rows) appendTranscriptEntry(logs, streamId, row);
+  await logs.flush();
+}
+
 async function persistRows(
   executionId: ExecutionId,
-  rowsByStream: ReadonlyMap<
-    StreamTabId,
-    readonly Parameters<StreamLogStore['append']>[1][]
-  >,
+  rowsByStream: ReadonlyMap<StreamTabId, readonly LogRow[]>,
 ): Promise<void> {
   const logs = await StreamLogStore.open();
   for (const [streamId, rows] of rowsByStream) {
@@ -203,26 +212,14 @@ async function writeSidecarFixture(
     },
   ]);
 
-  const logs = await StreamLogStore.open();
-  logs.ensureStream(streamId);
-  appendTranscriptEntry(
-    logs,
-    streamId,
+  await appendRows(streamId, [
     logRow(MESSAGE_TYPES.USER_MESSAGE, {
       text: 'Fix the lemma.',
       data: { attachments: ['image'] },
     }),
-  );
-  appendTranscriptEntry(
-    logs,
-    streamId,
     logRow(MESSAGE_TYPES.THINKING, {
       text: 'Consider the boundary terms.',
     }),
-  );
-  appendTranscriptEntry(
-    logs,
-    streamId,
     logRow(MESSAGE_TYPES.WEB_SEARCH, {
       data: {
         query: 'sobolev constant',
@@ -231,10 +228,6 @@ async function writeSidecarFixture(
         status: 'completed',
       },
     }),
-  );
-  appendTranscriptEntry(
-    logs,
-    streamId,
     logRow(MESSAGE_TYPES.WEB_FETCH, {
       data: {
         url: 'https://example.org/a',
@@ -245,10 +238,6 @@ async function writeSidecarFixture(
         content: 'The Sobolev constant satisfies...',
       },
     }),
-  );
-  appendTranscriptEntry(
-    logs,
-    streamId,
     logRow(MESSAGE_TYPES.TOOL_USE, {
       data: {
         toolName: 'write_file',
@@ -257,25 +246,16 @@ async function writeSidecarFixture(
         status: 'completed',
       },
     }),
-  );
-  // Diagnostic row: deliberately skipped by the mapper (never lived in the
-  // legacy conversation.json projection either).
-  appendTranscriptEntry(
-    logs,
-    streamId,
+    // Diagnostic row: deliberately skipped by the mapper (never lived in the
+    // legacy conversation.json projection either).
     logRow(MESSAGE_TYPES.STATISTICS, {
       text: 'Usage - input: 10, output: 5',
       data: { inputTokens: 10, outputTokens: 5 },
     }),
-  );
-  appendTranscriptEntry(
-    logs,
-    streamId,
     logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
       text: 'Done - the lemma is fixed.',
     }),
-  );
-  await logs.flush();
+  ]);
 }
 
 describe('completedRunArchive facade', () => {
@@ -403,7 +383,6 @@ describe('completedRunArchive facade', () => {
     await stampStreamId(executionId, streamId);
 
     const logs = await StreamLogStore.open();
-    logs.ensureStream(streamId);
     const firstTurn = logs.acquireWriter(streamId, executionId);
     firstTurn.appendSettled(
       logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prove the first lemma.' }),
@@ -664,6 +643,7 @@ describe('completedRunArchive facade', () => {
     expect(result.source).toBe('streamLog');
     expect(result.streamId).toBe(streamId);
     expect(result.conversation).not.toBeNull();
+    expect(result.conversation?.length).toBeGreaterThan(0);
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
@@ -672,11 +652,7 @@ describe('completedRunArchive facade', () => {
     await seedStreams(executionId, [{ streamId }]);
     await stampStreamId(executionId, streamId);
 
-    const logs = await StreamLogStore.open();
-    logs.ensureStream(streamId);
-    appendTranscriptEntry(
-      logs,
-      streamId,
+    await appendRows(streamId, [
       logRow(MESSAGE_TYPES.TOOL_USE, {
         data: {
           toolName: 'write_file',
@@ -685,10 +661,6 @@ describe('completedRunArchive facade', () => {
           status: 'completed',
         },
       }),
-    );
-    appendTranscriptEntry(
-      logs,
-      streamId,
       logRow(MESSAGE_TYPES.TOOL_USE, {
         data: {
           toolName: 'read_file',
@@ -698,8 +670,7 @@ describe('completedRunArchive facade', () => {
           status: 'failed',
         },
       }),
-    );
-    await logs.flush();
+    ]);
 
     const result = await readCompletedRunConversation(executionId);
     expect(result.conversation).toEqual([
@@ -734,31 +705,15 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
-  it('reads a full sidecar', async () => {
-    const executionId = 'fff666fff666' as ExecutionId;
-    const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
-    await writeSidecarFixture(executionId, streamId);
-    await stampStreamId(executionId, streamId);
-    const result = await readCompletedRunConversation(executionId);
-    expect(result.source).toBe('streamLog');
-    expect(result.streamId).toBe(streamId);
-    expect(result.conversation).not.toBeNull();
-    expect(result.conversation!.length).toBeGreaterThan(0);
-  });
-
   it('preserves a diagnostic-only stamped stream as execution evidence without a conversation', async () => {
     const executionId = '0999cb0999cb' as ExecutionId;
     const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
     await seedStreams(executionId, [{ streamId: root }]);
     await stampStreamId(executionId, root);
 
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(
-      logs,
-      root,
+    await appendRows(root, [
       logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
-    );
-    await logs.flush();
+    ]);
 
     const result = await readCompletedRunConversation(executionId);
     expect(result).toEqual({
@@ -786,23 +741,13 @@ describe('completedRunArchive facade', () => {
     ]);
     await stampStreamId(executionId, root);
 
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(
-      logs,
-      root,
+    await appendRows(root, [
       logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
-    );
-    appendTranscriptEntry(
-      logs,
-      child,
+    ]);
+    await appendRows(child, [
       logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
-    );
-    appendTranscriptEntry(
-      logs,
-      child,
       logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Child-only answer' }),
-    );
-    await logs.flush();
+    ]);
 
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       conversation: null,
@@ -820,18 +765,10 @@ describe('completedRunArchive facade', () => {
     ]);
     await stampStreamId(executionId, streamId);
 
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(
-      logs,
-      streamId,
+    await appendRows(streamId, [
       logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Delegated question' }),
-    );
-    appendTranscriptEntry(
-      logs,
-      streamId,
       logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Delegated answer' }),
-    );
-    await logs.flush();
+    ]);
 
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       source: 'streamLog',

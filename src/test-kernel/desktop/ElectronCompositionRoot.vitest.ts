@@ -32,8 +32,28 @@ function namedImportSources(source: string, importedName: string): string[] {
     .filter((specifier): specifier is string => specifier !== undefined);
 }
 
+function readDesktopMainIndex(): Promise<string> {
+  return readFile(desktopSourcePath('main', 'index.ts'), 'utf8');
+}
+
 function readDesktopPlatformIndex(): Promise<string> {
   return readFile(desktopSourcePath('main', 'platform', 'index.ts'), 'utf8');
+}
+
+// Asserts each needle first occurs after the anchor, in the given order.
+function expectOrderedAfter(
+  source: string,
+  anchor: string,
+  needles: readonly string[],
+): void {
+  const anchorIndex = source.indexOf(anchor);
+  expect(anchorIndex).toBeGreaterThanOrEqual(0);
+  let previousIndex = anchorIndex;
+  for (const needle of needles) {
+    const index = source.indexOf(needle, anchorIndex);
+    expect(index).toBeGreaterThan(previousIndex);
+    previousIndex = index;
+  }
 }
 
 describe('desktop composition root and launch environment', () => {
@@ -51,10 +71,7 @@ describe('desktop composition root and launch environment', () => {
   }
 
   it('owns one process session and flushes it before shutdown disposal', async () => {
-    const source = await readFile(
-      desktopSourcePath('main', 'index.ts'),
-      'utf8',
-    );
+    const source = await readDesktopMainIndex();
 
     expect(source.match(/new SessionHandle\(/gu)).toHaveLength(1);
     expect(source.match(/StreamLogStore\.openOrEphemeral\(\)/gu)).toHaveLength(
@@ -65,35 +82,17 @@ describe('desktop composition root and launch environment', () => {
     );
     expect(source).toContain('presentationSignal: presentationAbort.signal');
 
-    const installWindowTitle = source.indexOf('installDesktopWindowTitle(');
-    const loadRendererUrl = source.indexOf(
+    expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadURL(',
-      installWindowTitle,
-    );
-    const loadRendererFile = source.indexOf(
+    ]);
+    expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadFile(',
-      installWindowTitle,
-    );
-    expect(installWindowTitle).toBeGreaterThanOrEqual(0);
-    expect(loadRendererUrl).toBeGreaterThan(installWindowTitle);
-    expect(loadRendererFile).toBeGreaterThan(installWindowTitle);
-
-    const windowClose = source.indexOf("window.once('closed'");
-    const disposeWindowTitle = source.indexOf(
+    ]);
+    expectOrderedAfter(source, "window.once('closed'", [
       'disposeWindowTitle()',
-      windowClose,
-    );
-    const abortPresentation = source.indexOf(
       'presentationAbort.abort()',
-      windowClose,
-    );
-    const disposePresentation = source.indexOf(
       'agentExecution.dispose()',
-      windowClose,
-    );
-    expect(disposeWindowTitle).toBeGreaterThan(windowClose);
-    expect(abortPresentation).toBeGreaterThan(disposeWindowTitle);
-    expect(disposePresentation).toBeGreaterThan(abortPresentation);
+    ]);
 
     const shutdownBefore = source.indexOf(
       'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE',
@@ -143,10 +142,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('imports process-store initialization directly from its owner', async () => {
-    const source = await readFile(
-      desktopSourcePath('main', 'index.ts'),
-      'utf8',
-    );
+    const source = await readDesktopMainIndex();
     expect(
       namedImportSources(source, 'initializeDesktopProcessStores'),
     ).toContain('./desktopProcessStores.js');

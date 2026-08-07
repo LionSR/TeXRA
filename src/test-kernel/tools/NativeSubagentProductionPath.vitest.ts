@@ -84,14 +84,16 @@ interface ScriptedTurn {
   readonly text: string;
 }
 
+interface ObservedFollowUp {
+  readonly model: string;
+  readonly messages: readonly unknown[];
+  readonly text: string;
+}
+
 function taggedScriptedHandler(
   model: string,
   turns: Array<ScriptedTurn | 'hang'>,
-  observedFollowUps: Array<{
-    readonly model: string;
-    readonly messages: readonly unknown[];
-    readonly text: string;
-  }>,
+  observedFollowUps: ObservedFollowUp[],
   hangGate?: Promise<unknown>,
 ) {
   const handler = roundModelHandler({
@@ -206,6 +208,37 @@ function childExecutionId(resultOutput: string | undefined): ExecutionId {
   return match[1] as ExecutionId;
 }
 
+async function waitForCompletedResumes(count: number): Promise<void> {
+  await vi.waitFor(() => expect(completedResumes).toHaveLength(count), {
+    timeout: 10_000,
+  });
+}
+
+/**
+ * Queue the second-assertion follow-up onto a WAITING child through the real
+ * DelegateAgentTool path, asserting the queue accepted it.
+ */
+async function queueSecondAssertionFollowUp(
+  parentContext: ReturnType<typeof createRunContext>,
+  runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>,
+  executionId: ExecutionId,
+) {
+  const resumed = await runAsParentOwner(() =>
+    withRunContext(parentContext, () =>
+      new DelegateAgentTool().call({
+        agent: null,
+        model: null,
+        instruction: 'Now prove the second assertion.',
+        memories: [],
+        working_directory: null,
+        execution_id: executionId,
+      }),
+    ),
+  );
+  expect(resumed.status).toBe('executed');
+  return resumed;
+}
+
 /**
  * Shared production-shaped setup: a WAITING scripted parent launches a native
  * tool-use child through the real delegation path. Returns once the launch is
@@ -219,17 +252,9 @@ async function launchWaitingChild(options: {
   readonly executionId: ExecutionId;
   readonly parentContext: ReturnType<typeof createRunContext>;
   readonly runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>;
-  readonly observedFollowUps: Array<{
-    readonly model: string;
-    readonly messages: readonly unknown[];
-    readonly text: string;
-  }>;
+  readonly observedFollowUps: ObservedFollowUp[];
 }> {
-  const observedFollowUps: Array<{
-    readonly model: string;
-    readonly messages: readonly unknown[];
-    readonly text: string;
-  }> = [];
+  const observedFollowUps: ObservedFollowUp[] = [];
   modelFactoryMocks.createModelHandler.mockImplementation(
     async (modelConfig: { name: string }) =>
       taggedScriptedHandler(
@@ -340,29 +365,17 @@ describe('native subagent production delivery path', () => {
       await launchWaitingChild({ parentTurns, childTurns });
 
     await waitForPersistedResult(executionId, 'Result A.');
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(1);
 
-    const resumed = await runAsParentOwner(() =>
-      withRunContext(parentContext, () =>
-        new DelegateAgentTool().call({
-          agent: null,
-          model: null,
-          instruction: 'Now prove the second assertion.',
-          memories: [],
-          working_directory: null,
-          execution_id: executionId,
-        }),
-      ),
+    const resumed = await queueSecondAssertionFollowUp(
+      parentContext,
+      runAsParentOwner,
+      executionId,
     );
-    expect(resumed.status).toBe('executed');
     expect(resumed.summary).toContain('Follow-up queued');
 
     await waitForPersistedResult(executionId, 'Result B.');
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(2), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(2);
 
     const childResumeInput = observedFollowUps.find(
       ({ model, text }) =>
@@ -427,23 +440,13 @@ describe('native subagent production delivery path', () => {
       await launchWaitingChild({ parentTurns, childTurns });
 
     await waitForPersistedResult(executionId, 'Result A.');
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(1);
 
-    const resumed = await runAsParentOwner(() =>
-      withRunContext(parentContext, () =>
-        new DelegateAgentTool().call({
-          agent: null,
-          model: null,
-          instruction: 'Now prove the second assertion.',
-          memories: [],
-          working_directory: null,
-          execution_id: executionId,
-        }),
-      ),
+    const resumed = await queueSecondAssertionFollowUp(
+      parentContext,
+      runAsParentOwner,
+      executionId,
     );
-    expect(resumed.status).toBe('executed');
     expect(resumed.summary).toContain('Follow-up queued');
 
     // The answerless turn still delivers: its report/result overwrite turn 1's
@@ -462,9 +465,7 @@ describe('native subagent production delivery path', () => {
       },
       { timeout: 10_000 },
     );
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(2), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(2);
 
     await session.transcripts.flush();
     const archivedChild = await readCompletedRunConversation(executionId);
@@ -500,9 +501,7 @@ describe('native subagent production delivery path', () => {
       childTurns: [{ text: 'Result A.' }],
     });
     await waitForPersistedResult(executionId, 'Result A.');
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(1);
 
     // The loop minted a stable logical identity for turn 1's delivery.
     const store = getExecutionStore(executionId);
@@ -546,9 +545,7 @@ describe('native subagent production delivery path', () => {
       },
       session,
     });
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(2), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(2);
     await session.transcripts.flush();
     const afterDistinct = JSON.stringify(
       (await readCompletedRunConversation(PARENT_EXECUTION_ID)).conversation,
@@ -573,28 +570,18 @@ describe('native subagent production delivery path', () => {
         childGate: turn2Gate,
       });
     await waitForPersistedResult(executionId, 'Result A.');
-    await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
-      timeout: 10_000,
-    });
+    await waitForCompletedResumes(1);
 
     const store = getExecutionStore(executionId);
     const completed1 = (await store.readTurnState())?.lastCompletedTurn;
     expect(completed1?.token).toBeTruthy();
 
     // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
-    const resumed = await runAsParentOwner(() =>
-      withRunContext(parentContext, () =>
-        new DelegateAgentTool().call({
-          agent: null,
-          model: null,
-          instruction: 'Now prove the second assertion.',
-          memories: [],
-          working_directory: null,
-          execution_id: executionId,
-        }),
-      ),
+    await queueSecondAssertionFollowUp(
+      parentContext,
+      runAsParentOwner,
+      executionId,
     );
-    expect(resumed.status).toBe('executed');
 
     // Turn 2 was accepted: a pending-turn record marks it active, while the
     // persisted result still belongs to the latest completed turn (turn 1).

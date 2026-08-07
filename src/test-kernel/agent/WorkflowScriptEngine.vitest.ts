@@ -47,6 +47,20 @@ function rejectOnAbort(
   );
 }
 
+const EMPTY_FILES_JSON = '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}';
+
+type SandboxBridge = Parameters<typeof runScriptInSandbox>[1];
+
+function sandboxBridge(overrides: Partial<SandboxBridge> = {}): SandboxBridge {
+  return {
+    asyncFns: {},
+    syncFns: {},
+    argsJson: undefined,
+    filesJson: EMPTY_FILES_JSON,
+    ...overrides,
+  };
+}
+
 describe('parseWorkflowScript', () => {
   it('extracts and validates the meta literal', () => {
     const { meta, body } = parseWorkflowScript(
@@ -146,18 +160,15 @@ return null`),
   });
 
   it('rejects module imports and require', () => {
-    expect(() =>
-      parseWorkflowScript(`${META}const fs = require('node:fs')`),
-    ).toThrow(/cannot import/);
-    expect(() =>
-      parseWorkflowScript(`import fs from 'node:fs'\n${META}`),
-    ).toThrow(/cannot import/);
-    expect(() =>
-      parseWorkflowScript(`${META}return import('node:fs')`),
-    ).toThrow(/cannot import/);
-    expect(() =>
-      parseWorkflowScript(`${META}return require\`node:fs\``),
-    ).toThrow(/cannot import/);
+    const sources = [
+      `${META}const fs = require('node:fs')`,
+      `import fs from 'node:fs'\n${META}`,
+      `${META}return import('node:fs')`,
+      `${META}return require\`node:fs\``,
+    ];
+    for (const source of sources) {
+      expect(() => parseWorkflowScript(source)).toThrow(/cannot import/);
+    }
   });
 
   it('does not confuse regex literals with module loading or structure', () => {
@@ -235,37 +246,40 @@ return await agent('Inspect src', { id: 'core' })`,
   tasks: [{ id: 'known', label: 'Known task' }],
 }
 `;
-    await expect(
-      runWorkflowScript({
-        script: `${plannedMeta}return await agent('missing id')`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/must reference a task from meta\.tasks/);
-    await expect(
-      runWorkflowScript({
-        script: `${plannedMeta}return await agent('unknown', { id: 'other' })`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/undeclared task id "other"/);
-    await expect(
-      runWorkflowScript({
-        script: `${plannedMeta}return await agent('conflict', {
+    async function expectPlanRejection(
+      body: string,
+      pattern: RegExp,
+    ): Promise<void> {
+      await expect(
+        runWorkflowScript({
+          script: `${plannedMeta}${body}`,
+          runAgent: echoRunner,
+        }),
+      ).rejects.toThrow(pattern);
+    }
+
+    await expectPlanRejection(
+      `return await agent('missing id')`,
+      /must reference a task from meta\.tasks/,
+    );
+    await expectPlanRejection(
+      `return await agent('unknown', { id: 'other' })`,
+      /undeclared task id "other"/,
+    );
+    await expectPlanRejection(
+      `return await agent('conflict', {
   id: 'known',
   label: 'Conflicting label',
 })`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/must use the label and phase declared in meta\.tasks/);
-
-    await expect(
-      runWorkflowScript({
-        script: `${plannedMeta}return await parallel([
+      /must use the label and phase declared in meta\.tasks/,
+    );
+    await expectPlanRejection(
+      `return await parallel([
   () => agent('first use', { id: 'known' }),
   () => agent('second use', { id: 'known' }),
 ])`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/may be issued only once per run/i);
+      /may be issued only once per run/i,
+    );
   });
 
   it('accepts task presentation fields that exactly match the plan', async () => {
@@ -299,17 +313,23 @@ return await agent('inspect', {
   tasks: [],
 }
 `;
-    await expect(
-      runWorkflowScript({
-        script: `${emptyPlan}return await agent('undeclared')`,
+    function runEmptyPlan(
+      body: string,
+      overrides: Partial<Parameters<typeof runWorkflowScript>[0]> = {},
+    ): Promise<WorkflowScriptRunResult> {
+      return runWorkflowScript({
+        script: `${emptyPlan}${body}`,
         runAgent: echoRunner,
-      }),
+        ...overrides,
+      });
+    }
+
+    await expect(
+      runEmptyPlan(`return await agent('undeclared')`),
     ).rejects.toThrow(/Every agent\(\) call must reference a task/);
 
     const events: WorkflowScriptEvent[] = [];
-    const result = await runWorkflowScript({
-      script: `${emptyPlan}return 'done'`,
-      runAgent: echoRunner,
+    const result = await runEmptyPlan(`return 'done'`, {
       onEvent: (event) => events.push(event),
     });
     expect(result.result).toBe('done');
@@ -331,20 +351,21 @@ return [a, b]`,
   });
 
   it('exposes launch files as immutable script context', async () => {
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(
+      `
 return {
   files,
   frozen: Object.isFrozen(files) &&
     Object.values(files).every(Object.isFrozen),
 }`,
-      files: {
-        inputFiles: ['paper.tex'],
-        contextFiles: ['references.bib'],
-        mediaFiles: ['figure.pdf'],
+      {
+        files: {
+          inputFiles: ['paper.tex'],
+          contextFiles: ['references.bib'],
+          mediaFiles: ['figure.pdf'],
+        },
       },
-      runAgent: echoRunner,
-    });
+    );
 
     expect(run.result).toEqual({
       files: {
@@ -1093,33 +1114,35 @@ return await agent('active', { label: 'Active' })`,
   });
 
   it('rejects invalid primitive usage with clear errors', async () => {
-    await expect(runScript(`return await agent('')`)).rejects.toThrow(
-      /non-empty string prompt/,
-    );
-    await expect(runScript(`return await parallel('nope')`)).rejects.toThrow(
-      /array of zero-arg functions/,
-    );
-    await expect(
-      runScript(`return await parallel([() => agent('x'), 42])`),
-    ).rejects.toThrow(/parallel\(\): item 1 is not a function/);
-    await expect(runScript(`return await agent('x', [])`)).rejects.toThrow(
-      /must be a plain object/,
-    );
-    await expect(
-      runScript(`return await agent('x', { inputFiles: [''] })`),
-    ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
-    await expect(
-      runScript(`return await agent('x', { inputFiles: ['   '] })`),
-    ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
-    await expect(
-      runScript(`return await agent('x', { model: '  ' })`),
-    ).rejects.toThrow(/option "model" must be a non-empty string/);
-    await expect(runScript(`phase('   ')\nreturn null`)).rejects.toThrow(
-      /Workflow phase title must not be blank/,
-    );
-    await expect(
-      runScript(`return await agent('work', { phase: '   ' })`),
-    ).rejects.toThrow(/option "phase" must be a non-empty string/);
+    const cases: ReadonlyArray<readonly [string, RegExp]> = [
+      [`return await agent('')`, /non-empty string prompt/],
+      [`return await parallel('nope')`, /array of zero-arg functions/],
+      [
+        `return await parallel([() => agent('x'), 42])`,
+        /parallel\(\): item 1 is not a function/,
+      ],
+      [`return await agent('x', [])`, /must be a plain object/],
+      [
+        `return await agent('x', { inputFiles: [''] })`,
+        /inputFiles.*arrays of non-empty strings/,
+      ],
+      [
+        `return await agent('x', { inputFiles: ['   '] })`,
+        /inputFiles.*arrays of non-empty strings/,
+      ],
+      [
+        `return await agent('x', { model: '  ' })`,
+        /option "model" must be a non-empty string/,
+      ],
+      [`phase('   ')\nreturn null`, /Workflow phase title must not be blank/],
+      [
+        `return await agent('work', { phase: '   ' })`,
+        /option "phase" must be a non-empty string/,
+      ],
+    ];
+    for (const [body, pattern] of cases) {
+      await expect(runScript(body)).rejects.toThrow(pattern);
+    }
   });
 
   it('separates workflow file options from structured tool-use calls', async () => {
@@ -1302,12 +1325,7 @@ Promise.resolve().then(() => {
   Promise.resolve().then(() => { while (true) {} })
 })
 return 'delivered'`,
-      {
-        asyncFns: {},
-        syncFns: {},
-        argsJson: undefined,
-        filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
-      },
+      sandboxBridge(),
       {
         filename: 'delivered-before-deadline.workflow.js',
         timeoutMs: 40,
@@ -1478,25 +1496,18 @@ return await agent('one')`,
     expect(Date.now() - startedAt).toBeLessThan(1_000);
   });
 
-  it('preempts a CPU loop reached after an agent await', async () => {
+  it.each([
+    { reachedVia: 'an agent await', body: `await agent('one')` },
+    {
+      reachedVia: 'the guest microtask queue',
+      body: `await Promise.resolve()`,
+    },
+  ])('preempts a CPU loop reached through $reachedVia', async ({ body }) => {
     const startedAt = Date.now();
     await expect(
       runScript(
         `
-await agent('one')
-while (true) {}`,
-        { timeoutMs: 40 },
-      ),
-    ).rejects.toThrow(/timed out/);
-    expect(Date.now() - startedAt).toBeLessThan(1_000);
-  });
-
-  it('preempts a CPU loop reached through the guest microtask queue', async () => {
-    const startedAt = Date.now();
-    await expect(
-      runScript(
-        `
-await Promise.resolve()
+${body}
 while (true) {}`,
         { timeoutMs: 40 },
       ),
@@ -1514,12 +1525,7 @@ while (true) {}`,
     await expect(
       runScriptInSandbox(
         `await agent('slow'); return 'unreachable'`,
-        {
-          asyncFns: { agent: () => hostResult },
-          syncFns: {},
-          argsJson: undefined,
-          filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
-        },
+        sandboxBridge({ asyncFns: { agent: () => hostResult } }),
         {
           filename: 'late-host-promise.workflow.js',
           timeoutMs: 30,
@@ -1540,12 +1546,7 @@ while (true) {}`,
     await expect(
       runScriptInSandbox(
         `return await agent('malformed')`,
-        {
-          asyncFns: { agent: async () => '{' },
-          syncFns: {},
-          argsJson: undefined,
-          filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
-        },
+        sandboxBridge({ asyncFns: { agent: async () => '{' } }),
         { filename: 'malformed-host-result.workflow.js', timeoutMs: 1_000 },
       ),
     ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
@@ -1593,16 +1594,10 @@ while (true) {}`,
 
   it('rejects malformed args JSON while installing the bridge', async () => {
     await expect(
-      runScriptInSandbox(
-        `return args`,
-        {
-          asyncFns: {},
-          syncFns: {},
-          argsJson: '{',
-          filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
-        },
-        { filename: 'malformed-args.workflow.js', timeoutMs: 1_000 },
-      ),
+      runScriptInSandbox(`return args`, sandboxBridge({ argsJson: '{' }), {
+        filename: 'malformed-args.workflow.js',
+        timeoutMs: 1_000,
+      }),
     ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
   });
 

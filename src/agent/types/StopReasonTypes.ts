@@ -89,8 +89,7 @@ const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
 export function isTokenLimitStopReason(
   reason: ProviderStopReason | undefined,
 ): boolean {
-  if (!reason) return false;
-  return TOKEN_LIMIT_STOP_REASONS.includes(reason);
+  return !!reason && TOKEN_LIMIT_STOP_REASONS.includes(reason);
 }
 
 /**

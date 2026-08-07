@@ -212,7 +212,7 @@ async function authTool(context: CliContext, id: string): Promise<number> {
 const toolsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List external tool integrations' },
   args: { ...GLOBAL_ARGS },
-  run: (context) => listTools(context),
+  run: listTools,
 });
 
 const toolsStatusCommand = defineCliCommand({

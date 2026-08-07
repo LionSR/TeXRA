@@ -46,6 +46,12 @@ async function flushAsync(): Promise<void> {
   }
 }
 
+// Drain a promise and its .then() continuation (two microtask hops).
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 async function createShellHarness(
   overrides: Partial<DesktopShellActionFactoryOptions> = {},
 ) {
@@ -195,8 +201,7 @@ describe('desktop IPC adapters', () => {
     shellIpc.handleMessage({
       command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
 
     expect(postToRenderer).toHaveBeenNthCalledWith(1, {
       command: 'desktop:showLauncher',
@@ -228,8 +233,7 @@ describe('desktop IPC adapters', () => {
       command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
       customDirSet: true,
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
     expect(openPath).toHaveBeenCalledWith('/agents/custom');
 
     postToRenderer.mockClear();
@@ -277,9 +281,7 @@ describe('desktop IPC adapters', () => {
         command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
       }),
     ).toBe(true);
-    // Resolve the inner promise then the .then() chain.
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
     expect(getRecentCommits).toHaveBeenCalledOnce();
     expect(postToRenderer).toHaveBeenCalledWith({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
@@ -362,8 +364,7 @@ describe('desktop IPC adapters', () => {
       }),
       onAsyncError,
     }).handleMessage(executeMessage);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
     expect(onAsyncError).toHaveBeenCalledWith(error);
   });
 
@@ -609,12 +610,13 @@ describe('desktop IPC adapters', () => {
     const { createDesktopLogIpc } = await loadSourceModule(
       '@desktop/main/desktopLogIpc',
     );
+    const logText = '2026-05-07T00:00:00.000Z [info] safe log line';
     const postToRenderer = vi.fn();
     const copyLog = vi.fn(async (_text: string) => {});
     const exportLog = vi.fn(async (_text: string) => {});
     const readLog = vi.fn(() => ({
       path: '/logs/texra-desktop.log',
-      text: '2026-05-07T00:00:00.000Z [info] safe log line',
+      text: logText,
       truncated: false,
     }));
     const logs = createDesktopLogIpc(
@@ -627,21 +629,17 @@ describe('desktop IPC adapters', () => {
       command: 'desktop:setLog',
       log: {
         path: '/logs/texra-desktop.log',
-        text: '2026-05-07T00:00:00.000Z [info] safe log line',
+        text: logText,
         truncated: false,
       },
     });
 
     expect(logs.handleMessage({ command: 'desktop:copyLog' })).toBe(true);
     await Promise.resolve();
-    expect(copyLog).toHaveBeenCalledWith(
-      '2026-05-07T00:00:00.000Z [info] safe log line',
-    );
+    expect(copyLog).toHaveBeenCalledWith(logText);
 
     expect(logs.handleMessage({ command: 'desktop:exportLog' })).toBe(true);
     await Promise.resolve();
-    expect(exportLog).toHaveBeenCalledWith(
-      '2026-05-07T00:00:00.000Z [info] safe log line',
-    );
+    expect(exportLog).toHaveBeenCalledWith(logText);
   });
 });

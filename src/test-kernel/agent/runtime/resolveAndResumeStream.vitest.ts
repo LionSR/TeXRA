@@ -25,22 +25,49 @@ import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const STREAM = 'stream:resume' as StreamTabId;
+
+const RESOLVED_STATE = {
+  runState: { agent: 'a', model: 'm' } as never,
+  executionId: 'exec-1' as never,
+};
+
 function basePorts(
   overrides: Partial<ResumeStreamPorts> = {},
 ): ResumeStreamPorts {
   return {
     interactions: defaultSession().interactions,
     streamStatus: defaultSession().status,
-    resolveResumeState: vi.fn(async () => ({
-      runState: { agent: 'a', model: 'm' } as never,
-      executionId: 'exec-1' as never,
-    })),
+    resolveResumeState: vi.fn(async () => RESOLVED_STATE),
     resumeToolUse: vi.fn(async () => true),
     executeWorkflow: vi.fn(async () => {}),
     reportNoResumableSession: vi.fn(),
     reportFailure: vi.fn(),
     ...overrides,
   };
+}
+
+/**
+ * Drives one resume whose `port` reporting blocks on a gate, proving the
+ * in-flight guard is held until the report completes rather than dropped the
+ * moment retrieval settles.
+ */
+async function expectGuardHeldThroughAsyncReport(
+  port: 'reportNoResumableSession' | 'reportFailure',
+): Promise<void> {
+  const gate = createDeferred();
+  const reportStarted = createDeferred();
+  const ports = basePorts({
+    [port]: vi.fn(async () => {
+      reportStarted.resolve();
+      await gate.promise;
+    }),
+  });
+
+  const pending = resolveAndResumeStream(STREAM, ports);
+  await reportStarted.promise;
+
+  gate.resolve();
+  await expect(pending).resolves.toBe(false);
 }
 
 describe('resolveAndResumeStream', () => {
@@ -71,8 +98,7 @@ describe('resolveAndResumeStream', () => {
     retrieveSessionResumeDataMock.mockResolvedValue(snapshot);
     const ports = basePorts({
       resolveResumeState: vi.fn(async () => ({
-        runState: { agent: 'a', model: 'm' } as never,
-        executionId: 'exec-1' as never,
+        ...RESOLVED_STATE,
         parentStreamId,
       })),
     });
@@ -154,10 +180,7 @@ describe('resolveAndResumeStream', () => {
       isCancellationRequested: () => cancelled,
       resolveResumeState: vi.fn(async () => {
         cancelled = true;
-        return {
-          runState: { agent: 'a', model: 'm' } as never,
-          executionId: 'exec-1' as never,
-        };
+        return RESOLVED_STATE;
       }),
     });
 
@@ -237,20 +260,8 @@ describe('resolveAndResumeStream', () => {
 
   it('keeps the in-flight guard until async no-session reporting completes', async () => {
     retrieveSessionResumeDataMock.mockResolvedValue(null);
-    const gate = createDeferred();
-    const reportStarted = createDeferred();
-    const ports = basePorts({
-      reportNoResumableSession: vi.fn(async () => {
-        reportStarted.resolve();
-        await gate.promise;
-      }),
-    });
 
-    const pending = resolveAndResumeStream(STREAM, ports);
-    await reportStarted.promise;
-
-    gate.resolve();
-    await expect(pending).resolves.toBe(false);
+    await expectGuardHeldThroughAsyncReport('reportNoResumableSession');
   });
 
   it('surfaces a retrieval failure without leaking the in-flight slot', async () => {
@@ -263,22 +274,9 @@ describe('resolveAndResumeStream', () => {
   });
 
   it('keeps the in-flight guard until async failure reporting completes', async () => {
-    const error = new Error('kv boom');
-    retrieveSessionResumeDataMock.mockRejectedValue(error);
-    const gate = createDeferred();
-    const reportStarted = createDeferred();
-    const ports = basePorts({
-      reportFailure: vi.fn(async () => {
-        reportStarted.resolve();
-        await gate.promise;
-      }),
-    });
+    retrieveSessionResumeDataMock.mockRejectedValue(new Error('kv boom'));
 
-    const pending = resolveAndResumeStream(STREAM, ports);
-    await reportStarted.promise;
-
-    gate.resolve();
-    await expect(pending).resolves.toBe(false);
+    await expectGuardHeldThroughAsyncReport('reportFailure');
   });
 
   it('reports in-flight while preparing and clears it once settled', async () => {

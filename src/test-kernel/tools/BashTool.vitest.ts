@@ -228,6 +228,44 @@ function mockStreamingCommand(
   );
 }
 
+/** The successful zero-exit result most background-launch cases settle with. */
+const DONE_EXEC_RESULT: ExecResult = {
+  success: true,
+  stdout: 'done\n',
+  stderr: '',
+  timedOut: false,
+  exitCode: 0,
+};
+
+/**
+ * Stub `executeCommand` to park on a promise the test resolves manually.
+ * Returns the resolver so the case can interleave assertions before the
+ * (mocked) process settles.
+ */
+function holdCommand(): (result: ExecResult) => void {
+  let resolve: ((result: ExecResult) => void) | undefined;
+  vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+    () =>
+      new Promise((resolvePromise) => {
+        resolve = resolvePromise;
+      }),
+  );
+  return (result) => resolve?.(result);
+}
+
+/** Shared teardown for background-launch cases. */
+function detachBackgroundRun(
+  recorded: ReturnType<typeof recordSessionEvents>,
+  parentStreamId: StreamTabId,
+  streamToClear?: StreamTabId,
+): void {
+  recorded.detach();
+  if (streamToClear) {
+    clearStreamStatusForTest(defaultSession().status, streamToClear);
+  }
+  defaultSession().followUps.terminalize(parentStreamId);
+}
+
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
@@ -647,13 +685,7 @@ describe('BashTool', () => {
     // resumed — every other child-run type routes through the shared
     // wake-aware deliverChildRunFollowUp path. Prove the wake actually fires
     // by asserting the host resume port gets invoked once the run completes.
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-      success: true,
-      stdout: 'done\n',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(DONE_EXEC_RESULT);
 
     const parentStreamId = 'bash-tool-bg-wake-parent' as StreamTabId;
     const tryResumeStream = vi.fn().mockResolvedValue(true);
@@ -681,9 +713,7 @@ describe('BashTool', () => {
       });
       assert.equal(tryResumeStream.mock.calls[0]?.[0], parentStreamId);
     } finally {
-      recorded.detach();
-      clearStreamStatusForTest(defaultSession().status, parentStreamId);
-      defaultSession().followUps.terminalize(parentStreamId);
+      detachBackgroundRun(recorded, parentStreamId, parentStreamId);
     }
   });
 
@@ -697,13 +727,7 @@ describe('BashTool', () => {
     // whole wait budget. Prove the ordering: hold the host resume port open
     // and confirm the execution is already untracked (terminal) by the time
     // that port is even invoked.
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-      success: true,
-      stdout: 'done\n',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(DONE_EXEC_RESULT);
 
     const parentStreamId = 'bash-tool-bg-finalize-before-wake' as StreamTabId;
     let releaseResume: (() => void) | undefined;
@@ -751,20 +775,12 @@ describe('BashTool', () => {
       );
     } finally {
       releaseResume?.();
-      recorded.detach();
-      clearStreamStatusForTest(defaultSession().status, parentStreamId);
-      defaultSession().followUps.terminalize(parentStreamId);
+      detachBackgroundRun(recorded, parentStreamId, parentStreamId);
     }
   });
 
   it('finalizes background execution when supplementary result metadata fails', async () => {
-    let resolveCommand: ((result: ExecResult) => void) | undefined;
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveCommand = resolve;
-        }),
-    );
+    const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
     const recorded = recordSessionEvents(defaultSession().events);
@@ -777,32 +793,19 @@ describe('BashTool', () => {
       new Error('result metadata disk full'),
     );
 
-    resolveCommand?.({
-      success: true,
-      stdout: 'done\n',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
+    resolveCommand(DONE_EXEC_RESULT);
 
     await vi.waitFor(async () => {
       assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.COMPLETED);
     });
-    recorded.detach();
-    defaultSession().followUps.terminalize(parentStreamId);
+    detachBackgroundRun(recorded, parentStreamId);
   });
 
   it('finalizes the background child when the completion path throws before its normal finalize', async () => {
     // Nothing else finalizes a background child: before the latch, an
     // unexpected throw on the completion path left the child stream RUNNING
     // forever, with its interrupt handler still attached to a dead process.
-    let resolveCommand: ((result: ExecResult) => void) | undefined;
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveCommand = resolve;
-        }),
-    );
+    const resolveCommand = holdCommand();
     vi.spyOn(subagentResults, 'formatBashDelivery').mockImplementation(() => {
       throw new Error('delivery formatting blew up');
     });
@@ -815,13 +818,7 @@ describe('BashTool', () => {
     assert.ok(executionId, output);
     assert.ok(childStreamId, output);
 
-    resolveCommand?.({
-      success: true,
-      stdout: 'done\n',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
+    resolveCommand(DONE_EXEC_RESULT);
 
     await vi.waitFor(() => {
       assert.equal(
@@ -831,19 +828,11 @@ describe('BashTool', () => {
     });
     assert.equal(defaultSession().executions.getHandle(executionId), undefined);
 
-    recorded.detach();
-    clearStreamStatusForTest(defaultSession().status, childStreamId);
-    defaultSession().followUps.terminalize(parentStreamId);
+    detachBackgroundRun(recorded, parentStreamId, childStreamId);
   });
 
   it('persists a killed background command as interrupted, not failed', async () => {
-    let resolveCommand: ((result: ExecResult) => void) | undefined;
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveCommand = resolve;
-        }),
-    );
+    const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-killed-background' as StreamTabId;
     const recorded = recordSessionEvents(defaultSession().events);
@@ -860,7 +849,7 @@ describe('BashTool', () => {
       defaultSession().status.get(childStreamId),
       STREAM_PHASE.CANCELLED,
     );
-    resolveCommand?.({
+    resolveCommand({
       success: false,
       stdout: '',
       stderr: 'Terminated\n',
@@ -872,9 +861,7 @@ describe('BashTool', () => {
     await vi.waitFor(async () => {
       assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.CANCELLED);
     });
-    recorded.detach();
-    clearStreamStatusForTest(defaultSession().status, childStreamId);
-    defaultSession().followUps.terminalize(parentStreamId);
+    detachBackgroundRun(recorded, parentStreamId, childStreamId);
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {

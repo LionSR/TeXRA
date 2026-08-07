@@ -21,8 +21,8 @@ function newHandler(): ModelHandlerOpenAI {
   return handler;
 }
 
-/** A well-formed completion with a single `function` tool call. */
-function completionWithValidToolCall() {
+/** A completion whose single choice carries the given `tool_calls` payload. */
+function completionWithToolCalls(toolCalls: unknown[]) {
   return {
     id: 'test-completion',
     choices: [
@@ -31,13 +31,7 @@ function completionWithValidToolCall() {
         message: {
           role: 'assistant',
           content: null,
-          tool_calls: [
-            {
-              id: 'call_1',
-              type: 'function',
-              function: { name: 'do_thing', arguments: '{}' },
-            },
-          ],
+          tool_calls: toolCalls,
         },
         finish_reason: 'tool_calls',
       },
@@ -46,26 +40,23 @@ function completionWithValidToolCall() {
   } as any;
 }
 
+const VALID_TOOL_CALL = {
+  id: 'call_1',
+  type: 'function',
+  function: { name: 'do_thing', arguments: '{}' },
+};
+
+/** A well-formed completion with a single `function` tool call. */
+function completionWithValidToolCall() {
+  return completionWithToolCalls([VALID_TOOL_CALL]);
+}
+
 /**
  * A malformed completion whose `tool_calls` entry has an unsupported
  * `type` — the shape a corrupted/unexpected provider payload produces.
  */
 function completionWithMalformedToolCall() {
-  return {
-    id: 'test-completion',
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: null,
-          tool_calls: [{ id: 'call_1', type: 'not_a_real_type' }],
-        },
-        finish_reason: 'tool_calls',
-      },
-    ],
-    usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
-  } as any;
+  return completionWithToolCalls([{ id: 'call_1', type: 'not_a_real_type' }]);
 }
 
 describe('ModelHandlerOpenAI.extractToolUse', () => {
@@ -92,13 +83,7 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
 
 describe('ModelHandlerOpenAI tool-result attachment summaries', () => {
   const attachments = [{ path: 'chart.png', mimeType: 'image/png' }] as never;
-  const call = {
-    raw: {
-      id: 'call_1',
-      type: 'function',
-      function: { name: 'do_thing', arguments: '{}' },
-    },
-  } as never;
+  const call = { raw: VALID_TOOL_CALL } as never;
   const result = { status: 'executed', output: 'done' } as const;
 
   it('single follow-up path includes the attachment summary', async () => {

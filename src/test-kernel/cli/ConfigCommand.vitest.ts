@@ -76,26 +76,23 @@ describe('CLI config command', () => {
   });
 
   it.each([
-    ['workflow', '--workflow', 'builtInWorkflow:write,custom:review'],
-    ['toolUse', '--tool-use', 'builtInToolUse:assistant,custom:review'],
+    ['workflow', '--workflow', ['builtInWorkflow:write', 'custom:review']],
+    ['toolUse', '--tool-use', ['builtInToolUse:assistant', 'custom:review']],
   ] as const)(
     'changes only the %s category when the other list is omitted',
-    async (category, flag, value) => {
+    async (category, flag, keys) => {
       const result = await runCli([
         'config',
         'agents',
         flag,
-        value,
+        keys.join(','),
         '--output-format',
         'json',
         '--no-input',
       ]);
 
       expect(result.exitCode).toBe(0);
-      expect(mocks.setEnabledAgentKeys).toHaveBeenCalledWith(category, [
-        value.split(',')[0],
-        value.split(',')[1],
-      ]);
+      expect(mocks.setEnabledAgentKeys).toHaveBeenCalledWith(category, keys);
       expect(mocks.setCustom).not.toHaveBeenCalled();
     },
   );
@@ -121,45 +118,40 @@ describe('CLI config command', () => {
     expect(mocks.setEnabledAgentKeys).not.toHaveBeenCalled();
   });
 
-  it('reports an unknown team id as a usage error', async () => {
-    mocks.setTeam.mockRejectedValueOnce(
-      new InvalidAgentTeamError('Unknown agent team: missing-team'),
-    );
+  it.each([
+    {
+      name: 'team',
+      flag: '--team',
+      value: 'missing-team',
+      mock: () => mocks.setTeam,
+      message: 'Unknown agent team: missing-team',
+    },
+    {
+      name: 'default team',
+      flag: '--default-team',
+      value: 'custom-team',
+      mock: () => mocks.setDefaultTeam,
+      message: 'Only a built-in team can be the user default: custom-team',
+    },
+  ])(
+    'reports an invalid $name id as a usage error',
+    async ({ flag, value, mock, message }) => {
+      mock().mockRejectedValueOnce(new InvalidAgentTeamError(message));
 
-    const result = await runCli([
-      'config',
-      'agents',
-      '--team',
-      'missing-team',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
+      const result = await runCli([
+        'config',
+        'agents',
+        flag,
+        value,
+        '--output-format',
+        'json',
+        '--no-input',
+      ]);
 
-    expect(result.exitCode).toBe(2);
-    expect(mocks.setTeam).toHaveBeenCalledWith('missing-team');
-  });
-
-  it('reports an invalid default team id as a usage error', async () => {
-    mocks.setDefaultTeam.mockRejectedValueOnce(
-      new InvalidAgentTeamError(
-        'Only a built-in team can be the user default: custom-team',
-      ),
-    );
-
-    const result = await runCli([
-      'config',
-      'agents',
-      '--default-team',
-      'custom-team',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(2);
-    expect(mocks.setDefaultTeam).toHaveBeenCalledWith('custom-team');
-  });
+      expect(result.exitCode).toBe(2);
+      expect(mock()).toHaveBeenCalledWith(value);
+    },
+  );
 
   it('canonicalizes a default chat agent from the effective roster', async () => {
     const result = await runCli([

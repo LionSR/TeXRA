@@ -160,7 +160,7 @@ async function submitOpenAiApiKey(
   stdin.write('\r');
 }
 
-function renderConfigFormProps(): {
+interface RenderedConfigFormProps {
   entries?: readonly StateSettingEntry[];
   readValue?: (entry: StateSettingEntry) => unknown;
   writeValue?: (
@@ -179,7 +179,9 @@ function renderConfigFormProps(): {
     readonly description: string;
   }[];
   availableRows?: number;
-} {
+}
+
+function renderConfigFormProps(): RenderedConfigFormProps {
   const node = activeForm.get()?.render(() => {}, 20) as {
     type?: (props: unknown) => unknown;
     props?: unknown;
@@ -194,17 +196,15 @@ function renderConfigFormProps(): {
   if (rendered.type === CliConfigForm) {
     const props = rendered.props as Parameters<typeof CliConfigForm>[0];
     if (!props.stores) throw new TypeError('Expected /config stores');
-    return createCliConfigFormProps({
-      ...props,
-      stores: props.stores,
-    }) as ReturnType<typeof renderConfigFormProps>;
+    // The spread narrows `stores` from optional to required for the input type.
+    return createCliConfigFormProps({ ...props, stores: props.stores });
   }
-  return (rendered.props ?? {}) as ReturnType<typeof renderConfigFormProps>;
+  return (rendered.props ?? {}) as RenderedConfigFormProps;
 }
 
 function openConfigFormProps(
   stores = makeFakeSettingsStores().stores,
-): ReturnType<typeof renderConfigFormProps> {
+): RenderedConfigFormProps {
   registerBuiltinSlashCommands({ getConfigStores: () => stores });
   openCliSlashCommandForm('config', '');
   return renderConfigFormProps();
@@ -224,48 +224,30 @@ describe('ConfigForm helpers', () => {
     }
   });
 
-  it('classifies edit kinds from the entry schema', () => {
-    const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
-    const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    const tools = entryByKey(GlobalStateKey.DISABLED_TOOLS);
-    const timeout = entryByKey(
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    );
-
-    expect(settingEditKind(markCommits)).toBe('boolean');
-    expect(settingEditKind(authorName)).toBe('string');
-    expect(settingEditKind(formatter)).toBe('enum');
-    expect(settingEditKind(tools)).toBe('form');
-    expect(settingEditKind(timeout)).toBe('number');
+  it.each<[string, string]>([
+    [WorkspaceStateKey.GIT_MARK_COMMITS, 'boolean'],
+    [WorkspaceStateKey.GIT_AUTHOR_NAME, 'string'],
+    [WorkspaceStateKey.LATEX_FORMATTER, 'enum'],
+    [GlobalStateKey.DISABLED_TOOLS, 'form'],
+    [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS, 'number'],
+  ])('classifies %s as a %s edit kind', (key, kind) => {
+    expect(settingEditKind(entryByKey(key))).toBe(kind);
   });
 
-  it('coerces text-editor input by kind', () => {
-    expect(coerceSettingInput('texra-ai', false)).toEqual({
-      ok: true,
-      value: 'texra-ai',
-    });
-    expect(coerceSettingInput('', false)).toEqual({ ok: true, value: '' });
-    expect(coerceSettingInput('120000', true)).toEqual({
-      ok: true,
-      value: 120000,
-    });
-    expect(coerceSettingInput('  90000 ', true)).toEqual({
-      ok: true,
-      value: 90000,
-    });
-    expect(coerceSettingInput('', true)).toEqual({
-      ok: false,
-      message: 'Enter a number, or press Ctrl-R to reset.',
-    });
-    expect(coerceSettingInput('abc', true)).toEqual({
-      ok: false,
-      message: 'Enter a finite number.',
-    });
-    expect(coerceSettingInput('Infinity', true)).toEqual({
-      ok: false,
-      message: 'Enter a finite number.',
-    });
+  it.each<[string, boolean, ReturnType<typeof coerceSettingInput>]>([
+    ['texra-ai', false, { ok: true, value: 'texra-ai' }],
+    ['', false, { ok: true, value: '' }],
+    ['120000', true, { ok: true, value: 120000 }],
+    ['  90000 ', true, { ok: true, value: 90000 }],
+    [
+      '',
+      true,
+      { ok: false, message: 'Enter a number, or press Ctrl-R to reset.' },
+    ],
+    ['abc', true, { ok: false, message: 'Enter a finite number.' }],
+    ['Infinity', true, { ok: false, message: 'Enter a finite number.' }],
+  ])('coerces %j input (numeric=%s)', (input, numeric, expected) => {
+    expect(coerceSettingInput(input, numeric)).toEqual(expected);
   });
 
   it('validates coerced text input against the setting schema', () => {
@@ -282,42 +264,43 @@ describe('ConfigForm helpers', () => {
     if (!invalid.ok) expect(invalid.message).not.toBe('');
   });
 
-  it('recognizes parsed and raw Ctrl-R reset input', () => {
-    expect(isConfigResetInput('r', { ctrl: true })).toBe(true);
-    expect(isConfigResetInput('\u0012', {})).toBe(true);
-    expect(isConfigResetInput('r', { meta: true })).toBe(false);
+  it.each<[string, Parameters<typeof isConfigResetInput>[1], boolean]>([
+    ['r', { ctrl: true }, true],
+    ['\u0012', {}, true],
+    ['r', { meta: true }, false],
+  ])(
+    'recognizes parsed and raw Ctrl-R reset input (%j, %j)',
+    (input, key, expected) => {
+      expect(isConfigResetInput(input, key)).toBe(expected);
+    },
+  );
+
+  it.each<[unknown, string]>([
+    [true, 'on'],
+    [false, 'off'],
+    ['', '(empty)'],
+    ['latexindent', 'latexindent'],
+    [120000, '120000'],
+  ])('formats %j for display as %j', (value, formatted) => {
+    expect(formatSettingValue(value)).toBe(formatted);
   });
 
-  it('formats values for display', () => {
-    expect(formatSettingValue(true)).toBe('on');
-    expect(formatSettingValue(false)).toBe('off');
-    expect(formatSettingValue('')).toBe('(empty)');
-    expect(formatSettingValue('latexindent')).toBe('latexindent');
-    expect(formatSettingValue(120000)).toBe('120000');
-  });
-
-  it('summarizes configured provider keys without exposing values', () => {
-    expect(
-      formatProviderApiKeySummary({
-        statuses: {
-          openai: 'set',
-          anthropic: 'not-set',
-          kimiCode: 'env',
-        },
+  it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
+    [
+      {
+        statuses: { openai: 'set', anthropic: 'not-set', kimiCode: 'env' },
         loading: false,
         error: false,
-      }),
-    ).toBe('Configured: OpenAI, Kimi Code');
-    expect(
-      formatProviderApiKeySummary({
-        statuses: { openai: 'not-set' },
-        loading: false,
-        error: false,
-      }),
-    ).toBe('No provider keys set');
-    expect(formatProviderApiKeySummary({ loading: false, error: true })).toBe(
-      'Status unavailable',
-    );
+      },
+      'Configured: OpenAI, Kimi Code',
+    ],
+    [
+      { statuses: { openai: 'not-set' }, loading: false, error: false },
+      'No provider keys set',
+    ],
+    [{ loading: false, error: true }, 'Status unavailable'],
+  ])('summarizes key status without exposing values', (view, summary) => {
+    expect(formatProviderApiKeySummary(view)).toBe(summary);
   });
 
   it('uses configured provider names in the parent API keys row', () => {
@@ -361,32 +344,25 @@ describe('ConfigForm helpers', () => {
     });
   });
 
-  it('makes provider routing setting labels self-identifying', () => {
-    expect(
-      settingDisplayName(entryByKey(GlobalStateKey.DASHSCOPE_USE_CHINA)),
-    ).toBe('Qwen China region (Bailian)');
-    expect(
-      settingDisplayName(entryByKey(GlobalStateKey.MINIMAX_USE_CHINA)),
-    ).toBe('MiniMax China region');
-    expect(
-      settingDisplayName(entryByKey(GlobalStateKey.MOONSHOT_USE_CHINA)),
-    ).toBe('Kimi/Moonshot China region');
-    expect(settingDisplayName(entryByKey(GlobalStateKey.GLM_USE_CHINA))).toBe(
-      'GLM China region',
-    );
-    expect(settingDisplayName(entryByKey(GlobalStateKey.GLM_CODING_PLAN))).toBe(
-      'GLM Coding Plan',
-    );
+  it.each<[string, string]>([
+    [GlobalStateKey.DASHSCOPE_USE_CHINA, 'Qwen China region (Bailian)'],
+    [GlobalStateKey.MINIMAX_USE_CHINA, 'MiniMax China region'],
+    [GlobalStateKey.MOONSHOT_USE_CHINA, 'Kimi/Moonshot China region'],
+    [GlobalStateKey.GLM_USE_CHINA, 'GLM China region'],
+    [GlobalStateKey.GLM_CODING_PLAN, 'GLM Coding Plan'],
+  ])('labels %s self-identifying as %j', (key, name) => {
+    expect(settingDisplayName(entryByKey(key))).toBe(name);
   });
 
-  it('labels the store the CLI reads from (cliStore wins)', () => {
-    expect(
-      settingStoreLabel(entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS)),
-    ).toBe('config');
-    expect(
-      settingStoreLabel(entryByKey(WorkspaceStateKey.LATEX_FORMATTER)),
-    ).toBe('workspaceState');
-  });
+  it.each<[string, string]>([
+    [WorkspaceStateKey.GIT_MARK_COMMITS, 'config'],
+    [WorkspaceStateKey.LATEX_FORMATTER, 'workspaceState'],
+  ])(
+    'labels the store the CLI reads from for %s (cliStore wins)',
+    (key, store) => {
+      expect(settingStoreLabel(entryByKey(key))).toBe(store);
+    },
+  );
 
   it('prefers compact titles and falls back to stripped keys for display names', () => {
     expect(

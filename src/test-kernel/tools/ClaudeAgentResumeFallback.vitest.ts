@@ -116,6 +116,36 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
   }
 }
 
+function stubExecutions(): any {
+  return {
+    getAgentHandleByStream: () => undefined,
+    getHandle: () => undefined,
+  };
+}
+
+function fakeToolContexts(extra: Record<string, unknown> = {}): unknown {
+  return {
+    runContext: {
+      streamId: parentStreamId,
+      executionId,
+      interactions: { name: 'fake-runtime-host' },
+      ...extra,
+    },
+    callContext: { tracker: {}, hooks: {} },
+  };
+}
+
+function captureStrategy(): { strategy?: ChildRunStrategy<unknown> } {
+  const captured: { strategy?: ChildRunStrategy<unknown> } = {};
+  mocks.startChildRunLoop.mockImplementation(
+    (params: { strategy: ChildRunStrategy<unknown> }) => {
+      captured.strategy = params.strategy;
+      return completedChildRunLoop();
+    },
+  );
+  return captured;
+}
+
 describe('claude_agent tool launch and resume fallback', () => {
   beforeEach(() => {
     mocks.startChildRunLoop.mockReset();
@@ -123,15 +153,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.buildClaudeAgentEnv.mockReset();
     mocks.findClaudeBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
-    mocks.getCurrentToolContexts.mockReturnValue({
-      runContext: {
-        streamId: parentStreamId,
-        executionId,
-        workingDirectory: undefined,
-        interactions: { name: 'fake-runtime-host' },
-      },
-      callContext: { tracker: {}, hooks: {} },
-    });
+    mocks.getCurrentToolContexts.mockReturnValue(fakeToolContexts());
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.ensureRunDir.mockResolvedValue(undefined);
@@ -154,10 +176,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   it('resolves the Claude binary before child creation and then tracks startup synchronously', async () => {
     const binaryPath = pDefer<string | undefined>();
-    const executions = {
-      getAgentHandleByStream: () => undefined,
-      getHandle: () => undefined,
-    } as any;
+    const executions = stubExecutions();
     const startupEvents: string[] = [];
     const originalTrackInFlight =
       ClaudeAgentSessions.trackInFlight.bind(ClaudeAgentSessions);
@@ -211,15 +230,9 @@ describe('claude_agent tool launch and resume fallback', () => {
   });
 
   it('refuses a one-shot run whose follow-up could never be collected', async () => {
-    mocks.getCurrentToolContexts.mockReturnValue({
-      runContext: {
-        streamId: parentStreamId,
-        executionId,
-        stopAfterCycle: true,
-        interactions: { name: 'fake-runtime-host' },
-      },
-      callContext: { tracker: {}, hooks: {} },
-    });
+    mocks.getCurrentToolContexts.mockReturnValue(
+      fakeToolContexts({ stopAfterCycle: true }),
+    );
 
     const result = await new ClaudeAgentTool().call({
       prompt: 'must not launch into a run that ends first',
@@ -308,21 +321,12 @@ describe('claude_agent tool launch and resume fallback', () => {
   it('launches one fallback loop when concurrent calls use the same stale session_id', async () => {
     const envStarted = pDefer<void>();
     const envReady = pDefer<NodeJS.ProcessEnv>();
-    const executions = {
-      getAgentHandleByStream: () => undefined,
-      getHandle: () => undefined,
-    } as any;
-    let strategy: ChildRunStrategy<unknown> | undefined;
+    const executions = stubExecutions();
+    const captured = captureStrategy();
     mocks.buildClaudeAgentEnv.mockImplementation(() => {
       envStarted.resolve(undefined);
       return envReady.promise;
     });
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        strategy = params.strategy;
-        return completedChildRunLoop();
-      },
-    );
 
     const tool = new ClaudeAgentTool();
     const first = tool.call({
@@ -342,7 +346,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
     envReady.resolve({});
     const firstResult = await first;
-    strategy?.onTurnSuccess?.({ sessionId: 'stale-session' }, {
+    captured.strategy?.onTurnSuccess?.({ sessionId: 'stale-session' }, {
       executions,
     } as any);
     const secondResult = await second;
@@ -357,19 +361,13 @@ describe('claude_agent tool launch and resume fallback', () => {
       expect.objectContaining({ session: expect.anything() }),
     );
 
-    strategy?.releaseSessionOwnership?.();
+    captured.strategy?.releaseSessionOwnership?.();
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
   });
 
   it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
     const interrupt = vi.fn();
-    let strategy: ChildRunStrategy<unknown> | undefined;
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        strategy = params.strategy;
-        return completedChildRunLoop();
-      },
-    );
+    const captured = captureStrategy();
 
     await new ClaudeAgentTool().call({
       prompt: 'start a long initial turn',
@@ -378,29 +376,23 @@ describe('claude_agent tool launch and resume fallback', () => {
     const executions = {
       getAgentHandleByStream: () => ({ interrupt }),
     } as any;
-    strategy?.onLoopStart?.({ executions } as any);
+    captured.strategy?.onLoopStart?.({ executions } as any);
     ClaudeAgentSessions.interruptAll();
 
     expect(interrupt).toHaveBeenCalledOnce();
-    strategy?.releaseSessionOwnership?.();
+    captured.strategy?.releaseSessionOwnership?.();
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
     const firstEnvStarted = pDefer<void>();
     const firstEnv = pDefer<NodeJS.ProcessEnv>();
-    let strategy: ChildRunStrategy<unknown> | undefined;
+    const captured = captureStrategy();
     mocks.buildClaudeAgentEnv
       .mockImplementationOnce(() => {
         firstEnvStarted.resolve(undefined);
         return firstEnv.promise;
       })
       .mockResolvedValueOnce({});
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        strategy = params.strategy;
-        return completedChildRunLoop();
-      },
-    );
 
     const tool = new ClaudeAgentTool();
     const first = tool.call({
@@ -423,7 +415,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(2);
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
 
-    strategy?.releaseSessionOwnership?.();
+    captured.strategy?.releaseSessionOwnership?.();
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
   });
 
@@ -431,10 +423,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.register('sess-resumed', {
       childStreamId,
       executionId,
-      executions: {
-        getAgentHandleByStream: () => undefined,
-        getHandle: () => undefined,
-      } as any,
+      executions: stubExecutions(),
       model: 'claude-sonnet-4-6',
       permissionMode: 'acceptEdits',
       effort: 'high',

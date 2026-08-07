@@ -98,16 +98,14 @@ describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => 
 });
 
 describe('OutputXmlSummarySchema — strict shape', () => {
-  it('still rejects an unrecognized key on a record without documents', () => {
-    expect(() =>
-      OutputXmlSummarySchema.parse({ tagContents: {}, unexpected: 1 }),
-    ).toThrow();
-  });
-
-  it('rejects the retired documents key', () => {
-    expect(() =>
-      OutputXmlSummarySchema.parse({ tagContents: {}, documents: [] }),
-    ).toThrow();
+  it.each([
+    [
+      'an unrecognized key on a record without documents',
+      { tagContents: {}, unexpected: 1 },
+    ],
+    ['the retired documents key', { tagContents: {}, documents: [] }],
+  ])('rejects %s', (_label, payload) => {
+    expect(() => OutputXmlSummarySchema.parse(payload)).toThrow();
   });
 });
 

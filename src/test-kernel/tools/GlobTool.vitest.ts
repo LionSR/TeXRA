@@ -76,35 +76,28 @@ describe('GlobTool match metadata', () => {
     });
   });
 
-  it('omits a match that disappears before metadata lookup', async () => {
-    await withGlobWorkspace(async (workspacePath) => {
-      failStatFor(
-        workspacePath,
-        'vanished.tex',
-        fsError('ENOENT', 'match disappeared'),
-      );
+  it.each([
+    {
+      fileName: 'vanished.tex',
+      error: fsError('ENOENT', 'match disappeared'),
+    },
+    {
+      fileName: 'blocked.tex',
+      error: fsError('ENOTDIR', 'parent changed'),
+    },
+  ])(
+    'omits a match whose metadata lookup fails with $error.code',
+    async ({ fileName, error }) => {
+      await withGlobWorkspace(async (workspacePath) => {
+        failStatFor(workspacePath, fileName, error);
 
-      const result = await new GlobTool().call({ pattern: 'vanished.tex' });
+        const result = await new GlobTool().call({ pattern: fileName });
 
-      expect(result).toMatchObject({ status: 'executed' });
-      expect(result.output).toContain('(no matches)');
-    });
-  });
-
-  it('omits a match whose parent is no longer a directory', async () => {
-    await withGlobWorkspace(async (workspacePath) => {
-      failStatFor(
-        workspacePath,
-        'blocked.tex',
-        fsError('ENOTDIR', 'parent changed'),
-      );
-
-      const result = await new GlobTool().call({ pattern: 'blocked.tex' });
-
-      expect(result).toMatchObject({ status: 'executed' });
-      expect(result.output).toContain('(no matches)');
-    });
-  });
+        expect(result).toMatchObject({ status: 'executed' });
+        expect(result.output).toContain('(no matches)');
+      });
+    },
+  );
 
   it('surfaces operational stat failures through the tool boundary', async () => {
     await withGlobWorkspace(async (workspacePath) => {

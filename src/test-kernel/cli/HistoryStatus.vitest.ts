@@ -42,6 +42,27 @@ const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
 
 setupPlatform({ workspacePath: '/workspace' });
 
+/** Registers an execution, releases its lease, and writes a flow record. */
+async function seedFlowRecord(
+  id: ExecutionId,
+  config: AgentConfig,
+  agent: string,
+  shared: unknown,
+): Promise<void> {
+  await registerExecution(id, config, agent, {
+    streamId: `${agent}@deepseekT#${id}` as StreamTabId,
+    identity: { kind: 'agent', agent },
+  });
+  await releaseOwnedExecutionLease(id);
+  await getExecutionStore(id).write(flowKey(id), {
+    flowName: 'test',
+    params: {},
+    shared,
+    createdAt: new Date().toISOString(),
+    nodes: [],
+  });
+}
+
 describe('CLI history status formatting', () => {
   it('keeps failed terminal outcomes authoritative', () => {
     expect(
@@ -120,18 +141,7 @@ describe('CLI history status formatting', () => {
 
   it('does not mark invalid flow records as resumable', async () => {
     const id = 'abc123' as ExecutionId;
-    await registerExecution(id, TOOL_USE_CONFIG, 'orchestrator', {
-      streamId: `orchestrator@deepseekT#${id}` as StreamTabId,
-      identity: { kind: 'agent', agent: 'orchestrator' },
-    });
-    await releaseOwnedExecutionLease(id);
-    await getExecutionStore(id).write(flowKey(id), {
-      flowName: 'test',
-      params: {},
-      shared: null,
-      createdAt: new Date().toISOString(),
-      nodes: [],
-    });
+    await seedFlowRecord(id, TOOL_USE_CONFIG, 'orchestrator', null);
 
     const details = await readCliHistoryDetails(id);
 
@@ -146,21 +156,10 @@ describe('CLI history status formatting', () => {
 
   it('does not mark non-tool-use flow records as CLI-resumable', async () => {
     const id = 'workflow-with-flow' as ExecutionId;
-    await registerExecution(id, WORKFLOW_CONFIG, 'correct', {
-      streamId: `correct@deepseekT#${id}` as StreamTabId,
-      identity: { kind: 'agent', agent: 'correct' },
-    });
-    await releaseOwnedExecutionLease(id);
-    await getExecutionStore(id).write(flowKey(id), {
-      flowName: 'test',
-      params: {},
-      shared: {
-        currentRound: 1,
-        totalRounds: 2,
-        conversation: [],
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await seedFlowRecord(id, WORKFLOW_CONFIG, 'correct', {
+      currentRound: 1,
+      totalRounds: 2,
+      conversation: [],
     });
 
     const details = await readCliHistoryDetails(id);

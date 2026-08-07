@@ -6,6 +6,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
@@ -18,32 +19,69 @@ import {
   createLiveStoreSession,
 } from './progressBackendHarness';
 
+type DeletionKind = 'one-stream' | 'all-streams';
+type RecordingBackend = ReturnType<
+  typeof createIsolatedRecordingBackend
+>['backend'];
+
+function triggerDeletion(
+  backend: RecordingBackend,
+  kind: DeletionKind,
+  stream: StreamTabId,
+): Promise<unknown> {
+  return kind === 'one-stream'
+    ? backend.deleteStream(stream)
+    : backend.deleteAllStreams();
+}
+
+/** Stubs the durable clear for `kind` to run `body` and report success. */
+function mockSuccessfulClear(
+  backend: RecordingBackend,
+  kind: DeletionKind,
+  body: () => Promise<void>,
+): void {
+  if (kind === 'one-stream') {
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(async () => {
+      await body();
+      return 'deleted';
+    });
+  } else {
+    vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
+      await body();
+      return { active: new Set(), failed: new Set() };
+    });
+  }
+}
+
+/** Stubs the durable clear for `kind` to retain `stream` as still active. */
+function mockRetainedClear(
+  backend: RecordingBackend,
+  kind: DeletionKind,
+  stream: StreamTabId,
+): void {
+  if (kind === 'one-stream') {
+    vi.spyOn(backend.state, 'clearStream').mockResolvedValue('active');
+  } else {
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set([stream]),
+      failed: new Set(),
+    });
+  }
+}
+
 async function expectDeletionBeforeStorageRootReplacement(
-  deletionKind: 'one-stream' | 'all-streams',
+  deletionKind: DeletionKind,
 ): Promise<void> {
   const session = await createLiveStoreSession();
   const { backend } = createIsolatedRecordingBackend(session);
   const stream = `${deletionKind}-before-root-move` as StreamTabId;
   const operations: string[] = [];
-  let finishDeletion: (() => void) | undefined;
-  const deletionBlocked = new Promise<void>((resolve) => {
-    finishDeletion = resolve;
+  const deletionBlocked = pDefer<void>();
+  mockSuccessfulClear(backend, deletionKind, async () => {
+    operations.push('delete:start');
+    await deletionBlocked.promise;
+    operations.push('delete:end');
   });
-  if (deletionKind === 'one-stream') {
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(async () => {
-      operations.push('delete:start');
-      await deletionBlocked;
-      operations.push('delete:end');
-      return 'deleted';
-    });
-  } else {
-    vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
-      operations.push('delete:start');
-      await deletionBlocked;
-      operations.push('delete:end');
-      return { active: new Set(), failed: new Set() };
-    });
-  }
   const reloadAfterStorageRootChange = vi
     .spyOn(session, 'reloadAfterStorageRootChange')
     .mockImplementation(async () => {
@@ -53,10 +91,7 @@ async function expectDeletionBeforeStorageRootReplacement(
   backend.state.streamLogs.ensureStream(stream);
 
   try {
-    const deletion =
-      deletionKind === 'one-stream'
-        ? backend.deleteStream(stream)
-        : backend.deleteAllStreams();
+    const deletion = triggerDeletion(backend, deletionKind, stream);
     await vi.waitFor(() => {
       expect(operations).toEqual(['delete:start']);
     });
@@ -64,38 +99,35 @@ async function expectDeletionBeforeStorageRootReplacement(
     await Promise.resolve();
 
     expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
-    finishDeletion?.();
+    deletionBlocked.resolve();
     await deletion;
     await workspaceMove;
 
     expect(operations).toEqual(['delete:start', 'delete:end', 'reload']);
   } finally {
-    finishDeletion?.();
+    deletionBlocked.resolve();
   }
 }
 
 async function expectDeletionReleasesEarlierRootReplacement(
-  deletionKind: 'one-stream' | 'all-streams',
+  deletionKind: DeletionKind,
 ): Promise<void> {
   const session = createTestSession();
   const stream = `${deletionKind}-releases-root-move` as StreamTabId;
   const operations: string[] = [];
-  let releaseReload: (() => void) | undefined;
-  const reloadBlocked = new Promise<void>((resolve) => {
-    releaseReload = resolve;
-  });
+  const reloadBlocked = pDefer<void>();
   const reloadAfterStorageRootChange = vi
     .spyOn(session, 'reloadAfterStorageRootChange')
     .mockImplementation(async () => {
       operations.push('reload:start');
-      await reloadBlocked;
+      await reloadBlocked.promise;
       operations.push('reload:end');
       return true;
     });
   const lifecycle = createLifecycleOptions({
     stopStream: vi.fn(() => {
       operations.push('stop');
-      releaseReload?.();
+      reloadBlocked.resolve();
     }),
   });
   const { backend } = createIsolatedRecordingBackend(session, lifecycle);
@@ -109,46 +141,32 @@ async function expectDeletionReleasesEarlierRootReplacement(
     {} as never,
   );
   vi.spyOn(backend.state, 'waitForOwnedExecutionRelease').mockResolvedValue();
-  if (deletionKind === 'one-stream') {
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(async () => {
-      operations.push('delete');
-      return 'deleted';
-    });
-  } else {
-    vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
-      operations.push('delete');
-      return { active: new Set(), failed: new Set() };
-    });
-  }
+  mockSuccessfulClear(backend, deletionKind, async () => {
+    operations.push('delete');
+  });
 
   try {
     const workspaceMove = backend.reloadAfterStorageRootChange();
     await vi.waitFor(() =>
       expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce(),
     );
-    const deletion =
-      deletionKind === 'one-stream'
-        ? backend.deleteStream(stream)
-        : backend.deleteAllStreams();
+    const deletion = triggerDeletion(backend, deletionKind, stream);
 
     await deletion;
     await workspaceMove;
 
     expect(operations).toEqual(['reload:start', 'stop', 'reload:end']);
   } finally {
-    releaseReload?.();
+    reloadBlocked.resolve();
   }
 }
 
 async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
-  deletionKind: 'one-stream' | 'all-streams',
+  deletionKind: DeletionKind,
 ): Promise<void> {
-  let finishNotice: (() => void) | undefined;
-  const noticeBlocked = new Promise<void>((resolve) => {
-    finishNotice = resolve;
-  });
+  const noticeBlocked = pDefer<void>();
   const lifecycle = createLifecycleOptions({
-    notifyDeletionRetained: vi.fn(() => noticeBlocked),
+    notifyDeletionRetained: vi.fn(() => noticeBlocked.promise),
   });
   const session = createTestSession();
   const reloadAfterStorageRootChange = vi
@@ -157,20 +175,10 @@ async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
   const { backend } = createIsolatedRecordingBackend(session, lifecycle);
   const stream = `${deletionKind}-retained-before-root-move` as StreamTabId;
   backend.state.streamLogs.ensureStream(stream);
-  if (deletionKind === 'one-stream') {
-    vi.spyOn(backend.state, 'clearStream').mockResolvedValue('active');
-  } else {
-    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
-      active: new Set([stream]),
-      failed: new Set(),
-    });
-  }
+  mockRetainedClear(backend, deletionKind, stream);
 
   try {
-    const deletion =
-      deletionKind === 'one-stream'
-        ? backend.deleteStream(stream)
-        : backend.deleteAllStreams();
+    const deletion = triggerDeletion(backend, deletionKind, stream);
     await vi.waitFor(() =>
       expect(lifecycle.notifyDeletionRetained).toHaveBeenCalled(),
     );
@@ -179,11 +187,11 @@ async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
     await vi.waitFor(() =>
       expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce(),
     );
-    finishNotice?.();
+    noticeBlocked.resolve();
     await deletion;
     await workspaceMove;
   } finally {
-    finishNotice?.();
+    noticeBlocked.resolve();
   }
 }
 
@@ -288,13 +296,10 @@ describe('ProgressBackend', () => {
 
   it('serializes complete presentation reloads across rapid workspace moves', async () => {
     const session = await createLiveStoreSession();
-    let finishFirstReload: ((replaced: boolean) => void) | undefined;
-    const firstReload = new Promise<boolean>((resolve) => {
-      finishFirstReload = resolve;
-    });
+    const firstReload = pDefer<boolean>();
     const reloadAfterStorageRootChange = vi
       .spyOn(session, 'reloadAfterStorageRootChange')
-      .mockReturnValueOnce(firstReload)
+      .mockReturnValueOnce(firstReload.promise)
       .mockResolvedValue(true);
     const { backend } = createIsolatedRecordingBackend(session);
 
@@ -303,7 +308,7 @@ describe('ProgressBackend', () => {
     await Promise.resolve();
 
     expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
-    finishFirstReload?.(true);
+    firstReload.resolve(true);
     await first;
     await second;
 
@@ -317,12 +322,9 @@ describe('ProgressBackend', () => {
       .spyOn(session, 'reloadAfterStorageRootChange')
       .mockResolvedValue(true);
     const { backend } = createIsolatedRecordingBackend(session);
-    let finishInitialLoad: (() => void) | undefined;
-    const initialLoadBlocked = new Promise<void>((resolve) => {
-      finishInitialLoad = resolve;
-    });
+    const initialLoadBlocked = pDefer<void>();
     vi.spyOn(backend.state, 'load')
-      .mockReturnValueOnce(initialLoadBlocked)
+      .mockReturnValueOnce(initialLoadBlocked.promise)
       .mockResolvedValue();
 
     const initialLoad = backend.load();
@@ -333,7 +335,7 @@ describe('ProgressBackend', () => {
     await Promise.resolve();
 
     expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
-    finishInitialLoad?.();
+    initialLoadBlocked.resolve();
     await initialLoad;
     await workspaceMove;
 

@@ -331,7 +331,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   }
 
   createMediaContent(mediaMessage: MediaEntry[]): LanguageModelDataPart[] {
-    return mediaMessage.flatMap((media) => {
+    return mediaMessage.map((media) => {
       if (
         media.media_category !== 'image' ||
         !media.media_type.startsWith('image/')
@@ -345,13 +345,11 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       // this is the only consumer of raw bytes, so keeping both forms on every
       // entry would double the memory held for media the other handlers send
       // as base64.
-      return [
-        {
-          kind: 'data' as const,
-          data: Buffer.from(media.data, 'base64'),
-          mimeType: media.media_type,
-        },
-      ];
+      return {
+        kind: 'data' as const,
+        data: Buffer.from(media.data, 'base64'),
+        mimeType: media.media_type,
+      };
     });
   }
 

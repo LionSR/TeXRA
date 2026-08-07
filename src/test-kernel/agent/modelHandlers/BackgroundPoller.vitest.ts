@@ -24,6 +24,28 @@ function trace() {
 
 const extractId = (response: TestResponse) => response.id;
 const extractStatus = (response: TestResponse) => response.status;
+const isInProgress = (response: TestResponse) =>
+  response.status === 'in_progress';
+
+const FROZEN_NOW = new Date('2026-08-01T00:00:00.000Z');
+
+interface PollerOverrides {
+  maxDurationMs: number;
+  pollIntervalMs?: number;
+  isPending?: (response: TestResponse) => boolean;
+  logger?: AgentTrace | (() => AgentTrace);
+}
+
+function createPoller(
+  overrides: PollerOverrides,
+): BackgroundPoller<TestResponse> {
+  return new BackgroundPoller<TestResponse>({
+    pollIntervalMs: 0,
+    isPending: isInProgress,
+    logger: trace(),
+    ...overrides,
+  });
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -34,8 +56,7 @@ describe('BackgroundPoller', () => {
     const staleLogger = trace();
     const activeLogger = trace();
     let logger = staleLogger;
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
+    const poller = createPoller({
       maxDurationMs: 1000,
       isPending: () => false,
       logger: () => logger,
@@ -59,12 +80,7 @@ describe('BackgroundPoller', () => {
 
   it('uses provider-specific timeout guidance', async () => {
     const logger = trace();
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
-      maxDurationMs: -1,
-      isPending: (response) => response.status === 'in_progress',
-      logger,
-    });
+    const poller = createPoller({ maxDurationMs: -1, logger });
 
     await expect(
       poller.poll({
@@ -93,14 +109,8 @@ describe('BackgroundPoller', () => {
   it('honors a polling deadline established by an earlier invocation', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-01T03:00:00Z'));
-    const logger = trace();
     const retrieve = vi.fn();
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
-      maxDurationMs: 3 * 60 * 60 * 1000,
-      isPending: (response) => response.status === 'in_progress',
-      logger,
-    });
+    const poller = createPoller({ maxDurationMs: 3 * 60 * 60 * 1000 });
     const timeout = new Error('terminal polling timeout');
 
     const polling = poller.poll({
@@ -118,18 +128,13 @@ describe('BackgroundPoller', () => {
   });
 
   it('returns the timeout error when retrieval rejects at the deadline', async () => {
-    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    vi.useFakeTimers({ now: FROZEN_NOW });
     const deadlineAtMs = Date.now() + 1;
     const retrieve = vi.fn(async () => {
       vi.setSystemTime(deadlineAtMs);
       throw new Error('socket hang up');
     });
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
-      maxDurationMs: 1000,
-      isPending: (response) => response.status === 'in_progress',
-      logger: trace(),
-    });
+    const poller = createPoller({ maxDurationMs: 1000 });
     const timeout = new Error('canonical polling timeout');
 
     const polling = poller.poll({
@@ -148,18 +153,13 @@ describe('BackgroundPoller', () => {
   });
 
   it('rejects a retrieval result that arrives at the deadline', async () => {
-    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    vi.useFakeTimers({ now: FROZEN_NOW });
     const deadlineAtMs = Date.now() + 1;
     const retrieve = vi.fn(async () => {
       vi.setSystemTime(deadlineAtMs);
       return { id: 'resp-late-result', status: 'completed' };
     });
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
-      maxDurationMs: 1000,
-      isPending: (response) => response.status === 'in_progress',
-      logger: trace(),
-    });
+    const poller = createPoller({ maxDurationMs: 1000 });
 
     const polling = poller.poll({
       initialResponse: { id: 'resp-late-result', status: 'in_progress' },
@@ -183,15 +183,10 @@ describe('BackgroundPoller', () => {
   ])(
     'preserves cancellation when a deadline-bound retrieval %s late',
     async (_label, rejects) => {
-      vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+      vi.useFakeTimers({ now: FROZEN_NOW });
       const controller = new AbortController();
       const deadlineAtMs = Date.now() + 1;
-      const poller = new BackgroundPoller<TestResponse>({
-        pollIntervalMs: 0,
-        maxDurationMs: 1000,
-        isPending: (response) => response.status === 'in_progress',
-        logger: trace(),
-      });
+      const poller = createPoller({ maxDurationMs: 1000 });
 
       const polling = poller.poll({
         initialResponse: { id: 'resp-aborted-late', status: 'in_progress' },
@@ -216,17 +211,12 @@ describe('BackgroundPoller', () => {
   );
 
   it('times out the default poller exactly at its duration boundary', async () => {
-    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    vi.useFakeTimers({ now: FROZEN_NOW });
     const retrieve = vi.fn(async () => ({
       id: 'resp-boundary',
       status: 'completed',
     }));
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
-      maxDurationMs: 0,
-      isPending: (response) => response.status === 'in_progress',
-      logger: trace(),
-    });
+    const poller = createPoller({ maxDurationMs: 0 });
 
     const polling = poller.poll({
       initialResponse: { id: 'resp-boundary', status: 'in_progress' },
@@ -246,10 +236,9 @@ describe('BackgroundPoller', () => {
   it('logs aborts that happen while waiting for the next poll', async () => {
     const logger = trace();
     const controller = new AbortController();
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 1000,
+    const poller = createPoller({
       maxDurationMs: 10_000,
-      isPending: (response) => response.status === 'in_progress',
+      pollIntervalMs: 1000,
       logger,
     });
 
@@ -280,12 +269,7 @@ describe('BackgroundPoller', () => {
     const logger = trace();
     let finishedStats: BackgroundPollStats | undefined;
     const usage = { input_tokens: 3, output_tokens: 5 };
-    const poller = new BackgroundPoller<TestResponse>({
-      pollIntervalMs: 0,
-      maxDurationMs: 1000,
-      isPending: (response) => response.status === 'in_progress',
-      logger,
-    });
+    const poller = createPoller({ maxDurationMs: 1000, logger });
 
     await poller.poll({
       initialResponse: { id: 'resp-3', status: 'in_progress' },

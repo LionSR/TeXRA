@@ -35,6 +35,22 @@ function toolUse(
   };
 }
 
+function numberedLines(count: number): string {
+  return Array.from({ length: count }, (_, i) => `line ${i + 1}`).join('\n');
+}
+
+function bashOutput(
+  command: string,
+  outputText: string,
+  overrides: Partial<NormalizedToolUse> = {},
+): NormalizedToolUse {
+  return toolUse(
+    'bash',
+    { command },
+    { headerSummary: command, outputText, ...overrides },
+  );
+}
+
 async function renderBoundedTool(
   entry: NormalizedToolUse,
   maxRows: number,
@@ -67,7 +83,8 @@ describe('CLI tool display lines', () => {
       { outputText: 'passed' },
     );
 
-    expect(toolUseStyledLines(entry)).toEqual([
+    const lines = toolUseStyledLines(entry);
+    expect(lines).toEqual([
       {
         kind: 'row',
         spans: [
@@ -81,9 +98,9 @@ describe('CLI tool display lines', () => {
         spans: [{ dim: true, text: '⎿ ' }, { text: 'passed' }],
       },
     ]);
-    expect(Object.isFrozen(toolUseStyledLines(entry)[0])).toBe(true);
-    const firstLine = toolUseStyledLines(entry)[0];
+    const firstLine = lines[0];
     if (firstLine?.kind !== 'row') throw new Error('expected a row');
+    expect(Object.isFrozen(firstLine)).toBe(true);
     expect(Object.isFrozen(firstLine.spans)).toBe(true);
     expect(firstLine.spans.every(Object.isFrozen)).toBe(true);
   });
@@ -208,14 +225,12 @@ describe('CLI tool display lines', () => {
   });
 
   it('renders bash failures with command preview, output, and explicit exit line', () => {
-    const entry = toolUse(
-      'bash',
-      { command: 'npm run lint' },
+    const entry = bashOutput(
+      'npm run lint',
+      'checked 12 files\n2 problems found',
       {
         errorText: 'Command failed (exit 2)',
-        headerSummary: 'npm run lint',
         isError: true,
-        outputText: 'checked 12 files\n2 problems found',
         exitCode: 2,
       },
     );
@@ -232,17 +247,12 @@ describe('CLI tool display lines', () => {
   });
 
   it('renders bash approval rejections once when output and error match', () => {
-    const message = "User rejected command: printf 'approval-reject-live\\n'";
-    const entry = toolUse(
-      'bash',
-      { command: "printf 'approval-reject-live\\n'" },
-      {
-        errorText: message,
-        headerSummary: "printf 'approval-reject-live\\n'",
-        isError: true,
-        outputText: message,
-      },
-    );
+    const command = "printf 'approval-reject-live\\n'";
+    const message = `User rejected command: ${command}`;
+    const entry = bashOutput(command, message, {
+      errorText: message,
+      isError: true,
+    });
 
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
@@ -254,16 +264,10 @@ describe('CLI tool display lines', () => {
 
   it('keeps long duplicate error output when printing full output', () => {
     const message = `User rejected command: ${'diagnostic detail '.repeat(30)}`;
-    const entry = toolUse(
-      'bash',
-      { command: 'run-diagnostic' },
-      {
-        errorText: message,
-        headerSummary: 'run-diagnostic',
-        isError: true,
-        outputText: message,
-      },
-    );
+    const entry = bashOutput('run-diagnostic', message, {
+      errorText: message,
+      isError: true,
+    });
 
     const lines = toolUseDisplayLines(entry, { elide: false });
 
@@ -273,16 +277,7 @@ describe('CLI tool display lines', () => {
   });
 
   it('elides long bash output to a head+tail slice with a line marker', () => {
-    const entry = toolUse(
-      'bash',
-      { command: 'seq 20' },
-      {
-        headerSummary: 'seq 20',
-        outputText: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join(
-          '\n',
-        ),
-      },
-    );
+    const entry = bashOutput('seq 20', numberedLines(20));
 
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
@@ -302,14 +297,9 @@ describe('CLI tool display lines', () => {
   });
 
   it('caps a single pathologically long output line instead of rendering it whole', () => {
-    const hugeLine = 'x'.repeat(50_000);
-    const entry = toolUse(
-      'bash',
-      { command: "rg -n --fixed-strings 'approved-plan' ~/.nvm" },
-      {
-        headerSummary: "rg -n --fixed-strings 'approved-plan' ~/.nvm",
-        outputText: hugeLine,
-      },
+    const entry = bashOutput(
+      "rg -n --fixed-strings 'approved-plan' ~/.nvm",
+      'x'.repeat(50_000),
     );
 
     const lines = toolUseDisplayLines(entry);
@@ -318,41 +308,24 @@ describe('CLI tool display lines', () => {
     expect(lines[1].endsWith('…')).toBe(true);
   });
 
-  it('keeps short bash output whole when elision would not reduce height', () => {
-    const entry = toolUse(
-      'bash',
-      { command: 'seq 10' },
-      {
-        headerSummary: 'seq 10',
-        outputText: Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join(
-          '\n',
-        ),
-      },
-    );
+  it.each([
+    // Short output stays whole when elision would not reduce height.
+    { count: 10, elide: true },
+    // Elision disabled for printing shows the full output.
+    { count: 12, elide: false },
+  ])(
+    'keeps bash output whole with no marker (count=$count, elide=$elide)',
+    ({ count, elide }) => {
+      const entry = bashOutput(`seq ${count}`, numberedLines(count));
 
-    const lines = toolUseDisplayLines(entry);
-    expect(lines).toHaveLength(11);
-    expect(lines.some((line) => line.includes('ctrl + t'))).toBe(false);
-    expect(lines.at(-1)).toBe('  line 10');
-  });
+      const lines = toolUseDisplayLines(entry, { elide });
 
-  it('shows the full bash output when elision is disabled for printing', () => {
-    const entry = toolUse(
-      'bash',
-      { command: 'seq 12' },
-      {
-        headerSummary: 'seq 12',
-        outputText: Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join(
-          '\n',
-        ),
-      },
-    );
-
-    const full = toolUseDisplayLines(entry, { elide: false });
-    expect(full).toHaveLength(13); // header + 12 output lines, no marker
-    expect(full.some((line) => line.includes('ctrl + t'))).toBe(false);
-    expect(full.at(-1)).toBe('  line 12');
-  });
+      // header + output lines, no elision marker
+      expect(lines).toHaveLength(count + 1);
+      expect(lines.some((line) => line.includes('ctrl + t'))).toBe(false);
+      expect(lines.at(-1)).toBe(`  line ${count}`);
+    },
+  );
 
   it('labels MCP calls with their server/tool provenance', () => {
     const entry = toolUse(
@@ -505,10 +478,7 @@ describe('ToolUseRow edit patch rendering', () => {
         {
           errorText: 'Command failed (exit 2)',
           isError: true,
-          outputText: Array.from(
-            { length: 20 },
-            (_, index) => `line ${index + 1}`,
-          ).join('\n'),
+          outputText: numberedLines(20),
           exitCode: 2,
         },
       ),

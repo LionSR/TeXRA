@@ -4,7 +4,10 @@ import '@test/support/defaultSessionTestSetup';
 // Test support imports
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -80,6 +83,32 @@ class BlockingFirstIndexWriteState implements StateStore {
   }
 }
 
+/** Records every goal-state change delivered to one session. */
+function collectGoalChanges(session: SessionHandle): {
+  seen: unknown[];
+  clear: () => void;
+  detach: () => void;
+} {
+  const seen: unknown[] = [];
+  const detach = subscribeGoalStateChanges(session, (change) => {
+    seen.push(change);
+  });
+  return {
+    seen,
+    clear: () => {
+      seen.length = 0;
+    },
+    detach,
+  };
+}
+
+async function inSession(
+  session: SessionHandle,
+  run: () => Promise<unknown>,
+): Promise<unknown> {
+  return withRunContext(createRunContext({ session }), run);
+}
+
 describe('GoalStore.forget (abandon-on-delete contract)', () => {
   setupPlatform();
 
@@ -127,54 +156,29 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   it('routes explicit-session forget notifications only to the passed session', async () => {
     const runSession = createTestSession();
     const explicitSession = createTestSession();
-    const seenRun: unknown[] = [];
-    const seenExplicit: unknown[] = [];
-    const seenDefault: unknown[] = [];
-    const detachRun = subscribeGoalStateChanges(runSession, (change) => {
-      seenRun.push(change);
-    });
-    const detachExplicit = subscribeGoalStateChanges(
-      explicitSession,
-      (change) => {
-        seenExplicit.push(change);
-      },
-    );
-    const detachDefault = subscribeGoalStateChanges(
-      defaultSession(),
-      (change) => {
-        seenDefault.push(change);
-      },
-    );
+    const run = collectGoalChanges(runSession);
+    const explicit = collectGoalChanges(explicitSession);
+    const fallback = collectGoalChanges(defaultSession());
 
     try {
-      await withRunContext(
-        createRunContext({
-          session: runSession,
-        }),
-        async () => {
-          await GoalStore.start(STREAM_A, 'objective one');
-        },
+      await inSession(runSession, () =>
+        GoalStore.start(STREAM_A, 'objective one'),
       );
-      seenRun.length = 0;
-      seenExplicit.length = 0;
-      seenDefault.length = 0;
+      run.clear();
+      explicit.clear();
+      fallback.clear();
 
-      await withRunContext(
-        createRunContext({
-          session: runSession,
-        }),
-        async () => {
-          await GoalStore.forget(STREAM_A, explicitSession);
-        },
+      await inSession(runSession, () =>
+        GoalStore.forget(STREAM_A, explicitSession),
       );
 
-      expect(seenRun).toEqual([]);
-      expect(seenExplicit).toEqual([{ streamId: STREAM_A }]);
-      expect(seenDefault).toEqual([]);
+      expect(run.seen).toEqual([]);
+      expect(explicit.seen).toEqual([{ streamId: STREAM_A }]);
+      expect(fallback.seen).toEqual([]);
     } finally {
-      detachRun();
-      detachExplicit();
-      detachDefault();
+      run.detach();
+      explicit.detach();
+      fallback.detach();
       runSession.dispose();
       explicitSession.dispose();
     }
@@ -254,10 +258,7 @@ describe('subscribeGoalStateChanges', () => {
   it('delivers only goal changes from the supplied session', () => {
     const sessionA = createTestSession();
     const sessionB = createTestSession();
-    const seen: unknown[] = [];
-    const detach = subscribeGoalStateChanges(sessionA, (change) => {
-      seen.push(change);
-    });
+    const { seen, detach } = collectGoalChanges(sessionA);
 
     try {
       sessionB.events.emit({
@@ -293,48 +294,31 @@ describe('subscribeGoalStateChanges', () => {
   it('routes start, status, and edit notifications through the current run session only', async () => {
     const runSession = createTestSession();
     const otherSession = createTestSession();
-    const seenRun: unknown[] = [];
-    const seenOther: unknown[] = [];
-    const seenDefault: unknown[] = [];
-    const detachRun = subscribeGoalStateChanges(runSession, (change) => {
-      seenRun.push(change);
-    });
-    const detachOther = subscribeGoalStateChanges(otherSession, (change) => {
-      seenOther.push(change);
-    });
-    const detachDefault = subscribeGoalStateChanges(
-      defaultSession(),
-      (change) => {
-        seenDefault.push(change);
-      },
-    );
+    const run = collectGoalChanges(runSession);
+    const other = collectGoalChanges(otherSession);
+    const fallback = collectGoalChanges(defaultSession());
 
     try {
-      await withRunContext(
-        createRunContext({
-          session: runSession,
-        }),
-        async () => {
-          await GoalStore.start(SUBSCRIPTION_STREAM, 'prove the estimate');
-          await GoalStore.setStatus(SUBSCRIPTION_STREAM, 'paused');
-          await GoalStore.editObjective(
-            SUBSCRIPTION_STREAM,
-            'prove the sharp estimate',
-          );
-        },
-      );
+      await inSession(runSession, async () => {
+        await GoalStore.start(SUBSCRIPTION_STREAM, 'prove the estimate');
+        await GoalStore.setStatus(SUBSCRIPTION_STREAM, 'paused');
+        await GoalStore.editObjective(
+          SUBSCRIPTION_STREAM,
+          'prove the sharp estimate',
+        );
+      });
 
-      expect(seenRun).toEqual([
+      expect(run.seen).toEqual([
         { streamId: SUBSCRIPTION_STREAM },
         { streamId: SUBSCRIPTION_STREAM },
         { streamId: SUBSCRIPTION_STREAM },
       ]);
-      expect(seenOther).toEqual([]);
-      expect(seenDefault).toEqual([]);
+      expect(other.seen).toEqual([]);
+      expect(fallback.seen).toEqual([]);
     } finally {
-      detachRun();
-      detachOther();
-      detachDefault();
+      run.detach();
+      other.detach();
+      fallback.detach();
       runSession.dispose();
       otherSession.dispose();
     }

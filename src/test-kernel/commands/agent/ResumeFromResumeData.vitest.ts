@@ -36,11 +36,11 @@ async function capturePorts(): Promise<ResumeStreamPorts> {
   return ports as ResumeStreamPorts;
 }
 
-beforeEach(() => {
-  mocks.resolveAndResumeStream.mockClear();
-});
-
 describe('tryResumeFromResumeData ports', () => {
+  beforeEach(() => {
+    mocks.resolveAndResumeStream.mockClear();
+  });
+
   it('reports cancellation once the stream transcript is gone', async () => {
     const ports = await capturePorts();
 

@@ -53,6 +53,13 @@ function annotation(
   };
 }
 
+/** A full 100-entry warning page, which keeps pagination going. */
+function fullWarningPage(): GhCheckAnnotation[] {
+  return Array.from({ length: 100 }, (_, index) =>
+    annotation('warning', index),
+  );
+}
+
 async function createHarness(): Promise<{
   ghGet: Mock;
   source: AnnotationFetchSource;
@@ -97,13 +104,12 @@ describe('PRPollingSource annotation pagination', () => {
 
   it('fetches later annotation pages before level filtering runs', async () => {
     const { ghGet, source } = await createHarness();
-    const firstPage = Array.from({ length: 100 }, (_, index) =>
-      annotation('warning', index),
-    );
-    const secondPage = [annotation('failure', 100)];
     ghGet
-      .mockResolvedValueOnce({ status: 200, data: firstPage })
-      .mockResolvedValueOnce({ status: 200, data: secondPage });
+      .mockResolvedValueOnce({ status: 200, data: fullWarningPage() })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: [annotation('failure', 100)],
+      });
 
     const annotations = await source.fetchAnnotations('owner', 'repo', 42);
 
@@ -118,10 +124,7 @@ describe('PRPollingSource annotation pagination', () => {
 
   it('caps annotation pagination for malformed full pages', async () => {
     const { ghGet, source } = await createHarness();
-    const fullPage = Array.from({ length: 100 }, (_, index) =>
-      annotation('warning', index),
-    );
-    ghGet.mockResolvedValue({ status: 200, data: fullPage });
+    ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
 
     const annotations = await source.fetchAnnotations('owner', 'repo', 42);
 
@@ -135,10 +138,7 @@ describe('PRPollingSource annotation pagination', () => {
   it('counts annotation budget by endpoint page', async () => {
     const { ghGet, source, PRPollingSource } = await createHarness();
     PRPollingSource.resetAnnotationFetchBudgetForTests(1);
-    const fullPage = Array.from({ length: 100 }, (_, index) =>
-      annotation('warning', index),
-    );
-    ghGet.mockResolvedValue({ status: 200, data: fullPage });
+    ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
 
     await expect(source.fetchAnnotations('owner', 'repo', 42)).rejects.toThrow(
       'Annotation fetch budget exhausted',

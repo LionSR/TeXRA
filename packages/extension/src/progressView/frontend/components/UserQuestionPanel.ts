@@ -88,15 +88,14 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   override handleKeyboardShortcut(key: string): boolean {
-    if (key === 'y') {
-      if (this.showFeedback) return false;
-      if (!this.hasAnyAnswer(this.permission.data)) {
-        return true;
-      }
+    if (key !== 'y') return super.handleKeyboardShortcut(key);
+    if (this.showFeedback) return false;
+    // Swallow 'y' when nothing is answerable, mirroring the disabled submit
+    // button, so the shortcut doesn't fall through to other handlers.
+    if (this.hasAnyAnswer(this.permission.data)) {
       this.submitAnswers();
-      return true;
     }
-    return super.handleKeyboardShortcut(key);
+    return true;
   }
 
   private renderQuestion(question: UserQuestionPrompt): TemplateResult {

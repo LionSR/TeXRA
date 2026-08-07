@@ -50,6 +50,25 @@ function expectParseWarning(
   );
 }
 
+/** The shared subagent result-meta envelope the projection tests permute. */
+function interimResultMeta(
+  response: string,
+  outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
+): Extract<ResultMeta, { producer: 'subagent' }> {
+  return {
+    producer: 'subagent',
+    agentName: 'reviewer',
+    wallTimeMs: 20,
+    result: {
+      category: 'toolUse',
+      outcome,
+      response,
+      files: [],
+      cost: 0.1,
+    },
+  };
+}
+
 // `isReservedKvKeyName` is the single owner of the reserved single-value-key
 // and `child-` prefix vocabulary, exported so callers walking a run directory
 // (e.g. `src/tools/executions/executionKvFiles.ts`) recognize it without
@@ -120,18 +139,7 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('supersedes an interim result outcome with the durable cancelled outcome', async () => {
     const id = 'terminal-outcome-supersedes-interim' as ExecutionId;
-    const interim = {
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        response: 'Interim result.',
-        files: [],
-        cost: 0.1,
-      },
-    };
+    const interim = interimResultMeta('Interim result.');
     await getExecutionStore(id).write('result-meta', interim);
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
@@ -151,18 +159,10 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('keeps a producer failure signal when the execution completed', async () => {
     const id = 'terminal-outcome-keeps-failure' as ExecutionId;
-    await getExecutionStore(id).write('result-meta', {
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.FAILED,
-        response: 'The subagent reported an error.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    await getExecutionStore(id).write(
+      'result-meta',
+      interimResultMeta('The subagent reported an error.', RUN_OUTCOME.FAILED),
+    );
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
       outcome: RUN_OUTCOME.COMPLETED,
@@ -175,18 +175,10 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('keeps the record outcome while the execution has no terminal outcome', async () => {
     const id = 'terminal-outcome-absent' as ExecutionId;
-    await getExecutionStore(id).write('result-meta', {
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        response: 'Waiting for the next turn.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    await getExecutionStore(id).write(
+      'result-meta',
+      interimResultMeta('Waiting for the next turn.'),
+    );
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
     });
@@ -202,18 +194,7 @@ describe('ExecutionKVStore meta read shims', () => {
   // interrupted predecessor's outcome would relabel every one of them.
   it('serves the resumed turn outcome once the resume boundary clears the terminal facts', async () => {
     const id = 'terminal-outcome-resume-boundary' as ExecutionId;
-    const interim = {
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        response: 'Interim result before the stop.',
-        files: [],
-        cost: 0.1,
-      },
-    } satisfies ResultMeta;
+    const interim = interimResultMeta('Interim result before the stop.');
     await getExecutionStore(id).write('result-meta', interim);
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
@@ -224,13 +205,9 @@ describe('ExecutionKVStore meta read shims', () => {
     );
 
     await clearTerminalExecutionState(id);
-    await getExecutionStore(id).writeResultMeta({
-      ...interim,
-      result: {
-        ...interim.result,
-        response: 'Interim result from the resumed turn.',
-      },
-    });
+    await getExecutionStore(id).writeResultMeta(
+      interimResultMeta('Interim result from the resumed turn.'),
+    );
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
       { result: { outcome: RUN_OUTCOME.COMPLETED } },

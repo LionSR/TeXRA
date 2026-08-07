@@ -118,10 +118,11 @@ function buildContextManagementItems(data: ContextManagementData): {
   }
 
   // Show context utilization
+  const utilizationBefore = `${data.utilizationBefore.toFixed(1)}%`;
   const utilizationDisplay =
     action !== 'max_tokens_reduced'
-      ? `${data.utilizationBefore.toFixed(1)}% → ${data.utilizationAfter.toFixed(1)}%`
-      : `${data.utilizationBefore.toFixed(1)}%`;
+      ? `${utilizationBefore} → ${data.utilizationAfter.toFixed(1)}%`
+      : utilizationBefore;
   items.push({
     icon: 'chart-pie',
     label: 'Context utilization',

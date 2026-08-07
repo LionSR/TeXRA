@@ -7,6 +7,11 @@ import * as config from '@utils/config/configUtils';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
+/** Enables debug-level logging for the duration of a test. */
+function enableDebugLogging(): void {
+  vi.spyOn(config, 'getConfig').mockReturnValue(true);
+}
+
 /** Installs a capturing sink and returns the lines it receives. */
 function captureLines(options?: { trusted: boolean }): string[] {
   const lines: string[] = [];
@@ -28,7 +33,7 @@ describe('logUtils', () => {
   });
 
   it('serializes self-referential array log data without recursing forever', () => {
-    vi.spyOn(config, 'getConfig').mockReturnValue(true);
+    enableDebugLogging();
     const lines = captureLines();
 
     const data: unknown[] = [];
@@ -40,7 +45,7 @@ describe('logUtils', () => {
   });
 
   it('does not mark repeated acyclic references as circular', () => {
-    vi.spyOn(config, 'getConfig').mockReturnValue(true);
+    enableDebugLogging();
     const lines = captureLines();
 
     const shared = { value: 1 };
@@ -89,7 +94,7 @@ describe('logUtils', () => {
   });
 
   it('redacts serialized debug data before sending it to the sink', () => {
-    vi.spyOn(config, 'getConfig').mockReturnValue(true);
+    enableDebugLogging();
     const lines = captureLines();
 
     logger.debug('test', 'request metadata', {
@@ -101,10 +106,11 @@ describe('logUtils', () => {
       },
     });
 
+    const output = lines.join('\n');
     expect(lines).toHaveLength(2);
-    expect(lines.join('\n')).not.toContain(SECRET);
-    expect(lines.join('\n')).not.toContain('correct horse battery staple');
-    expect(lines.join('\n')).not.toContain('opaque-refresh-credential');
+    expect(output).not.toContain(SECRET);
+    expect(output).not.toContain('correct horse battery staple');
+    expect(output).not.toContain('opaque-refresh-credential');
     expect(lines[1]).toContain('"authorization": "Bearer [redacted]"');
     expect(lines[1]).toContain('"password": "[redacted]"');
     expect(lines[1]).toContain('"refreshToken": "[redacted]"');

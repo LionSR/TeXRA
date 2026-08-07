@@ -21,6 +21,20 @@ function makeStream(name: string): StreamTabInfo {
   };
 }
 
+function makeBashChild(
+  name: string,
+  parentStreamId: string,
+  creationTimestamp: number,
+): StreamTabInfo {
+  return {
+    identity: { kind: 'process', tool: 'bash' },
+    name,
+    label: 'bash',
+    parentStreamId,
+    creationTimestamp,
+  };
+}
+
 /** Let the nested <stream-tab> finish its own first render. */
 function settleChildRender(): Promise<unknown> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -226,20 +240,8 @@ describe('stream-tab expand chevron', () => {
       ...makeStream('engineer'),
       agentCategory: AgentCategory.ToolUse,
     };
-    const liveBash: StreamTabInfo = {
-      identity: { kind: 'process', tool: 'bash' },
-      name: 'bash@tool#live',
-      label: 'bash',
-      parentStreamId: 'engineer',
-      creationTimestamp: 2,
-    };
-    const doneBash: StreamTabInfo = {
-      identity: { kind: 'process', tool: 'bash' },
-      name: 'bash@tool#done',
-      label: 'bash',
-      parentStreamId: 'engineer',
-      creationTimestamp: 3,
-    };
+    const liveBash = makeBashChild('bash@tool#live', 'engineer', 2);
+    const doneBash = makeBashChild('bash@tool#done', 'engineer', 3);
     const tabs = await mountTabs({
       streams: [parent],
       childStreamsByParent: new Map([['engineer', [liveBash, doneBash]]]),

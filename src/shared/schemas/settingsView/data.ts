@@ -344,7 +344,6 @@ const ToolInfoSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
 });
-export type ToolInfo = z.infer<typeof ToolInfoSchema>;
 
 /** Single tool entry in the dashboard */
 const ToolDashboardItemSchema = z.object({

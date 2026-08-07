@@ -57,6 +57,28 @@ function workflowCallEvent(
   );
 }
 
+type ScriptRunOptions = Parameters<
+  typeof runPersistedWorkflowScriptWithProgress
+>[1];
+
+const LIFECYCLE_STATUSES = ['planned', 'running', 'completed'] as const;
+
+/** Run a script against this file's shared store; options override the defaults. */
+function runScript(
+  trace: TraceEmitter,
+  checkpointId: string,
+  script: string,
+  options: Partial<ScriptRunOptions> = {},
+): ReturnType<typeof runPersistedWorkflowScriptWithProgress> {
+  return runPersistedWorkflowScriptWithProgress(trace, {
+    store: getExecutionStore(executionId),
+    checkpointId,
+    script,
+    runAgent: async () => 'done',
+    ...options,
+  });
+}
+
 /**
  * The current card set, one entry per `logId` — what a host progress tree
  * holds after applying every update.
@@ -88,16 +110,15 @@ describe('workflow-script progress bridge', () => {
 }`;
 
     await parent.within(() =>
-      runPersistedWorkflowScriptWithProgress(trace, {
-        store: getExecutionStore(executionId),
-        checkpointId: 'phase-log',
-        script: `${plannedMeta}
+      runScript(
+        trace,
+        'phase-log',
+        `${plannedMeta}
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
 return await agent('Inspect', { id: 'inspect' })`,
-        runAgent: async () => 'done',
-      }),
+      ),
     );
 
     const phaseId = stageId(events, 'Research');
@@ -157,10 +178,10 @@ return await agent('Inspect', { id: 'inspect' })`,
   it('marks declared tasks not reached by the script as skipped', async () => {
     const { trace, events } = recordingTrace();
     const activities: string[] = [];
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'not-reached-plan',
-      script: `export const meta = {
+    await runScript(
+      trace,
+      'not-reached-plan',
+      `export const meta = {
   name: 'conditional-plan',
   description: 'declares all possible work',
   phases: [{ title: 'Research' }],
@@ -171,9 +192,8 @@ return await agent('Inspect', { id: 'inspect' })`,
 }
 phase('Research')
 return await agent('Run one', { id: 'used' })`,
-      runAgent: async () => 'done',
-      onActivity: (line) => activities.push(line),
-    });
+      { onActivity: (line) => activities.push(line) },
+    );
 
     const unusedPlanned = workflowCallEvent(events, 'Unused task', 'planned');
     expect(workflowCallEvent(events, 'Used task', 'completed')).toBeDefined();
@@ -191,10 +211,10 @@ return await agent('Run one', { id: 'used' })`,
 
   it('opens and closes a declared phase the run never reached', async () => {
     const { trace, events } = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'unreached-phase',
-      script: `export const meta = {
+    await runScript(
+      trace,
+      'unreached-phase',
+      `export const meta = {
   name: 'unreached-phase',
   description: 'declares a phase the run never enters',
   phases: [{ title: 'Research' }, { title: 'Write' }],
@@ -205,8 +225,7 @@ return await agent('Run one', { id: 'used' })`,
 }
 phase('Research')
 return await agent('Run one', { id: 'used' })`,
-      runAgent: async () => 'done',
-    });
+    );
 
     // The skipped card still belongs to its own phase group, so the sweep has
     // to open that stage even though the script never entered it.
@@ -231,10 +250,10 @@ return await agent('Run one', { id: 'used' })`,
 
   it('keeps a phase-less declared task out of the phase active at call time', async () => {
     const { trace, events } = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'phase-less-declared-task',
-      script: `export const meta = {
+    await runScript(
+      trace,
+      'phase-less-declared-task',
+      `export const meta = {
   name: 'phase-less-declared-task',
   description: 'declares a task with no phase',
   phases: [{ title: 'Research' }],
@@ -242,21 +261,17 @@ return await agent('Run one', { id: 'used' })`,
 }
 phase('Research')
 return await agent('Run loose', { id: 'loose' })`,
-      runAgent: async () => 'done',
-    });
+    );
 
     // meta.tasks[].phase is optional, so the plan can declare a task with no
     // phase while a phase() is active. Its card must stay where it was first
     // classified — a progress tree cannot move a card between groups — and the
     // payload every host folds `done/total` by must say the same thing, so a
     // phase-less task is counted under no phase rather than under the wrong one.
-    for (const status of ['planned', 'running', 'completed'] as const) {
-      expect(workflowCallEvent(events, 'Loose task', status)).toMatchObject({
-        stageId: undefined,
-      });
-      expect(
-        workflowCallEvent(events, 'Loose task', status)?.call.phase,
-      ).toBeUndefined();
+    for (const status of LIFECYCLE_STATUSES) {
+      const event = workflowCallEvent(events, 'Loose task', status);
+      expect(event).toMatchObject({ stageId: undefined });
+      expect(event?.call.phase).toBeUndefined();
     }
 
     // The two answers agree by construction: the phase whose group holds the
@@ -278,10 +293,10 @@ return await agent('Run loose', { id: 'loose' })`,
 
   it('does not fail an active phase for a failed phase-less declared task', async () => {
     const { trace, events } = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'failed-phase-less-declared-task',
-      script: `export const meta = {
+    await runScript(
+      trace,
+      'failed-phase-less-declared-task',
+      `export const meta = {
   name: 'failed-phase-less-declared-task',
   description: 'keeps a phase-less failure outside the active phase',
   phases: [{ title: 'Research' }],
@@ -289,10 +304,12 @@ return await agent('Run loose', { id: 'loose' })`,
 }
 phase('Research')
 return await agent('Run loose', { id: 'loose' })`,
-      runAgent: async () => {
-        throw new Error('model unavailable');
+      {
+        runAgent: async () => {
+          throw new Error('model unavailable');
+        },
       },
-    });
+    );
 
     const researchId = stageId(events, 'Research');
     expect(workflowCallEvent(events, 'Loose task', 'failed')).toMatchObject({
@@ -309,10 +326,10 @@ return await agent('Run loose', { id: 'loose' })`,
   it('marks a planned task failed when the live-call cap refuses it', async () => {
     const { trace, events } = recordingTrace();
     await expect(
-      runPersistedWorkflowScriptWithProgress(trace, {
-        store: getExecutionStore(executionId),
-        checkpointId: 'planned-call-cap',
-        script: `export const meta = {
+      runScript(
+        trace,
+        'planned-call-cap',
+        `export const meta = {
   name: 'planned-call-cap',
   description: 'distinguishes refused work from work not reached',
   phases: [{ title: 'Audit' }],
@@ -323,9 +340,8 @@ return await agent('Run loose', { id: 'loose' })`,
 }
 await agent('Run first', { id: 'first' })
 return await agent('Run refused', { id: 'refused' })`,
-        maxAgentCalls: 1,
-        runAgent: async () => 'done',
-      }),
+        { maxAgentCalls: 1 },
+      ),
     ).rejects.toThrow(/agent-call cap/);
 
     expect(workflowCallEvent(events, 'Refused audit', 'failed')).toMatchObject({
@@ -371,13 +387,12 @@ return await agent('Second prompt', {
     'keeps %s calls with one journal id as separate progress records',
     async (mode, body) => {
       const { trace, events } = recordingTrace();
-      await runPersistedWorkflowScriptWithProgress(trace, {
-        store: getExecutionStore(executionId),
-        checkpointId: `reused-journal-id-${mode}`,
-        script: `${meta}
+      await runScript(
+        trace,
+        `reused-journal-id-${mode}`,
+        `${meta}
 ${body}`,
-        runAgent: async () => 'done',
-      });
+      );
 
       const firstRunning = workflowCallEvent(events, 'First task', 'running');
       const firstCompleted = workflowCallEvent(
@@ -401,13 +416,9 @@ ${body}`,
   );
 
   it('projects a cached completion without synthesizing a start event', async () => {
-    const store = getExecutionStore(executionId);
     const script = `${meta}
 return await agent('Read', { phase: 'Review' })`;
-    await runPersistedWorkflowScriptWithProgress(recordingTrace().trace, {
-      store,
-      checkpointId: 'cached',
-      script,
+    await runScript(recordingTrace().trace, 'cached', script, {
       runAgent: async () => 'saved',
     });
 
@@ -440,12 +451,7 @@ const early = agent('Draft', { phase: 'Write' })
 phase('Write')
 return await early`;
 
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'early-phase-agent',
-      script,
-      runAgent: async () => 'done',
-    });
+    await runScript(trace, 'early-phase-agent', script);
 
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -473,12 +479,7 @@ return await early`;
 phase('  Review  ')
 return await agent('Review the argument', { id: 'review-task' })`;
 
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'trimmed-declared-task-phase',
-      script,
-      runAgent: async () => 'done',
-    });
+    await runScript(trace, 'trimmed-declared-task-phase', script);
 
     const phaseStarts = events.filter(
       (event) => event.type === 'stage.start' && event.kind === 'phase',
@@ -491,7 +492,7 @@ return await agent('Review the argument', { id: 'review-task' })`;
       }),
     ]);
     const planned = workflowCallEvent(events, 'Review argument', 'planned');
-    for (const status of ['planned', 'running', 'completed'] as const) {
+    for (const status of LIFECYCLE_STATUSES) {
       expect(
         workflowCallEvent(events, 'Review argument', status),
       ).toMatchObject({
@@ -507,16 +508,12 @@ return await agent('Review the argument', { id: 'review-task' })`;
   });
 
   it('renders each call cost on live finish lines only', async () => {
-    const store = getExecutionStore(executionId);
     const script = `${meta}
 await agent('First')
 return await agent('Second')`;
     const { trace, events } = recordingTrace();
     const callCosts = new Map<number, number>();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store,
-      checkpointId: 'live-cost',
-      script,
+    await runScript(trace, 'live-cost', script, {
       runAgent: async (invocation) => {
         callCosts.set(invocation.index, 0.05);
         return 'done';
@@ -537,10 +534,7 @@ return await agent('Second')`;
 
     clearStoreCache();
     const replay = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(replay.trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'live-cost',
-      script,
+    await runScript(replay.trace, 'live-cost', script, {
       runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
       getCallCostUsd: () => 0,
     });
@@ -553,19 +547,23 @@ return await agent('Second')`;
   it('enriches live finish lines with the reported model and duration', async () => {
     const { trace, events } = recordingTrace();
     const activities: string[] = [];
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'model-duration',
-      script: `${meta}
+    await runScript(
+      trace,
+      'model-duration',
+      `${meta}
 return await agent('Draft')`,
-      runAgent: async (invocation: WorkflowAgentInvocation) => {
-        invocation.reportModel?.('deepseekT');
-        invocation.reportChildStream?.('draft@deepseekT#abcdef' as StreamTabId);
-        return 'done';
+      {
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.reportModel?.('deepseekT');
+          invocation.reportChildStream?.(
+            'draft@deepseekT#abcdef' as StreamTabId,
+          );
+          return 'done';
+        },
+        getCallCostUsd: () => 0.02,
+        onActivity: (line) => activities.push(line),
       },
-      getCallCostUsd: () => 0.02,
-      onActivity: (line) => activities.push(line),
-    });
+    );
 
     expect(workflowCallEvent(events, 'Draft', 'completed')?.call).toMatchObject(
       {
@@ -591,19 +589,13 @@ return await agent('Draft')`,
     const script = `${meta}
 return await agent('Draft')`;
     const first = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(first.trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'relaunch-card-id',
-      script,
+    await runScript(first.trace, 'relaunch-card-id', script, {
       runAgent: vi.fn(() => Promise.resolve('done')),
     });
 
     clearStoreCache();
     const second = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(second.trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'relaunch-card-id',
-      script,
+    await runScript(second.trace, 'relaunch-card-id', script, {
       runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
     });
 
@@ -626,28 +618,30 @@ return await agent('Draft')`;
     const started = new Promise<void>((resolve) => {
       markStarted = resolve;
     });
-    const run = runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'late-user-skip',
-      script: `${meta}
+    const run = runScript(
+      trace,
+      'late-user-skip',
+      `${meta}
 return await agent('Late skip')`,
-      runAgent: async (invocation: WorkflowAgentInvocation) => {
-        invocation.reportModel?.('kimiK2');
-        markStarted?.();
-        return await new Promise<never>((_resolve, reject) => {
-          invocation.signal.addEventListener(
-            'abort',
-            () => reject(new Error('skipped')),
-            { once: true },
-          );
-        });
+      {
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.reportModel?.('kimiK2');
+          markStarted?.();
+          return await new Promise<never>((_resolve, reject) => {
+            invocation.signal.addEventListener(
+              'abort',
+              () => reject(new Error('skipped')),
+              { once: true },
+            );
+          });
+        },
+        onControl: (handle) => {
+          control = handle;
+        },
+        getCallCostUsd: () => 0.04,
+        onActivity: (line) => activities.push(line),
       },
-      onControl: (handle) => {
-        control = handle;
-      },
-      getCallCostUsd: () => 0.04,
-      onActivity: (line) => activities.push(line),
-    });
+    );
 
     await started;
     control.skip(0);
@@ -669,16 +663,18 @@ return await agent('Late skip')`,
 
   it('marks a phase failed when an agent call fails', async () => {
     const { trace, events } = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'agent-failure',
-      script: `${meta}
+    await runScript(
+      trace,
+      'agent-failure',
+      `${meta}
 phase('Analysis')
 return await agent('Unsuccessful')`,
-      runAgent: async () => {
-        throw new Error('model unavailable');
+      {
+        runAgent: async () => {
+          throw new Error('model unavailable');
+        },
       },
-    });
+    );
 
     const phaseId = stageId(events, 'Analysis');
     expect(workflowCallEvent(events, 'Unsuccessful', 'failed')).toMatchObject({
@@ -702,16 +698,16 @@ return await agent('Unsuccessful')`,
       ({ prompt }: WorkflowAgentInvocation) =>
         new Promise<string>((resolve) => pending.set(prompt, resolve)),
     );
-    const run = runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'parallel-phases',
-      script: `${meta}
+    const run = runScript(
+      trace,
+      'parallel-phases',
+      `${meta}
 return await parallel([
   () => agent('slow', { phase: 'First' }),
   () => agent('fast', { phase: 'Second' }),
 ])`,
-      runAgent,
-    });
+      { runAgent },
+    );
 
     await vi.waitFor(() => expect(runAgent).toHaveBeenCalledTimes(2));
     pending.get('fast')?.('fast result');
@@ -730,15 +726,14 @@ return await parallel([
 
   it('does not move an unphased live call into a later phase', async () => {
     const { trace, events } = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
-      checkpointId: 'late-phase',
-      script: `${meta}
+    await runScript(
+      trace,
+      'late-phase',
+      `${meta}
 const pending = agent('before phase')
 phase('Later')
 return await pending`,
-      runAgent: async () => 'done',
-    });
+    );
 
     const completion = workflowCallEvent(events, 'before phase', 'completed');
     expect(completion).toMatchObject({
@@ -752,18 +747,20 @@ return await pending`,
     const { trace, events } = recordingTrace();
     const activities: string[] = [];
     await expect(
-      runPersistedWorkflowScriptWithProgress(trace, {
-        store: getExecutionStore(executionId),
-        checkpointId: 'runner-abort',
-        script: `${meta}
+      runScript(
+        trace,
+        'runner-abort',
+        `${meta}
 return await agent('Abort', { phase: 'Execution' })`,
-        runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.reportModel?.('abort-model');
-          throw new WorkflowRunAbortError('fatal runner error');
+        {
+          runAgent: async (invocation: WorkflowAgentInvocation) => {
+            invocation.reportModel?.('abort-model');
+            throw new WorkflowRunAbortError('fatal runner error');
+          },
+          getCallCostUsd: () => 0.06,
+          onActivity: (line) => activities.push(line),
         },
-        getCallCostUsd: () => 0.06,
-        onActivity: (line) => activities.push(line),
-      }),
+      ),
     ).rejects.toThrow('fatal runner error');
 
     const phaseId = stageId(events, 'Execution');
@@ -800,22 +797,24 @@ return await agent('Abort', { phase: 'Execution' })`,
       const started = new Promise<void>((resolve) => {
         markStarted = resolve;
       });
-      const run = runPersistedWorkflowScriptWithProgress(trace, {
-        store: getExecutionStore(executionId),
-        checkpointId: 'orphaned-runner',
-        script: `${meta}
+      const run = runScript(
+        trace,
+        'orphaned-runner',
+        `${meta}
 agent('Orphaned', { phase: 'Execution' })
 return 'guest success'`,
-        runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.reportChildStream?.(
-            'orphaned@model#abcdef' as StreamTabId,
-          );
-          markStarted?.();
-          return await new Promise<never>(() => undefined);
+        {
+          runAgent: async (invocation: WorkflowAgentInvocation) => {
+            invocation.reportChildStream?.(
+              'orphaned@model#abcdef' as StreamTabId,
+            );
+            markStarted?.();
+            return await new Promise<never>(() => undefined);
+          },
+          getCallCostUsd,
+          onActivity: (line) => activities.push(line),
         },
-        getCallCostUsd,
-        onActivity: (line) => activities.push(line),
-      });
+      );
 
       await started;
       await vi.advanceTimersByTimeAsync(5_000);
@@ -848,16 +847,15 @@ return 'guest success'`,
   it('closes every opened phase after a script failure', async () => {
     const { trace, events } = recordingTrace();
     await expect(
-      runPersistedWorkflowScriptWithProgress(trace, {
-        store: getExecutionStore(executionId),
-        checkpointId: 'script-failure',
-        script: `${meta}
+      runScript(
+        trace,
+        'script-failure',
+        `${meta}
 phase('One')
 log('first')
 phase('Two')
 throw new Error('script failed')`,
-        runAgent: async () => 'unused',
-      }),
+      ),
     ).rejects.toThrow('script failed');
 
     for (const label of ['One', 'Two']) {

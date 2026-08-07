@@ -25,6 +25,18 @@ function createAgentHandle(id: string, streamId: StreamTabId) {
   });
 }
 
+function trackRunningAgent(
+  session: ReturnType<typeof createTestSession>,
+  id: string,
+  streamId: StreamTabId,
+): ReturnType<typeof createAgentHandle> {
+  const handle = createAgentHandle(id, streamId);
+  session.executions.trackAgentExecution(handle, {
+    status: STREAM_PHASE.RUNNING,
+  });
+  return handle;
+}
+
 function createWindow(initialTitle: string) {
   const webContents = new EventEmitter();
   let title = initialTitle;
@@ -75,16 +87,17 @@ describe('desktop process-session window title', () => {
     const session = createTestSession();
     const orphanStream = 'stream:provisional-orphan' as StreamTabId;
     const waitingStream = 'stream:waiting' as StreamTabId;
-    const waitingHandle = createAgentHandle('execution:waiting', waitingStream);
     try {
       seedStreamStatusForTest(session.status, orphanStream, {
         phase: STREAM_PHASE.RUNNING,
       });
       expect(getDesktopSessionActivity(session)).toBe('idle');
 
-      session.executions.trackAgentExecution(waitingHandle, {
-        status: STREAM_PHASE.RUNNING,
-      });
+      const waitingHandle = trackRunningAgent(
+        session,
+        'execution:waiting',
+        waitingStream,
+      );
       session.executions.updateAgentExecutionStatus(
         waitingHandle,
         STREAM_PHASE.WAITING,
@@ -97,21 +110,17 @@ describe('desktop process-session window title', () => {
 
   it('remains running until the last of two live agents completes', () => {
     const session = createTestSession();
-    const first = createAgentHandle(
-      'execution:first',
-      'stream:first' as StreamTabId,
-    );
-    const second = createAgentHandle(
-      'execution:second',
-      'stream:second' as StreamTabId,
-    );
     try {
-      session.executions.trackAgentExecution(first, {
-        status: STREAM_PHASE.RUNNING,
-      });
-      session.executions.trackAgentExecution(second, {
-        status: STREAM_PHASE.RUNNING,
-      });
+      const first = trackRunningAgent(
+        session,
+        'execution:first',
+        'stream:first' as StreamTabId,
+      );
+      const second = trackRunningAgent(
+        session,
+        'execution:second',
+        'stream:second' as StreamTabId,
+      );
       expect(getDesktopSessionActivity(session)).toBe('running');
 
       session.executions.untrack(first.executionId);
@@ -127,11 +136,8 @@ describe('desktop process-session window title', () => {
   it('gives approval precedence and returns to running or idle', async () => {
     const session = createTestSession();
     const streamId = 'stream:approval' as StreamTabId;
-    const handle = createAgentHandle('execution:approval', streamId);
+    const handle = trackRunningAgent(session, 'execution:approval', streamId);
     try {
-      session.executions.trackAgentExecution(handle, {
-        status: STREAM_PHASE.RUNNING,
-      });
       const firstApproval = session.interactions.requestPlanApproval({
         approvalId: 'approval:running',
         streamId,
@@ -181,13 +187,11 @@ describe('desktop process-session window title', () => {
 
       dispose();
       expect(view.webContents.listenerCount('page-title-updated')).toBe(0);
-      const handle = createAgentHandle(
+      trackRunningAgent(
+        session,
         'execution:after-close',
         'stream:after-close' as StreamTabId,
       );
-      session.executions.trackAgentExecution(handle, {
-        status: STREAM_PHASE.RUNNING,
-      });
       expect(view.setTitle).not.toHaveBeenCalled();
     } finally {
       dispose();
@@ -201,13 +205,11 @@ describe('desktop process-session window title', () => {
     const dispose = installTitle(view.window, session);
     try {
       view.destroy();
-      const handle = createAgentHandle(
+      trackRunningAgent(
+        session,
         'execution:destroyed-window',
         'stream:destroyed-window' as StreamTabId,
       );
-      session.executions.trackAgentExecution(handle, {
-        status: STREAM_PHASE.RUNNING,
-      });
       expect(view.setTitle).not.toHaveBeenCalled();
     } finally {
       dispose();

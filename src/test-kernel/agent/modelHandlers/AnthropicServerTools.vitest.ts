@@ -111,30 +111,34 @@ describe('extractAnthropicServerToolData', () => {
 describe('buildAnthropicAssistantContent', () => {
   const logger = { debug: () => {} } as never;
 
-  it('excludes tool_use blocks and strips orphaned server_tool_use', () => {
-    const message = asMessage([
-      thinkingBlock,
-      textBlock,
-      { type: 'tool_use', id: 't1', name: 'edit', input: {} },
-      serverUse('s1', 'web_search'), // orphan -> stripped
-    ]);
-    const out = buildAnthropicAssistantContent(
-      message,
-      { supportsPromptCaching: false },
+  function buildContent(
+    blocks: unknown[],
+    supportsPromptCaching: boolean,
+  ): unknown[] {
+    return buildAnthropicAssistantContent(
+      asMessage(blocks),
+      { supportsPromptCaching },
       logger,
+    );
+  }
+
+  it('excludes tool_use blocks and strips orphaned server_tool_use', () => {
+    const out = buildContent(
+      [
+        thinkingBlock,
+        textBlock,
+        { type: 'tool_use', id: 't1', name: 'edit', input: {} },
+        serverUse('s1', 'web_search'), // orphan -> stripped
+      ],
+      false,
     );
     expect(typesOf(out)).toEqual(['thinking', 'text']);
   });
 
   it('tags the compaction block with a cache breakpoint when caching is on', () => {
-    const message = asMessage([
-      textBlock,
-      { type: 'compaction', content: 'x' },
-    ]);
-    const out = buildAnthropicAssistantContent(
-      message,
-      { supportsPromptCaching: true },
-      logger,
+    const out = buildContent(
+      [textBlock, { type: 'compaction', content: 'x' }],
+      true,
     );
     const compaction = out.find(
       (b) => (b as { type: string }).type === 'compaction',
@@ -143,12 +147,7 @@ describe('buildAnthropicAssistantContent', () => {
   });
 
   it('leaves blocks untouched when caching is off', () => {
-    const message = asMessage([{ type: 'compaction', content: 'x' }]);
-    const out = buildAnthropicAssistantContent(
-      message,
-      { supportsPromptCaching: false },
-      logger,
-    );
+    const out = buildContent([{ type: 'compaction', content: 'x' }], false);
     expect(
       (out[0] as { cache_control?: unknown }).cache_control,
     ).toBeUndefined();
