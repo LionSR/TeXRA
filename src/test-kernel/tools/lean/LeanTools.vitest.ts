@@ -2,12 +2,11 @@
 // resolution, external-tool status, lake command mutex). The LSP adapter,
 // server registry, and JSON-RPC connection keep their own suites.
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { performance } from 'node:perf_hooks';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import { defaultResolveWorkspaceRoot } from '@tools/lean/direct/directLspAdapter';
 import {
@@ -158,17 +157,38 @@ describe('Lean external tool status', () => {
  */
 
 const NODE = process.execPath;
-const PARALLEL_BUDGET_MS = 600;
-const SLEEP_PER_CALL_MS = 120;
 
-function nodeSleep(ms: number, marker: string): readonly string[] {
-  // Emits `marker:start`, sleeps, then `marker:end` on stdout so we can
-  // reconstruct the interleaving from captured output.
+/**
+ * A child process that announces its startup by writing `readyPath` and then
+ * blocks until `gatePath` exists, so tests can observe process startup and
+ * control process completion deterministically — no wall-clock budgets. The
+ * child self-terminates (exit 1) if the gate never lands, so a failing test
+ * cannot leak a hung process.
+ */
+function nodeGateCommand(
+  readyPath: string,
+  gatePath: string,
+): readonly string[] {
   return [
     '-e',
-    `process.stdout.write('${marker}:start\\n'); ` +
-      `setTimeout(() => { process.stdout.write('${marker}:end\\n'); }, ${ms});`,
+    `const fs = require('node:fs');` +
+      `fs.writeFileSync(${JSON.stringify(readyPath)}, 'ready');` +
+      `const poll = setInterval(() => {` +
+      ` if (fs.existsSync(${JSON.stringify(gatePath)})) {` +
+      ` clearInterval(poll); process.exit(0);` +
+      ` }` +
+      `}, 5);` +
+      `setTimeout(() => process.exit(1), 30_000).unref();`,
   ];
+}
+
+async function waitForFile(filePath: string): Promise<void> {
+  await vi.waitFor(
+    () => {
+      expect(existsSync(filePath)).toBe(true);
+    },
+    { timeout: 10_000, interval: 10 },
+  );
 }
 
 describe('runLakeCommand mutex', () => {
@@ -234,27 +254,38 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('serializes calls against the same workspace when `serialize: true`', async () => {
-    const [first, second] = await Promise.all([
-      runLakeCommand({
-        workspaceRoot: workspaceA,
-        lakeCommand: NODE,
-        args: nodeSleep(60, 'a'),
-        serialize: true,
-      }).then((result) => ({ result, finishedAt: performance.now() })),
-      runLakeCommand({
-        workspaceRoot: workspaceA,
-        lakeCommand: NODE,
-        args: nodeSleep(10, 'b'),
-        serialize: true,
-      }).then((result) => ({ result, finishedAt: performance.now() })),
-    ]);
-    expect(first.result.exitCode).toBe(0);
-    expect(second.result.exitCode).toBe(0);
-    expect(first.result.stdout).toContain('a:start');
-    expect(first.result.stdout).toContain('a:end');
-    expect(second.result.stdout).toContain('b:start');
-    expect(second.result.stdout).toContain('b:end');
-    expect(second.finishedAt).toBeGreaterThanOrEqual(first.finishedAt);
+    const gateA = path.join(workspaceA, 'gate-a');
+    const readyA = path.join(workspaceA, 'ready-a');
+    const gateB = path.join(workspaceA, 'gate-b');
+    const readyB = path.join(workspaceA, 'ready-b');
+
+    const first = runLakeCommand({
+      workspaceRoot: workspaceA,
+      lakeCommand: NODE,
+      args: nodeGateCommand(readyA, gateA),
+      serialize: true,
+    });
+    const second = runLakeCommand({
+      workspaceRoot: workspaceA,
+      lakeCommand: NODE,
+      args: nodeGateCommand(readyB, gateB),
+      serialize: true,
+    });
+
+    // The first child holds the workspace mutex: it starts and blocks on its
+    // gate. While that gate holds, the second call's child cannot have
+    // spawned — if the mutex were broken, the second child would announce
+    // itself during the first waitFor poll window.
+    await waitForFile(readyA);
+    expect(existsSync(readyB)).toBe(false);
+
+    // Only releasing the first call lets the second child start.
+    writeFileSync(gateA, 'go');
+    await waitForFile(readyB);
+    writeFileSync(gateB, 'go');
+
+    await expect(first).resolves.toMatchObject({ exitCode: 0 });
+    await expect(second).resolves.toMatchObject({ exitCode: 0 });
   });
 
   it.each<{
@@ -273,24 +304,38 @@ describe('runLakeCommand mutex', () => {
       serialize: false,
     },
   ])('runs calls in parallel $name', async ({ secondWorkspace, serialize }) => {
-    const start = Date.now();
-    await Promise.all([
+    const gateA = path.join(workspaceA, 'gate-a');
+    const readyA = path.join(workspaceA, 'ready-a');
+    const gateB = path.join(secondWorkspace(), 'gate-b');
+    const readyB = path.join(secondWorkspace(), 'ready-b');
+
+    const calls = Promise.all([
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
-        args: nodeSleep(SLEEP_PER_CALL_MS, 'a'),
+        args: nodeGateCommand(readyA, gateA),
         serialize,
       }),
       runLakeCommand({
         workspaceRoot: secondWorkspace(),
         lakeCommand: NODE,
-        args: nodeSleep(SLEEP_PER_CALL_MS, 'b'),
+        args: nodeGateCommand(readyB, gateB),
         serialize,
       }),
     ]);
-    // Serialized, the two sleeps would take >= 2*SLEEP_PER_CALL_MS. In
-    // parallel they finish in roughly SLEEP_PER_CALL_MS plus startup. The
-    // budget allows comfortable headroom while still distinguishing the two.
-    expect(Date.now() - start).toBeLessThan(PARALLEL_BUDGET_MS);
+
+    // Both children announce themselves while each is still blocked on its
+    // own gate — only possible when the calls run concurrently. If they were
+    // serialized, the second child would never spawn (its gate could never
+    // be released first) and this poll would time out and fail the test.
+    await waitForFile(readyA);
+    await waitForFile(readyB);
+
+    writeFileSync(gateA, 'go');
+    writeFileSync(gateB, 'go');
+    const results = await calls;
+    for (const result of results) {
+      expect(result.exitCode).toBe(0);
+    }
   });
 });

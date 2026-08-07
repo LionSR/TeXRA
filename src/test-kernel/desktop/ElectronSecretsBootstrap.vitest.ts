@@ -137,11 +137,13 @@ describe('desktop renderer bootstrap fallback', () => {
   it('wraps the initial render in a try/catch with a fallback UI', () => {
     const source = loadRendererMain();
     expect(source).toContain('renderBootstrapFallback');
-    expect(source).toContain('try {');
-    expect(source).toContain('logsController.rerenderViewer();');
-    expect(source).toContain('rerenderShell();');
-    expect(source).toContain('catch (error)');
-    expect(source).toContain('bootstrapFailed');
+    // The initial render (rerender + shell) must sit inside the bootstrap
+    // try/catch whose handler flags the failure and renders the fallback —
+    // a bare `try {`/`catch (error)` containment check would match almost
+    // any source, so pin the whole guard structurally.
+    expect(source).toMatch(
+      /try \{\s*logsController\.rerenderViewer\(\);\s*rerenderShell\(\);[\s\S]*?\} catch \(error\) \{\s*bootstrapFailed = true;[\s\S]*?renderBootstrapFallback\(error\);/,
+    );
   });
 
   it('renders a Reload control and a "continue without saved secrets" affordance', () => {
