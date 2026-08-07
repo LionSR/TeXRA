@@ -52,7 +52,7 @@ interface AgentBlueprint {
   fallbackVars: Record<string, string>;
 }
 
-export interface ToolGroup {
+interface ToolGroup {
   description: string;
   tools: string[];
   keywords: string[];

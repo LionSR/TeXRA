@@ -30,12 +30,10 @@ import type { StreamTabId } from '@shared/schemas';
  * effective when an orchestrator delegates to another orchestrator. A child
  * may still override any inherited approval explicitly.
  */
-export type DelegatedChildApprovalPolicy = 'inherit' | 'auto-approved';
-
 export function configureDelegatedChildApprovals(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
-  policy: DelegatedChildApprovalPolicy = 'inherit',
+  policy: 'inherit' | 'auto-approved' = 'inherit',
   session: SessionHandle = currentSession(),
 ): void {
   if (parentStreamId) {

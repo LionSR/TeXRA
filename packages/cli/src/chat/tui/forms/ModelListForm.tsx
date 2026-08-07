@@ -61,21 +61,6 @@ export function modelListDescription({
     : 'Available models. Finish the active response before switching models.';
 }
 
-function EmptyModelListState(props: {
-  readonly models: readonly CliModelAccess[];
-  readonly apiMode: ApiAccessMode;
-}): React.JSX.Element {
-  return (
-    <Text>
-      {emptyModelListMessageForCliMode(
-        props.models,
-        props.apiMode,
-        CHAT_API_MODE_MODEL_RECOVERY,
-      )}
-    </Text>
-  );
-}
-
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
@@ -137,7 +122,13 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     >
       <Text dimColor>{description}</Text>
       {items.length === 0 ? (
-        <EmptyModelListState models={models} apiMode={props.apiMode} />
+        <Text>
+          {emptyModelListMessageForCliMode(
+            models,
+            props.apiMode,
+            CHAT_API_MODE_MODEL_RECOVERY,
+          )}
+        </Text>
       ) : (
         <Box flexDirection="column">
           <Select

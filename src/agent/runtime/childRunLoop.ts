@@ -286,15 +286,6 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   }
 }
 
-/** True when an error/abort represents a clean, caller-initiated interruption. */
-function isCleanInterruption(
-  err: unknown,
-  signal: AbortSignal,
-  loop: ChildRunInterruptible,
-): boolean {
-  return signal.aborted || loop.isInterrupted() || isUserAbort(err);
-}
-
 /** Log a turn summary (duration + token usage) to the child stream. */
 function logTurnSummary(
   logger: AgentTrace,
@@ -340,7 +331,12 @@ async function attemptTurn<TTurn>(
     }
     return { kind: 'completed', turn, turnIsError };
   } catch (caught) {
-    if (isCleanInterruption(caught, abortController.signal, loop)) {
+    // A clean, caller-initiated interruption maps to `interrupted`.
+    if (
+      abortController.signal.aborted ||
+      loop.isInterrupted() ||
+      isUserAbort(caught)
+    ) {
       return { kind: 'interrupted' };
     }
     logger.error(toErrorMessage(caught));
@@ -451,7 +447,7 @@ interface PendingChildDelivery {
  * Format, persist, and enqueue one turn's outcome on the parent's follow-up
  * queue — the loop's single delivery site, shared by every interim and
  * terminal turn, every strategy. Returns the pending delivery for the caller
- * to wake via {@link wakePendingDelivery} once its own ordering allows it;
+ * to wake via {@link submitPendingDelivery} once its own ordering allows it;
  * `undefined` when there is nothing to wake (detached child, or delivery
  * skipped by `prepareParentDelivery`).
  */

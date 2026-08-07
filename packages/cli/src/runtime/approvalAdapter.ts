@@ -48,17 +48,6 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   ) => void;
 }
 
-function settleApprovalEvent(
-  event: CliDecisionApprovalEvent,
-  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
-  context: CliContext,
-): ApprovalDecision | undefined {
-  if (event === 'showRetryRequest') {
-    return settleRetry(payload as RetryPermission, context);
-  }
-  return settleExecutable(context);
-}
-
 export function toToolEditResult(
   decision: ApprovalDecision,
   proposedContent: string,
@@ -88,7 +77,10 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   hooks: CliApprovalPromptHooks,
   options: { writeRejectionToStderr?: boolean } = {},
 ): Promise<{ decision: ApprovalDecision; prompted: boolean }> {
-  const immediate = settleApprovalEvent(event, payload, context);
+  const immediate =
+    event === 'showRetryRequest'
+      ? settleRetry(payload as RetryPermission, context)
+      : settleExecutable(context);
 
   if (event === 'showRetryRequest') {
     const data = payload as RetryPermission;

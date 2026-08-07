@@ -18,7 +18,6 @@ export type DesktopLogLevel =
 export interface DesktopLogEntry {
   readonly id: string;
   readonly level: DesktopLogLevel;
-  readonly levelLabel: string;
   readonly message: string;
   readonly raw: string;
   readonly summary: string;
@@ -140,11 +139,9 @@ export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
     duplicateIds.set(baseId, duplicateCount + 1);
 
     const message = draft.messageLines.join('\n');
-    const presentation = LOG_LEVEL_PRESENTATION[draft.level];
     return {
       id: duplicateCount === 0 ? baseId : `${baseId}-${duplicateCount + 1}`,
       level: draft.level,
-      levelLabel: presentation.label,
       message,
       raw,
       summary:
@@ -202,7 +199,7 @@ export function createLogsPane(
           <span class="desktop-log-entry-level-icon" aria-hidden="true">
             ${waIcon(presentation.icon)}
           </span>
-          <span class="desktop-log-entry-level">${entry.levelLabel}</span>
+          <span class="desktop-log-entry-level">${presentation.label}</span>
           <time class="desktop-log-entry-time" datetime=${entry.timestamp ?? ''}
             >${entry.timestampLabel}</time
           >

@@ -241,21 +241,19 @@ export class UsageMonitor {
 
   private currentUsageRoute(): UsageRoute | undefined {
     try {
-      return this.usesRelayRoute() ? 'relay' : 'api-key';
+      // Shares ModelHandler's runtime combinator (#7101 triage) rather than
+      // re-deriving the same `!openRouter && relaySync` formula independently
+      // — `IModelHandler` does not expose `shouldUseServerSideKeys()`, so the
+      // config-shaped combinator is what this class can call.
+      return usesServerSideKeysRoute(this.modelInfo.config)
+        ? 'relay'
+        : 'api-key';
     } catch (error) {
       this.context.logger.debug('Usage route relay check failed', {
         data: error,
       });
       return undefined;
     }
-  }
-
-  private usesRelayRoute(): boolean {
-    // Shares ModelHandler's runtime combinator (#7101 triage) rather than
-    // re-deriving the same `!openRouter && relaySync` formula independently
-    // — `IModelHandler` does not expose `shouldUseServerSideKeys()`, so the
-    // config-shaped combinator is what this class can call.
-    return usesServerSideKeysRoute(this.modelInfo.config);
   }
 
   /**

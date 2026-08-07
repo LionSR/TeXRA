@@ -40,6 +40,30 @@ import type {
   ProgressFollowUpPolishResult,
 } from './ProgressFollowUpPolishController';
 
+/**
+ * Resume, rerun, and restore are native-agent affordances. A workflow-script
+ * stream's persisted config is a borrowed default agent, a process stream's is
+ * synthetic, and an external-CLI session resumes through its own tool — for
+ * all three, relaunching the stored config would run the wrong thing
+ * (live defect 3 of the run-classification consolidation).
+ */
+export function isNativeAgentRun(identity: RunIdentity | undefined): boolean {
+  return identity?.kind === 'agent' && identity.tool === undefined;
+}
+
+/** User-facing refusal for the resume/re-run/restore gate. Front-end button
+ *  hiding makes this rare (stale renderer state, direct IPC), but a refused
+ *  action must still say why instead of silently doing nothing. */
+export async function reportNonNativeRunRefusal(
+  showInfo: (message: string) => void | PromiseLike<unknown>,
+  action: string,
+): Promise<void> {
+  await showInfo(
+    `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
+      'not one.',
+  );
+}
+
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
   Extract<ProgressViewInboundMessage, { command: C }>;
 
@@ -456,16 +480,8 @@ export function createProgressViewSecondTierHandlers(
 
     // ── State restore ──
     [CMD.RESTORE_STATE]: async (data) => {
-      // Restoring the launcher form from a non-agent stream would push a
-      // synthetic/borrowed config into it — native agent runs only. The
-      // toolbar hides the button for such streams; a refusal that still
-      // arrives (stale renderer state, direct IPC) must say why.
-      const identity = deps.getRunIdentity(data.stream);
-      if (identity?.kind !== 'agent' || identity.tool !== undefined) {
-        await deps.host.showInfo(
-          "Only TeXRA agent runs can be restored from here; this stream's " +
-            'run is not one.',
-        );
+      if (!isNativeAgentRun(deps.getRunIdentity(data.stream))) {
+        await reportNonNativeRunRefusal(deps.host.showInfo, 'restored');
         return;
       }
       const config = deps.getRunConfig(data.stream);

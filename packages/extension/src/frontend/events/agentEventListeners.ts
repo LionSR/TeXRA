@@ -158,9 +158,7 @@ function createPresentationEventHandlers(
   return {
     requestOpenFile: handleRequestOpenFile,
     requestShowInstruction: handleRequestShowInstruction,
-    showAgentConfigBanner: (payload) => {
-      void handleShowAgentConfigBanner(payload);
-    },
+    showAgentConfigBanner: handleShowAgentConfigBanner,
     requestShowError: handleRequestShowError,
     requestEnsureProgressView: (payload) => {
       void handleRequestEnsureProgressView(payload, progressViewProvider);

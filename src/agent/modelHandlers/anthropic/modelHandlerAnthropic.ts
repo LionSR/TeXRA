@@ -1513,7 +1513,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         workspaceState.reasoning.thinkingBlocks = [
           ...thinkingBlocks,
         ] as ThinkingBlock[];
-        // thinkingBlock is now a getter that returns thinkingBlocks[0]
         workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
           `Added ${thinkingBlocks.length} thinking blocks to workspaceState`,

@@ -12,7 +12,6 @@ const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 export function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,
-  usage = YOLO_USAGE,
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
@@ -22,7 +21,7 @@ export function applyCliApprovalPolicySelection(
 
   const policy = parseTexraApprovalPolicy(normalized);
   if (!policy) {
-    appendLocalAssistantTranscript(usage);
+    appendLocalAssistantTranscript(YOLO_USAGE);
     return;
   }
 

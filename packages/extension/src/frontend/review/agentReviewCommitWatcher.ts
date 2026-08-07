@@ -25,19 +25,19 @@ import { AgentReviewService } from './AgentReviewService';
 const CHANNEL = 'AgentReview';
 const COMMIT_DEBOUNCE_MS = 1500;
 
-/** True when the workspace root lives inside the repository. */
-function isWorkspaceRepository(repository: GitRepository): boolean {
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) return false;
-  return isPathWithin(repository.rootUri.fsPath, workspacePath);
-}
-
 function watchRepository(
   repository: GitRepository,
   context: vscode.ExtensionContext,
   watchedRoots: Set<string>,
 ): void {
-  if (!isWorkspaceRepository(repository)) return;
+  // Only watch the repository containing the workspace root.
+  const workspacePath = WorkspaceFS.getPath();
+  if (
+    !workspacePath ||
+    !isPathWithin(repository.rootUri.fsPath, workspacePath)
+  ) {
+    return;
+  }
   const repoRoot = repository.rootUri.fsPath;
   if (watchedRoots.has(repoRoot)) return;
   watchedRoots.add(repoRoot);

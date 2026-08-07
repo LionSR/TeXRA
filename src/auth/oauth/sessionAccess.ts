@@ -9,7 +9,10 @@ import * as logger from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { SubscriptionOAuthError } from './subscriptionOAuthError';
+import {
+  SubscriptionOAuthError,
+  type SubscriptionOAuthErrorKind,
+} from './subscriptionOAuthError';
 import type {
   SubscriptionSessionStatus,
   SubscriptionSessionStorage,
@@ -75,7 +78,7 @@ interface SessionAccessNeedsReauthError {
 export interface SessionAccessErrorFactory {
   new (
     message: string,
-    kind: 'fatal' | 'expired' | 'transient' | 'config' | 'pending',
+    kind: SubscriptionOAuthErrorKind,
     status?: number,
     options?: ErrorOptions,
   ): Error & SessionAccessNeedsReauthError;

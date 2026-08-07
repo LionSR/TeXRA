@@ -157,7 +157,7 @@ export function buildStatusBadge(
 }
 
 /** Options for building a details summary header. */
-export interface DetailsSummaryOptions {
+interface DetailsSummaryOptions {
   /** wa-icon name (codicon-style aliases supported), or {@link SPINNER_ICON_NAME}. */
   iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
   label: string;
@@ -220,9 +220,7 @@ export function buildFileLinkSpan(
 export function buildFileListRender(files: FileListEntry[]): {
   items: TemplateResult;
   summary: string;
-} | null {
-  if (!Array.isArray(files)) return null;
-
+} {
   // prettier-ignore
   const items = html`${files.map((file) => {
     const iconName = file.ok ? 'check' : 'triangle-exclamation';

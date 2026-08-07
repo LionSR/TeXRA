@@ -145,12 +145,12 @@ async function personalKeyProviders(): Promise<string[]> {
   return API_PROVIDERS.filter((_, index) => origins[index] !== 'none');
 }
 
-export interface CliApiStatus {
+interface CliApiStatus {
   /** Compact lines used by the launcher. */
   readonly lines: readonly string[];
 }
 
-export interface LoadCliApiStatusOptions {
+interface LoadCliApiStatusOptions {
   readonly apiMode?: ApiAccessMode;
   readonly includeActionHint?: boolean;
 }

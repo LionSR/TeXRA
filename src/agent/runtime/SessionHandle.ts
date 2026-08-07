@@ -899,13 +899,6 @@ export class SessionHandle {
 /** Live sessions whose background processes must be stopped at shutdown. */
 const liveSessions = new Set<SessionHandle>();
 
-function hasLiveNonDefaultSession(processDefault: SessionHandle): boolean {
-  for (const session of liveSessions) {
-    if (session !== processDefault) return true;
-  }
-  return false;
-}
-
 /** Stop background OS processes owned by every live runtime session. */
 export function killAllSessionBackgroundProcesses(): void {
   for (const session of liveSessions) {
@@ -963,7 +956,7 @@ export function defaultSession(): SessionHandle {
   const processDefault = cachedDefaultSession;
   if (
     !defaultSessionFallbackWarned &&
-    hasLiveNonDefaultSession(processDefault)
+    [...liveSessions].some((session) => session !== processDefault)
   ) {
     defaultSessionFallbackWarned = true;
     try {

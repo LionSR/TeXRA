@@ -53,12 +53,6 @@ function interopSkillSources(base: string, scopeLabel: string): SkillSource[] {
   }));
 }
 
-function resolveSkillSourcePath(base: string, candidate: string): string {
-  return path.isAbsolute(candidate)
-    ? path.resolve(candidate)
-    : path.resolve(base, candidate);
-}
-
 function uniqueSources(sources: readonly SkillSource[]): SkillSource[] {
   const seen = new Map<string, SkillSource>();
   for (const source of sources) {
@@ -88,7 +82,7 @@ export function defaultSkillSources(
   for (const candidate of options.additionalPaths ?? []) {
     sources.push({
       scope: 'custom',
-      path: resolveSkillSourcePath(context.cwd, candidate),
+      path: path.resolve(context.cwd, candidate),
       label: 'custom',
       required: true,
     });

@@ -1,6 +1,6 @@
 /** LaTeXDiff section with base/edited file selectors, commit selector, and diff actions. */
 
-// Side-effect imports - register WA select & option components
+// Side-effect imports - register WA button, button-group, details, select, option & tooltip components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';

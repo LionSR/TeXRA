@@ -10,9 +10,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { LogMessageData, MessageType } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   isStreamingTextLogMessage,
-  safeFormat,
   type FormatOptions,
   type FormatResult,
 } from './baseLogFormatter';
@@ -77,11 +77,12 @@ function wrapWithErrorHandling(
 ): TemplateFormatterFn {
   return (message, options) => {
     const resolvedLabel = typeof label === 'function' ? label(message) : label;
-    const result = safeFormat(() => fn(message, options), resolvedLabel);
-    if (!result.ok) {
-      return formatRenderError(resolvedLabel, result.error);
+    try {
+      return fn(message, options);
+    } catch (e) {
+      console.error(`Error parsing ${resolvedLabel}:`, e);
+      return formatRenderError(resolvedLabel, toErrorMessage(e));
     }
-    return result.value;
   };
 }
 

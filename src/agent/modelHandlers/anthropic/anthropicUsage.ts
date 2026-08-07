@@ -76,10 +76,6 @@ export function computeAnthropicPrice(
   responseUsage: BetaUsage,
   config: AnthropicPricingConfig,
 ): number {
-  if (!responseUsage) {
-    return 0;
-  }
-
   // Note: Anthropic doesn't provide tool_use_tokens in their API response
   const usageTotals = getAnthropicUsageTokenTotals(responseUsage);
 

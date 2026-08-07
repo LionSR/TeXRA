@@ -456,15 +456,6 @@ function configureAnsi(
   };
 }
 
-function formatAnsiLatexReference(
-  refType: string,
-  label: string,
-  style: AnsiMarkdownStyle,
-): string {
-  const text = `\\${refType}{${label}}`;
-  return style.dim(style.underline(text));
-}
-
 // Table layout needs the terminal width baked into the renderer (the shared
 // processor caches by content only), so each processor is bound to one
 // (width, colorEnabled) pair. Keep a small LRU of processors rather than a
@@ -489,8 +480,10 @@ function processorFor(
   });
   const processor = createMarkdownProcessor({
     renderer,
+    // The CLI shows LaTeX refs as dim-underlined source (math rendering is
+    // disabled), e.g. `\ref{sec:x}`.
     formatLatexReference: (refType, label) =>
-      formatAnsiLatexReference(refType, label, style),
+      style.dim(style.underline(`\\${refType}{${label}}`)),
     // The CLI shows LaTeX source verbatim (math rendering is disabled), so
     // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans from markdown-it, which
     // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.

@@ -148,33 +148,6 @@ const WorkflowToolConfigFieldsSchema = ToolConfigFieldsSchema.omit({
   attachDiagnostics: true,
 });
 
-// Composes: UIFileFieldsSchema (file fields) + workflow tool options.
-const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
-  WorkflowToolConfigFieldsSchema,
-).extend({
-  sessionType: SessionTypeSchema.prefault('toolUse'),
-  launchTarget: LaunchTargetSchema.prefault('agent'),
-  selectedTeamId: z.string().prefault(''),
-  workingDirectory: z.string().prefault(''),
-  agent: z
-    .object({
-      workflow: z.string().prefault('correct'),
-      toolUse: z.string().prefault('orchestrator'),
-    })
-    .prefault({}),
-  model: z.string().prefault(DEFAULT_AGENT_MODEL),
-  commit: z.string().prefault('HEAD'),
-  instruction: z
-    .object({
-      workflow: z.string().prefault(''),
-      toolUse: z.string().prefault(''),
-    })
-    .prefault({}),
-  baseFile: z.string().prefault(''),
-  latexdiffsVisible: z.boolean().prefault(false),
-  openedFiles: z.array(z.string()).nullish(),
-});
-
 /**
  * Legacy persisted blobs carried the per-category agent and instruction as
  * flat `workflowAgent`/`toolUseAgent` and `workflowInstruction`/
@@ -217,9 +190,32 @@ function liftLegacyMainViewFlatFields(input: unknown): unknown {
   return lifted;
 }
 
+// Composes: UIFileFieldsSchema (file fields) + workflow tool options.
 export const MainViewPersistedStateSchema = z.preprocess(
   liftLegacyMainViewFlatFields,
-  MainViewPersistedStateBaseSchema,
+  UIFileFieldsSchema.merge(WorkflowToolConfigFieldsSchema).extend({
+    sessionType: SessionTypeSchema.prefault('toolUse'),
+    launchTarget: LaunchTargetSchema.prefault('agent'),
+    selectedTeamId: z.string().prefault(''),
+    workingDirectory: z.string().prefault(''),
+    agent: z
+      .object({
+        workflow: z.string().prefault('correct'),
+        toolUse: z.string().prefault('orchestrator'),
+      })
+      .prefault({}),
+    model: z.string().prefault(DEFAULT_AGENT_MODEL),
+    commit: z.string().prefault('HEAD'),
+    instruction: z
+      .object({
+        workflow: z.string().prefault(''),
+        toolUse: z.string().prefault(''),
+      })
+      .prefault({}),
+    baseFile: z.string().prefault(''),
+    latexdiffsVisible: z.boolean().prefault(false),
+    openedFiles: z.array(z.string()).nullish(),
+  }),
 );
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
@@ -268,8 +264,7 @@ const FileSelectConfigSchema = z.object({
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
-const CheckboxValuesSchema = WorkflowToolConfigFieldsSchema;
-export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
+export type CheckboxValues = z.infer<typeof WorkflowToolConfigFieldsSchema>;
 
 const SingleFilesSchema = z.object({
   baseFile: z.string(),
@@ -294,7 +289,7 @@ const MultiFilesKeySchema = MultiFilesSchema.keyof();
 
 const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
-  checkboxValues: CheckboxValuesSchema,
+  checkboxValues: WorkflowToolConfigFieldsSchema,
   singleFiles: SingleFilesSchema,
   fileOptions: FileOptionsSchema,
   multiFiles: MultiFilesSchema,

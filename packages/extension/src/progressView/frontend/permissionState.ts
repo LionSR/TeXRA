@@ -66,3 +66,8 @@ export function permissionId(permission: PermissionState): string {
       return assertNever(permission, 'Unhandled PermissionState kind');
   }
 }
+
+/** Stable identity key for a pending permission, used for selection/dedup. */
+export function getPermissionKey(permission: PermissionState): string {
+  return `${permission.kind}:${permissionId(permission)}`;
+}

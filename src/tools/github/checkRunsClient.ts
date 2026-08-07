@@ -54,7 +54,7 @@ export interface CheckRunsCache {
   lastTotalCount: number;
 }
 
-export interface FetchAllCheckRunsResult {
+interface FetchAllCheckRunsResult {
   response: ConditionalResponse<{
     total_count: number;
     check_runs: GhCheckRun[];

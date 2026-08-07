@@ -22,8 +22,8 @@ export function createConversationPreview(
   });
   if (!transcript) return null;
 
-  const lastAssistant = transcript.messages.findLast((message) =>
-    isAssistantMessageRole(message.role),
+  const lastAssistant = transcript.messages.findLast(
+    (message) => message.role === 'assistant' || message.role === 'model',
   );
   const selected = lastAssistant
     ? [lastAssistant]
@@ -80,10 +80,6 @@ function toConversationPreviewMessage(
       : content,
     truncated,
   };
-}
-
-function isAssistantMessageRole(role: string): boolean {
-  return role === 'assistant' || role === 'model';
 }
 
 export function formatConversationPreview(

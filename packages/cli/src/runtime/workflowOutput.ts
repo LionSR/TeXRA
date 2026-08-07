@@ -23,13 +23,14 @@ import {
   isMaterializedStdinWorkflowInputPath,
   STDIN_WORKFLOW_INPUT_BASENAME,
 } from './workflowInputs';
+import type { Stats } from 'node:fs';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {
   return path.isAbsolute(target) ? target : path.join(cwd, target);
 }
 
-type OutputPathStats = Pick<Awaited<ReturnType<typeof fs.stat>>, 'isDirectory'>;
+type OutputPathStats = Pick<Stats, 'isDirectory'>;
 
 type OutputFlag = '--output' | '--output-dir';
 

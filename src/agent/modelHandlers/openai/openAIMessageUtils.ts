@@ -242,7 +242,7 @@ export function insertMediaIntoChatUserMessage(
 }
 
 /** Capability flags `initializeChatMessages`/`createChatRoundMessages` need from the handler. */
-export interface ChatMessageRoutingCapabilities {
+interface ChatMessageRoutingCapabilities {
   supportsSystemPrompt: boolean;
   supportsIntermDevMsgs: boolean;
   supportsVision: boolean;

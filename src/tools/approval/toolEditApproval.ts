@@ -319,20 +319,6 @@ export type AcceptedToolEditApprovalResult = Extract<
   { accepted: true }
 >;
 
-function formatUnifiedApprovalUserDiff(
-  path: string,
-  suggestedContent: string,
-  appliedContent: string,
-): string | undefined {
-  const diffBody = computeUserPatch(suggestedContent, appliedContent);
-
-  if (!diffBody) {
-    return undefined;
-  }
-
-  return `User adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``;
-}
-
 interface WriteApprovedContentResult {
   appliedContent: string;
   baseContent: string;
@@ -391,12 +377,10 @@ export function appendApprovalDiffNote(
   appliedContent: string,
   separator: string = '\n\n',
 ): string {
-  const diffNote = formatUnifiedApprovalUserDiff(
-    path,
-    proposedContent,
-    appliedContent,
-  );
-  return diffNote ? `${baseOutput}${separator}${diffNote}` : baseOutput;
+  const diffBody = computeUserPatch(proposedContent, appliedContent);
+  return diffBody
+    ? `${baseOutput}${separator}User adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``
+    : baseOutput;
 }
 
 export function buildApprovalRejectedResult(

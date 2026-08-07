@@ -16,7 +16,7 @@ import { isObject } from '@utils/core';
 /**
  * Result of stringifying a value with language metadata.
  */
-export type StringifyResult = {
+type StringifyResult = {
   text: string;
   language: 'yaml' | 'json' | 'plaintext';
 };

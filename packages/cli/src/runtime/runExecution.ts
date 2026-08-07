@@ -38,7 +38,7 @@ import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
 import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
 
-export interface CliExecuteOptions {
+interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
   readonly enforceCategory?: boolean;
   readonly registerExecution?: boolean;

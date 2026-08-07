@@ -7,7 +7,6 @@ import {
   captureOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,

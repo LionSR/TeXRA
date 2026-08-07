@@ -90,7 +90,7 @@ export interface CliOnboardingResult {
 }
 
 /** Minimal slice of CliContext the gate needs (keeps it cheaply testable). */
-export interface OnboardingGateContext {
+interface OnboardingGateContext {
   readonly mode: 'headless' | 'interactive';
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;

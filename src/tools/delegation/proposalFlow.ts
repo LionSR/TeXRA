@@ -6,7 +6,10 @@
  */
 
 // Local imports
-import type { AgentEntry } from '@agent/index/agentRegistry';
+import {
+  resolveDelegationScopeAgents,
+  type AgentEntry,
+} from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -27,7 +30,6 @@ import {
   getDelegationAgent,
   getDelegationAgentForScope,
   getDelegationAgents,
-  getDelegationAgentsForScope,
 } from './delegationAgentAvailability';
 import {
   availableModelNamesFromOptions,
@@ -73,7 +75,7 @@ export function requireVisibleAgent(
   if (agent) return agent;
   const available = (
     scope
-      ? getDelegationAgentsForScope(category, scope)
+      ? resolveDelegationScopeAgents(scope, category)
       : getDelegationAgents(category)
   )
     .map((a) => a.name)

@@ -21,9 +21,8 @@ import {
 function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
   const esc = escapeLatex;
 
-  const rows = HEADER_FIELDS.filter((f) => f.key === 'date' || meta[f.key]).map(
-    (f) =>
-      `\\textbf{${f.label}:} & ${esc(String(meta[f.key] ?? 'Unknown'))} \\\\`,
+  const rows = HEADER_FIELDS.filter((f) => meta[f.key]).map(
+    (f) => `\\textbf{${f.label}:} & ${esc(String(meta[f.key]))} \\\\`,
   );
 
   const instruction = meta.instruction

@@ -37,7 +37,7 @@ const ZoteroExportInputSchema = z.strictObject({
     .nullish(),
 });
 
-export type ZoteroExportInput = z.infer<typeof ZoteroExportInputSchema>;
+type ZoteroExportInput = z.infer<typeof ZoteroExportInputSchema>;
 
 export class ZoteroExportTool extends defineTool({
   name: 'zotero_export',

@@ -90,7 +90,6 @@ export function refreshInstructionPlaceholder(): void {
       ? 'orchestrator'
       : sessionType$.get();
   const placeholders = ONBOARDING_PLACEHOLDERS[placeholderKey];
-  if (!placeholders.length) return;
   const current = instructionPlaceholder$.get();
   const currentIndex = placeholders.indexOf(current);
   if (!current || currentIndex === -1) {
@@ -232,17 +231,6 @@ export function setBaseFile(value: string): void {
   });
 }
 
-export function setEditedFile(value: string): void {
-  singleFiles$.set({
-    ...singleFiles$.get(),
-    editedFile: value,
-  });
-}
-
-export function setCommit(value: string): void {
-  commit$.set(value);
-}
-
 // ---------------------------------------------------------------------------
 // Session / agent / model changes (user-driven)
 // ---------------------------------------------------------------------------
@@ -303,6 +291,10 @@ export function changeTeam(value: string): void {
   selectedTeamId$.set(value);
 }
 
+export function changeWorkingDirectory(value: string): void {
+  workingDirectory$.set(value);
+}
+
 /**
  * Reconcile a team ID against the latest catalog without announcing, so
  * callers control what the user is told. Only absence from a non-empty
@@ -349,14 +341,6 @@ export function changeAgent(sessionType: SessionType, value: string): void {
   refreshModelSelectionForActiveSession();
   refreshInstructionPlaceholder();
   postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
-}
-
-export function changeModel(value: string): void {
-  model$.set(value);
-}
-
-export function changeWorkingDirectory(value: string): void {
-  workingDirectory$.set(value);
 }
 
 // ---------------------------------------------------------------------------

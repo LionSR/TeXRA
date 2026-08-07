@@ -12,7 +12,7 @@ export { AgentCategory };
 
 /**
  * Field validators shared between `AgentSettingBaseSchema` (materialised
- * settings, defaults applied) and `RawAgentSettingInputSchema` below (raw
+ * settings, defaults applied) and `AgentSettingInputSchema` below (raw
  * YAML input, defaults intentionally left unmaterialised so inheritance can
  * tell "not written" apart from "written as the default value"). Sharing the
  * validator here keeps constraints like temperature's bounds in one place;
@@ -85,17 +85,11 @@ const rawWorkflowSettingFields = {
 };
 
 /** Partial settings as they appear in YAML before inheritance and defaults. */
-const RawAgentSettingInputSchema = z.strictObject({
+const AgentSettingInputSchema = z.strictObject({
   ...rawAgentSettingBaseFields,
   ...rawWorkflowSettingFields,
   agentCategory: AgentCategorySchema.optional(),
 });
-
-/**
- * Raw YAML settings. This schema validates field shapes without materialising
- * defaults, so inherited child blocks only override fields the author wrote.
- */
-const AgentSettingInputSchema = RawAgentSettingInputSchema;
 
 export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
 

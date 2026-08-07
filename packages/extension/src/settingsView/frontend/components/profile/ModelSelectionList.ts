@@ -98,14 +98,6 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
-  private getProviderKeyStatus(
-    provider: string,
-  ): ProviderKeyStatus | undefined {
-    return resolveProviderKeyRows(this.providerKeyStatuses).find(
-      (entry) => entry.provider === provider,
-    );
-  }
-
   private toggleProvider(provider: string): void {
     this.expandedProvider =
       this.expandedProvider === provider ? null : provider;
@@ -263,7 +255,9 @@ export class ModelSelectionList extends LitElement {
     const isExpanded = this.expandedProvider === group.provider;
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
-    const keyStatus = this.getProviderKeyStatus(group.provider);
+    const keyStatus = resolveProviderKeyRows(this.providerKeyStatuses).find(
+      (entry) => entry.provider === group.provider,
+    );
     // Key status is read-only here. Setting, fetching, and removing keys all
     // live in the API Configuration section above; mirroring those actions in
     // this list produced two competing key UIs.

@@ -156,12 +156,17 @@ export async function handleCompare(
   }
 }
 
+type ReplaceOrCopyTarget = {
+  targetLocation: FileLocation;
+  targetFileName: string;
+};
+
 /** Build the legacy `<base>_<agent>_r<round>_<model>` copy target beside the
  *  base file, preserving the base's location kind. */
 function buildCopyTarget(
   baseLocation: FileLocation,
   copyMeta: AcceptCopyMeta,
-): { targetLocation: FileLocation; targetFileName: string } {
+): ReplaceOrCopyTarget {
   const parsed = path.parse(baseLocation.absolutePath);
   const stem = legacyWorkflowOutputStem({
     base: parsed.name,
@@ -175,11 +180,6 @@ function buildCopyTarget(
     targetFileName,
   };
 }
-
-type ReplaceOrCopyTarget = {
-  targetLocation: FileLocation;
-  targetFileName: string;
-};
 
 /** Offer a quick-pick between replacing the original and saving a postfixed
  *  copy, used when run metadata is available. Returns undefined when the user

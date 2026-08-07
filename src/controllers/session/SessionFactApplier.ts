@@ -96,9 +96,10 @@ export class SessionFactApplier {
   /**
    * Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive.
    * Handlers hold only their own logic and RETURN it — `handleRunFact` wraps
-   * each dispatch in `applyFact` once. Returning (rather than discarding) the
-   * call keeps async handlers' promises flowing to `applyFact`, so a rejection
-   * after an await is still logged instead of becoming an unhandled rejection.
+   * each dispatch in `withEventErrorHandling` once. Returning (rather than
+   * discarding) the call keeps async handlers' promises flowing to the
+   * wrapper, so a rejection after an await is still logged instead of
+   * becoming an unhandled rejection.
    */
   private readonly runFactHandlers: RunFactHandlers = {
     usage: (_streamId, event) => this.handleUpdateStreamUsage(event.payload),
@@ -181,43 +182,47 @@ export class SessionFactApplier {
 
   handleSessionFact(fact: SessionFact): void {
     // Wrap once, and RETURN each case so async handlers' promises reach
-    // `applyFact` (a discarded promise would let a post-await rejection escape
-    // `withEventErrorHandling`'s thenable check as an unhandled rejection).
-    this.applyFact(`failed to handle ${fact.type} fact`, () => {
-      switch (fact.type) {
-        case 'goalStateChanged':
-          return this.handleGoalStateChanged(fact.payload.streamId);
-        case 'inquiryThreadUpdated':
-          return this.renderer.onInquiryThreadUpdated(fact.payload);
-        case 'clearMissingOutputs':
-          return this.handleClearMissingOutputs(fact.payload);
-        case 'updateQueuedFollowUps':
-          return this.handleUpdateQueuedFollowUps(fact.payload);
-        case 'followUpSent':
-          // Refresh from the follow-ups store (same as updateQueuedFollowUps):
-          // the send itself is not a payload, but the queue may have changed.
-          return this.handleUpdateQueuedFollowUps({
-            streamId: fact.payload.streamId,
-          });
-        case 'setActiveStream':
-          return this.handleSetActiveStream(fact.payload);
-        case 'updateStreamDescription':
-          return this.handleUpdateStreamDescription(fact.payload);
-        case 'status':
-          return this.setStreamStatus(
-            fact.streamId,
-            fact.phase,
-            fact.previousPhase,
-            fact.substate,
-          );
-        case 'setParentStream':
-          return this.handleSetParentStream(fact.payload);
-        case 'removeStream':
-          this.registeredWithRenderer.delete(fact.payload.streamId);
-          return this.options.deleteStream(fact.payload.streamId);
-      }
-      assertNever(fact, 'Unhandled session fact');
-    });
+    // `withEventErrorHandling` (a discarded promise would let a post-await
+    // rejection escape its thenable check as an unhandled rejection).
+    withEventErrorHandling(
+      'SessionFacts',
+      `failed to handle ${fact.type} fact`,
+      () => {
+        switch (fact.type) {
+          case 'goalStateChanged':
+            return this.handleGoalStateChanged(fact.payload.streamId);
+          case 'inquiryThreadUpdated':
+            return this.renderer.onInquiryThreadUpdated(fact.payload);
+          case 'clearMissingOutputs':
+            return this.handleClearMissingOutputs(fact.payload);
+          case 'updateQueuedFollowUps':
+            return this.handleUpdateQueuedFollowUps(fact.payload);
+          case 'followUpSent':
+            // Refresh from the follow-ups store (same as updateQueuedFollowUps):
+            // the send itself is not a payload, but the queue may have changed.
+            return this.handleUpdateQueuedFollowUps({
+              streamId: fact.payload.streamId,
+            });
+          case 'setActiveStream':
+            return this.handleSetActiveStream(fact.payload);
+          case 'updateStreamDescription':
+            return this.handleUpdateStreamDescription(fact.payload);
+          case 'status':
+            return this.setStreamStatus(
+              fact.streamId,
+              fact.phase,
+              fact.previousPhase,
+              fact.substate,
+            );
+          case 'setParentStream':
+            return this.handleSetParentStream(fact.payload);
+          case 'removeStream':
+            this.registeredWithRenderer.delete(fact.payload.streamId);
+            return this.options.deleteStream(fact.payload.streamId);
+        }
+        assertNever(fact, 'Unhandled session fact');
+      },
+    );
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
@@ -227,13 +232,11 @@ export class SessionFactApplier {
       streamId: StreamTabId,
       event: SessionRunFactEvent,
     ) => void | Promise<void>;
-    this.applyFact(`failed to handle ${event.type} fact`, () =>
-      handle(streamId, event),
+    withEventErrorHandling(
+      'SessionFacts',
+      `failed to handle ${event.type} fact`,
+      () => handle(streamId, event),
     );
-  }
-
-  private applyFact(context: string, handle: () => void | Promise<void>): void {
-    withEventErrorHandling('SessionFacts', context, handle);
   }
 
   private handleUpdateStreamDescription({

@@ -61,6 +61,8 @@ export const TOOL_USE_STATUS = {
   FAILED: 'failed',
 } as const;
 
+type ToolUseStatus = (typeof TOOL_USE_STATUS)[keyof typeof TOOL_USE_STATUS];
+
 const ToolUseStatusSchema = z.enum(TOOL_USE_STATUS);
 
 export const ToolUseLogSchema = z.object({
@@ -75,19 +77,24 @@ export const ToolUseLogSchema = z.object({
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
-const NormalizedToolUseSchema = z.object({
-  toolName: z.string(),
-  errorText: z.string(),
-  outputText: z.string(),
-  exitCode: z.int().optional(),
-  userInstructionText: z.string(),
-  input: z.unknown(),
-  isError: z.boolean(),
-  isUserFeedback: z.boolean(),
-  headerSummary: z.string(),
-  status: ToolUseStatusSchema.optional(),
-});
-export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
+/**
+ * The flat, renderer-friendly tool-use view `normalizeToolUseData`
+ * (`@shared/toolUse`) derives from a parsed {@link ToolUseLog}. Declared as a
+ * plain type, not a schema: the producer builds this shape field-by-field and
+ * nothing ever parses it, so a Zod schema would own no boundary.
+ */
+export type NormalizedToolUse = {
+  toolName: string;
+  errorText: string;
+  outputText: string;
+  exitCode?: number;
+  userInstructionText: string;
+  input: unknown;
+  isError: boolean;
+  isUserFeedback: boolean;
+  headerSummary: string;
+  status?: ToolUseStatus;
+};
 
 // ============================================================
 // URL Sanitization

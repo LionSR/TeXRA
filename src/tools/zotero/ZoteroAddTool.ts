@@ -111,7 +111,7 @@ const ZoteroAddInputSchema = z.strictObject({
     .nullish(),
 });
 
-export type ZoteroAddInput = z.infer<typeof ZoteroAddInputSchema>;
+type ZoteroAddInput = z.infer<typeof ZoteroAddInputSchema>;
 
 /**
  * Map Crossref work types to Zotero item types.

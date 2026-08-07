@@ -352,30 +352,25 @@ export function createDesktopWorkspaceIpc(
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
           options.browserViews.close(data.tabId);
           return true;
-        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST:
-          if (!options.getEnvironmentSummary) {
+        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST: {
+          const postEnvironment = (environment: DesktopEnvironmentSummary) =>
             renderer.postToRenderer({
               command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-              environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+              environment,
             });
+          if (!options.getEnvironmentSummary) {
+            postEnvironment(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY);
             return true;
           }
           void options
             .getEnvironmentSummary()
-            .then((environment) => {
-              renderer.postToRenderer({
-                command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-                environment,
-              });
-            })
+            .then(postEnvironment)
             .catch((error: unknown) => {
               reportError(error);
-              renderer.postToRenderer({
-                command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-                environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
-              });
+              postEnvironment(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY);
             });
           return true;
+        }
       }
     },
   };

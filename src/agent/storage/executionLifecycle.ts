@@ -47,8 +47,8 @@ export async function hasPersistedParent(
 
 // ---------------------------------------------------------------------------
 // Per-execution write serialization — read-modify-write cycles on meta run one
-// at a time per execution so that concurrent writeTerminalOutcome /
-// writeSessionDescription calls never race and silently drop each other's
+// at a time per execution so that concurrent terminal-outcome /
+// session-description writes never race and silently drop each other's
 // fields. Different executions proceed independently.
 // ---------------------------------------------------------------------------
 
@@ -148,30 +148,6 @@ export async function registerExecution(
 }
 
 /**
- * Persist supplementary metadata fields on an existing execution as a
- * best-effort operation.
- * Serialized with other meta updates for the same execution to prevent
- * read-modify-write races (e.g. between terminal status and description).
- * Never throws because these fields are caches or presentation metadata, not
- * lifecycle state. Authoritative metadata must use enqueueMetaUpdate directly.
- */
-async function persistSupplementaryMetaFieldsBestEffort(
-  executionId: ExecutionId,
-  fields: Partial<ExecutionMeta>,
-  what: string,
-): Promise<void> {
-  try {
-    await enqueueMetaUpdate(executionId, () => fields);
-  } catch (err) {
-    // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
-    logger.debug(
-      CHANNEL,
-      `Failed to persist ${what} for ${executionId}: ${toErrorMessage(err)}`,
-    );
-  }
-}
-
-/**
  * Drop the previous run's terminal facts as a persisted execution is admitted
  * for resumption. `meta.outcome` owns "how did this run end" and every reader
  * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
@@ -189,14 +165,6 @@ export async function clearTerminalExecutionState(
   const meta = await getExecutionStore(executionId).readMeta();
   if (meta?.outcome === undefined) return;
   await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
-}
-
-/** Persist the canonical terminal outcome — the one terminal write. */
-async function writeTerminalOutcome(
-  executionId: ExecutionId,
-  outcome: RunOutcome,
-): Promise<void> {
-  await enqueueMetaUpdate(executionId, () => ({ outcome }));
 }
 
 export interface FinalizeExecutionInput {
@@ -232,7 +200,8 @@ export async function finalizeExecution({
   flowRecord,
 }: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
   try {
-    await writeTerminalOutcome(executionId, outcome);
+    // Persist the canonical terminal outcome — the one terminal write.
+    await enqueueMetaUpdate(executionId, () => ({ outcome }));
   } catch (error) {
     // A terminal COMPLETED/FAILED result must never retain a resumable flow,
     // even when the caller requested preservation before the status write failed.
@@ -293,9 +262,16 @@ export async function writeSessionDescription(
   executionId: ExecutionId,
   description: string,
 ): Promise<void> {
-  await persistSupplementaryMetaFieldsBestEffort(
-    executionId,
-    { description },
-    'session description',
-  );
+  // Best-effort, serialized with other meta updates for the same execution to
+  // prevent read-modify-write races (e.g. against terminal status). Never
+  // throws: the description is presentation metadata, not lifecycle state.
+  try {
+    await enqueueMetaUpdate(executionId, () => ({ description }));
+  } catch (err) {
+    // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
+    logger.debug(
+      CHANNEL,
+      `Failed to persist session description for ${executionId}: ${toErrorMessage(err)}`,
+    );
+  }
 }

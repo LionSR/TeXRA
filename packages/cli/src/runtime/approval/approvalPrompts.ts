@@ -97,18 +97,6 @@ export function appendCliApiSwitchHint(
   return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
 }
 
-function enqueueCliPrompt<T>(
-  context: CliContext,
-  prompt: () => Promise<T>,
-): Promise<T> {
-  let queue = cliPromptQueues.get(context);
-  if (!queue) {
-    queue = new PQueue({ concurrency: 1 });
-    cliPromptQueues.set(context, queue);
-  }
-  return queue.add(prompt);
-}
-
 async function askCliApprovalQuestion(
   context: CliContext,
   request: CliPromptRequest,
@@ -164,9 +152,12 @@ export function queueCliApprovalQuestion(
   context: CliContext,
   request: CliPromptRequest,
 ): Promise<string> {
-  return enqueueCliPrompt(context, () =>
-    askCliApprovalQuestion(context, request),
-  );
+  let queue = cliPromptQueues.get(context);
+  if (!queue) {
+    queue = new PQueue({ concurrency: 1 });
+    cliPromptQueues.set(context, queue);
+  }
+  return queue.add(() => askCliApprovalQuestion(context, request));
 }
 
 export async function askApproval(
