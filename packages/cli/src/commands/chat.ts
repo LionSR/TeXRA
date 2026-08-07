@@ -60,7 +60,7 @@ export const chatCommand = withUsageSections(
         ['/login, /logout', 'sign in or out of ChatGPT or Researcher Access'],
         [
           'Ctrl-T',
-          "print the focused stream's full output once into terminal scrollback",
+          "open the focused stream's full output in a scrollable reader (`p` prints it to scrollback)",
         ],
         ['Tab', 'select a visible child session or process'],
         [

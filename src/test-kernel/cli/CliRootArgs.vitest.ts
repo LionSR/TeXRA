@@ -1322,7 +1322,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('ChatGPT or Researcher Access');
     expect(stdout).toContain(
-      "print the focused stream's full output once into terminal scrollback",
+      "open the focused stream's full output in a scrollable reader (`p` prints it to scrollback)",
     );
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('select a visible child session or process');
