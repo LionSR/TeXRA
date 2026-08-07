@@ -11,6 +11,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files';
 import { getExtensionLowercase } from '@utils/core/pathCore';
+import { normalizeFilePath } from '@utils/core';
 
 export type AcceptedFileTarget = {
   targetLocation: FileLocation;
@@ -34,9 +35,8 @@ export function siblingLocation(
   if (baseLocation.kind === 'external') {
     return createExternalLocation(targetAbsolutePath);
   }
-  const targetRelativePath = path.join(
-    path.dirname(baseLocation.relativePath),
-    targetFileName,
+  const targetRelativePath = normalizeFilePath(
+    path.join(path.dirname(baseLocation.relativePath), targetFileName),
   );
   if (baseLocation.kind === 'workspace') {
     return createWorkspaceLocation(targetAbsolutePath, targetRelativePath);
