@@ -9,32 +9,26 @@ All notable changes to this project will be documented in this file.
 #### Features
 
 - **The TUI exit summary shows session cost and payment route** — leaving a
-  chat session now reports how much the session cost and how it was paid for.
-- **The model catalog is reachable from the TUI** — you can browse and enable
-  models without leaving the chat interface.
+  chat session now reports how much it cost and how it was paid for.
+- **The model catalog is reachable from the TUI** — browse and enable models
+  without leaving the chat interface.
 
 #### Bug Fixes
 
 - **Live transcript updates are restored and Ctrl-T is closable** — the
   transcript viewer no longer goes stale while a run streams, and the full
-  tool-output view opened with Ctrl-T can be dismissed again.
-- **TUI blocking UX defects are fixed and nested runs use one vocabulary** —
-  approval, retry, and login flows no longer block the interface, and nested
-  runs are consistently described as "background tasks".
-- **Doubled blank rows between transcript entries are gone** — adjacent
-  separators no longer spend two blank rows on one gap.
-- **Retired streams no longer re-activate after `/clear`** — a reset can no
-  longer resurrect a stream it just retired.
-- **The TUI interface review is applied** — hints are truthful, links are
-  reachable, and the chrome stays within its row budget.
+  tool-output view can be dismissed again.
+- **TUI blocking UX defects are fixed** — approval, retry, and login flows no
+  longer block the interface, and nested runs are consistently described as
+  "background tasks".
+- **TUI polish** — doubled blank rows between transcript entries are gone,
+  retired streams no longer re-activate after `/clear`, hints are truthful,
+  links are reachable, and errors and warnings have a non-colour cue.
 - **The approval-denied exit code is retired** — a denied approval gate is no
-  longer reported as a failed run, and the CLI warns once (on stderr) when a
-  gate is denied so a nonzero exit is diagnosable.
-- **TUI error and warning text have a non-colour cue** — errors and warnings
-  are distinguishable without relying on colour alone.
+  longer reported as a failed run; the CLI warns once on stderr instead.
 - **Grok follow-ups work from the TUI** — Grok subscription sessions handle
   follow-up messages correctly.
-- **CLI approval modes now govern Bash commands and file edits consistently** —
+- **CLI approval modes govern Bash commands and file edits consistently** —
   `never` denies them even when a prompt setting or stream bypass would allow
   them, while automatic approval permits them without opening a prompt.
 
@@ -50,108 +44,47 @@ All notable changes to this project will be documented in this file.
 #### Bug Fixes
 
 - **New Subscriptions settings tab** — ChatGPT subscription, Copilot in VS
-  Code, and Kimi Code setup with step-by-step instructions now live together
-  under Account instead of being split across Account and Providers & Models.
-- **Settings status indicators now share one visual language** — a green
-  check for set values and a neutral "Not set" tag everywhere, toggle rows
-  show just the switch, and the LaTeX tab no longer flags off states in red.
-  Section headings, toggle rows, reset/delete/sign-in buttons, and empty
-  states now use the same shared styles and icons across all tabs, the
-  launcher loading shimmer uses Web Awesome skeletons, and account notices
-  use the shared callout banner.
-- **The sidebar tabs are now "New" and "Sessions"** — the former Launcher and
-  Progress tabs use names that say what they hold, the redundant "Sessions"
-  heading inside the sessions panel is gone, and an idle session now reads
-  "Idle" instead of "Waiting for follow-up".
-- **Removed stray blank bands in the session view** — empty space above the
-  first message and above the message input no longer appears when there are
-  no queued follow-ups.
-- **The session close button is quieter** — its tooltip reads "Delete" and it
-  no longer shows a hover box, only a color change.
-- **Dropped the redundant subscription tooltip in the usage bar** — "Free ·
-  ChatGPT" no longer explains itself on hover.
-- **Session rows are more compact** — a run's short description now leads the
-  row instead of the agent name, and the metadata line (worktree, last
-  activity, model) only appears on hover, focus, or selection; everything
-  remains in the tooltip.
+  Code, and Kimi Code setup now live together under Account instead of being
+  split across Account and Providers & Models.
+- **Settings status indicators share one visual language** — a green check
+  for set values and a neutral "Not set" tag everywhere, with shared styles
+  and icons across all tabs.
+- **The sidebar tabs are now "New" and "Sessions"** — the redundant
+  "Sessions" heading is gone, and an idle session reads "Idle" instead of
+  "Waiting for follow-up".
+- **The session view is decluttered** — stray blank bands are removed, the
+  close button is quieter, the redundant subscription tooltip is dropped, and
+  session rows are more compact.
 - **The Copilot section no longer shows a wall of buttons** — per-model route
-  controls collapse behind a "Manage Copilot routes" disclosure that opens
-  only when a route needs a decision.
+  controls collapse behind a "Manage Copilot routes" disclosure.
 - **Session reliability controls moved to the Agents tab** — compaction
-  threshold and automatic retries now live with agent configuration instead of
-  the Providers & Models tab, and tool-use agents now list before workflow
-  agents.
-- **The agent and model pickers in the task input are narrower** — they no
-  longer stretch to dominate the input row on wide sidebars.
-- **The session view and settings UI are decluttered** — the extension's
-  session view and settings are tidier and easier to scan.
-- **Nested runs are named "background tasks" in user-facing text** — the
-  extension, desktop, and CLI now use one consistent name for nested runs.
-- **Session labels are declared from RunIdentity** — agent and process names
-  come from the canonical run identity instead of derived labels, and
-  finished process children are no longer retained or listed.
-- **Review follow-ups are fixed** — file-row clicks dispatch correctly and
-  approvals are labelled with the run they belong to.
-- **Narrow panes stack and actions stay reachable** — the layout sweep keeps
-  settings, model rows, and approval actions usable at sidebar widths.
-- **Approve is the filled primary action and Account opens settings** — the
-  approval button reads as the primary action, and the Account control opens
-  the settings view.
-- **Every control is named and exposes its state, and the shared focus ring
-  is restored** — controls reach assistive technology and keyboard users see
-  a consistent focus ring.
-- **Variant token contrast and the light-terminal palette are repaired** —
-  text and diff colours stay legible on light and dark terminals.
-- **Muted and border-control tokens are consumed consistently** — de-emphasis
-  is a single colour step instead of compounded alphas.
-- **Every custom property actually resolves** — declarations that quietly
-  evaluated to nothing now take colour from the right role.
-- **Element opacity no longer stacks on tokens that already carry alpha** —
-  measured composites stay above contrast thresholds.
+  threshold and automatic retries now live with agent configuration, and
+  tool-use agents list before workflow agents.
+- **Nested runs are named "background tasks"** — one consistent name across
+  the extension, desktop, and CLI, with session labels declared from
+  RunIdentity.
+- **Review follow-ups and approvals are fixed** — file-row clicks dispatch
+  correctly, approvals are labelled with their run, and Approve/Reject stay
+  on screen in a dedicated approval dock.
+- **Accessibility is restored** — every control is named and exposes its
+  state, the shared focus ring is back, non-colour status cues are added, and
+  the WorktreeChip uses the shared visually-hidden helper.
+- **Token and colour fixes** — variant contrast, the light-terminal palette,
+  muted/border tokens, resolving custom properties, and opacity stacking are
+  repaired.
 - **The composer sizes from its content** — the follow-up input rests at two
-  lines and grows with the draft instead of standing six lines tall.
-- **The ExternalInquiryPanel Submit button is a primary action** — it keeps
-  its accent colour after the shared rule change.
-- **Approval Approve/Reject actions stay on screen** — request panels move
-  into a dedicated approval dock above the transcript, and command details
-  scroll while the action row stays visible.
-- **The high-contrast user-message border renders** — high-contrast themes
-  get the delineated bubble the rule always promised.
-- **The Followup collapsible is restored on VS Code** — the six-line composer
-  no longer permanently owns the footer.
-- **The shared focus ring and non-colour status cues are restored** — the
-  progress view uses the documented focus ring and adds non-colour status
-  cues.
-- **The WorktreeChip uses the shared visually-hidden helper** — screen
-  readers get consistent hidden text.
-- **The Background Tasks roster is no longer gated on the active stream** —
-  a background bash session that finishes while you are on another tab now
-  updates its status instead of rendering "Running" indefinitely.
-- **The approval flow is readable and correctly targeted** — approval
-  sections have headings and accessible names, arriving requests are
-  announced, and the flow is correctly targeted.
-- **The feedback label is associated with its textarea** — click-to-focus
-  and assistive-technology naming work for the feedback input.
+  lines and grows with the draft, and the Followup collapsible is restored on
+  VS Code.
 - **The approval policy is re-seeded on rollback/reset** — workspace
-  transition rollback and settings reset re-read the effective persisted
-  policy instead of leaving a stale value, and invalid values warn before
-  falling back.
-- **Missing optional external tools no longer toast** — optional tools
-  (Codex, Claude Code, GitHub Activity, …) stay inactive quietly when their
-  dependencies are not installed; setup remains on the Tools dashboard.
-- **`lean_inspect` failures are reachable** — a failed Lean inspection now
-  surfaces instead of being silently dropped.
-- **Custom LaTeX replacements reuse the canonical Zod schema** — the settings
-  view validates replacements with the same schema as the rest of the app.
-- **The retry error message is no longer clipped** — long provider messages
-  stay readable instead of being cut mid-sentence with no way to read the
-  rest.
+  transitions re-read the effective persisted policy instead of leaving a
+  stale value.
+- **Optional tools and Lean inspection** — missing optional external tools
+  stay quiet, and `lean_inspect` failures surface instead of being dropped.
+- **LaTeX and retry polish** — custom LaTeX replacements reuse the canonical
+  Zod schema, and long retry error messages are no longer clipped.
 - **Model access has one name in every host** — the CLI, extension, and
-  desktop describe model access consistently.
-- **Small follow-up issues are fixed in a batch** — assorted minor fixes
-  across the surfaces.
-- **Vite 8 build warnings are resolved** — the build no longer emits
-  deprecation and chunk-size warnings.
+  desktop describe model access consistently, and Vite 8 build warnings are
+  resolved.
 
 ### Shared (all surfaces)
 
@@ -165,8 +98,7 @@ All notable changes to this project will be documented in this file.
   reviews post as the app instead of requiring a personal access token.
 - **Per-stream call counts and subscription equivalent cost** — usage
   tracking now records how many model calls each stream made and prices
-  subscription rounds at their list-price equivalent, so usage tables and
-  views reflect the real cost.
+  subscription rounds at their list-price equivalent.
 - **DeepSeek V4 Flash (Thinking) joins the default model list** — the
   thinking variant of DeepSeek V4 Flash is now available by default in the
   model picker.
