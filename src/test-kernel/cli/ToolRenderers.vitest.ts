@@ -288,7 +288,7 @@ describe('CLI tool display lines', () => {
         "  line 4",
         "  line 5",
         "  line 6",
-        "  … +11 lines (Ctrl-T to print full output)",
+        "  … +11 lines (Ctrl-T to view full output)",
         "  line 18",
         "  line 19",
         "  line 20",
