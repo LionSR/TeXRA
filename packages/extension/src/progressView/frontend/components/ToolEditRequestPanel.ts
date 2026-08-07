@@ -5,10 +5,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
-// Side-effect imports - register WA icon component
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+// Side-effect imports - register WA components used by this template
+// (the split-button caret/menu registrations come from @shared/wa/splitButton)
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
@@ -22,7 +21,7 @@ import {
 import type { ToolEditPermission } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderSplitButtonMenu } from '@shared/wa/splitButton';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -109,35 +108,21 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
         })}
         ${
           showDropdown
-            ? html`
-                <wa-dropdown
-                  class="diff-dropdown-menu split-button-menu"
-                  placement="bottom-end"
-                  @wa-select=${this.handleMenuSelect}
-                >
-                  <wa-button
-                    id="tool-edit-diff-dropdown-trigger"
-                    slot="trigger"
-                    class="diff-dropdown-trigger split-button-trigger"
-                    appearance="plain"
-                    variant="neutral"
-                    size="s"
-                    type="button"
-                    aria-label="More diff actions"
-                  >
-                    ${waIcon('chevron-down')}
-                  </wa-button>
+            ? renderSplitButtonMenu({
+                classPrefix: 'diff-dropdown',
+                triggerId: 'tool-edit-diff-dropdown-trigger',
+                triggerAriaLabel: 'More diff actions',
+                tooltip: 'More diff actions',
+                items: html`
                   <wa-dropdown-item value="previewProposed">
                     Preview
                   </wa-dropdown-item>
                   <wa-dropdown-item value="showLatexdiff">
                     LaTeXdiff
                   </wa-dropdown-item>
-                </wa-dropdown>
-                <wa-tooltip for="tool-edit-diff-dropdown-trigger">
-                  More diff actions
-                </wa-tooltip>
-              `
+                `,
+                onSelect: this.handleMenuSelect,
+              })
             : nothing
         }
       </div>
@@ -203,11 +188,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   // Diff menu handlers
   // ===========================================================================
 
-  private handleMenuSelect = (
-    event: CustomEvent<{ item: HTMLElement }>,
-  ): void => {
-    const action =
-      (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
+  private handleMenuSelect = (action: string): void => {
     switch (action) {
       case 'openDiff':
       case 'showLatexdiff':

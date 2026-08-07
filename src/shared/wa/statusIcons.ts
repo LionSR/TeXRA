@@ -3,6 +3,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { css, html, type CSSResult, type TemplateResult } from 'lit';
 
+// Local imports
+import type { ProviderKeyStatus } from '@shared/schemas';
+
 type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 
 interface SetStatusFallback {
@@ -49,3 +52,21 @@ export const statusCheckIconStyles: CSSResult = css`
     font-size: 1em;
   }
 `;
+
+/**
+ * Provider API-key status icon. The API Configuration list owns key actions;
+ * the model list mirrors the status read-only — one config so the two
+ * surfaces cannot drift.
+ */
+export function renderKeyStatusIcon(
+  status: ProviderKeyStatus['status'],
+): TemplateResult {
+  return renderSetStatusIcon({
+    status,
+    title: 'Key set',
+    fallbacks: {
+      env: { label: 'Env' },
+      'not-set': { label: 'Not set' },
+    },
+  });
+}

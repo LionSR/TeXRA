@@ -1,26 +1,23 @@
 /**
- * Whether the user is signed in with Grok, as the model layer sees it.
- *
- * The OAuth session machinery lives outside this layer (`@auth/xai`), so the
- * model layer holds only the answer, not the plumbing.
+ * Whether the user is signed in with Grok, as the model layer sees it. Probe
+ * semantics (signed-out default, install-once) live in `../signedInProbe`.
  */
+import { createSignedInProbe, type SignedInProbe } from '../signedInProbe';
 
 /** Reads the current Grok sign-in state. Never throws; never hits the network. */
-export type XaiSignedInProbe = () => Promise<boolean>;
+export type XaiSignedInProbe = SignedInProbe;
 
-const SIGNED_OUT: XaiSignedInProbe = async () => false;
-
-let probe: XaiSignedInProbe = SIGNED_OUT;
+const signedIn = createSignedInProbe();
 
 /**
  * Install the app's Grok sign-in probe, or pass `null` to restore the
  * signed-out default. Called once per process from the host composition root.
  */
 export function setXaiSignedInProbe(next: XaiSignedInProbe | null): void {
-  probe = next ?? SIGNED_OUT;
+  signedIn.setProbe(next);
 }
 
 /** Whether a Grok (xAI) subscription session is currently signed in. */
 export function isXaiSignedIn(): Promise<boolean> {
-  return probe();
+  return signedIn.isSignedIn();
 }

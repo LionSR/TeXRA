@@ -8,12 +8,12 @@ import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
 } from '@model/codex/codexPreference';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   shouldUseSubscriptionDeviceCode,
+  signInCliSubscription,
+  signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
-  writeCliLoopbackSignInProgress,
   type CliSubscriptionLoginTransportInit,
   type CliSubscriptionSignOutResult,
 } from './subscriptionLogin';
@@ -41,30 +41,14 @@ export async function signInCliChatGpt(
   init: CliChatGptLoginInit,
   options: CliChatGptLoginOptions,
 ): Promise<CodexSession> {
-  const coordinator = codexCoordinator();
-
-  if (init.device) {
-    return loginWithDeviceCode({
-      coordinator,
-      onPrompt: ({ userCode, verificationUrl }) => {
-        options.writeProgress(
-          `To sign in with ChatGPT:\n  1. Open ${verificationUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
-        );
-      },
-      signal: options.signal,
-    });
-  }
-
-  return loginWithLoopback({
-    coordinator,
-    openBrowser: (url) =>
-      writeCliLoopbackSignInProgress({
-        writeProgress: options.writeProgress,
-        displayName: 'ChatGPT',
-        url,
-        noBrowser: init.noBrowser,
-      }),
+  return signInCliSubscription({
+    coordinator: codexCoordinator(),
+    displayName: 'ChatGPT',
+    init,
+    writeProgress: options.writeProgress,
     signal: options.signal,
+    loginWithDeviceCode,
+    loginWithLoopback,
   });
 }
 
@@ -79,10 +63,8 @@ export function chatGptSignOutPreferenceMessage(
 }
 
 export async function signOutCliChatGpt(): Promise<CliChatGptSignOutResult> {
-  await codexCoordinator().signOut();
-  try {
-    return { preferenceUpdate: await setPreferCodexSubscription(false) };
-  } catch (error: unknown) {
-    return { preferenceError: toErrorMessage(error) };
-  }
+  return signOutCliSubscription({
+    coordinator: codexCoordinator(),
+    disablePreference: () => setPreferCodexSubscription(false),
+  });
 }

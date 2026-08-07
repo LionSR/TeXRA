@@ -17,6 +17,7 @@ import {
   type ResumabilityDecision,
 } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
+import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import {
@@ -74,6 +75,45 @@ function throwIfResumeStorageUnreadable(
     return;
   }
   throw new Error(`Unable to read resume storage: ${resumability.cause}`);
+}
+
+/** Agent-type label used in resume-retrieval warnings and error messages. */
+type ResumeAgentLabel = 'tool-use' | 'workflow';
+
+/**
+ * Probe resumability for an execution: returns the persisted flow record when
+ * resumable, `null` when there is nothing to resume, and throws when the
+ * resume storage itself is unreadable (re-wrapped by the caller's catch).
+ */
+async function probeResumableFlowRecord(
+  executionId: ExecutionId,
+  agentType: ResumeAgentLabel,
+): Promise<FlowRecord | null> {
+  const resumability = await deriveResumability(executionId);
+  if (!resumability.resumable) {
+    throwIfResumeStorageUnreadable(resumability);
+    logger.warn('Execution is not resumable', {
+      data: { agentType, executionId, cause: resumability.cause },
+    });
+    return null;
+  }
+  return resumability.flowRecord;
+}
+
+/**
+ * Wrap an unexpected retrieval failure (KV/IO error) so the resume boundary
+ * can distinguish "resume failed" from "no session to resume" instead of
+ * silently falling back to starting a new run.
+ */
+function resumeRetrievalError(
+  agentType: ResumeAgentLabel,
+  streamId: StreamTabId,
+  error: unknown,
+): Error {
+  return new Error(
+    `Failed to retrieve ${agentType} resume data for stream: ${streamId}`,
+    { cause: error },
+  );
 }
 
 /**
@@ -135,19 +175,8 @@ async function retrieveToolUseResumeData(
   options: SessionResumeRetrievalOptions,
 ): Promise<ToolUseResumeData | null> {
   try {
-    const resumability = await deriveResumability(executionId);
-    if (!resumability.resumable) {
-      throwIfResumeStorageUnreadable(resumability);
-      logger.warn('Execution is not resumable', {
-        data: {
-          agentType: 'tool-use',
-          executionId,
-          cause: resumability.cause,
-        },
-      });
-      return null;
-    }
-    const { flowRecord } = resumability;
+    const flowRecord = await probeResumableFlowRecord(executionId, 'tool-use');
+    if (!flowRecord) return null;
 
     const migrationResult = migrateSharedState(flowRecord.shared);
     if (!migrationResult.success) {
@@ -201,13 +230,7 @@ async function retrieveToolUseResumeData(
       agentConfig: currentConfig,
     };
   } catch (error) {
-    // An unexpected failure here (KV/IO error) is NOT the same as "no session
-    // to resume" — propagate it so the resume boundary surfaces it rather than
-    // silently falling back to "start a new run".
-    throw new Error(
-      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
-      { cause: error },
-    );
+    throw resumeRetrievalError('tool-use', streamId, error);
   }
 }
 
@@ -222,19 +245,8 @@ async function retrieveWorkflowResumeData(
   agentConfig: AgentConfig,
 ): Promise<WorkflowResumeData | null> {
   try {
-    const resumability = await deriveResumability(executionId);
-    if (!resumability.resumable) {
-      throwIfResumeStorageUnreadable(resumability);
-      logger.warn('Execution is not resumable', {
-        data: {
-          agentType: 'workflow',
-          executionId,
-          cause: resumability.cause,
-        },
-      });
-      return null;
-    }
-    const { flowRecord } = resumability;
+    const flowRecord = await probeResumableFlowRecord(executionId, 'workflow');
+    if (!flowRecord) return null;
 
     // Minimal validation - just verify essential fields exist.
     // Full state validation happens when the flow actually resumes.
@@ -266,12 +278,6 @@ async function retrieveWorkflowResumeData(
       modelHandlerCompatibilityKey,
     };
   } catch (error) {
-    // Unexpected failure (KV/IO error) is distinct from "no session to resume":
-    // propagate so the resume boundary surfaces it instead of silently
-    // degrading to "start a new run".
-    throw new Error(
-      `Failed to retrieve workflow resume data for stream: ${streamId}`,
-      { cause: error },
-    );
+    throw resumeRetrievalError('workflow', streamId, error);
   }
 }

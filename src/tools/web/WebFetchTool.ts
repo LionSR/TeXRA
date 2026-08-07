@@ -2,7 +2,7 @@
 import { isIP } from 'node:net';
 
 // Third-party imports
-import ky, { HTTPError } from 'ky';
+import ky from 'ky';
 import { AbortError } from 'p-retry';
 import TurndownService from 'turndown';
 import { z } from 'zod';
@@ -11,10 +11,9 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
-  isTimeoutError,
   joinAbortSignal,
   retryTransientFetch,
-  unwrapAbortError,
+  toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -165,25 +164,14 @@ export class WebFetchTool extends defineTool({
         { retries: WEB_FETCH_RETRIES, minTimeout: 500, cancelSignal },
       ));
     } catch (error) {
-      // Defensive: ensure the specific type checks below see the real error
-      // even if a p-retry AbortError wrapper reaches here (p-retry v8 already
-      // unwraps it to .originalError, so this is normally a no-op).
-      const err = unwrapAbortError(error);
-      if (isTimeoutError(err)) {
-        throw new ToolError(
+      throw toFetchToolError(error, {
+        timeout:
           `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
-            `The remote server did not respond in time. Retry the request, or try a different URL.`,
-        );
-      }
-      if (err instanceof HTTPError) {
-        throw new ToolError(
-          `HTTP ${err.response.status}: Failed to fetch ${url}`,
-        );
-      }
-      if (err instanceof TypeError) {
-        throw new ToolError(`Network error fetching ${url}: ${err.message}`);
-      }
-      throw new ToolError(`Failed to fetch ${url}: ${toErrorMessage(err)}`);
+          `The remote server did not respond in time. Retry the request, or try a different URL.`,
+        http: (status) => `HTTP ${status}: Failed to fetch ${url}`,
+        network: (message) => `Network error fetching ${url}: ${message}`,
+        fallback: (message) => `Failed to fetch ${url}: ${message}`,
+      });
     }
 
     const ctLower = contentType.toLowerCase();

@@ -4,15 +4,8 @@
  */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  css,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -21,11 +14,11 @@ import type { Plan } from '@shared/schemas';
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 
-// Web Awesome native components
-import '@awesome.me/webawesome/dist/components/details/details.js';
+// Local imports - base class
+import { CollapsiblePanel } from './CollapsiblePanel';
 
 @customElement('plan-view')
-export class PlanView extends LitElement {
+export class PlanView extends CollapsiblePanel {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -52,53 +45,22 @@ export class PlanView extends LitElement {
 
   @property({ attribute: false }) plan: Plan | null = null;
 
-  /** When this key changes, the panel collapses. Used by the parent to reset
-   *  open state on context switches (e.g. switching streams). */
-  @property({ type: String }) collapseKey = '';
-
-  @state() private open = false;
-
-  protected override willUpdate(changed: PropertyValues): void {
-    if (
-      changed.has('collapseKey') &&
-      changed.get('collapseKey') !== undefined
-    ) {
-      this.open = false;
-    }
-  }
-
   override render(): TemplateResult | typeof nothing {
     if (!this.plan) {
       return nothing;
     }
 
-    return html`
-      <wa-details
-        id=${ELEMENT_IDS.PLAN_VIEW_CONTAINER}
-        class="panel-collapsible is-boxed"
-        summary="Plan"
-        ?open=${this.open}
-        @wa-show=${this.handleShow}
-        @wa-hide=${this.handleHide}
-      >
-        <div class="plan-body">${this.renderDocument(this.plan.objective)}</div>
-      </wa-details>
-    `;
+    return this.renderCollapsibleDetails({
+      id: ELEMENT_IDS.PLAN_VIEW_CONTAINER,
+      summary: 'Plan',
+      // prettier-ignore
+      body: html`<div class="plan-body">${this.renderDocument(this.plan.objective)}</div>`,
+    });
   }
 
   /** Kept to one line so the pre-wrap body gets no template whitespace. */
   private renderDocument(text: string): TemplateResult {
     // prettier-ignore
     return html`<div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-document">${text}</div>`;
-  }
-
-  private handleShow(e: Event): void {
-    if (e.target !== e.currentTarget) return;
-    this.open = true;
-  }
-
-  private handleHide(e: Event): void {
-    if (e.target !== e.currentTarget) return;
-    this.open = false;
   }
 }
