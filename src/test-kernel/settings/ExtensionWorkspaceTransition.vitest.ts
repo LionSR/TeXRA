@@ -120,10 +120,9 @@ vi.mock('@progressView/extensionHostInteractions', () => ({
 vi.mock('@progressView/ProgressViewMessageHandler', () => ({
   ProgressViewMessageHandler: class {},
 }));
-vi.mock('@progressView/progressBackendAppSignals', () => ({
-  attachProgressBackendAppSignals: () => ({ dispose: vi.fn() }),
+vi.mock('@eventBus/AppSignals', () => ({
+  appSignals: { on: () => () => {} },
 }));
-vi.mock('@eventBus/AppSignals', () => ({ appSignals: {} }));
 
 const { WorkspaceStorageProvider } =
   await import('@platform/defaults/workspaceStorage');

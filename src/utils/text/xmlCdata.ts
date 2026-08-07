@@ -33,18 +33,16 @@ export function removeCDATA(content: string): string {
 }
 
 /**
- * Wrap the content of each tag with a CDATA section. `attrPattern` is an extra
- * regex fragment inserted before the open-tag's `>` to optionally match
- * attributes (empty string for a bare `<tag>`).
+ * Wrap the content of each tag with a CDATA section, tolerating attributes on
+ * the open tag.
  */
-function wrapTagsWithCdata(
+export function addCdataToTagsMultiple(
   xmlData: string,
   tags: string[],
-  attrPattern: string,
 ): string {
   return tags.reduce((result, tag) => {
     const pattern = new RegExp(
-      `(<${tag}${attrPattern}>)(.*?)(</${tag}>)`,
+      `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
       'gs',
     );
     return result.replace(pattern, (_, openTag, body, closeTag) =>
@@ -53,21 +51,4 @@ function wrapTagsWithCdata(
         : `${openTag}<![CDATA[${body}]]>${closeTag}`,
     );
   }, xmlData);
-}
-
-/**
- * Wrap content of specified tags with CDATA sections
- */
-export function addCdataToTags(xmlData: string, tags: string[]): string {
-  return wrapTagsWithCdata(xmlData, tags, '');
-}
-
-/**
- * Wrap content of specified tags with CDATA sections, handling attributes
- */
-export function addCdataToTagsMultiple(
-  xmlData: string,
-  tags: string[],
-): string {
-  return wrapTagsWithCdata(xmlData, tags, '(?:\\s+[^>]*)?');
 }

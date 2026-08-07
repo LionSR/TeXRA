@@ -8,11 +8,11 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { listExecutions } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import {
-  BUILTIN_DEFAULT_CHAT_MODEL,
-  resolveChatDefaults,
-} from '@cli/runtime/chatDefaults';
-import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
+  CLI_BUILTIN_DEFAULT_MODEL,
+  loadWorkspaceCliConfig,
+} from '@cli/runtime/cliConfig';
 import { BUILTIN_DEFAULT_CHAT_AGENT } from '@cli/runtime/defaultAgents';
 import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
@@ -107,8 +107,8 @@ function expectChatDefaults(
 describe('CLI chat defaults', () => {
   it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
     expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
-    expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekproT');
-    expect(MODEL_CONFIGS[BUILTIN_DEFAULT_CHAT_MODEL]).toBeDefined();
+    expect(CLI_BUILTIN_DEFAULT_MODEL).toBe('deepseekproT');
+    expect(MODEL_CONFIGS[CLI_BUILTIN_DEFAULT_MODEL]).toBeDefined();
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },

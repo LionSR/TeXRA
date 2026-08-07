@@ -1,6 +1,5 @@
 import type { StopReason as AnthropicSDKStopReason } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
-import type { CompletionChoice } from 'openai/resources/completions';
 
 /**
  * Finish reasons returned by the OpenAI Chat Completion API.
@@ -15,21 +14,8 @@ export const OPENAI_CHAT_FINISH = {
 } as const satisfies Record<string, NonNullable<OpenAIChatFinishReason>>;
 type OpenAIChatFinishReason = ChatCompletion.Choice['finish_reason'];
 
-/**
- * Finish reasons for the legacy OpenAI text completion API.
- * The Responses API maps its status field to these values.
- */
-export const OPENAI_COMPLETION_FINISH = {
-  STOP: 'stop',
-  LENGTH: 'length',
-  CONTENT_FILTER: 'content_filter',
-} as const satisfies Record<string, NonNullable<OpenAICompletionFinishReason>>;
-type OpenAICompletionFinishReason = CompletionChoice['finish_reason'];
-
 /** Stop reasons defined in the Model Context Protocol SDK. */
 export const MCP_STOP = {
-  END_TURN: 'endTurn',
-  STOP_SEQUENCE: 'stopSequence',
   MAX_TOKENS: 'maxTokens',
 } as const;
 type MCPStopReason = (typeof MCP_STOP)[keyof typeof MCP_STOP];
@@ -64,7 +50,6 @@ type GoogleFinishReason = (typeof GOOGLE_FINISH)[keyof typeof GOOGLE_FINISH];
  */
 export type ProviderStopReason =
   | OpenAIChatFinishReason
-  | OpenAICompletionFinishReason
   | AnthropicSDKStopReason
   | GoogleFinishReason
   | MCPStopReason
@@ -73,7 +58,6 @@ export type ProviderStopReason =
 /** Known stop reasons that indicate token limit was hit. */
 const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
   OPENAI_CHAT_FINISH.LENGTH,
-  OPENAI_COMPLETION_FINISH.LENGTH,
   ANTHROPIC_STOP.MAX_TOKENS,
   ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
   MCP_STOP.MAX_TOKENS,

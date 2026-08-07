@@ -38,7 +38,6 @@ describe('resolveBrowserLaunch', () => {
       expect(resolveBrowserLaunch(url, platform)).toEqual({
         command,
         args,
-        windowsVerbatimArguments: false,
       });
     },
   );

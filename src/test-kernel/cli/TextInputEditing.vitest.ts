@@ -25,9 +25,7 @@ import {
   isEscapeInput,
   isUnhandledControlInput,
   isPlainReturnInput,
-  isShiftReturnInput,
   isTextInputNewlineInput,
-  metaChordDigit,
   metaChordInput,
   normalizedCtrlInput,
   rewriteKittyEnterInput,
@@ -45,19 +43,10 @@ describe('CLI TUI text input editing', () => {
     expect(isPlainReturnInput('\n', {})).toBe(true);
     expect(isPlainReturnInput('j', { ctrl: true })).toBe(false);
     // Shift-agnostic: Shift+Enter still confirms in modals/Select. The editor
-    // routes it to a newline by testing isShiftReturnInput first (see below).
+    // routes it to a newline by testing isShiftReturnInput first.
     expect(isPlainReturnInput('', { return: true, shift: true })).toBe(true);
     expect(isPlainReturnInput('\n', { ctrl: true })).toBe(false);
     expect(isPlainReturnInput('\u001Bp', {})).toBe(false);
-  });
-
-  it('treats Shift+Enter as a newline, distinct from plain Enter and Ctrl-J', () => {
-    expect(isShiftReturnInput('', { return: true, shift: true })).toBe(true);
-    expect(isShiftReturnInput(SYNTHETIC_SHIFT_RETURN_INPUT, {})).toBe(true);
-    // Plain Enter, Ctrl-J, and Option+Enter are not Shift+Enter.
-    expect(isShiftReturnInput('', { return: true })).toBe(false);
-    expect(isShiftReturnInput('j', { ctrl: true })).toBe(false);
-    expect(isShiftReturnInput('', { return: true, meta: true })).toBe(false);
   });
 
   it('treats Ctrl-J and Shift+Enter as literal newlines in text input', () => {
@@ -66,7 +55,13 @@ describe('CLI TUI text input editing', () => {
     expect(isTextInputNewlineInput(SYNTHETIC_SHIFT_RETURN_INPUT, {})).toBe(
       true,
     );
+    expect(isTextInputNewlineInput('', { return: true, shift: true })).toBe(
+      true,
+    );
     expect(isTextInputNewlineInput('\n', { meta: true })).toBe(false);
+    expect(isTextInputNewlineInput('', { return: true, meta: true })).toBe(
+      false,
+    );
     expect(isTextInputNewlineInput('\r', {})).toBe(false);
     expect(isTextInputNewlineInput('', { return: true })).toBe(false);
   });
@@ -155,13 +150,6 @@ describe('CLI TUI text input editing', () => {
     expect(metaChordInput('\u001Bp', {})).toBe('p');
     expect(metaChordInput('\u001B3', {})).toBe('3');
     expect(metaChordInput('p', { ctrl: true, meta: true })).toBeUndefined();
-  });
-
-  it('parses Option/Alt digit shortcuts after chord normalization', () => {
-    expect(metaChordDigit('3', { meta: true })).toBe(3);
-    expect(metaChordDigit('\u001B3', {})).toBe(3);
-    expect(metaChordDigit('\u001Bp', {})).toBeUndefined();
-    expect(metaChordDigit('\u001B0', {})).toBeUndefined();
   });
 
   it('normalizes raw terminal control bytes for readline-style shortcuts', () => {

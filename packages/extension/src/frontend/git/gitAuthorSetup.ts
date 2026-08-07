@@ -8,17 +8,11 @@
 import { workspaceSM } from '@common/state';
 import {
   applyGitAuthorSettings,
-  type GitAuthorSettings,
   readGitAuthorSettingsFromState,
+  type GitAuthorSettings,
 } from '@utils/system/gitAuthorSettings';
-
-/** Read the current git author settings from workspace state with defaults. */
-export function readGitAuthorSettings(): GitAuthorSettings {
-  return readGitAuthorSettingsFromState(workspaceSM);
-}
 
 /** Apply settings and return them so callers can forward without re-reading. */
 export function applyGitAuthorConfig(): GitAuthorSettings {
-  const settings = readGitAuthorSettings();
-  return applyGitAuthorSettings(settings);
+  return applyGitAuthorSettings(readGitAuthorSettingsFromState(workspaceSM));
 }

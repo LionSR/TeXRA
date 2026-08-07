@@ -8,7 +8,11 @@ import {
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { AgentSourceSchema, agentName } from '@shared/schemas/agent';
+import {
+  AGENT_CATEGORIES,
+  AgentSourceSchema,
+  agentName,
+} from '@shared/schemas/agent';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
@@ -76,11 +80,6 @@ const AGENT_CATEGORY_FILTERS = new Map<string, AgentCategory>(
     category,
   ]),
 );
-
-const AGENT_CATEGORIES = [
-  AgentCategory.Workflow,
-  AgentCategory.ToolUse,
-] as const satisfies readonly AgentCategory[];
 
 export function parseCliAgentCategoryFilter(
   input: string | undefined,

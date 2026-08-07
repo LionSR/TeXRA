@@ -5,11 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, vi } from 'vitest';
 
 // Local imports - utils
-import {
-  addCdataToTags,
-  addCdataToTagsMultiple,
-  removeCDATA,
-} from '@utils/text/xmlCdata';
+import { addCdataToTagsMultiple, removeCDATA } from '@utils/text/xmlCdata';
 import { formatContent } from '@utils/text/xmlConversion';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
@@ -87,7 +83,7 @@ describe('xmlUtils CDATA handling', () => {
     const input =
       '<latex_document><![CDATA[Text with <xml-like> LaTeX & comments]]></latex_document>';
 
-    const result = addCdataToTags(input, ['latex_document']);
+    const result = addCdataToTagsMultiple(input, ['latex_document']);
 
     assert.equal(result, input);
   });
@@ -105,7 +101,7 @@ describe('xmlUtils CDATA handling', () => {
     const input =
       '<latex_document><![CDATA[Text with <xml-like> LaTeX</latex_document>';
 
-    const result = addCdataToTags(input, ['latex_document']);
+    const result = addCdataToTagsMultiple(input, ['latex_document']);
 
     assert.equal(
       result,

@@ -39,7 +39,6 @@ import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
-import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
 
 import type { MainViewProvider } from '../webview/MainViewProvider';
 
@@ -239,9 +238,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public async initialize(): Promise<void> {
     await this.backend.load();
-    this._disposables.push(
-      attachProgressBackendAppSignals(this.backend, appSignals),
-    );
+    this._disposables.push({
+      dispose: appSignals.on('extensionDeactivating', () => {
+        this.backend.markAllRunningTasksAsCancelled();
+      }),
+    });
     this.logger.debug('ProgressViewProvider initialized');
   }
 

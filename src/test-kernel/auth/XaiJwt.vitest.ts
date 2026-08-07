@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  accessTokenIsExpiring,
-  decodeXaiJwtClaims,
-  extractXaiClaims,
-} from '@auth/xai';
+import { decodeXaiJwtClaims } from '@auth/xai';
 
 function makeJwt(payload: object): string {
   const header = Buffer.from(
@@ -24,24 +20,7 @@ describe('xAI JWT claim helpers', () => {
     expect(claims.expiresAtMs).toBe(exp * 1000);
   });
 
-  it('prefers id_token email over access_token', () => {
-    const claims = extractXaiClaims(
-      makeJwt({ email: 'id@example.com' }),
-      makeJwt({ email: 'access@example.com' }),
-    );
-    expect(claims.email).toBe('id@example.com');
-  });
-
-  it('detects expiring JWTs within the skew window', () => {
-    const nearExpiry = makeJwt({ exp: Math.floor(Date.now() / 1000) + 30 });
-    expect(accessTokenIsExpiring(nearExpiry, Date.now(), 60_000)).toBe(true);
-    expect(accessTokenIsExpiring(nearExpiry, Date.now(), 0)).toBe(false);
-  });
-
-  it('returns false for opaque tokens', () => {
-    expect(accessTokenIsExpiring('opaque-token', Date.now(), 60_000)).toBe(
-      false,
-    );
+  it('returns empty claims for opaque tokens', () => {
     expect(decodeXaiJwtClaims('not-a-jwt')).toEqual({});
   });
 });

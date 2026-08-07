@@ -4,7 +4,11 @@ import * as vscode from 'vscode';
 // Local imports
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import {
+  SecretManager,
+  ApiProvider,
+  type ApiProviderQuickPickItem,
+} from '@frontend/secretManager';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -107,19 +111,16 @@ async function promptForApiKey(
   });
 }
 
-type ProviderQuickPickItem = Awaited<
-  ReturnType<typeof SecretManager.getApiProviderQuickPickItems>
->[number];
-
 async function pickApiProvider(
   placeHolder: string,
   prompt: string,
 ): Promise<ApiProvider | undefined> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick<ProviderQuickPickItem>(
-    providerItems,
-    { placeHolder, prompt },
-  );
+  const providerPick =
+    await vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
+      placeHolder,
+      prompt,
+    });
   return providerPick?.provider;
 }
 

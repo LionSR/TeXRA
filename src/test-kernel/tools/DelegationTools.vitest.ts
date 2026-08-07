@@ -38,10 +38,8 @@ import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
-import {
-  DelegateAgentTool,
-  rejectOversizedBibAttachments,
-} from '@tools/delegation/DelegationTools';
+import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
+import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
 import { WorkspaceFS } from '@utils/files';
 
 function stat(size: number): FileStat {

@@ -49,9 +49,9 @@ export interface AppSignalPayloads {
   workspaceFilesWritten: { absolutePaths: string[] };
 }
 
-export type AppSignal = keyof AppSignalPayloads;
+type AppSignal = keyof AppSignalPayloads;
 
-export interface AppSignalsLike {
+interface AppSignalsLike {
   on<K extends AppSignal>(
     event: K,
     listener: (payload: AppSignalPayloads[K]) => void,
