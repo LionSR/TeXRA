@@ -15,8 +15,8 @@
 export const PROMO_NOTICE_SHORT = {
   lead: 'Free access to a rotating selection of leading research models.',
   fineprint:
-    'TeXRA forwards your messages to the model provider without permanently ' +
-    'storing them or using them for training.',
+    'TeXRA only forwards your messages to the model provider — it does not ' +
+    'store them.',
 } as const;
 
 /**
