@@ -82,3 +82,55 @@ describe('arXiv source download filenames', () => {
     await expect(fs.access(`${destBasePath}.gz`)).rejects.toThrow();
   });
 });
+
+describe('arXiv source download retry classification', () => {
+  it('retries a 429 rate limit instead of aborting immediately', async () => {
+    const dir = await makeTempDir('texra-arxiv-', tempDirs);
+    const destBasePath = path.join(dir, 'source');
+    let attempt = 0;
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) => {
+        attempt += 1;
+        if (attempt === 1) {
+          return new Response(null, { status: 429 });
+        }
+        return new Response('source contents', {
+          status: 200,
+          headers: {
+            'content-disposition': 'attachment; filename="source"',
+            'content-type': 'application/x-gzip',
+          },
+        });
+      },
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const downloadedPath = await ArxivProcessor.downloadFile(
+      'https://arxiv.org/src/2404.12175',
+      destBasePath,
+      5000,
+    );
+
+    expect(attempt).toBe(2);
+    expect(downloadedPath).toBe(destBasePath);
+  });
+
+  it('does not retry a permanent 400 response', async () => {
+    const dir = await makeTempDir('texra-arxiv-', tempDirs);
+    const destBasePath = path.join(dir, 'source');
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(null, { status: 400 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      ArxivProcessor.downloadFile(
+        'https://arxiv.org/src/2404.12175',
+        destBasePath,
+        5000,
+      ),
+    ).rejects.toThrow('HTTP 400');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
