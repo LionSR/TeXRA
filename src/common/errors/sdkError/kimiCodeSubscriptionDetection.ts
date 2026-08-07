@@ -1,6 +1,11 @@
-import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+import { isObject } from '@utils/core';
 
-import { errorBodyCandidates, pickStringField } from './errorInspection';
+import {
+  errorBodyCandidates,
+  pickNumberField,
+  pickStringField,
+} from './errorInspection';
 
 /**
  * Detection + formatting for the Kimi Code (Moonshot coding-subscription)
@@ -33,6 +38,7 @@ const USAGE_LIMIT_PATTERN =
  *  OpenAI SDK exposes the request config (with `baseURL`) directly on the
  *  error, so this is a single field read — no cause-chain walk. */
 function isKimiCodeEndpointError(err: unknown): boolean {
+  if (!isObject(err)) return false;
   const request = (err as { request?: { baseURL?: unknown } }).request;
   return (
     typeof request?.baseURL === 'string' &&
@@ -61,13 +67,8 @@ export function parseKimiCodeSubscriptionLimit(
   if (!message || !USAGE_LIMIT_PATTERN.test(message)) return null;
 
   const resetsInSeconds = errorBodyCandidates(rawErrorBody)
-    .map(
-      (candidate) => (candidate as Record<string, unknown>).resets_in_seconds,
-    )
-    .find(
-      (value): value is number =>
-        typeof value === 'number' && Number.isFinite(value),
-    );
+    .map((candidate) => pickNumberField(candidate, 'resets_in_seconds'))
+    .find((value): value is number => value !== undefined);
 
   return { resetsInSeconds };
 }

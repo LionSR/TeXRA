@@ -55,6 +55,7 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import { getPreferKimiCode } from '@utils/config/providerConfig';
 import { platform } from '@platform/platform';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
@@ -79,7 +80,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
-import { setCliCodexSubscription } from './codexSubscription';
+import { setCliCodexSubscription, setCliKimiCode } from './codexSubscription';
 import {
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
@@ -591,8 +592,10 @@ async function switchRetryToPersonalCredentials(
         const previousApiMode = getCliApiMode();
         const previousOpenRouter = cliOpenRouterEnabled();
         const previousSubscriptionPreference = isPreferCodexSubscription();
+        const previousKimiCodePreference = getPreferKimiCode();
         let apiModeWriteStarted = false;
         let subscriptionWriteStarted = false;
+        let kimiCodeWriteStarted = false;
         try {
           if (decision.apiMode) {
             const apiMode = decision.apiMode;
@@ -611,6 +614,11 @@ async function switchRetryToPersonalCredentials(
                 'ChatGPT subscription remains enabled by a more specific setting.',
               );
             }
+            signal.throwIfAborted();
+          }
+          if (decision.disableKimiCode) {
+            kimiCodeWriteStarted = true;
+            await runRetryTask(() => setCliKimiCode(false), signal);
             signal.throwIfAborted();
           }
           if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
@@ -641,6 +649,25 @@ async function switchRetryToPersonalCredentials(
                     'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
                   restoreFailedContext:
                     'Could not restore the ChatGPT subscription preference',
+                })
+              : undefined;
+          const kimiCodeFailure =
+            kimiCodeWriteStarted && !getPreferKimiCode()
+              ? await attemptRollback({
+                  restore: async () => {
+                    await setCliKimiCode(previousKimiCodePreference);
+                    if (getPreferKimiCode() !== previousKimiCodePreference) {
+                      throw new Error(
+                        `Kimi Code preference remained ${String(getPreferKimiCode())}.`,
+                      );
+                    }
+                  },
+                  restoredInMemory: () =>
+                    getPreferKimiCode() === previousKimiCodePreference,
+                  memoryRestoredContext:
+                    'The previous Kimi Code preference appears restored in memory, but persistence could not be confirmed',
+                  restoreFailedContext:
+                    'Could not restore the Kimi Code preference',
                 })
               : undefined;
           const apiModeFailure =
@@ -681,6 +708,7 @@ async function switchRetryToPersonalCredentials(
               : undefined;
           const rollbackFailures = [
             subscriptionFailure,
+            kimiCodeFailure,
             apiModeFailure,
             openRouterFailure,
           ].filter(filterNotNullish);

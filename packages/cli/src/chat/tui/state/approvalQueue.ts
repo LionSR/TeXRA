@@ -66,6 +66,9 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Turn off the "prefer ChatGPT subscription" preference before accepting,
    *  so a Codex usage-limit retry routes through the OpenAI API key. */
   readonly disableChatGptSubscription?: boolean;
+  /** Turn off the "Prefer Kimi Code" preference before accepting, so a Kimi
+   *  Code usage-limit retry routes through the Moonshot open-platform API key. */
+  readonly disableKimiCode?: boolean;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
 }
