@@ -1,25 +1,19 @@
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
-  ExecutionId,
-  StreamTabId,
 } from '@shared/schemas';
 
-import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import {
+  AgentCliSessionRegistry,
+  type AgentCliSessionEntry,
+} from './agentCliSessionRegistry';
 import type { Thread } from '@openai/codex-sdk';
 
-export interface ActiveCodexThread {
+export interface ActiveCodexThread extends AgentCliSessionEntry {
   thread: Thread;
-  childStreamId: StreamTabId;
-  executionId: ExecutionId;
-  executions: ExecutionRegistry;
 }
 
-export interface ActiveClaudeAgentSession {
-  childStreamId: StreamTabId;
-  executionId: ExecutionId;
-  executions: ExecutionRegistry;
+export interface ActiveClaudeAgentSession extends AgentCliSessionEntry {
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
   effort: ClaudeAgentEffort;

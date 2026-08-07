@@ -48,11 +48,8 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 // Local imports - progress view helpers
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import {
-  getPermissionKey,
-  isTextInput,
-  selectExternalInquiryKey,
-} from './RequestPanelsState';
+import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
+import { getPermissionKey, type PermissionState } from '../permissionState';
 
 // Local imports - progress view contexts
 import {
@@ -65,7 +62,6 @@ import {
 // Local imports - progress view component types
 import type { ApproveSplitButton } from './ApproveSplitButton';
 import type { BaseRequestPanel } from './BaseRequestPanel';
-import type { PermissionState } from '../permissionState';
 
 // Side-effect imports to register sub-panel custom elements
 import './ToolEditRequestPanel';
@@ -275,12 +271,13 @@ export class RequestPanels extends LitElement {
   /**
    * The request the y/n accelerators will act on.
    *
-   * Single source of truth: `getActivePanel` resolves the DOM node from this,
-   * and the renderers mark that same permission `data-armed`. Deriving the
-   * two separately let them disagree — the newest permission is not the
-   * target while the external-inquiry carousel is active, so an indicator
-   * keyed off `permissions[0]` would ring a panel the carousel does not even
-   * render, while the keypress landed on the visible one.
+   * Single source of truth: `handleGlobalKeydown` resolves the DOM node from
+   * this via `findPanelFor`, and the renderers mark that same permission
+   * `data-armed`. Deriving the two separately let them disagree — the newest
+   * permission is not the target while the external-inquiry carousel is
+   * active, so an indicator keyed off `permissions[0]` would ring a panel the
+   * carousel does not even render, while the keypress landed on the visible
+   * one.
    */
   private get armedPermission(): PermissionState | null {
     const newest = this.permissions[0];
@@ -528,24 +525,14 @@ export class RequestPanels extends LitElement {
 
     if (key.length === 1 && !event.composedPath().includes(this)) return;
 
-    const panel = this.getActivePanel();
+    const armed = this.armedPermission;
+    const panel = armed ? this.findPanelFor(armed) : null;
     if (!panel) return;
 
     if (panel.handleKeyboardShortcut(key)) {
       event.preventDefault();
     }
   };
-
-  /**
-   * Find the panel that should receive keyboard shortcuts.
-   *
-   * For external inquiry carousel: targets the currently visible panel.
-   * For other permission kinds: targets the newest (first in the queue).
-   */
-  private getActivePanel(): BaseRequestPanel | null {
-    const target = this.armedPermission;
-    return target ? this.findPanelFor(target) : null;
-  }
 
   /**
    * Rendered panel node for a permission. We match by reference rather than

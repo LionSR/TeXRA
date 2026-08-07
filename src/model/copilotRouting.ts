@@ -19,11 +19,9 @@ import { copilotRouteForModel } from './runtimeModelRegistry';
 export type CopilotRouteOverride = 'direct';
 
 function copilotRouteModels(): readonly string[] {
-  return (
-    platform().globalState.get<readonly string[]>(
-      GlobalStateKey.COPILOT_ROUTE_MODELS,
-      [],
-    ) ?? []
+  return platform().globalState.get<readonly string[]>(
+    GlobalStateKey.COPILOT_ROUTE_MODELS,
+    [],
   );
 }
 

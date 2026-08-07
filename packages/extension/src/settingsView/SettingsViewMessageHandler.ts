@@ -837,8 +837,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleOpenMemoryFolder(): Promise<void> {
     try {
-      await StorageFS.ensureDir(resolveMemoryStoragePath());
-      const absolutePath = StorageFS.fullPath(resolveMemoryStoragePath());
+      const resolvedPath = resolveMemoryStoragePath();
+      await StorageFS.ensureDir(resolvedPath);
+      const absolutePath = StorageFS.fullPath(resolvedPath);
       await safeExecuteCommand(
         'revealFileInOS',
         [vscode.Uri.file(absolutePath)],

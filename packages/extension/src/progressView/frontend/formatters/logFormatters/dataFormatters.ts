@@ -75,19 +75,23 @@ export function formatFileListTemplate(
   const parseResult = z.array(FileListEntrySchema).safeParse(data);
 
   // Raw fallback when parsing fails
-  const renderData = parseResult.success
-    ? buildFileListRender(parseResult.data)
-    : undefined;
+  if (!parseResult.success) {
+    return buildFileListDetails({
+      logId: id,
+      open: options?.defaultOpen ?? false,
+      iconName: 'file',
+      label: 'Files (raw)',
+      items: html`<pre>${text ?? ''}</pre>`,
+    });
+  }
+
+  const { items, summary } = buildFileListRender(parseResult.data);
   return buildFileListDetails({
     logId: id,
     open: options?.defaultOpen ?? false,
     iconName: 'file',
-    label: parseResult.success
-      ? (renderData?.summary ?? 'Files')
-      : 'Files (raw)',
-    items: parseResult.success
-      ? (renderData?.items ?? '')
-      : html`<pre>${text ?? ''}</pre>`,
+    label: summary,
+    items,
   });
 }
 

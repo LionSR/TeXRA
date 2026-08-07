@@ -30,36 +30,6 @@ const BRANCH_PROMPT_HINT =
   'The review will diff the current branch against the selected branch';
 
 /**
- * Show a single-select QuickPick that honors Escape (resolves `undefined`).
- * The first item is pre-selected so Enter accepts the default.
- */
-function pickFromQuickPick<T extends vscode.QuickPickItem>(config: {
-  title: string;
-  placeholder: string;
-  items: T[];
-  prompt: string;
-  defaultButton?: vscode.QuickInputButton;
-}): Promise<T | undefined> {
-  const { title, placeholder, items, prompt, defaultButton } = config;
-  const qp = vscode.window.createQuickPick<T>();
-  qp.title = title;
-  qp.placeholder = placeholder;
-  qp.ignoreFocusOut = true;
-  qp.items = items;
-  qp.activeItems = [items[0]];
-  qp.prompt = prompt;
-  if (defaultButton) qp.buttons = [defaultButton];
-  return settleQuickInput(qp, (accept) => {
-    if (defaultButton) {
-      qp.onDidTriggerButton((button) => {
-        if (button === defaultButton) accept(items[0]);
-      });
-    }
-    qp.onDidAccept(() => accept(qp.activeItems[0] ?? qp.selectedItems[0]));
-  });
-}
-
-/**
  * Drive the two-step prompt flow. Each step honors Escape: returning
  * `undefined` from any prompt cancels the whole run, so a half-configured
  * review never starts.
@@ -95,14 +65,24 @@ export async function promptReviewOptions(
     iconPath: new vscode.ThemeIcon('check'),
     tooltip: 'Use auto-detect (skip)',
   };
-  const branchPick = await pickFromQuickPick({
-    title: 'Agent Review — Diff Against',
-    placeholder: 'Choose the branch to compare against',
-    items: branchItems,
-    prompt: trimmedInstructions
-      ? `Focus: ${trimmedInstructions}`
-      : BRANCH_PROMPT_HINT,
-    defaultButton: useDefaultButton,
+  // Single-select QuickPick honoring Escape (resolves `undefined`). The first
+  // item is pre-selected so Enter accepts the default; the button accepts it
+  // directly.
+  const qp = vscode.window.createQuickPick<BranchItem>();
+  qp.title = 'Agent Review — Diff Against';
+  qp.placeholder = 'Choose the branch to compare against';
+  qp.ignoreFocusOut = true;
+  qp.items = branchItems;
+  qp.activeItems = [branchItems[0]];
+  qp.prompt = trimmedInstructions
+    ? `Focus: ${trimmedInstructions}`
+    : BRANCH_PROMPT_HINT;
+  qp.buttons = [useDefaultButton];
+  const branchPick = await settleQuickInput<BranchItem>(qp, (accept) => {
+    qp.onDidTriggerButton((button) => {
+      if (button === useDefaultButton) accept(branchItems[0]);
+    });
+    qp.onDidAccept(() => accept(qp.activeItems[0] ?? qp.selectedItems[0]));
   });
   if (!branchPick) return undefined;
 

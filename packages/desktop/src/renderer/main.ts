@@ -61,10 +61,7 @@ import {
   SetThemeMessageSchema,
   type DesktopThemeKind,
 } from '@shared/schemas/commonViewMessages';
-import {
-  ProgressViewOutboundMessageSchema,
-  type ProgressViewOutboundMessage,
-} from '@shared/schemas/progressView';
+import { ProgressViewOutboundMessageSchema } from '@shared/schemas/progressView';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
@@ -482,17 +479,6 @@ function takePendingFileList(
   const pending = pendingFileLists.get(directory);
   pendingFileLists.delete(directory);
   return pending;
-}
-
-/**
- * Progress-view messages are dispatched straight into the shared
- * messageDispatcher: `<progress-app>` is never mounted on desktop, its children
- * mount directly.
- */
-function isProgressOutboundMessage(
-  raw: unknown,
-): raw is ProgressViewOutboundMessage {
-  return ProgressViewOutboundMessageSchema.safeParse(raw).success;
 }
 
 /**
@@ -1576,7 +1562,7 @@ window.addEventListener('message', (event) => {
   }
   // Progress view messages dispatch directly into the shared
   // messageDispatcher, with no <progress-app> mounted for plumbing.
-  if (isProgressOutboundMessage(event.data)) {
+  if (ProgressViewOutboundMessageSchema.safeParse(event.data).success) {
     dispatchMessage(event.data);
   }
 });

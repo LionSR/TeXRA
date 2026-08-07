@@ -1,6 +1,3 @@
-import { z } from 'zod';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
@@ -44,24 +41,17 @@ async function hasChinesePackages(
   }
 }
 
-// ============================================================================
-// Texcount Schemas
-// ============================================================================
+export type TexcountMode = 'separate' | 'include' | 'sum';
 
-const TexcountModeSchema = z.enum(['separate', 'include', 'sum']);
-export type TexcountMode = z.infer<typeof TexcountModeSchema>;
+export interface TexcountOptions {
+  mode?: TexcountMode;
+  channel?: string;
+}
 
-const TexcountOptionsSchema = z.object({
-  mode: TexcountModeSchema.optional(),
-  channel: z.string().optional(),
-});
-export type TexcountOptions = z.infer<typeof TexcountOptionsSchema>;
-
-const TexcountResultSchema = z.object({
-  output: z.string().nullable(),
-  errors: z.array(z.string()),
-});
-export type TexcountResult = z.infer<typeof TexcountResultSchema>;
+export interface TexcountResult {
+  output: string | null;
+  errors: string[];
+}
 
 /** Returns why the file cannot be counted, or null when it is countable. */
 async function rejectionReason(

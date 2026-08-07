@@ -14,7 +14,6 @@ export interface SubscriptionPreferenceUpdate {
 }
 
 export interface SubscriptionPreference {
-  readonly configKey: string;
   isPrefer(): boolean;
   setPrefer(enabled: boolean): Promise<SubscriptionPreferenceUpdate>;
 }
@@ -40,5 +39,5 @@ export function createSubscriptionPreference(
     return { effective: isPrefer(), target };
   }
 
-  return { configKey, isPrefer, setPrefer };
+  return { isPrefer, setPrefer };
 }

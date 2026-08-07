@@ -14,11 +14,7 @@ import {
 } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
-import {
-  type ToolUseRunShared,
-  type CyclePrepResult,
-  assertPreparedShared,
-} from './types';
+import type { ToolUseRunShared, CyclePrepResult } from './types';
 import type { ToolUseServices } from '../ToolUseServices';
 
 type ToolUseCycleOutcome =
@@ -36,7 +32,9 @@ export class ToolUseCycleNode<C> extends Node<
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
-    assertPreparedShared(shared);
+    if (shared.stateSlices === null) {
+      throw new Error('PrepareNode must run before CycleNode');
+    }
 
     // stateSlices.workspaceSnapshot was produced by this same node's own
     // toSnapshot() last round (or by ToolUsePrepareNode's one-time

@@ -7,7 +7,7 @@ import {
 } from './overflowText';
 import { clipToWidth, textDisplayWidth } from './terminalText';
 
-export interface ScrollBoundedRows<T> {
+interface ScrollBoundedRows<T> {
   readonly hiddenAfter: number;
   readonly hiddenBefore: number;
   readonly visibleRows: readonly T[];

@@ -14,7 +14,11 @@ import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type {
+  ExecutionId,
+  RunStorageFileLocation,
+  StreamTabId,
+} from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -55,7 +59,7 @@ async function resolveInvocationFileList(
   return await Promise.all(
     references.map(async ({ file, runStorage }) => {
       if (!runStorage) return file;
-      let output: Awaited<ReturnType<typeof resolveChildRunOutput>>;
+      let output: RunStorageFileLocation | undefined;
       try {
         output = await resolveChildRunOutput(parentExecutionId, file);
       } catch (error) {
@@ -117,36 +121,29 @@ export async function fingerprintWorkflowAgentDependencies(
   return hash.digest('hex');
 }
 
-async function selectWorkflowScriptModel(
-  input: Parameters<typeof selectAvailableDelegationModel>[0],
+async function workflowScriptModelSelection(
+  invocation: WorkflowAgentInvocation,
+  parent: LaunchRunContext,
+  agentCategory: AgentCategory,
 ): Promise<string> {
+  const requestedModel = invocation.options.model;
   try {
-    return await selectAvailableDelegationModel(input);
+    return await selectAvailableDelegationModel({
+      ...(requestedModel !== undefined && { requestedModel }),
+      parentModel: parent.model,
+      agentCategory,
+    });
   } catch (error) {
     // A declared model is workflow configuration, so its rejection must not
     // disappear as a nullable call inside parallel(). When the
     // script omits the field, preserve the established delegation failure
     // semantics; per-call model routing must not broaden that behavior.
-    if (input.requestedModel == null) throw error;
+    if (requestedModel === undefined) throw error;
     throw new WorkflowRunAbortError(
       formatError('Workflow model could not be selected', error),
       { cause: error },
     );
   }
-}
-
-function workflowScriptModelSelection(
-  invocation: WorkflowAgentInvocation,
-  parent: LaunchRunContext,
-  agentCategory: AgentCategory,
-): Promise<string> {
-  return selectWorkflowScriptModel({
-    ...(invocation.options.model !== undefined && {
-      requestedModel: invocation.options.model,
-    }),
-    parentModel: parent.model,
-    agentCategory,
-  });
 }
 
 /**

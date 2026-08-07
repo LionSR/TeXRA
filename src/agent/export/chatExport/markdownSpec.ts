@@ -76,12 +76,11 @@ function escapeMarkdownText(text: string): string {
   return text.replaceAll(MARKDOWN_TEXT_ESCAPE_RE, (ch) => `\\${ch}`);
 }
 
-function percentEncodeAscii(ch: string): string {
-  return `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`;
-}
-
 function escapeMarkdownUrlDestination(url: string): string {
-  return url.replaceAll(MARKDOWN_URL_DESTINATION_ESCAPE_RE, percentEncodeAscii);
+  return url.replaceAll(
+    MARKDOWN_URL_DESTINATION_ESCAPE_RE,
+    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`,
+  );
 }
 
 function markdownLinkOrText(url: string, title: string): string {

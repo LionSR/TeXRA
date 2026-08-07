@@ -19,11 +19,6 @@ export interface EditorTreeDirectory {
 
 export type EditorTreeNode = EditorTreeDirectory | EditorTreeFile;
 
-export interface EditorTree {
-  readonly nodes: readonly EditorTreeNode[];
-  readonly directoryPaths: ReadonlySet<string>;
-}
-
 interface MutableEditorTreeDirectory {
   readonly kind: 'directory';
   readonly name: string;
@@ -73,9 +68,8 @@ function freezeNodes(
  */
 export function buildEditorTree(
   entries: readonly EditorFileEntry[],
-): EditorTree {
+): readonly EditorTreeNode[] {
   const root = new Map<string, MutableEditorTreeNode>();
-  const directoryPaths = new Set<string>();
 
   for (const entry of entries) {
     const segments = entry.path
@@ -92,7 +86,6 @@ export function buildEditorTree(
       const existing = siblings.get(name);
 
       if (isDirectoryEntry) {
-        directoryPaths.add(path);
         if (existing?.kind === 'directory') {
           siblings = existing.children;
           continue;
@@ -117,10 +110,7 @@ export function buildEditorTree(
     }
   }
 
-  return {
-    nodes: freezeNodes(root.values()),
-    directoryPaths,
-  };
+  return freezeNodes(root.values());
 }
 
 /**

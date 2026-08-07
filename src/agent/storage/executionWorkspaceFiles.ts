@@ -8,7 +8,7 @@ import { byStringProp, normalizeFilePath } from '@utils/core';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
 
-export interface ExecutionWorkspaceFile {
+interface ExecutionWorkspaceFile {
   readonly path: string;
   readonly displayPath: string;
   readonly absolutePath: string;

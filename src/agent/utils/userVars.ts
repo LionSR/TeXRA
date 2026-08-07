@@ -20,10 +20,7 @@ import {
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentSkillsEnabledSchema,
 } from '@shared/schemas/agentSkills';
-import {
-  loadRuntimeSkillCatalog,
-  type SkillLoadIssue,
-} from '@skills/runtimeSkills';
+import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
@@ -152,11 +149,6 @@ type AttachedMemoriesResult = {
   misses: AttachedMemoryMiss[];
 };
 
-function formatRuntimeSkillIssue(issue: SkillLoadIssue): string {
-  const location = issue.path ? ` (${issue.path})` : '';
-  return `${issue.severity}: ${issue.message}${location}`;
-}
-
 /**
  * Build all user variables needed for prompt rendering.
  *
@@ -198,7 +190,8 @@ export async function buildUserVars(
   ]);
 
   for (const issue of runtimeSkills.issues) {
-    logger.warn(`Skill import ${formatRuntimeSkillIssue(issue)}`);
+    const location = issue.path ? ` (${issue.path})` : '';
+    logger.warn(`Skill import ${issue.severity}: ${issue.message}${location}`);
   }
 
   // Merge all variable sources using spread operator.

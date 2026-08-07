@@ -68,7 +68,9 @@ export function getValidatedConfig<T>(
   const raw = getConfig<unknown>(path);
   const result = schema.safeParse(raw);
   if (result.success) return result.data;
-  if (isConfigExplicitlySet(path)) {
+  // Warn only when the user explicitly set the value (global, workspace, or
+  // workspace folder); an unset setting failing the schema is normal.
+  if (configProvider()?.isExplicitlySet(path)) {
     logger.warn(
       CHANNEL,
       `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
@@ -105,14 +107,6 @@ export async function updateConfig<T>(
   }
 
   await provider.update(key, value, target);
-}
-
-/**
- * Checks if a configuration setting has been explicitly set by the user
- * (global, workspace, or workspace folder), rather than using defaults.
- */
-function isConfigExplicitlySet(key: string): boolean {
-  return configProvider()?.isExplicitlySet(key) ?? false;
 }
 
 /**

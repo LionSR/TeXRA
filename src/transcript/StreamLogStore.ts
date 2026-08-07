@@ -750,7 +750,13 @@ export class StreamLogStore {
         `Cannot append to released stream ${streamId}. Await ensureLoaded() first.`,
       );
     }
-    const logInstance = this.getOrCreate(streamId);
+    const state = this.ensureStreamState(streamId);
+    let logInstance = state.log;
+    if (!logInstance) {
+      logInstance = new StreamLog();
+      state.log = logInstance;
+      if (!this.summaries.has(streamId)) this.summaries.set(streamId, {});
+    }
     const appended = settled
       ? logInstance.appendSettled(entry)
       : logInstance.append(entry);
@@ -762,7 +768,7 @@ export class StreamLogStore {
   /**
    * Shared body of the entry mutators: guard writability, resolve the resident
    * log, apply the mutation, and commit only when the log reports a change.
-   * The three public mutators differ solely in which `StreamLog` method runs.
+   * The three writer-scoped mutators differ solely in which `StreamLog` method runs.
    */
   private mutateEntry(
     streamId: StreamTabId,
@@ -1071,17 +1077,6 @@ export class StreamLogStore {
         writeAttempts++;
       }
     }
-  }
-
-  private getOrCreate(streamId: StreamTabId): StreamLog {
-    const state = this.ensureStreamState(streamId);
-    let logInstance = state.log;
-    if (!logInstance) {
-      logInstance = new StreamLog();
-      state.log = logInstance;
-      if (!this.summaries.has(streamId)) this.summaries.set(streamId, {});
-    }
-    return logInstance;
   }
 
   private assertWritableStream(streamId: StreamTabId): void {

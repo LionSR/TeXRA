@@ -39,19 +39,10 @@ type BucketMigration = (
   },
 ) => Promise<void>;
 
-const GLOBAL_MERGE_PER_CHILD = [
-  CUSTOM_AGENTS_STORAGE_DIR,
-  EXTERNAL_INQUIRY_THREADS_DIR,
-] as const;
 const mergeTaskRuns: BucketMigration = (sourcePath, targetPath, options) =>
   mergeLegacyStorageBucket(sourcePath, targetPath, {
     ...options,
     mergePerChild: 'all',
-  });
-const mergeGlobalBuckets: BucketMigration = (sourcePath, targetPath, options) =>
-  mergeLegacyStorageBucket(sourcePath, targetPath, {
-    ...options,
-    mergePerChild: GLOBAL_MERGE_PER_CHILD,
   });
 
 /**
@@ -114,6 +105,13 @@ export async function migrateLegacyVscodeStorage(
     () => context.globalStorageUri?.fsPath,
     () => storage.getGlobalStoragePath(),
     'vscode-global-storage',
-    mergeGlobalBuckets,
+    (sourcePath, targetPath, options) =>
+      mergeLegacyStorageBucket(sourcePath, targetPath, {
+        ...options,
+        mergePerChild: [
+          CUSTOM_AGENTS_STORAGE_DIR,
+          EXTERNAL_INQUIRY_THREADS_DIR,
+        ],
+      }),
   );
 }

@@ -66,7 +66,7 @@ const ZoteroSearchInputSchema = z
     'At least one of query, title, author, or year must be provided.',
   );
 
-export type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
+type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
 
 /**
  * Build a human-readable label from whichever search parameters are set.

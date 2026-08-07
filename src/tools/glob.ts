@@ -38,7 +38,7 @@ const GlobInputSchema = z.strictObject({
     .describe('Directory to search within. Defaults to the workspace root.'),
 });
 
-export type GlobInput = z.infer<typeof GlobInputSchema>;
+type GlobInput = z.infer<typeof GlobInputSchema>;
 
 interface GlobMatchInfo {
   relativePath: string;

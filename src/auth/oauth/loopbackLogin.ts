@@ -176,10 +176,9 @@ export async function loginWithOAuthLoopback<S>(
     ]);
     const code = await Promise.race([codePromise, cancellationPromise]);
     signal?.throwIfAborted();
-    if (abortListener) {
-      signal?.removeEventListener('abort', abortListener);
-      abortListener = undefined;
-    }
+    // The abort listener stays attached until the `finally` below: after the
+    // race settles, a late abort only rejects the already-settled
+    // cancellationPromise (swallowed above), so no early removal is needed.
     return await coordinator.completeLoginWithCode({
       code,
       verifier: authorize.verifier,

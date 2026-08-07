@@ -13,8 +13,6 @@ import { raceWithTimeout } from './raceWithTimeout';
 
 const CHANNEL = 'VscodeDiagnostics';
 
-export { DiagnosticSeverity } from 'vscode';
-
 /**
  * Wait for diagnostics to change for a specific file.
  * Uses event subscription with timeout.

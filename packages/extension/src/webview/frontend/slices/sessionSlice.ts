@@ -16,7 +16,7 @@ import { refreshInstructionPlaceholder } from '../mainViewActions';
 // exhaustive, messageDispatcher.ts is the real coverage checkpoint).
 export const sessionHandlers = {
   [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (message) => {
-    const sessionType = parseSessionType(message.sessionType ?? undefined);
+    const sessionType = parseSessionType(message.sessionType);
     if (sessionType) {
       sessionType$.set(sessionType);
     }

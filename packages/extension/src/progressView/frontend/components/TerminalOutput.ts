@@ -55,7 +55,7 @@ const TERMINAL_REFIT_EVENTS = ['toggle', 'wa-show', 'wa-after-show'] as const;
  * `<details>` surface. */
 const DETAILS_ANCESTOR_SELECTOR = 'wa-details, details';
 
-export interface TerminalTextUpdatePlan {
+interface TerminalTextUpdatePlan {
   reset: boolean;
   textToWrite: string;
 }

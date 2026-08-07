@@ -7,6 +7,11 @@ import type { RequestOpenFilePayload } from '@shared/schemas';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import type { RegisteredToolName } from '@tools/registry';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
+import {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
+} from '@utils/files/fileLocation';
 
 export const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
@@ -56,27 +61,22 @@ export async function launchDesktopAgent(
       if (!output) return;
       let location: RequestOpenFilePayload['location'];
       if (output.location === 'workspace') {
-        location = {
-          kind: 'workspace',
-          absolutePath: output.absolutePath,
-          relativePath: output.relativePath,
-        };
+        location = createWorkspaceLocation(
+          output.absolutePath,
+          output.relativePath,
+        );
       } else if (output.location === 'runStorage') {
-        location = {
-          kind: 'runStorage',
-          absolutePath: output.absolutePath,
-          relativePath: output.relativePath,
-          executionId: result.executionId,
-        };
+        location = createRunStorageLocation(
+          output.absolutePath,
+          output.relativePath,
+          result.executionId,
+        );
       } else {
-        location = { kind: 'external', absolutePath: output.absolutePath };
+        location = createExternalLocation(output.absolutePath);
       }
       context.session.interactions.emit(
         'requestOpenFile',
-        {
-          location,
-          preserveFocus: false,
-        },
+        { location, preserveFocus: false },
         { replayWhenAttached: true },
       );
     },

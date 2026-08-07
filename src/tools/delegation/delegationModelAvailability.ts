@@ -27,11 +27,6 @@ function formatAvailableModelsLine(
   return `Available models: ${modelNames.join(', ')}`;
 }
 
-function normalizeModelName(model: string | null | undefined): string | null {
-  const trimmed = model?.trim();
-  return trimmed || null;
-}
-
 export function selectDelegationModelFromAvailableNames(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
@@ -60,7 +55,7 @@ export function selectDelegationModelFromAvailableNames(input: {
     throw new Error(NO_DELEGATION_MODELS_MESSAGE);
   }
   if (decision.unavailable) {
-    const requestedModel = normalizeModelName(input.requestedModel);
+    const requestedModel = input.requestedModel?.trim() || null;
     throw new Error(
       `Model "${requestedModel}" is not currently available for delegation in the active API mode. Available models: ${availableModels.join(', ')}.`,
     );

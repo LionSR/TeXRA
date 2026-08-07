@@ -60,7 +60,6 @@ import {
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 export { rejectOversizedBibAttachments } from './inputFields';
-export type { WorkflowAgentInput };
 
 const LOG_CHANNEL = 'delegation';
 
@@ -207,7 +206,7 @@ const DelegateAgentInputSchema = z
       "Provide exactly one of 'agent' (to start a new delegation) or 'execution_id' (to resume an existing one) — not both, not neither.",
   });
 
-export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
+type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
 export class DelegateAgentTool extends defineTool({

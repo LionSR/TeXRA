@@ -2,8 +2,23 @@
  * Timestamp formatting utilities for progress view formatters.
  */
 
-// Local imports - formatter constants
-import { DATETIME_FORMAT_OPTIONS, TIME_FORMAT_OPTIONS } from './constants';
+// DateTimeFormat options for consistent timestamp formatting
+const DATETIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
+
+const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
 
 // Shared formatters (lazily initialized for browser environments)
 let TIME_FORMATTER: Intl.DateTimeFormat | null = null;

@@ -38,7 +38,7 @@ import {
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
 
-export interface ConversationPaneProps {
+interface ConversationPaneProps {
   /** Transcript measurement width, which callers may clamp to layout minimums. */
   readonly width?: number;
   /** Physical parent width; metadata must not render beyond this boundary. */

@@ -30,7 +30,7 @@ const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // `<Static>` transcript lines persist in the primary-buffer scrollback.
 const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
 const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
-export interface CleanupTerminalModesOptions {
+interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
 }
 

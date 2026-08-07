@@ -68,7 +68,7 @@ import {
   isMcpTextBlock,
 } from './helpers';
 
-export type ToolSectionContext = {
+type ToolSectionContext = {
   toolName: string;
   input: unknown;
   filePath: string;

@@ -6,8 +6,6 @@ import { AgentCategorySchema } from '../agent';
 import { ToolConfigInputFieldsSchema } from '../toolConfig';
 import { LaunchTargetSchema } from './state';
 
-const MainViewExecuteToolConfigSchema = ToolConfigInputFieldsSchema.partial();
-
 export const MainViewExecuteFilesSchema = z.object({
   inputFiles: z.array(z.string()).optional(),
   contextFiles: z.array(z.string()).optional(),
@@ -19,16 +17,6 @@ export const MainViewExecuteFilesSchema = z.object({
   inputFilesActive: z.boolean().optional(),
   contextFilesActive: z.boolean().optional(),
   mediaFilesActive: z.boolean().optional(),
-});
-
-const MainViewExecuteSessionSchema = z.object({
-  workingDirectory: z.string().nullish(),
-  cliOutputFile: z.string().nullish(),
-  cliMultiAgentPresetId: z.string().nullish(),
-  // Team runs send team identity only; hosts resolve the roster at the
-  // execution boundary where catalog/auth state is authoritative.
-  launchTarget: LaunchTargetSchema.nullish(),
-  teamId: z.string().nullish(),
 });
 
 /**
@@ -44,8 +32,18 @@ export const MainViewExecuteMessageSchema = z.object({
   agentCategory: AgentCategorySchema.optional(),
   memories: z.array(z.string()).optional(),
   files: MainViewExecuteFilesSchema.optional(),
-  session: MainViewExecuteSessionSchema.optional(),
-  toolConfig: MainViewExecuteToolConfigSchema.optional(),
+  session: z
+    .object({
+      workingDirectory: z.string().nullish(),
+      cliOutputFile: z.string().nullish(),
+      cliMultiAgentPresetId: z.string().nullish(),
+      // Team runs send team identity only; hosts resolve the roster at the
+      // execution boundary where catalog/auth state is authoritative.
+      launchTarget: LaunchTargetSchema.nullish(),
+      teamId: z.string().nullish(),
+    })
+    .optional(),
+  toolConfig: ToolConfigInputFieldsSchema.partial().optional(),
 });
 export type MainViewExecuteMessage = z.infer<
   typeof MainViewExecuteMessageSchema

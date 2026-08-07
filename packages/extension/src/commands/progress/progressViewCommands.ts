@@ -19,13 +19,9 @@ function getProgressProviderOrWarn(): ProgressViewProvider | undefined {
  * sidebar in its current location vs. focusing it.
  */
 export async function showProgressView(inPlace: boolean): Promise<void> {
-  const provider = getProgressProviderOrWarn();
-  if (!provider) return;
-  await provider.showProgressView({ inPlace });
+  await getProgressProviderOrWarn()?.showProgressView({ inPlace });
 }
 
 export async function openProgressViewInTab(): Promise<void> {
-  const provider = getProgressProviderOrWarn();
-  if (!provider) return;
-  await provider.popOutToEditor();
+  await getProgressProviderOrWarn()?.popOutToEditor();
 }

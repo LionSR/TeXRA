@@ -188,43 +188,24 @@ export async function isCodexSubscriptionActive(
 }
 
 /**
- * Whether `model` is eligible to route through a signed-in Grok (xAI)
- * subscription. All non-OpenRouter-only xAI registry models qualify; the OAuth
+ * Resolve the active Grok-subscription provider profile, or null when the
+ * subscription preference is off, OpenRouter is selected, or the model is not
+ * xAI-eligible. All non-OpenRouter-only xAI registry models qualify; the OAuth
  * token hits the same `api.x.ai` surface as an API key.
- */
-export function isXaiSubscriptionEligible(model: ModelConfig): boolean {
-  if (model.provider !== ModelProvider.XAI) return false;
-  if (model.openRouterOnly) return false;
-  return true;
-}
-
-/** Resolve the active Grok-subscription provider profile. */
-export function resolveXaiSubscriptionCapabilities({
-  model,
-  useOpenRouter,
-}: ProviderCapabilityKey): ProviderCapabilityProfile | null {
-  if (useOpenRouter) return null;
-  if (!isXaiSubscriptionEligible(model)) return null;
-  return {
-    authMode: 'xai-subscription',
-    ...zeroCostAccessOverrides(model.contextWindow),
-    usageRoute: 'xai-subscription',
-  };
-}
-
-/**
- * Resolve Grok-subscription capabilities for a model, or null when the
- * subscription preference is off or the model is not xAI-eligible.
  */
 export function resolveXaiSubscriptionCapabilitiesForAgentCategory(
   config: ModelConfig,
   useOpenRouter: boolean,
 ): ProviderCapabilityProfile | null {
   if (!isPreferXaiSubscription()) return null;
-  return resolveXaiSubscriptionCapabilities({
-    model: config,
-    useOpenRouter,
-  });
+  if (useOpenRouter) return null;
+  if (config.provider !== ModelProvider.XAI) return null;
+  if (config.openRouterOnly) return null;
+  return {
+    authMode: 'xai-subscription',
+    ...zeroCostAccessOverrides(config.contextWindow),
+    usageRoute: 'xai-subscription',
+  };
 }
 
 /** Whether the model currently routes through a signed-in Grok subscription. */

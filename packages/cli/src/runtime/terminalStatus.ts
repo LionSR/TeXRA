@@ -15,13 +15,9 @@ interface CliRunResultMetadata {
   readonly copiedOutputs?: string[];
 }
 
-type CliRunResultFor<T extends ExecuteAgentResult> = T & CliRunResultMetadata;
-
-export type CliRunResult = ExecuteAgentResult extends infer T
-  ? T extends ExecuteAgentResult
-    ? CliRunResultFor<T>
-    : never
-  : never;
+// Intersecting distributes over the runAgent result union, attaching the
+// CLI-only metadata fields to every member.
+export type CliRunResult = ExecuteAgentResult & CliRunResultMetadata;
 
 export type CliToolUseRunResult = Extract<
   CliRunResult,

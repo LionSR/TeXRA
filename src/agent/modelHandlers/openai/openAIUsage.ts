@@ -17,9 +17,6 @@ import {
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
-/** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-type OpenAIPricingConfig = StandardPricingConfig;
-
 /**
  * Cached prompt tokens. OpenAI reports them under
  * `prompt_tokens_details.cached_tokens`; DeepSeek uses `prompt_cache_hit_tokens`.
@@ -35,7 +32,7 @@ function getCachedTokens(usage: ExtendedCompletionUsage): number {
 /** Computes cost based on token usage and model pricing. */
 export function computeOpenAIPrice(
   responseUsage: ExtendedCompletionUsage | null,
-  config: OpenAIPricingConfig,
+  config: StandardPricingConfig,
 ): number {
   if (!responseUsage) return 0;
 
@@ -64,7 +61,7 @@ export function computeOpenAIPrice(
  */
 export function computeOpenAIResponsePrice(
   responseUsage: ResponseUsage,
-  config: OpenAIPricingConfig,
+  config: StandardPricingConfig,
 ): number {
   return computeStandardPrice(
     {
@@ -114,7 +111,7 @@ export function normalizeOpenAIUsage(
   rawUsage: ExtendedCompletionUsage | null,
   responseTimeMs: number,
   provider: NormalizedUsage['provider'],
-  config: OpenAIPricingConfig,
+  config: StandardPricingConfig,
 ): NormalizedUsage {
   return normalizeUsage(
     {

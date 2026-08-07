@@ -156,8 +156,6 @@ const FileOperationMessages = [
     paths: z.array(z.string()),
     target: MultipleDocumentFileTypeSchema.nullish(),
   }),
-  // Note: Use withFilesArray (required files) directly instead of
-  // withOptionalFiles + .extend() override pattern
   withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
     fileType: z.literal('input'),
   }),
@@ -250,9 +248,6 @@ const RequestRecentCommitsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),
   notifyWhenEmpty: z.boolean().nullish(),
 });
-export type RequestRecentCommitsMessage = z.infer<
-  typeof RequestRecentCommitsMessageSchema
->;
 
 const LatexdiffMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFF),

@@ -45,12 +45,6 @@ import { byCategory, type ByCategory } from '@shared/schemas';
 // Local imports - main view
 import { SESSION_TYPES, type SessionType } from './constants';
 import {
-  fileStateContext,
-  sessionContext,
-  type FileStateContextValue,
-  type SessionContextValue,
-} from './mainViewContexts';
-import {
   DEFAULT_CHECKBOX_VALUES,
   DEFAULT_FILE_OPTIONS,
   DEFAULT_MULTI_FILES,
@@ -58,13 +52,13 @@ import {
   DEFAULT_STATE,
   ONBOARDING_PLACEHOLDERS,
 } from './store';
-
-// Re-export the context objects so MainApp wires @provide from one place.
-export { fileStateContext, sessionContext };
-export type { FileStateContextValue, SessionContextValue };
+import type {
+  FileStateContextValue,
+  SessionContextValue,
+} from './mainViewContexts';
 
 /** Onboarding funnel plus the pre-first-push sentinel. */
-export type WebviewOnboardingFunnelState = OnboardingFunnelState | 'pending';
+type WebviewOnboardingFunnelState = OnboardingFunnelState | 'pending';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is

@@ -143,59 +143,50 @@ export class AIAgentsTab extends LitElement {
     `;
   }
 
-  private renderCodexInlineSettings(): TemplateResult {
-    return html`
-      <div class="settings-section">
-        ${this.renderSelectRow(
+  private renderInlineSettingsFor(itemId: string): TemplateResult | null {
+    let rows: ReadonlyArray<readonly [string, WorkspaceStateKey, string]>;
+    if (itemId === 'codex') {
+      rows = [
+        [
           'Sandbox mode',
           WorkspaceStateKey.CODEX_SANDBOX_MODE,
           this.codexSandboxMode,
-        )}
-        ${this.renderSelectRow(
+        ],
+        [
           'Reasoning effort',
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
           this.codexReasoningEffort,
-        )}
-        ${this.renderSelectRow(
+        ],
+        [
           'Approval policy',
           WorkspaceStateKey.CODEX_APPROVAL_POLICY,
           this.codexApprovalPolicy,
-        )}
-      </div>
-    `;
-  }
-
-  private renderClaudeAgentInlineSettings(): TemplateResult {
-    return html`
-      <div class="settings-section">
-        ${this.renderSelectRow(
-          'Model',
-          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-          this.claudeAgentModel,
-        )}
-        ${this.renderSelectRow(
+        ],
+      ];
+    } else if (itemId === 'claude-agent') {
+      rows = [
+        ['Model', WorkspaceStateKey.CLAUDE_AGENT_MODEL, this.claudeAgentModel],
+        [
           'Reasoning effort',
           WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
           this.claudeAgentEffort,
-        )}
-        ${this.renderSelectRow(
+        ],
+        [
           'Permission mode',
           WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
           this.claudeAgentPermissionMode,
+        ],
+      ];
+    } else {
+      return null;
+    }
+    return html`
+      <div class="settings-section">
+        ${rows.map(([label, key, value]) =>
+          this.renderSelectRow(label, key, value),
         )}
       </div>
     `;
-  }
-
-  private renderInlineSettingsFor(itemId: string): TemplateResult | null {
-    if (itemId === 'codex') return this.renderCodexInlineSettings();
-    if (itemId === 'claude-agent')
-      return this.renderClaudeAgentInlineSettings();
-    return null;
-  }
-
-  private aiAgentItems(): ToolDashboardItem[] {
-    return this.items.filter((item) => item.category === 'ai-agents');
   }
 
   private renderStatusSummary(
@@ -249,7 +240,7 @@ export class AIAgentsTab extends LitElement {
       `;
     }
 
-    const items = this.aiAgentItems();
+    const items = this.items.filter((item) => item.category === 'ai-agents');
 
     return html`
       <div class="tab-content-container">

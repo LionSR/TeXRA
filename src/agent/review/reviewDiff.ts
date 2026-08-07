@@ -335,16 +335,12 @@ export async function collectReviewDiff(
     }
   }
 
-  let collected: [string | null, string | null];
-  try {
-    collected = await Promise.all([
-      rawGit(sgRoot, ['diff', '--no-color', baseRef, '--']),
-      rawGit(sgRoot, ['diff', '--name-only', baseRef, '--']),
-    ]);
-  } catch (error) {
-    return { ok: false, reason: toErrorMessage(error) };
-  }
-  const [diffText, nameOnly] = collected;
+  // rawGit converts every failure to null, so this pair cannot reject; the
+  // null checks below are the only error handling these diffs need.
+  const [diffText, nameOnly] = await Promise.all([
+    rawGit(sgRoot, ['diff', '--no-color', baseRef, '--']),
+    rawGit(sgRoot, ['diff', '--name-only', baseRef, '--']),
+  ]);
   // A failed name-only diff must fail the collection too: issue reports are
   // validated against `changedFiles`, so an empty list alongside real diff
   // text would reject every finding as outside the change set.

@@ -7,8 +7,6 @@ import {
   type SessionTitleState,
 } from '@shared/sessionTitle';
 
-type DesktopSessionActivity = SessionTitleState;
-
 type DesktopTitleSession = Pick<
   SessionHandle,
   'events' | 'executions' | 'interactions' | 'status'
@@ -22,7 +20,7 @@ type DesktopTitleWindow = Pick<
 /** Derive aggregate activity from canonical process-session owners. */
 export function getDesktopSessionActivity(
   session: DesktopTitleSession,
-): DesktopSessionActivity {
+): SessionTitleState {
   if (session.interactions.pendingCount > 0) return 'approval';
   const hasRunningAgent = session.executions.getAgentHandles().some(
     (handle) =>
