@@ -101,3 +101,22 @@ Deno.test(
     strictEqual((await response.json()).code, 'workflow_not_on_default_branch');
   },
 );
+
+Deno.test(
+  'exchange reports missing App only when installation lookup fails',
+  async () => {
+    const { GitHubApiError } = await import('./githubApp.ts');
+    const response = await handleExchangeRequest(
+      request(),
+      dependencies({
+        createAppClient: () =>
+          Promise.reject(new GitHubApiError(404, 'Not Found')),
+      }),
+    );
+    strictEqual(response.status, 403);
+    strictEqual(
+      (await response.json()).error,
+      'TeXRA GitHub App is not installed on this repository',
+    );
+  },
+);

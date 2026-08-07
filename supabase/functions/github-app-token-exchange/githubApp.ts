@@ -106,19 +106,29 @@ export async function createGitHubAppClient(input: {
         .split('/')
         .map((segment) => encodeURIComponent(segment))
         .join('/');
-      const workflow = await githubJson<ContentResponse>(
-        `${repositoryPath}/contents/${encodedPath}?ref=${encodeURIComponent(workflowSha)}`,
-        verificationAuthentication.token,
-      );
-      const defaultWorkflow = await githubJson<ContentResponse>(
-        `${repositoryPath}/contents/${encodedPath}?ref=${encodeURIComponent(repository.default_branch)}`,
-        verificationAuthentication.token,
-      );
-      return (
-        workflow.type === 'file' &&
-        defaultWorkflow.type === 'file' &&
-        workflow.sha === defaultWorkflow.sha
-      );
+      try {
+        const workflow = await githubJson<ContentResponse>(
+          `${repositoryPath}/contents/${encodedPath}?ref=${encodeURIComponent(workflowSha)}`,
+          verificationAuthentication.token,
+        );
+        const defaultWorkflow = await githubJson<ContentResponse>(
+          `${repositoryPath}/contents/${encodedPath}?ref=${encodeURIComponent(repository.default_branch)}`,
+          verificationAuthentication.token,
+        );
+        return (
+          workflow.type === 'file' &&
+          defaultWorkflow.type === 'file' &&
+          workflow.sha === defaultWorkflow.sha
+        );
+      } catch (error) {
+        // Missing workflow on either ref means the blob is not trusted yet
+        // (new file on a PR, deleted on default, etc.) — same skip as a
+        // SHA mismatch. Do not treat this as "App not installed".
+        if (error instanceof GitHubApiError && error.status === 404) {
+          return false;
+        }
+        throw error;
+      }
     },
     mintRepositoryToken: async () => {
       const authentication = await auth({
@@ -126,7 +136,9 @@ export async function createGitHubAppClient(input: {
         installationId: installation.id,
         repositoryIds: [repository.id],
         permissions: {
-          contents: 'write',
+          // Review posting and thread mutation only need these; contents
+          // write is intentionally not granted on the exchanged token.
+          contents: 'read',
           issues: 'write',
           pull_requests: 'write',
         },

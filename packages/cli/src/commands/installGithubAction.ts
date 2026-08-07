@@ -63,6 +63,7 @@ const WORKFLOW_TEMPLATE = [
   '          persist-credentials: false',
   '',
   '      - name: Run TeXRA review',
+  '        # Customers track @v1; dogfood/repro pins use a full commit SHA instead.',
   '        uses: texra-ai/texra-action/review@v1',
   '        with:',
   '          require-write-access: "true"',
