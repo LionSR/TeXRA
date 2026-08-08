@@ -1,8 +1,10 @@
+// Third-party imports
 import { Box, Text } from 'ink';
 
+// Local imports - TUI presentation
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 
-export interface WizardStepShellProps {
+interface WizardStepShellProps {
   readonly children: React.ReactNode;
   readonly title: React.ReactNode;
   readonly subtitle: string;
