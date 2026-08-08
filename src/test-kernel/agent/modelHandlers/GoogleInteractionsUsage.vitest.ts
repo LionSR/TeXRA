@@ -76,6 +76,7 @@ describe('Google Interactions usage', () => {
   });
 
   it('returns a zeroed usage for a null payload', () => {
+    expect(computeGoogleInteractionsPrice(null, CONFIG)).toBe(0);
     const normalized = normalizeGoogleInteractionsUsage(null, 5, CONFIG);
     expect(normalized.inputTokens).toBe(0);
     expect(normalized.outputTokens).toBe(0);
