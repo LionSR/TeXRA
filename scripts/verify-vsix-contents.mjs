@@ -12,6 +12,7 @@ import {
   extensionManifestSnapshot,
   readJson,
   REQUIRED_CATALOG_CONTRIBUTES,
+  requiredMonacoWorkers,
   withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
@@ -194,8 +195,15 @@ function verifyDistEntrypoints(entries, failures) {
 // ~12MB of unreachable Monaco language workers into the VSIX once already, with
 // nothing failing. Pin it — the workers are never referenced by shipped code,
 // so their presence is always a bundling accident.
-const MONACO_WORKER_ENTRY =
-  /\/(?:\w+\.worker-\w+\.js|editorWebWorkerMain\.js)$/;
+// Matched by worker stem rather than by "anything named *.worker-*" so a
+// legitimate non-Monaco Vite worker in some future webview does not trip this.
+// requiredMonacoWorkers is the same list the desktop package checks are built
+// from, where these files are required rather than forbidden.
+const MONACO_WORKER_ENTRY = new RegExp(
+  `/(?:${[...requiredMonacoWorkers, 'editorWebWorkerMain']
+    .map((stem) => stem.replaceAll('.', '\\.'))
+    .join('|')})(?:-[A-Za-z0-9_-]+)?\\.js$`,
+);
 
 function verifyNoMonacoWorkers(entries, failures) {
   const workers = [...entries].filter((entry) =>
