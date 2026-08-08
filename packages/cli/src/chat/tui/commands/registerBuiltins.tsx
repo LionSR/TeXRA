@@ -341,7 +341,16 @@ export function registerBuiltinSlashCommands(options?: {
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<CliModelAccessSelection>({
           action: onModelAccessSelect,
-          onDone: props.onDone,
+          onDone: (value) => {
+            // Selecting "Your own API keys" switches to personal mode and then
+            // opens the API key configuration form so keys can be set in place
+            // instead of requiring a separate `/key` run.
+            if (value.kind === 'api-fallback' && value.apiMode === 'personal') {
+              openCliSlashCommandForm('key', '');
+              return;
+            }
+            props.onDone(value);
+          },
           onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
