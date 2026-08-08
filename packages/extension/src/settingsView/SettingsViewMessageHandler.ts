@@ -23,7 +23,10 @@ import {
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
+import {
+  SettingsProfileController,
+  SHARED_PROVIDER_PROFILE_DEFAULTS,
+} from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -83,11 +86,6 @@ import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/a
 import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
 import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_URLS,
-  PROVIDER_SETTINGS,
-} from '@shared/constants/providers';
-import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
@@ -103,13 +101,8 @@ import {
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import {
   setGlobalStreaming,
-  getProviderStreaming,
   setProviderStreaming,
-  getProviderEndpoint,
   setProviderEndpoint,
-  supportsCustomEndpoint,
-  getProviderDisplayName,
-  getProviderKeyUrl,
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
@@ -170,34 +163,23 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
     });
     this.profileController = new SettingsProfileController({
+      ...SHARED_PROVIDER_PROFILE_DEFAULTS,
       globalState: globalSM,
-      providerIds: SecretManager.API_PROVIDERS,
-      providerSettings: PROVIDER_SETTINGS,
-      providerDisplayNames: PROVIDER_DISPLAY_NAMES,
-      providerKeyUrls: PROVIDER_URLS,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
-      getProviderDisplayName,
-      getProviderKeyUrl,
-      getProviderStreaming,
-      getProviderEndpoint,
-      supportsCustomEndpoint,
       getConfig,
       updateConfig: (key, value) =>
         updateConfig(key, value, { target: 'global', prefix: false }),
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      invalidateModelOptionsCache,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),
       externalOpener: new VscodeExternalOpener(),
       getProviderDisplayName: (provider) =>
-        getProviderDisplayName(
-          provider,
-          PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-        ),
-      getProviderKeyUrl,
+        this.profileController.getProviderDisplayName(provider),
+      getProviderKeyUrl: (provider) =>
+        this.profileController.getProviderKeyUrl(provider),
       getApiKeySecretName: (provider) =>
         SecretManager.getApiKeySecretName(provider as ApiProvider),
       setSecret: (key, value) => SecretManager.set(key, value),
