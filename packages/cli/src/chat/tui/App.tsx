@@ -266,9 +266,13 @@ export function App(props: AppProps): React.JSX.Element {
     ],
   );
   // Rows Tab navigates to that are still in flight — the count the status bar
-  // advertises next to the Tab binding.
+  // advertises next to the Tab binding. `sessionViews` leads with the list
+  // root, so require a parent: the root session is not a background session.
   const childRunningCount = sessionViews.filter(
-    (view) => view.slice !== undefined && isActivePhase(view.slice.status),
+    (view) =>
+      view.parentId !== undefined &&
+      view.slice !== undefined &&
+      isActivePhase(view.slice.status),
   ).length;
   const pendingApprovalsForRows = useMemo(
     () => groupPendingApprovalsByRow(pendingSummaries, rootStreamId),
