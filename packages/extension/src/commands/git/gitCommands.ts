@@ -155,14 +155,12 @@ const GIT_INSTALL_OPTIONS: Partial<
 
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
-function isToolAvailable(tool: string): boolean {
-  return executeCommandSync([tool, '--version']).success;
-}
-
 async function promptGitMissing(): Promise<void> {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
   const command =
-    option && isToolAvailable(option.tool) ? option.command : null;
+    option && executeCommandSync([option.tool, '--version']).success
+      ? option.command
+      : null;
 
   let message: string;
   if (command) {

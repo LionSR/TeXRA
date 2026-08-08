@@ -1434,7 +1434,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     newResponse: string,
     _agentSetting: AgentSetting,
   ): boolean {
-    // DEBUG: Log the stop reason to help diagnose continuation issues
     this.logger.debug(
       `Checking if should continue - stop reason: "${stopReason}"`,
     );
@@ -1502,7 +1501,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(`Found ${thinkingBlocks.length} thinking blocks`);
 
     // If workspaceState is provided, update it with all thinking blocks
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+    if (
+      workspaceState &&
+      workspaceState.reasoning.thinkingBlocks.length === 0
+    ) {
       // Store all thinking blocks for future reference
       if (
         regularThinkingContent &&
@@ -1513,7 +1515,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         workspaceState.reasoning.thinkingBlocks = [
           ...thinkingBlocks,
         ] as ThinkingBlock[];
-        workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
           `Added ${thinkingBlocks.length} thinking blocks to workspaceState`,
         );

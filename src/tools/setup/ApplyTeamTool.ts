@@ -46,10 +46,6 @@ import { getSetupAuthStatus, getSetupPlatform } from './platform';
 const TEAM_CHOICES = [...AGENT_MODE_PRESETS, STARTER_AGENT_MODE_PRESET];
 const TEAM_IDS = TEAM_CHOICES.map((preset) => preset.id);
 
-function isTeamId(value: string): boolean {
-  return TEAM_IDS.includes(value);
-}
-
 function describeTeams(): string {
   return TEAM_CHOICES.map(
     (preset) => `- \`${preset.id}\` — ${preset.name}: ${preset.description}`,
@@ -59,7 +55,7 @@ function describeTeams(): string {
 const ApplyTeamInputSchema = z.strictObject({
   teamId: z
     .string()
-    .refine(isTeamId, {
+    .refine((value) => TEAM_IDS.includes(value), {
       message: `Expected one of: ${TEAM_IDS.join(', ')}`,
     })
     .describe(`Team to apply. One of:\n${describeTeams()}`),

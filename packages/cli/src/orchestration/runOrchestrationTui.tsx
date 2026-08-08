@@ -2,7 +2,8 @@ import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
 import { Select } from '@cli/tui/ui/Select';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import type { KeyHint } from '@cli/tui/ui/KeyHints';
+import { WizardStepShell } from '@cli/tui/ui/WizardStepShell';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
@@ -246,53 +247,6 @@ export function orchestrationLauncherLayout(
   };
 }
 
-/** One picker step: the shared header/list/hints scaffold every non-launcher
- *  step renders. The launcher overrides only the header with its branded row. */
-function StepShell({
-  children,
-  footerHints,
-  keyHints,
-  statusLines,
-  subtitle,
-  title,
-}: {
-  readonly children: React.ReactNode;
-  readonly footerHints: readonly string[];
-  readonly keyHints: readonly KeyHint[];
-  readonly statusLines: readonly string[];
-  readonly subtitle: string;
-  readonly title: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Box flexDirection="column" paddingX={1}>
-      {title}
-      <Text dimColor>{subtitle}</Text>
-      {statusLines.length > 0 ? (
-        <Box marginTop={1} flexDirection="column">
-          {statusLines.map((line, index) => (
-            <Text key={`${index}:${line}`} dimColor wrap="wrap">
-              {line}
-            </Text>
-          ))}
-        </Box>
-      ) : null}
-      <Box marginTop={1}>{children}</Box>
-      {footerHints.length > 0 ? (
-        <Box marginTop={1} flexDirection="column">
-          {footerHints.map((hint) => (
-            <Text key={hint} dimColor wrap="wrap">
-              {hint}
-            </Text>
-          ))}
-        </Box>
-      ) : null}
-      <Box marginTop={1}>
-        <KeyHints hints={keyHints} confirmCancel={false} />
-      </Box>
-    </Box>
-  );
-}
-
 export function OrchestrationApp(
   props: OrchestrationAppProps,
 ): React.JSX.Element {
@@ -445,7 +399,7 @@ export function OrchestrationApp(
   } as const;
 
   // One picker per step. Everything around it — header, status lines, footer
-  // hints, key hints — is the shared `StepShell` below, so a new step only
+  // hints, key hints — is the shared `WizardStepShell`, so a new step only
   // declares the list it shows and how Enter reads.
   let stepSelect: React.JSX.Element;
   let stepKeyHints: readonly KeyHint[];
@@ -520,7 +474,7 @@ export function OrchestrationApp(
   }
 
   return (
-    <StepShell
+    <WizardStepShell
       title={
         step.kind === 'launcher' ? (
           <Box gap={1}>
@@ -541,7 +495,7 @@ export function OrchestrationApp(
       keyHints={stepKeyHints}
     >
       {stepSelect}
-    </StepShell>
+    </WizardStepShell>
   );
 }
 

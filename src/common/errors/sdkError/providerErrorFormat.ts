@@ -62,6 +62,12 @@ import {
   parseKimiCodeSubscriptionLimit,
 } from './kimiCodeSubscriptionDetection';
 import {
+  describeGlmCodingPlanLimit,
+  describeGlmCodingPlanRateLimit,
+  isGlmCodingPlanRateLimit,
+  parseGlmCodingPlanLimit,
+} from './glmCodingPlanDetection';
+import {
   type SdkErrorEntry,
   SDK_ERRORS,
   SDK_ERRORS_BY_KIND,
@@ -270,6 +276,20 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const kimiCodeSubscriptionMessage = kimiCodeSubscriptionLimit
     ? describeKimiCodeSubscriptionLimit(kimiCodeSubscriptionLimit)
     : undefined;
+  // GLM Coding Plan quota exhaustion — same pattern: a credential exhaustion
+  // that turns off the Coding Plan toggle on accept so GLM requests re-route
+  // through the regular pay-as-you-go endpoint.
+  const glmCodingPlanLimit = parseGlmCodingPlanLimit(rawErrorBody);
+  const isGlmCodingPlanLimited = glmCodingPlanLimit !== null;
+  const glmCodingPlanMessage = glmCodingPlanLimit
+    ? describeGlmCodingPlanLimit(glmCodingPlanLimit)
+    : undefined;
+  // GLM Coding Plan transient rate limit / overload (codes 1302/1305): surface
+  // a clear "retry in a moment" message, but keep it retryable — it is NOT a
+  // quota exhaustion, so no switch-to-regular-endpoint affordance.
+  const glmCodingPlanRateLimitMessage = isGlmCodingPlanRateLimit(rawErrorBody)
+    ? describeGlmCodingPlanRateLimit()
+    : undefined;
   // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
   // upstream-credit are independently detected first; relay monthly limit
   // (by body or message) is the remaining exhaustion condition. Explicit SDK
@@ -280,6 +300,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       exhaustionReason = 'chatgpt-subscription';
     } else if (isKimiCodeSubscriptionLimited) {
       exhaustionReason = 'kimi-code-subscription';
+    } else if (isGlmCodingPlanLimited) {
+      exhaustionReason = 'glm-coding-plan';
     } else if (isUpstreamCreditDepleted) {
       exhaustionReason = 'upstream-credit';
     } else if (
@@ -363,6 +385,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       message:
         chatgptSubscriptionMessage ??
         kimiCodeSubscriptionMessage ??
+        glmCodingPlanMessage ??
+        glmCodingPlanRateLimitMessage ??
         sdkMatch.message,
       // Credential-exhausted errors keep userRetryable=true so the retry
       // panel surfaces with the "Use your own API key" affordance, but
@@ -393,7 +417,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   return {
     ...classification,
     message:
-      chatgptSubscriptionMessage ?? kimiCodeSubscriptionMessage ?? message,
+      chatgptSubscriptionMessage ??
+      kimiCodeSubscriptionMessage ??
+      glmCodingPlanMessage ??
+      glmCodingPlanRateLimitMessage ??
+      message,
     statusCode,
     statusText,
     provider,

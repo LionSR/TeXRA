@@ -285,13 +285,8 @@ const CleanLatexdiffvcMessageSchema = z.object({
   ...latexdiffvcOperationFields,
 });
 
-const LatexdiffvcOperationMessageSchema = z.discriminatedUnion('command', [
-  PackLatexdiffvcMessageSchema,
-  CleanLatexdiffvcMessageSchema,
-]);
-export type LatexdiffvcOperationMessage = z.infer<
-  typeof LatexdiffvcOperationMessageSchema
->;
+export type LatexdiffvcOperationMessage =
+  PackLatexdiffvcMessage | z.infer<typeof CleanLatexdiffvcMessageSchema>;
 
 const GitDiffMessages = [
   RequestRecentCommitsMessageSchema,

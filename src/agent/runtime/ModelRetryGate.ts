@@ -323,7 +323,11 @@ export class ModelRetryGate {
     state.retryAt =
       Date.now() +
       Math.max(
-        this.backoffMs(baseBackoffMs, state.failures),
+        jitteredExponentialBackoffMs(
+          baseBackoffMs,
+          state.failures,
+          MAX_BACKOFF_MS,
+        ),
         failure.retryAfterMs ?? 0,
       );
     this.scheduleProbe(state);
@@ -417,14 +421,6 @@ export class ModelRetryGate {
         });
       },
       Math.max(0, state.retryAt - Date.now()),
-    );
-  }
-
-  private backoffMs(baseBackoffMs: number, failures: number): number {
-    return jitteredExponentialBackoffMs(
-      baseBackoffMs,
-      failures,
-      MAX_BACKOFF_MS,
     );
   }
 }

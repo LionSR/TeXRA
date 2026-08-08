@@ -105,10 +105,6 @@ function elideOutputLines(lines: readonly string[]): ElidedOutput {
   };
 }
 
-function elisionMarker(hiddenCount: number): string {
-  return `… +${hiddenCount} lines (Ctrl-T to view full output)`;
-}
-
 // Generic fallback for tools without a curated preview field in
 // `deriveToolInputPreview` (@shared/tools/toolInputPreview): show whichever
 // of these fields exists first. Order matters: earlier keys win.
@@ -311,7 +307,10 @@ function outputRows(
     rows.push(
       row([
         CONTINUATION_PREFIX_SPAN,
-        { text: elisionMarker(sliced.hiddenCount), dim: true },
+        {
+          text: `… +${sliced.hiddenCount} lines (Ctrl-T to view full output)`,
+          dim: true,
+        },
       ]),
     );
   }
@@ -473,19 +472,17 @@ export function toolUseStyledLines(
   return lines;
 }
 
-function lineText(line: ToolDisplayLine): readonly string[] {
-  return line.kind === 'patch'
-    ? line.textLines
-    : [line.spans.map((span) => span.text).join('')];
-}
-
 /** Plain-text projection of the same styled lines, for row budgeting, static
  *  row counting, and ctrl+t full-output printing. */
 export function toolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options?: DisplayLineOptions,
 ): readonly string[] {
-  return toolUseStyledLines(toolUse, options).flatMap(lineText);
+  return toolUseStyledLines(toolUse, options).flatMap((line) =>
+    line.kind === 'patch'
+      ? line.textLines
+      : [line.spans.map((span) => span.text).join('')],
+  );
 }
 
 /** Tool detail rows are separated from the next conversation entry. Derive

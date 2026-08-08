@@ -4,6 +4,7 @@ import {
   apiKeyEnvName,
   apiKeyExistsUncached,
   apiKeySecretName,
+  configuredApiKeyProviders,
   hasUsableApiKey,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -121,6 +122,24 @@ describe('API provider key caches', () => {
     ).resolves.toEqual({
       openai: 'env',
     });
+  });
+
+  it('lists only providers with a configured key (secret or env)', async () => {
+    const { secrets } = createSecrets(
+      { [apiKeySecretName('openai')]: 'sk-test' },
+      { MOONSHOT_API_KEY: 'from-env' },
+    );
+
+    await expect(configuredApiKeyProviders(secrets)).resolves.toEqual([
+      'openai',
+      'moonshot',
+    ]);
+  });
+
+  it('reports no configured providers when every key is absent', async () => {
+    const { secrets } = createSecrets();
+
+    await expect(configuredApiKeyProviders(secrets)).resolves.toEqual([]);
   });
 
   it('treats empty env keys as missing in uncached lookups', async () => {

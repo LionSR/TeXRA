@@ -36,7 +36,7 @@ import {
 import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-  isCliKimiCodeSubscriptionRetry,
+  isCliCodingPlanRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -75,12 +75,19 @@ import {
 } from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import { filterNotNullish } from '@utils/core';
-import { getPreferKimiCode } from '@utils/config/providerConfig';
+import {
+  getGLMCodingPlan,
+  getPreferKimiCode,
+} from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
-import { setCliCodexSubscription, setCliKimiCode } from './codexSubscription';
+import {
+  setCliCodexSubscription,
+  setCliGlmCodingPlan,
+  setCliKimiCode,
+} from './codexSubscription';
 import {
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
@@ -113,7 +120,7 @@ function maybeAutoSwitchRetry(
 ): ApprovalDecision | undefined {
   if (!isCliApiSwitchableRetry(payload)) return undefined;
   if (isCliChatGptSubscriptionRetry(payload)) return undefined;
-  if (isCliKimiCodeSubscriptionRetry(payload)) return undefined;
+  if (isCliCodingPlanRetry(payload)) return undefined;
 
   const details = payload.errorDetails;
   // Upstream credit depletion means the stored direct key IS the broken
@@ -592,9 +599,11 @@ async function switchRetryToPersonalCredentials(
         const previousApiMode = getCliApiMode();
         const previousOpenRouter = cliOpenRouterEnabled();
         const previousSubscriptionPreference = isPreferCodexSubscription();
+        const previousGlmCodingPlan = getGLMCodingPlan();
         const previousKimiCodePreference = getPreferKimiCode();
         let apiModeWriteStarted = false;
         let subscriptionWriteStarted = false;
+        let glmCodingPlanWriteStarted = false;
         let kimiCodeWriteStarted = false;
         try {
           if (decision.apiMode) {
@@ -614,6 +623,11 @@ async function switchRetryToPersonalCredentials(
                 'ChatGPT subscription remains enabled by a more specific setting.',
               );
             }
+            signal.throwIfAborted();
+          }
+          if (decision.disableGlmCodingPlan) {
+            glmCodingPlanWriteStarted = true;
+            await runRetryTask(() => setCliGlmCodingPlan(false), signal);
             signal.throwIfAborted();
           }
           if (decision.disableKimiCode) {
@@ -649,6 +663,25 @@ async function switchRetryToPersonalCredentials(
                     'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
                   restoreFailedContext:
                     'Could not restore the ChatGPT subscription preference',
+                })
+              : undefined;
+          const glmCodingPlanFailure =
+            glmCodingPlanWriteStarted && !getGLMCodingPlan()
+              ? await attemptRollback({
+                  restore: async () => {
+                    await setCliGlmCodingPlan(previousGlmCodingPlan);
+                    if (getGLMCodingPlan() !== previousGlmCodingPlan) {
+                      throw new Error(
+                        `GLM Coding Plan remained ${String(getGLMCodingPlan())}.`,
+                      );
+                    }
+                  },
+                  restoredInMemory: () =>
+                    getGLMCodingPlan() === previousGlmCodingPlan,
+                  memoryRestoredContext:
+                    'The previous GLM Coding Plan setting appears restored in memory, but persistence could not be confirmed',
+                  restoreFailedContext:
+                    'Could not restore the GLM Coding Plan setting',
                 })
               : undefined;
           const kimiCodeFailure =
@@ -708,6 +741,7 @@ async function switchRetryToPersonalCredentials(
               : undefined;
           const rollbackFailures = [
             subscriptionFailure,
+            glmCodingPlanFailure,
             kimiCodeFailure,
             apiModeFailure,
             openRouterFailure,

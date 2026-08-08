@@ -10,10 +10,6 @@ import type { ZodType } from 'zod';
 
 const CHANNEL = 'configUtils';
 
-interface ConfigSubscriptionContext {
-  subscriptions: Disposable[];
-}
-
 interface UpdateConfigOptions {
   target?: ConfigTarget;
   prefix?: boolean;
@@ -118,7 +114,7 @@ export async function updateConfig<T>(
  * @returns Disposable for the registered listener
  */
 export function watchConfig(
-  context: ConfigSubscriptionContext,
+  context: { subscriptions: Disposable[] },
   keys: string | string[],
   callback: () => void,
 ): Disposable {

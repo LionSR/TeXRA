@@ -22,21 +22,21 @@ const IDLE_RESULT = {
   retried: false,
   disabledIncludedModelAccess: false,
   disabledChatGptSubscription: false,
-  disabledKimiCodeSubscription: false,
+  disabledCodingPlans: [],
 };
 const RETRIED_WITH_OWN_KEY_RESULT = {
   proceeded: true,
   retried: true,
   disabledIncludedModelAccess: true,
   disabledChatGptSubscription: false,
-  disabledKimiCodeSubscription: false,
+  disabledCodingPlans: [],
 };
 
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
   preferChatGptSubscription?: boolean;
-  preferKimiCode?: boolean;
+  glmCodingPlan?: boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
 }
@@ -47,7 +47,7 @@ function createHarness(options: HarnessOptions = {}): {
   prompts: Array<ApiProvider | undefined>;
   includedAccessValues: boolean[];
   chatGptSubscriptionValues: boolean[];
-  kimiCodeSubscriptionValues: boolean[];
+  glmCodingPlanValues: boolean[];
   invalidations: number;
   retries: string[];
 } {
@@ -59,9 +59,9 @@ function createHarness(options: HarnessOptions = {}): {
   const prompts: Array<ApiProvider | undefined> = [];
   const includedAccessValues: boolean[] = [];
   const chatGptSubscriptionValues: boolean[] = [];
-  const kimiCodeSubscriptionValues: boolean[] = [];
+  const glmCodingPlanValues: boolean[] = [];
   let preferChatGptSubscription = options.preferChatGptSubscription ?? true;
-  let preferKimiCode = options.preferKimiCode ?? true;
+  let glmCodingPlan = options.glmCodingPlan ?? true;
   let invalidations = 0;
   const retries: string[] = [];
 
@@ -70,7 +70,7 @@ function createHarness(options: HarnessOptions = {}): {
     prompts,
     includedAccessValues,
     chatGptSubscriptionValues,
-    kimiCodeSubscriptionValues,
+    glmCodingPlanValues,
     get invalidations() {
       return invalidations;
     },
@@ -93,11 +93,16 @@ function createHarness(options: HarnessOptions = {}): {
         preferChatGptSubscription = enabled;
         chatGptSubscriptionValues.push(enabled);
       },
-      getPreferKimiCode: () => preferKimiCode,
-      setPreferKimiCode: async (enabled) => {
-        preferKimiCode = enabled;
-        kimiCodeSubscriptionValues.push(enabled);
-      },
+      codingPlanToggles: [
+        {
+          exhaustionReason: 'glm-coding-plan',
+          getEnabled: () => glmCodingPlan,
+          setEnabled: async (enabled) => {
+            glmCodingPlan = enabled;
+            glmCodingPlanValues.push(enabled);
+          },
+        },
+      ],
       invalidateModelOptionsCache: () => {
         invalidations += 1;
       },
@@ -294,7 +299,7 @@ describe('ProgressApiKeyRetryController', () => {
       retried: true,
       disabledIncludedModelAccess: true,
       disabledChatGptSubscription: true,
-      disabledKimiCodeSubscription: false,
+      disabledCodingPlans: [],
     });
     // The subscription quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
@@ -322,51 +327,55 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, []);
   });
 
-  it('disables the Kimi Code preference and retries with the existing Moonshot key, no prompt', async () => {
+  it('disables the GLM Coding Plan and retries with the existing GLM key, no prompt', async () => {
     const harness = createHarness({
-      keys: { moonshot: 'stored-moonshot' },
+      keys: { glm: 'stored-glm' },
     });
 
     const result = await harness.controller.useOwnApiKey({
-      stream: 'stream-kimi',
-      requestId: 'retry-kimi',
-      provider: 'moonshot',
-      exhaustionReason: 'kimi-code-subscription',
+      stream: 'stream-glm',
+      requestId: 'retry-glm',
+      provider: 'glm',
+      exhaustionReason: 'glm-coding-plan',
     });
 
-    // The Kimi Code switch also drops relay so the retry reaches the stored
-    // Moonshot key rather than the relay JWT.
     assert.deepEqual(result, {
       proceeded: true,
       retried: true,
-      disabledIncludedModelAccess: true,
+      disabledIncludedModelAccess: false,
       disabledChatGptSubscription: false,
-      disabledKimiCodeSubscription: true,
+      disabledCodingPlans: ['glm-coding-plan'],
     });
-    // The subscription quota failed, not the key — a stored key is already
+    // The coding-plan quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
     assert.deepEqual(harness.prompts, []);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.deepEqual(harness.kimiCodeSubscriptionValues, [false]);
-    assert.equal(harness.invalidations, 2);
-    assert.deepEqual(harness.retries, ['stream-kimi']);
+    assert.deepEqual(harness.includedAccessValues, []);
+    assert.deepEqual(harness.glmCodingPlanValues, [false]);
+    assert.equal(harness.invalidations, 1);
+    assert.deepEqual(harness.retries, ['stream-glm']);
   });
 
-  it('does not disable the Kimi Code preference when no usable Moonshot key is available', async () => {
-    const harness = createHarness({ keys: {} });
-
-    const result = await harness.controller.useOwnApiKey({
-      stream: 'stream-kimi2',
-      requestId: 'retry-kimi2',
-      provider: 'moonshot',
-      exhaustionReason: 'kimi-code-subscription',
+  it('does not disable the GLM Coding Plan when it is already off', async () => {
+    const harness = createHarness({
+      keys: { glm: 'stored-glm' },
+      glmCodingPlan: false,
     });
 
-    assert.deepEqual(result, IDLE_RESULT);
-    // No usable key exists, so the prompt is still shown (then declined here).
-    assert.deepEqual(harness.prompts, ['moonshot']);
-    assert.deepEqual(harness.kimiCodeSubscriptionValues, []);
-    assert.deepEqual(harness.retries, []);
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-glm2',
+      requestId: 'retry-glm2',
+      provider: 'glm',
+      exhaustionReason: 'glm-coding-plan',
+    });
+
+    assert.deepEqual(result, {
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: [],
+    });
+    assert.deepEqual(harness.glmCodingPlanValues, []);
   });
 
   it('prepares an existing direct key for a fresh Copilot fallback without retrying in place', async () => {
