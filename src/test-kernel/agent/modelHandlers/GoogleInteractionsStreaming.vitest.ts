@@ -160,7 +160,7 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
     // Thought signature is captured onto the round-trip ThoughtStep and persisted
     // into workspace reasoning state.
     const workspaceState = {
-      reasoning: { thinkingAdded: false, thinkingBlocks: [] as unknown[] },
+      reasoning: { thinkingBlocks: [] as unknown[] },
     } as unknown as AgentWorkspaceState;
     handler.processThinkingBlock(result.response, workspaceState);
     const blocks = workspaceState.reasoning.thinkingBlocks as Array<{

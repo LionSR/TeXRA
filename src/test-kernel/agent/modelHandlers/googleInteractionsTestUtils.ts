@@ -38,16 +38,14 @@ export function userStep(text: string): Interactions.Step {
  * handler touches during a tool round-trip.
  */
 export function fakeWorkspace(): AgentWorkspaceState {
-  const reasoning = { thinkingBlocks: [], thinkingAdded: false } as {
+  const reasoning = { thinkingBlocks: [] } as {
     thinkingBlocks: Array<{ thinking?: string; signature?: string }>;
-    thinkingAdded: boolean;
   };
   return {
     reasoning,
     resetServerToolContent: () => undefined,
     resetReasoning: () => {
       reasoning.thinkingBlocks = [];
-      reasoning.thinkingAdded = false;
     },
   } as unknown as AgentWorkspaceState;
 }
