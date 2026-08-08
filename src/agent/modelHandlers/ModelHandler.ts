@@ -126,7 +126,7 @@ import {
  * module must stay free of provider SDK imports so host startup can load base
  * handler code without pulling OpenAI/Anthropic/Google clients into the eager graph.
  */
-export type SdkErrorTagger = (err: unknown, provider: string) => void;
+type SdkErrorTagger = (err: unknown, provider: string) => void;
 
 interface ClientCompactionResult<M> {
   compactedMessages: M[];

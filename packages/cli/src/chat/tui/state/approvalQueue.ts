@@ -304,18 +304,8 @@ function approvalQueueStatusKind(
 export function approvalPayloadStreamId(
   payload: ApprovalPayload,
 ): StreamTabId | undefined {
-  switch (payload.kind) {
-    case 'bash':
-    case 'planApproval':
-    case 'proposal':
-    case 'retry':
-    case 'externalInquiry':
-    case 'userQuestion':
-    case 'toolEdit':
-      return payload.payload.streamId || undefined;
-    default:
-      return assertNever(payload, 'Unhandled approval payload kind');
-  }
+  // Every payload variant carries a `streamId` field; all resolve the same way.
+  return payload.payload.streamId || undefined;
 }
 
 /**

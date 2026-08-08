@@ -304,7 +304,7 @@ export class StreamLogStore {
   // -- StreamState record access -------------------------------------------
   // The `streams` map holds one record per resident stream. Field reads are
   // done inline (`this.streams.get(id)?.field`); only get-or-create, the
-  // empty-record prune, and the two multi-caller iterations are factored out.
+  // empty-record prune, and the pending-loads iteration are factored out.
 
   private ensureStreamState(streamId: StreamTabId): StreamState {
     return this.streams.getOrCreate(streamId);
@@ -328,11 +328,6 @@ export class StreamLogStore {
         s.pendingLoad === undefined &&
         s.writer === undefined,
     );
-  }
-
-  /** Snapshot of streams with unsaved changes (list form of `dirtyIds`). */
-  private dirtyStreamIds(): StreamTabId[] {
-    return [...this.dirtyIds];
   }
 
   /** In-flight `ensureLoaded` promises across every resident stream. */
@@ -1017,7 +1012,7 @@ export class StreamLogStore {
       } else {
         // No in-flight work. Decide whether anything deferred can still
         // be persisted in another save cycle.
-        const dirty = this.dirtyStreamIds();
+        const dirty = [...this.dirtyIds];
         const canRetry = dirty.some(
           (id) => this.streams.get(id)?.loadFailed !== true,
         );
@@ -1431,7 +1426,7 @@ export class StreamLogStore {
     // empty-plus-new-appends log before `ensureLoaded` merges disk entries
     // back in. Keep them dirty so the next save retries after the load
     // resolves.
-    const allDirty = this.dirtyStreamIds();
+    const allDirty = [...this.dirtyIds];
     this.dirtyIds.clear();
     const toWrite: StreamTabId[] = [];
     for (const streamId of allDirty) {

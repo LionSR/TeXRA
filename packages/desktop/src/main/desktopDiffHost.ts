@@ -36,15 +36,6 @@ export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): Pick<DiffViewHost, 'openDiff'> {
-  // Renders the diff in the Review workbench (`<texra-diff-view>`), or
-  // reports `false` so the caller falls back to the external editor.
-  function tryShowDiffInRenderer(message: DesktopShowDiffMessage): boolean {
-    return tryShowInRenderer(
-      { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
-      message,
-    );
-  }
-
   async function openDiff(
     original: DiffSource,
     proposed: DiffSource,
@@ -62,16 +53,19 @@ export function createDesktopDiffHost(
     // Prefer the in-app Review workbench when wired. A `false` return value or
     // a thrown error opts into the external-editor fallback (covers the
     // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
-    const shownInRenderer = tryShowDiffInRenderer({
-      command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-      title,
-      displayPath: title.replace(/^Tool edit:\s*/, ''),
-      originalText: originalContent,
-      proposedText: proposedContent,
-      additions: lineChanges.added,
-      deletions: lineChanges.removed,
-      language: monacoLanguageForFilePath(proposed.filePath),
-    });
+    const shownInRenderer = tryShowInRenderer(
+      { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
+      {
+        command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
+        title,
+        displayPath: title.replace(/^Tool edit:\s*/, ''),
+        originalText: originalContent,
+        proposedText: proposedContent,
+        additions: lineChanges.added,
+        deletions: lineChanges.removed,
+        language: monacoLanguageForFilePath(proposed.filePath),
+      } satisfies DesktopShowDiffMessage,
+    );
     if (shownInRenderer) return { original, proposed, title };
 
     // External-editor fallback: write a unified patch file and open it.
