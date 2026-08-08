@@ -41,6 +41,7 @@ export {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
   listExecutions,
+  listExecutionStreamReferences,
   deleteExecution,
   deleteAllExecutions,
   isAgentRunEntry,
