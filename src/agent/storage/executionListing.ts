@@ -15,7 +15,12 @@ import {
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId, RunIdentity, RunOutcome } from '@shared/schemas';
+import type {
+  ExecutionId,
+  RunIdentity,
+  RunOutcome,
+  StreamTabId,
+} from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -122,6 +127,44 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
 // ============================================================================
 // Public API
 // ============================================================================
+
+export interface ExecutionStreamReference {
+  readonly executionId: ExecutionId;
+  readonly streamId: StreamTabId;
+}
+
+/**
+ * List execution→stream references recorded in readable execution metadata.
+ *
+ * This deliberately does not infer ownership for metadata without `streamId`,
+ * or for malformed metadata. Those rows are retained: the sweep's only safe
+ * deletion authority is the registered execution→stream edge itself.
+ */
+export async function listExecutionStreamReferences(): Promise<
+  ExecutionStreamReference[]
+> {
+  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
+  const executionDirs = listExecutionDirs(entries);
+  const results = await pMap(
+    executionDirs,
+    async (executionId): Promise<ExecutionStreamReference | null> => {
+      try {
+        const meta = await getExecutionStore(executionId).readMetaStrict();
+        if (!meta?.streamId) return null;
+        return { executionId, streamId: meta.streamId };
+      } catch (error) {
+        logger.warn(
+          CHANNEL,
+          `Skipping execution ${executionId} with unreadable metadata during orphan cleanup: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        return null;
+      }
+    },
+    { concurrency: EXECUTION_STORAGE_CONCURRENCY },
+  );
+  return results.filter(filterNotNull);
+}
 
 /**
  * List all executions by scanning the executions/ directory.

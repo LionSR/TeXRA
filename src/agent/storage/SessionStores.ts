@@ -4,8 +4,10 @@ import PQueue from 'p-queue';
 // Local imports
 import {
   deleteExecution as deleteStoredExecution,
+  listExecutionStreamReferences,
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
+  type ExecutionStreamReference,
 } from '@agent/storage/executionListing';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import { isBackgroundShellStream } from '@agent/runtime/streamTab';
@@ -22,6 +24,9 @@ type DeleteExecutionFn = (
   executionId: ExecutionId,
   options?: DeleteExecutionOptions,
 ) => Promise<DeleteExecutionResult>;
+type ListExecutionStreamReferencesFn = () => Promise<
+  ExecutionStreamReference[]
+>;
 
 interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
@@ -32,6 +37,7 @@ export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
   snapshots: StreamSnapshotStore;
   deleteExecution?: DeleteExecutionFn;
+  listExecutionStreamReferences?: ListExecutionStreamReferencesFn;
   goalEntries?: GoalEntryStore;
   /** Runs after a canonical transcript stream is committed as deleted. */
   onCanonicalStreamDeleted?: (stream: StreamTabId) => void | Promise<void>;
@@ -66,6 +72,7 @@ export class SessionStores {
   private readonly streamLogs: StreamLogStore;
   private readonly snapshots: StreamSnapshotStore;
   private readonly deleteExecution: DeleteExecutionFn;
+  private readonly listExecutionStreamReferences: ListExecutionStreamReferencesFn;
   private readonly goalEntries: GoalEntryStore | undefined;
   private readonly onCanonicalStreamDeleted:
     ((stream: StreamTabId) => void | Promise<void>) | undefined;
@@ -80,6 +87,8 @@ export class SessionStores {
     this.streamLogs = options.streamLogs;
     this.snapshots = options.snapshots;
     this.deleteExecution = options.deleteExecution ?? deleteStoredExecution;
+    this.listExecutionStreamReferences =
+      options.listExecutionStreamReferences ?? listExecutionStreamReferences;
     this.goalEntries = options.goalEntries;
     this.onCanonicalStreamDeleted = options.onCanonicalStreamDeleted;
   }
@@ -576,7 +585,55 @@ export class SessionStores {
         }
       }),
     );
+    sweptExecutionIds.push(
+      ...(await this.sweepOrphanedExecutions(liveStreams)),
+    );
     return { streams: sweptStreams, executionIds: sweptExecutionIds };
+  }
+
+  /**
+   * Sweep execution directories whose explicit metadata reference is absent
+   * from the persistent transcript index. Metadata without a `streamId` and
+   * unreadable metadata stay untouched: they do not establish ownership.
+   */
+  private async sweepOrphanedExecutions(
+    liveStreams: ReadonlySet<StreamTabId>,
+  ): Promise<ExecutionId[]> {
+    let references;
+    try {
+      references = await this.listExecutionStreamReferences();
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Skipping execution-side orphan cleanup; startup will continue: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return [];
+    }
+
+    const swept: ExecutionId[] = [];
+    for (const { executionId, streamId } of references) {
+      if (liveStreams.has(streamId) || this.streamLogs.has(streamId)) continue;
+      try {
+        const result = await this.enqueueDeletion(async () => {
+          // A stream can be registered by another host between this process's
+          // scan and deletion. Only the durable transcript index may admit the
+          // irreversible delete; this instance's cached summary is a prefilter.
+          if (await this.streamLogs.hasAuthoritativeStream(streamId)) {
+            return undefined;
+          }
+          return this.deleteExecution(executionId);
+        });
+        if (result?.status === 'deleted') swept.push(executionId);
+      } catch (error) {
+        logger.warn(
+          CHANNEL,
+          `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+          { data: error },
+        );
+      }
+    }
+    return swept;
   }
 
   private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
