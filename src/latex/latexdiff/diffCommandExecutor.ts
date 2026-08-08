@@ -35,10 +35,6 @@ export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = Object.freeze([
   'smartcite\\*?',
 ] as const);
 
-function buildLatexdiffTextCommandExclusionFlag(): string {
-  return `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`;
-}
-
 export const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
 
 export function resolveLatexdiffSubtype(options?: {
@@ -127,7 +123,7 @@ export class DiffCommandExecutor {
   ): string[] {
     return [
       '--graphics-markup=none',
-      buildLatexdiffTextCommandExclusionFlag(),
+      `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`,
       `--math-markup=${mathMarkup}`,
       ...(subtype ? [`--subtype=${subtype}`] : []),
     ];

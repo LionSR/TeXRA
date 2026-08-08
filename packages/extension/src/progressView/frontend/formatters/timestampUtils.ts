@@ -30,24 +30,19 @@ export function getTimeFormatter(): Intl.DateTimeFormat {
   return TIME_FORMATTER;
 }
 
-/** Get the date-time formatter. */
-function getDateTimeFormatter(): Intl.DateTimeFormat {
-  DATE_TIME_FORMATTER ??= new Intl.DateTimeFormat(
-    undefined,
-    DATETIME_FORMAT_OPTIONS,
-  );
-  return DATE_TIME_FORMATTER;
-}
-
 /** Format a timestamp for display. */
 export function formatDisplayTimestamp(date: Date): {
   fullTimestamp: string;
   timeDisplay: string;
   tooltipTimestamp: string;
 } {
+  DATE_TIME_FORMATTER ??= new Intl.DateTimeFormat(
+    undefined,
+    DATETIME_FORMAT_OPTIONS,
+  );
   return {
     fullTimestamp: date.toISOString(),
     timeDisplay: getTimeFormatter().format(date),
-    tooltipTimestamp: getDateTimeFormatter().format(date),
+    tooltipTimestamp: DATE_TIME_FORMATTER.format(date),
   };
 }
