@@ -19,7 +19,6 @@ import {
 
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
-import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { renderSplitButtonMenu } from '@shared/wa/splitButton';
@@ -41,8 +40,6 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   ];
 
   protected readonly approvalDecision = { action: 'approve' } as const;
-
-  @state() private inlineDiffOpen = false;
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 'd') {
@@ -70,7 +67,6 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
       leadingActions: this.renderDiffActions(),
-      trailing: this.renderInlineDiff(data),
     });
   }
 
@@ -81,26 +77,14 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   private renderDiffActions(): TemplateResult {
     const data = this.permission.data;
     const showDropdown = Boolean(data.isLatex);
-    const hasInlineDiff = this.hasInlineDiff(data);
-
-    const diffLabel =
-      hasInlineDiff && this.inlineDiffOpen ? 'Hide diff' : 'Open diff';
-    let diffTitle: string;
-    if (!hasInlineDiff) {
-      diffTitle = 'Open diff (d)';
-    } else if (this.inlineDiffOpen) {
-      diffTitle = 'Hide inline diff (d)';
-    } else {
-      diffTitle = 'Open inline diff (d)';
-    }
 
     return html`
       <div class="diff-dropdown split-button">
         ${renderLabeledActionButton({
           id: 'tool-edit-diff-button',
           icon: 'code-compare',
-          text: diffLabel,
-          tooltip: diffTitle,
+          text: 'Open diff',
+          tooltip: 'Open diff (d)',
           className: 'diff-main-button split-button-main',
           onClick: this.handleDiffAction,
         })}
@@ -124,23 +108,6 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
             : nothing
         }
       </div>
-    `;
-  }
-
-  private renderInlineDiff(
-    data: ToolEditPermission,
-  ): TemplateResult | typeof nothing {
-    if (!this.inlineDiffOpen || !this.hasInlineDiff(data)) {
-      return nothing;
-    }
-
-    return html`
-      <texra-diff-view
-        class="approval-request__inline-diff"
-        .originalText=${data.originalContent ?? ''}
-        .proposedText=${data.proposedContent ?? ''}
-        .language=${monacoLanguageForPath(data.path)}
-      ></texra-diff-view>
     `;
   }
 
@@ -195,23 +162,12 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
     }
   };
 
+  // Every host answers `openDiff` with its own diff surface: the extension
+  // opens a VS Code diff tab (VscodeDiffViewHost), the desktop posts
+  // `desktop:showDiff` to its Review workbench (desktopDiffHost).
   private handleDiffAction = (): void => {
-    const data = this.permission.data;
-    if (this.hasInlineDiff(data)) {
-      this.inlineDiffOpen = !this.inlineDiffOpen;
-      return;
-    }
     this.emitAction({ action: 'openDiff' });
   };
-
-  private hasInlineDiff(data: ToolEditPermission): boolean {
-    // Only the desktop registers <texra-diff-view>; the extension and trace
-    // viewer ship no Monaco and fall through to openDiff (VS Code's own diff).
-    // Read per call, not at module scope: the desktop imports the progressView
-    // barrel — and so this module — one line before it registers the element.
-    if (customElements.get('texra-diff-view') === undefined) return false;
-    return data.originalContent != null || data.proposedContent != null;
-  }
 }
 
 declare global {
