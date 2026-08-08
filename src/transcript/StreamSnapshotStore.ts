@@ -959,8 +959,43 @@ export class StreamSnapshotStore {
    */
   async stageDeleteStream(
     stream: StreamTabId,
+    onCommitted?: (children: readonly StreamTabId[]) => void | Promise<void>,
   ): Promise<StagedStreamSnapshotDeletion> {
-    return this.deletions.stage(stream);
+    const deletion = await this.deletions.stage(stream);
+    return {
+      commit: async () => {
+        await deletion.commit();
+        let children: StreamTabId[] = [];
+        try {
+          children = await this.detachPersistedChildren(stream);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} was deleted, but child parent-edge cleanup was incomplete.`,
+            { data: error },
+          );
+        }
+        try {
+          await onCommitted?.(children);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} was deleted, but child-detachment projection was incomplete.`,
+            { data: error },
+          );
+        }
+        try {
+          await this.flush();
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} was deleted, but child parent-edge persistence was incomplete.`,
+            { data: error },
+          );
+        }
+      },
+      rollback: () => deletion.rollback(),
+    };
   }
 
   /** Delete a stream's sidecars and in-memory state as one committed action. */
@@ -1173,6 +1208,22 @@ export class StreamSnapshotStore {
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
     return this.records.get(stream)?.meta?.parentStreamId;
+  }
+
+  /** Find and seed children before their canonical parent-detach facts emit. */
+  private async detachPersistedChildren(
+    parent: StreamTabId,
+  ): Promise<StreamTabId[]> {
+    await this.flush();
+    const children: StreamTabId[] = [];
+    for (const stream of await this.listPersistedStreams()) {
+      if (stream === parent) continue;
+      if ((await readMeta(this.kv(stream)))?.parentStreamId === parent) {
+        children.push(stream);
+      }
+    }
+    await this.preload(children);
+    return children.filter((child) => this.getParentStreamId(child) === parent);
   }
 
   /**
