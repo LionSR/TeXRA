@@ -258,8 +258,9 @@ export interface ResponseFinalizedEvent extends StageStamp {
 /**
  * Host-specific escape hatch. Hosts use this for events that aren't part
  * of the agent-general union (TeXRA: `latexdiff`, `scratchpad`,
- * `filesLoaded`, `missingOutputs`, `webSearch`, `webFetch`, …). Keeps the
- * union clean for SDK consumers; host subscribers switch on `key`.
+ * `filesLoaded`, `webSearch`, `webFetch`, …). Durable run facts such as
+ * `updateMissingOutputs` remain explicit `RunFactEvent` arms. Keeps the union
+ * clean for SDK consumers; host subscribers switch on `key`.
  */
 interface DomainEvent extends StageStamp {
   readonly type: 'domain';
