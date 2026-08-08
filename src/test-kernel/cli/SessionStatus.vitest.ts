@@ -227,9 +227,9 @@ describe('CLI session status formatter', () => {
     ).toContain('status: idle');
   });
 
-  it('uses the distinct child-stream label for a subagent stalled on follow-up', () => {
+  it('uses the idle wording for a subagent stalled on follow-up', () => {
     expect(formatCliStatusLabel(STREAM_PHASE.WAITING, undefined, true)).toBe(
-      'waiting for you',
+      'idle',
     );
   });
 
