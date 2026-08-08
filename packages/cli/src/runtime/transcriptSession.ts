@@ -61,6 +61,11 @@ async function initializePersistentSession(
       releaseStreamResources(stream, result.session);
     },
   });
+  // Leftover background shells go first: they leave the transcript index the
+  // orphan sweep then reads as its live set.
+  await stores.sweepEphemeralStreams(
+    new Set(result.session.transcripts.keys()),
+  );
   await stores.sweepOrphanedStreams(new Set(result.session.transcripts.keys()));
   return result;
 }
