@@ -2,21 +2,107 @@ import {
   createClient,
   SupabaseClient as Client,
   User,
+  type SupportedStorage,
 } from '@supabase/supabase-js';
 import * as logger from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { UserTierSchema, type UserTier } from './config';
+import {
+  SUPABASE_GOTRUE_STORAGE_KEY,
+  UserTierSchema,
+  type UserTier,
+} from './config';
 import {
   fetchRelayTokenStatus,
   getCachedRelayTokenState,
   getConfiguredRelayToken,
   markRelayTokenRejected,
 } from './relayToken';
+import type { SessionSecretStore } from './oauth/sessionAccess';
 import type {
   AuthTokenProvider,
   SessionTokens,
   StoredSessionState,
 } from './TokenProvider';
+
+/**
+ * GoTrue storage for the shared client.
+ *
+ * Browser OAuth is a two-hop handshake: the window that starts sign-in
+ * generates the PKCE `code_verifier`, and the deep link carrying the one-time
+ * `?code=` back is delivered by the OS to whichever editor window the host
+ * picks — not necessarily that one. GoTrue's own storage is a plain
+ * in-process object, so a callback landing in another window (or after the
+ * extension host reloaded) found no verifier and failed the exchange with
+ * `pkce_code_verifier_not_found`.
+ *
+ * Every key GoTrue derives from its storage key is PKCE flow state (the
+ * `-code-verifier` slots and their flow index); those go to the host secret
+ * store, which is shared across windows and survives a reload. The bare
+ * storage key is GoTrue's session slot and stays in memory on purpose: the
+ * host's own session record remains the single owner of the signed-in
+ * session, so nothing session-shaped is ever persisted here.
+ *
+ * This is the one shape `@supabase/auth-js` accepts, and it is only consulted
+ * when `persistSession` is true — hence that flag below.
+ *
+ * A callback that carries no flow id (TeXRA's does not: the auth-bridge deep
+ * link keeps `redirect_to` free of query parameters) clears the fixed verifier
+ * key on exchange but leaves its numbered slot behind. GoTrue caps those at
+ * five and evicts the oldest, so the leftovers are bounded and hold spent
+ * verifiers, which are worthless without their single-use auth code.
+ */
+function gotrueStorage(
+  secrets: SessionSecretStore | undefined,
+): SupportedStorage {
+  // Writes are mirrored here so a secret-store failure degrades to the old
+  // in-process behavior (same-window sign-in still completes) instead of
+  // losing the flow outright.
+  const memory = new Map<string, string>();
+  const flowStore = (key: string): SessionSecretStore | null =>
+    secrets !== undefined && key !== SUPABASE_GOTRUE_STORAGE_KEY
+      ? secrets
+      : null;
+  const warn = (action: string, key: string, error: unknown): void => {
+    logger.warn(
+      'SupabaseClient',
+      `Could not ${action} PKCE flow state (${key}); sign-in will only be ` +
+        `completable in this window: ${toErrorMessage(error)}`,
+    );
+  };
+
+  return {
+    getItem: async (key) => {
+      const store = flowStore(key);
+      if (!store) return memory.get(key) ?? null;
+      try {
+        return (await store.get(key)) ?? null;
+      } catch (error) {
+        warn('read', key, error);
+        return memory.get(key) ?? null;
+      }
+    },
+    setItem: async (key, value) => {
+      memory.set(key, value);
+      const store = flowStore(key);
+      if (!store) return;
+      try {
+        await store.set(key, value);
+      } catch (error) {
+        warn('store', key, error);
+      }
+    },
+    removeItem: async (key) => {
+      memory.delete(key);
+      const store = flowStore(key);
+      if (!store) return;
+      try {
+        await store.delete(key);
+      } catch (error) {
+        warn('clear', key, error);
+      }
+    },
+  };
+}
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -105,15 +191,19 @@ export class SupabaseClient {
   /**
    * Initialize the Supabase client with project credentials.
    */
-  static initialize(url: string, publicKey: string): void {
+  static initialize(
+    url: string,
+    publicKey: string,
+    secrets?: SessionSecretStore,
+  ): void {
     if (!url || !publicKey) {
       throw new Error(
         'Supabase credentials missing. Check the TeXRA configuration.',
       );
     }
-    // Idempotent re-init: returning the existing client preserves the in-memory
-    // PKCE code_verifier (persistSession:false) across the OAuth round-trip even
-    // if a host wires up the auth coordinator more than once.
+    // Idempotent re-init: returning the existing client preserves the pending
+    // PKCE flow state across the OAuth round-trip even if a host wires up the
+    // auth coordinator more than once.
     if (
       this.instance &&
       this.config?.url === url &&
@@ -124,11 +214,16 @@ export class SupabaseClient {
     this.config = { url, publicKey };
     this.instance = createClient(url, publicKey, {
       auth: {
-        persistSession: false, // The host's secret storage owns the session
+        // `persistSession` is what gates GoTrue's use of `storage` at all; the
+        // adapter above is what keeps this honest, writing PKCE flow state
+        // only and never the session, which the host's secret storage owns.
+        persistSession: true,
+        storage: gotrueStorage(secrets),
+        storageKey: SUPABASE_GOTRUE_STORAGE_KEY,
         autoRefreshToken: false, // Manual refresh via auth provider
         // PKCE: browser OAuth returns a one-time ?code= (not tokens) to the
-        // callback. The code_verifier stays in this client and is consumed by
-        // exchangeCodeForSession, so no access/refresh token ever transits the
+        // callback, which exchangeCodeForSession trades for a session using
+        // the stored verifier, so no access/refresh token ever transits the
         // browser or the auth-bridge page. detectSessionInUrl is off because
         // every host parses its own callback and exchanges the code explicitly.
         flowType: 'pkce',

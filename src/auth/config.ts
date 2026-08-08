@@ -271,3 +271,11 @@ export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;
 
 /** Key the stored Supabase session takes in the host's secret storage. */
 export const SUPABASE_SESSION_KEY = 'texra.supabase.session';
+
+/**
+ * GoTrue's own storage key. Pinned rather than left to the default derived
+ * from the URL host so the client's storage can tell the session slot (this
+ * exact key, kept in memory) from the PKCE flow state it derives from it
+ * (suffixed keys, persisted so a callback can land in any window).
+ */
+export const SUPABASE_GOTRUE_STORAGE_KEY = 'texra.supabase.gotrue';
