@@ -19,6 +19,7 @@ import {
 
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
+import { monacoLanguageForPath } from '@shared/monaco/monacoLoader';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { renderSplitButtonMenu } from '@shared/wa/splitButton';
@@ -26,9 +27,6 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseBypassApprovalPanel } from './BaseBypassApprovalPanel';
-
-// Local imports - helpers
-import { monacoLanguageForPath } from './monacoLanguage';
 
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
