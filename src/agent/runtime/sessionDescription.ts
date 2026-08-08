@@ -7,7 +7,7 @@
  * future agents can quickly understand each session.
  */
 
-import { getRosterAgent } from '@agent/index';
+import { resolveAgentForLaunch } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -17,7 +17,7 @@ import {
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { agentKey, type ExecutionId, type StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -116,17 +116,17 @@ export async function generateSessionDescription(
 
     const userPrompt = buildUserPrompt(
       config.agent,
-      // Resolve the entry the run actually launched: by the pinned source when
-      // the launch site captured one (two sources can hold the same name), and
-      // filtered to the run's own category rather than merely ordered by it —
-      // a bare-name lookup can otherwise return the other roster's agent and
-      // label this run with that agent's purpose.
-      getRosterAgent(
+      // The launch resolver, not a lookup of our own: `getAgentPath` is a thin
+      // wrapper over this same call, so the purpose we describe always belongs
+      // to the entry that actually ran. Any other resolver can diverge — by
+      // category, by pinned source, or by picking a higher-priority same-name
+      // agent the visible roster did not select — and label a run with a
+      // different agent's purpose.
+      resolveAgentForLaunch(
         config.agentCategory,
-        config.agentSource
-          ? agentKey(config.agentSource, config.agent)
-          : config.agent,
-      )?.description,
+        config.agent,
+        config.agentSource,
+      )?.entry.description,
       instruction,
     );
     const text = await runHelperModelCompletion(helperResult.kit, {
