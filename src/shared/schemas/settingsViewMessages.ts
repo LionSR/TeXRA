@@ -17,19 +17,29 @@ export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 // goal helpers are imported from '@shared/schemas/goal' directly.
 export { type Goal } from './goal';
 
-// Re-export types (and one constant) from the individual view-message
-// modules so the historical settings surface (single import site) stays
-// intact. The schemas themselves are no longer re-exported here — consumers
-// only ever needed the inferred types through this barrel.
+// Re-export the types and values needed by settings consumers from the
+// individual view-message modules so the historical settings surface (single
+// import site) stays intact. Keep this selective: the schemas themselves are
+// deliberately not re-exported here.
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
-export { type HistoryItem } from './historyViewMessages';
+export {
+  HISTORY_RUN_STATUS,
+  resolveHistoryRunStatus,
+  type HistoryItem,
+  type HistoryRunStatus,
+  type UpdateHistoryMessage,
+} from './historyViewMessages';
 
 export {
   API_ACCESS_MODE_OPTIONS,
+  type ApiAccessMode,
+  type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
-  type NumberSetting,
+  type RemoteAgent,
+  type SessionProblem,
+  type UpdateProfileMessage,
 } from './profileViewMessages';
 
 // Settings-specific data + outbound message schemas and the inbound schemas.

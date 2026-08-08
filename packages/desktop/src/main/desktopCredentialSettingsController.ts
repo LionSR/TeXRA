@@ -41,7 +41,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import { buildGrokAuthStatusMessage } from '@shared/settingsView/handlers/grokHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';

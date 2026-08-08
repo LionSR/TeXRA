@@ -28,7 +28,7 @@ import type {
   RetryPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
 

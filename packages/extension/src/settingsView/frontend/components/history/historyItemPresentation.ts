@@ -3,7 +3,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 import {
   HISTORY_RUN_STATUS,
   type HistoryRunStatus,
-} from '@shared/schemas/historyViewMessages';
+} from '@shared/schemas/settingsViewMessages';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { formatShortDateTime } from '@shared/utils/string';
 

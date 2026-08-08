@@ -8,7 +8,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { byCategory } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import {
   firstRunSetupAgentOverride,

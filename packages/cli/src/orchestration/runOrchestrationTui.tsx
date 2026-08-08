@@ -8,7 +8,7 @@ import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
   isCliOrchestrationModelPickAction,
   orchestrationModelAccessView,

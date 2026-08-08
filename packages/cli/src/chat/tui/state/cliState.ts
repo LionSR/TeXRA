@@ -29,7 +29,7 @@ import {
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,

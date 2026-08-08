@@ -62,7 +62,7 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { GoalStore } from '@tools/goal';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
