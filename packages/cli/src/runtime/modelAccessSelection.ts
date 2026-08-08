@@ -1,8 +1,9 @@
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { apiKeyExists } from '@model/apiProviders';
+import { API_PROVIDERS, apiKeyExists, lookupApiKeyOrigin } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
@@ -51,16 +52,23 @@ export function contextForCliModelAccess(
 export async function readCliModelAccessStatus(
   apiMode: ApiAccessMode,
 ): Promise<CliModelAccessStatus> {
-  const [chatGpt, grok, kimiCodeKeySet] = await Promise.all([
+  const secrets = platform().secrets;
+  const [chatGpt, grok, kimiCodeKeySet, keyOrigins] = await Promise.all([
     getCodexStatus(),
     getXaiStatus(),
-    apiKeyExists(platform().secrets, 'kimiCode'),
+    apiKeyExists(secrets, 'kimiCode'),
+    Promise.all(
+      API_PROVIDERS.map((provider) => lookupApiKeyOrigin(secrets, provider)),
+    ),
   ]);
   const preferences = {
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
     grok: isPreferXaiSubscription() ? 'on' : 'off',
     kimiCode: getPreferKimiCode() ? 'on' : 'off',
   } as const;
+  const personalKeyProviders = API_PROVIDERS.filter(
+    (_, index) => keyOrigins[index] !== 'none',
+  ).map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider);
   return {
     apiFallback: apiMode,
     preferences,
@@ -69,6 +77,7 @@ export async function readCliModelAccessStatus(
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
     kimiCodeKeySet,
+    personalKeyProviders,
   };
 }
 
