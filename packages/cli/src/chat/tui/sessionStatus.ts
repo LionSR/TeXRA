@@ -44,16 +44,15 @@ export function formatCliStatusLabel(
   substate?: StreamSubstate,
   isChildStream?: boolean,
 ): string {
-  // `formatStreamStatusLabel`'s 'cli' style already covers the child-stream
-  // vocabulary end to end, including the WAITING -> "waiting for you"
-  // override (`CLI_CHILD_WAITING_LABEL`) — no separate probe is needed here.
-  // A blank status renders as '' for a child row (no status column yet) and
-  // as '—' for the root session (an established placeholder slot).
+  // `formatStreamStatusLabel`'s 'cli' style covers the child-stream
+  // vocabulary end to end, including WAITING -> "idle" — no separate probe is
+  // needed here. A blank status renders as '' for a child row (no status
+  // column yet) and as '—' for the root session (an established placeholder
+  // slot).
   return formatStreamStatusLabel(status, {
     style: 'cli',
     missingLabel: isChildStream ? '' : '—',
     ...(substate ? { substate } : {}),
-    ...(isChildStream ? { isChildStream } : {}),
   });
 }
 

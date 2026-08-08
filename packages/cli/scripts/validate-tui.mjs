@@ -2725,7 +2725,7 @@ const SCENARIOS = [
     keys: ['\t'],
     expect: [
       'strategy running',
-      'leanSolver waiting for you',
+      'leanSolver idle',
       'reviewer error',
       '3 sub',
       'Tab input',
@@ -2844,8 +2844,8 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
-    expect: ['leanSolver w', '+3 sessions'],
-    maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
+    expect: ['leanSolver…', '+3 sessions'],
+    maxOccurrences: [{ text: 'leanSolver idle', max: 1 }],
   },
   {
     name: 'subagent-list-remembers-selection',
@@ -3122,7 +3122,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r', '\t', UP, '\r'],
     frame: 'viewport',
-    expect: ['◆ waiting for you', 'root active'],
+    expect: ['◆ idle', 'root active'],
     unexpect: [
       'Harness interrupt requested.',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
@@ -3245,7 +3245,7 @@ const SCENARIOS = [
       'Harness focused interrupt requested for harness-stream-1.',
       '› ✓ ● main stopped',
       'strategy running',
-      'leanSolver waiting for you',
+      'leanSolver idle',
       'reviewer running',
       '3 sub',
       'Choosing a session',
@@ -3273,7 +3273,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'strategy stopped',
-      'leanSolver waiting for you',
+      'leanSolver idle',
       'reviewer running',
       '3 subagents',
       'Choosing a session',
@@ -3294,7 +3294,7 @@ const SCENARIOS = [
     expect: [
       'strategy stopped',
       '› ✓ ● reviewer running',
-      'leanSolver waiting for you',
+      'leanSolver idle',
       'Tab input',
       'Ctrl-C stop root',
     ],
@@ -3328,7 +3328,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: [{ input: ESC, delayMs: 80 }, '2'],
     frame: 'viewport',
-    expect: ['waiting for you', 'root active', 'Tab sessions'],
+    expect: ['idle', 'root active', 'Tab sessions'],
     unexpect: [
       'Harness focused interrupt requested',
       'Harness interrupt requested.',
