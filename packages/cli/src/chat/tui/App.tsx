@@ -14,6 +14,7 @@ import {
 // Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { type StreamTabId } from '@shared/schemas';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 // Local imports - TUI surfaces and state
@@ -264,6 +265,15 @@ export function App(props: AppProps): React.JSX.Element {
       streams,
     ],
   );
+  // Rows Tab navigates to that are still in flight — the count the status bar
+  // advertises next to the Tab binding. `sessionViews` leads with the list
+  // root, so require a parent: the root session is not a background session.
+  const childRunningCount = sessionViews.filter(
+    (view) =>
+      view.parentId !== undefined &&
+      view.slice !== undefined &&
+      isActivePhase(view.slice.status),
+  ).length;
   const pendingApprovalsForRows = useMemo(
     () => groupPendingApprovalsByRow(pendingSummaries, rootStreamId),
     [pendingSummaries, rootStreamId],
@@ -738,6 +748,7 @@ export function App(props: AppProps): React.JSX.Element {
                 selectedChildWorkflowControllable
               }
               childNavigationAvailable={childListAvailable}
+              runningSessions={childRunningCount}
               shortcutsActive={focusShortcutsActive}
               streamFocusAvailable={sessionViews.length > 0}
               transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
