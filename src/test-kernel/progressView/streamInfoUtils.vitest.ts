@@ -65,8 +65,9 @@ describe('buildStreamTabInfo', () => {
       },
     });
 
-    // Never the raw `agent#executionId` handle — see streamTabInfo.ts.
-    expect(info.label).toBe('Pending session');
+    // The id's own prefix already is the clean agent name — see
+    // streamTabInfo.ts — so it's the label until identity resolves.
+    expect(info.label).toBe(CHILD_STREAM_ID);
     expect(info.identity).toBeUndefined();
     expect(info.agentCategory).toBeUndefined();
   });
