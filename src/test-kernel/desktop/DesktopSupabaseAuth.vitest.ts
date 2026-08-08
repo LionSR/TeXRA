@@ -20,7 +20,7 @@ import {
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
@@ -202,7 +202,11 @@ function installAuthenticatedSupabaseProvider() {
     refreshToken: 'refresh-token',
   }));
   const getStoredSessionState = vi.fn(async () => 'authenticated' as const);
-  SupabaseClient.initialize('https://example.supabase.co', 'public-key');
+  SupabaseClient.initialize(
+    'https://example.supabase.co',
+    'public-key',
+    new FakeSecrets(),
+  );
   SupabaseClient.setAuthProvider({
     whenReady: vi.fn(async () => {}),
     ensureFreshToken,
