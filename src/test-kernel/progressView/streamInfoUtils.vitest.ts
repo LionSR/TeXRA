@@ -29,8 +29,9 @@ describe('getStreamTabDisplayName', () => {
       id: 'orchestrator@opus46T#bf8234a371db',
       expected: 'orchestrator@opus46T',
     },
-    // An executionId may itself contain '#': split on the last one.
-    { id: 'bash@tool#exec#child', expected: 'bash@tool#exec' },
+    // An executionId may itself contain '#': the *first* separator wins, so
+    // none of the executionId leaks into the label.
+    { id: 'bash@tool#exec#child', expected: 'bash@tool' },
     // Not a minted id — shown verbatim rather than blanked.
     { id: 'no-separator', expected: 'no-separator' },
     { id: '#leading', expected: '#leading' },

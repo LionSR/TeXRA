@@ -265,13 +265,18 @@ export const streamTabStyles = css`
   }
 
   /* The chip shares the meta row with the timestamp and model — keep it
-     truncating instead of wrapping. Slightly lower opacity than its plain-text
-     siblings: which branch a row ran in matters less than who ran it
-     (.agent-name) or when — it's supplementary, not the headline fact, and
-     should read that way even on a row where it's the only thing shown. */
+     truncating instead of wrapping.
+
+     Deliberately no opacity de-emphasis here: opacity on the host would
+     composite every child — branch label, PR badge, diff stats, CI dot —
+     and several already use the translucent --wa-color-text-quiet at
+     --font-size-xs, which measures ~4.4:1 in Light Modern; multiplying that
+     puts real text under the normal-text contrast floor. The row's hierarchy
+     is carried the accessible way instead: .agent-name below sits at full
+     --wa-color-text-normal and semibold, so it reads as primary against its
+     muted siblings without dimming anything further. */
   .tab-meta worktree-chip {
     flex-shrink: 1;
-    opacity: 0.75;
   }
 
   /* A custom agent name is unbounded length — truncate rather than crowd

@@ -32,7 +32,12 @@ export function getStreamTabId(
  * never-resolved case.
  */
 export function getStreamTabDisplayName(streamId: string): string {
-  const separator = streamId.lastIndexOf('#');
+  // The *first* '#' is the separator: the format is `${name}#${executionId}`,
+  // so anything after it belongs to the executionId. Splitting on the last
+  // one would leak part of an executionId that contains '#', and would give
+  // that run a different label than the same agent's resolved run.
+  // (Mirrors `getCleanAgentName`, which splits on the first ':'.)
+  const separator = streamId.indexOf('#');
   // No separator, or a leading '#', means this is not a minted id — show it
   // verbatim rather than silently rendering an empty label.
   if (separator <= 0) return streamId;
