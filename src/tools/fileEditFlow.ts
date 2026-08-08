@@ -17,11 +17,17 @@ import { WorkspaceFS } from '@utils/files';
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.
- * Returns 0 for empty needles. Uses the same split semantics as
- * {@link replaceAllLiteral} so the count stays consistent with the replacement.
+ * Returns 0 for empty needles.
  */
 function countOccurrences(haystack: string, needle: string): number {
-  return needle.length === 0 ? 0 : haystack.split(needle).length - 1;
+  if (needle.length === 0) return 0;
+  let count = 0;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count++;
+    index = haystack.indexOf(needle, index + needle.length);
+  }
+  return count;
 }
 
 /**
