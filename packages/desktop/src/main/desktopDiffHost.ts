@@ -8,6 +8,7 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@hosts/uiHosts';
+import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import {
   computeLineChangeSummary,
   computeUserPatch,
@@ -17,7 +18,6 @@ import { createTexraTempDir } from '@utils/files/tempDir';
 import {
   DESKTOP_DIFF_COMMANDS,
   type DesktopShowDiffMessage,
-  monacoLanguageForFilePath,
 } from '../shared/desktopDiffMessages.js';
 import {
   tryShowInRenderer,
@@ -63,7 +63,7 @@ export function createDesktopDiffHost(
         proposedText: proposedContent,
         additions: lineChanges.added,
         deletions: lineChanges.removed,
-        language: monacoLanguageForFilePath(proposed.filePath),
+        language: monacoLanguageForPath(proposed.filePath ?? ''),
       } satisfies DesktopShowDiffMessage,
     );
     if (shownInRenderer) return { original, proposed, title };
