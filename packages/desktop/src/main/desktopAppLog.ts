@@ -17,6 +17,7 @@ import {
 } from 'electron';
 
 import { redactSecrets, type LogRedactionOptions } from '@logger/redaction';
+import { normalizeFilePath } from '@utils/core';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 
@@ -68,13 +69,13 @@ export function readDesktopLogSnapshot(options: {
       ? buffer.subarray(buffer.length - maxBytes)
       : buffer;
     return {
-      path: redactSecrets(path, redactionOptions),
+      path: redactSecrets(normalizeFilePath(path), redactionOptions),
       truncated,
       text: redactSecrets(excerpt.toString('utf8'), redactionOptions),
     };
   } catch (error) {
     return {
-      path: redactSecrets(path, redactionOptions),
+      path: redactSecrets(normalizeFilePath(path), redactionOptions),
       truncated: false,
       text: redactSecrets(
         format('Desktop log is not available: %s', error),
