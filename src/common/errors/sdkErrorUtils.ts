@@ -70,4 +70,6 @@ export {
 export {
   parseGlmCodingPlanLimit,
   describeGlmCodingPlanLimit,
+  isGlmCodingPlanRateLimit,
+  describeGlmCodingPlanRateLimit,
 } from './sdkError/glmCodingPlanDetection';
