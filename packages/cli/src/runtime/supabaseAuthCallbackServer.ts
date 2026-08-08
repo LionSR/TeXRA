@@ -159,7 +159,9 @@ async function handleCallbackRequest(
     assertAcceptingCallbacks(attemptState);
     const result = await authCoordinator.createSessionFromCallback({
       path: CALLBACK_PATH,
-      query: trimUrlMarker(body.query, '?'),
+      query: body.query?.startsWith('?')
+        ? body.query.slice(1)
+        : (body.query ?? ''),
     });
     if (!result.success) throw new Error(result.error);
     assertAcceptingCallbacks(attemptState);
@@ -228,13 +230,6 @@ function parseCallbackBody(
     );
   }
   return parsed.value;
-}
-
-function trimUrlMarker(
-  value: string | null | undefined,
-  marker: '?' | '#',
-): string {
-  return value?.startsWith(marker) ? value.slice(1) : (value ?? '');
 }
 
 function writeHtml(

@@ -191,11 +191,6 @@ function wrapDisplayLines(
   return lines.flatMap((line) => wrapDisplayLine(line, columns));
 }
 
-function tailWindow(text: string, columns: number, tailRows: number): string {
-  const budget = Math.max(1, columns) * tailRows * 2;
-  return text.length > budget ? text.slice(-budget) : text;
-}
-
 export function liveAssistantDisplayLines({
   rows,
   text,
@@ -206,7 +201,11 @@ export function liveAssistantDisplayLines({
   readonly width?: number;
 }): readonly string[] {
   const columns = transcriptColumns(width);
-  return wrapAnsiToWidth(tailWindow(text, columns, rows), columns)
+  // Keep only the tail that could occupy the visible rows, so a very long
+  // stream does not pay for wrapping text the slice will discard anyway.
+  const budget = Math.max(1, columns) * rows * 2;
+  const windowed = text.length > budget ? text.slice(-budget) : text;
+  return wrapAnsiToWidth(windowed, columns)
     .split('\n')
     .slice(-Math.max(1, rows));
 }

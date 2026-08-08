@@ -247,11 +247,6 @@ function runCliUpdate(method: InstallMethod): Promise<boolean> {
   });
 }
 
-function affirmative(answer: string): boolean {
-  const normalized = answer.trim().toLowerCase();
-  return normalized === '' || normalized === 'y' || normalized === 'yes';
-}
-
 export interface CheckCliUpdateAvailableOptions {
   currentVersion: string;
   globalState: StateStore;
@@ -370,7 +365,9 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
         const answer = await askCliQuestion(
           `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
         );
-        confirmed = affirmative(answer);
+        const normalized = answer.trim().toLowerCase();
+        confirmed =
+          normalized === '' || normalized === 'y' || normalized === 'yes';
       },
     });
   } catch {

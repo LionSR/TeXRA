@@ -1434,7 +1434,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     newResponse: string,
     _agentSetting: AgentSetting,
   ): boolean {
-    // DEBUG: Log the stop reason to help diagnose continuation issues
     this.logger.debug(
       `Checking if should continue - stop reason: "${stopReason}"`,
     );
