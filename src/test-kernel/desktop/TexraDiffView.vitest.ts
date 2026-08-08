@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { TexraDiffView } from '@progressView/frontend/components/TexraDiffView';
+import type { TexraDiffView } from '@desktop/renderer/TexraDiffView';
 import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 const workerModuleIds = [
@@ -122,7 +122,7 @@ describe('texra-diff-view', () => {
       vi.doMock(workerModuleId, () => ({ default: MockWorker }));
     }
 
-    await import('@progressView/frontend/components/TexraDiffView');
+    await import('@desktop/renderer/TexraDiffView');
     const element = document.createElement('texra-diff-view') as TexraDiffView;
     element.originalText = 'alpha\nbeta\n';
     element.proposedText = 'alpha\ngamma\n';
