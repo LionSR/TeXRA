@@ -207,10 +207,6 @@ const views = [
             addedLines: 1,
             removedLines: 1,
             isLatex: true,
-            originalContent:
-              'The two expressions differ by a normalization factor.',
-            proposedContent:
-              'The two expressions match after rationalizing the denominator.',
           },
         },
       },
