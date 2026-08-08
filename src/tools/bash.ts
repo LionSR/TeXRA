@@ -24,6 +24,7 @@ import {
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { BASH_CHILD_STREAM_PREFIX } from '@agent/runtime/streamTab';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -71,7 +72,6 @@ const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
  * no way to recover it from the follow-up.
  */
 const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
-const BASH_CHILD_STREAM_PREFIX = 'bash@tool';
 const FOREGROUND_OUTPUT_HEAD_CHARS = TOOL_RESULT_TRUNCATION_HEAD_CHARS;
 const FOREGROUND_OUTPUT_TAIL_CHARS = TOOL_RESULT_TRUNCATION_TAIL_CHARS;
 const SHELL_BACKGROUNDING_PATTERN =
