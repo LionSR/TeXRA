@@ -105,6 +105,17 @@ export function deleteStreamState(
   draft.followupOptionsByStream.delete(streamId);
 }
 
+/** Clear every visible child edge targeting a deleted parent stream. */
+export function detachChildStreamTabs(
+  draft: Draft<ProgressState>,
+  parentStreamId: StreamTabId,
+): void {
+  for (const [childId, child] of draft.streamById) {
+    if (child.parentStreamId !== parentStreamId) continue;
+    draft.streamById.set(childId, { ...child, parentStreamId: undefined });
+  }
+}
+
 /**
  * Create default entries — for whichever of the same key list
  * `deleteStreamState` owns (`streamStates`, `streamLogs`,

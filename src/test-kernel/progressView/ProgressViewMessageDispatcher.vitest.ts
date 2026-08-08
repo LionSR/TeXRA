@@ -234,6 +234,26 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
     expect(webviewStorage.get(logListStateKey(streamId))).toBeUndefined();
   });
 
+  it('DELETE_STREAM clears retained child parent references', () => {
+    const parent = 'stream-parent' as StreamTabId;
+    const child = 'stream-child' as StreamTabId;
+    seedStreamWithLogListToggle(parent);
+    seedStreamWithLogListToggle(child);
+    appState.get().streamById.set(child, {
+      ...appState.get().streamById.get(child)!,
+      parentStreamId: parent,
+    });
+
+    dispatchMessage(
+      { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: parent },
+      vi.fn(),
+    );
+
+    expect(
+      appState.get().streamById.get(child)?.parentStreamId,
+    ).toBeUndefined();
+  });
+
   it('routes a malformed message to onError instead of throwing inside a handler body', () => {
     const before = appState.get();
     const onError = vi.fn();

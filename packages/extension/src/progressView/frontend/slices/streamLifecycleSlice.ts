@@ -17,6 +17,7 @@ import {
 
 import {
   deleteStreamState,
+  detachChildStreamTabs,
   ensureStreamState,
   firstStreamId,
   type ProgressState,
@@ -199,6 +200,7 @@ export const streamLifecycleHandlers = {
       create(appState.get(), (draft) => {
         deleteStreamState(draft, streamId);
         draft.streamById.delete(streamId);
+        detachChildStreamTabs(draft, streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
         }
