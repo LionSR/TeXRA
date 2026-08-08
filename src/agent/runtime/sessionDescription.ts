@@ -18,6 +18,7 @@ import {
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { agentKey } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -116,9 +117,16 @@ export async function generateSessionDescription(
 
     const userPrompt = buildUserPrompt(
       config.agent,
-      // Look the agent up under its own category: the two rosters can hold the
-      // same name, and a workflow agent is invisible to a tool-use lookup.
-      getAgent(config.agent, config.agentCategory)?.description,
+      // Resolve the entry the run actually launched: by the pinned source when
+      // the launch site captured one (two sources can hold the same name), else
+      // under the run's own category — the category argument only orders source
+      // priority, and a tool-use lookup cannot see a workflow agent at all.
+      getAgent(
+        config.agentSource
+          ? agentKey(config.agentSource, config.agent)
+          : config.agent,
+        config.agentCategory,
+      )?.description,
       instruction,
     );
     const text = await runHelperModelCompletion(helperResult.kit, {
