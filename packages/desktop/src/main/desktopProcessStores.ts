@@ -1,32 +1,15 @@
 import { createChannelTrace } from '@agent/trace';
-import { SessionStores } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { releaseStreamResources } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
+import { createSessionStores } from '@controllers/session/sessionStores';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
  * Load the process-owned desktop stores and attach their lifecycle hooks.
  */
 export async function initializeDesktopProcessStores(session: SessionHandle) {
-  const { transcripts, snapshots } = session;
   const logger = createChannelTrace('DesktopProcessStores');
-  const stores = new SessionStores({
-    streamLogs: transcripts,
-    snapshots,
-    goalEntries: {
-      forget: (stream) => GoalStore.forget(stream, session),
-      forgetMany: (streams) => GoalStore.forgetMany(streams, session),
-    },
-    onCanonicalStreamDeleted: (stream) => {
-      session.status.clearStream(stream);
-      releaseStreamResources(stream, session);
-    },
-  });
-  // Leftover background shells go first: they leave the transcript index the
-  // orphan sweep then reads as its live set.
-  await stores.sweepEphemeralStreams(new Set(transcripts.keys()));
-  await stores.sweepOrphanedStreams(new Set(transcripts.keys()));
+  const stores = createSessionStores(session);
+  await stores.sweepLeftoverStreams();
 
   const detachStreamRemoval = session.events.subscribe(
     (sessionEvent) => {
