@@ -20,7 +20,7 @@ import {
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
   CompactPickerKeyHints,
   FormFrame,

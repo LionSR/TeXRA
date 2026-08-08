@@ -1,6 +1,6 @@
 import type { UsageRoute } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import { parseCliApiMode } from './apiAccessMode';
 

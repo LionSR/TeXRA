@@ -18,7 +18,7 @@ import safeStringify from 'safe-stable-stringify';
 
 // Local imports
 import { redactSecrets } from '@logger/redaction';
-import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
+import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
 import { serializeError } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 

@@ -16,6 +16,18 @@ export * from './contextManagement';
 export * from './spendingStatus';
 export * from './onboarding';
 
+// Layer 1b: Standalone schemas and shared settings
+export * from './agentSkills';
+export * from './codex';
+export * from './coreSettings';
+export * from './opResults';
+export * from './stateSettings';
+export * from './workflowScriptFiles';
+
+// Layer 2b: Depends on layer 1
+export * from './agentPresets';
+export * from './toolResult';
+
 // Layer 2: Depends on layer 1 only
 export * from './stream';
 export * from './roundIndexed';

@@ -15,7 +15,7 @@ import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
   getGLMCodingPlan,
   getPreferKimiCode,

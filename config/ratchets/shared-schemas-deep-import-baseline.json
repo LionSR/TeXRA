@@ -42,6 +42,15 @@
         "parseCodexSandboxMode"
       ]
     },
+    "@shared/schemas/agentPresets": {
+      "type": ["AgentModePreset"],
+      "value": [
+        "AGENT_MODE_PRESETS",
+        "AGENT_MODE_PRESETS_BY_ID",
+        "parseAgentModePresets",
+        "STARTER_AGENT_MODE_PRESET"
+      ]
+    },
     "@shared/schemas/agentRoster": {
       "type": [
         "AgentDelegationScope",
@@ -55,12 +64,54 @@
         "INHERITED_AGENT_ROSTER"
       ]
     },
+    "@shared/schemas/agentSkills": {
+      "type": [],
+      "value": [
+        "AGENT_SKILLS_CONFIG_KEY",
+        "AGENT_SKILLS_ENABLED_DEFAULT",
+        "AgentSkillsEnabledSchema"
+      ]
+    },
+    "@shared/schemas/codex": {
+      "type": [
+        "CodexFileChangeToolInput",
+        "CodexMcpToolOutput",
+        "CodexThreadToolInput",
+        "CodexTodoToolInput",
+        "CodexTurnState",
+        "CodexTurnToolInput"
+      ],
+      "value": [
+        "CODEX_FILE_CHANGE_TOOL",
+        "CODEX_THREAD_TOOL",
+        "CODEX_TODO_TOOL",
+        "CODEX_TURN_TOOL",
+        "CodexFileChangeToolInputSchema",
+        "CodexMcpToolOutputSchema",
+        "CodexThreadToolInputSchema",
+        "CodexTodoToolInputSchema",
+        "CodexTurnToolInputSchema"
+      ]
+    },
     "@shared/schemas/commonViewMessages": {
       "type": ["DesktopThemeKind", "StateRestoreMessage", "Theme"],
       "value": [
         "CommonViewMessageSchema",
         "DESKTOP_THEME_KIND",
         "SetThemeMessageSchema"
+      ]
+    },
+    "@shared/schemas/coreSettings": {
+      "type": [],
+      "value": [
+        "CLI_CORE_SETTING_CONSUMERS",
+        "CoreSettingsShape",
+        "DEFAULT_CORE_SETTINGS",
+        "getCoreSettingDefault",
+        "LATEXDIFF_TEMP_FILE_LOCATIONS",
+        "MODEL_RETRY_MAX_ATTEMPTS_SETTING",
+        "ModelRetryMaxAttemptsSchema",
+        "TOOL_EDIT_APPROVAL_CONFIG_KEY"
       ]
     },
     "@shared/schemas/fileFields": {
@@ -100,8 +151,8 @@
       "value": []
     },
     "@shared/schemas/log": {
-      "type": [],
-      "value": ["StreamLogEntrySchema"]
+      "type": ["LogLevel"],
+      "value": ["LOG_LEVELS", "StreamLogEntrySchema"]
     },
     "@shared/schemas/mainView": {
       "type": ["MainViewInboundMessage", "MainViewMessage"],
@@ -127,6 +178,10 @@
       "type": ["OnboardingFunnelState"],
       "value": []
     },
+    "@shared/schemas/opResults": {
+      "type": ["ExecResult", "FileOpResult"],
+      "value": ["mergeRunDirAndWorkspaceResult"]
+    },
     "@shared/schemas/output": {
       "type": ["AcceptCopyMeta", "FileLocation", "OutputFileSummary"],
       "value": [
@@ -140,10 +195,6 @@
         "roundOutputsToCompileFailureSummaries",
         "roundOutputsToOutputSummaries"
       ]
-    },
-    "@shared/schemas/profileViewMessages": {
-      "type": ["NumberSetting"],
-      "value": []
     },
     "@shared/schemas/progressView": {
       "type": [
@@ -173,6 +224,7 @@
     "@shared/schemas/settingsViewMessages": {
       "type": [
         "AgentSelectionItem",
+        "ApiAccessMode",
         "ChatGptAuthStatus",
         "ClaudeAgentEffort",
         "ClaudeAgentModel",
@@ -183,6 +235,8 @@
         "CopilotRouteInfo",
         "Goal",
         "GrokAuthStatus",
+        "HistoryItem",
+        "HistoryRunStatus",
         "LatexConfigValues",
         "LatexSettingsStatus",
         "MemoryPreview",
@@ -193,6 +247,8 @@
         "ProviderSetting",
         "PRSubscriptionEntry",
         "ReasoningLevel",
+        "RemoteAgent",
+        "SessionProblem",
         "SETTINGS_VIEW_CMD",
         "SettingsMessageFor",
         "SettingsTab",
@@ -209,18 +265,22 @@
         "UpdateChatGptAuthStatusMessage",
         "UpdateCustomAgentDirMessage",
         "UpdateGitAuthorSettingsMessage",
+        "UpdateHistoryMessage",
         "UpdateLatexConfigValuesMessage",
         "UpdateModelSelectionMessage",
+        "UpdateProfileMessage",
         "UpdateReliabilityAndOrchestrationMessage"
       ],
       "value": [
         "API_ACCESS_MODE_OPTIONS",
         "DEFAULT_LATEX_SETTINGS_STATUS",
         "dispatchSettingsViewInbound",
+        "HISTORY_RUN_STATUS",
         "LatexConfigValuesSchema",
         "REASONING_LEVEL_LABELS",
         "REASONING_LEVEL_OPTIONS",
         "ReasoningLevelSchema",
+        "resolveHistoryRunStatus",
         "SETTINGS_TAB",
         "SETTINGS_VIEW_CMD",
         "SettingsViewInboundMessageSchema"
@@ -234,6 +294,30 @@
         "spendingQuotaState",
         "SpendingStatusErrorSchema",
         "SpendingStatusSchema"
+      ]
+    },
+    "@shared/schemas/stateSettings": {
+      "type": [
+        "SettingEnumChoice",
+        "SettingStore",
+        "SettingsViewSnapshot",
+        "SettingsViewStateSettingEntry",
+        "StateSettingEntry"
+      ],
+      "value": [
+        "CLI_STATE_SETTINGS",
+        "DEFAULT_GIT_AUTHOR_EMAIL",
+        "DEFAULT_GIT_AUTHOR_NAME",
+        "DEFAULT_GIT_MARK_COMMITS",
+        "DEFAULT_GIT_WORKTREE_SUPPORT",
+        "DEFAULT_TOOL_PATH_PROTECTION_ENABLED",
+        "settingEnumChoices",
+        "settingEnumOptions",
+        "settingIsBoolean",
+        "settingIsNumber",
+        "settingIsString",
+        "settingsViewSettingByKey",
+        "stateSettingByKey"
       ]
     },
     "@shared/schemas/stream": {
@@ -259,16 +343,116 @@
       "type": ["ToolConfig"],
       "value": ["DEFAULT_TOOL_CONFIG", "ToolConfigSchema"]
     },
+    "@shared/schemas/toolResult": {
+      "type": [
+        "EditRecord",
+        "FileReference",
+        "ToolFileAttachment",
+        "ToolResult",
+        "ValidationErrorDiagnostics"
+      ],
+      "value": [
+        "DIAGNOSTIC_TYPE_VALIDATION_ERROR",
+        "FlattenedEditRecordSchema",
+        "formatZodIssuesForDiagnostics",
+        "ToolError",
+        "ToolFileAttachmentSchema",
+        "ToolResultSchema",
+        "ValidationErrorDiagnosticsSchema"
+      ]
+    },
     "@shared/schemas/usage": {
       "type": [],
       "value": ["UsageProviderSchema", "UsageRouteSchema"]
+    },
+    "@shared/schemas/workflowScriptFiles": {
+      "type": ["WorkflowScriptFiles"],
+      "value": ["WorkflowScriptFilesSchema"]
     },
     "@shared/schemas/workPlan": {
       "type": [],
       "value": ["planSummaryLine"]
     }
   },
-  "forced": {
+  "forced": {},
+  "gratuitous": {
+    "@shared/schemas/agent": [
+      "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
+      "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
+      "packages/cli/src/chat/tui/forms/ModelListForm.tsx (type-only)",
+      "packages/cli/src/commands/config.ts",
+      "packages/cli/src/commands/models.ts",
+      "packages/cli/src/runtime/credentialStatus.ts",
+      "packages/cli/src/runtime/modelAccess.ts (type-only)",
+      "packages/cli/src/runtime/orchestration.ts",
+      "packages/cli/src/runtime/runModel.ts",
+      "packages/desktop/src/main/desktopAgentSettingsController.ts (type-only)",
+      "packages/desktop/src/main/desktopCredentialSettingsController.ts",
+      "packages/desktop/src/main/desktopMainViewStartup.ts",
+      "packages/desktop/src/main/desktopShellIpc.ts",
+      "packages/desktop/src/main/index.ts",
+      "packages/desktop/src/shared/desktopCommandSurface.ts (type-only)",
+      "packages/extension/src/commands/extensionCommandHandlers.ts",
+      "packages/extension/src/commands/setup/setupAssistantCommand.ts",
+      "packages/extension/src/frontend/agents/AgentDirectoryManager.ts",
+      "packages/extension/src/frontend/agents/optionsLoader.ts",
+      "packages/extension/src/frontend/agents/register.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
+      "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts",
+      "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
+      "packages/extension/src/webview/frontend/slices/catalogSlice.ts",
+      "packages/extension/src/webview/MainViewProvider.ts",
+      "src/agent/core/definition/AgentConfig.ts",
+      "src/agent/core/definition/AgentDataclass.ts",
+      "src/agent/index/AgentDirectoryService.ts (type-only)",
+      "src/agent/index/agentEntry.ts (type-only)",
+      "src/agent/index/agentOptionsBuilder.ts",
+      "src/agent/index/agentRegistry.ts",
+      "src/agent/index/agentRegistry.ts (type-only)",
+      "src/agent/index/agentYamlScanner.ts (type-only)",
+      "src/agent/index/index.ts (type-only)",
+      "src/agent/remote/types.ts",
+      "src/agent/roster/AgentRosterController.ts",
+      "src/agent/runtime/AgentLaunchContext.ts (type-only)",
+      "src/agent/runtime/agentLoad.ts",
+      "src/agent/runtime/AgentRunLifecycle.ts",
+      "src/agent/runtime/agentToolResolution.ts (type-only)",
+      "src/agent/runtime/ExecutionHandle.ts (type-only)",
+      "src/agent/runtime/ModelFactory.ts (type-only)",
+      "src/agent/runtime/streamTab.ts",
+      "src/common/teams/TeamPlan.ts",
+      "src/common/teams/TeamRoster.ts",
+      "src/controllers/onboarding/setupLaunch.ts",
+      "src/controllers/progressView/backend/agentProposalTransport.ts",
+      "src/controllers/session/streamTabInfo.ts",
+      "src/controllers/settingsView/SettingsAgentCatalogController.ts",
+      "src/controllers/settingsView/SettingsAgentControllerFactory.ts",
+      "src/controllers/settingsView/SettingsAgentDirectoryController.ts (type-only)",
+      "src/controllers/settingsView/SettingsAgentFileController.ts (type-only)",
+      "src/controllers/settingsView/SettingsAgentVisibilityController.ts",
+      "src/controllers/settingsView/SettingsAgentVisibilityController.ts (type-only)",
+      "src/housekeeping/pack.ts",
+      "src/housekeeping/runDirOps.ts",
+      "src/model/computeModelOptions.ts",
+      "src/model/providerCapabilities.ts (type-only)",
+      "src/model/setupCredentialAccess.ts",
+      "src/model/ToolDefinition.ts",
+      "src/shared/constants/workflowOutput.ts",
+      "src/telemetry/UsageLogTypes.ts",
+      "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
+      "src/tools/executionFormatters.ts (type-only)",
+      "src/tools/setup/ApplyTeamTool.ts",
+      "src/tools/setup/platform.ts"
+    ],
+    "@shared/schemas/agentCliSettings": [
+      "packages/extension/src/settingsView/frontend/settingsState.ts",
+      "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts",
+      "src/shared/settingsView/handlers/approvalHandlers.ts",
+      "src/tools/approval/bashApproval.ts",
+      "src/tools/claudeAgentConfig.ts",
+      "src/tools/codex.ts",
+      "src/tools/codexConfig.ts"
+    ],
     "@shared/schemas/agentPresets": [
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
       "packages/desktop/src/renderer/desktopOnboarding.ts",
@@ -285,6 +469,20 @@
       "src/shared/settingsView/handlers/agentSelectionHandlers.ts (type-only)",
       "src/tools/setup/ApplyTeamTool.ts"
     ],
+    "@shared/schemas/agentRoster": [
+      "packages/cli/src/chat/tui/runChatTui.tsx (type-only)",
+      "packages/cli/src/chat/tui/state/cliState.ts (type-only)",
+      "packages/cli/src/runtime/agentRoster.ts (type-only)",
+      "src/agent/core/definition/AgentConfig.ts",
+      "src/agent/index/agentRegistry.ts (type-only)",
+      "src/agent/roster/AgentRosterController.ts",
+      "src/agent/runtime/RunScope.ts (type-only)",
+      "src/agent/utils/userVars.ts (type-only)",
+      "src/common/teams/TeamPlan.ts (type-only)",
+      "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
+      "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
+      "src/tools/delegation/proposalFlow.ts (type-only)"
+    ],
     "@shared/schemas/agentSkills": [
       "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
@@ -296,6 +494,15 @@
       "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts",
       "src/tools/codexShared.ts",
       "src/tools/codexShared.ts (type-only)"
+    ],
+    "@shared/schemas/commonViewMessages": [
+      "packages/desktop/src/main/desktopViewStateIpc.ts",
+      "packages/desktop/src/renderer/main.ts",
+      "packages/desktop/src/renderer/TexraDiffView.ts",
+      "packages/extension/src/webview/frontend/MainApp.ts (type-only)",
+      "packages/extension/src/webview/frontend/persistence.ts (type-only)",
+      "src/shared/BaseWebviewApp.ts",
+      "src/shared/wa/hostTheme.ts (type-only)"
     ],
     "@shared/schemas/coreSettings": [
       "packages/cli/src/schemas/knownKeys.ts",
@@ -313,10 +520,60 @@
       "src/telemetry/UsageLogService.ts",
       "src/tools/approval/latexPreview.ts"
     ],
-    "@shared/schemas/historyViewMessages": [
-      "packages/cli/src/runtime/history.ts",
-      "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
-      "src/controllers/settingsView/HistoryMessageBuilder.ts"
+    "@shared/schemas/fileFields": ["src/agent/core/definition/AgentConfig.ts"],
+    "@shared/schemas/fileTypes": [
+      "packages/extension/src/frontend/files/fileSelectionRegistry.ts (type-only)",
+      "packages/extension/src/webview/frontend/slices/documentSlice.ts",
+      "packages/extension/src/webview/managers/FileManager.ts",
+      "src/agent/core/state/TaskState.ts"
+    ],
+    "@shared/schemas/goal": [
+      "packages/extension/src/progressView/frontend/components/StreamHeader.ts",
+      "packages/extension/src/progressView/frontend/slices/permissionSlice.ts",
+      "src/agent/goal/maybeBuildGoalContinuation.ts",
+      "src/controllers/progressView/backend/WebviewUpdater.ts (type-only)",
+      "src/tools/goal/goalFeatureFlag.ts",
+      "src/tools/goal/goalStore.ts",
+      "src/tools/plan/PlanTool.ts"
+    ],
+    "@shared/schemas/identifiers": [
+      "packages/extension/src/commands/extensionCommandHandlers.ts",
+      "src/agent/goal/maybeBuildGoalContinuation.ts (type-only)",
+      "src/tools/goal/goalAutoApproval.ts (type-only)",
+      "src/tools/goal/goalStore.ts (type-only)",
+      "src/transcript/traceDocumentSchema.ts"
+    ],
+    "@shared/schemas/lineChanges": [
+      "src/agent/output/diffComputation.ts (type-only)",
+      "src/tools/approval/toolEditApproval.ts (type-only)"
+    ],
+    "@shared/schemas/log": [
+      "src/logger/logUtils.ts",
+      "src/transcript/traceDocumentSchema.ts"
+    ],
+    "@shared/schemas/mainView": [
+      "packages/desktop/src/main/desktopShellIpc.ts",
+      "packages/desktop/src/main/hostBridge.ts",
+      "packages/extension/src/progressView/ProgressViewMessageHandler.ts",
+      "packages/extension/src/webview/managers/BaseWebviewManager.ts"
+    ],
+    "@shared/schemas/mainView/executeMessage": [
+      "packages/desktop/src/main/desktopAgentExecution.ts (type-only)",
+      "packages/desktop/src/main/desktopExecutionIpc.ts",
+      "packages/desktop/src/main/mainViewIpc.ts (type-only)",
+      "packages/extension/src/webview/frontend/mainViewActions.ts (type-only)",
+      "packages/extension/src/webview/managers/executionHandlers.ts (type-only)",
+      "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
+      "src/controllers/onboarding/setupLaunch.ts (type-only)"
+    ],
+    "@shared/schemas/mainView/inbound": [
+      "packages/extension/src/webview/managers/executionHandlers.ts (type-only)"
+    ],
+    "@shared/schemas/mainView/state": [
+      "src/common/teams/TeamPlan.ts (type-only)"
+    ],
+    "@shared/schemas/onboarding": [
+      "src/controllers/onboarding/onboardingFunnel.ts (type-only)"
     ],
     "@shared/schemas/opResults": [
       "packages/cli/src/runtime/gitOps.ts (type-only)",
@@ -331,7 +588,42 @@
       "src/utils/system/execUtils.ts (type-only)",
       "src/utils/system/toolUtils.ts (type-only)"
     ],
-    "@shared/schemas/profileViewMessages": [
+    "@shared/schemas/output": [
+      "packages/cli/src/runtime/workflowOutput.ts (type-only)",
+      "packages/extension/src/commands/extensionCommandHandlers.ts",
+      "packages/extension/src/progressView/frontend/formatters/logFormatters/dataFormatters.ts",
+      "src/agent/core/definition/AgentDataclass.ts",
+      "src/agent/core/flows/ResponseCycleFlow.ts",
+      "src/agent/modelHandlers/ModelHandler.ts",
+      "src/agent/output/OutputFileProcessor.ts",
+      "src/agent/output/XmlOutputManager.ts",
+      "src/agent/runtime/AgentFlowResult.ts",
+      "src/agent/runtime/executeAgent.ts",
+      "src/agent/runtime/selectAutoOpenFinalOutput.ts (type-only)",
+      "src/tools/delegation/subagentDiffs.ts (type-only)",
+      "src/tools/delegation/subagentResults.ts (type-only)",
+      "src/utils/text/xmlExtraction.ts"
+    ],
+    "@shared/schemas/progressView": [
+      "packages/desktop/src/main/desktopProgressIpc.ts",
+      "packages/desktop/src/main/hostBridge.ts",
+      "packages/extension/src/progressView/ProgressViewMessageHandler.ts",
+      "packages/trace-viewer/src/replayTrace.ts (type-only)",
+      "src/controllers/progressView/ProgressAgentProposalController.ts (type-only)",
+      "src/controllers/progressView/ProgressViewCommandHandlers.ts (type-only)"
+    ],
+    "@shared/schemas/prompts": [
+      "src/controllers/approval/ToolEditApprovalController.ts (type-only)",
+      "src/tools/approval/toolEditApproval.ts (type-only)"
+    ],
+    "@shared/schemas/proposalFields": [
+      "packages/extension/src/progressView/frontend/components/ProposalRequestPanel.ts",
+      "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts"
+    ],
+    "@shared/schemas/roundIndexed": [
+      "packages/extension/src/progressView/frontend/components/FileList.ts"
+    ],
+    "@shared/schemas/settingsViewMessages": [
       "packages/cli/src/chat/tui/commands/handlers/apiModeCommands.ts (type-only)",
       "packages/cli/src/chat/tui/commands/handlers/statusAssembly.ts (type-only)",
       "packages/cli/src/chat/tui/forms/ModelAccessForm.tsx (type-only)",
@@ -347,15 +639,68 @@
       "packages/cli/src/runtime/cliContext.ts (type-only)",
       "packages/cli/src/runtime/credentialStatus.ts (type-only)",
       "packages/cli/src/runtime/globalArgs.ts (type-only)",
+      "packages/cli/src/runtime/history.ts",
       "packages/cli/src/runtime/modelAccess.ts (type-only)",
       "packages/cli/src/runtime/modelAccessRoute.ts (type-only)",
       "packages/cli/src/runtime/modelAccessSelection.ts (type-only)",
       "packages/cli/src/runtime/orchestration.ts (type-only)",
       "packages/desktop/src/main/desktopCredentialSettingsController.ts (type-only)",
+      "packages/desktop/src/main/desktopSettingsIpc.ts",
+      "packages/desktop/src/main/desktopShellIpc.ts",
+      "packages/desktop/src/main/desktopToolingSettingsController.ts (type-only)",
+      "packages/desktop/src/renderer/main.ts",
+      "packages/desktop/src/shared/desktopCommandSurface.ts",
+      "packages/extension/src/commands/extensionCommandHandlers.ts",
+      "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
+      "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/components/profile/ApiAccessSection.ts",
+      "packages/extension/src/settingsView/frontend/components/profile/ModelSelectionList.ts",
+      "packages/extension/src/settingsView/frontend/components/profile/ProviderKeyList.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/components/profile/providerKeyRows.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/components/profile/ReliabilitySettingsSection.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/components/tools/ToolCard.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/AccountTab.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/tabs/AgentsTab.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/tabs/GitTab.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts",
+      "packages/extension/src/settingsView/frontend/tabs/ModelsTab.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts (type-only)",
+      "packages/extension/src/settingsView/handlers/agentHandlers.ts",
+      "packages/extension/src/settingsView/handlers/githubSubscriptionHandlers.ts",
+      "packages/extension/src/settingsView/handlers/historyHandlers.ts",
+      "packages/extension/src/settingsView/handlers/latexSettingsHandlers.ts",
+      "packages/extension/src/settingsView/SettingsViewMessageHandler.ts",
+      "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
       "src/agent/index/remoteAgentProfileData.ts (type-only)",
+      "src/controllers/settingsView/HistoryMessageBuilder.ts",
+      "src/controllers/settingsView/LatexConfigPersistenceController.ts",
+      "src/controllers/settingsView/LatexToolingController.ts",
       "src/controllers/settingsView/ProfileMessageBuilder.ts (type-only)",
-      "src/controllers/settingsView/SettingsProfileController.ts (type-only)"
+      "src/controllers/settingsView/SettingsAgentCatalogController.ts (type-only)",
+      "src/controllers/settingsView/SettingsMemoryController.ts (type-only)",
+      "src/controllers/settingsView/SettingsModelSelectionController.ts",
+      "src/controllers/settingsView/SettingsModelSelectionControllerFactory.ts (type-only)",
+      "src/controllers/settingsView/SettingsProfileController.ts (type-only)",
+      "src/controllers/settingsView/SettingsViewHost.ts (type-only)",
+      "src/controllers/settingsView/ToolDashboardData.ts (type-only)",
+      "src/shared/settingsView/handlers/agentSelectionHandlers.ts (type-only)",
+      "src/shared/settingsView/handlers/agentSkillsHandlers.ts (type-only)",
+      "src/shared/settingsView/handlers/approvalHandlers.ts (type-only)",
+      "src/shared/settingsView/handlers/chatGptHandlers.ts (type-only)",
+      "src/shared/settingsView/handlers/superYoloHandlers.ts (type-only)",
+      "src/shared/tools/toolStatusLabels.ts (type-only)",
+      "src/tools/externalToolDefs.ts (type-only)",
+      "src/utils/system/gitAuthorSettings.ts (type-only)"
+    ],
+    "@shared/schemas/spendingStatus": [
+      "packages/extension/src/settingsView/frontend/components/profile/RelayQuotaMeter.ts",
+      "packages/extension/src/settingsView/frontend/settingsState.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/slices/profileSlice.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/tabs/AccountTab.ts (type-only)",
+      "src/auth/serverKeys/ServerSideKeyService.ts (type-only)",
+      "src/auth/serverKeys/TierService.ts"
     ],
     "@shared/schemas/stateSettings": [
       "packages/cli/src/chat/tui/forms/CliConfigForm.tsx",
@@ -363,7 +708,6 @@
       "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "packages/cli/src/commands/config.ts",
       "packages/cli/src/schemas/knownKeys.ts",
-      "packages/desktop/src/main/desktopSettingsIpc.ts (type-only)",
       "packages/extension/src/settingsView/frontend/components/shared/stateSettingRows.ts",
       "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/GitTab.ts",
@@ -373,6 +717,21 @@
       "src/shared/settingsView/handlers/stateSettingWrite.ts",
       "src/utils/config/platformSettings.ts",
       "src/utils/system/gitAuthorSettings.ts"
+    ],
+    "@shared/schemas/stream": [
+      "src/agent/storage/index.ts",
+      "src/shared/streams/streamStatus.ts",
+      "src/transcript/traceDocumentSchema.ts"
+    ],
+    "@shared/schemas/streamSnapshot": [
+      "packages/trace-viewer/src/traceDataSchema.ts",
+      "src/transcript/traceDocumentSchema.ts"
+    ],
+    "@shared/schemas/todoDisplay": ["src/tools/delegation/subagentResults.ts"],
+    "@shared/schemas/toolConfig": [
+      "src/agent/core/definition/AgentConfig.ts",
+      "src/controllers/mainView/MainViewExecutionController.ts",
+      "src/latex/LatexMediaManager.ts"
     ],
     "@shared/schemas/toolResult": [
       "packages/extension/src/frontend/lm/registerLanguageModelTools.ts (type-only)",
@@ -449,6 +808,7 @@
       "src/tools/structuredOutput.ts (type-only)",
       "src/tools/texcount/TexcountTool.ts",
       "src/tools/TextEditorTool.ts",
+      "src/tools/timeouts.ts",
       "src/tools/todo/TodoTool.ts (type-only)",
       "src/tools/userQuestion/UserQuestionTool.ts (type-only)",
       "src/tools/utils.ts",
@@ -463,6 +823,10 @@
       "src/tools/zotero/ZoteroSearchTool.ts (type-only)",
       "src/transcript/completedRunArchive.ts"
     ],
+    "@shared/schemas/usage": [
+      "src/agent/utils/UsageMonitor.ts",
+      "src/telemetry/UsageLogTypes.ts"
+    ],
     "@shared/schemas/workflowScriptFiles": [
       "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts",
       "src/agent/workflowScript/persistence.ts",
@@ -470,272 +834,6 @@
       "src/agent/workflowScript/types.ts (type-only)",
       "src/tools/delegation/workflowScriptStrategy.ts (type-only)",
       "src/tools/delegation/WorkflowScriptTool.ts"
-    ]
-  },
-  "gratuitous": {
-    "@shared/schemas/agent": [
-      "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
-      "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "packages/cli/src/chat/tui/forms/ModelListForm.tsx (type-only)",
-      "packages/cli/src/commands/config.ts",
-      "packages/cli/src/commands/models.ts",
-      "packages/cli/src/runtime/agents.ts",
-      "packages/cli/src/runtime/credentialStatus.ts",
-      "packages/cli/src/runtime/modelAccess.ts (type-only)",
-      "packages/cli/src/runtime/orchestration.ts",
-      "packages/cli/src/runtime/runModel.ts",
-      "packages/desktop/src/main/desktopAgentSettingsController.ts (type-only)",
-      "packages/desktop/src/main/desktopCredentialSettingsController.ts",
-      "packages/desktop/src/main/desktopMainViewStartup.ts",
-      "packages/desktop/src/main/desktopShellIpc.ts",
-      "packages/desktop/src/main/index.ts",
-      "packages/desktop/src/shared/desktopCommandSurface.ts (type-only)",
-      "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "packages/extension/src/commands/setup/setupAssistantCommand.ts",
-      "packages/extension/src/frontend/agents/AgentDirectoryManager.ts",
-      "packages/extension/src/frontend/agents/optionsLoader.ts",
-      "packages/extension/src/frontend/agents/register.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
-      "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts",
-      "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
-      "packages/extension/src/webview/frontend/slices/catalogSlice.ts",
-      "packages/extension/src/webview/MainViewProvider.ts",
-      "src/agent/core/definition/AgentConfig.ts",
-      "src/agent/core/definition/AgentDataclass.ts",
-      "src/agent/index/AgentDirectoryService.ts (type-only)",
-      "src/agent/index/agentEntry.ts (type-only)",
-      "src/agent/index/agentOptionsBuilder.ts",
-      "src/agent/index/agentRegistry.ts",
-      "src/agent/index/agentRegistry.ts (type-only)",
-      "src/agent/index/agentRegistryConstants.ts (type-only)",
-      "src/agent/index/agentYamlScanner.ts (type-only)",
-      "src/agent/index/index.ts (type-only)",
-      "src/agent/remote/types.ts",
-      "src/agent/roster/AgentRosterController.ts",
-      "src/agent/runtime/AgentLaunchContext.ts (type-only)",
-      "src/agent/runtime/agentLoad.ts",
-      "src/agent/runtime/AgentRunLifecycle.ts",
-      "src/agent/runtime/agentToolResolution.ts (type-only)",
-      "src/agent/runtime/ExecutionHandle.ts (type-only)",
-      "src/agent/runtime/ModelFactory.ts (type-only)",
-      "src/agent/runtime/streamTab.ts",
-      "src/common/teams/TeamPlan.ts",
-      "src/common/teams/TeamRoster.ts",
-      "src/controllers/onboarding/setupLaunch.ts",
-      "src/controllers/progressView/backend/agentProposalTransport.ts",
-      "src/controllers/session/streamTabInfo.ts",
-      "src/controllers/settingsView/SettingsAgentCatalogController.ts",
-      "src/controllers/settingsView/SettingsAgentControllerFactory.ts",
-      "src/controllers/settingsView/SettingsAgentDirectoryController.ts (type-only)",
-      "src/controllers/settingsView/SettingsAgentFileController.ts (type-only)",
-      "src/controllers/settingsView/SettingsAgentVisibilityController.ts",
-      "src/controllers/settingsView/SettingsAgentVisibilityController.ts (type-only)",
-      "src/housekeeping/pack.ts",
-      "src/housekeeping/runDirOps.ts",
-      "src/model/computeModelOptions.ts",
-      "src/model/providerCapabilities.ts (type-only)",
-      "src/model/setupCredentialAccess.ts",
-      "src/model/ToolDefinition.ts",
-      "src/shared/constants/workflowOutput.ts",
-      "src/telemetry/UsageLogTypes.ts",
-      "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
-      "src/tools/executionFormatters.ts (type-only)",
-      "src/tools/setup/ApplyTeamTool.ts",
-      "src/tools/setup/platform.ts"
-    ],
-    "@shared/schemas/agentCliSettings": [
-      "packages/extension/src/settingsView/frontend/settingsState.ts",
-      "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts",
-      "src/shared/settingsView/handlers/approvalHandlers.ts",
-      "src/tools/approval/bashApproval.ts",
-      "src/tools/claudeAgentConfig.ts",
-      "src/tools/codex.ts",
-      "src/tools/codexConfig.ts"
-    ],
-    "@shared/schemas/agentRoster": [
-      "packages/cli/src/chat/tui/runChatTui.tsx (type-only)",
-      "packages/cli/src/chat/tui/state/cliState.ts (type-only)",
-      "packages/cli/src/runtime/agentRoster.ts (type-only)",
-      "src/agent/core/definition/AgentConfig.ts",
-      "src/agent/index/agentRegistry.ts (type-only)",
-      "src/agent/roster/AgentRosterController.ts",
-      "src/agent/runtime/RunScope.ts (type-only)",
-      "src/agent/utils/userVars.ts (type-only)",
-      "src/common/teams/TeamPlan.ts (type-only)",
-      "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
-      "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
-      "src/tools/delegation/proposalFlow.ts (type-only)"
-    ],
-    "@shared/schemas/commonViewMessages": [
-      "packages/desktop/src/main/desktopViewStateIpc.ts",
-      "packages/desktop/src/renderer/main.ts",
-      "packages/extension/src/progressView/frontend/components/TexraDiffView.ts",
-      "packages/extension/src/webview/frontend/MainApp.ts (type-only)",
-      "packages/extension/src/webview/frontend/persistence.ts (type-only)",
-      "src/shared/BaseWebviewApp.ts",
-      "src/shared/wa/hostTheme.ts (type-only)"
-    ],
-    "@shared/schemas/fileFields": ["src/agent/core/definition/AgentConfig.ts"],
-    "@shared/schemas/fileTypes": [
-      "packages/extension/src/frontend/files/fileSelectionRegistry.ts (type-only)",
-      "packages/extension/src/webview/frontend/slices/documentSlice.ts",
-      "packages/extension/src/webview/managers/FileManager.ts",
-      "src/agent/core/state/TaskState.ts"
-    ],
-    "@shared/schemas/goal": [
-      "packages/extension/src/progressView/frontend/components/StreamHeader.ts",
-      "packages/extension/src/progressView/frontend/slices/permissionSlice.ts",
-      "src/agent/goal/maybeBuildGoalContinuation.ts",
-      "src/controllers/progressView/backend/WebviewUpdater.ts (type-only)",
-      "src/tools/goal/goalFeatureFlag.ts",
-      "src/tools/goal/goalStore.ts",
-      "src/tools/plan/PlanTool.ts"
-    ],
-    "@shared/schemas/identifiers": [
-      "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "src/agent/goal/maybeBuildGoalContinuation.ts (type-only)",
-      "src/tools/goal/goalAutoApproval.ts (type-only)",
-      "src/tools/goal/goalStore.ts (type-only)",
-      "src/transcript/traceDocumentSchema.ts"
-    ],
-    "@shared/schemas/lineChanges": [
-      "src/agent/output/diffComputation.ts (type-only)",
-      "src/tools/approval/toolEditApproval.ts (type-only)"
-    ],
-    "@shared/schemas/log": ["src/transcript/traceDocumentSchema.ts"],
-    "@shared/schemas/mainView": [
-      "packages/desktop/src/main/desktopShellIpc.ts",
-      "packages/desktop/src/main/hostBridge.ts",
-      "packages/extension/src/progressView/ProgressViewMessageHandler.ts",
-      "packages/extension/src/webview/managers/BaseWebviewManager.ts"
-    ],
-    "@shared/schemas/mainView/executeMessage": [
-      "packages/desktop/src/main/desktopAgentExecution.ts (type-only)",
-      "packages/desktop/src/main/desktopExecutionIpc.ts",
-      "packages/desktop/src/main/mainViewIpc.ts (type-only)",
-      "packages/extension/src/webview/frontend/mainViewActions.ts (type-only)",
-      "packages/extension/src/webview/managers/executionHandlers.ts (type-only)",
-      "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
-      "src/controllers/onboarding/setupLaunch.ts (type-only)"
-    ],
-    "@shared/schemas/mainView/inbound": [
-      "packages/extension/src/webview/managers/executionHandlers.ts (type-only)"
-    ],
-    "@shared/schemas/mainView/state": [
-      "src/common/teams/TeamPlan.ts (type-only)"
-    ],
-    "@shared/schemas/onboarding": [
-      "src/controllers/onboarding/onboardingFunnel.ts (type-only)"
-    ],
-    "@shared/schemas/output": [
-      "packages/cli/src/runtime/workflowOutput.ts (type-only)",
-      "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "packages/extension/src/progressView/frontend/formatters/logFormatters/dataFormatters.ts",
-      "src/agent/core/definition/AgentDataclass.ts",
-      "src/agent/core/flows/ResponseCycleFlow.ts",
-      "src/agent/modelHandlers/ModelHandler.ts",
-      "src/agent/output/OutputFileProcessor.ts",
-      "src/agent/output/XmlOutputManager.ts",
-      "src/agent/runtime/AgentFlowResult.ts",
-      "src/agent/runtime/executeAgent.ts",
-      "src/agent/runtime/selectAutoOpenFinalOutput.ts (type-only)",
-      "src/tools/delegation/subagentDiffs.ts (type-only)",
-      "src/tools/delegation/subagentResults.ts (type-only)",
-      "src/utils/text/xmlExtraction.ts"
-    ],
-    "@shared/schemas/profileViewMessages": [
-      "src/shared/settingsView/handlers/superYoloHandlers.ts (type-only)"
-    ],
-    "@shared/schemas/progressView": [
-      "packages/desktop/src/main/desktopProgressIpc.ts",
-      "packages/desktop/src/main/hostBridge.ts",
-      "packages/desktop/src/renderer/main.ts",
-      "packages/extension/src/progressView/ProgressViewMessageHandler.ts",
-      "packages/trace-viewer/src/replayTrace.ts (type-only)",
-      "src/controllers/progressView/ProgressAgentProposalController.ts (type-only)",
-      "src/controllers/progressView/ProgressViewCommandHandlers.ts (type-only)"
-    ],
-    "@shared/schemas/prompts": [
-      "src/controllers/approval/ToolEditApprovalController.ts (type-only)",
-      "src/tools/approval/toolEditApproval.ts (type-only)"
-    ],
-    "@shared/schemas/proposalFields": [
-      "packages/extension/src/progressView/frontend/components/ProposalRequestPanel.ts",
-      "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts"
-    ],
-    "@shared/schemas/roundIndexed": [
-      "packages/extension/src/progressView/frontend/components/FileList.ts"
-    ],
-    "@shared/schemas/settingsViewMessages": [
-      "packages/desktop/src/main/desktopSettingsIpc.ts",
-      "packages/desktop/src/main/desktopShellIpc.ts",
-      "packages/desktop/src/main/desktopToolingSettingsController.ts (type-only)",
-      "packages/desktop/src/renderer/main.ts",
-      "packages/desktop/src/shared/desktopCommandSurface.ts",
-      "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/components/profile/ApiAccessSection.ts",
-      "packages/extension/src/settingsView/frontend/components/profile/ModelSelectionList.ts",
-      "packages/extension/src/settingsView/frontend/components/profile/ProviderKeyList.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/components/profile/providerKeyRows.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/components/profile/ReliabilitySettingsSection.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/components/tools/ToolCard.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/settingsState.ts",
-      "packages/extension/src/settingsView/frontend/tabs/AgentsTab.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/tabs/GitTab.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts",
-      "packages/extension/src/settingsView/frontend/tabs/ModelsTab.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts (type-only)",
-      "packages/extension/src/settingsView/handlers/agentHandlers.ts",
-      "packages/extension/src/settingsView/handlers/githubSubscriptionHandlers.ts",
-      "packages/extension/src/settingsView/handlers/historyHandlers.ts",
-      "packages/extension/src/settingsView/handlers/latexSettingsHandlers.ts",
-      "packages/extension/src/settingsView/SettingsViewMessageHandler.ts",
-      "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
-      "src/controllers/settingsView/LatexConfigPersistenceController.ts",
-      "src/controllers/settingsView/LatexToolingController.ts",
-      "src/controllers/settingsView/SettingsAgentCatalogController.ts (type-only)",
-      "src/controllers/settingsView/SettingsMemoryController.ts (type-only)",
-      "src/controllers/settingsView/SettingsModelSelectionController.ts",
-      "src/controllers/settingsView/SettingsModelSelectionControllerFactory.ts (type-only)",
-      "src/controllers/settingsView/SettingsViewHost.ts (type-only)",
-      "src/controllers/settingsView/ToolDashboardData.ts (type-only)",
-      "src/shared/settingsView/handlers/agentSelectionHandlers.ts (type-only)",
-      "src/shared/settingsView/handlers/agentSkillsHandlers.ts (type-only)",
-      "src/shared/settingsView/handlers/approvalHandlers.ts (type-only)",
-      "src/shared/settingsView/handlers/chatGptHandlers.ts (type-only)",
-      "src/shared/settingsView/handlers/superYoloHandlers.ts (type-only)",
-      "src/shared/tools/toolStatusLabels.ts (type-only)",
-      "src/tools/externalToolDefs.ts (type-only)",
-      "src/utils/system/gitAuthorSettings.ts (type-only)"
-    ],
-    "@shared/schemas/spendingStatus": [
-      "packages/extension/src/settingsView/frontend/components/profile/RelayQuotaMeter.ts",
-      "packages/extension/src/settingsView/frontend/settingsState.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/slices/profileSlice.ts (type-only)",
-      "packages/extension/src/settingsView/frontend/tabs/AccountTab.ts (type-only)",
-      "src/auth/serverKeys/ServerSideKeyService.ts (type-only)",
-      "src/auth/serverKeys/TierService.ts"
-    ],
-    "@shared/schemas/stream": [
-      "src/agent/storage/index.ts",
-      "src/shared/streams/streamStatus.ts",
-      "src/transcript/traceDocumentSchema.ts"
-    ],
-    "@shared/schemas/streamSnapshot": [
-      "packages/trace-viewer/src/traceDataSchema.ts",
-      "src/transcript/traceDocumentSchema.ts"
-    ],
-    "@shared/schemas/todoDisplay": ["src/tools/delegation/subagentResults.ts"],
-    "@shared/schemas/toolConfig": [
-      "src/agent/core/definition/AgentConfig.ts",
-      "src/controllers/mainView/MainViewExecutionController.ts",
-      "src/latex/LatexMediaManager.ts"
-    ],
-    "@shared/schemas/usage": [
-      "src/agent/utils/UsageMonitor.ts",
-      "src/telemetry/UsageLogTypes.ts"
     ],
     "@shared/schemas/workPlan": ["src/tools/delegation/subagentResults.ts"]
   }
