@@ -10,8 +10,8 @@
 import * as path from 'node:path';
 
 import { execa } from 'execa';
-import { Mutex } from 'async-mutex';
 
+import { KeyedMutex } from '@utils/core';
 import { deriveCommandStderr } from '@utils/system/execUtils';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
@@ -22,18 +22,7 @@ const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 // changing when a command is terminated for excessive output.
 const LAKE_PROCESS_MAX_BUFFER_CHARS = 100_000_000;
 
-// Keys are resolved workspace roots — a small bounded set per process lifetime,
-// so we don't bother evicting entries after release.
-const workspaceMutexes = new Map<string, Mutex>();
-
-function getWorkspaceMutex(key: string): Mutex {
-  let mutex = workspaceMutexes.get(key);
-  if (!mutex) {
-    mutex = new Mutex();
-    workspaceMutexes.set(key, mutex);
-  }
-  return mutex;
-}
+const workspaceMutex = new KeyedMutex<string>();
 
 function capOutput(output: string): string {
   if (output.length <= LAKE_MAX_OUTPUT_CHARS) return output;
@@ -70,9 +59,7 @@ export async function runLakeCommand(
     return executeLake(options);
   }
   const workspaceKey = path.resolve(options.workspaceRoot);
-  return getWorkspaceMutex(workspaceKey).runExclusive(() =>
-    executeLake(options),
-  );
+  return workspaceMutex.runExclusive(workspaceKey, () => executeLake(options));
 }
 
 async function executeLake(
