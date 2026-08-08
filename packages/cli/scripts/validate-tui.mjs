@@ -2844,7 +2844,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
-    expect: ['leanSolver w', '+3 sessions'],
+    expect: ['leanSolver…', '+3 sessions'],
     maxOccurrences: [{ text: 'leanSolver idle', max: 1 }],
   },
   {
