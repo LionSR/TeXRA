@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
   chat session now reports how much it cost and how it was paid for.
 - **The model catalog is reachable from the TUI** — browse and enable models
   without leaving the chat interface.
+- **The transcript reader pages with `PgUp`/`PgDn`** — the Ctrl-T full-output
+  view scrolls a page at a time instead of one line per keypress.
 
 #### Bug Fixes
 
