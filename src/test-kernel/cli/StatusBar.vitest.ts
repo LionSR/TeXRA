@@ -58,6 +58,7 @@ function statusInput(
     usage: undefined,
     stage: undefined,
     subagents: 0,
+    runningSessions: 0,
     approvalDepth: 0,
     model: 'deepseekT',
     modelAccess: 'personal',
@@ -248,6 +249,21 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-T transcript');
     expect(display.bindings).not.toContain('Alt-s subagents');
+  });
+
+  it('declares the running session count as a status segment', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        width: 80,
+        runningSessions: 3,
+        shortcuts: STREAM_NAV_SHORTCUTS,
+      }),
+    );
+
+    expect(display.left.map((segment) => segment.text)).toContain(
+      '3 running sessions',
+    );
+    expect(display.bindings).toContain('Tab sessions');
   });
 
   it('prioritizes Esc back at the narrowest width where it fits', () => {

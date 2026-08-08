@@ -29,6 +29,7 @@ import {
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import {
   FOREGROUND_OWNERSHIP,
+  RUNNING_SESSION,
   SESSION_LIST,
   SUBAGENT,
 } from '@shared/copy/nestedRuns';
@@ -100,6 +101,8 @@ export interface StatusBarDisplayInput {
   readonly stage: StreamStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
+  /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
+  readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly model: string;
@@ -344,6 +347,19 @@ function subagentsSegment(subagents: number): StatusBarSegment | undefined {
     ? {
         text: formatResultCount(subagents, SUBAGENT.countNoun),
         compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
+        color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+      }
+    : undefined;
+}
+
+function runningSessionsSegment(
+  runningSessions: number,
+): StatusBarSegment | undefined {
+  return runningSessions > 0
+    ? {
+        text: formatResultCount(runningSessions, RUNNING_SESSION.countNoun),
+        compactText: `${runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
       }
@@ -1045,6 +1061,7 @@ export function buildStatusBarDisplay(
       formatUsage(input.usage, input.model),
       queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
       subagentsSegment(input.subagents),
+      runningSessionsSegment(input.runningSessions),
       pendingInteractionSegment({
         depth: input.approvalDepth,
         kind: input.approvalKind,
