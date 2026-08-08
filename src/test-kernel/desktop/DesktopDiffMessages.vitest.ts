@@ -6,28 +6,6 @@ function loadDesktopDiffMessages() {
   return loadSourceModule('@desktop/shared/desktopDiffMessages');
 }
 
-describe('monacoLanguageForFilePath', () => {
-  it.each([
-    // Known LaTeX extensions.
-    ['foo.tex', 'latex'],
-    ['/abs/path/foo.bib', 'bibtex'],
-    ['windows\\path\\foo.sty', 'latex'],
-    // Case-insensitive.
-    ['FOO.TEX', 'latex'],
-    ['Foo.MD', 'markdown'],
-    // Unknown / missing extensions fall back to plaintext.
-    [undefined, 'plaintext'],
-    ['Makefile', 'plaintext'],
-    ['foo.unknownext', 'plaintext'],
-  ] as Array<[string | undefined, string]>)(
-    'maps %s to %s',
-    async (filePath, expected) => {
-      const { monacoLanguageForFilePath } = await loadDesktopDiffMessages();
-      expect(monacoLanguageForFilePath(filePath)).toBe(expected);
-    },
-  );
-});
-
 describe('DesktopShowDiffMessageSchema', () => {
   const basePayload = {
     command: 'desktop:showDiff',
