@@ -40,12 +40,12 @@ describe('ModelAccessForm status', () => {
       await waitFor(() => stdout.output.includes('Loading current preference'));
       expect(stdout.output).not.toContain('Off ·');
 
-      // Preference rows are disabled until status loads; 1–3 are subscriptions.
+      // Preference rows are disabled until status loads; 1–4 are subscriptions.
       stdin.write('1');
       await Promise.resolve();
       expect(onSelect).not.toHaveBeenCalled();
 
-      stdin.write('4');
+      stdin.write('5');
       await waitFor(() => onSelect.mock.calls.length === 1);
       expect(onSelect).toHaveBeenCalledWith(
         cliApiFallbackSelection('included'),
@@ -67,13 +67,13 @@ describe('ModelAccessForm status', () => {
       await waitFor(() => stdout.output.includes('model access unavailable'));
       expect(stdout.output).toContain('Current preference unavailable');
       expect(stdout.output).not.toContain('Off ·');
-      expect(stdout.output).toContain('✓ 4. Included access');
+      expect(stdout.output).toContain('✓ 5. Included access');
 
       stdin.write('2');
       await Promise.resolve();
       expect(onSelect).not.toHaveBeenCalled();
 
-      stdin.write('5');
+      stdin.write('6');
       await waitFor(() => onSelect.mock.calls.length === 1);
       expect(onSelect).toHaveBeenCalledWith(
         cliApiFallbackSelection('personal'),
@@ -87,7 +87,12 @@ describe('ModelAccessForm status', () => {
     loadCliModelAccessOverview.mockResolvedValue({
       access: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'on' },
+        preferences: {
+          chatGpt: 'on',
+          grok: 'off',
+          kimiCode: 'on',
+          glmCode: 'off',
+        },
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'user@example.com',

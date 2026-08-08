@@ -11,6 +11,7 @@ import { formatPercent } from '@utils/text/stringUtils';
 import { getCliApiMode } from './apiAccessMode';
 import {
   formatCliChatGptPreference,
+  formatCliGlmCodingPlanPreference,
   formatCliGrokPreference,
   formatCliKimiCodePreference,
   formatCliModelAccessRoute,
@@ -79,6 +80,7 @@ export async function loadCliModelAccessOverview(
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
     `Grok preference: ${formatCliGrokPreference(access)}`,
     `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
+    `GLM Coding Plan preference: ${formatCliGlmCodingPlanPreference(access)}`,
     `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`,
     formatAccountStatusLine(
       RESEARCHER_ACCESS.label,
@@ -259,6 +261,11 @@ export async function loadCliDetailedAccountStatusLines(options: {
           ? 'key configured'
           : 'key not configured',
     },
+    glmCode: {
+      preferred: access.preferences.glmCode === 'on',
+      credential:
+        access.glmKeySet === true ? 'key configured' : 'key not configured',
+    },
     fallback:
       access.apiFallback === 'included'
         ? {
@@ -300,6 +307,15 @@ export async function loadCliDetailedAccountStatusLines(options: {
     routes.kimiCode.credential,
   );
   if (kimiLine) lines.push(kimiLine);
+
+  const glmLine = formatModelPreferenceLine(
+    'GLM Coding Plan',
+    routes.glmCode.preferred,
+    access.glmKeySet === true,
+    'key required',
+    routes.glmCode.credential,
+  );
+  if (glmLine) lines.push(glmLine);
 
   const fallbackLine = `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`;
   if (routes.fallback.kind === 'included') {
