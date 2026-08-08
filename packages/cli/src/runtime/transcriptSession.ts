@@ -1,9 +1,9 @@
-import { SessionStores } from '@agent/storage';
 import {
   initializeDefaultSession,
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { createSessionStores } from '@controllers/session/sessionStores';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
@@ -49,24 +49,7 @@ async function initializePersistentSession(
       responseTextProcessing: texraResponseTextProcessing,
     }),
   );
-  const stores = new SessionStores({
-    streamLogs: result.session.transcripts,
-    snapshots: result.session.snapshots,
-    goalEntries: {
-      forget: (stream) => GoalStore.forget(stream, result.session),
-      forgetMany: (streams) => GoalStore.forgetMany(streams, result.session),
-    },
-    onCanonicalStreamDeleted: (stream) => {
-      result.session.status.clearStream(stream);
-      releaseStreamResources(stream, result.session);
-    },
-  });
-  // Leftover background shells go first: they leave the transcript index the
-  // orphan sweep then reads as its live set.
-  await stores.sweepEphemeralStreams(
-    new Set(result.session.transcripts.keys()),
-  );
-  await stores.sweepOrphanedStreams(new Set(result.session.transcripts.keys()));
+  await createSessionStores(result.session).sweepLeftoverStreams();
   return result;
 }
 

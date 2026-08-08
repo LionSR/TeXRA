@@ -7,7 +7,7 @@
  * future agents can quickly understand each session.
  */
 
-import { getAgent } from '@agent/index';
+import { getRosterAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -17,8 +17,7 @@ import {
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { agentKey } from '@shared/schemas/agent';
+import { agentKey, type ExecutionId, type StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -118,14 +117,15 @@ export async function generateSessionDescription(
     const userPrompt = buildUserPrompt(
       config.agent,
       // Resolve the entry the run actually launched: by the pinned source when
-      // the launch site captured one (two sources can hold the same name), else
-      // under the run's own category — the category argument only orders source
-      // priority, and a tool-use lookup cannot see a workflow agent at all.
-      getAgent(
+      // the launch site captured one (two sources can hold the same name), and
+      // filtered to the run's own category rather than merely ordered by it —
+      // a bare-name lookup can otherwise return the other roster's agent and
+      // label this run with that agent's purpose.
+      getRosterAgent(
+        config.agentCategory,
         config.agentSource
           ? agentKey(config.agentSource, config.agent)
           : config.agent,
-        config.agentCategory,
       )?.description,
       instruction,
     );
