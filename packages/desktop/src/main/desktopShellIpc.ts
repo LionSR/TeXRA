@@ -94,22 +94,6 @@ export function createDesktopShellActions(
     void openCustomAgentDirectory().catch(reportAsyncError);
   }
 
-  function openLogFolder() {
-    void options.openLogFolder().catch(reportAsyncError);
-  }
-
-  function openWorkspaceFolder() {
-    void options.openWorkspaceFolder().catch(reportAsyncError);
-  }
-
-  function openDesktopDocs() {
-    void options.openExternalUrl(DESKTOP_DOCS_URL).catch(reportAsyncError);
-  }
-
-  function signIn() {
-    void options.signIn().catch(reportAsyncError);
-  }
-
   function resetMainView() {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
@@ -125,11 +109,13 @@ export function createDesktopShellActions(
   }
 
   return {
-    signIn,
+    signIn: () => void options.signIn().catch(reportAsyncError),
     openAgentDirectory,
-    openDesktopDocs,
-    openLogFolder,
-    openWorkspaceFolder,
+    openDesktopDocs: () =>
+      void options.openExternalUrl(DESKTOP_DOCS_URL).catch(reportAsyncError),
+    openLogFolder: () => void options.openLogFolder().catch(reportAsyncError),
+    openWorkspaceFolder: () =>
+      void options.openWorkspaceFolder().catch(reportAsyncError),
     saveFile: () => {
       renderer.postToRenderer({
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,

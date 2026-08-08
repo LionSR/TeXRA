@@ -45,15 +45,16 @@ export function installDesktopNavigationPolicy(
     return { action: 'deny' };
   });
 
-  webContents.on('will-navigate', (event, url) => {
+  // will-navigate and will-redirect share one deny-then-route handler.
+  const denyAndRoute = (
+    event: { preventDefault(): void },
+    url: string,
+  ): void => {
     event.preventDefault();
     routeOrDeny(url, reportAsyncError);
-  });
-
-  webContents.on('will-redirect', (event, url) => {
-    event.preventDefault();
-    routeOrDeny(url, reportAsyncError);
-  });
+  };
+  webContents.on('will-navigate', denyAndRoute);
+  webContents.on('will-redirect', denyAndRoute);
 
   webContents.on('will-attach-webview', (event) => {
     event.preventDefault();

@@ -48,6 +48,10 @@ export const ExhaustionReasonSchema = z.enum([
    *  the "Prefer Kimi Code" preference so dual-backend Kimi models re-route
    *  through the Moonshot open-platform API key. */
   'kimi-code-subscription',
+  /** A GLM Coding Plan request was rejected because the plan's usage quota is
+   *  exhausted; accepting the switch turns off the Coding Plan toggle so GLM
+   *  requests route through the regular pay-as-you-go endpoint. */
+  'glm-coding-plan',
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
 
@@ -195,17 +199,6 @@ export function isChatGptSubscriptionLimitError(
   errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
 ): boolean {
   return errorDetails?.exhaustionReason === 'chatgpt-subscription';
-}
-
-/** Single source of truth for "this error is a Kimi Code (Moonshot
- *  coding-subscription) usage-limit rejection". Both hosts (VS Code progress
- *  view, CLI approval policy) branch on this to switch the retry from the
- *  relay/personal-key path to disabling the "Prefer Kimi Code" preference so
- *  dual-backend Kimi models re-route through the Moonshot open-platform key. */
-export function isKimiCodeSubscriptionLimitError(
-  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
-): boolean {
-  return errorDetails?.exhaustionReason === 'kimi-code-subscription';
 }
 
 /** Single source of truth for "the upstream provider account itself is out of

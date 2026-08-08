@@ -1,3 +1,6 @@
+// Third-party imports
+import stableStringify from 'fast-json-stable-stringify';
+
 // Local imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -183,7 +186,7 @@ type RawToolConfig = string | ToolDefinition;
 
 function differsFrom(declared: unknown, registered: unknown): boolean {
   if (declared === undefined || declared === registered) return false;
-  return JSON.stringify(declared) !== JSON.stringify(registered);
+  return stableStringify(declared) !== stableStringify(registered);
 }
 
 /**

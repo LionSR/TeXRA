@@ -50,15 +50,6 @@ import type { StreamArtifactReader } from './subscribeStreamArtifacts';
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
-/** Element-wise equality for the string-list slices patched below, so an
- *  unchanged list never churns the `streams` signal identity. */
-function sameStringList(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return left.length === right.length && left.every((x, i) => x === right[i]);
-}
-
 /** Extract a stream id from a session fact for per-stream generation capture.
  *  The only fact types that trigger renderer callbacks after an async suspend
  *  are `setActiveStream` and `setParentStream`; other facts are handled
@@ -297,7 +288,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     // hub alone.
     const messages = this.session.followUps.getAll(streamId);
     patchStream(streamId, (slice) =>
-      sameStringList(slice.queuedFollowUpMessages, messages)
+      isDeepStrictEqual(slice.queuedFollowUpMessages, messages)
         ? slice
         : { ...slice, queuedFollowUpMessages: messages },
     );

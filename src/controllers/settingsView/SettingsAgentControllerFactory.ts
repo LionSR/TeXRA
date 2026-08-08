@@ -1,6 +1,7 @@
 /**
- * Constructs the trio of settings-view agent controllers
- * (catalog / directory / visibility) from the host-supplied state ports.
+ * Constructs the settings-view agent controllers (catalog / directory /
+ * visibility / custom-agent file planner / remote-prompt viewer) from the
+ * host-supplied state ports.
  *
  * Both desktop and extension build these controllers with the same shape;
  * this factory removes ~75 lines of duplication on each side.
@@ -14,12 +15,16 @@ import {
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index';
+import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
+import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
+import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKey,
@@ -45,6 +50,8 @@ export interface SettingsAgentControllers {
   readonly directory: SettingsAgentDirectoryController;
   readonly visibility: SettingsAgentVisibilityController;
   readonly state: SettingsAgentCatalogState;
+  readonly fileController: SettingsAgentFileController;
+  readonly remotePromptController: SettingsRemoteAgentPromptController;
 }
 
 export function createSettingsAgentControllers(
@@ -121,6 +128,19 @@ export function createSettingsAgentControllers(
         })),
     },
   });
+  const fileController = new SettingsAgentFileController();
+  const remotePromptController = new SettingsRemoteAgentPromptController({
+    getUserTier: () => SupabaseClient.getUserTier(),
+    getAccessToken: () => SupabaseClient.getAccessToken(),
+    fetchPromptConfig: fetchRemoteAgentConfigYaml,
+  });
 
-  return { catalog, directory, visibility, state };
+  return {
+    catalog,
+    directory,
+    visibility,
+    state,
+    fileController,
+    remotePromptController,
+  };
 }

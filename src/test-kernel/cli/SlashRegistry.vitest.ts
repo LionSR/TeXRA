@@ -396,7 +396,9 @@ describe('slashRegistry', () => {
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
-    expect(apiNode.isClosed()).toBe(true);
+    // Selecting "Your own API keys" still advances to the key configuration
+    // form so the user can set keys even when the mode switch itself failed.
+    expect(activeForm.get()?.commandName).toBe('key');
   });
 
   it('keeps model-access selection in a busy form until it settles', async () => {
@@ -420,7 +422,9 @@ describe('slashRegistry', () => {
     selection.resolve();
     await settleFormSelection();
 
-    expect(apiNode.isClosed()).toBe(true);
+    // After switching to personal mode, the API key configuration form opens
+    // in place of the model access form.
+    expect(activeForm.get()?.commandName).toBe('key');
   });
 
   it('keeps provider API keys inside the masked local form', async () => {

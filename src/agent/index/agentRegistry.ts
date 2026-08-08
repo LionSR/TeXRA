@@ -19,10 +19,6 @@ import {
   agentKeyOf,
   agentName,
 } from '@shared/schemas/agent';
-import {
-  LOOKUP_PRIORITY,
-  TOOL_USE_LOOKUP_PRIORITY,
-} from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
 import {
   clearInlineAgentDefinitions,
@@ -39,6 +35,28 @@ import {
 import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
+
+/**
+ * Source priority for lookups (higher priority first). `inline` must be listed,
+ * not omitted: `deduplicateByName` compares `indexOf`, and an absent source
+ * scores `-1`, ranking it first by accident instead of by decision.
+ */
+const LOOKUP_PRIORITY: AgentSource[] = [
+  'inline',
+  'custom',
+  'remote',
+  'builtInWorkflow',
+  'builtInToolUse',
+];
+
+/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
+const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
+  'inline',
+  'custom',
+  'remote',
+  'builtInToolUse',
+  'builtInWorkflow',
+];
 
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
 

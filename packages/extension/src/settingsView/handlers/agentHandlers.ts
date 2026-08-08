@@ -7,15 +7,14 @@
 import * as vscode from 'vscode';
 
 import { getAgent, loadAgents, refresh as refreshAgents } from '@agent/index';
-import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
-import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
-import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
+import type { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import type { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
@@ -46,13 +45,8 @@ import {
 export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;
-  private readonly fileController = new SettingsAgentFileController();
-  private readonly remotePromptController =
-    new SettingsRemoteAgentPromptController({
-      getUserTier: () => SupabaseClient.getUserTier(),
-      getAccessToken: () => SupabaseClient.getAccessToken(),
-      fetchPromptConfig: fetchRemoteAgentConfigYaml,
-    });
+  private readonly fileController: SettingsAgentFileController;
+  private readonly remotePromptController: SettingsRemoteAgentPromptController;
   private readonly visibilityController: SettingsAgentVisibilityController;
   private readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
@@ -73,6 +67,8 @@ export class AgentHandlers {
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
+    this.fileController = controllers.fileController;
+    this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),

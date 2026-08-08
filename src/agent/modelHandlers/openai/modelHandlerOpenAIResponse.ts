@@ -1120,10 +1120,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     const messages: ResponseInputItem[] = [];
 
     if (systemPrompt) {
-      const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
+      // Every runnable model accepts a system-role prompt; only the retired
+      // o1-mini / o1-preview ever needed the 'user'-role fallback.
       const systemMessage: ResponseInputItem.Message = {
         type: 'message',
-        role,
+        role: 'system',
         content: [createInputText(systemPrompt)],
       };
       messages.push(systemMessage);
@@ -2527,7 +2528,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         type: 'thinking',
         thinking: part.text,
       }));
-      workspaceState.reasoning.thinkingAdded = true;
     }
 
     if (thoughtContent) {

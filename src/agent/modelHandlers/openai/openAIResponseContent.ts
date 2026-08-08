@@ -68,14 +68,6 @@ export function extractTextContentPart(part: unknown): string | undefined {
     : undefined;
 }
 
-function contentHasText(content: unknown): boolean {
-  if (typeof content === 'string') return content.trim().length > 0;
-  if (!Array.isArray(content)) return false;
-  return content.some(
-    (part) => (extractTextContentPart(part)?.trim().length ?? 0) > 0,
-  );
-}
-
 /** Whether a completed Responses payload already carries assistant text. */
 export function hasResponseOutputText(response: {
   readonly output_text?: unknown;
@@ -98,7 +90,14 @@ export function hasResponseOutputText(response: {
     };
     if (candidate.type !== 'message') return false;
     if (candidate.role != null && candidate.role !== 'assistant') return false;
-    return contentHasText(candidate.content);
+    // Inlined from a former single-caller helper: this check decides whether
+    // compaction text is injected, so it stays auditable as one unit.
+    const { content } = candidate;
+    if (typeof content === 'string') return content.trim().length > 0;
+    if (!Array.isArray(content)) return false;
+    return content.some(
+      (part) => (extractTextContentPart(part)?.trim().length ?? 0) > 0,
+    );
   });
 }
 
