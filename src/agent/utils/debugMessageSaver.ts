@@ -1,7 +1,10 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import {
+  resolveRunStoragePath,
+  RUNS_STORAGE_DIR,
+} from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
@@ -69,7 +72,7 @@ export async function maybeSaveDebugObject({
 
   try {
     const filePath = executionId
-      ? path.join(RUNS_STORAGE_DIR, executionId, debugFileName)
+      ? resolveRunStoragePath(executionId, debugFileName)
       : debugFileName;
     const fs = executionId ? StorageFS : WorkspaceFS;
 
