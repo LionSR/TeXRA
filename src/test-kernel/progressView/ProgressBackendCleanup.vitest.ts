@@ -668,4 +668,43 @@ describe('ProgressBackend cleanup', () => {
       await second.backend.state.clearAll();
     }
   });
+
+  it('sweeps leftover background shells at load, keeping real sessions', async () => {
+    // No identity on its execution row: every stream a workspace wrote before
+    // identity stamping (#9705) hydrates this way, so the sweep has only the
+    // minted prefix to read.
+    const shell = {
+      stream: 'bash@tool#a6961a' as StreamTabId,
+      executionId: 'a6961a' as ExecutionId,
+    };
+    const session = toolStreamAndExecution('b6961b');
+    const first = await createPersistentRecordingBackend();
+
+    try {
+      for (const ids of [shell, session]) {
+        registerStream(first.backend, ids);
+        await writeExecutionConfig(ids.executionId);
+      }
+      await first.backend.state.flush();
+    } finally {
+      first.backend.dispose();
+      first.session.dispose();
+    }
+
+    const second = await createPersistentRecordingBackend();
+    try {
+      await second.session.waitUntilReady();
+      await second.backend.state.load();
+
+      expect(second.backend.state.streamLogs.has(shell.stream)).toBe(false);
+      await expectStored(streamDataDir(shell.stream), false);
+      await expectStored(`executions/${shell.executionId}`, false);
+
+      // A real session is untouched, whatever its age.
+      expect(second.backend.state.streamLogs.has(session.stream)).toBe(true);
+      await expectStored(`executions/${session.executionId}`, true);
+    } finally {
+      await second.backend.state.clearAll();
+    }
+  });
 });

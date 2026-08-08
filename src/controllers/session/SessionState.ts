@@ -14,6 +14,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { createSessionStores } from '@controllers/session/sessionStores';
 import type { StateStore } from '@platform/interfaces';
 import {
   type ActiveChildInfo,
@@ -31,8 +32,6 @@ import {
 } from '@shared/state/PersistedState';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import { releaseStreamResources } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 /**
@@ -155,20 +154,7 @@ export class SessionState {
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
     this.snapshots = session.snapshots;
-    this.stores =
-      stores ??
-      new SessionStores({
-        streamLogs: this.streamLogs,
-        snapshots: this.snapshots,
-        goalEntries: {
-          forget: (stream) => GoalStore.forget(stream, this.session),
-          forgetMany: (streams) => GoalStore.forgetMany(streams, this.session),
-        },
-        onCanonicalStreamDeleted: (stream) => {
-          this.session.status.clearStream(stream);
-          releaseStreamResources(stream, this.session);
-        },
-      });
+    this.stores = stores ?? createSessionStores(session);
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -548,19 +534,18 @@ export class SessionState {
     // presentation must never reload those live stores.
     await this.stores.waitForPendingStreamDeletions();
 
-    const streamIds = this.streamLogs.keys();
-    this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
+    this.logger.info(
+      `[Persistence] Discovered ${this.streamLogs.keys().length} stream(s)`,
+    );
 
+    // The extension's presentation *is* its process owner, so it runs the
+    // shared startup sweep here; the desktop and CLI run it from theirs, where
+    // this state is not the owner of these stores. Sweeping before the loop
+    // below means no metadata is built for a stream this load then deletes.
     if (stateOwnership === 'backend') {
-      const sweep = await this.stores.sweepOrphanedStreams(new Set(streamIds));
-      if (sweep.streams.length > 0) {
-        this.logger.info(
-          `[Persistence] Removed ${sweep.streams.length} orphaned stream sidecar(s) and ${sweep.executionIds.length} execution dir(s)`,
-          { data: sweep },
-        );
-      }
+      await this.stores.sweepLeftoverStreams();
     }
-    for (const stream of streamIds) {
+    for (const stream of this.streamLogs.keys()) {
       this.resetStreamMetadataForRun(stream);
     }
 

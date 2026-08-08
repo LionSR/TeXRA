@@ -8,6 +8,7 @@ import {
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
+import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -416,6 +417,88 @@ export class SessionStores {
       }),
     );
     return { active, failed };
+  }
+
+  /**
+   * The startup sweep every process owner runs before presenting a rail: drop
+   * leftover background shells, then persisted state no live stream refers to.
+   *
+   * One entry point so the order lives in one place. It matters: the ephemeral
+   * sweep removes streams from the transcript index, and the orphan sweep reads
+   * that index as its live set — running them the other way round would take
+   * the shells' own sidecars for orphans on the next launch instead of this one.
+   */
+  async sweepLeftoverStreams(): Promise<void> {
+    await this.sweepEphemeralStreams(new Set(this.streamLogs.keys()));
+    const orphans = await this.sweepOrphanedStreams(
+      new Set(this.streamLogs.keys()),
+    );
+    if (orphans.streams.length > 0) {
+      logger.info(
+        CHANNEL,
+        `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
+        { data: orphans },
+      );
+    }
+  }
+
+  /**
+   * Delete background-shell streams a previous process left behind.
+   *
+   * A background shell is ephemeral by construction: `autoClose` drops its tab
+   * the moment the command finalizes, and the command's output is already
+   * delivered into the parent run's transcript. One still on disk means the
+   * host exited mid-command or the deletion was refused — nothing can resume
+   * it, so it is leftover state rather than history, and left alone it never
+   * stops accumulating.
+   *
+   * No presentation can make this call: stream phases are in-memory only, so a
+   * persisted shell hydrates with no status at all and no rail filter can key
+   * off one.
+   *
+   * A shell still running holds its execution lease, so `deleteStream` answers
+   * `'active'` and keeps it — the durable lease is the liveness authority here,
+   * not an in-memory phase. The cost is that a shell whose host crashed inside
+   * the lease's staleness window is retained (loudly) until the next launch.
+   */
+  private async sweepEphemeralStreams(
+    liveStreams: ReadonlySet<StreamTabId>,
+  ): Promise<StreamTabId[]> {
+    const swept: StreamTabId[] = [];
+    const retained: StreamTabId[] = [];
+    for (const stream of liveStreams) {
+      if (!isBackgroundShellStream(stream)) continue;
+      // Awaited one at a time because `deletionQueue` already serializes every
+      // deletion on this instance at concurrency 1: firing them together would
+      // only queue them, trading readable sequencing for a burst of promises.
+      // Per-stream failure isolation: one unreadable leftover must not abandon
+      // the rest of the sweep, and must not fail the load that called it.
+      try {
+        if ((await this.deleteStream(stream)) === 'deleted') swept.push(stream);
+        else retained.push(stream);
+      } catch (error) {
+        retained.push(stream);
+        logger.warn(
+          CHANNEL,
+          `Failed to sweep leftover background shell ${stream}: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
+    }
+    if (swept.length > 0) {
+      logger.info(
+        CHANNEL,
+        `Swept ${swept.length} leftover background-shell stream(s).`,
+      );
+    }
+    if (retained.length > 0) {
+      logger.warn(
+        CHANNEL,
+        `${retained.length} leftover background-shell stream(s) could not be swept and stay listed.`,
+        { data: { retained } },
+      );
+    }
+    return swept;
   }
 
   /**
