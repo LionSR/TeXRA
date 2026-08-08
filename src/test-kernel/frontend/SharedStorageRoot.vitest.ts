@@ -1,3 +1,6 @@
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,9 +26,13 @@ import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 type MigrationContext = Parameters<typeof migrateLegacyVscodeStorage>[0];
 type MigrationStorage = Parameters<typeof migrateLegacyVscodeStorage>[1];
 
+function absolutePath(...segments: string[]): string {
+  return path.join(path.sep, ...segments);
+}
+
 const context = {
-  storageUri: { fsPath: '/legacy/workspace' },
-  globalStorageUri: { fsPath: '/legacy/global' },
+  storageUri: { fsPath: absolutePath('legacy', 'workspace') },
+  globalStorageUri: { fsPath: absolutePath('legacy', 'global') },
 } as MigrationContext;
 
 describe('VS Code shared-storage migration', () => {
@@ -40,7 +47,7 @@ describe('VS Code shared-storage migration', () => {
       getStoragePath: () => {
         throw new Error('workspace unavailable');
       },
-      getGlobalStoragePath: () => '/shared/global',
+      getGlobalStoragePath: () => absolutePath('shared', 'global'),
     } as MigrationStorage;
 
     await expect(
@@ -49,8 +56,8 @@ describe('VS Code shared-storage migration', () => {
 
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledOnce();
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledWith(
-      '/legacy/global',
-      '/shared/global',
+      absolutePath('legacy', 'global'),
+      absolutePath('shared', 'global'),
       expect.objectContaining({
         label: 'vscode-global-storage',
         mergePerChild: ['custom_agents', 'ei_threads'],
@@ -64,7 +71,7 @@ describe('VS Code shared-storage migration', () => {
 
   it('keeps a successful workspace migration when global resolution fails', async () => {
     const storage = {
-      getStoragePath: () => '/shared/workspace',
+      getStoragePath: () => absolutePath('shared', 'workspace'),
       getGlobalStoragePath: () => {
         throw new Error('global unavailable');
       },
@@ -76,16 +83,16 @@ describe('VS Code shared-storage migration', () => {
 
     expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledOnce();
     expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledWith(
-      '/legacy/workspace',
-      '/shared/workspace',
+      absolutePath('legacy', 'workspace'),
+      absolutePath('shared', 'workspace'),
       expect.objectContaining({
         label: 'vscode-workspace-storage',
       }),
     );
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenNthCalledWith(
       1,
-      '/legacy/workspace/taskRuns',
-      '/shared/workspace/executions',
+      absolutePath('legacy', 'workspace', 'taskRuns'),
+      absolutePath('shared', 'workspace', 'executions'),
       expect.objectContaining({
         label: 'vscode-workspace-storage/taskRuns',
         mergePerChild: 'all',
@@ -93,8 +100,8 @@ describe('VS Code shared-storage migration', () => {
     );
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenNthCalledWith(
       2,
-      '/shared/workspace/taskRuns',
-      '/shared/workspace/executions',
+      absolutePath('shared', 'workspace', 'taskRuns'),
+      absolutePath('shared', 'workspace', 'executions'),
       expect.objectContaining({
         label: 'shared-workspace-storage/taskRuns',
         mergePerChild: 'all',
