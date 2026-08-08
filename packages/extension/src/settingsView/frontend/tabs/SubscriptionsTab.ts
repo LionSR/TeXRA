@@ -34,6 +34,47 @@ import {
 } from '../components/profile/SubscriptionSection';
 
 const KIMI_CODE_CONSOLE_URL = 'https://www.kimi.com/code/console';
+const GLM_CODING_PLAN_CONSOLE_URL = 'https://z.ai/subscribe';
+
+/** One API-key-based coding-plan subscription section (GLM Coding Plan, Kimi
+ *  Code). Both share the same three-step setup: get a key, add it, enable the
+ *  plan toggle. */
+interface CodingPlanSection {
+  readonly sectionId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly consoleUrl: string;
+  readonly keyLabel: string;
+  readonly keyHelp: string;
+  readonly toggleLabel: string;
+  readonly toggleHelp: string;
+}
+
+const CODING_PLAN_SECTIONS: readonly CodingPlanSection[] = [
+  {
+    sectionId: 'glm-coding-plan-subscription',
+    title: 'GLM Coding Plan',
+    description:
+      'Use a GLM Coding Plan subscription for GLM models via the coding endpoint.',
+    consoleUrl: GLM_CODING_PLAN_CONSOLE_URL,
+    keyLabel: '1. Get a subscription key',
+    keyHelp: 'Subscribe and create an API key in the Z.AI console.',
+    toggleLabel: '3. Enable the Coding Plan',
+    toggleHelp:
+      'Turn on "GLM Coding Plan" on the GLM row so requests route through the coding endpoint with your plan\u2019s monthly quota.',
+  },
+  {
+    sectionId: 'kimi-code-subscription',
+    title: 'Kimi Code',
+    description: 'Use a Kimi Code membership for the kimi-for-coding models.',
+    consoleUrl: KIMI_CODE_CONSOLE_URL,
+    keyLabel: '1. Get a membership key',
+    keyHelp: 'Create an API key in the Kimi Code console.',
+    toggleLabel: '3. Optional: prefer Kimi Code',
+    toggleHelp:
+      'Enable "Prefer Kimi Code" on the same row so K3 also uses your Kimi Code subscription; the kimi-for-coding models always do.',
+  },
+];
 
 @customElement('subscriptions-tab')
 export class SubscriptionsTab extends LitElement {
@@ -76,27 +117,27 @@ export class SubscriptionsTab extends LitElement {
           .provider=${GROK_SUBSCRIPTION_SECTION}
           .auth=${this.grokAuth}
         ></subscription-section>
-        ${this.renderKimiCodeSection()} ${this.renderCopilotSection()}
+        ${CODING_PLAN_SECTIONS.map((section) =>
+          this.renderCodingPlanSection(section),
+        )}
+        ${this.renderCopilotSection()}
       </div>
     `;
   }
 
-  private renderKimiCodeSection(): TemplateResult {
+  private renderCodingPlanSection(section: CodingPlanSection): TemplateResult {
     return html`
-      <section id="kimi-code-subscription">
+      <section id=${section.sectionId}>
         ${renderSettingsSectionHeading({
-          title: 'Kimi Code',
-          description:
-            'Use a Kimi Code membership for the kimi-for-coding models.',
+          title: section.title,
+          description: section.description,
           icon: 'gem',
         })}
         <div class="settings-section">
           <div class="settings-row">
             <div class="settings-row-text">
-              <span class="settings-row-label">1. Get a membership key</span>
-              <span class="settings-row-help">
-                Create an API key in the Kimi Code console.
-              </span>
+              <span class="settings-row-label">${section.keyLabel}</span>
+              <span class="settings-row-help">${section.keyHelp}</span>
             </div>
             <div class="settings-row-control">
               ${renderLabeledActionButton({
@@ -106,7 +147,7 @@ export class SubscriptionsTab extends LitElement {
                 appearance: 'outlined',
                 onClick: () =>
                   postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
-                    url: KIMI_CODE_CONSOLE_URL,
+                    url: section.consoleUrl,
                   }),
               })}
             </div>
@@ -115,8 +156,8 @@ export class SubscriptionsTab extends LitElement {
             <div class="settings-row-text">
               <span class="settings-row-label">2. Add the key</span>
               <span class="settings-row-help">
-                Paste it on the Kimi Code row in Providers &amp; Models, or set
-                the KIMI_CODE_API_KEY environment variable.
+                Paste it on the ${section.title} row in Providers &amp; Models,
+                or set the provider API key environment variable.
               </span>
             </div>
             <div class="settings-row-control">
@@ -134,13 +175,8 @@ export class SubscriptionsTab extends LitElement {
           </div>
           <div class="settings-row">
             <div class="settings-row-text">
-              <span class="settings-row-label"
-                >3. Optional: prefer Kimi Code</span
-              >
-              <span class="settings-row-help">
-                Enable "Prefer Kimi Code" on the same row so K3 also uses your
-                Kimi Code subscription; the kimi-for-coding models always do.
-              </span>
+              <span class="settings-row-label">${section.toggleLabel}</span>
+              <span class="settings-row-help">${section.toggleHelp}</span>
             </div>
           </div>
         </div>

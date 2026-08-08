@@ -143,14 +143,11 @@ export const STREAM_SUBSTATE = {
 export const StreamSubstateSchema = z.enum(STREAM_SUBSTATE);
 export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
 
-function isRunOutcome(value: string | undefined): value is RunOutcome {
-  return RunOutcomeSchema.safeParse(value).success;
-}
-
 export function executionStatusToRunOutcome(
   status: string | undefined,
 ): RunOutcome | undefined {
-  if (isRunOutcome(status)) return status;
+  const runOutcome = RunOutcomeSchema.safeParse(status);
+  if (runOutcome.success) return runOutcome.data;
 
   const parsed = ExecutionStatusSchema.safeParse(status);
   if (!parsed.success) return undefined;
@@ -165,7 +162,11 @@ export function executionStatusToRunOutcome(
   }
 }
 
-function streamStatusToPhase(status: StreamStatus): StreamPhase {
+export type StreamLifecycleStatus = StreamPhase | typeof STREAM_STATUS.READY;
+
+export function streamStatusToLifecycleStatus(
+  status: StreamStatus,
+): StreamLifecycleStatus {
   switch (status) {
     case STREAM_STATUS.RUNNING:
     case STREAM_STATUS.RESUMING:
@@ -176,19 +177,10 @@ function streamStatusToPhase(status: StreamStatus): StreamPhase {
     case STREAM_STATUS.ERROR:
       return STREAM_PHASE.FAILED;
     case STREAM_STATUS.STOPPED:
-    case STREAM_STATUS.READY:
       return STREAM_PHASE.COMPLETED;
+    case STREAM_STATUS.READY:
+      return STREAM_STATUS.READY;
   }
-}
-
-export type StreamLifecycleStatus = StreamPhase | typeof STREAM_STATUS.READY;
-
-export function streamStatusToLifecycleStatus(
-  status: StreamStatus,
-): StreamLifecycleStatus {
-  return status === STREAM_STATUS.READY
-    ? STREAM_STATUS.READY
-    : streamStatusToPhase(status);
 }
 
 export const StreamLifecycleStatusSchema = z.union([

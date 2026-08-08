@@ -119,7 +119,10 @@ export const MULTI_FILE_LIST_BY_KEY = Object.fromEntries(
 /** {@link MULTI_FILE_LISTS} keyed by the inbound `SET_*_FILES` command. */
 export const MULTI_FILE_LIST_BY_SET_COMMAND = Object.fromEntries(
   MULTI_FILE_LIST_ENTRIES.map(([, list]) => [list.setCommand, list]),
-) as Record<string, MultiFileList | undefined>;
+) as Record<
+  (typeof MULTI_FILE_LISTS)[MultipleDocumentFileType]['setCommand'],
+  MultiFileList
+>;
 
 /** Maps a single-file selection type (`SET_CURRENT_FILE`'s base/edited slot) to its `FileOptions` key. */
 export const SINGLE_FILE_TYPE_TO_KEY: Record<

@@ -142,6 +142,19 @@ export async function loadApiKeyStatusMap<const Provider extends ApiProvider>(
   return Object.fromEntries(entries) as Record<Provider, ApiKeyStatus>;
 }
 
+/**
+ * Return provider IDs that have a configured API key (secret or env).
+ * Shared by the CLI status surfaces so the provider-key scan lives in one place.
+ */
+export async function configuredApiKeyProviders(
+  secrets: PlatformSecrets,
+): Promise<ApiProvider[]> {
+  const origins = await Promise.all(
+    API_PROVIDERS.map((provider) => lookupApiKeyOrigin(secrets, provider)),
+  );
+  return API_PROVIDERS.filter((_, index) => origins[index] !== 'none');
+}
+
 /** Get an API key, throwing if not found. See trio doc above. */
 export async function getApiKey(
   secrets: PlatformSecrets,

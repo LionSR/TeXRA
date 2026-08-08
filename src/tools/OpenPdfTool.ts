@@ -49,7 +49,10 @@ export class OpenPdfTool extends defineTool({
     }
 
     const location = resolvePdfLocation(input.path);
-    const displayPath = displayPdfLocation(location);
+    const displayPath =
+      location.kind === 'workspace' || location.kind === 'runStorage'
+        ? location.relativePath
+        : location.absolutePath;
 
     if (!hasExtension(location.absolutePath, '.pdf')) {
       throw new ToolError(`open_pdf only opens PDF files: ${displayPath}`);
@@ -84,11 +87,4 @@ function resolvePdfLocation(rawPath: string): FileLocation {
 
   const resolved = resolveWorkspaceRelativePath(trimmed, currentToolRoot());
   return pathToLocation(resolved.absolute);
-}
-
-function displayPdfLocation(location: FileLocation): string {
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return location.relativePath;
-  }
-  return location.absolutePath;
 }

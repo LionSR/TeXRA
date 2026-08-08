@@ -1,4 +1,4 @@
-import type { PhaseStage, RoundStage, StreamStage } from '@shared/schemas';
+import type { RoundStage, StreamStage } from '@shared/schemas';
 
 /** The `stage.start` fact fields the normalizers below read. */
 interface StageStartLike {
@@ -25,18 +25,6 @@ export function roundStageFromStageStart(
   return { index: event.index ?? 0, ...boundedTotal(event.total) };
 }
 
-/** The `PhaseStage` payload of a `kind: "phase"` stage fact, or undefined. */
-function phaseStageFromStageStart(
-  event: StageStartLike,
-): PhaseStage | undefined {
-  if (event.kind !== 'phase') return undefined;
-  return {
-    label: event.label,
-    ...(event.index !== undefined ? { index: event.index } : {}),
-    ...boundedTotal(event.total),
-  };
-}
-
 /**
  * Normalize a `stage.start` fact into the discriminated slot. `run` and
  * `session` stages structure the trace, not run progress, so they yield
@@ -45,8 +33,14 @@ function phaseStageFromStageStart(
 export function streamStageFromStageStart(
   event: StageStartLike,
 ): StreamStage | undefined {
-  const phase = phaseStageFromStageStart(event);
-  if (phase) return { kind: 'phase', ...phase };
+  if (event.kind === 'phase') {
+    return {
+      kind: 'phase',
+      label: event.label,
+      ...(event.index !== undefined ? { index: event.index } : {}),
+      ...boundedTotal(event.total),
+    };
+  }
   const round = roundStageFromStageStart(event);
   return round && { kind: 'round', ...round };
 }

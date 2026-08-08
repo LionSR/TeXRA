@@ -43,6 +43,22 @@ describe('tool registry resolution', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('does not report an override when only key order differs', () => {
+    // Structural equality must be key-order independent: JSON.stringify
+    // comparison would false-positive here even though the content matches.
+    const warn = vi.fn();
+    const [registered] = resolveToolDefinitions(['grep']);
+    const reorderedParameters = Object.fromEntries(
+      Object.entries(
+        registered?.parameters as Record<string, unknown>,
+      ).reverse(),
+    );
+    const reordered = { ...registered, parameters: reorderedParameters };
+
+    expect(resolveToolDefinitions([reordered], warn)).toEqual([registered]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('keeps a definition the registry does not hold', () => {
     // An embedder registering agents as values supplies tools the built-in
     // registry never sees; their definition is all the model has to go on.

@@ -1,4 +1,4 @@
-import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
+import { configuredApiKeyProviders } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
@@ -138,11 +138,7 @@ export function formatCliApiStatusActionHint(
 }
 
 async function personalKeyProviders(): Promise<string[]> {
-  const secrets = platform().secrets;
-  const origins = await Promise.all(
-    API_PROVIDERS.map((provider) => lookupApiKeyOrigin(secrets, provider)),
-  );
-  return API_PROVIDERS.filter((_, index) => origins[index] !== 'none');
+  return configuredApiKeyProviders(platform().secrets);
 }
 
 interface CliApiStatus {

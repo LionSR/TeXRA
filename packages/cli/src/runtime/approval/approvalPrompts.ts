@@ -5,7 +5,6 @@ import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
-  isKimiCodeSubscriptionLimitError,
   type AgentProposalPermission,
   type ExhaustionReason,
   type PlanApprovalPermission,
@@ -41,8 +40,22 @@ export const CLI_PERSONAL_API_RETRY_HINT =
 export const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your ChatGPT subscription to your own API keys.';
 
-export const CLI_KIMI_CODE_SUBSCRIPTION_RETRY_HINT =
-  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your Kimi Code subscription to your own Moonshot API keys.';
+/** Coding-plan exhaustion reasons whose retry hint names the regular endpoint. */
+const CODING_PLAN_RETRY_HINTS: Readonly<Record<string, string>> = {
+  'glm-coding-plan':
+    'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your GLM Coding Plan to the regular GLM endpoint.',
+  'kimi-code-subscription':
+    'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your Kimi Code subscription to your own Moonshot API keys.',
+};
+
+/** Retry hint for an API-key-based coding-plan exhaustion, or undefined. */
+export function codingPlanRetryHint(
+  exhaustionReason: ExhaustionReason | undefined,
+): string | undefined {
+  return exhaustionReason
+    ? CODING_PLAN_RETRY_HINTS[exhaustionReason]
+    : undefined;
+}
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -79,19 +92,19 @@ export function isCliChatGptSubscriptionRetry(
   return isChatGptSubscriptionLimitError(payload.errorDetails);
 }
 
-/** Whether the failed retry was a Kimi Code subscription usage limit, so the
- *  switch turns off the "Prefer Kimi Code" preference rather than relay access. */
-export function isCliKimiCodeSubscriptionRetry(
-  payload: RetryPermission,
-): boolean {
-  return isKimiCodeSubscriptionLimitError(payload.errorDetails);
+/** Whether the failed retry was an API-key-based coding-plan usage limit (GLM
+ *  Coding Plan, Kimi Code), so the switch turns off the plan's toggle. */
+export function isCliCodingPlanRetry(payload: RetryPermission): boolean {
+  return (
+    codingPlanRetryHint(payload.errorDetails?.exhaustionReason) !== undefined
+  );
 }
 
 export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
   const details = payload.errorDetails;
   if (!details) return false;
   if (isChatGptSubscriptionLimitError(details)) return true;
-  if (isKimiCodeSubscriptionLimitError(details)) return true;
+  if (isCliCodingPlanRetry(payload)) return true;
   return (
     isCredentialExhausted(details) &&
     (details.isRelayError === true ||

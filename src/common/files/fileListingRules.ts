@@ -31,10 +31,6 @@ export interface PreparedFileFilters {
   sanitizedDirs: string[];
 }
 
-function getPathSegments(filePath: string): string[] {
-  return normalizeFilePath(filePath).split('/');
-}
-
 function trimNonEmpty(values: readonly string[]): string[] {
   return values
     .map((value) => value.trim())
@@ -128,9 +124,9 @@ export function prepareFileFilters(
 }
 
 function containsHiddenSegment(relativePath: string): boolean {
-  return getPathSegments(relativePath).some(
-    (segment) => segment.startsWith('.') && segment.length > 1,
-  );
+  return normalizeFilePath(relativePath)
+    .split('/')
+    .some((segment) => segment.startsWith('.') && segment.length > 1);
 }
 
 function containsExcludedDirectory(

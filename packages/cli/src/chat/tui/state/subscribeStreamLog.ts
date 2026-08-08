@@ -392,6 +392,37 @@ function computeFinalized(
   );
 }
 
+/**
+ * Fields every {@link ConversationEntry} shares, regardless of role: the
+ * source identity plus the two spreads (`messageType`, `settlementSeqNo`)
+ * that must stay absent — not merely `undefined` — when the source entry
+ * doesn't carry them, matching {@link ConversationEntry}'s optional-key shape.
+ */
+function baseLogEntryFields<R extends ConversationEntry['role']>(
+  entry: StreamLogEntry,
+  role: R,
+  text: string,
+) {
+  return {
+    id: entry.id,
+    sourceSeqNo: entry.seqNo,
+    role,
+    text,
+    ...(entry.messageType ? { messageType: entry.messageType } : {}),
+    ...(entry.settlementSeqNo !== undefined
+      ? { settlementSeqNo: entry.settlementSeqNo }
+      : {}),
+  };
+}
+
+/** Reuses `prev` when `next` is content-equal, so an unchanged row keeps identity. */
+function dedupeEntry(
+  prev: ConversationEntry | undefined,
+  next: ConversationEntry,
+): ConversationEntry {
+  return prev && entriesEqual(prev, next) ? prev : next;
+}
+
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
@@ -401,18 +432,11 @@ function renderLogEntry(
     const images = projectFileListImages(entry.data);
     if (images.length === 0) return null;
     const next: ConversationEntry = {
-      id: entry.id,
-      sourceSeqNo: entry.seqNo,
-      role: 'media',
-      text: '',
-      messageType: MESSAGE_TYPES.FILE_LIST,
+      ...baseLogEntryFields(entry, 'media', ''),
       finalized: true,
-      ...(entry.settlementSeqNo !== undefined
-        ? { settlementSeqNo: entry.settlementSeqNo }
-        : {}),
       images,
     };
-    return prev && entriesEqual(prev, next) ? prev : next;
+    return dedupeEntry(prev, next);
   }
 
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
@@ -433,15 +457,8 @@ function renderLogEntry(
     // `<Static>` (which is append-only). Inherit the prior flag so a sync
     // tick can't roll an already-promoted entry back to false.
     const next: ConversationEntry = {
-      id: entry.id,
-      sourceSeqNo: entry.seqNo,
-      role: 'tool',
-      text: '',
-      ...(entry.messageType ? { messageType: entry.messageType } : {}),
+      ...baseLogEntryFields(entry, 'tool', ''),
       finalized: computeFinalized(entry, prev),
-      ...(entry.settlementSeqNo !== undefined
-        ? { settlementSeqNo: entry.settlementSeqNo }
-        : {}),
       toolUse,
     };
     if (prev && entriesEqual(prev, next)) {
@@ -462,18 +479,15 @@ function renderLogEntry(
     if (!parsed.success) return null;
     const call = parsed.data;
     const next: ConversationEntry = {
-      id: entry.id,
-      sourceSeqNo: entry.seqNo,
-      role: 'workflowTask',
-      text: formatWorkflowCallLine(call),
-      messageType: entry.messageType,
+      ...baseLogEntryFields(
+        entry,
+        'workflowTask',
+        formatWorkflowCallLine(call),
+      ),
       finalized: computeFinalized(entry, prev),
-      ...(entry.settlementSeqNo !== undefined
-        ? { settlementSeqNo: entry.settlementSeqNo }
-        : {}),
       task: call,
     };
-    return prev && entriesEqual(prev, next) ? prev : next;
+    return dedupeEntry(prev, next);
   }
 
   // A phase header is immutable at GROUP_START and therefore printable
@@ -490,20 +504,13 @@ function renderLogEntry(
     const phaseIndex = phaseData.index ?? prevPhase?.phaseIndex;
     const phaseTotal = phaseData.total ?? prevPhase?.phaseTotal;
     const next: ConversationEntry = {
-      id: entry.id,
-      sourceSeqNo: entry.seqNo,
-      role: 'phase',
-      text: phaseLabel,
-      ...(entry.messageType ? { messageType: entry.messageType } : {}),
+      ...baseLogEntryFields(entry, 'phase', phaseLabel),
       finalized: true,
-      ...(entry.settlementSeqNo !== undefined
-        ? { settlementSeqNo: entry.settlementSeqNo }
-        : {}),
       phaseLabel,
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
     };
-    return prev && entriesEqual(prev, next) ? prev : next;
+    return dedupeEntry(prev, next);
   }
 
   // Workflow run/round/session lifecycle rows are projected into `taskGroups`,
@@ -535,14 +542,7 @@ function renderLogEntry(
   // change after they appear, so they finalize immediately.
   const finalized = computeFinalized(entry, prev, role !== 'assistant');
   const next: ConversationEntry = {
-    id: entry.id,
-    sourceSeqNo: entry.seqNo,
-    role,
-    text: renderedText,
-    ...(entry.messageType ? { messageType: entry.messageType } : {}),
-    ...(entry.settlementSeqNo !== undefined
-      ? { settlementSeqNo: entry.settlementSeqNo }
-      : {}),
+    ...baseLogEntryFields(entry, role, renderedText),
     ...(assistantTranscript !== undefined &&
     hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
       ? { pendingEmbeddedSubagentFollowup: true }
@@ -550,7 +550,7 @@ function renderLogEntry(
     finalized,
   };
   if (!isRenderableTranscriptEntry(next)) return null;
-  return prev && entriesEqual(prev, next) ? prev : next;
+  return dedupeEntry(prev, next);
 }
 
 // An entry is "settled" once its content can no longer change, so it is

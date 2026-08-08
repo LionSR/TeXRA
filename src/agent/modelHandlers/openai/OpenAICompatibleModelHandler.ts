@@ -1,4 +1,5 @@
 // Third-party imports
+import { ModelProvider } from 'llm-zoo';
 import OpenAI from 'openai';
 
 // Local imports
@@ -30,6 +31,19 @@ export abstract class OpenAICompatibleModelHandler<
   Resp = unknown,
   Media = unknown,
 > extends ModelHandler<M, U, T, OpenAI, Resp, Media> {
+  /** Runtime combinator (provider identity × reasoning capability), read by
+   * multiple call sites in `openai/` — kept as a named getter rather than
+   * inlined at each one (#7101 triage: DRY combinator, not per-provider
+   * override). Lives on the OpenAI-compatible base rather than the
+   * host-agnostic `ModelHandler` because it hard-codes an OpenAI provider
+   * check and has no reader outside this subtree. */
+  get isOReasoningModel(): boolean {
+    return (
+      this.config.provider === ModelProvider.OPENAI &&
+      this.capabilities.supportsReasoning
+    );
+  }
+
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.

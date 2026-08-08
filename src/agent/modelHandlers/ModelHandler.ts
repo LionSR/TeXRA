@@ -126,7 +126,7 @@ import {
  * module must stay free of provider SDK imports so host startup can load base
  * handler code without pulling OpenAI/Anthropic/Google clients into the eager graph.
  */
-export type SdkErrorTagger = (err: unknown, provider: string) => void;
+type SdkErrorTagger = (err: unknown, provider: string) => void;
 
 interface ClientCompactionResult<M> {
   compactedMessages: M[];
@@ -917,17 +917,6 @@ export abstract class ModelHandler<
     );
   }
 
-  /** Runtime combinator (provider identity × reasoning capability), read by
-   * multiple call sites in `openai/` — kept as a named getter rather than
-   * inlined at each one (#7101 triage: DRY combinator, not per-provider
-   * override). */
-  get isOReasoningModel(): boolean {
-    return (
-      this.config.provider === ModelProvider.OPENAI &&
-      this.capabilities.supportsReasoning
-    );
-  }
-
   /**
    * Normalizes a reasoning-effort value for the concrete handler.
    * Provider handlers override this hook when their API supports a narrower
@@ -1655,11 +1644,13 @@ export abstract class ModelHandler<
     reasoning: string,
     workspaceState?: AgentWorkspaceState,
   ): void {
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+    if (
+      workspaceState &&
+      workspaceState.reasoning.thinkingBlocks.length === 0
+    ) {
       workspaceState.reasoning.thinkingBlocks = [
         { type: 'thinking', thinking: reasoning },
       ];
-      workspaceState.reasoning.thinkingAdded = true;
     }
   }
 

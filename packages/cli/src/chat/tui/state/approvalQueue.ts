@@ -69,6 +69,9 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Turn off the "Prefer Kimi Code" preference before accepting, so a Kimi
    *  Code usage-limit retry routes through the Moonshot open-platform API key. */
   readonly disableKimiCode?: boolean;
+  /** Turn off the GLM Coding Plan toggle before accepting, so a GLM Coding
+   *  Plan usage-limit retry routes through the regular GLM endpoint. */
+  readonly disableGlmCodingPlan?: boolean;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
 }
@@ -307,18 +310,8 @@ function approvalQueueStatusKind(
 export function approvalPayloadStreamId(
   payload: ApprovalPayload,
 ): StreamTabId | undefined {
-  switch (payload.kind) {
-    case 'bash':
-    case 'planApproval':
-    case 'proposal':
-    case 'retry':
-    case 'externalInquiry':
-    case 'userQuestion':
-    case 'toolEdit':
-      return payload.payload.streamId || undefined;
-    default:
-      return assertNever(payload, 'Unhandled approval payload kind');
-  }
+  // Every payload variant carries a `streamId` field; all resolve the same way.
+  return payload.payload.streamId || undefined;
 }
 
 /**

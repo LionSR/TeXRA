@@ -36,6 +36,7 @@ import {
 } from '@agent/runtime/RunContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import * as logger from '@logger/logUtils';
+import type { FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import {
   ExecutionIdSchema,
@@ -1076,21 +1077,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       throw new ToolError(`File not found: ${displayPath}`);
     }
 
-    const stats = await StorageFS.stat(fullPath);
-    if (isDirectory(stats.type)) {
-      throw new ToolError(
-        `Path is a directory: ${displayPath}. Use without trailing path to list.`,
-      );
-    }
-
-    const content = await StorageFS.read(fullPath);
-    const lines = splitContentLines(content);
-
-    return formatFileView({
-      path: displayPath,
-      lines,
+    return readFileContent(StorageFS, fullPath, {
+      directoryErrorPath: displayPath,
+      resultPath: displayPath,
       viewRange,
-      maxLines: Infinity,
     });
   }
 
@@ -1163,19 +1153,51 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const stats = await AbsoluteFS.stat(resolved.absolutePath);
-    if (isDirectory(stats.type)) {
-      throw new ToolError(
-        `Path is a directory: /executions/${executionId}/workspace-files/${filePath}. Use without trailing path to list.`,
-      );
-    }
-
-    const content = await AbsoluteFS.read(resolved.absolutePath);
-    return formatFileView({
-      path: `/executions/${executionId}/workspace-files/${resolved.path}`,
-      lines: splitContentLines(content),
+    return readFileContent(AbsoluteFS, resolved.absolutePath, {
+      directoryErrorPath: `/executions/${executionId}/workspace-files/${filePath}`,
+      resultPath: `/executions/${executionId}/workspace-files/${resolved.path}`,
       viewRange,
-      maxLines: Infinity,
     });
   }
+}
+
+/**
+ * Shared stat → directory-guard → read → format tail for `readFile` and
+ * `readWorkspaceFile`, which differ only in which FS backend resolved the
+ * path. `directoryErrorPath` and `resultPath` can differ (a workspace-file
+ * read reports the raw requested path on error but the canonical resolved
+ * path on success).
+ */
+interface FileBackend {
+  stat: (target: string) => Promise<FileStat>;
+  read: (target: string) => Promise<string>;
+}
+
+async function readFileContent(
+  fs: FileBackend,
+  fullPath: string,
+  {
+    directoryErrorPath,
+    resultPath,
+    viewRange,
+  }: {
+    directoryErrorPath: string;
+    resultPath: string;
+    viewRange: [number, number] | undefined;
+  },
+): Promise<ToolResult> {
+  const stats = await fs.stat(fullPath);
+  if (isDirectory(stats.type)) {
+    throw new ToolError(
+      `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
+    );
+  }
+
+  const content = await fs.read(fullPath);
+  return formatFileView({
+    path: resultPath,
+    lines: splitContentLines(content),
+    viewRange,
+    maxLines: Infinity,
+  });
 }

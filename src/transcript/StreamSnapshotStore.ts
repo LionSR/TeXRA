@@ -51,7 +51,6 @@ import {
   type StreamTabMeta,
   type TodoItem,
   type TokenUsageStats,
-  type UpdateStreamUsagePayload,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { mapToRecord } from '@utils/core';
@@ -331,7 +330,7 @@ export class StreamSnapshotStore {
   private readonly deletions = new StagedDeletionCoordinator({
     queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
     cancelPendingWrites: (stream) => this.cancelPendingWritesForStream(stream),
-    bumpStreamVersion: (stream) => this.bumpStreamVersion(stream),
+    bumpStreamVersion: (stream) => this.records.bumpVersion(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
     invalidateKvHandles: (stream) => this.invalidateKvHandles(stream),
     evict: (stream) => this.evict(stream),
@@ -397,10 +396,6 @@ export class StreamSnapshotStore {
     return this.records.version(stream);
   }
 
-  private bumpStreamVersion(stream: StreamTabId): void {
-    this.records.bumpVersion(stream);
-  }
-
   private canMutateSynchronously(stream: StreamTabId): boolean {
     const record = this.records.get(stream);
     if (record?.seeded) return true;
@@ -436,7 +431,12 @@ export class StreamSnapshotStore {
             this.setRunConfig(event.streamId, event.config, event.executionId);
             return;
           case 'usage':
-            this.handleSessionUsageEvent(event.payload);
+            // `addUsage`'s safeParse is the wire→domain narrowing boundary.
+            void this.addUsage(
+              event.payload.streamId,
+              event.payload.storageKey,
+              event.payload.usage,
+            );
             return;
           case 'updateTodos':
             this.setTodos(event.streamId, event.todos);
@@ -500,13 +500,6 @@ export class StreamSnapshotStore {
       detachSessionEvents();
       detachRunEvents();
     };
-  }
-
-  private handleSessionUsageEvent(payload: UpdateStreamUsagePayload): void {
-    // `addUsage`'s safeParse owns the wire→domain narrowing: it strips the
-    // extended wire fields (elapsedTime/percentageCached/toolUseTokens), so
-    // restating the base field list here would duplicate the schema.
-    void this.addUsage(payload.streamId, payload.storageKey, payload.usage);
   }
 
   /**

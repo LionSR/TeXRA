@@ -43,7 +43,6 @@ type SetMultipleFilesMessage =
 function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
   const files = message.files ?? [];
   const list = MULTI_FILE_LIST_BY_SET_COMMAND[message.command];
-  if (!list) return;
 
   multiFiles$.set({ ...multiFiles$.get(), [list.key]: files });
 }
