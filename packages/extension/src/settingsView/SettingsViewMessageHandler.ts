@@ -64,15 +64,12 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  readPersistedTexraApprovalPolicy,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
-import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
+import {
+  applyStateSettingUpdate,
+  postStateSettingSnapshot as dispatchStateSettingSnapshot,
+} from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -91,7 +88,7 @@ import {
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { StorageFS, WorkspaceFS } from '@utils/files';
-import { assertNever, debounce } from '@utils/core';
+import { debounce } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
@@ -696,91 +693,67 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * Generic write path for catalog-backed settings-view rows.
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
-    const write = resolveStateSettingWrite(key, value);
-    if (!write) return;
-    if (write.kind === 'rejected') {
+    const result = await applyStateSettingUpdate(key, value, {
+      stores: {
+        config: platform().config,
+        workspaceState: workspaceSM,
+        globalState: globalSM,
+      },
+      // The shared function already gates this hook on
+      // `configTarget !== 'global'`; this checks only the workspace half.
+      requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
+      onApprovalPolicyChanged: (policy) => {
+        defaultSession().setApprovalPolicy(policy);
+        refreshApprovalPolicyTooltip();
+      },
+    });
+    if (result.kind === 'ignored') return;
+    if (result.kind === 'rejected') {
       await showLoggedErrorMessage(
         this.channel,
-        `Invalid value for “${write.entry.title ?? write.entry.key}”`,
-        write.error,
+        `Invalid value for “${result.entry.title ?? result.entry.key}”`,
+        result.error,
       );
-      await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
-      return;
-    }
-    if (
-      write.entry.store === 'config' &&
-      write.entry.configTarget !== 'global' &&
-      !WorkspaceFS.getPath()
-    ) {
+    } else if (result.kind === 'workspace-required') {
       void showLoggedInfoMessage(
         this.channel,
-        `Open a workspace folder before changing the “${write.entry.title ?? write.entry.key}” setting.`,
+        `Open a workspace folder before changing the “${result.entry.title ?? result.entry.key}” setting.`,
       );
-      await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
-      return;
-    }
-    const stores = {
-      config: platform().config,
-      workspaceState: workspaceSM,
-      globalState: globalSM,
-    };
-    try {
-      await (write.kind === 'reset'
-        ? resetSetting(write.entry, stores)
-        : writeSetting(write.entry, write.value, stores));
-      if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
-        defaultSession().setApprovalPolicy(
-          write.kind === 'reset'
-            ? readPersistedTexraApprovalPolicy((key, fallback) =>
-                platform().config.get(key, fallback),
-              )
-            : (write.value as TexraApprovalPolicy),
-        );
-        refreshApprovalPolicyTooltip();
-      }
-    } catch (error) {
+    } else if (result.kind === 'failed') {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to update “${write.entry.title ?? write.entry.key}”`,
-        error,
+        `Failed to update “${result.entry.title ?? result.entry.key}”`,
+        result.error,
       );
     }
-    await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+    await this.postStateSettingSnapshot(result.entry.settingsViewSnapshot);
   }
 
   private async postStateSettingSnapshot(
     snapshot: SettingsViewSnapshot,
   ): Promise<void> {
-    switch (snapshot) {
-      case 'agent-skills':
-        await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
-        break;
-      case 'approval':
-        await this.withActiveWebview((w) => this.sendApprovalSettings(w));
-        break;
-      case 'git-author': {
+    await dispatchStateSettingSnapshot(snapshot, {
+      'agent-skills': () =>
+        this.withActiveWebview((w) => this.sendAgentSkillsSettings(w)),
+      approval: () =>
+        this.withActiveWebview((w) => this.sendApprovalSettings(w)),
+      'git-author': () => {
         const settings = applyGitAuthorConfig();
-        await this.withActiveWebview((w) =>
+        return this.withActiveWebview((w) =>
           this.sendGitAuthorSettings(w, settings),
         );
-        break;
-      }
-      case 'latex':
-        await this.withActiveWebview((w) =>
+      },
+      latex: () =>
+        this.withActiveWebview((w) =>
           this.latexHandlers.sendLatexConfigValues(w),
-        );
-        break;
-      case 'multi-agent':
-        await this.withActiveWebview((w) =>
+        ),
+      'multi-agent': () =>
+        this.withActiveWebview((w) =>
           this.sendReliabilityAndOrchestrationSettings(w),
-        );
-        break;
-      case 'telemetry':
-        await this.withActiveWebview((w) => this.sendTelemetrySettings(w));
-        break;
-      default:
-        assertNever(snapshot, 'Unhandled settings-view snapshot');
-    }
+        ),
+      telemetry: () =>
+        this.withActiveWebview((w) => this.sendTelemetrySettings(w)),
+    });
   }
 
   // ============================================================
