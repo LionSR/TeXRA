@@ -14,7 +14,7 @@ import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import {
   SettingsProfileController,
-  SHARED_PROVIDER_PROFILE_DEFAULTS,
+  getSharedProviderProfileDefaults,
 } from '@controllers/settingsView/SettingsProfileController';
 import {
   buildModelSelectionMessage,
@@ -144,7 +144,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       options.modelSelectionExtras,
     );
     this.profileController = new SettingsProfileController({
-      ...SHARED_PROVIDER_PROFILE_DEFAULTS,
+      ...getSharedProviderProfileDefaults(),
       globalState: options.globalState,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
