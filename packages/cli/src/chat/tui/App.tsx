@@ -9,15 +9,12 @@ import {
   useMemo,
   useReducer,
   useRef,
-  useState,
 } from 'react';
 
 // Local imports - shared runtime
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { type StreamTabId } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
 import {
@@ -46,7 +43,6 @@ import {
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import { orderedStaticTranscriptEntries } from './panes/transcriptEntries';
 import {
   currentApproval,
   pendingApprovalSummaries,
@@ -79,10 +75,8 @@ import {
   openTranscriptReader,
   transcriptReaderStreamId as transcriptReaderStreamIdSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
-  setTransientNotice,
   slashPaletteOpen as slashPaletteOpenSignal,
   streams as streamsSignal,
-  type StreamSlice,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
@@ -92,10 +86,6 @@ import {
   subagentExecutionLabels as subagentExecutionLabelsSignal,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
-import {
-  createTranscriptPrintRequest,
-  type TranscriptPrintRequest,
-} from './state/transcriptLines';
 import {
   childListStreamId,
   childStreamListValue,
@@ -111,8 +101,6 @@ import {
 } from './state/workflowDashboardModel';
 import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
-import { syncStreamLog } from './state/subscribeStreamLog';
-import { transcriptViewportKey } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
 
 // Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
@@ -120,13 +108,6 @@ interface InputEventEmitterLike {
   emit(event: 'input', data: string): void;
   on(event: 'input', listener: (data: string) => void): void;
   off(event: 'input', listener: (data: string) => void): void;
-}
-
-const NO_TRANSCRIPT_PRINTS: readonly TranscriptPrintRequest[] = [];
-
-function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
-  if (!slice) return undefined;
-  return orderedStaticTranscriptEntries(slice.entries, slice.status).at(-1)?.id;
 }
 
 // Jump-to-waiting: surface the newly focused stream's pending approval right
@@ -194,10 +175,6 @@ export function App(props: AppProps): React.JSX.Element {
   const selectedChildValue = childListSelection.selectedValue;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
-  const [transcriptPrints, setTranscriptPrints] = useState<
-    readonly TranscriptPrintRequest[]
-  >([]);
-  const nextTranscriptPrintId = useRef(0);
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
@@ -270,18 +247,6 @@ export function App(props: AppProps): React.JSX.Element {
   }, [inputDisabled, stdin]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const transcriptOwnerKey = transcriptViewportKey({
-    activeStreamId,
-    parentStream,
-  });
-  const sessionEmpty = rootStreamId === undefined && streams.size === 0;
-  const visibleTranscriptPrints = sessionEmpty
-    ? NO_TRANSCRIPT_PRINTS
-    : transcriptPrints;
-  useEffect(() => {
-    if (!sessionEmpty) return;
-    setTranscriptPrints((current) => (current.length > 0 ? [] : current));
-  }, [sessionEmpty]);
   const sessionViews = useMemo(
     () =>
       streamTreeViews({
@@ -355,8 +320,6 @@ export function App(props: AppProps): React.JSX.Element {
       : undefined;
   const selectedChildStreamId =
     childListStreamId(selectedChildValue) ?? selectedWorkflowChildStreamId;
-  const selectedChildKind =
-    selectedChildStreamId !== undefined ? 'stream' : undefined;
   const selectedChildKillable =
     selectedChildStreamId !== undefined &&
     activeSubagentExecutionIds.has(selectedChildStreamId);
@@ -485,7 +448,6 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={availableRows}
             executionLabels={subagentExecutionLabels}
             onClose={closeTranscriptReader}
-            onPrintToScrollback={printStreamOutput}
             streamId={transcriptReaderStreamId}
             title={title}
           />
@@ -539,40 +501,6 @@ export function App(props: AppProps): React.JSX.Element {
       return true;
     }
     return false;
-  };
-
-  const printStreamOutput = (streamId: StreamTabId): void => {
-    void defaultSession()
-      .transcripts.ensureLoaded(streamId)
-      .then(() => {
-        syncStreamLog(streamId, { forceFull: true });
-        const currentActiveStreamId = activeStreamIdSignal.get();
-        const currentStreams = streamsSignal.get();
-        nextTranscriptPrintId.current += 1;
-        const request = createTranscriptPrintRequest({
-          afterEntryId: lastStaticEntryId(
-            currentActiveStreamId
-              ? currentStreams.get(currentActiveStreamId)
-              : undefined,
-          ),
-          id: `printed-transcript:${nextTranscriptPrintId.current}`,
-          ownerKey: transcriptOwnerKey,
-          slice: currentStreams.get(streamId),
-          title: streamDisplayLabel({
-            childStreamEntries,
-            parentStream,
-            streamId,
-            streams: currentStreams,
-          }),
-        });
-        setTranscriptPrints((current) => [...current, request]);
-        if (currentActiveStreamId !== streamId) syncStreamLog(streamId);
-      })
-      .catch((error: unknown) => {
-        setTransientNotice(
-          `Could not load transcript: ${toErrorMessage(error)}`,
-        );
-      });
   };
 
   const appOwnsEscape = (): boolean => {
@@ -805,7 +733,6 @@ export function App(props: AppProps): React.JSX.Element {
                 foregroundOpen || reverseSearchOpen || slashPaletteOpen
               }
               childListFocused={childListFocused}
-              childListSelectionKind={selectedChildKind}
               childListSelectionKillable={selectedChildKillable}
               childListSelectionWorkflowControllable={
                 selectedChildWorkflowControllable
@@ -835,14 +762,12 @@ export function App(props: AppProps): React.JSX.Element {
           activeSubagentExecutionIds,
           childListTarget,
           pendingApprovals: pendingApprovalsForRows,
-          transcriptPrints: visibleTranscriptPrints,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillExecution={props.onKillExecution}
         onSkipExecution={props.onSkipExecution}
         onRetryExecution={props.onRetryExecution}
-        onPrintStream={printStreamOutput}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

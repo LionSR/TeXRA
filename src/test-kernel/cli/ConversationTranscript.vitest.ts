@@ -45,12 +45,7 @@ import {
   type StreamSlice,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
-import {
-  createTranscriptPrintRequest,
-  formatTranscriptForScrollback,
-  transcriptToLines,
-  type TranscriptPrintRequest,
-} from '@cli/chat/tui/state/transcriptLines';
+import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import {
   CLI_LOCAL_STREAM_ID,
   finalizeAssistantTranscriptEntries,
@@ -723,87 +718,6 @@ describe('CLI conversation transcript', () => {
     expect(second.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
   });
 
-  it('appends each print request once in transcript order', () => {
-    const user = entry('u1', 'user', 'Print the derivation.', true);
-    const assistant = entry('a1', 'assistant', 'Later result.', true);
-    const request = createTranscriptPrintRequest({
-      afterEntryId: 'u1',
-      id: 'printed-transcript:1',
-      ownerKey: 'root-scrollback',
-      slice: sliceWithEntries(STREAM_ID, [
-        user,
-        toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'complete result'),
-      ]),
-      title: 'assistant',
-    });
-    const beforePrint = staticItems([user]);
-    const first = staticItems([user, assistant], {
-      currentItems: beforePrint,
-      printRequests: [request],
-    });
-
-    expect(first.map((item) => item.id)).toEqual([
-      'session-header',
-      'u1',
-      'printed-transcript:1',
-      'a1',
-    ]);
-    expect(first.at(-2)).toMatchObject({
-      kind: 'printedTranscript',
-      request: { title: 'assistant' },
-    });
-    expect(
-      staticItems([user, assistant], {
-        currentItems: first,
-        printRequests: [request],
-      }),
-    ).toBe(first);
-  });
-
-  it('rebuilds owner-scoped print history with the header first', () => {
-    const user = entry('u1', 'user', 'Before printing.', true);
-    const assistant = entry('a1', 'assistant', 'After printing.', true);
-    const request = createTranscriptPrintRequest({
-      afterEntryId: 'u1',
-      id: 'printed-transcript:root',
-      ownerKey: 'root-scrollback',
-      slice: sliceWithEntries(STREAM_ID, [
-        toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'complete result'),
-      ]),
-      title: 'assistant',
-    });
-    const compact = staticItems([user, assistant], {
-      maxRows: 0,
-      printRequests: [request],
-      width: 80,
-    });
-    expect(compact.map((item) => item.id)).toEqual([
-      'u1',
-      'printed-transcript:root',
-      'a1',
-    ]);
-
-    const withHeader = [
-      'session-header',
-      'u1',
-      'printed-transcript:root',
-      'a1',
-    ];
-    expect(
-      staticItemIds([user, assistant], {
-        printRequests: [request],
-        width: 80,
-      }),
-    ).toEqual(withHeader);
-    expect(
-      staticItemIds([user, assistant], {
-        currentItems: compact,
-        printRequests: [request],
-        width: 80,
-      }),
-    ).toEqual(withHeader);
-  });
-
   it('shows the session header exactly once', () => {
     const first = appendStaticTranscriptItems({
       scrollbackStreamId: undefined,
@@ -1268,45 +1182,6 @@ describe('CLI conversation transcript', () => {
       expect(printed.lines.every((line) => line.length <= 20)).toBe(true);
     }
   });
-
-  it('prints full output as one control-safe terminal block', () => {
-    const text = formatTranscriptForScrollback({
-      cols: 80,
-      request: createTranscriptPrintRequest({
-        id: 'printed-transcript:1',
-        ownerKey: 'root-scrollback',
-        slice: sliceWithEntries(STREAM_ID, [
-          entry(
-            'a1',
-            'assistant',
-            '\u0000\u001b[31manswer\u001b[0m\u001b[2J\u0007\b\u007f',
-            true,
-          ),
-          toolEntry(
-            't1',
-            'completed',
-            'first\rsecond\tindented\u001b]0;unsafe\u001b\\\u009b2J\u009dtitle\u009c',
-          ),
-        ]),
-        title: 'assistant\nrenamed\u0007',
-      }),
-    });
-
-    expect(text).toContain('[Full output: assistant renamed]');
-    expect(text).toContain('answer');
-    expect(text).toContain('first');
-    expect(text).toContain('second');
-    expect(text).toContain('  indented');
-    expect(text).not.toContain('\u001b');
-    expect(text).not.toContain('\u0007');
-    expect(
-      [...text].every((char) => {
-        const code = char.charCodeAt(0);
-        return code === 10 || (code >= 32 && (code < 127 || code > 159));
-      }),
-    ).toBe(true);
-    expect(text.endsWith('\n')).toBe(true);
-  });
 });
 
 function sliceWithEntries(
@@ -1342,7 +1217,6 @@ function staticItems(
   options: {
     readonly currentItems?: readonly StaticTranscriptItem[];
     readonly maxRows?: number;
-    readonly printRequests?: readonly TranscriptPrintRequest[];
     readonly width?: number;
   } = {},
 ): readonly StaticTranscriptItem[] {
@@ -1350,7 +1224,6 @@ function staticItems(
     currentItems: options.currentItems ?? [],
     maxRows: options.maxRows,
     meta: SESSION_META,
-    printRequests: options.printRequests,
     scrollbackStreamId: STREAM_ID,
     streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
     width: options.width,

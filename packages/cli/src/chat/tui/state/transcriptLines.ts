@@ -1,38 +1,12 @@
-// Flatten a stream's conversation entries into full-fidelity plain-text lines
-// for print-once terminal output. Unlike the finalized scrollback and the live
-// region, this renders every tool-output line.
+// Flatten a stream's conversation entries into full-fidelity plain-text
+// display lines. Unlike the finalized scrollback and the live region, this
+// renders every tool-output line.
 
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
-import { safeTerminalText } from '../render/terminalText';
 import type { ConversationEntry, StreamSlice } from './cliState';
-
-export interface TranscriptPrintRequest {
-  readonly afterEntryId?: string;
-  readonly id: string;
-  readonly ownerKey: string;
-  readonly slice: StreamSlice | undefined;
-  readonly title?: string;
-}
-
-/** Capture the stream state at the moment the user asks to print it. */
-export function createTranscriptPrintRequest({
-  afterEntryId,
-  id,
-  ownerKey,
-  slice,
-  title,
-}: TranscriptPrintRequest): TranscriptPrintRequest {
-  return {
-    afterEntryId,
-    id,
-    ownerKey,
-    title,
-    slice: slice ? { ...slice, entries: [...slice.entries] } : undefined,
-  };
-}
 
 // Wrapped-line cache keyed by the immutable entry object. Entries are
 // replaced (never mutated in place) when their content changes, so hits are
@@ -161,24 +135,4 @@ export function transcriptToLines(
     previousLines = lines;
   }
   return out;
-}
-
-/** Format one immutable request for the terminal's static scrollback. */
-export function formatTranscriptForScrollback({
-  cols,
-  executionLabels = EMPTY_EXECUTION_LABELS,
-  request,
-}: {
-  readonly cols: number;
-  readonly executionLabels?: ExecutionLabels;
-  readonly request: TranscriptPrintRequest;
-}): string {
-  const heading = safeTerminalText(request.title ?? '')
-    .replaceAll('\n', ' ')
-    .trim();
-  const body = safeTerminalText(
-    transcriptToLines(request.slice, cols, executionLabels).join('\n'),
-  );
-  const label = heading ? `Full output: ${heading}` : 'Full output';
-  return `\n[${label}]\n${body.trimEnd() || '(no output yet)'}\n`;
 }
