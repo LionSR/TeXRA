@@ -26,13 +26,9 @@ interface MutableEditorTreeDirectory {
   readonly children: Map<string, MutableEditorTreeNode>;
 }
 
-interface MutableEditorTreeFile {
-  readonly kind: 'file';
-  readonly name: string;
-  readonly path: string;
-}
-
-type MutableEditorTreeNode = MutableEditorTreeDirectory | MutableEditorTreeFile;
+// File nodes are never mutated between the mutable build-tree and the frozen
+// result, so the frozen EditorTreeFile serves both roles.
+type MutableEditorTreeNode = MutableEditorTreeDirectory | EditorTreeFile;
 type NamedTreeNode = Pick<EditorTreeNode, 'kind' | 'name'>;
 
 function compareTreeNodes(left: NamedTreeNode, right: NamedTreeNode): number {

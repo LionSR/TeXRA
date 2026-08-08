@@ -6,7 +6,6 @@ import {
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
 import {
-  formatDesktopAccelerator,
   toElectronAccelerator,
   toPlatformAccelerator,
 } from '@shared/commands/accelerators';

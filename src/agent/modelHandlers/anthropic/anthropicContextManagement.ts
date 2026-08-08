@@ -47,10 +47,6 @@ export function isLongCacheControl(cacheControl: unknown): boolean {
   return marker.type === 'ephemeral' && marker.ttl === '1h';
 }
 
-// Cache creation cost multipliers relative to base input price, by TTL.
-export const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
-export const CACHE_CREATION_COST_MULTIPLIER_1H = 2.0;
-
 // Anthropic allows up to 4 cache breakpoint slots total.
 const MAX_CACHE_BREAKPOINT_SLOTS = 4;
 
