@@ -156,7 +156,7 @@ describe('wolframScriptUtils', () => {
     vi.restoreAllMocks();
   });
 
-  it('executeWolframCode delegates to runWolfram with code args', async () => {
+  it('executeWolframCode runs wolframscript with code args', async () => {
     vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
     const executeCommand = vi
       .spyOn(execUtils, 'executeCommand')

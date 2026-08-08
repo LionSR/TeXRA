@@ -23,10 +23,7 @@ import {
   buildStatusBadge,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import {
-  stringifyWithLanguage,
-  extractCodeOnlyInput,
-} from '@progressView/frontend/formatters/parseUtils';
+import { stringifyWithLanguage } from '@progressView/frontend/formatters/parseUtils';
 import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
@@ -581,18 +578,20 @@ function buildDefaultSections(ctx: ToolSectionContext): TemplateResult[] {
   const { toolName, input } = ctx;
   if (input == null) return [];
   const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
-  const { isCodeOnly, code } = codeLanguage
-    ? extractCodeOnlyInput(input)
-    : { isCodeOnly: false, code: '' };
 
-  if (isCodeOnly) {
-    return [
-      buildToolSection('', code, {
-        toolName,
-        language: codeLanguage,
-        extraClass: 'tool-command-input',
-      }),
-    ];
+  // Code-only input (wolfram `code` / bash `command`) renders with syntax
+  // highlighting instead of falling back to YAML serialization.
+  if (codeLanguage && isObject(input)) {
+    const codeValue = input.code ?? input.command;
+    if (typeof codeValue === 'string') {
+      return [
+        buildToolSection('', codeValue, {
+          toolName,
+          language: codeLanguage,
+          extraClass: 'tool-command-input',
+        }),
+      ];
+    }
   }
   const { text: inputValue, language: inputLanguage } =
     stringifyWithLanguage(input);

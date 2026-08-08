@@ -13,9 +13,9 @@ import { z } from 'zod';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { warn } from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
+import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
-import { rateLimitedRequest } from '@tools/citation/rateLimiter';
+import { rateLimitedApiCall } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import {
   type ArxivSearchResult,
@@ -129,15 +129,12 @@ export class ArxivSearchTool extends defineTool({
       client = client.sortOrder(input.sortOrder);
     }
 
-    const entries = await wrapApiCall(
-      () =>
-        rateLimitedRequest(
-          'arxiv',
-          ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
-          'arXiv search',
-          () => client.execute(),
-        ),
+    const entries = await rateLimitedApiCall(
+      'arxiv',
+      ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
+      'arXiv search',
       'Failed to query arXiv API',
+      () => client.execute(),
     );
 
     const results: ArxivSearchResult[] = entries.map((entry) => {
