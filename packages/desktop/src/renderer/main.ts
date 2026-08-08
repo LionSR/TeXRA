@@ -21,7 +21,7 @@ import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { create as mutate } from 'mutative';
 import '@progressView/frontend';
-import '@progressView/frontend/components/TexraDiffView';
+import './TexraDiffView';
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
   handleFileAction,
