@@ -14,6 +14,7 @@ import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { unique } from '@utils/core';
+import { getGLMCodingPlan } from '@utils/config/providerConfig';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
@@ -259,9 +260,20 @@ export function formatModelStatusForCliMode(
   apiMode: ApiAccessMode,
 ): string {
   if (apiMode === 'personal') {
-    return model.model.provider === 'kimiCode'
-      ? 'api: Kimi Code subscription'
-      : `api: ${model.status}`;
+    if (model.model.provider === 'kimiCode')
+      return 'api: Kimi Code subscription';
+    // GLM models route through the Coding Plan endpoint when the toggle is on.
+    // Gate on the resolved provider-key route (not just provider + toggle): the
+    // coding-plan path only applies to the direct GLM endpoint, never to an
+    // OpenRouter route, which stays reported as its own key status.
+    if (
+      model.model.provider === 'glm' &&
+      model.model.availability === 'provider-key' &&
+      getGLMCodingPlan()
+    ) {
+      return 'api: GLM Coding Plan';
+    }
+    return `api: ${model.status}`;
   }
 
   const availability = model.model.availability;

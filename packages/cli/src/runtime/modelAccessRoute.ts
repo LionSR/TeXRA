@@ -13,12 +13,13 @@ export type CliModelAccessRoute =
   'chatgpt' | 'grok' | 'kimi-code' | 'included' | 'personal';
 
 type CliSubscriptionPreferenceState = 'off' | 'on';
-type CliSubscriptionProvider = 'chatgpt' | 'grok' | 'kimi-code';
+type CliSubscriptionProvider = 'chatgpt' | 'grok' | 'kimi-code' | 'glm-code';
 
 interface CliSubscriptionPreferences {
   readonly chatGpt: CliSubscriptionPreferenceState;
   readonly grok: CliSubscriptionPreferenceState;
   readonly kimiCode: CliSubscriptionPreferenceState;
+  readonly glmCode: CliSubscriptionPreferenceState;
 }
 
 export type CliModelAccessSelection =
@@ -57,6 +58,7 @@ export interface CliModelAccessStatus {
   readonly grokSignedIn: boolean;
   readonly grokAccountLabel?: string;
   readonly kimiCodeKeySet?: boolean;
+  readonly glmKeySet?: boolean;
   readonly texraSignedIn?: boolean;
   /** Display names of providers with configured API keys (e.g. `['DeepSeek']`). */
   readonly personalKeyProviders?: readonly string[];
@@ -114,6 +116,16 @@ export function parseCliModelAccessSelection(
       return {
         kind: 'subscription-preference',
         provider: 'kimi-code',
+        state: 'on',
+      };
+    case 'glm':
+    case 'glmcode':
+    case 'glm-code':
+    case 'glm-coding':
+    case 'glm-coding-plan':
+      return {
+        kind: 'subscription-preference',
+        provider: 'glm-code',
         state: 'on',
       };
     default:
@@ -257,6 +269,19 @@ export function formatCliKimiCodePreference(
     : 'Off · key required to enable';
 }
 
+/** Format the GLM Coding Plan preference independently of key availability. */
+export function formatCliGlmCodingPlanPreference(
+  status: CliModelAccessStatus,
+): string {
+  if (status.preferences.glmCode === 'on' && status.glmKeySet !== true) {
+    return 'On · key required';
+  }
+  if (status.preferences.glmCode === 'on') return 'On · key configured';
+  return status.glmKeySet === true
+    ? 'Off · key configured'
+    : 'Off · key required to enable';
+}
+
 const cliSubscriptionAccessItems = [
   {
     provider: 'chatgpt',
@@ -275,6 +300,12 @@ const cliSubscriptionAccessItems = [
     preference: 'kimiCode',
     label: 'Prefer Kimi Code subscription',
     formatDescription: formatCliKimiCodePreference,
+  },
+  {
+    provider: 'glm-code',
+    preference: 'glmCode',
+    label: 'Prefer GLM Coding Plan',
+    formatDescription: formatCliGlmCodingPlanPreference,
   },
 ] as const satisfies ReadonlyArray<{
   readonly provider: CliSubscriptionProvider;
@@ -338,5 +369,6 @@ export function formatCliModelAccessSummary(
   const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
   const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
   const kimiCode = status.preferences.kimiCode === 'on' ? 'On' : 'Off';
-  return `ChatGPT ${chatGpt} · Grok ${grok} · Kimi ${kimiCode} · otherwise: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
+  const glmCode = status.preferences.glmCode === 'on' ? 'On' : 'Off';
+  return `ChatGPT ${chatGpt} · Grok ${grok} · Kimi ${kimiCode} · GLM ${glmCode} · otherwise: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
 }
