@@ -18,7 +18,7 @@ import type {
   SpendingStatus,
   SpendingStatusError,
 } from '@shared/schemas/spendingStatus';
-import type { SessionProblem } from '@shared/schemas/profileViewMessages';
+import type { SessionProblem } from '@shared/schemas/settingsViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';

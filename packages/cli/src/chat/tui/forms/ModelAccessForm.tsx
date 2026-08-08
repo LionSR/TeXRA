@@ -14,7 +14,7 @@ import {
 
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { ListForm } from './_shared/ListForm';
 
 interface ModelAccessFormProps {
