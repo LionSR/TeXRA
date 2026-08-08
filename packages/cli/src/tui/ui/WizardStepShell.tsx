@@ -36,7 +36,9 @@ export function WizardStepShell({
           ))}
         </Box>
       ) : null}
-      <Box marginTop={1}>{children}</Box>
+      <Box marginTop={1} flexDirection="column">
+        {children}
+      </Box>
       {footerHints.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
           {footerHints.map((hint) => (
