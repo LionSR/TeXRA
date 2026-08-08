@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, expect, vi } from 'vitest';
 
 // Local imports - auth
+import { SUPABASE_GOTRUE_STORAGE_KEY } from '@auth/config';
 import {
   RELAY_CI_TOKEN_PREFIX,
   RELAY_TOKEN_ENV_VAR,
@@ -11,6 +12,7 @@ import {
 } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
+import type { SessionSecretStore } from '@auth/oauth/sessionAccess';
 import * as logger from '@logger/logUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
@@ -278,5 +280,174 @@ describe('SupabaseClient', () => {
     );
 
     assert.equal(SupabaseClient.isTokenExpiringSoon(), true);
+  });
+});
+
+describe('SupabaseClient PKCE flow state', () => {
+  const SUPABASE_URL = 'https://example.supabase.co';
+  const VERIFIER_KEY = `${SUPABASE_GOTRUE_STORAGE_KEY}-code-verifier`;
+
+  afterEach(() => {
+    SupabaseClient.resetForTests();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /** Stand-in for the host secret store, shared by every editor window. */
+  function secretStore(): SessionSecretStore & {
+    entries: Map<string, string>;
+  } {
+    const entries = new Map<string, string>();
+    return {
+      entries,
+      get: async (key) => entries.get(key),
+      set: async (key, value) => {
+        entries.set(key, value);
+      },
+      delete: async (key) => {
+        entries.delete(key);
+      },
+    };
+  }
+
+  /** Start browser OAuth without navigating, as a host window would. */
+  async function startSignIn(): Promise<void> {
+    const { error } = await SupabaseClient.getClient().auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'https://remote.texra.ai/functions/v1/auth-bridge/cursor/x',
+        skipBrowserRedirect: true,
+      },
+    });
+    assert.equal(error, null);
+  }
+
+  it('persists only the flow state, never the session slot', async () => {
+    const secrets = secretStore();
+    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+
+    await startSignIn();
+
+    // A flow start writes its numbered slot, the slot index, and the fixed
+    // legacy key the callback reads. All three are keys GoTrue derives from
+    // its storage key; the storage key itself is the session slot and must
+    // never appear here.
+    const keys = [...secrets.entries.keys()];
+    assert.ok(keys.includes(VERIFIER_KEY));
+    assert.ok(!keys.includes(SUPABASE_GOTRUE_STORAGE_KEY));
+    assert.ok(
+      keys.every((key) => key.startsWith(`${SUPABASE_GOTRUE_STORAGE_KEY}-`)),
+      `unexpected persisted keys: ${keys.join(', ')}`,
+    );
+  });
+
+  it('completes a callback delivered to a different client instance', async () => {
+    const secrets = secretStore();
+    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+    await startSignIn();
+    // GoTrue JSON-encodes every stored value; the slot holds the verifier
+    // alone, or `verifier/redirectType` for a recovery link.
+    const stored: unknown = JSON.parse(secrets.entries.get(VERIFIER_KEY) ?? '');
+    const verifier = String(stored).split('/')[0];
+    assert.ok(verifier);
+
+    // A second window (or the same one after a host reload): a fresh client
+    // that never generated a verifier of its own.
+    let exchangeBody = '';
+    const exchange: typeof fetch = async (_input, init) => {
+      exchangeBody = String(init?.body);
+      return new Response(
+        JSON.stringify({
+          access_token: 'pkce-access',
+          refresh_token: 'pkce-refresh',
+          token_type: 'bearer',
+          expires_in: 3600,
+          user: {
+            id: 'user-id',
+            aud: 'authenticated',
+            email: 'user@example.com',
+            app_metadata: {},
+            user_metadata: {},
+            created_at: new Date().toISOString(),
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+    vi.stubGlobal('fetch', exchange);
+    SupabaseClient.resetForTests();
+    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+
+    const { data, error } =
+      await SupabaseClient.getClient().auth.exchangeCodeForSession('auth-code');
+
+    assert.equal(error, null);
+    assert.equal(data.session?.access_token, 'pkce-access');
+    assert.deepEqual(JSON.parse(exchangeBody), {
+      auth_code: 'auth-code',
+      code_verifier: verifier,
+    });
+    // The consumed verifier is cleared, and the session that replaced it is
+    // not written here: the host's own session record stays its single owner.
+    // (GoTrue leaves the numbered slot behind for a callback that carries no
+    // flow id; its own ring caps those at five.)
+    assert.ok(!secrets.entries.has(VERIFIER_KEY));
+    assert.ok(!secrets.entries.has(SUPABASE_GOTRUE_STORAGE_KEY));
+  });
+
+  it('still signs in this window when the secret store is unwritable', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    // A locked keychain answers an absent value (rather than throwing) on
+    // reads and throws on writes; only the in-process mirror remains usable.
+    const secrets: SessionSecretStore = {
+      get: async () => undefined,
+      set: async () => {
+        throw new Error('keychain locked');
+      },
+      delete: async () => {},
+    };
+    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+
+    await startSignIn();
+
+    expect(warn).toHaveBeenCalledWith(
+      'SupabaseClient',
+      expect.stringContaining('keychain locked'),
+    );
+
+    // The callback lands in this window: the exchange must still succeed
+    // using the mirrored verifier even though the store miss returned absent.
+    let exchangeBody = '';
+    const exchange: typeof fetch = async (_input, init) => {
+      exchangeBody = String(init?.body);
+      return new Response(
+        JSON.stringify({
+          access_token: 'pkce-access',
+          refresh_token: 'pkce-refresh',
+          token_type: 'bearer',
+          expires_in: 3600,
+          user: {
+            id: 'user-id',
+            aud: 'authenticated',
+            email: 'user@example.com',
+            app_metadata: {},
+            user_metadata: {},
+            created_at: new Date().toISOString(),
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+    vi.stubGlobal('fetch', exchange);
+
+    const { data, error } =
+      await SupabaseClient.getClient().auth.exchangeCodeForSession('auth-code');
+
+    assert.equal(error, null);
+    assert.equal(data.session?.access_token, 'pkce-access');
+    assert.ok(
+      JSON.parse(exchangeBody).code_verifier.length > 0,
+      'the exchange reused the verifier mirrored in memory',
+    );
   });
 });
