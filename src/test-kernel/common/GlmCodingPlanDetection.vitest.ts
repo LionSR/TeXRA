@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeGlmCodingPlanLimit,
+  describeGlmCodingPlanRateLimit,
   formatProviderHttpError,
+  isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
 } from '@common/errors/sdkErrorUtils';
 
@@ -92,6 +94,33 @@ describe('parseGlmCodingPlanLimit', () => {
   it('ignores unrelated bodies', () => {
     expect(parseGlmCodingPlanLimit({ message: 'nope' })).toBeNull();
     expect(parseGlmCodingPlanLimit(undefined)).toBeNull();
+  });
+
+  it('recognizes a GLM Coding Plan rate limit (1302) as retryable, not exhaustion', () => {
+    const rateLimitBody = {
+      error: {
+        code: '1302',
+        message: '您的账户已达到速率限制，请您控制请求频率',
+      },
+    } as const;
+
+    // Not a quota exhaustion — no switch-to-regular-endpoint affordance.
+    expect(parseGlmCodingPlanLimit(rateLimitBody)).toBeNull();
+    // But it IS recognized as a rate limit with a clear retry hint.
+    expect(isGlmCodingPlanRateLimit(rateLimitBody)).toBe(true);
+    expect(describeGlmCodingPlanRateLimit()).toContain('rate limit');
+    expect(describeGlmCodingPlanRateLimit()).toContain('retry');
+  });
+
+  it('recognizes a GLM Coding Plan overload (1305) as a rate limit', () => {
+    const overloadBody = {
+      error: { code: '1305', message: 'temporarily overloaded' },
+    } as const;
+    expect(isGlmCodingPlanRateLimit(overloadBody)).toBe(true);
+  });
+
+  it('does not treat quota exhaustion as a rate limit', () => {
+    expect(isGlmCodingPlanRateLimit(WEEKLY_LIMIT_BODY)).toBe(false);
   });
 
   it('formats a human-readable reset hint', () => {

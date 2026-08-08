@@ -63,6 +63,8 @@ import {
 } from './kimiCodeSubscriptionDetection';
 import {
   describeGlmCodingPlanLimit,
+  describeGlmCodingPlanRateLimit,
+  isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
 } from './glmCodingPlanDetection';
 import {
@@ -282,6 +284,12 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const glmCodingPlanMessage = glmCodingPlanLimit
     ? describeGlmCodingPlanLimit(glmCodingPlanLimit)
     : undefined;
+  // GLM Coding Plan transient rate limit / overload (codes 1302/1305): surface
+  // a clear "retry in a moment" message, but keep it retryable — it is NOT a
+  // quota exhaustion, so no switch-to-regular-endpoint affordance.
+  const glmCodingPlanRateLimitMessage = isGlmCodingPlanRateLimit(rawErrorBody)
+    ? describeGlmCodingPlanRateLimit()
+    : undefined;
   // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
   // upstream-credit are independently detected first; relay monthly limit
   // (by body or message) is the remaining exhaustion condition. Explicit SDK
@@ -378,6 +386,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
         chatgptSubscriptionMessage ??
         kimiCodeSubscriptionMessage ??
         glmCodingPlanMessage ??
+        glmCodingPlanRateLimitMessage ??
         sdkMatch.message,
       // Credential-exhausted errors keep userRetryable=true so the retry
       // panel surfaces with the "Use your own API key" affordance, but
@@ -411,6 +420,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       chatgptSubscriptionMessage ??
       kimiCodeSubscriptionMessage ??
       glmCodingPlanMessage ??
+      glmCodingPlanRateLimitMessage ??
       message,
     statusCode,
     statusText,
