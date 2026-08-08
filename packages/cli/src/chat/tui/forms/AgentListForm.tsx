@@ -35,16 +35,14 @@ interface AgentGroups {
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
-function isDelegatingAgent(agent: AgentDelegationFlag): boolean {
-  return agent.isOrchestrator === true;
-}
-
 export function agentPickerPrimarySectionTitle(
   agents: readonly AgentDelegationFlag[],
 ): string {
-  const hasDelegatingAgents = agents.some(isDelegatingAgent);
+  const hasDelegatingAgents = agents.some(
+    (agent) => agent.isOrchestrator === true,
+  );
   const hasToolUseSpecialists = agents.some(
-    (agent) => !isDelegatingAgent(agent),
+    (agent) => agent.isOrchestrator !== true,
   );
 
   if (hasDelegatingAgents && hasToolUseSpecialists) {

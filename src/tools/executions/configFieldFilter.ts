@@ -23,16 +23,11 @@ const WORKFLOW_ONLY_FIELDS = new Set([
 /** Config fields only relevant to toolUse agents — hidden for workflow. */
 const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
 
-function hiddenFieldsFor(category: string): ReadonlySet<string> | undefined {
-  switch (category) {
-    case 'toolUse':
-      return WORKFLOW_ONLY_FIELDS;
-    case 'workflow':
-      return TOOL_USE_ONLY_FIELDS;
-    default:
-      return undefined;
-  }
-}
+/** Per-category field-exclusion sets; unknown categories get no filtering. */
+const HIDDEN_BY_CATEGORY: Readonly<Record<string, ReadonlySet<string>>> = {
+  toolUse: WORKFLOW_ONLY_FIELDS,
+  workflow: TOOL_USE_ONLY_FIELDS,
+};
 
 /**
  * Serialize a run record to pretty JSON, dropping agent-config fields
@@ -43,7 +38,7 @@ export function serializeFilteredConfig(
   record: RunRecord,
   category: string | undefined,
 ): string {
-  const excludeSet = category ? hiddenFieldsFor(category) : undefined;
+  const excludeSet = category ? HIDDEN_BY_CATEGORY[category] : undefined;
   if (!excludeSet) {
     return JSON.stringify(record, null, 2);
   }

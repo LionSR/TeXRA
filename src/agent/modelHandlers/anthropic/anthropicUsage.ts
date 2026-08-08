@@ -10,12 +10,12 @@
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
-import {
-  CACHE_CREATION_COST_MULTIPLIER_5M,
-  CACHE_CREATION_COST_MULTIPLIER_1H,
-} from './anthropicContextManagement';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages';
+
+// Cache creation cost multipliers relative to base input price, by TTL.
+const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
+const CACHE_CREATION_COST_MULTIPLIER_1H = 2.0;
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
 export interface AnthropicPricingConfig {

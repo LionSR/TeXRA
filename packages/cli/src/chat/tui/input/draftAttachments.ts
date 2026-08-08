@@ -45,16 +45,6 @@ export function shouldCollapsePaste(text: string): boolean {
   );
 }
 
-function formatPastedTextChip(id: number, numLines: number): string {
-  return numLines === 0
-    ? `[Pasted text #${id}]`
-    : `[Pasted text #${id} +${numLines} lines]`;
-}
-
-function formatImageChip(id: number): string {
-  return `[Image #${id}]`;
-}
-
 /**
  * Matches the chips the input collapses pastes/attachments into. The optional
  * `+M lines` is non-capturing — only the id matters for lookup.
@@ -106,14 +96,17 @@ export class DraftAttachmentStore {
   addPastedText(content: string): string {
     const id = this.nextId++;
     this.entries.set(id, { id, kind: 'text', content });
-    return formatPastedTextChip(id, pastedNewlineCount(content));
+    const numLines = pastedNewlineCount(content);
+    return numLines === 0
+      ? `[Pasted text #${id}]`
+      : `[Pasted text #${id} +${numLines} lines]`;
   }
 
   /** Store a pasted image; returns the chip to insert in the draft. */
   addPastedImage(image: Omit<PastedImageEntry, 'id' | 'kind'>): string {
     const id = this.nextId++;
     this.entries.set(id, { id, kind: 'image', ...image });
-    return formatImageChip(id);
+    return `[Image #${id}]`;
   }
 
   isEmpty(): boolean {

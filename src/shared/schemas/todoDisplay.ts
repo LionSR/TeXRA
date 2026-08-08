@@ -26,7 +26,7 @@ export const STATUS_DISPLAY: Readonly<
 });
 
 /** Count items by status. Works with any array of objects having a `status` field. */
-export interface StatusCounts {
+interface StatusCounts {
   completed: number;
   inProgress: number;
   pending: number;
