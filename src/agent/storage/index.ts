@@ -40,7 +40,6 @@ export {
   type ExecutionListingEntry,
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
-  type ExecutionStreamReference,
   listExecutions,
   listExecutionStreamReferences,
   deleteExecution,
