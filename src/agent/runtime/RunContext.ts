@@ -24,15 +24,15 @@ export interface LaunchRunContext extends RunContextCommon {
   readonly runScope: RunScope;
 }
 
-interface BareRunContext extends RunContextCommon {
+type BareRunIdentity = Partial<
+  Pick<
+    RunScope,
+    'streamId' | 'executionId' | 'agentName' | 'workingDirectory' | 'session'
+  >
+>;
+
+interface BareRunContext extends RunContextCommon, BareRunIdentity {
   readonly kind: 'bare';
-  readonly streamId?: StreamTabId;
-  readonly executionId?: ExecutionId;
-  /** Agent name (e.g. "orchestrator", "search-agent"). */
-  readonly agentName?: string;
-  readonly workingDirectory?: string;
-  /** Session that owns this run's coordination state. */
-  readonly session?: SessionHandle;
 }
 
 /**
@@ -63,13 +63,9 @@ interface CreateRunContextCommon {
   stopAfterCycle?: boolean;
 }
 
-interface CreateBareRunContextOptions extends CreateRunContextCommon {
+interface CreateBareRunContextOptions
+  extends CreateRunContextCommon, BareRunIdentity {
   runScope?: undefined;
-  streamId?: StreamTabId;
-  executionId?: ExecutionId;
-  agentName?: string;
-  workingDirectory?: string;
-  session?: SessionHandle;
 }
 
 export interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
