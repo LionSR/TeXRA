@@ -42,7 +42,6 @@ export const WebviewReadyMessageSchema = z.object({
 });
 
 const SwitchViewTargetSchema = z.enum(['main', 'progress', 'dashboard']);
-export type SwitchViewTarget = z.infer<typeof SwitchViewTargetSchema>;
 
 export const SwitchViewMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.SWITCH_VIEW),
