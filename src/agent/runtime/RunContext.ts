@@ -25,7 +25,10 @@ export interface LaunchRunContext extends RunContextCommon {
 }
 
 type BareRunIdentity = Partial<
-  Pick<RunScope, 'streamId' | 'executionId' | 'agentName' | 'workingDirectory' | 'session'>
+  Pick<
+    RunScope,
+    'streamId' | 'executionId' | 'agentName' | 'workingDirectory' | 'session'
+  >
 >;
 
 interface BareRunContext extends RunContextCommon, BareRunIdentity {
@@ -60,7 +63,8 @@ interface CreateRunContextCommon {
   stopAfterCycle?: boolean;
 }
 
-interface CreateBareRunContextOptions extends CreateRunContextCommon, BareRunIdentity {
+interface CreateBareRunContextOptions
+  extends CreateRunContextCommon, BareRunIdentity {
   runScope?: undefined;
 }
 
