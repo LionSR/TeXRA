@@ -2,7 +2,7 @@ import {
   loadCliDetailedAccountStatusLines,
   loadCliModelAccessOverview,
 } from '@cli/runtime/apiStatus';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 /** Load the canonical account snapshot used by TUI account commands. */
 export async function loadCliAccountStatusLines(options: {

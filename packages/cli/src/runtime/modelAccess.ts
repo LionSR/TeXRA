@@ -12,7 +12,7 @@ import {
 } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { unique } from '@utils/core';
 import { getGLMCodingPlan } from '@utils/config/providerConfig';
 

@@ -10,7 +10,7 @@
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { NumberSetting } from '@shared/schemas/profileViewMessages';
+import type { NumberSetting } from '@shared/schemas/settingsViewMessages';
 import type { UpdateReliabilityAndOrchestrationMessage } from '@shared/schemas/settingsViewMessages';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';

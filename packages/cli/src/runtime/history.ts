@@ -27,7 +27,7 @@ import {
 import {
   resolveHistoryRunStatus,
   type HistoryRunStatus,
-} from '@shared/schemas/historyViewMessages';
+} from '@shared/schemas/settingsViewMessages';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {

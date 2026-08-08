@@ -1,7 +1,7 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';

@@ -5,7 +5,7 @@ import {
 } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { formatResultCount } from '@utils/text/stringUtils';
 

@@ -48,7 +48,7 @@ import {
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
