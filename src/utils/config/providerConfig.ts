@@ -152,6 +152,10 @@ export function getGLMCodingPlan(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
 }
 
+export async function setGLMCodingPlan(enabled: boolean): Promise<void> {
+  await tryGlobalState()?.update(GlobalStateKey.GLM_CODING_PLAN, enabled);
+}
+
 /**
  * Whether the user opted to route dual-backend Kimi models (K3) through the
  * Kimi Code coding endpoint when a Kimi Code API key is set. The two

@@ -22,15 +22,6 @@ import {
 import { isInquiryContinuationText } from './transcriptEntries';
 import type { ConversationEntry } from '../state/cliState';
 
-function displayLines(
-  layout: TranscriptEntryLayout,
-  fillWidth: boolean | undefined,
-): readonly string[] {
-  return fillWidth === true
-    ? fillRows(layout.lines.join('\n'), layout.columns).split('\n')
-    : layout.lines;
-}
-
 function PlainEntryRows({
   colorEnabled,
   entry,
@@ -47,10 +38,11 @@ function PlainEntryRows({
   // User turns are full-width inverse bands in both static and live panes.
   // Inquiry continuations remain ordinary prefixed rows and only fill when
   // their bounded caller requests it.
-  const lines = displayLines(
-    layout,
-    fillWidth === true || (entry.role === 'user' && !isInquiryContinuation),
-  );
+  const shouldFill =
+    fillWidth === true || (entry.role === 'user' && !isInquiryContinuation);
+  const lines = shouldFill
+    ? fillRows(layout.lines.join('\n'), layout.columns).split('\n')
+    : layout.lines;
   const paddingX = layout.inset / 2;
   const boxProps = {
     flexDirection: 'column' as const,

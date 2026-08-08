@@ -1,7 +1,7 @@
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { apiKeyExists } from '@model/apiProviders';
+import { apiKeyExists, configuredApiKeyProviders } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   isPreferCodexSubscription,
@@ -12,6 +12,7 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
@@ -51,16 +52,22 @@ export function contextForCliModelAccess(
 export async function readCliModelAccessStatus(
   apiMode: ApiAccessMode,
 ): Promise<CliModelAccessStatus> {
-  const [chatGpt, grok, kimiCodeKeySet] = await Promise.all([
-    getCodexStatus(),
-    getXaiStatus(),
-    apiKeyExists(platform().secrets, 'kimiCode'),
-  ]);
+  const secrets = platform().secrets;
+  const [chatGpt, grok, kimiCodeKeySet, configuredProviders] =
+    await Promise.all([
+      getCodexStatus(),
+      getXaiStatus(),
+      apiKeyExists(secrets, 'kimiCode'),
+      configuredApiKeyProviders(secrets),
+    ]);
   const preferences = {
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
     grok: isPreferXaiSubscription() ? 'on' : 'off',
     kimiCode: getPreferKimiCode() ? 'on' : 'off',
   } as const;
+  const personalKeyProviders = configuredProviders.map(
+    (provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+  );
   return {
     apiFallback: apiMode,
     preferences,
@@ -69,11 +76,8 @@ export async function readCliModelAccessStatus(
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
     kimiCodeKeySet,
+    personalKeyProviders,
   };
-}
-
-function selectedApiFallback(context: CliContext | undefined): ApiAccessMode {
-  return context ? effectiveCliApiMode(context) : getCliApiMode();
 }
 
 /** Apply one declarative preference or fallback transition. */
@@ -96,7 +100,7 @@ export async function updateCliModelAccess(
     };
   }
 
-  const apiMode = selectedApiFallback(context);
+  const apiMode = context ? effectiveCliApiMode(context) : getCliApiMode();
   if (selection.provider === 'kimi-code') {
     if (selection.state === 'off') {
       await setPreferKimiCode(false);

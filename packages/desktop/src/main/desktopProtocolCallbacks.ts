@@ -179,16 +179,11 @@ export function installDesktopProtocolCallbackLifecycle(
 }
 
 function normalizeProtocolPath(url: URL): string {
-  const rawPath = getRawProtocolPath(url);
+  let rawPath = url.pathname && url.pathname !== '/' ? url.pathname : '';
+  if (!rawPath && url.hostname) rawPath = `/${url.hostname}`;
   return rawPath.length > 1 && rawPath.endsWith('/')
     ? rawPath.slice(0, -1)
     : rawPath;
-}
-
-function getRawProtocolPath(url: URL): string {
-  if (url.pathname && url.pathname !== '/') return url.pathname;
-  if (url.hostname) return `/${url.hostname}`;
-  return '';
 }
 
 function registerProtocolClient(options: InstallDesktopProtocolOptions): void {

@@ -12,13 +12,10 @@ import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  readPersistedTexraApprovalPolicy,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
-import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
-import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
+  applyStateSettingUpdate,
+  postStateSettingSnapshot,
+  type SettingsSnapshotPosters,
+} from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
@@ -35,7 +32,6 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { assertNever } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -242,6 +238,15 @@ export function createDesktopSettingsIpc(
     await options.agentSettingsController.refreshCatalogData();
   }
 
+  const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
+    'agent-skills': postAgentSkillsSettings,
+    approval: postApprovalSettings,
+    'git-author': () => postGitAuthorSettings(applyCurrentGitAuthorSettings()),
+    latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    'multi-agent': postReliabilityAndOrchestrationSettings,
+    telemetry: postTelemetrySettings,
+  };
+
   /**
    * Generic write path for catalog-backed settings-view rows.
    */
@@ -249,69 +254,33 @@ export function createDesktopSettingsIpc(
     key: string,
     value: unknown,
   ): Promise<void> {
-    const write = resolveStateSettingWrite(key, value);
-    if (!write) return;
-    if (write.kind === 'rejected') {
-      options.ui.onError(write.error);
+    const result = await applyStateSettingUpdate(key, value, {
+      stores: { config: options.config, workspaceState, globalState },
+      onApprovalPolicyChanged: (policy) =>
+        options.session.setApprovalPolicy(policy),
+    });
+    if (result.kind === 'ignored') return;
+    if (result.kind === 'rejected') {
+      options.ui.onError(result.error);
       await options.ui.showErrorMessage(
         formatError(
-          `Invalid value for "${write.entry.title ?? write.entry.key}"`,
-          write.error,
+          `Invalid value for "${result.entry.title ?? result.entry.key}"`,
+          result.error,
         ),
       );
-      postStateSettingSnapshot(write.entry.settingsViewSnapshot);
-      return;
-    }
-    const stores = { config: options.config, workspaceState, globalState };
-    try {
-      await (write.kind === 'reset'
-        ? resetSetting(write.entry, stores)
-        : writeSetting(write.entry, write.value, stores));
-      if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
-        options.session.setApprovalPolicy(
-          write.kind === 'reset'
-            ? readPersistedTexraApprovalPolicy((key, fallback) =>
-                options.config.get(key, fallback),
-              )
-            : (write.value as TexraApprovalPolicy),
-        );
-      }
-    } catch (error) {
-      options.ui.onError(error);
+    } else if (result.kind === 'failed') {
+      options.ui.onError(result.error);
       await options.ui.showErrorMessage(
         formatError(
-          `Failed to update "${write.entry.title ?? write.entry.key}"`,
-          error,
+          `Failed to update "${result.entry.title ?? result.entry.key}"`,
+          result.error,
         ),
       );
-    } finally {
-      postStateSettingSnapshot(write.entry.settingsViewSnapshot);
     }
-  }
-
-  function postStateSettingSnapshot(snapshot: SettingsViewSnapshot): void {
-    switch (snapshot) {
-      case 'agent-skills':
-        postAgentSkillsSettings();
-        break;
-      case 'approval':
-        postApprovalSettings();
-        break;
-      case 'git-author':
-        postGitAuthorSettings(applyCurrentGitAuthorSettings());
-        break;
-      case 'latex':
-        options.toolingSettingsController.postLatexConfigValues();
-        break;
-      case 'multi-agent':
-        postReliabilityAndOrchestrationSettings();
-        break;
-      case 'telemetry':
-        postTelemetrySettings();
-        break;
-      default:
-        assertNever(snapshot, 'Unhandled settings-view snapshot');
-    }
+    await postStateSettingSnapshot(
+      result.entry.settingsViewSnapshot,
+      stateSettingSnapshotPosters,
+    );
   }
 
   function runAsync(work: Promise<void>): void {

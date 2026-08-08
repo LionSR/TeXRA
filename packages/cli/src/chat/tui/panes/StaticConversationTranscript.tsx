@@ -182,22 +182,6 @@ const SESSION_HEADER_ID = 'session-header';
 const FULL_SESSION_HEADER_ROWS = 4;
 const COMPACT_SESSION_HEADER_ROWS = 1;
 
-function childHeaderIdentityPending({
-  parentStream,
-  scrollbackStreamId,
-  streams,
-}: {
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly scrollbackStreamId: StreamTabId | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): boolean {
-  return (
-    scrollbackStreamId !== undefined &&
-    parentStream.has(scrollbackStreamId) &&
-    !streams.get(scrollbackStreamId)?.model
-  );
-}
-
 function staticTranscriptItemRowCount(
   item: StaticTranscriptItem,
   width?: number,
@@ -316,7 +300,9 @@ export function appendStaticTranscriptItems({
   let nextItems: StaticTranscriptItem[] | undefined;
   const shouldWaitForChildIdentity =
     !seen.has(SESSION_HEADER_ID) &&
-    childHeaderIdentityPending({ parentStream, scrollbackStreamId, streams });
+    scrollbackStreamId !== undefined &&
+    parentStream.has(scrollbackStreamId) &&
+    !streams.get(scrollbackStreamId)?.model;
   if (shouldWaitForChildIdentity) return currentItems;
 
   if (!seen.has(SESSION_HEADER_ID)) {

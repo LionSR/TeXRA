@@ -1118,13 +1118,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     );
     const thoughtContent = perStepText.join('').trim();
 
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+    if (
+      workspaceState &&
+      workspaceState.reasoning.thinkingBlocks.length === 0
+    ) {
       workspaceState.reasoning.thinkingBlocks = thoughtSteps.map((s, i) => ({
         type: 'thinking',
         thinking: perStepText[i],
         signature: s.signature,
       }));
-      workspaceState.reasoning.thinkingAdded = true;
     }
 
     if (thoughtContent) {

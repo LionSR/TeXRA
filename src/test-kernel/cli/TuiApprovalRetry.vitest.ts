@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
+  glmCodingPlan: false,
   notify: vi.fn(),
   openRouter: false,
   retryCopyFailure: undefined as Error | undefined,
@@ -25,7 +26,9 @@ const mocks = vi.hoisted(() => ({
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
   setCliKimiCode: vi.fn(),
+  setCliGlmCodingPlan: vi.fn(),
   setPreferKimiCode: vi.fn(),
+  setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
 
@@ -65,6 +68,7 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   setCliCodexSubscription: mocks.setCliCodexSubscription,
   setCliKimiCode: mocks.setCliKimiCode,
+  setCliGlmCodingPlan: mocks.setCliGlmCodingPlan,
 }));
 
 vi.mock('@utils/config/providerConfig', async (importActual) => {
@@ -74,6 +78,8 @@ vi.mock('@utils/config/providerConfig', async (importActual) => {
     ...actual,
     getPreferKimiCode: () => mocks.preferKimiCode,
     setPreferKimiCode: mocks.setPreferKimiCode,
+    getGLMCodingPlan: () => mocks.glmCodingPlan,
+    setGLMCodingPlan: mocks.setGLMCodingPlan,
   };
 });
 

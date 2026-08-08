@@ -186,17 +186,36 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 // into VS Code-free zones.
 // ============================================================================
 
-interface SdkMessage {
-  type: string;
+interface SdkSystemMessage {
+  type: 'system';
   subtype?: string;
   session_id?: string;
+}
+
+interface SdkAssistantMessage {
+  type: 'assistant';
+  session_id?: string;
   message?: { content?: ClaudeMessageBlock[] };
-  parent_tool_use_id?: string | null;
+}
+
+interface SdkUserMessage {
+  type: 'user';
+  session_id?: string;
+  message?: { content?: ClaudeMessageBlock[] };
+}
+
+interface SdkResultMessage {
+  type: 'result';
+  subtype?: string;
+  session_id?: string;
   result?: string;
   is_error?: boolean;
   total_cost_usd?: number;
   usage?: TurnResult['usage'];
 }
+
+type SdkMessage =
+  SdkSystemMessage | SdkAssistantMessage | SdkUserMessage | SdkResultMessage;
 
 // ============================================================================
 // Streamed turn — drains the SDK's async generator into log entries + a
@@ -257,34 +276,39 @@ export async function runStreamedTurn(params: {
   for await (const raw of stream as AsyncIterable<SdkMessage>) {
     if (raw.session_id) sessionId = raw.session_id;
 
-    if (raw.type === 'assistant' && raw.message?.content) {
-      handleAssistantBlocks(
-        raw.message.content,
-        logger,
-        toolLogRefs,
-        responseParts,
-      );
-      continue;
-    }
-    if (raw.type === 'user' && raw.message?.content) {
-      handleToolResults(raw.message.content, logger, toolLogRefs);
-      continue;
-    }
-    if (raw.type === 'result') {
-      usage = raw.usage ?? null;
-      totalCostUsd = raw.total_cost_usd;
-      if (raw.subtype === 'success') {
-        if (isNonEmptyString(raw.result)) {
-          responseParts.push(raw.result);
+    switch (raw.type) {
+      case 'assistant':
+        if (raw.message?.content) {
+          handleAssistantBlocks(
+            raw.message.content,
+            logger,
+            toolLogRefs,
+            responseParts,
+          );
         }
-      } else {
-        isError = true;
-        errorMessage = raw.result ?? raw.subtype ?? 'Claude Code error';
-      }
-      continue;
-    }
-    if (raw.type === 'system' && raw.subtype === 'init' && raw.session_id) {
-      logger.info(`Claude session ${raw.session_id} started`);
+        break;
+      case 'user':
+        if (raw.message?.content) {
+          handleToolResults(raw.message.content, logger, toolLogRefs);
+        }
+        break;
+      case 'result':
+        usage = raw.usage ?? null;
+        totalCostUsd = raw.total_cost_usd;
+        if (raw.subtype === 'success') {
+          if (isNonEmptyString(raw.result)) {
+            responseParts.push(raw.result);
+          }
+        } else {
+          isError = true;
+          errorMessage = raw.result ?? raw.subtype ?? 'Claude Code error';
+        }
+        break;
+      case 'system':
+        if (raw.subtype === 'init' && raw.session_id) {
+          logger.info(`Claude session ${raw.session_id} started`);
+        }
+        break;
     }
   }
 

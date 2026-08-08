@@ -224,10 +224,14 @@ export function monacoThemeForHostTheme(
 /**
  * Monaco language id for a file path, covering the extensions TeXRA users
  * actually open. Monaco's own registry is keyed by language id, not extension,
- * so this mapping has to live on our side.
+ * so this mapping has to live on our side. This is the single owner of that
+ * mapping across every host — do not add a second one.
  */
 export function monacoLanguageForPath(filePath: string): string {
   const name = filePath.replaceAll('\\', '/').split('/').at(-1) ?? '';
+  const lowerName = name.toLowerCase();
+  if (lowerName === 'dockerfile') return 'dockerfile';
+  if (lowerName === 'makefile') return 'makefile';
   const dotIndex = name.lastIndexOf('.');
   const extension =
     dotIndex === -1 ? '' : name.slice(dotIndex + 1).toLowerCase();
@@ -242,6 +246,8 @@ export function monacoLanguageForPath(filePath: string): string {
     case 'md':
     case 'markdown':
       return 'markdown';
+    case 'mdx':
+      return 'mdx';
     case 'ts':
     case 'mts':
     case 'cts':
@@ -268,20 +274,37 @@ export function monacoLanguageForPath(filePath: string): string {
       return 'shell';
     case 'css':
       return 'css';
+    case 'scss':
+      return 'scss';
+    case 'less':
+      return 'less';
     case 'html':
     case 'htm':
       return 'html';
     case 'toml':
       return 'ini';
+    case 'xml':
+      return 'xml';
+    case 'sql':
+      return 'sql';
     case 'rs':
       return 'rust';
     case 'go':
       return 'go';
+    case 'java':
+      return 'java';
+    case 'cs':
+      return 'csharp';
+    case 'php':
+      return 'php';
+    case 'rb':
+      return 'ruby';
     case 'c':
     case 'h':
       return 'c';
     case 'cpp':
     case 'cc':
+    case 'cxx':
     case 'hpp':
       return 'cpp';
     default:

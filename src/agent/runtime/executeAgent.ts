@@ -2,10 +2,7 @@ import * as path from 'node:path';
 
 import { logConversationProgress } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  runToolUseFlow,
-  type RunToolUseFlowResult,
-} from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
@@ -67,28 +64,6 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
-
-/** Build a tool-use AgentFlowResult from a tool-use flow run. */
-function buildToolUseFlowResult(
-  result: RunToolUseFlowResult,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-  memoryMisses: AgentFlowResult['memoryMisses'],
-): AgentRuntimeFlowResult {
-  return {
-    category: 'toolUse',
-    outcome: result.outcome,
-    response: result.response,
-    files: result.files,
-    executionId,
-    streamId,
-    ...(result.structured !== undefined
-      ? { structured: result.structured }
-      : {}),
-    ...(result.error ? { error: result.error } : {}),
-    ...buildOptionalFlowResultFields(memoryMisses, result.totalCostUsd),
-  };
-}
 
 /** Create the awaited round-finalized callback used by agent flows. */
 function createUsageRecordingCallback(
@@ -212,12 +187,22 @@ async function launchToolUseRun(
       detach: (flowContext) => handle.detachToolUseFlow(flowContext),
     },
   );
-  return buildToolUseFlowResult(
-    result,
-    runExecutionId,
-    runStreamId,
-    ctx.attachedMemoryMisses,
-  );
+  return {
+    category: 'toolUse',
+    outcome: result.outcome,
+    response: result.response,
+    files: result.files,
+    executionId: runExecutionId,
+    streamId: runStreamId,
+    ...(result.structured !== undefined
+      ? { structured: result.structured }
+      : {}),
+    ...(result.error ? { error: result.error } : {}),
+    ...buildOptionalFlowResultFields(
+      ctx.attachedMemoryMisses,
+      result.totalCostUsd,
+    ),
+  };
 }
 
 /**
