@@ -215,10 +215,7 @@ interface SdkResultMessage {
 }
 
 type SdkMessage =
-  | SdkSystemMessage
-  | SdkAssistantMessage
-  | SdkUserMessage
-  | SdkResultMessage;
+  SdkSystemMessage | SdkAssistantMessage | SdkUserMessage | SdkResultMessage;
 
 // ============================================================================
 // Streamed turn — drains the SDK's async generator into log entries + a

@@ -898,7 +898,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // Usage / price (PORT — delegate to the snake_case adapter)
   // ===========================================================================
 
-  computePrice(responseUsage: Usage): number {
+  computePrice(responseUsage: Usage | null): number {
     return computeGoogleInteractionsPrice(
       responseUsage,
       this.standardPricingConfig(),
