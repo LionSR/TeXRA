@@ -31,9 +31,11 @@ function getCachedTokens(usage: ExtendedCompletionUsage): number {
 
 /** Computes cost based on token usage and model pricing. */
 export function computeOpenAIPrice(
-  responseUsage: ExtendedCompletionUsage,
+  responseUsage: ExtendedCompletionUsage | null,
   config: StandardPricingConfig,
 ): number {
+  if (!responseUsage) return 0;
+
   const cachedTokens = getCachedTokens(responseUsage);
   const promptTokens =
     responseUsage.prompt_tokens ??

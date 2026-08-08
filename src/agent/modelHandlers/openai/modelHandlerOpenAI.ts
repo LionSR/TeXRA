@@ -939,7 +939,7 @@ export class ModelHandlerOpenAI<
   }
 
   /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: ExtendedCompletionUsage): number {
+  computePrice(responseUsage: ExtendedCompletionUsage | null): number {
     return computeOpenAIPrice(responseUsage, this.standardPricingConfig());
   }
 
