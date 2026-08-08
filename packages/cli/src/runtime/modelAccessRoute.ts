@@ -58,6 +58,8 @@ export interface CliModelAccessStatus {
   readonly grokAccountLabel?: string;
   readonly kimiCodeKeySet?: boolean;
   readonly texraSignedIn?: boolean;
+  /** Display names of providers with configured API keys (e.g. `['DeepSeek']`). */
+  readonly personalKeyProviders?: readonly string[];
 }
 
 interface CliModelAccessItem {
@@ -322,7 +324,9 @@ export function buildCliModelAccessItems(
     {
       value: cliApiFallbackSelection('personal'),
       label: formatCliModelAccessRoute('personal'),
-      description: 'Use keys configured on this computer',
+      description: status?.personalKeyProviders?.length
+        ? `Configured: ${status.personalKeyProviders.join(', ')}`
+        : 'Use keys configured on this computer',
     },
   ];
 }
