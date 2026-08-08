@@ -8,6 +8,7 @@ import {
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
+import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -416,6 +417,53 @@ export class SessionStores {
       }),
     );
     return { active, failed };
+  }
+
+  /**
+   * Delete background-shell streams a previous process left behind.
+   *
+   * A background shell is ephemeral by construction: `autoClose` drops its tab
+   * the moment the command finalizes, and the command's output is already
+   * delivered into the parent run's transcript. One still on disk means the
+   * host exited mid-command or the deletion was refused — nothing can resume
+   * it, so it is leftover state rather than history, and left alone it never
+   * stops accumulating.
+   *
+   * Every host's process owner calls this at startup, because no presentation
+   * can make the call: stream phases are in-memory only, so a persisted shell
+   * hydrates with no status at all and no rail filter can key off one.
+   *
+   * A shell still running holds its execution lease, so `deleteStream` answers
+   * `'active'` and keeps it — the durable lease is the liveness authority here,
+   * not an in-memory phase. The cost is that a shell whose host crashed inside
+   * the lease's staleness window is retained (loudly) until the next launch.
+   */
+  async sweepEphemeralStreams(
+    liveStreams: ReadonlySet<StreamTabId>,
+  ): Promise<StreamTabId[]> {
+    const swept: StreamTabId[] = [];
+    const retained: StreamTabId[] = [];
+    for (const stream of liveStreams) {
+      if (!isBackgroundShellStream(stream)) continue;
+      // Serialized: the deletion queue behind `deleteStream` is per-stream, and
+      // a swept stream releases resources its siblings' hooks may also touch.
+      if ((await this.deleteStream(stream)) === 'deleted') swept.push(stream);
+      else retained.push(stream);
+    }
+    if (swept.length > 0) {
+      logger.info(
+        CHANNEL,
+        `Swept ${swept.length} leftover background-shell stream(s).`,
+      );
+    }
+    if (retained.length > 0) {
+      logger.warn(
+        CHANNEL,
+        `${retained.length} leftover background-shell stream(s) could not be swept and stay listed.`,
+        { data: { retained } },
+      );
+    }
+    return swept;
   }
 
   /**

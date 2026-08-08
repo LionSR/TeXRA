@@ -300,6 +300,47 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
   });
 });
 
+describe('SessionStores ephemeral sweep', () => {
+  const shell = 'bash@tool#4f4f4f4f4f4f' as StreamTabId;
+  const realSession = 'chat@deepseek#5f5f5f5f5f5f' as StreamTabId;
+
+  it('deletes leftover background shells and nothing else', async () => {
+    const stores = new SessionStores({
+      streamLogs: await StreamLogStore.open(),
+      snapshots: new StreamSnapshotStore(),
+    });
+    const deleteStream = vi.spyOn(stores, 'deleteStream');
+
+    const swept = await stores.sweepEphemeralStreams(
+      new Set([shell, realSession]),
+    );
+
+    expect(swept).toEqual([shell]);
+    expect(deleteStream).toHaveBeenCalledTimes(1);
+    expect(deleteStream).toHaveBeenCalledWith(shell);
+  });
+
+  it('keeps a shell whose deletion is refused, and says so', async () => {
+    const stores = new SessionStores({
+      streamLogs: await StreamLogStore.open(),
+      snapshots: new StreamSnapshotStore(),
+    });
+    // What a still-running shell looks like here: it holds its execution lease,
+    // so the durable lifecycle refuses the delete rather than cutting it short.
+    vi.spyOn(stores, 'deleteStream').mockResolvedValue('active');
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const swept = await stores.sweepEphemeralStreams(new Set([shell]));
+
+    expect(swept).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      'SessionStores',
+      '1 leftover background-shell stream(s) could not be swept and stay listed.',
+      { data: { retained: [shell] } },
+    );
+  });
+});
+
 describe('SessionStores orphan sweep', () => {
   const orphan = 'orphaned-sidecar' as StreamTabId;
 
