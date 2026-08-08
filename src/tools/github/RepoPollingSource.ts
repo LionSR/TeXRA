@@ -47,13 +47,14 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { getNewestTimestamp } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
-  DedupedResource,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
-  PollingSourceBase,
   type BasePollSubscriptionState,
+  createBasePollState,
+  DEFAULT_POLLING_BACKOFF_CONFIG,
+  dedupeComments,
+  type DedupedResource,
+  PollingSourceBase,
 } from './PollingSourceBase';
 import {
   GhIssueCommentArraySchema,
@@ -82,10 +83,6 @@ const SEED_WINDOW_MS = 60_000;
 // least-recently-used PR on overflow; `.get()`/`.set()` both refresh recency,
 // so closed-and-forgotten PRs roll off before actively-touched ones.
 const MAX_PR_STATE_ENTRIES = 500;
-// Cap on the per-comment dedup resources, mirroring PRPollingSource. Events
-// older than this fall out of the dedup window — but the `since` cursor
-// will normally have advanced past them by then anyway.
-const MAX_SEEN_IDS = 1000;
 // Holistic merge-conflict probing: each tick we GET `/pulls/{N}` for at
 // most this many open PRs whose `updated_at` advanced since the prior tick,
 // in newest-first order. Bounded so a busy repo can't fan out into one
@@ -435,27 +432,14 @@ function createInitialState(input: RepoSubscribeInput): SubscriptionState {
     owner: input.owner,
     repo: input.repo,
     slug: repoKeyToString(input),
-    listeners: new Set(),
+    ...createBasePollState(now),
     initialized: false,
     subscribedAt: new Date(now).toISOString(),
-    issueComments: new DedupedResource<GhIssueComment>({
-      getId: (comment: GhIssueComment) => comment.id,
-      getCursor: getNewestTimestamp,
-      maxSeenIds: MAX_SEEN_IDS,
-      sinceCursor: seed,
-    }),
-    reviewComments: new DedupedResource<GhReviewComment>({
-      getId: (comment: GhReviewComment) => comment.id,
-      getCursor: getNewestTimestamp,
-      maxSeenIds: MAX_SEEN_IDS,
-      sinceCursor: seed,
-    }),
+    issueComments: dedupeComments<GhIssueComment>({ sinceCursor: seed }),
+    reviewComments: dedupeComments<GhReviewComment>({ sinceCursor: seed }),
     prStateByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prUpdatedAtByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prMergeableByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
-    lastSuccessAt: now,
-    consecutiveFailures: 0,
-    skipPollUntilMs: 0,
   };
 }
 

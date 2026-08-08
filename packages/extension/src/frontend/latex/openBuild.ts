@@ -71,6 +71,22 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
 }
 
 /**
+ * Invoke the LaTeX Workshop build command for a file, warn-logging on failure.
+ * `warnLabel` prefixes the failure message so callers keep their diagnostic context.
+ */
+export async function invokeLatexWorkshopBuild(
+  uri: vscode.Uri,
+  channel: string,
+  warnLabel: string,
+): Promise<void> {
+  try {
+    await vscode.commands.executeCommand('latex-workshop.build', uri);
+  } catch (err) {
+    logger.warn(channel, `${warnLabel}: ${toErrorMessage(err)}`);
+  }
+}
+
+/**
  * Open a file, compile if it is TeX, and display the resulting PDF.
  * The PDF viewer is refreshed if already loaded.
  */
@@ -117,14 +133,7 @@ async function openAndBuildLatex(
   await vscode.window.showTextDocument(doc, { preview: true, preserveFocus });
 
   if (fileLocation.kind === 'workspace') {
-    try {
-      await vscode.commands.executeCommand('latex-workshop.build', uri);
-    } catch (err) {
-      logger.warn(
-        CHANNEL,
-        `LaTeX Workshop build failed: ${toErrorMessage(err)}`,
-      );
-    }
+    await invokeLatexWorkshopBuild(uri, CHANNEL, 'LaTeX Workshop build failed');
   } else {
     // Outside workspace — LaTeX Workshop cannot resolve project-local
     // packages, so compile internally with TEXINPUTS set.

@@ -46,10 +46,9 @@ describe('renderAgentTemplateString', () => {
   });
 
   it('keeps {{ ALL_CONTEXTS }} literal when the settings-view creation path renders the bundled workflow template (issue #7678)', () => {
-    // The settings-view agent-creation path (agentHandlers.ts createAgentFromTemplate
-    // -> agentTemplateBundle.ts renderAgentTemplateFromBundle) only supplies
-    // AGENT_NAME/DESCRIPTION/TOOLS_YAML, so {{ ALL_CONTEXTS }} must survive via
-    // AGENT_RUNTIME_TOKENS passthrough or nunjucks blanks it in the written YAML.
+    // The settings-view agent-creation path (agentHandlers.ts createAgentFromTemplate)
+    // only supplies AGENT_NAME/DESCRIPTION/TOOLS_YAML, so {{ ALL_CONTEXTS }} must
+    // survive via AGENT_RUNTIME_TOKENS passthrough or nunjucks blanks it in the written YAML.
     const templatePath = path.join(
       process.cwd(),
       'packages/extension/resources/templates',

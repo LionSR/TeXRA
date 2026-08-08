@@ -33,7 +33,7 @@ import {
   formatReviewComment,
   formatSubscriptionError,
 } from './formatPREvent';
-import { getNewestTimestamp, prRef, withSince } from './formatUtils';
+import { prRef, withSince } from './formatUtils';
 import {
   ghGet,
   GitHubAuthError,
@@ -57,10 +57,13 @@ import {
   planAnnotationCandidates,
 } from './prCheckRunDomain';
 import {
-  DedupedResource,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
-  PollingSourceBase,
   type BasePollSubscriptionState,
+  createBasePollState,
+  DEFAULT_POLLING_BACKOFF_CONFIG,
+  dedupeComments,
+  DedupedResource,
+  MAX_SEEN_IDS,
+  PollingSourceBase,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -82,18 +85,10 @@ function createInitialState(pr: PRKey): PRSubscriptionState {
   return {
     pr,
     slug: `${pr.owner}/${pr.repo}`,
-    listeners: new Set(),
+    ...createBasePollState(),
     initialized: false,
-    issueComments: new DedupedResource<GhIssueComment>({
-      getId: (comment: GhIssueComment) => comment.id,
-      getCursor: getNewestTimestamp,
-      maxSeenIds: MAX_SEEN_IDS,
-    }),
-    reviewComments: new DedupedResource<GhReviewComment>({
-      getId: (comment: GhReviewComment) => comment.id,
-      getCursor: getNewestTimestamp,
-      maxSeenIds: MAX_SEEN_IDS,
-    }),
+    issueComments: dedupeComments<GhIssueComment>(),
+    reviewComments: dedupeComments<GhReviewComment>(),
     reviews: new DedupedResource<GhReview>({
       getId: (review: GhReview) => review.id,
       maxSeenIds: MAX_SEEN_IDS,
@@ -106,17 +101,11 @@ function createInitialState(pr: PRKey): PRSubscriptionState {
     merged: false,
     mergeableState: undefined,
     etags: {},
-    lastSuccessAt: Date.now(),
-    consecutiveFailures: 0,
-    skipPollUntilMs: 0,
   };
 }
 
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
-// Per-resource id history is trimmed to this many entries so long-running
-// subscriptions don't grow the state map unboundedly.
-const MAX_SEEN_IDS = 1000;
 // Bound the per-subscription fan-out across runs (e.g. a matrix build
 // lighting up a fleet of checks). Excess candidates stay in
 // `pendingAnnotationRuns` and are drained on subsequent ticks.

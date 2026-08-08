@@ -1,6 +1,6 @@
 // Local imports - utils
 import type { AgentTrace } from '@agent/trace';
-import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage, isUserAbort } from '@common/errors/sdkErrorUtils';
 import { delay, onAbort as registerAbortHandler } from '@utils/core';
 
 export interface BackgroundPollStats {
@@ -97,10 +97,15 @@ function safeExtraData<TResponse>(
   options: BackgroundPollOptions<TResponse>,
   response: TResponse,
   stats: BackgroundPollStats,
+  logger: AgentTrace,
 ): Record<string, unknown> {
   try {
     return options.extraFinishData?.(response, stats) ?? {};
-  } catch {
+  } catch (err) {
+    logger.warn(
+      `BackgroundPoller: extraFinishData callback failed; omitting extra finish data: ${getSdkErrorMessage(err)}`,
+      { data: err },
+    );
     return {};
   }
 }
@@ -299,7 +304,7 @@ export class BackgroundPoller<TResponse> {
         {
           data: {
             ...stats,
-            ...safeExtraData(options, current, stats),
+            ...safeExtraData(options, current, stats, logger()),
           },
         },
       );

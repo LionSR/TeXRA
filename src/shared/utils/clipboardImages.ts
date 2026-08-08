@@ -61,7 +61,8 @@ export function readFileAsBase64(file: File): Promise<string | null> {
     reader.onerror = () => resolve(null);
     try {
       reader.readAsDataURL(file);
-    } catch {
+    } catch (error) {
+      console.warn('readFileAsBase64 failed', error);
       resolve(null);
     }
   });

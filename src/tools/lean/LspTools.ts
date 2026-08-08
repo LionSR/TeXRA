@@ -319,9 +319,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
     );
 
     if (!data) {
-      return errorResult(
-        `Could not get goal state at ${location}${error ? `\nError: ${error}` : ''}`,
-        { summary: 'No goal state' },
+      return this.noPositionData(
+        'Could not get goal state',
+        location,
+        'No goal state',
+        error,
       );
     }
 
@@ -351,9 +353,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
     );
 
     if (!data) {
-      return errorResult(
-        `No expected type at ${location}${error ? `\nError: ${error}` : ''}`,
-        { summary: 'No term goal' },
+      return this.noPositionData(
+        'No expected type',
+        location,
+        'No term goal',
+        error,
       );
     }
 
@@ -373,9 +377,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
     );
 
     if (!data) {
-      return errorResult(
-        `No information at ${location}${error ? `\nError: ${error}` : ''}`,
-        { summary: 'No hover info' },
+      return this.noPositionData(
+        'No information',
+        location,
+        'No hover info',
+        error,
       );
     }
 
@@ -387,5 +393,22 @@ Requires: Lean 4 VS Code extension installed and active.`,
     }
 
     return executed(text, 'Hover info');
+  }
+
+  /**
+   * Shared "language server returned nothing" error for the three inspect
+   * dispatches. The optional LSP error string is surfaced inline so the
+   * agent sees the underlying cause.
+   */
+  private noPositionData(
+    message: string,
+    location: string,
+    summary: string,
+    error?: string,
+  ): ToolResult {
+    return errorResult(
+      `${message} at ${location}${error ? `\nError: ${error}` : ''}`,
+      { summary },
+    );
   }
 }

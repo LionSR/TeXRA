@@ -29,6 +29,7 @@
  * session is justified only as the ownership container.
  */
 
+import pDefer, { type DeferredPromise } from 'p-defer';
 import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
@@ -82,26 +83,10 @@ interface ResultListenerRegistration {
   readonly replayMissed: boolean;
 }
 
-interface ArtifactFlushBatch {
-  readonly promise: Promise<void>;
-  readonly resolve: () => void;
-  readonly reject: (error: unknown) => void;
-}
-
 interface WaitingRepairProbe {
   readonly executionId: string;
   readonly statusGeneration: object | undefined;
   readonly result: Promise<boolean>;
-}
-
-function createArtifactFlushBatch(): ArtifactFlushBatch {
-  let resolve: () => void = () => undefined;
-  let reject: (error: unknown) => void = () => undefined;
-  const promise = new Promise<void>((settle, fail) => {
-    resolve = settle;
-    reject = fail;
-  });
-  return { promise, resolve, reject };
 }
 
 function isReplayableTerminalResult(event: ResultEvent): boolean {
@@ -166,7 +151,7 @@ export class SessionHandle {
   /** This session's execution-keyed trace flushers. */
   readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
-  private pendingArtifactFlush: ArtifactFlushBatch | undefined;
+  private pendingArtifactFlush: DeferredPromise<void> | undefined;
   private artifactFlushWorkerRunning = false;
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
@@ -696,7 +681,7 @@ export class SessionHandle {
     } catch (error) {
       traceFailure = error;
     }
-    this.pendingArtifactFlush ??= createArtifactFlushBatch();
+    this.pendingArtifactFlush ??= pDefer<void>();
     const batch = this.pendingArtifactFlush;
     if (!this.artifactFlushWorkerRunning) {
       this.artifactFlushWorkerRunning = true;

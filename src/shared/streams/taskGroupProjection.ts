@@ -80,7 +80,13 @@ export function upsertTaskGroupFromStreamLog(
     return false;
   }
 
-  const payload = GroupLogPayloadSchema.catch({}).parse(entry.data);
+  const parsed = GroupLogPayloadSchema.safeParse(entry.data);
+  if (!parsed.success) {
+    console.warn('[taskGroupProjection] malformed GROUP payload', {
+      id: entry.id,
+    });
+  }
+  const payload = parsed.success ? parsed.data : {};
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =
     cachedIndex !== undefined && taskGroups[cachedIndex]?.id === entry.id

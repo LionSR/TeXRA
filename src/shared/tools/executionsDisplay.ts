@@ -1,6 +1,6 @@
 import { isObject } from '@utils/core';
 
-export const EXECUTIONS_DEFAULT_ACTION = 'view';
+const EXECUTIONS_DEFAULT_ACTION = 'view';
 
 /** The executions action a call is performing, defaulted when absent or blank. */
 export function executionsAction(input: Record<string, unknown>): string {

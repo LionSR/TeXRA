@@ -15,11 +15,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
 import type { LatexDiffsActionDetail } from '@shared/schemas';
-import {
-  compactFormControlStyles,
-  compactIconActionButtonStyles,
-  designTokens,
-} from '@shared/styles';
+import { compactFormControlStyles, designTokens } from '@shared/styles';
+import { buttonStyles } from '@shared/styles/controlStyles';
 import { readSelectValue } from '@shared/utils/selectTemplates';
 import {
   renderIconActionButton,
@@ -115,7 +112,7 @@ const COMMIT_MANAGE_ACTIONS: readonly DiffActionSpec[] = [
 export class LatexDiffsSection extends LitElement {
   static override styles = [
     designTokens,
-    compactIconActionButtonStyles,
+    buttonStyles,
     compactFormControlStyles,
     fileSelectLayoutStyles,
     css`

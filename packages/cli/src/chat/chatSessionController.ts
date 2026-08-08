@@ -2,6 +2,7 @@
 // orchestration for the CLI chat session. Host-neutral (no Ink/TUI rendering
 // dependencies) — the Ink component consumes narrow commands exposed here.
 
+import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
@@ -438,12 +439,11 @@ export function createChatSessionController(
     // tryResumeStream() (or another resume()) can never observe this call
     // suspended between "checked available" and "claimed", and race in to
     // claim the same slot out from under it.
-    let resolveRunPromise: () => void = () => {};
-    let rejectRunPromise: (error: unknown) => void = () => {};
-    const claimedRunPromise = new Promise<void>((resolve, reject) => {
-      resolveRunPromise = resolve;
-      rejectRunPromise = reject;
-    });
+    const {
+      promise: claimedRunPromise,
+      resolve: resolveRunPromise,
+      reject: rejectRunPromise,
+    } = pDefer<void>();
     if (!session.tryClaimRootRunSlot(claimedRunPromise)) {
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
@@ -590,12 +590,11 @@ export function createChatSessionController(
     streamId: StreamTabId,
     options: AutoResumeOptions = {},
   ): Promise<boolean> => {
-    let resolveRun: (resumed: boolean) => void = () => {};
-    let rejectRun: (error: unknown) => void = () => {};
-    const runPromise = new Promise<boolean>((resolve, reject) => {
-      resolveRun = resolve;
-      rejectRun = reject;
-    });
+    const {
+      promise: runPromise,
+      resolve: resolveRun,
+      reject: rejectRun,
+    } = pDefer<boolean>();
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below — see tryClaimRootRunSlot and the matching comment
     // in resume().

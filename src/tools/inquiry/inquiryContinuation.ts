@@ -37,7 +37,7 @@ import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
   getThreadSummary,
-  listOpenThreadsForStream,
+  listThreadsByStatus,
   readExternalInquiryThread,
   type ExternalInquiryThreadManifest,
 } from './externalInquiryStorage';
@@ -199,7 +199,11 @@ async function injectContinuation(
     return 'archived';
   }
 
-  const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
+  const stillOpen = await listThreadsByStatus({
+    status: 'open',
+    scope: 'stream',
+    streamId: manifest.parentStreamId,
+  });
   const text = buildContinuationText({
     event,
     threadId,

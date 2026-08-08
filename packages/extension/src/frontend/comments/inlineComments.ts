@@ -12,8 +12,6 @@
  * list. The agent reads the user's replies back with the tool's "list" command.
  */
 
-import * as path from 'node:path';
-
 import * as vscode from 'vscode';
 
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
@@ -53,11 +51,6 @@ function appendComment(
 ): void {
   // VS Code only re-renders when `comments` is reassigned, not mutated.
   thread.comments = [...thread.comments, makeComment(author, body)];
-}
-
-function comparableFsPath(fsPath: string): string {
-  const normalized = path.normalize(fsPath);
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function setThreadResolved(
@@ -128,14 +121,13 @@ const provider: InlineCommentProvider = {
   },
 
   list: ({ absolutePath }) => {
-    const comparablePath =
-      absolutePath == null ? undefined : comparableFsPath(absolutePath);
+    // Compare through Uri.file so both sides share VS Code's path
+    // normalization (drive-letter casing on Windows, etc.).
+    const targetFsPath =
+      absolutePath == null ? undefined : vscode.Uri.file(absolutePath).fsPath;
     const views: InlineCommentThreadView[] = [];
     for (const [threadId, thread] of threads) {
-      if (
-        comparablePath &&
-        comparableFsPath(thread.uri.fsPath) !== comparablePath
-      ) {
+      if (targetFsPath && thread.uri.fsPath !== targetFsPath) {
         continue;
       }
       views.push(toView(threadId, thread));

@@ -9,7 +9,7 @@ import {
   type ArxivPaperMetadata,
   createArxivClient,
   extractBasePaperMetadata,
-} from '@tools/latex/arxivShared';
+} from '@tools/arxiv/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';

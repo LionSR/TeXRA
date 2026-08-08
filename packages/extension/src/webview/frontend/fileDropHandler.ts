@@ -6,7 +6,7 @@ import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
 import type { MultipleDocumentFileType } from '@shared/schemas';
-import { unique } from '@utils/core';
+import { tryParseUrl, unique } from '@utils/core';
 
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
@@ -26,17 +26,13 @@ function decodeFileUri(value: string): string | null {
     return null;
   }
 
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'file:') return null;
-    const pathname = decodeURIComponent(url.pathname);
-    if (url.hostname && url.hostname !== 'localhost') {
-      return `//${url.hostname}${pathname}`;
-    }
-    return pathname.replace(/^\/([A-Za-z]:)/, '$1');
-  } catch {
-    return null;
+  const url = tryParseUrl(value);
+  if (!url || url.protocol !== 'file:') return null;
+  const pathname = decodeURIComponent(url.pathname);
+  if (url.hostname && url.hostname !== 'localhost') {
+    return `//${url.hostname}${pathname}`;
   }
+  return pathname.replace(/^\/([A-Za-z]:)/, '$1');
 }
 
 function normalizeDroppedPath(

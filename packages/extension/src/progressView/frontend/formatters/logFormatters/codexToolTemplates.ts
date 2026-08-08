@@ -26,6 +26,7 @@ import {
   buildToolUseSection,
   wrapInPre,
   SPINNER_ICON_NAME,
+  triStateStatusIcon,
 } from '../htmlBuilders';
 
 // Side-effect imports - register WA components
@@ -120,7 +121,7 @@ function renderCodexFileStatusSection(patchStatus: string): RenderableSection {
   return patchStatus
     ? renderBadgeSection('Status:', [
         {
-          iconName: patchStatus === 'failed' ? 'circle-exclamation' : 'check',
+          iconName: triStateStatusIcon(patchStatus, null),
           label: patchStatus,
         },
       ])
@@ -245,23 +246,10 @@ function renderCodexTodoContent(
   ]);
 }
 
-function getCodexTurnStateIcon(
-  state: string,
-): TeXRAIconName | typeof SPINNER_ICON_NAME {
-  switch (state) {
-    case 'failed':
-      return 'circle-exclamation';
-    case 'running':
-      return SPINNER_ICON_NAME;
-    default:
-      return 'check';
-  }
-}
-
 function renderCodexTurnStateSection(state: string): RenderableSection {
   return state
     ? renderBadgeSection('State:', [
-        { iconName: getCodexTurnStateIcon(state), label: state },
+        { iconName: triStateStatusIcon(state, 'running'), label: state },
       ])
     : nothing;
 }
