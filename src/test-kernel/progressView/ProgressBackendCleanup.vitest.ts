@@ -668,4 +668,54 @@ describe('ProgressBackend cleanup', () => {
       await second.backend.state.clearAll();
     }
   });
+
+  it('sweeps leftover background shells at load, by identity and by minted id', async () => {
+    // Stamped `{ kind: 'process' }`, under a prefix the id rule would miss.
+    const stamped = {
+      stream: 'shell@tool#f6966f' as StreamTabId,
+      executionId: 'f6966f' as ExecutionId,
+    };
+    // No identity on its execution row: every row a workspace wrote before
+    // identity stamping (#9705) hydrates this way.
+    const legacy = {
+      stream: 'bash@tool#a6961a' as StreamTabId,
+      executionId: 'a6961a' as ExecutionId,
+    };
+    const session = toolStreamAndExecution('b6961b');
+    const first = await createPersistentRecordingBackend();
+
+    try {
+      for (const ids of [stamped, legacy, session]) {
+        registerStream(first.backend, ids);
+        await writeExecutionConfig(ids.executionId);
+      }
+      await getExecutionStore(stamped.executionId).writeMeta({
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        streamId: stamped.stream,
+        identity: { kind: 'process', tool: 'bash' },
+      });
+      await first.backend.state.flush();
+    } finally {
+      first.backend.dispose();
+      first.session.dispose();
+    }
+
+    const second = await createPersistentRecordingBackend();
+    try {
+      await second.session.waitUntilReady();
+      await second.backend.state.load();
+
+      expect(second.backend.state.streamLogs.has(stamped.stream)).toBe(false);
+      expect(second.backend.state.streamLogs.has(legacy.stream)).toBe(false);
+      await expectStored(streamDataDir(legacy.stream), false);
+      await expectStored(`executions/${legacy.executionId}`, false);
+
+      // A real session is untouched, whatever its age.
+      expect(second.backend.state.streamLogs.has(session.stream)).toBe(true);
+      await expectStored(`executions/${session.executionId}`, true);
+    } finally {
+      await second.backend.state.clearAll();
+    }
+  });
 });
