@@ -3,7 +3,10 @@ import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
 } from '@model/codex/codexPreference';
-import { setPreferKimiCode } from '@utils/config/providerConfig';
+import {
+  setGLMCodingPlan,
+  setPreferKimiCode,
+} from '@utils/config/providerConfig';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 
@@ -38,5 +41,15 @@ export async function setCliCodexSubscription(
  */
 export async function setCliKimiCode(enabled: boolean): Promise<void> {
   await setPreferKimiCode(enabled);
+  refreshSubscriptionPreferenceViews();
+}
+
+/**
+ * Flip the GLM Coding Plan toggle and refresh the TUI views. Shared by the
+ * retry "switch to the regular GLM endpoint" path so the persist-then-refresh
+ * sequence lives in one place.
+ */
+export async function setCliGlmCodingPlan(enabled: boolean): Promise<void> {
+  await setGLMCodingPlan(enabled);
   refreshSubscriptionPreferenceViews();
 }

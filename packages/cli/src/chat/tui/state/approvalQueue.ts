@@ -69,6 +69,9 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Turn off the "Prefer Kimi Code" preference before accepting, so a Kimi
    *  Code usage-limit retry routes through the Moonshot open-platform API key. */
   readonly disableKimiCode?: boolean;
+  /** Turn off the GLM Coding Plan toggle before accepting, so a GLM Coding
+   *  Plan usage-limit retry routes through the regular GLM endpoint. */
+  readonly disableGlmCodingPlan?: boolean;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
 }
