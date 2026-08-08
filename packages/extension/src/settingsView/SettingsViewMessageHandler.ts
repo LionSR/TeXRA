@@ -25,7 +25,7 @@ import {
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import {
   SettingsProfileController,
-  SHARED_PROVIDER_PROFILE_DEFAULTS,
+  getSharedProviderProfileDefaults,
 } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
@@ -163,7 +163,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
     });
     this.profileController = new SettingsProfileController({
-      ...SHARED_PROVIDER_PROFILE_DEFAULTS,
+      ...getSharedProviderProfileDefaults(),
       globalState: globalSM,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
