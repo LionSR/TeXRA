@@ -231,6 +231,32 @@ describe('stream-tab expand chevron', () => {
     ).toBe('engineer');
   });
 
+  it('keeps the opaque stream id out of row text but in its accessible name', async () => {
+    const tabs = await mountTabs({
+      streams: [
+        {
+          ...makeStream('review'),
+          name: 'review#a4c8939992cf',
+          agentCategory: AgentCategory.ToolUse,
+        },
+      ],
+    });
+
+    const shadow = tabs.shadowRoot?.querySelector('stream-tab')?.shadowRoot;
+    // Visible text carries the name only — never the hex suffix.
+    expect(
+      shadow?.querySelector('#stream-tab-title')?.textContent,
+    ).not.toContain('a4c8939992cf');
+    // The row summary stays aria-only by design (#9168) — no visual tooltip
+    // spanning the row — but the id must still be in it, since that is what
+    // separates two parallel runs of the same agent.
+    expect(
+      shadow
+        ?.querySelector('#stream-tab-select-button')
+        ?.getAttribute('aria-label'),
+    ).toContain('review#a4c8939992cf');
+  });
+
   it('omits the inline agent name when the title already is that same identity', async () => {
     const tabs = await mountTabs({
       streams: [
