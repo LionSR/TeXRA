@@ -1,16 +1,15 @@
 /**
  * Session description generation.
  *
- * When a tool-use session starts, generates a short AI summary describing
- * what the session aims to accomplish. The description is persisted on the
- * execution metadata and pushed to the progress view so that the stream tab,
- * history view, and future agents can quickly understand each session.
+ * When a run starts, generates a short AI summary describing what it aims to
+ * accomplish. The description is persisted on the execution metadata and
+ * pushed to the progress view so that the stream tab, history view, and
+ * future agents can quickly understand each session.
  */
 
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   createHelperModelKit,
@@ -88,8 +87,13 @@ export function getDisplayedInstruction(
 /**
  * Generate and persist a session description from the user's instruction.
  *
- * Started concurrently at the beginning of a tool-use session and joined
- * before execution ownership is released. Never throws.
+ * Started concurrently at the beginning of a run and joined before execution
+ * ownership is released. Never throws.
+ *
+ * Every category qualifies. Workflow runs were excluded while "session" meant
+ * a tool-use conversation, which left the whole workflow-subagent population —
+ * the rows a workflow script's `agent()` calls create, and the ones a reader
+ * can least tell apart — labelled by nothing but their agent name.
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, persists the description to execution metadata and emits
  * an `updateStreamDescription` event so the progress view can display it.
@@ -101,8 +105,6 @@ export async function generateSessionDescription(
   session: SessionHandle,
 ): Promise<void> {
   try {
-    if (config.agentCategory !== AgentCategory.ToolUse) return;
-
     const instruction = getDisplayedInstruction(config);
     if (!instruction) return;
 
@@ -114,7 +116,9 @@ export async function generateSessionDescription(
 
     const userPrompt = buildUserPrompt(
       config.agent,
-      getAgent(config.agent, AgentCategory.ToolUse)?.description,
+      // Look the agent up under its own category: the two rosters can hold the
+      // same name, and a workflow agent is invisible to a tool-use lookup.
+      getAgent(config.agent, config.agentCategory)?.description,
       instruction,
     );
     const text = await runHelperModelCompletion(helperResult.kit, {

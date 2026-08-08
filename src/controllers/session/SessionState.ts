@@ -14,6 +14,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import type { StateStore } from '@platform/interfaces';
 import {
   type ActiveChildInfo,
@@ -564,11 +565,67 @@ export class SessionState {
       this.resetStreamMetadataForRun(stream);
     }
 
+    if (stateOwnership === 'backend') {
+      await this.sweepEphemeralStreams(streamIds);
+    }
+
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
 
     this.logger.info('[Persistence] State load complete');
+  }
+
+  /**
+   * Delete background-shell streams left on disk by an earlier session.
+   *
+   * A `process`-kind stream is ephemeral by construction: `autoClose` drops its
+   * tab the moment the command finalizes (`finalizeChildStream`), and the
+   * command's output is already delivered into the parent run's transcript. One
+   * still on disk at load means the host exited mid-command or the deletion was
+   * refused — either way nothing can resume it, so it is leftover state, not
+   * history, and it also never stops accumulating.
+   *
+   * This belongs here rather than in each host's rail because nothing
+   * downstream can tell a finished ephemeral row from a live one: stream phases
+   * are in-memory only, so a hydrated background shell arrives with no status
+   * at all and no render-time filter can key off one (the check in
+   * `StreamTabs.renderStreamNode` only works while a live status exists).
+   */
+  private async sweepEphemeralStreams(
+    streamIds: readonly StreamTabId[],
+  ): Promise<void> {
+    const leftovers = streamIds.filter((stream) => {
+      // A background shell this host is still running owns its tab.
+      if (isActivePhase(this.streamStatus.get(stream))) return false;
+      const identity = this.getStreamMetadata(stream).identity;
+      // Rows written before identity stamping (#9705) hydrate without one, and
+      // that is the whole population of a workspace last used before then —
+      // `isBackgroundShellStream` reads the minted prefix for those, and only
+      // those.
+      return identity
+        ? identity.kind === 'process'
+        : isBackgroundShellStream(stream);
+    });
+    if (leftovers.length === 0) return;
+
+    const retained: StreamTabId[] = [];
+    for (const stream of leftovers) {
+      // Serialized: `clearStream` rotates the active tab, and the deletion
+      // queue behind it is per-stream, not per-batch.
+      if ((await this.clearStream(stream)) !== 'deleted') retained.push(stream);
+    }
+    this.logger.info(
+      `[Persistence] Swept ${leftovers.length - retained.length} ephemeral background-shell stream(s)`,
+    );
+    if (retained.length > 0) {
+      // Refused deletions keep their rail row, so say which ones and why the
+      // list still shows them rather than leaving a silent discrepancy.
+      this.logger.warn(
+        `[Persistence] ${retained.length} ephemeral background-shell stream(s) could not be swept and stay listed`,
+        { data: { retained } },
+      );
+    }
   }
 
   /** Drop workspace-scoped caches before loading a replacement storage root. */
