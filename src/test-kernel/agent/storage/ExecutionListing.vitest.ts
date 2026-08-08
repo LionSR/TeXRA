@@ -4,6 +4,7 @@ import {
   clearStoreCache,
   getExecutionStore,
   isUserVisibleExecution,
+  listExecutionStreamReferences,
   listExecutions,
 } from '@agent/storage';
 import {
@@ -64,6 +65,36 @@ describe('execution listing normalization', () => {
         identity: { kind: 'agent', agent: 'assistant' },
       }),
     ]);
+  });
+
+  it('lists only readable execution metadata with an explicit stream reference', async () => {
+    const referenced = 'f9892001' as ExecutionId;
+    const withoutStream = 'f9892002' as ExecutionId;
+    const malformed = 'f9892003' as ExecutionId;
+    await getExecutionStore(referenced).writeMeta({
+      timestamp: '2026-08-08T00:00:00.000Z',
+      streamId: 'referenced-stream',
+    });
+    await getExecutionStore(withoutStream).writeMeta({
+      timestamp: '2026-08-08T00:00:00.000Z',
+    });
+    await getExecutionStore(malformed).write('meta', { timestamp: 42 });
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    try {
+      const references = await listExecutionStreamReferences();
+
+      expect(references).toEqual([
+        { executionId: referenced, streamId: 'referenced-stream' },
+      ]);
+      expect(warn).toHaveBeenCalledWith(
+        'ExecutionListing',
+        expect.stringContaining(`Skipping execution ${malformed}`),
+        expect.anything(),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('sees metadata replaced by another host after an earlier listing', async () => {
