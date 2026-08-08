@@ -69,7 +69,12 @@ function mockModelAccessOverview(): void {
   vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockResolvedValue({
     access: {
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'off',
+        glmCode: 'off',
+      },
       chatGptSignedIn: false,
       grokSignedIn: false,
     },
