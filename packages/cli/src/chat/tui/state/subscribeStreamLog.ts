@@ -479,7 +479,11 @@ function renderLogEntry(
     if (!parsed.success) return null;
     const call = parsed.data;
     const next: ConversationEntry = {
-      ...baseLogEntryFields(entry, 'workflowTask', formatWorkflowCallLine(call)),
+      ...baseLogEntryFields(
+        entry,
+        'workflowTask',
+        formatWorkflowCallLine(call),
+      ),
       finalized: computeFinalized(entry, prev),
       task: call,
     };
