@@ -8,7 +8,7 @@ import type {
   ProviderKeyStatus,
   ProviderSetting,
   UpdateProfileMessage,
-} from '@shared/schemas/profileViewMessages';
+} from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_SETTINGS,

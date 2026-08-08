@@ -11,7 +11,7 @@ import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getCliAuthProfile } from './supabaseAuth';
