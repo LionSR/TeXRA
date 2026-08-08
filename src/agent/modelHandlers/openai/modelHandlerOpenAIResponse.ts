@@ -2527,7 +2527,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         type: 'thinking',
         thinking: part.text,
       }));
-      workspaceState.reasoning.thinkingAdded = true;
     }
 
     if (thoughtContent) {
