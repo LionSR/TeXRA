@@ -6,6 +6,7 @@ import {
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -13,10 +14,7 @@ import {
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
-import {
-  implicitDefaultToolUseAgents,
-  pickDefaultToolUseAgent,
-} from './defaultAgents';
+import { pickDefaultToolUseAgent } from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
 import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
 import {
