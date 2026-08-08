@@ -535,7 +535,6 @@ export interface SubagentListProps {
   /** Retry the focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onRetryExecution?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
-  readonly onPrintStream?: (streamId: StreamTabId) => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
    *  root bucket already folded onto the root stream id by the caller). */
   readonly pendingApprovals?: ReadonlyMap<
@@ -688,10 +687,6 @@ export function SubagentList(
         childListStreamId(props.selectedValue) ?? workflowChildStreamId;
       if (!streamId) return;
       const pressed = input.toLowerCase();
-      if (pressed === 'v') {
-        props.onPrintStream?.(streamId);
-        return;
-      }
       // Kill/skip/retry target only a focused subagent stream (a
       // workflow-script grandchild); the session control registry no-ops for
       // any execution id that is not an in-flight grandchild, so non-workflow

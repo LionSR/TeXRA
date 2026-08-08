@@ -13,7 +13,6 @@ import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import { groupBy } from '@utils/core';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -29,10 +28,6 @@ import {
   type ChildStreamEntries,
 } from '../state/childExecutions';
 import { streamViewForId } from '../state/streamViews';
-import {
-  formatTranscriptForScrollback,
-  type TranscriptPrintRequest,
-} from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { orderedStaticTranscriptEntries } from './transcriptEntries';
@@ -55,11 +50,6 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'entry';
       readonly entry: ConversationEntry;
-    }
-  | {
-      readonly id: string;
-      readonly kind: 'printedTranscript';
-      readonly request: TranscriptPrintRequest;
     };
 
 interface StaticTranscriptState {
@@ -193,13 +183,6 @@ function staticTranscriptItemRowCount(
       ? COMPACT_SESSION_HEADER_ROWS
       : FULL_SESSION_HEADER_ROWS;
   }
-  if (item.kind === 'printedTranscript') {
-    return formatTranscriptForScrollback({
-      cols: transcriptColumns(width),
-      executionLabels,
-      request: item.request,
-    }).split('\n').length;
-  }
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
       executionLabels,
@@ -211,8 +194,8 @@ function staticTranscriptItemRowCount(
 }
 
 /** The transcript entry an item sits directly below, when that neighbor is
- *  itself an entry. A header or printed-output block above carries no margin
- *  for the next entry to collapse against. */
+ *  itself an entry. A header above carries no margin for the next entry to
+ *  collapse against. */
 function entryAbove(
   item: StaticTranscriptItem | undefined,
 ): ConversationEntry | undefined {
@@ -256,18 +239,6 @@ function StaticTranscriptItemContent({
           />
         </EntryErrorBoundary>
       );
-    case 'printedTranscript':
-      return (
-        <EntryErrorBoundary label="full output">
-          <Text>
-            {formatTranscriptForScrollback({
-              cols: width,
-              executionLabels,
-              request: item.request,
-            })}
-          </Text>
-        </EntryErrorBoundary>
-      );
   }
 }
 
@@ -279,7 +250,6 @@ export function appendStaticTranscriptItems({
   meta,
   maxRows,
   parentStream = new Map(),
-  printRequests = [],
   scrollbackStreamId,
   width,
 }: {
@@ -290,7 +260,6 @@ export function appendStaticTranscriptItems({
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly printRequests?: readonly TranscriptPrintRequest[];
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): readonly StaticTranscriptItem[] {
@@ -350,7 +319,7 @@ export function appendStaticTranscriptItems({
 
   // Only the selected scrollback owner feeds `<Static>` output. Root focus owns
   // root history; child focus owns that child's history. Other streams stay
-  // available through their own focus or print-once full output.
+  // available through their own focus.
   const slice = scrollbackStreamId
     ? streams.get(scrollbackStreamId)
     : undefined;
@@ -359,43 +328,15 @@ export function appendStaticTranscriptItems({
     entries,
     slice?.status,
   );
-  const unseenRequests = printRequests.filter(
-    (request) => !seen.has(request.id),
-  );
   const appendItem = (item: StaticTranscriptItem): void => {
     nextItems ??= [...currentItems];
     nextItems.push(item);
     seen.add(item.id);
   };
 
-  // Requests carry the last static entry visible when the user invoked the
-  // command. Interleave against that anchor so an owner round trip rebuilds
-  // exactly the same chronology as incremental append-only rendering.
-  const anchoredRequests: TranscriptPrintRequest[] = [];
-  for (const request of unseenRequests) {
-    if (request.afterEntryId === undefined || seen.has(request.afterEntryId)) {
-      appendItem({ id: request.id, kind: 'printedTranscript', request });
-      continue;
-    }
-    anchoredRequests.push(request);
-  }
-  const requestsByUnseenAnchor = groupBy(
-    anchoredRequests,
-    (request) => request.afterEntryId,
-  );
   for (const entry of orderedStaticEntries) {
     if (!seen.has(entry.id)) {
       appendItem({ id: entry.id, kind: 'entry', entry });
-    }
-    for (const request of requestsByUnseenAnchor.get(entry.id) ?? []) {
-      appendItem({ id: request.id, kind: 'printedTranscript', request });
-    }
-  }
-  // A legacy or externally restored request may name an entry no longer in
-  // the owner transcript. Keep the output rather than dropping it silently.
-  for (const request of unseenRequests) {
-    if (!seen.has(request.id)) {
-      appendItem({ id: request.id, kind: 'printedTranscript', request });
     }
   }
   // Same reference when nothing was appended so the `setItems` functional
@@ -409,7 +350,6 @@ export function StaticConversationTranscript({
   onRenderKeyChange,
   ownerKey,
   renderKey = ownerKey,
-  printRequests = [],
   scrollbackStreamId,
   subagentExecutionLabels,
   width,
@@ -419,7 +359,6 @@ export function StaticConversationTranscript({
   readonly onRenderKeyChange?: () => void;
   readonly ownerKey: string;
   readonly renderKey?: string;
-  readonly printRequests?: readonly TranscriptPrintRequest[];
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
@@ -446,7 +385,6 @@ export function StaticConversationTranscript({
       meta: sessionMeta,
       maxRows,
       parentStream,
-      printRequests,
       scrollbackStreamId,
       width: normalizedWidth,
     });
@@ -474,7 +412,6 @@ export function StaticConversationTranscript({
         meta: sessionMeta,
         maxRows,
         parentStream,
-        printRequests,
         scrollbackStreamId,
         width: normalizedWidth,
       });
@@ -488,7 +425,6 @@ export function StaticConversationTranscript({
     maxRows,
     ownerKey,
     parentStream,
-    printRequests,
     scrollbackStreamId,
     sessionMeta,
     streams,

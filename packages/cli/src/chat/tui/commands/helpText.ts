@@ -73,8 +73,8 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
     '- `Esc` stops the focused agent · `Ctrl-C` exits idle chats; stops active responses',
-    "- `Ctrl-T` opens the focused stream's full output in a scrollable reader (`p` prints it to scrollback)",
-    `- \`Tab\` ${SESSION_LIST.openHelp} · \`v\` prints the selected stream's full output`,
+    "- `Ctrl-T` opens the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
+    `- \`Tab\` ${SESSION_LIST.openHelp}`,
     `- \`${focusChord}\` focuses a stream directly`,
   ].join('\n');
 }
