@@ -79,11 +79,22 @@ describe('session description helpers', () => {
     ).toBe('Summarize the paper.');
   });
 
-  it('does not generate helper-model descriptions for workflow runs', async () => {
+  it('generates descriptions for workflow runs, looked up in their own roster', async () => {
     const session = createTestSession();
     const events: SessionEvent[] = [];
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
+    });
+    const handler = {
+      createResponse: vi.fn().mockResolvedValue({ response: {} }),
+      extractResponse: vi
+        .fn()
+        .mockReturnValue({ text: 'Correcting derivation signs' }),
+      initializeMessages: vi.fn().mockResolvedValue([]),
+    };
+    mocks.getAgent.mockReturnValue({ description: 'Corrects a draft' });
+    mocks.createHelperModelKit.mockResolvedValue({
+      kit: { client: {}, handler },
     });
 
     await runDescription(
@@ -94,9 +105,28 @@ describe('session description helpers', () => {
     );
     detach();
 
-    expect(mocks.createHelperModelKit).not.toHaveBeenCalled();
-    expect(mocks.writeSessionDescription).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
+    // A tool-use lookup would miss a workflow agent entirely, leaving the
+    // helper prompt without the agent's purpose.
+    expect(mocks.getAgent).toHaveBeenCalledWith(
+      'correct',
+      AgentCategory.Workflow,
+    );
+    expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
+      'exec-workflow',
+      'Correcting derivation signs',
+    );
+    expect(events).toEqual([
+      {
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: 'stream-workflow',
+            description: 'Correcting derivation signs',
+          },
+        },
+      },
+    ]);
   });
 
   it('logs helper-model failures without rejecting the fire-and-forget call', async () => {
