@@ -265,9 +265,13 @@ export const streamTabStyles = css`
   }
 
   /* The chip shares the meta row with the timestamp and model — keep it
-     truncating instead of wrapping. */
+     truncating instead of wrapping. Slightly lower opacity than its plain-text
+     siblings: which branch a row ran in matters less than who ran it
+     (.agent-name) or when — it's supplementary, not the headline fact, and
+     should read that way even on a row where it's the only thing shown. */
   .tab-meta worktree-chip {
     flex-shrink: 1;
+    opacity: 0.75;
   }
 
   /* A custom agent name is unbounded length — truncate rather than crowd
