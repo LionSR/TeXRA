@@ -41,7 +41,7 @@ function getSafeDocumentPathParts(source: string): {
           (seg) =>
             seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
         )
-        .join(path.sep);
+        .join('/');
 
   return {
     dir,
@@ -60,7 +60,9 @@ function getSafeDocumentPathParts(source: string): {
  */
 export function getSafeDocumentRelativePath(source: string): string {
   const safe = getSafeDocumentPathParts(source);
-  return path.join(safe.dir, `${safe.name}${safe.ext}`);
+  // Document-relative paths use a forward-slash convention regardless of host
+  // platform (they are workflow names, not host paths), so normalize the join.
+  return normalizeFilePath(path.join(safe.dir, `${safe.name}${safe.ext}`));
 }
 
 /**

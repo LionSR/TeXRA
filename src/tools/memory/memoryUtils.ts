@@ -37,7 +37,10 @@ export function displayToStoragePath(displayPath: string): string {
   if (!isPathWithin(base, resolved)) {
     throw new Error(`Invalid memory path: ${displayPath}`);
   }
+  // Memory paths use a forward-slash display convention regardless of host
+  // platform, so normalize the storage path the same way relativeToDisplayPath
+  // does (path.join on Windows would otherwise emit backslashes).
   return relative
-    ? path.join(MEMORY_STORAGE_DIR, relative)
+    ? normalizeFilePath(path.join(MEMORY_STORAGE_DIR, relative))
     : MEMORY_STORAGE_DIR;
 }

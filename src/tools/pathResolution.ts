@@ -8,6 +8,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { ToolError } from '@shared/schemas/toolResult';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import {
   findExternalRoot,
@@ -120,7 +121,7 @@ export function resolveWorkspaceRelativePath(
       throw new ToolError(outsideMessage);
     }
     return {
-      relative: absolutePath,
+      relative: normalizeFilePath(absolutePath),
       absolute: absolutePath,
       fsPath: absolutePath,
       ...(match ? { external: externalInfo(match) } : {}),
