@@ -33,14 +33,17 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { identity, config } = metadata;
 
   // A stream whose identity hasn't resolved yet (no `run.start` seen, no
-  // durable record hydrated) has nothing readable to show — never fall back
-  // to `streamId`, the opaque `agent#executionId` handle (never parsed back;
-  // see `src/agent/runtime/streamTab.ts`), which every consumer of `label`
-  // (this file's callers, `streamDisplayLabel()`, the desktop command
-  // palette, …) trusts as display-safe.
+  // durable record hydrated) has nothing readable to show. `streamId` is the
+  // opaque `agent#executionId` handle (never parsed back; see
+  // `src/agent/runtime/streamTab.ts`) — but it's what we have, and its
+  // prefix (minted by `getStreamTabId()`) already *is* the clean agent name,
+  // so it reads as e.g. "review#a4c8939992cf" rather than pure noise. A
+  // generic placeholder here (tried in #9861, reverted) is strictly worse:
+  // it hides the one piece of real information — which agent this is — that
+  // the id string still carries even before identity resolves.
   const identityName = identity
     ? getCleanAgentName(runIdentityName(identity))
-    : 'Pending session';
+    : streamId;
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).
