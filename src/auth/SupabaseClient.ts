@@ -75,7 +75,10 @@ function gotrueStorage(
       const store = flowStore(key);
       if (!store) return memory.get(key) ?? null;
       try {
-        return (await store.get(key)) ?? null;
+        // A degraded store can answer an absent value instead of throwing
+        // (e.g. a locked keychain that denies decryption). The mirrored write
+        // is still this window's best answer, so treat a miss like a failure.
+        return (await store.get(key)) ?? memory.get(key) ?? null;
       } catch (error) {
         warn('read', key, error);
         return memory.get(key) ?? null;
