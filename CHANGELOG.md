@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.40.1] - 2026-08-07
+## [0.40.1] - 2026-08-08
 
 ### CLI
 
@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - **The status bar reports how many sessions are running** — while background
   sessions are in flight, the status bar declares the count (e.g. "3 running
   sessions") alongside the Tab sessions hint.
+- **GLM Coding Plan access** — GLM models can be used through a GLM Coding
+  Plan subscription, with the access mode and picker status shown in the CLI.
 
 #### Bug Fixes
 
@@ -107,6 +109,8 @@ All notable changes to this project will be documented in this file.
 - **DeepSeek V4 Flash (Thinking) joins the default model list** — the
   thinking variant of DeepSeek V4 Flash is now available by default in the
   model picker.
+- **GLM-5.2 joins the default model list** — GLM-5.2 is now available by
+  default in the model picker alongside the other provider flagships.
 
 #### Breaking Changes
 
