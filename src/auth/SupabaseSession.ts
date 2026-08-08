@@ -58,25 +58,6 @@ interface StableSessionSnapshot {
 }
 
 /**
- * A code exchange with no stored verifier means this callback belongs to a
- * sign-in attempt whose flow state is gone — a link opened on another machine,
- * or one left over from before the session was cleared. GoTrue's own wording
- * for it advises `@supabase/ssr` and cookies, which is meaningless in an
- * editor, so say what the user can actually do.
- */
-function describeCodeExchangeError(
-  error: { code?: string; message: string } | null,
-): string {
-  if (error?.code === 'pkce_code_verifier_not_found') {
-    return (
-      'this sign-in link is no longer valid. It was either opened on another ' +
-      'machine or left over from an earlier attempt. Start sign-in again.'
-    );
-  }
-  return error?.message || 'Code exchange failed';
-}
-
-/**
  * Host-neutral coordinator for Supabase session storage, token freshness,
  * OAuth callback conversion, and refresh. Host wrappers own UI and registration.
  */
@@ -248,9 +229,19 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       .auth.exchangeCodeForSession(code);
 
     if (error || !data.session) {
+      // A missing verifier means this callback belongs to a sign-in attempt
+      // whose flow state is gone — a link opened on another machine, or one
+      // left over from before the session was cleared. GoTrue's own wording
+      // for it advises `@supabase/ssr` and cookies, which is meaningless in
+      // an editor, so say what the user can actually do.
       return {
         success: false,
-        error: describeCodeExchangeError(error),
+        error:
+          error?.code === 'pkce_code_verifier_not_found'
+            ? 'this sign-in link is no longer valid. It was either opened on ' +
+              'another machine or left over from an earlier attempt. Start ' +
+              'sign-in again.'
+            : error?.message || 'Code exchange failed',
         isAuthError: true,
       };
     }
