@@ -567,7 +567,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Pricing & usage
   // ---------------------------------------------------------------------------
 
-  computePrice(responseUsage: ChatUsage | null): number {
+  computePrice(responseUsage: ChatUsage): number {
     return computeOpenRouterPrice(responseUsage, this.standardPricingConfig());
   }
 
