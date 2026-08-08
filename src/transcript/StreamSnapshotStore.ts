@@ -984,6 +984,15 @@ export class StreamSnapshotStore {
             { data: error },
           );
         }
+        try {
+          await this.flush();
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} was deleted, but child parent-edge persistence was incomplete.`,
+            { data: error },
+          );
+        }
       },
       rollback: () => deletion.rollback(),
     };
@@ -1201,7 +1210,7 @@ export class StreamSnapshotStore {
     return this.records.get(stream)?.meta?.parentStreamId;
   }
 
-  /** Remove parent edges from fresh sidecar metadata after a parent commits. */
+  /** Find and seed children before their canonical parent-detach facts emit. */
   private async detachPersistedChildren(
     parent: StreamTabId,
   ): Promise<StreamTabId[]> {
@@ -1209,17 +1218,11 @@ export class StreamSnapshotStore {
     const children: StreamTabId[] = [];
     for (const stream of await this.listPersistedStreams()) {
       if (stream === parent) continue;
-      const meta = await readMeta(this.kv(stream));
-      if (meta?.parentStreamId !== parent) continue;
-      const record = this.getOrCreateRecord(stream);
-      const next = { ...meta, parentStreamId: undefined };
-      record.meta = next;
-      record.runExecutionId = meta.executionId;
-      record.metaOverlay = true;
-      this.writeMeta(stream, next);
-      children.push(stream);
+      if ((await readMeta(this.kv(stream)))?.parentStreamId === parent) {
+        children.push(stream);
+      }
     }
-    await this.flush();
+    await this.preload(children);
     return children;
   }
 

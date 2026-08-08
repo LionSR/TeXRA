@@ -65,12 +65,16 @@ describe('SessionStores deletion coordination', () => {
     snapshotFacts(snapshots).setParentStream(child, parent);
     await snapshots.flush();
     const reloadedSnapshots = new StreamSnapshotStore();
+    const projectionFacts = snapshotFacts(reloadedSnapshots);
     const detached: Array<[StreamTabId, readonly StreamTabId[]]> = [];
     const stores = new SessionStores({
       streamLogs: session.transcripts,
       snapshots: reloadedSnapshots,
       onChildrenDetached: (deletedParent, children) => {
         detached.push([deletedParent, children]);
+        for (const detachedChild of children) {
+          projectionFacts.setParentStream(detachedChild, null);
+        }
       },
     });
 
@@ -127,7 +131,7 @@ describe('SessionStores deletion coordination', () => {
     try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(session.transcripts.has(parent)).toBe(false);
-      expect(snapshots.getParentStreamId(child)).toBeUndefined();
+      expect(snapshots.getParentStreamId(child)).toBe(parent);
     } finally {
       session.dispose();
     }
