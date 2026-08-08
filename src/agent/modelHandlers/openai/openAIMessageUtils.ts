@@ -243,7 +243,6 @@ export function insertMediaIntoChatUserMessage(
 
 /** Capability flags `initializeChatMessages`/`createChatRoundMessages` need from the handler. */
 interface ChatMessageRoutingCapabilities {
-  supportsSystemPrompt: boolean;
   supportsIntermDevMsgs: boolean;
   supportsVision: boolean;
   supportsNativeAudio: boolean;
@@ -272,13 +271,12 @@ export async function initializeChatMessages<T extends MessageLike>(
 ): Promise<T[]> {
   const messages: T[] = [];
 
-  // Handle system prompt differently for O1 models
-  // O1 mini and O1 preview models do not support system prompt; use 'user' role instead.
-  // For openai native o1 full or above reasoning models, "developer" is the new name but "system" still works.
+  // Every runnable model accepts a system-role prompt. The only models that
+  // ever needed the 'user'-role fallback were o1-mini / o1-preview, both
+  // retired, so the system prompt always goes in the 'system' role now.
   if (systemPrompt) {
-    const role = capabilities.supportsSystemPrompt ? 'system' : 'user';
     messages.push({
-      role,
+      role: 'system',
       content: [{ type: 'text', text: systemPrompt }],
     } as T);
   }
