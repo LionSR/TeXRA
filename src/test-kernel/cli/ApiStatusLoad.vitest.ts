@@ -37,6 +37,16 @@ vi.mock('@cli/runtime/modelAccessSelection', () => ({
 vi.mock('@model/apiProviders', () => ({
   API_PROVIDERS: ['deepseek', 'kimiCode'],
   lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
+  configuredApiKeyProviders: async () => {
+    const origins = await Promise.all(
+      ['deepseek', 'kimiCode'].map((provider) =>
+        mocks.lookupApiKeyOrigin({}, provider),
+      ),
+    );
+    return ['deepseek', 'kimiCode'].filter(
+      (_, index) => origins[index] !== 'none',
+    );
+  },
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -480,5 +490,24 @@ describe('loadCliApiStatusLines', () => {
       'auth: signed out',
       'actions: choose Model access below; provider keys are configured',
     ]);
+  });
+
+  it('lists providers configured by secret or env origin', async () => {
+    const originsByProvider: Record<string, 'secret' | 'env' | 'none'> = {
+      deepseek: 'secret',
+      kimiCode: 'env',
+    };
+    mocks.lookupApiKeyOrigin.mockImplementation(
+      (_secrets: unknown, provider: string) =>
+        Promise.resolve(originsByProvider[provider] ?? 'none'),
+    );
+
+    await expect(loadCliApiStatus()).resolves.toEqual({
+      lines: [
+        'api: your own API keys',
+        'your own API keys: DeepSeek, Kimi Code',
+        'auth: signed out',
+      ],
+    });
   });
 });

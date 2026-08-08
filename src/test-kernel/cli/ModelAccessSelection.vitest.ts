@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   signInCliGrok: vi.fn(),
   updateGlobalState: vi.fn(),
   apiKeyExists: vi.fn(),
+  lookupApiKeyOrigin: vi.fn(),
   getPreferKimiCode: vi.fn(),
   setPreferKimiCode: vi.fn(),
 }));
@@ -63,7 +64,54 @@ vi.mock('@model/xai/xaiPreference', () => ({
 }));
 
 vi.mock('@model/apiProviders', () => ({
+  API_PROVIDERS: [
+    'openai',
+    'anthropic',
+    'openRouter',
+    'google',
+    'xai',
+    'deepseek',
+    'moonshot',
+    'kimiCode',
+    'dashscope',
+    'minimax',
+    'glm',
+    'meta',
+  ],
   apiKeyExists: mocks.apiKeyExists,
+  lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
+  configuredApiKeyProviders: async () => {
+    const origins = await Promise.all(
+      [
+        'openai',
+        'anthropic',
+        'openRouter',
+        'google',
+        'xai',
+        'deepseek',
+        'moonshot',
+        'kimiCode',
+        'dashscope',
+        'minimax',
+        'glm',
+        'meta',
+      ].map((provider) => mocks.lookupApiKeyOrigin({}, provider)),
+    );
+    return [
+      'openai',
+      'anthropic',
+      'openRouter',
+      'google',
+      'xai',
+      'deepseek',
+      'moonshot',
+      'kimiCode',
+      'dashscope',
+      'minimax',
+      'glm',
+      'meta',
+    ].filter((_, index) => origins[index] !== 'none');
+  },
 }));
 
 vi.mock('@utils/config/providerConfig', () => ({
@@ -115,6 +163,7 @@ function expectedAccessStatus(overrides: Record<string, unknown>) {
     grokSignedIn: false,
     grokAccountLabel: undefined,
     kimiCodeKeySet: false,
+    personalKeyProviders: [],
     ...overrides,
   };
 }
@@ -140,6 +189,7 @@ beforeEach(() => {
   mocks.shouldUseChatGptDeviceCode.mockReturnValue(false);
   mocks.shouldUseGrokDeviceCode.mockReturnValue(false);
   mocks.apiKeyExists.mockResolvedValue(false);
+  mocks.lookupApiKeyOrigin.mockResolvedValue('none');
   mocks.getPreferKimiCode.mockReturnValue(false);
   mocks.setPreferKimiCode.mockResolvedValue(undefined);
 });
@@ -329,6 +379,39 @@ describe('CLI model access routes', () => {
       preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
       kimiCodeKeySet: false,
     });
+  });
+
+  it('reports configured provider keys as display names', async () => {
+    mocks.lookupApiKeyOrigin.mockImplementation(async (_secrets, provider) => {
+      if (provider === 'deepseek') return 'secret';
+      if (provider === 'moonshot') return 'env';
+      if (provider === 'kimiCode') return 'secret';
+      return 'none';
+    });
+
+    await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
+      apiFallback: 'personal',
+      personalKeyProviders: ['DeepSeek', 'Moonshot', 'Kimi Code'],
+    });
+  });
+
+  it('renders configured provider keys in the personal item description', async () => {
+    mocks.lookupApiKeyOrigin.mockImplementation(async (_secrets, provider) => {
+      if (provider === 'deepseek') return 'secret';
+      if (provider === 'moonshot') return 'env';
+      if (provider === 'kimiCode') return 'secret';
+      return 'none';
+    });
+    const status = await readCliModelAccessStatus('personal');
+
+    const items = buildCliModelAccessItems({ kind: 'loaded', access: status });
+    const personalItem = items.find(
+      (item) =>
+        item.value.kind === 'api-fallback' && item.value.apiMode === 'personal',
+    );
+    expect(personalItem?.description).toBe(
+      'Configured: DeepSeek, Moonshot, Kimi Code',
+    );
   });
 
   it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
