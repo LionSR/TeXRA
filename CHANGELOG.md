@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
   without leaving the chat interface.
 - **The transcript reader pages with `PgUp`/`PgDn`** — the Ctrl-T full-output
   view scrolls a page at a time instead of one line per keypress.
+- **The status bar reports how many sessions are running** — while background
+  sessions are in flight, the status bar declares the count (e.g. "3 running
+  sessions") alongside the Tab sessions hint.
 
 #### Bug Fixes
 
