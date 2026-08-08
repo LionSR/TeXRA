@@ -717,8 +717,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         workspaceState: workspaceSM,
         globalState: globalSM,
       },
-      requiresOpenWorkspace: (entry) =>
-        entry.configTarget !== 'global' && !WorkspaceFS.getPath(),
+      // The shared function already gates this hook on
+      // `configTarget !== 'global'`; this checks only the workspace half.
+      requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
       onApprovalPolicyChanged: (policy) => {
         defaultSession().setApprovalPolicy(policy);
         refreshApprovalPolicyTooltip();
