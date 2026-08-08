@@ -468,8 +468,9 @@ export class SessionStores {
     const retained: StreamTabId[] = [];
     for (const stream of liveStreams) {
       if (!isBackgroundShellStream(stream)) continue;
-      // Serialized: the deletion queue behind `deleteStream` is per-stream, and
-      // a swept stream releases resources its siblings' hooks may also touch.
+      // Awaited one at a time because `deletionQueue` already serializes every
+      // deletion on this instance at concurrency 1: firing them together would
+      // only queue them, trading readable sequencing for a burst of promises.
       // Per-stream failure isolation: one unreadable leftover must not abandon
       // the rest of the sweep, and must not fail the load that called it.
       try {
