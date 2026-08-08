@@ -31,25 +31,6 @@ import { BaseBypassApprovalPanel } from './BaseBypassApprovalPanel';
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
 
-/**
- * Whether this host can render the inline Monaco diff.
- *
- * `<texra-diff-view>` is registered by the desktop renderer alone
- * (`desktop/src/renderer/main.ts`). The extension webview and the trace viewer
- * deliberately ship no Monaco — the extension opens the real diff through VS
- * Code's own `vscode.diff`, which the `openDiff` action below reaches. Without
- * this check the diff button toggled an unregistered, empty element in those
- * hosts *and* shadowed the working path, since the inline branch wins whenever
- * the payload carries content.
- *
- * Checked per call rather than once at module scope: this module is pulled in
- * through the progressView barrel, which the desktop imports one line *before*
- * it registers the element.
- */
-function inlineDiffSupported(): boolean {
-  return customElements.get('texra-diff-view') !== undefined;
-}
-
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   static override styles = [
@@ -224,7 +205,11 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   };
 
   private hasInlineDiff(data: ToolEditPermission): boolean {
-    if (!inlineDiffSupported()) return false;
+    // Only the desktop registers <texra-diff-view>; the extension and trace
+    // viewer ship no Monaco and fall through to openDiff (VS Code's own diff).
+    // Read per call, not at module scope: the desktop imports the progressView
+    // barrel — and so this module — one line before it registers the element.
+    if (customElements.get('texra-diff-view') === undefined) return false;
     return data.originalContent != null || data.proposedContent != null;
   }
 }
