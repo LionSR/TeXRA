@@ -112,11 +112,10 @@ describe('CLI child list interaction', () => {
     expect(output).not.toContain(POINTER);
   });
 
-  it('prints and kills only the selected active session, then focuses it', async () => {
+  it('kills the selected active session, then focuses it', async () => {
     const { ink, React } = await loadInk();
     const onFocusStream = vi.fn();
     const onKillExecution = vi.fn();
-    const onPrintStream = vi.fn();
     const onCancel = vi.fn();
     const { Harness, current } = controlledList(
       React,
@@ -128,7 +127,6 @@ describe('CLI child list interaction', () => {
         onCancel,
         onFocusStream,
         onKillExecution,
-        onPrintStream,
         sessions: [session(root, true), session(child)],
       },
     );
@@ -142,8 +140,6 @@ describe('CLI child list interaction', () => {
       await waitForInput(stdin);
       stdin.write('\u001B[B');
       await waitFor(() => current() === childStreamListValue(child));
-      stdin.write('v');
-      await waitFor(() => onPrintStream.mock.calls.length === 1);
       stdin.write('k');
       await waitFor(() => onKillExecution.mock.calls.length === 1);
       stdin.write('\r');
@@ -151,7 +147,6 @@ describe('CLI child list interaction', () => {
       stdin.write('\u001B');
       await waitFor(() => onCancel.mock.calls.length === 1);
 
-      expect(onPrintStream).toHaveBeenCalledWith(child);
       expect(onKillExecution).toHaveBeenCalledWith('child-exec');
       expect(onFocusStream).toHaveBeenCalledWith(child);
       expect(onCancel).toHaveBeenCalledOnce();
@@ -261,7 +256,6 @@ describe('CLI child list interaction', () => {
     const callbacks = {
       onFocusStream: vi.fn(),
       onKillExecution: vi.fn(),
-      onPrintStream: vi.fn(),
       onRetryExecution: vi.fn(),
       onSkipExecution: vi.fn(),
     };
@@ -284,7 +278,7 @@ describe('CLI child list interaction', () => {
 
     try {
       await waitForInput(stdin);
-      for (const input of ['v', 'k', 's', 'r', '\r']) stdin.write(input);
+      for (const input of ['k', 's', 'r', '\r']) stdin.write(input);
       await sleep(30);
 
       for (const callback of Object.values(callbacks)) {
@@ -442,7 +436,6 @@ describe('CLI child list interaction', () => {
   it('keeps detail and controls inert when workflow tasks reuse a child id', async () => {
     const { ink, React } = await loadInk();
     const onFocusStream = vi.fn();
-    const onPrintStream = vi.fn();
     const onSkipExecution = vi.fn();
     const rootSlice = workflowRootSlice([
       ...['first', 'second'].map((id) => ({
@@ -483,7 +476,6 @@ describe('CLI child list interaction', () => {
           maxRows: 6,
           onCancel: vi.fn(),
           onFocusStream,
-          onPrintStream,
           onSkipExecution,
           sessions: [],
           ...props,
@@ -491,10 +483,9 @@ describe('CLI child list interaction', () => {
       );
       try {
         await waitForInput(stdin);
-        for (const input of ['\r', 'v', 's']) stdin.write(input);
+        for (const input of ['\r', 's']) stdin.write(input);
         await sleep(30);
         expect(onFocusStream).not.toHaveBeenCalled();
-        expect(onPrintStream).not.toHaveBeenCalled();
         expect(onSkipExecution).not.toHaveBeenCalled();
       } finally {
         instance.unmount();
