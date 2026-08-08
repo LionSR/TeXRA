@@ -29,6 +29,7 @@ import type {
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { groupBy } from '@utils/core';
 
 // Side-effect imports - register WA button, icon, and switch components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -251,18 +252,6 @@ export class ToolsTab extends LitElement {
     return this.items.filter((item) => TOOLS_TAB_CATEGORIES.has(item.category));
   }
 
-  private groupByCategory(
-    items: readonly ToolDashboardItem[],
-  ): Map<ToolCategory, ToolDashboardItem[]> {
-    const groups = new Map<ToolCategory, ToolDashboardItem[]>();
-    for (const item of items) {
-      const list = groups.get(item.category) ?? [];
-      list.push(item);
-      groups.set(item.category, list);
-    }
-    return groups;
-  }
-
   private renderSummary(
     items: readonly ToolDashboardItem[],
   ): TemplateResult | typeof nothing {
@@ -328,7 +317,7 @@ export class ToolsTab extends LitElement {
     }
 
     const items = this.visibleItems();
-    const groups = this.groupByCategory(items);
+    const groups = groupBy(items, (i) => i.category);
 
     return html`
       <div class="tools-container tab-content-container">

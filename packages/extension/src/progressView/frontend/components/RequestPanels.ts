@@ -48,6 +48,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 // Local imports - progress view helpers
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
 import { getPermissionKey, type PermissionState } from '../permissionState';
 import { streamDisplayLabel } from '../utils';
@@ -158,22 +159,6 @@ function renderPanel(
   ></${section.tag}>`;
 }
 
-/**
- * One pass over the queue. A kind with no section (malformed IPC data) lands
- * in a bucket nothing renders, so it is dropped rather than throwing.
- */
-function groupByKind(
-  permissions: readonly PermissionState[],
-): ReadonlyMap<PermissionState['kind'], PermissionState[]> {
-  const groups = new Map<PermissionState['kind'], PermissionState[]>();
-  for (const permission of permissions) {
-    const existing = groups.get(permission.kind);
-    if (existing) existing.push(permission);
-    else groups.set(permission.kind, [permission]);
-  }
-  return groups;
-}
-
 function externalInquiryKeys(
   permissions: readonly PermissionState[],
 ): string[] {
@@ -238,7 +223,7 @@ export class RequestPanels extends LitElement {
         (changedProperties.get('permissions') as
           PermissionState[] | undefined) ?? [],
       );
-      this.permissionsByKind = groupByKind(this.permissions);
+      this.permissionsByKind = groupBy(this.permissions, (p) => p.kind);
       this.selectedExternalInquiryKey = selectExternalInquiryKey(
         this.selectedExternalInquiryKey,
         previousKeys,
