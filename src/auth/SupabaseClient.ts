@@ -51,58 +51,50 @@ import type {
  * five and evicts the oldest, so the leftovers are bounded and hold spent
  * verifiers, which are worthless without their single-use auth code.
  */
-function gotrueStorage(
-  secrets: SessionSecretStore | undefined,
-): SupportedStorage {
+function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
   // Writes are mirrored here so a secret-store failure degrades to the old
   // in-process behavior (same-window sign-in still completes) instead of
   // losing the flow outright.
   const memory = new Map<string, string>();
-  const flowStore = (key: string): SessionSecretStore | null =>
-    secrets !== undefined && key !== SUPABASE_GOTRUE_STORAGE_KEY
-      ? secrets
-      : null;
-  const warn = (action: string, key: string, error: unknown): void => {
-    logger.warn(
-      'SupabaseClient',
-      `Could not ${action} PKCE flow state (${key}); sign-in will only be ` +
-        `completable in this window: ${toErrorMessage(error)}`,
-    );
+
+  /**
+   * Run one secret-store operation, unless the key is the session slot. That
+   * slot and a failed store both answer `undefined`, which every caller
+   * resolves against the memory mirror.
+   */
+  const onFlowState = async <T>(
+    action: string,
+    key: string,
+    run: () => Promise<T>,
+  ): Promise<T | undefined> => {
+    if (key === SUPABASE_GOTRUE_STORAGE_KEY) return undefined;
+    try {
+      return await run();
+    } catch (error) {
+      logger.warn(
+        'SupabaseClient',
+        `Could not ${action} PKCE flow state (${key}); sign-in will only be ` +
+          `completable in this window: ${toErrorMessage(error)}`,
+      );
+      return undefined;
+    }
   };
 
   return {
-    getItem: async (key) => {
-      const store = flowStore(key);
-      if (!store) return memory.get(key) ?? null;
-      try {
-        // A degraded store can answer an absent value instead of throwing
-        // (e.g. a locked keychain that denies decryption). The mirrored write
-        // is still this window's best answer, so treat a miss like a failure.
-        return (await store.get(key)) ?? memory.get(key) ?? null;
-      } catch (error) {
-        warn('read', key, error);
-        return memory.get(key) ?? null;
-      }
-    },
+    // A degraded store can answer an absent value instead of throwing (e.g. a
+    // locked keychain that denies decryption). The mirrored write is still
+    // this window's best answer, so a miss falls back like a failure does.
+    getItem: async (key) =>
+      (await onFlowState('read', key, () => secrets.get(key))) ??
+      memory.get(key) ??
+      null,
     setItem: async (key, value) => {
       memory.set(key, value);
-      const store = flowStore(key);
-      if (!store) return;
-      try {
-        await store.set(key, value);
-      } catch (error) {
-        warn('store', key, error);
-      }
+      await onFlowState('store', key, () => secrets.set(key, value));
     },
     removeItem: async (key) => {
       memory.delete(key);
-      const store = flowStore(key);
-      if (!store) return;
-      try {
-        await store.delete(key);
-      } catch (error) {
-        warn('clear', key, error);
-      }
+      await onFlowState('clear', key, () => secrets.delete(key));
     },
   };
 }
@@ -197,7 +189,7 @@ export class SupabaseClient {
   static initialize(
     url: string,
     publicKey: string,
-    secrets?: SessionSecretStore,
+    secrets: SessionSecretStore,
   ): void {
     if (!url || !publicKey) {
       throw new Error(
