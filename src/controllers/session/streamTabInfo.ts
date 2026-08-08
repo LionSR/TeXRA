@@ -1,4 +1,5 @@
 import { isRemoteAgent } from '@agent/index/agentRegistry';
+import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import type { SessionStreamMetadata } from '@controllers/session/SessionState';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
@@ -33,17 +34,15 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { identity, config } = metadata;
 
   // A stream whose identity hasn't resolved yet (no `run.start` seen, no
-  // durable record hydrated) has nothing readable to show. `streamId` is the
-  // opaque `agent#executionId` handle (never parsed back; see
-  // `src/agent/runtime/streamTab.ts`) — but it's what we have, and its
-  // prefix (minted by `getStreamTabId()`) already *is* the clean agent name,
-  // so it reads as e.g. "review#a4c8939992cf" rather than pure noise. A
-  // generic placeholder here (tried in #9861, reverted) is strictly worse:
-  // it hides the one piece of real information — which agent this is — that
-  // the id string still carries even before identity resolves.
+  // durable record hydrated) has no RunIdentity to name it by. Its id's
+  // prefix is the clean agent name, so showing that (not the whole
+  // `agent#executionId` handle, and not a generic placeholder — #9861 tried
+  // that and it hid the only real information available) lands these rows on
+  // exactly the same label as a resolved run: the agent name, with the full
+  // id on `name` for tooltips and parallel-run disambiguation.
   const identityName = identity
     ? getCleanAgentName(runIdentityName(identity))
-    : streamId;
+    : getStreamTabDisplayName(streamId);
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).

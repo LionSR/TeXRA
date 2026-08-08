@@ -133,10 +133,12 @@ describe('stream-header', () => {
   describe('tooltips', () => {
     it('anchors the truncated stream label via wa-tooltip[for]', async () => {
       const element = await mount();
+      // The label names the run; the opaque id rides along so it is
+      // recoverable on hover without ever sitting in the header text.
       expectAnchoredTooltip(
         element,
         ELEMENT_IDS.ACTIVE_STREAM_NAME,
-        'Stream A',
+        'Stream A · stream-a',
       );
     });
 

@@ -457,7 +457,7 @@ export class StreamHeader extends LitElement {
           ${
             this.stream.label
               ? html`<wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
-                  >${this.stream.label}</wa-tooltip
+                  >${this.stream.label} · ${this.stream.name}</wa-tooltip
                 >`
               : nothing
           }
@@ -587,7 +587,7 @@ export class StreamHeader extends LitElement {
         <span class="parent-link-label">${displayName}</span>
       </span>
       <wa-tooltip for=${ELEMENT_IDS.PARENT_LINK}
-        >Go to parent: ${displayName}</wa-tooltip
+        >Go to parent: ${displayName} · ${parentStreamId}</wa-tooltip
       >
     `;
   }
