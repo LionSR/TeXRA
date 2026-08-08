@@ -205,6 +205,11 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   };
 
   private hasInlineDiff(data: ToolEditPermission): boolean {
+    // Only the desktop registers <texra-diff-view>; the extension and trace
+    // viewer ship no Monaco and fall through to openDiff (VS Code's own diff).
+    // Read per call, not at module scope: the desktop imports the progressView
+    // barrel — and so this module — one line before it registers the element.
+    if (customElements.get('texra-diff-view') === undefined) return false;
     return data.originalContent != null || data.proposedContent != null;
   }
 }
