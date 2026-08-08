@@ -1655,7 +1655,10 @@ export abstract class ModelHandler<
     reasoning: string,
     workspaceState?: AgentWorkspaceState,
   ): void {
-    if (workspaceState && workspaceState.reasoning.thinkingBlocks.length === 0) {
+    if (
+      workspaceState &&
+      workspaceState.reasoning.thinkingBlocks.length === 0
+    ) {
       workspaceState.reasoning.thinkingBlocks = [
         { type: 'thinking', thinking: reasoning },
       ];

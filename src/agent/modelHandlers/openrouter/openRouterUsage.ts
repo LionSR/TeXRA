@@ -26,9 +26,10 @@ type OpenRouterPricingConfig = StandardPricingConfig;
  * the existing static full-inference estimate for that route.
  */
 export function computeOpenRouterPrice(
-  responseUsage: ChatUsage,
+  responseUsage: ChatUsage | null,
   config: OpenRouterPricingConfig,
 ): number {
+  if (!responseUsage) return 0;
   if (responseUsage.isByok !== true && responseUsage.cost != null) {
     return responseUsage.cost;
   }
