@@ -75,7 +75,10 @@ import {
 } from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import { filterNotNullish } from '@utils/core';
-import { getGLMCodingPlan, getPreferKimiCode } from '@utils/config/providerConfig';
+import {
+  getGLMCodingPlan,
+  getPreferKimiCode,
+} from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
