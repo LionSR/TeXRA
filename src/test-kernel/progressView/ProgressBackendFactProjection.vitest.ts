@@ -1090,7 +1090,8 @@ describe('ProgressBackend', () => {
     const infos = buildStreamInfos(backend.state);
     expect(infos.map((info) => info.name)).toContain(stream);
     expect(infos.find((info) => info.name === stream)).toMatchObject({
-      label: stream,
+      // Pending: labelled by the id's prefix, never the whole handle.
+      label: 'search@deepseek',
       agentCategory: AgentCategory.ToolUse,
       isRemote: true,
       executionId,
