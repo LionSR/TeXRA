@@ -397,6 +397,8 @@ describe('SupabaseClient PKCE flow state', () => {
 
   it('still signs in this window when the secret store is unwritable', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    // A locked keychain answers an absent value (rather than throwing) on
+    // reads and throws on writes; only the in-process mirror remains usable.
     const secrets: SessionSecretStore = {
       get: async () => undefined,
       set: async () => {
@@ -411,6 +413,41 @@ describe('SupabaseClient PKCE flow state', () => {
     expect(warn).toHaveBeenCalledWith(
       'SupabaseClient',
       expect.stringContaining('keychain locked'),
+    );
+
+    // The callback lands in this window: the exchange must still succeed
+    // using the mirrored verifier even though the store miss returned absent.
+    let exchangeBody = '';
+    const exchange: typeof fetch = async (_input, init) => {
+      exchangeBody = String(init?.body);
+      return new Response(
+        JSON.stringify({
+          access_token: 'pkce-access',
+          refresh_token: 'pkce-refresh',
+          token_type: 'bearer',
+          expires_in: 3600,
+          user: {
+            id: 'user-id',
+            aud: 'authenticated',
+            email: 'user@example.com',
+            app_metadata: {},
+            user_metadata: {},
+            created_at: new Date().toISOString(),
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+    vi.stubGlobal('fetch', exchange);
+
+    const { data, error } =
+      await SupabaseClient.getClient().auth.exchangeCodeForSession('auth-code');
+
+    assert.equal(error, null);
+    assert.equal(data.session?.access_token, 'pkce-access');
+    assert.ok(
+      JSON.parse(exchangeBody).code_verifier.length > 0,
+      'the exchange reused the verifier mirrored in memory',
     );
   });
 });
