@@ -69,12 +69,6 @@ interface Draft {
   gitignore?: boolean;
 }
 
-const WIZARD_KEY_HINTS = [
-  { key: '↑/↓', action: 'navigate' },
-  { key: 'Enter', action: 'select' },
-  { key: 'Esc', action: 'cancel' },
-] as const;
-
 export function initWizardModelSelectItems(
   models: readonly CliModelAccess[],
 ): ReadonlyArray<SelectItem<string>> {
@@ -232,7 +226,11 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
         </Text>
       }
       subtitle={`Step ${index + 1}/${stepCount} · ${STEP_TITLES[step]}`}
-      keyHints={WIZARD_KEY_HINTS}
+      keyHints={[
+        { key: '↑/↓', action: 'navigate' },
+        { key: 'Enter', action: 'select' },
+        { key: 'Esc', action: 'cancel' },
+      ]}
     >
       {picker}
     </WizardStepShell>
