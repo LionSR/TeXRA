@@ -1223,7 +1223,7 @@ export class StreamSnapshotStore {
       }
     }
     await this.preload(children);
-    return children;
+    return children.filter((child) => this.getParentStreamId(child) === parent);
   }
 
   /**
