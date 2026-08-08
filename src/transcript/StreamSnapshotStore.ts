@@ -959,8 +959,34 @@ export class StreamSnapshotStore {
    */
   async stageDeleteStream(
     stream: StreamTabId,
+    onCommitted?: (children: readonly StreamTabId[]) => void | Promise<void>,
   ): Promise<StagedStreamSnapshotDeletion> {
-    return this.deletions.stage(stream);
+    const deletion = await this.deletions.stage(stream);
+    return {
+      commit: async () => {
+        await deletion.commit();
+        let children: StreamTabId[] = [];
+        try {
+          children = await this.detachPersistedChildren(stream);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} was deleted, but child parent-edge cleanup was incomplete.`,
+            { data: error },
+          );
+        }
+        try {
+          await onCommitted?.(children);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Stream ${stream} was deleted, but child-detachment projection was incomplete.`,
+            { data: error },
+          );
+        }
+      },
+      rollback: () => deletion.rollback(),
+    };
   }
 
   /** Delete a stream's sidecars and in-memory state as one committed action. */
@@ -1175,24 +1201,22 @@ export class StreamSnapshotStore {
     return this.records.get(stream)?.meta?.parentStreamId;
   }
 
-  /**
-   * Clear durable parent edges that point at a stream whose transcript has
-   * already been removed. Ordinary parent changes still enter through the
-   * `setParentStream` session fact; this is the deletion lifecycle repair.
-   */
-  async detachChildrenOf(parent: StreamTabId): Promise<StreamTabId[]> {
+  /** Remove parent edges from fresh sidecar metadata after a parent commits. */
+  private async detachPersistedChildren(
+    parent: StreamTabId,
+  ): Promise<StreamTabId[]> {
     await this.flush();
-    const streams = await this.listPersistedStreams();
     const children: StreamTabId[] = [];
-    for (const stream of streams) {
+    for (const stream of await this.listPersistedStreams()) {
       if (stream === parent) continue;
       const meta = await readMeta(this.kv(stream));
       if (meta?.parentStreamId !== parent) continue;
-      // A lifecycle scan can encounter a persisted child that this process has
-      // never seeded. Preserve its execution FK before applying the patch.
       const record = this.getOrCreateRecord(stream);
-      record.meta ??= meta;
-      this.queueMetaPatch(stream, { parentStreamId: undefined });
+      const next = { ...meta, parentStreamId: undefined };
+      record.meta = next;
+      record.runExecutionId = meta.executionId;
+      record.metaOverlay = true;
+      this.writeMeta(stream, next);
       children.push(stream);
     }
     await this.flush();

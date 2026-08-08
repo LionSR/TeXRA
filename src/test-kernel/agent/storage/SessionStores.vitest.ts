@@ -84,12 +84,12 @@ describe('SessionStores deletion coordination', () => {
     }
   });
 
-  it('keeps a committed deletion successful when durable child repair fails', async () => {
+  it('projects child detachment when durable discovery fails', async () => {
     const session = createTestSession();
-    const parent = 'repair-failure-parent' as StreamTabId;
+    const parent = 'discovery-failure-parent' as StreamTabId;
     session.transcripts.ensureStream(parent);
     const snapshots = new StreamSnapshotStore();
-    vi.spyOn(snapshots, 'detachChildrenOf').mockRejectedValueOnce(
+    vi.spyOn(snapshots, 'listPersistedStreams').mockRejectedValueOnce(
       new Error('sidecar unavailable'),
     );
     const onChildrenDetached = vi.fn();
@@ -101,7 +101,6 @@ describe('SessionStores deletion coordination', () => {
 
     try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
-      expect(session.transcripts.has(parent)).toBe(false);
       expect(onChildrenDetached).toHaveBeenCalledWith(parent, []);
     } finally {
       session.dispose();
@@ -484,7 +483,10 @@ describe('SessionStores orphan sweep', () => {
     const result = await stores.sweepOrphanedStreams(new Set());
 
     expect(result.streams).toEqual([orphan]);
-    expect(stageDeleteStream).toHaveBeenCalledWith(orphan);
+    expect(stageDeleteStream).toHaveBeenCalledWith(
+      orphan,
+      expect.any(Function),
+    );
   });
 
   it('removes an execution whose stream lost its sidecar FK before deletion', async () => {

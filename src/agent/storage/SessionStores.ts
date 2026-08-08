@@ -146,7 +146,6 @@ export class SessionStores {
     const hadCanonicalStream = this.streamLogs.has(stream);
     const result = await this.deleteStreamOnce(stream);
     if (result === 'deleted' && hadCanonicalStream) {
-      await this.detachChildrenAfterCanonicalDeletion(stream);
       await this.notifyDeleted(stream);
     }
     return result;
@@ -197,22 +196,10 @@ export class SessionStores {
     }
   }
 
-  private async detachChildrenAfterCanonicalDeletion(
+  private async notifyChildrenDetached(
     stream: StreamTabId,
+    children: readonly StreamTabId[],
   ): Promise<void> {
-    let children: StreamTabId[] = [];
-    try {
-      children = await this.snapshots.detachChildrenOf(stream);
-    } catch (error) {
-      // The transcript commit is irreversible, so preserve its successful
-      // result instead of reporting the parent as retained. Runtime children
-      // still detach below even when durable discovery failed.
-      logger.warn(
-        CHANNEL,
-        `Stream ${stream} was deleted, but child parent-edge cleanup was incomplete: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-    }
     if (!this.onChildrenDetached) return;
     try {
       await this.onChildrenDetached(stream, children);
@@ -466,11 +453,6 @@ export class SessionStores {
         }
       }),
     );
-    const retainedStreams = new Set<StreamTabId>([...active, ...failed]);
-    for (const stream of canonicalStreams) {
-      if (retainedStreams.has(stream)) continue;
-      await this.detachChildrenAfterCanonicalDeletion(stream);
-    }
     return { active, failed };
   }
 
@@ -685,7 +667,10 @@ export class SessionStores {
   }
 
   private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
-    const snapshotDeletion = await this.snapshots.stageDeleteStream(stream);
+    const snapshotDeletion = await this.snapshots.stageDeleteStream(
+      stream,
+      (children) => this.notifyChildrenDetached(stream, children),
+    );
     try {
       // The transcript registry is the commit point for tab visibility.
       // Snapshot sidecars are only renamed before this, so a failure can roll
@@ -732,7 +717,12 @@ export class SessionStores {
     await Promise.all(
       streams.map(async (stream) => {
         try {
-          staged.set(stream, await this.snapshots.stageDeleteStream(stream));
+          staged.set(
+            stream,
+            await this.snapshots.stageDeleteStream(stream, (children) =>
+              this.notifyChildrenDetached(stream, children),
+            ),
+          );
         } catch (error) {
           failed.add(stream);
           failures.push(error);
