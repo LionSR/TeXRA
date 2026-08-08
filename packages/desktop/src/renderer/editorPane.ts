@@ -20,9 +20,9 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import type { DesktopThemeKind } from '@shared/schemas';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import {
   loadMonaco,
-  monacoLanguageForPath,
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
