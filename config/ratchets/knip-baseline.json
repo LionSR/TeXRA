@@ -77,11 +77,6 @@
       "name": "packages/trace-viewer/vite.standalone.config.ts"
     },
     {
-      "file": "src/shared/schemas/commonViewMessages.ts",
-      "category": "types",
-      "name": "SwitchViewTarget"
-    },
-    {
       "file": "src/test-kernel/support/setupFakePlatform.ts",
       "category": "files",
       "name": "src/test-kernel/support/setupFakePlatform.ts"

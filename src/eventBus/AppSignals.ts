@@ -51,17 +51,7 @@ export interface AppSignalPayloads {
 
 type AppSignal = keyof AppSignalPayloads;
 
-interface AppSignalsLike {
-  on<K extends AppSignal>(
-    event: K,
-    listener: (payload: AppSignalPayloads[K]) => void,
-    options?: { signal?: AbortSignal },
-  ): () => void;
-
-  emit<K extends AppSignal>(event: K, payload: AppSignalPayloads[K]): void;
-}
-
-class AppSignals implements AppSignalsLike {
+class AppSignals {
   private readonly emitter = new EventEmitter();
 
   on<K extends AppSignal>(
