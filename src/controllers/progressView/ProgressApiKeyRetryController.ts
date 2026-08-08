@@ -14,11 +14,26 @@ export interface ProgressApiKeyRetryRequest {
   viaRelay?: boolean;
 }
 
+/**
+ * One API-key-based coding-plan subscription (GLM Coding Plan, Kimi Code) that
+ * the retry controller can turn off when its quota is exhausted. Both share the
+ * same shape: a toggle that routes requests through a coding endpoint, and a
+ * quota-exhaustion reason that signals the toggle should be disabled so requests
+ * re-route through the regular pay-as-you-go endpoint.
+ */
+interface CodingPlanToggle {
+  /** The exhaustion reason that signals this plan's quota ran out. */
+  readonly exhaustionReason: ExhaustionReason;
+  readonly getEnabled: () => boolean;
+  readonly setEnabled: (enabled: boolean) => Promise<void>;
+}
+
 interface ProgressApiKeyPreparationResult {
   proceeded: boolean;
   disabledIncludedModelAccess: boolean;
   disabledChatGptSubscription: boolean;
-  disabledKimiCodeSubscription: boolean;
+  /** Exhaustion reasons whose coding-plan toggle was turned off. */
+  disabledCodingPlans: readonly ExhaustionReason[];
 }
 
 export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
@@ -28,7 +43,7 @@ export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResu
 interface ProgressApiRoutingSnapshot {
   readonly useIncludedModelAccess: boolean;
   readonly preferChatGptSubscription: boolean;
-  readonly preferKimiCode: boolean;
+  readonly codingPlans: ReadonlyMap<ExhaustionReason, boolean>;
 }
 
 function noRetryResult(): ProgressApiKeyRetryResult {
@@ -37,7 +52,7 @@ function noRetryResult(): ProgressApiKeyRetryResult {
     retried: false,
     disabledIncludedModelAccess: false,
     disabledChatGptSubscription: false,
-    disabledKimiCodeSubscription: false,
+    disabledCodingPlans: [],
   };
 }
 
@@ -50,8 +65,8 @@ export interface ProgressApiKeyRetryControllerDeps {
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
   getPreferChatGptSubscription(): boolean;
   setPreferChatGptSubscription(enabled: boolean): Promise<void>;
-  getPreferKimiCode(): boolean;
-  setPreferKimiCode(enabled: boolean): Promise<void>;
+  /** API-key-based coding-plan subscriptions (GLM Coding Plan, Kimi Code). */
+  codingPlanToggles: readonly CodingPlanToggle[];
   invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
   triggerRetry(stream: StreamTabId, requestId: string): boolean;
@@ -127,8 +142,7 @@ export class ProgressApiKeyRetryController {
     return (
       request.viaRelay === true ||
       request.exhaustionReason === 'chatgpt-subscription' ||
-      request.exhaustionReason === 'copilot-subscription' ||
-      request.exhaustionReason === 'kimi-code-subscription'
+      request.exhaustionReason === 'copilot-subscription'
     );
   }
 
@@ -140,12 +154,6 @@ export class ProgressApiKeyRetryController {
       request.exhaustionReason === 'copilot-subscription' &&
       request.chatGptSubscriptionEligible === true
     );
-  }
-
-  private isKimiCodeSubscriptionExhausted(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): boolean {
-    return request.exhaustionReason === 'kimi-code-subscription';
   }
 
   private async applyOwnApiKeyRouting(
@@ -177,25 +185,26 @@ export class ProgressApiKeyRetryController {
       disabledChatGptSubscription = true;
     }
 
-    // Kimi Code quota exhausted: turn off "Prefer Kimi Code" so dual-backend
-    // Kimi models (e.g. `kimi3`) re-route through the Moonshot open-platform
-    // API key on retry. Exclusive Kimi Code models have no open-platform route
-    // and cannot fall back this way.
-    let disabledKimiCodeSubscription = false;
-    if (
-      this.deps.getPreferKimiCode() &&
-      this.isKimiCodeSubscriptionExhausted(request)
-    ) {
-      await this.deps.setPreferKimiCode(false);
-      this.deps.invalidateModelOptionsCache();
-      disabledKimiCodeSubscription = true;
+    // Any API-key-based coding-plan subscription (GLM Coding Plan, Kimi Code)
+    // whose quota is exhausted: turn off its toggle so requests re-route through
+    // the regular pay-as-you-go endpoint on retry.
+    const disabledCodingPlans: ExhaustionReason[] = [];
+    for (const toggle of this.deps.codingPlanToggles) {
+      if (
+        toggle.getEnabled() &&
+        request.exhaustionReason === toggle.exhaustionReason
+      ) {
+        await toggle.setEnabled(false);
+        this.deps.invalidateModelOptionsCache();
+        disabledCodingPlans.push(toggle.exhaustionReason);
+      }
     }
 
     return {
       proceeded: true,
       disabledIncludedModelAccess,
       disabledChatGptSubscription,
-      disabledKimiCodeSubscription,
+      disabledCodingPlans,
     };
   }
 
@@ -222,7 +231,12 @@ export class ProgressApiKeyRetryController {
     return {
       useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
       preferChatGptSubscription: this.deps.getPreferChatGptSubscription(),
-      preferKimiCode: this.deps.getPreferKimiCode(),
+      codingPlans: new Map(
+        this.deps.codingPlanToggles.map((toggle) => [
+          toggle.exhaustionReason,
+          toggle.getEnabled(),
+        ]),
+      ),
     };
   }
 
@@ -243,8 +257,14 @@ export class ProgressApiKeyRetryController {
         ),
       );
     }
-    if (prepared.disabledKimiCodeSubscription) {
-      restores.push(this.deps.setPreferKimiCode(before.preferKimiCode));
+    for (const reason of prepared.disabledCodingPlans) {
+      const toggle = this.deps.codingPlanToggles.find(
+        (candidate) => candidate.exhaustionReason === reason,
+      );
+      if (toggle)
+        restores.push(
+          toggle.setEnabled(before.codingPlans.get(reason) ?? false),
+        );
     }
     await Promise.all(restores);
     if (restores.length > 0) this.deps.invalidateModelOptionsCache();
