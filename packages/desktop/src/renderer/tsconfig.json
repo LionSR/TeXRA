@@ -1,0 +1,10 @@
+{
+  // Nearest-tsconfig marker for per-file transpilers (esbuild under Vite and
+  // Vitest resolve a tsconfig by walking up from each file). The package root
+  // tsconfig.json scopes its `include` to vite.config.ts, and the repo-root
+  // tsconfig excludes packages/desktop entirely, so without this a Lit
+  // @customElement class here reaches the runtime with its decorator syntax
+  // untranspiled. tsc itself still runs from ../../tsconfig.renderer.json.
+  "extends": "../../tsconfig.renderer.json",
+  "include": ["./**/*.ts", "./**/*.d.ts"]
+}

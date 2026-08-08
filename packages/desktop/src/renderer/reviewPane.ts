@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import '@progressView/frontend/components/TexraDiffView';
+import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { DESKTOP_THEME_KIND, type DesktopThemeKind } from '@shared/schemas';
