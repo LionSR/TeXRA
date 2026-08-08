@@ -17,8 +17,6 @@ import { withEventErrorHandling } from '@controllers/session/eventErrorHandling'
 import {
   STREAM_PHASE,
   isGoalInFlight,
-  type AddOutputFilesPayload,
-  type ClearMissingOutputsPayload,
   type ConversationProgress,
   type SetActiveStreamPayload,
   type SetParentStreamPayload,
@@ -26,14 +24,10 @@ import {
   type StreamStage,
   type StreamSubstate,
   type StreamTabId,
-  type UpdateCompileFailuresPayload,
   type UpdateConversationProgressPayload,
-  type UpdateMissingOutputsPayload,
-  type UpdatePlanPayload,
   type UpdateQueuedFollowUpsPayload,
   type UpdateStreamDescriptionPayload,
   type UpdateStreamUsagePayload,
-  type UpdateTodosPayload,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { streamStageFromStageStart } from '@shared/streams/stage';
@@ -103,23 +97,18 @@ export class SessionFactApplier {
    */
   private readonly runFactHandlers: RunFactHandlers = {
     usage: (_streamId, event) => this.handleUpdateStreamUsage(event.payload),
-    'run.start': (_streamId, event) => {
-      const streamId = event.streamId;
-      this.state.refreshStreamMetadataFromSnapshot(streamId);
-      if (this.renderer.isAvailable()) {
-        this.pushStreamMetadata(streamId, {
-          streamStates: this.state.streamStatus.getAllStreamStates(),
-        });
-      }
-    },
+    'run.start': (_streamId, event) => this.handleRunConfig(event.streamId),
     'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),
-    updateTodos: (_streamId, event) => this.handleUpdateTodos(event),
-    updatePlan: (_streamId, event) => this.handleUpdatePlan(event),
-    addOutputFiles: (_streamId, event) => this.handleAddOutputFiles(event),
+    updateTodos: (_streamId, event) =>
+      this.renderer.onTodosChanged(event.streamId, event.todos),
+    updatePlan: (_streamId, event) =>
+      this.renderer.onPlanChanged(event.streamId, event.plan),
+    addOutputFiles: (_streamId, event) =>
+      this.renderer.onFilesChanged(event.streamId),
     updateMissingOutputs: (_streamId, event) =>
-      this.handleUpdateMissingOutputs(event),
+      this.renderer.onMissingOutputsChanged(event.streamId),
     updateCompileFailures: (_streamId, event) =>
-      this.handleUpdateCompileFailures(event),
+      this.renderer.onCompileFailuresChanged(event.streamId),
     goalPaused: (_streamId, event) => {
       this.renderer.onGoalPaused(event.streamId);
     },
@@ -194,7 +183,10 @@ export class SessionFactApplier {
           case 'inquiryThreadUpdated':
             return this.renderer.onInquiryThreadUpdated(fact.payload);
           case 'clearMissingOutputs':
-            return this.handleClearMissingOutputs(fact.payload);
+            return this.renderer.onMissingOutputsChanged(
+              fact.payload.streamId,
+              { reset: true },
+            );
           case 'updateQueuedFollowUps':
             return this.handleUpdateQueuedFollowUps(fact.payload);
           case 'followUpSent':
@@ -259,28 +251,6 @@ export class SessionFactApplier {
     this.renderer.onParentStreamChanged(childStreamId, parentStreamId ?? null);
   }
 
-  private handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
-    this.renderer.onFilesChanged(streamId);
-  }
-
-  private handleUpdateMissingOutputs({
-    streamId,
-  }: UpdateMissingOutputsPayload): void {
-    this.renderer.onMissingOutputsChanged(streamId);
-  }
-
-  private handleUpdateCompileFailures({
-    streamId,
-  }: UpdateCompileFailuresPayload): void {
-    this.renderer.onCompileFailuresChanged(streamId);
-  }
-
-  private handleClearMissingOutputs({
-    streamId,
-  }: ClearMissingOutputsPayload): void {
-    this.renderer.onMissingOutputsChanged(streamId, { reset: true });
-  }
-
   private handleUpdateStreamUsage({
     streamId,
     storageKey,
@@ -289,14 +259,6 @@ export class SessionFactApplier {
     // Latest gauge value is the event payload. The snapshot store may
     // accumulate per-key; hosts read cumulative totals from the store.
     this.renderer.onRunUsageChanged(streamId, storageKey, usage);
-  }
-
-  private handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
-    this.renderer.onTodosChanged(streamId, todos);
-  }
-
-  private handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
-    this.renderer.onPlanChanged(streamId, plan);
   }
 
   private handleUpdateQueuedFollowUps({
@@ -410,9 +372,9 @@ export class SessionFactApplier {
     this.state.refreshStreamMetadataFromSnapshot(streamId);
 
     if (this.renderer.isAvailable()) {
-      // A run config may change agent name, model, or label, which
-      // the frontend tabs display even for background subagents. Patch only
-      // the affected stream instead of rebuilding all historical stream tabs.
+      // A run start or config change may update agent name, model, or label,
+      // which the frontend tabs display even for background subagents. Patch
+      // only the affected stream instead of rebuilding all historical tabs.
       this.pushStreamMetadata(streamId, {
         streamStates: this.state.streamStatus.getAllStreamStates(),
       });

@@ -72,10 +72,6 @@ export async function readCliModelAccessStatus(
   };
 }
 
-function selectedApiFallback(context: CliContext | undefined): ApiAccessMode {
-  return context ? effectiveCliApiMode(context) : getCliApiMode();
-}
-
 /** Apply one declarative preference or fallback transition. */
 export async function updateCliModelAccess(
   context: CliContext | undefined,
@@ -96,7 +92,7 @@ export async function updateCliModelAccess(
     };
   }
 
-  const apiMode = selectedApiFallback(context);
+  const apiMode = context ? effectiveCliApiMode(context) : getCliApiMode();
   if (selection.provider === 'kimi-code') {
     if (selection.state === 'off') {
       await setPreferKimiCode(false);
