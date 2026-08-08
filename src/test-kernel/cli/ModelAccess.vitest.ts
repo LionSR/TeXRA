@@ -20,8 +20,14 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 
+const getGLMCodingPlanMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: vi.fn(),
+}));
+
+vi.mock('@utils/config/providerConfig', () => ({
+  getGLMCodingPlan: getGLMCodingPlanMock,
 }));
 
 vi.mock('llm-zoo', async (importOriginal) => {
@@ -402,9 +408,53 @@ describe('CLI model access resolution', () => {
       apiMode: 'included' as const,
       expected: 'grok subscription',
     },
-  ])('formats model picker status: $name', ({ entry, apiMode, expected }) => {
-    expect(formatModelStatusForCliMode(entry, apiMode)).toBe(expected);
-  });
+    {
+      name: 'labels a GLM provider-key row as GLM Coding Plan when the toggle is on',
+      entry: model('glm52', {
+        model: modelOption('glm52', {
+          availability: 'provider-key',
+          provider: 'glm',
+        }),
+        status: 'api key set',
+      }),
+      apiMode: 'personal' as const,
+      codingPlan: true,
+      expected: 'api: GLM Coding Plan',
+    },
+    {
+      name: 'keeps the plain api status for GLM provider-key rows when the toggle is off',
+      entry: model('glm52', {
+        model: modelOption('glm52', {
+          availability: 'provider-key',
+          provider: 'glm',
+        }),
+        status: 'api key set',
+      }),
+      apiMode: 'personal' as const,
+      codingPlan: false,
+      expected: 'api: api key set',
+    },
+    {
+      name: 'never claims GLM Coding Plan for an OpenRouter-routed GLM row',
+      entry: model('glm52', {
+        model: modelOption('glm52', {
+          availability: 'openrouter-key',
+          provider: 'glm',
+        }),
+        status: 'openrouter key',
+      }),
+      apiMode: 'personal' as const,
+      codingPlan: true,
+      expected: 'api: openrouter key',
+    },
+  ])(
+    'formats model picker status: $name',
+    ({ entry, apiMode, expected, codingPlan }) => {
+      if (codingPlan !== undefined)
+        getGLMCodingPlanMock.mockReturnValue(codingPlan);
+      expect(formatModelStatusForCliMode(entry, apiMode)).toBe(expected);
+    },
+  );
 
   it('builds model picker rows from the access-list source of truth', () => {
     const rows = modelSelectItemsForCliMode(
