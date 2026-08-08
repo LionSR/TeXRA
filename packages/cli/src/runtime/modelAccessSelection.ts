@@ -53,12 +53,13 @@ export async function readCliModelAccessStatus(
   apiMode: ApiAccessMode,
 ): Promise<CliModelAccessStatus> {
   const secrets = platform().secrets;
-  const [chatGpt, grok, kimiCodeKeySet, configuredProviders] = await Promise.all([
-    getCodexStatus(),
-    getXaiStatus(),
-    apiKeyExists(secrets, 'kimiCode'),
-    configuredApiKeyProviders(secrets),
-  ]);
+  const [chatGpt, grok, kimiCodeKeySet, configuredProviders] =
+    await Promise.all([
+      getCodexStatus(),
+      getXaiStatus(),
+      apiKeyExists(secrets, 'kimiCode'),
+      configuredApiKeyProviders(secrets),
+    ]);
   const preferences = {
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
     grok: isPreferXaiSubscription() ? 'on' : 'off',

@@ -64,18 +64,53 @@ vi.mock('@model/xai/xaiPreference', () => ({
 }));
 
 vi.mock('@model/apiProviders', () => ({
-  API_PROVIDERS: ['openai', 'anthropic', 'openRouter', 'google', 'xai', 'deepseek', 'moonshot', 'kimiCode', 'dashscope', 'minimax', 'glm', 'meta'],
+  API_PROVIDERS: [
+    'openai',
+    'anthropic',
+    'openRouter',
+    'google',
+    'xai',
+    'deepseek',
+    'moonshot',
+    'kimiCode',
+    'dashscope',
+    'minimax',
+    'glm',
+    'meta',
+  ],
   apiKeyExists: mocks.apiKeyExists,
   lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
   configuredApiKeyProviders: async () => {
     const origins = await Promise.all(
-      ['openai', 'anthropic', 'openRouter', 'google', 'xai', 'deepseek', 'moonshot', 'kimiCode', 'dashscope', 'minimax', 'glm', 'meta'].map(
-        (provider) => mocks.lookupApiKeyOrigin({}, provider),
-      ),
+      [
+        'openai',
+        'anthropic',
+        'openRouter',
+        'google',
+        'xai',
+        'deepseek',
+        'moonshot',
+        'kimiCode',
+        'dashscope',
+        'minimax',
+        'glm',
+        'meta',
+      ].map((provider) => mocks.lookupApiKeyOrigin({}, provider)),
     );
-    return ['openai', 'anthropic', 'openRouter', 'google', 'xai', 'deepseek', 'moonshot', 'kimiCode', 'dashscope', 'minimax', 'glm', 'meta'].filter(
-      (_, index) => origins[index] !== 'none',
-    );
+    return [
+      'openai',
+      'anthropic',
+      'openRouter',
+      'google',
+      'xai',
+      'deepseek',
+      'moonshot',
+      'kimiCode',
+      'dashscope',
+      'minimax',
+      'glm',
+      'meta',
+    ].filter((_, index) => origins[index] !== 'none');
   },
 }));
 
@@ -371,7 +406,8 @@ describe('CLI model access routes', () => {
 
     const items = buildCliModelAccessItems({ kind: 'loaded', access: status });
     const personalItem = items.find(
-      (item) => item.value.kind === 'api-fallback' && item.value.apiMode === 'personal',
+      (item) =>
+        item.value.kind === 'api-fallback' && item.value.apiMode === 'personal',
     );
     expect(personalItem?.description).toBe(
       'Configured: DeepSeek, Moonshot, Kimi Code',
