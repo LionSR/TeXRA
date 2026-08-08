@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   signInCliGrok: vi.fn(),
   updateGlobalState: vi.fn(),
   apiKeyExists: vi.fn(),
+  lookupApiKeyOrigin: vi.fn(),
   getPreferKimiCode: vi.fn(),
   setPreferKimiCode: vi.fn(),
 }));
@@ -63,7 +64,9 @@ vi.mock('@model/xai/xaiPreference', () => ({
 }));
 
 vi.mock('@model/apiProviders', () => ({
+  API_PROVIDERS: ['openai', 'anthropic', 'openRouter', 'google', 'xai', 'deepseek', 'moonshot', 'kimiCode', 'dashscope', 'minimax', 'glm', 'meta'],
   apiKeyExists: mocks.apiKeyExists,
+  lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
 }));
 
 vi.mock('@utils/config/providerConfig', () => ({
@@ -115,6 +118,7 @@ function expectedAccessStatus(overrides: Record<string, unknown>) {
     grokSignedIn: false,
     grokAccountLabel: undefined,
     kimiCodeKeySet: false,
+    personalKeyProviders: [],
     ...overrides,
   };
 }
@@ -140,6 +144,7 @@ beforeEach(() => {
   mocks.shouldUseChatGptDeviceCode.mockReturnValue(false);
   mocks.shouldUseGrokDeviceCode.mockReturnValue(false);
   mocks.apiKeyExists.mockResolvedValue(false);
+  mocks.lookupApiKeyOrigin.mockResolvedValue('none');
   mocks.getPreferKimiCode.mockReturnValue(false);
   mocks.setPreferKimiCode.mockResolvedValue(undefined);
 });
