@@ -96,19 +96,25 @@ export interface SettingsProfileControllerDeps {
  * its own `globalState`, `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
  * and `setUseIncludedModelAccess`, since those depend on host-specific
  * storage and secrets.
+ *
+ * Returns a fresh object per call rather than a shared exported literal, so
+ * one host mutating its spread copy (`{ ...getSharedProviderProfileDefaults(), ... }`)
+ * can never alias into the other host's controller.
  */
-export const SHARED_PROVIDER_PROFILE_DEFAULTS = {
-  providerIds: API_PROVIDERS,
-  providerSettings: PROVIDER_SETTINGS,
-  providerDisplayNames: PROVIDER_DISPLAY_NAMES,
-  providerKeyUrls: PROVIDER_URLS,
-  getProviderDisplayName,
-  getProviderKeyUrl,
-  getProviderStreaming,
-  getProviderEndpoint,
-  supportsCustomEndpoint,
-  invalidateModelOptionsCache,
-} satisfies Partial<SettingsProfileControllerDeps>;
+export function getSharedProviderProfileDefaults() {
+  return {
+    providerIds: API_PROVIDERS,
+    providerSettings: PROVIDER_SETTINGS,
+    providerDisplayNames: PROVIDER_DISPLAY_NAMES,
+    providerKeyUrls: PROVIDER_URLS,
+    getProviderDisplayName,
+    getProviderKeyUrl,
+    getProviderStreaming,
+    getProviderEndpoint,
+    supportsCustomEndpoint,
+    invalidateModelOptionsCache,
+  } satisfies Partial<SettingsProfileControllerDeps>;
+}
 
 export class SettingsProfileController {
   private readonly providerSettingsByKey: Map<string, ProviderSettingDef>;
