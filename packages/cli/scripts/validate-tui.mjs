@@ -462,7 +462,7 @@ const SCENARIOS = [
       HARNESS_VISIBLE_TOOL_USE_AGENTS: '',
       HARNESS_VISIBLE_WORKFLOW_AGENTS: '',
     },
-    bootExpect: 'Model access — ChatGPT On · Grok Off · Kimi On',
+    bootExpect: 'Model access — ChatGPT On · Grok Off · Kimi On · GLM Off',
     keys: ['3'],
     exitKeys: [ESC, ESC],
     expectExit: true,
@@ -475,16 +475,19 @@ const SCENARIOS = [
       'Off · sign in required to enable',
       'Prefer Kimi Code subscr',
       'On · key configured',
+      'Prefer GLM Coding Plan',
+      'Off · key configured',
       'Included access',
       'Your own API keys',
-      // ChatGPT + Grok + Kimi + Included + Personal → Personal is item 5.
-      '✓ 5. Your own API keys',
+      // ChatGPT + Grok + Kimi + GLM + Included + Personal → Personal is item 6.
+      '✓ 6. Your own API keys',
       'Esc back',
     ],
     unexpect: [
       '✓ 1. Prefer ChatGPT',
       '✓ 2. Prefer Grok',
       '✓ 3. Prefer Kimi Code',
+      '✓ 4. Prefer GLM Coding Plan',
     ],
   },
   {

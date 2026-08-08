@@ -53,6 +53,7 @@ export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
 const MODEL_ROUTING_SETTING_KEYS: ReadonlySet<string> = new Set([
   GlobalStateKey.USE_OPENROUTER,
   GlobalStateKey.KIMI_CODE_PREFER,
+  GlobalStateKey.GLM_CODING_PLAN,
 ]);
 
 const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = {
