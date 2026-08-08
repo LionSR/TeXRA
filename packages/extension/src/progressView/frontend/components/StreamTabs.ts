@@ -111,6 +111,13 @@ function buildTooltip(
   if (info.description) {
     parts.push(info.description);
   }
+  // The opaque id: off the row's visible text, but kept in the row's
+  // accessible name — it is what tells two parallel runs of the same agent
+  // apart. This summary is deliberately aria-only (#9168): a visual tooltip
+  // spanning the whole row would fight the specific per-icon hints
+  // (`stream-tab-kind`, `stream-tab-remote`, the worktree chip) it encloses.
+  // The header and parent-breadcrumb do carry it on hover.
+  parts.push(info.name);
   if (lastTimestamp) {
     const lastSeen = formatRelativeTime(lastTimestamp);
     if (lastSeen) parts.push(`Last activity ${lastSeen}`);

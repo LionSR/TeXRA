@@ -15,3 +15,31 @@ export function getStreamTabId(
 ): StreamTabId {
   return `${getCleanAgentName(agent)}#${options.executionId}`;
 }
+
+/**
+ * The human-orienting name prefix of a stream tab id, for display only.
+ *
+ * This does not violate "nothing parses it back": that rule is about
+ * *addressing* a run — resolving identity or locating an execution by
+ * re-deriving the format, which is what the deleted legacy resolver did.
+ * Reading the prefix that {@link getStreamTabId} deliberately put there
+ * "human-orienting only" feeds no lookup and no identity decision; it just
+ * avoids showing a raw hex suffix to a reader. The full id stays available
+ * as `StreamTabInfo.name` for tooltips and copy.
+ *
+ * Callers must have no better source. A resolved {@link RunIdentity} always
+ * wins — see `buildStreamTabInfo`, whose only use of this is the legacy /
+ * never-resolved case.
+ */
+export function getStreamTabDisplayName(streamId: string): string {
+  // The *first* '#' is the separator: the format is `${name}#${executionId}`,
+  // so anything after it belongs to the executionId. Splitting on the last
+  // one would leak part of an executionId that contains '#', and would give
+  // that run a different label than the same agent's resolved run.
+  // (Mirrors `getCleanAgentName`, which splits on the first ':'.)
+  const separator = streamId.indexOf('#');
+  // No separator, or a leading '#', means this is not a minted id — show it
+  // verbatim rather than silently rendering an empty label.
+  if (separator <= 0) return streamId;
+  return streamId.slice(0, separator);
+}
