@@ -922,7 +922,7 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(stoppedRootDisplay)).not.toContain('root active');
   });
 
-  it('labels a focused WAITING child distinctly from the root idle wording', () => {
+  it('shows the idle wording for a focused WAITING child and root alike', () => {
     const rootDisplay = buildStatusBarDisplay(
       statusInput({ status: STREAM_PHASE.WAITING, isChildStream: false }),
     );
@@ -936,8 +936,7 @@ describe('CLI StatusBar display model', () => {
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
-    expect(leftTexts(childDisplay)).toContain('waiting for you');
-    expect(leftTexts(childDisplay)).not.toContain('idle');
+    expect(leftTexts(childDisplay)).toContain('idle');
   });
 
   it.each([
