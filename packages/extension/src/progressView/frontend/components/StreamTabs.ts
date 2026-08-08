@@ -111,6 +111,9 @@ function buildTooltip(
   if (info.description) {
     parts.push(info.description);
   }
+  // The opaque id, kept off the row itself but one hover away — it is what
+  // tells two parallel runs of the same agent apart.
+  parts.push(info.name);
   if (lastTimestamp) {
     const lastSeen = formatRelativeTime(lastTimestamp);
     if (lastSeen) parts.push(`Last activity ${lastSeen}`);
