@@ -21,15 +21,16 @@ created: 2026-08-08
 
 ## Verdict
 
-**Well-aligned. No structural refactor is warranted, and none was made.** The
-four named areas remain converged on the Claude-Agent-SDK shape, and the
-`config/ratchets/` guardrails plus the free-zone import fence are holding. This
-re-check reproduces the standing conclusion of the `-05-29 → -08-03` chain with
-fresh citations and adds **four small, concrete, non-urgent deltas** the prior
-checkpoints had not yet named — two of them net-negative cleanups ready to apply,
-two of them pre-publish decisions for the public event/type surface. None is a
-removable "wrapper layer"; the abstractions this task asked us to hunt for are,
-once again, mostly justified boundaries.
+**Well-aligned. No large structural refactor is warranted.** The four named
+areas remain converged on the Claude-Agent-SDK shape, and the `config/ratchets/`
+guardrails plus the free-zone import fence are holding. This re-check reproduces
+the standing conclusion of the `-05-29 → -08-03` chain with fresh citations and
+adds **four small, concrete, non-urgent deltas** the prior checkpoints had not
+yet named — two of them net-negative cleanups, since landed in this PR (§3-A,
+§3-C); one deferred to a focused follow-up (§3-B); one narrowed down to a stale
+comment plus a genuine pre-publish decision (§3-D). None is a removable
+"wrapper layer"; the abstractions this task asked us to hunt for are, once
+again, mostly justified boundaries.
 
 The one genuinely structural obstacle to a package cut is unchanged and remains
 the intra-`agent` dependency web documented as finding #1 of the
@@ -47,7 +48,8 @@ extraction is pursued.
   sole local `BaseNode`/`Node`/`Flow` definition — no upstream layer to
   collapse. `agentCreator/` is correctly one linear `runAgentCreator` function,
   importing none of `BaseNode`/`Flow`. No wrapper-only forwarder found **except**
-  §3-A below (already tracked as PT-2).
+  the `SessionHandle.useHostInteractions` pass-through in §4 below (already
+  tracked as PT-2).
 - **Model handlers.** Unusually well-consolidated. `toolConversion.ts` owns every
   provider shape-map (providers call in, none re-implement); usage normalization
   is config-driven through `support/UsageNormalizer`; SDK-error tagging is a thin
@@ -66,7 +68,8 @@ extraction is pursued.
   under `src/agent` — agent logging flows through trace/channel as intended.
 - **Surface.** The `@texra-ai/agent` run surface still mirrors the Anthropic
   `Query` pattern one-for-one (`runAgent(input): AgentRun`, `AgentRun extends
-  AsyncIterable<AgentEvent>` + `result`/`interrupt`, five-field `RunAgentInput`).
+AsyncIterable<AgentEvent>` + `result`/`interrupt`, six-field `RunAgentInput`:
+  `platform`, `agent`, `instruction`, `interactions`, optional `model`/`tools`).
   The host-layer import ban is airtight (`eslint.config.mjs`), composition-root
   discipline holds (single guarded `initPlatform`), and approval-requiring tools
   are refused at the boundary. Every ratchet's `semantics` field states the
@@ -106,10 +109,12 @@ specifiers (`packages/agent/src/index.ts:2-13`: `@agent/trace`,
 `@agent/core/tools/ToolTypes`, `@agent/core/definition/{AgentConfig,AgentDataclass}`,
 `@agent/index/agentRegistry`) plus `@platform/*`, `@tools/*`, `@transcript/*`
 leaves — all currently un-ratcheted and unmeasured. **Recommendation (low-risk):**
-add `agent: resolve(REPO_ROOT, 'packages/agent/src')` to `HOST_DIRS` and snapshot
-its current count, so the SDK barrel's internal-coupling width can only shrink.
-This is the surface a Tier-1 manifest must eventually re-export or seal; freezing
-it now costs nothing and prevents silent widening.
+add `'agent'` to the `HOSTS` tuple (not just `HOST_DIRS` — `collectCurrentHosts()`
+and every `it.each` case iterate `HOSTS`, so `HOST_DIRS` alone leaves the new
+entry unscanned), extend `HostBaseline.hosts`, and snapshot the current count, so
+the SDK barrel's internal-coupling width can only shrink. This is the surface a
+Tier-1 manifest must eventually re-export or seal; freezing it now costs nothing
+and prevents silent widening.
 
 ### B. `@shared/schemas` `forced` bucket — highest-leverage barrel shrink — NEW (actionable)
 
@@ -126,10 +131,17 @@ because the barrel does not re-export those leaves:
 `agentPresets(14)`, `agentSkills(4)`, `codex(4)`, `coreSettings(14)`,
 `historyViewMessages(3)`, `opResults(11)`, `profileViewMessages(24)`,
 `stateSettings(15)`, `toolResult(87)`, `workflowScriptFiles(6)`.
-Re-exporting these ten from `src/shared/schemas/index.ts` reclassifies all ~182
-statements at ratchet-measure time and directly shrinks the frozen surface —
-`toolResult` alone (87) is nearly half the bucket. This is the single
-highest-leverage "shrink the frozen list" move and is mechanical/low-risk.
+Re-exporting these ten wholesale would reclassify all ~182 statements at
+ratchet-measure time — `toolResult` alone (87) is nearly half the bucket — but
+is **not** simply mechanical: `index.ts:49-53` deliberately keeps
+`historyViewMessages` and `profileViewMessages` off the barrel, re-exporting
+only selected consumer-facing symbols through the canonical
+`settingsViewMessages` entry point, so a blanket `export *` for those two would
+undo that curated boundary. `forced` proves a name is absent from the barrel,
+not that every export in the leaf belongs there. The real follow-up is
+per-leaf: `export *` for the eight leaves with no existing curation, and a
+deliberate symbol-selection (or caller migration) for the two that are
+intentionally narrowed.
 
 ### C. `isOReasoningModel` sits on the host-agnostic base but is OpenAI-only — NEW (net-negative cleanup)
 
@@ -142,33 +154,45 @@ highest-leverage "shrink the frozen list" move and is mechanical/low-risk.
 hard-codes `config.provider === ModelProvider.OPENAI` and has **zero non-OpenAI
 readers** — every caller is inside `openai/`
 (`modelHandlerOpenAI.ts:291,306,637`, `modelHandlerOpenAIResponse.ts:1550`).
-Moving it into `ModelHandlerOpenAI` (or `OpenAICompatibleModelHandler`), where
-its only readers already live, removes one provider-identity concept from the
-core base class. This exact layering angle was raised but left open in the
+Moving it into `OpenAICompatibleModelHandler` — the only class common to all four
+readers; `ModelHandlerOpenAIResponse` extends `OpenAICompatibleModelHandler`
+directly and is a sibling of `ModelHandlerOpenAI`, not its subclass, so
+`ModelHandlerOpenAI` alone would leave `modelHandlerOpenAIResponse.ts:1550`
+without access — removes one provider-identity concept from the core base
+class. This exact layering angle was raised but left open in the
 [2026-07-02 checkpoint](./2026-07-02-agent-sdk-readiness-checkpoint.md); it is a
 clean net-delete from core, not a behavior change. (The other base-class provider
-comparisons — `ModelHandler.ts:295,778,913` — each carry a `#7101` combinator
-defense and are _not_ silently removable; they remain the layer's residual
-core-leak surface for a future interface-first provider port, listed here only
-for the record.)
+comparisons are _not_ silently removable, though the paper trail differs per
+site: `ModelHandler.ts:778` (`supportsReasoningLevelOverride`) carries its own
+`#7101` combinator note; `:295` (`isOpenAIProvider`) and `:913`
+(`getStreamingConfig`'s `ModelProvider.OTHERS` check) have no comment of their
+own but fall under the general `#7101` triage-complete note at `:723-728`,
+which states every remaining predicate was reviewed and kept. They remain the
+layer's residual core-leak surface for a future interface-first provider port,
+listed here only for the record.)
 
-### D. Public `AgentEvent` union leaks TeXRA-specific arms — NEW (pre-publish decision)
+### D. Public `AgentEvent` union carries TeXRA-specific arms, and one doc comment is stale — NEW (pre-publish decision)
 
 `events.ts:258-263` documents the `domain` escape hatch as the mechanism that
 keeps host-specific events "out of the agent-general union… Keeps the union clean
-for SDK consumers," and its own example list even names `missingOutputs`. Yet
-`RunFactEvent` (`events.ts:177-201`) bakes six TeXRA/LaTeX-specific arms directly
-into the union that `AgentRun` iterates (`packages/agent/src/index.ts:69`) and
-the package re-exports (`:23`): `updateTodos`, `updatePlan`, `addOutputFiles`,
-`updateMissingOutputs`, `updateCompileFailures`, `goalPaused` — with
-`updateMissingOutputs` directly contradicting the hatch's own cited example.
-Additionally, several public arms tie their shape to internal `@shared/schemas`
-host types (`RunConfigEvent.config: AgentConfig`, `StatusEvent`), which a
-published `.d.ts` would drag along. This is not a bug today, but it is a decision
-the SDK boundary should resolve before publication: either route these arms
-through `domain` (consistent with the file's own doctrine) or explicitly bless
-them as part of the agent-general contract. Flagging, not executing — this is a
-public-contract call for the maintainer, not cleanup.
+for SDK consumers," and its own example list still names `missingOutputs`. But
+that comment predates a later, deliberate decision: `runFactEvents.ts:15-19`
+states plainly that "durable run facts ride the run trace as explicit
+`AgentEvent` arms… producers no longer encode them through the `domain` escape
+hatch." `RunFactEvent` (`events.ts:177-201`) is that decision implemented —
+`updateTodos`, `updatePlan`, `addOutputFiles`, `updateMissingOutputs`,
+`updateCompileFailures`, `goalPaused` are first-class discriminated arms on
+purpose, because `RUN_FACT_EVENT_TYPES` and `SessionFactApplier.handleRunFact`
+depend on those exact discriminants to drive CLI and progress-view state — not
+residue to route through `domain`. So the actionable item is narrower than
+"decide where these arms live": it's that the `DomainEvent` comment's
+`missingOutputs` example is stale against the later invariant and should be
+corrected (drop the example or note the carve-out), not a live either/or.
+What remains a genuine pre-publish decision: several public arms tie their
+shape to internal `@shared/schemas` host types (`RunConfigEvent.config:
+AgentConfig`, `StatusEvent`), which a published `.d.ts` would drag along — that
+part is real and unresolved. Flagging, not executing — a public-contract call
+for the maintainer.
 
 ## 4. Already tracked — confirmed, not re-litigated
 
@@ -192,11 +216,16 @@ checkpoint is not mistaken for discovering them:
   event-pump glue that could move behind `@agent/runtime`, leaving `index.ts` a
   thin manifest. Cosmetic; no contract impact.
 - **`IModelHandler` is `Pick<ModelHandler<…>>`, not an independent port**
-  (`IModelHandler.ts:35-86`) — a pluggable provider must `extend` the ~2000-line
-  base, not merely satisfy an interface. Deliberate drift-proofing per the
-  docstring; the standing decision (2026-07-25) is _not_ to demote base-default
-  members to an optional sub-interface. Recorded as the structural fact an
-  interface-first provider SDK would eventually confront, not an action item.
+  (`IModelHandler.ts:35-86`) — structurally, any object or unrelated class that
+  satisfies the resulting member shape works; TypeScript does not require
+  literal inheritance. What's coupled is the _type declaration_: the port's
+  signatures are pinned to the base class's, so a base-class member rename or
+  retype ripples into the port, and building a truly independent provider means
+  reproducing ~40 picked signatures by hand rather than inheriting them for
+  free. Deliberate drift-proofing per the docstring; the standing decision
+  (2026-07-25) is _not_ to demote base-default members to an optional
+  sub-interface. Recorded as the structural fact an interface-first provider
+  SDK would eventually confront, not an action item.
 - **TD-2(a)** (making `HostInteractions` request methods required) — retired with
   evidence in the [2026-08-03 checkpoint §7](./2026-08-03-agent-sdk-readiness-checkpoint.md);
   the optional-with-graceful-decline shape is the shipped minimal-host contract
@@ -208,14 +237,17 @@ Agent core, model handlers, logger/trace, and the package surface remain aligned
 with the Agent-SDK direction; the guardrails are holding and, where measured,
 still tightening. There is no unnecessary abstraction to remove beyond the
 already-tracked PT-2 pass-through, and no subagent boundary to newly design — the
-`ChildRunStrategy` seams already are the boundaries. The only fresh, actionable
-residue is four small items: two ready-to-apply net-negative cleanups (§3-B barrel
-re-exports, §3-C `isOReasoningModel` relocation), one zero-risk ratchet extension
-that closes a real measurement blind spot on the SDK package itself (§3-A), and
-one public-event-surface decision for the maintainer before publication (§3-D).
-The remaining work continues to belong to the packaging/legal track and the
-one-time intra-`agent` dependency inversion — both already captured elsewhere —
-not to abstraction cleanup.
+`ChildRunStrategy` seams already are the boundaries. Of the four fresh items this
+checkpoint named: **§3-A (SDK-package ratchet coverage) and §3-C
+(`isOReasoningModel` relocation) have landed** in this PR; **§3-B (barrel
+re-exports) is deferred** to a follow-up that also needs to preserve the two
+curated `settingsViewMessages` leaves rather than blanket-re-exporting; **§3-D**
+is narrower than originally scoped — the `domain`-routing "decision" was a false
+choice (the stale `DomainEvent` comment needs a fix, not a migration) and the
+one real open item is whether public event arms may keep depending on internal
+`@shared/schemas` host types before publication. The remaining work continues to
+belong to the packaging/legal track and the one-time intra-`agent` dependency
+inversion — both already captured elsewhere — not to abstraction cleanup.
 
 ---
 
