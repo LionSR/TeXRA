@@ -9,8 +9,7 @@ import {
 } from '@agent/index/AgentDirectorySync';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { promptExtensionInstall } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -163,7 +162,17 @@ export async function initializeLatexSupport(): Promise<void> {
       // prompted to install a TeX extension they don't need. They'll still
       // discover it via the LaTeX settings tab or compile errors later.
       if (await workspaceContainsLatexFiles()) {
-        await promptLatexWorkshopInstall();
+        logger.info(
+          'extension',
+          'LaTeX Workshop extension not found, prompting installation',
+        );
+        await promptExtensionInstall({
+          suppressKey: 'latex-workshop-install',
+          message:
+            'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+          extensionId: LATEX_WORKSHOP_EXT_ID,
+          channel: 'extension',
+        });
       }
     }
   } catch (err) {
@@ -185,26 +194,4 @@ async function workspaceContainsLatexFiles(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function promptLatexWorkshopInstall(): Promise<void> {
-  logger.info(
-    'extension',
-    'LaTeX Workshop extension not found, prompting installation',
-  );
-  await showInstructionWithSuppress(
-    'latex-workshop-install',
-    'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
-    [
-      {
-        title: 'Install',
-        callback: () =>
-          safeExecuteCommand(
-            'workbench.extensions.installExtension',
-            [LATEX_WORKSHOP_EXT_ID],
-            'extension',
-          ),
-      },
-    ],
-  );
 }

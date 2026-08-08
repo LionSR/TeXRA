@@ -5,14 +5,13 @@ import { z } from 'zod';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { wrapApiCall } from '@tools/utils';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
   extractBasePaperMetadata,
 } from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
-import { rateLimitedRequest } from '@tools/citation/rateLimiter';
+import { rateLimitedApiCall } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 
@@ -49,15 +48,12 @@ export class ArxivMetadataTool extends defineTool({
     const requestId = normaliseArxivIdentifier(rawId);
 
     // Use arxiv-client's ids() method for direct ID lookup.
-    const entries = await wrapApiCall(
-      () =>
-        rateLimitedRequest(
-          'arxiv',
-          ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
-          'arXiv metadata lookup',
-          () => createArxivClient().ids([requestId]).execute(),
-        ),
+    const entries = await rateLimitedApiCall(
+      'arxiv',
+      ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
+      'arXiv metadata lookup',
       'Failed to query arXiv API',
+      () => createArxivClient().ids([requestId]).execute(),
     );
 
     if (!entries?.length) {

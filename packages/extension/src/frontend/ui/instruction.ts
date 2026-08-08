@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { INSTRUCTION_PREFIX, globalSM } from '@common/state';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 const NEVER_REMIND = 'Never remind again';
 
@@ -42,4 +43,28 @@ export async function showInstructionWithSuppress(
 
   const action = actions.find((a) => a.title === choice);
   await action?.callback();
+}
+
+/**
+ * Prompt the user to install a VS Code extension, with a suppressible
+ * "Never remind again" option. Fires the install command on confirm and
+ * warns on failure via {@link safeExecuteCommand}.
+ */
+export async function promptExtensionInstall(opts: {
+  suppressKey: string;
+  message: string;
+  extensionId: string;
+  channel: string;
+}): Promise<void> {
+  await showInstructionWithSuppress(opts.suppressKey, opts.message, [
+    {
+      title: 'Install',
+      callback: () =>
+        safeExecuteCommand(
+          'workbench.extensions.installExtension',
+          [opts.extensionId],
+          opts.channel,
+        ),
+    },
+  ]);
 }
