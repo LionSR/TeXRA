@@ -75,10 +75,16 @@ function setPersonalKeys(...providers: string[]): void {
 function useIncludedAccessStatus(): void {
   mocks.readCliModelAccessStatus.mockResolvedValue({
     apiFallback: 'included',
-    preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+    preferences: {
+      chatGpt: 'off',
+      grok: 'off',
+      kimiCode: 'off',
+      glmCode: 'off',
+    },
     chatGptSignedIn: false,
     grokSignedIn: false,
     kimiCodeKeySet: false,
+    glmKeySet: false,
   });
 }
 
@@ -101,10 +107,16 @@ describe('loadCliApiStatusLines', () => {
     mocks.resolveCliUsageTier.mockReset().mockResolvedValue('free');
     mocks.readCliModelAccessStatus.mockReset().mockResolvedValue({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'off',
+        glmCode: 'off',
+      },
       chatGptSignedIn: false,
       grokSignedIn: false,
       kimiCodeKeySet: false,
+      glmKeySet: false,
     });
     mocks.lookupApiKeyOrigin.mockReset().mockResolvedValue('none');
   });
@@ -207,11 +219,17 @@ describe('loadCliApiStatusLines', () => {
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
-      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'on' },
+      preferences: {
+        chatGpt: 'on',
+        grok: 'off',
+        kimiCode: 'on',
+        glmCode: 'off',
+      },
       chatGptSignedIn: true,
       grokSignedIn: false,
       chatGptAccountLabel: 'chatgpt@example.com',
       kimiCodeKeySet: true,
+      glmKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
@@ -282,10 +300,16 @@ describe('loadCliApiStatusLines', () => {
     async ({ expected, preference, signedIn }) => {
       mocks.readCliModelAccessStatus.mockResolvedValue({
         apiFallback: 'personal',
-        preferences: { chatGpt: preference, grok: 'off', kimiCode: 'off' },
+        preferences: {
+          chatGpt: preference,
+          grok: 'off',
+          kimiCode: 'off',
+          glmCode: 'off',
+        },
         chatGptSignedIn: signedIn,
         chatGptAccountLabel: signedIn ? 'chatgpt@example.com' : undefined,
         kimiCodeKeySet: false,
+        glmKeySet: false,
       });
 
       await expect(accountStatusLines('personal')).resolves.toEqual(expected);
@@ -331,10 +355,71 @@ describe('loadCliApiStatusLines', () => {
     async ({ expected, keySet, preference }) => {
       mocks.readCliModelAccessStatus.mockResolvedValue({
         apiFallback: 'personal',
-        preferences: { chatGpt: 'off', grok: 'off', kimiCode: preference },
+        preferences: {
+          chatGpt: 'off',
+          grok: 'off',
+          kimiCode: preference,
+          glmCode: 'off',
+        },
         chatGptSignedIn: false,
         grokSignedIn: false,
         kimiCodeKeySet: keySet,
+        glmKeySet: false,
+      });
+
+      await expect(accountStatusLines('personal')).resolves.toEqual(expected);
+    },
+  );
+
+  it.each([
+    {
+      name: 'off without a key',
+      preference: 'off',
+      keySet: false,
+      expected: ['Otherwise: Your own API keys'],
+    },
+    {
+      name: 'off with a key',
+      preference: 'off',
+      keySet: true,
+      expected: [
+        'GLM Coding Plan: not preferred · key configured',
+        'Otherwise: Your own API keys',
+      ],
+    },
+    {
+      name: 'on without a key',
+      preference: 'on',
+      keySet: false,
+      expected: [
+        'GLM Coding Plan: preferred · key required',
+        'Otherwise: Your own API keys',
+      ],
+    },
+    {
+      name: 'on with a key',
+      preference: 'on',
+      keySet: true,
+      expected: [
+        'GLM Coding Plan: preferred · key configured',
+        'Otherwise: Your own API keys',
+      ],
+    },
+  ] as const)(
+    'renders the GLM Coding Plan route when available: $name',
+    async ({ expected, keySet, preference }) => {
+      mocks.readCliModelAccessStatus.mockResolvedValue({
+        apiFallback: 'personal',
+        preferences: {
+          chatGpt: 'off',
+          grok: 'off',
+          kimiCode: 'off',
+          glmCode: preference,
+        },
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+        kimiCodeKeySet: false,
+        glmKeySet: keySet,
       });
 
       await expect(accountStatusLines('personal')).resolves.toEqual(expected);
@@ -442,11 +527,17 @@ describe('loadCliApiStatusLines', () => {
   it('reports the legacy model-access overview without reading key storage', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
+      preferences: {
+        chatGpt: 'on',
+        grok: 'off',
+        kimiCode: 'off',
+        glmCode: 'off',
+      },
       chatGptSignedIn: true,
       grokSignedIn: false,
       chatGptAccountLabel: 'chatgpt@example.com',
       kimiCodeKeySet: false,
+      glmKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
@@ -459,17 +550,24 @@ describe('loadCliApiStatusLines', () => {
     ).resolves.toEqual({
       access: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
+        preferences: {
+          chatGpt: 'on',
+          grok: 'off',
+          kimiCode: 'off',
+          glmCode: 'off',
+        },
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'chatgpt@example.com',
         kimiCodeKeySet: false,
+        glmKeySet: false,
         texraSignedIn: true,
       },
       lines: [
         'ChatGPT preference: On · chatgpt@example.com',
         'Grok preference: Off · sign in required to enable',
         'Kimi Code preference: Off · key required to enable',
+        'GLM Coding Plan preference: Off · key required to enable',
         'Otherwise: Your own API keys',
         'Researcher Access: signed in as texra@example.com',
       ],

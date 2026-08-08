@@ -522,6 +522,7 @@ const HARNESS_MODEL_ACCESS =
           // remain the visible "on" pair (Grok still appears as a row).
           grok: 'off' as const,
           kimiCode: 'on' as const,
+          glmCode: 'off' as const,
         },
         chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
         ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
@@ -529,6 +530,7 @@ const HARNESS_MODEL_ACCESS =
           : {}),
         grokSignedIn: false,
         kimiCodeKeySet: true,
+        glmKeySet: true,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
