@@ -54,6 +54,14 @@ export const SUBAGENT = {
   compactCountSuffix: 'sub',
 } as const;
 
+/** Status-bar count for child sessions still in flight, e.g. `3 running
+ *  sessions`. */
+export const RUNNING_SESSION = {
+  countNoun: 'running session',
+  /** Compact status-bar chip suffix, e.g. `3 run`. */
+  compactCountSuffix: 'run',
+} as const;
+
 /**
  * CLI session-list navigation. The list shows background tasks (and the root);
  * the user-facing noun for "a row I can focus" is session.
