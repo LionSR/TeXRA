@@ -300,43 +300,65 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
   });
 });
 
-describe('SessionStores ephemeral sweep', () => {
+describe('SessionStores startup sweep', () => {
   const shell = 'bash@tool#4f4f4f4f4f4f' as StreamTabId;
   const realSession = 'chat@deepseek#5f5f5f5f5f5f' as StreamTabId;
 
+  /** Stores over a transcript index holding one shell and one real session. */
+  async function storesWithLeftovers(): Promise<SessionStores> {
+    const streamLogs = await StreamLogStore.open();
+    streamLogs.ensureStream(shell);
+    streamLogs.ensureStream(realSession);
+    const snapshots = new StreamSnapshotStore();
+    // Keep the orphan half of the sweep out of this: it reads the whole
+    // storage root, which other suites in this process also write.
+    vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([]);
+    vi.spyOn(snapshots, 'listStagedDeletions').mockResolvedValue([]);
+    return new SessionStores({ streamLogs, snapshots });
+  }
+
   it('deletes leftover background shells and nothing else', async () => {
-    const stores = new SessionStores({
-      streamLogs: await StreamLogStore.open(),
-      snapshots: new StreamSnapshotStore(),
-    });
-    const deleteStream = vi.spyOn(stores, 'deleteStream');
+    const stores = await storesWithLeftovers();
+    const deleteStream = vi
+      .spyOn(stores, 'deleteStream')
+      .mockResolvedValue('deleted');
 
-    const swept = await stores.sweepEphemeralStreams(
-      new Set([shell, realSession]),
-    );
+    await stores.sweepLeftoverStreams();
 
-    expect(swept).toEqual([shell]);
     expect(deleteStream).toHaveBeenCalledTimes(1);
     expect(deleteStream).toHaveBeenCalledWith(shell);
   });
 
   it('keeps a shell whose deletion is refused, and says so', async () => {
-    const stores = new SessionStores({
-      streamLogs: await StreamLogStore.open(),
-      snapshots: new StreamSnapshotStore(),
-    });
+    const stores = await storesWithLeftovers();
     // What a still-running shell looks like here: it holds its execution lease,
     // so the durable lifecycle refuses the delete rather than cutting it short.
     vi.spyOn(stores, 'deleteStream').mockResolvedValue('active');
     const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
 
-    const swept = await stores.sweepEphemeralStreams(new Set([shell]));
+    await stores.sweepLeftoverStreams();
 
-    expect(swept).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
       'SessionStores',
       '1 leftover background-shell stream(s) could not be swept and stay listed.',
       { data: { retained: [shell] } },
+    );
+  });
+
+  it('survives a deletion that throws, and still reaches the orphan sweep', async () => {
+    const stores = await storesWithLeftovers();
+    vi.spyOn(stores, 'deleteStream').mockRejectedValue(
+      new Error('sidecar unreadable'),
+    );
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    // One unreadable leftover must not fail the load that called the sweep.
+    await expect(stores.sweepLeftoverStreams()).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledWith(
+      'SessionStores',
+      `Failed to sweep leftover background shell ${shell}: sidecar unreadable`,
+      expect.anything(),
     );
   });
 });

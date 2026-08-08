@@ -420,6 +420,29 @@ export class SessionStores {
   }
 
   /**
+   * The startup sweep every process owner runs before presenting a rail: drop
+   * leftover background shells, then persisted state no live stream refers to.
+   *
+   * One entry point so the order lives in one place. It matters: the ephemeral
+   * sweep removes streams from the transcript index, and the orphan sweep reads
+   * that index as its live set — running them the other way round would take
+   * the shells' own sidecars for orphans on the next launch instead of this one.
+   */
+  async sweepLeftoverStreams(): Promise<void> {
+    await this.sweepEphemeralStreams(new Set(this.streamLogs.keys()));
+    const orphans = await this.sweepOrphanedStreams(
+      new Set(this.streamLogs.keys()),
+    );
+    if (orphans.streams.length > 0) {
+      logger.info(
+        CHANNEL,
+        `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
+        { data: orphans },
+      );
+    }
+  }
+
+  /**
    * Delete background-shell streams a previous process left behind.
    *
    * A background shell is ephemeral by construction: `autoClose` drops its tab
@@ -429,16 +452,16 @@ export class SessionStores {
    * it, so it is leftover state rather than history, and left alone it never
    * stops accumulating.
    *
-   * Every host's process owner calls this at startup, because no presentation
-   * can make the call: stream phases are in-memory only, so a persisted shell
-   * hydrates with no status at all and no rail filter can key off one.
+   * No presentation can make this call: stream phases are in-memory only, so a
+   * persisted shell hydrates with no status at all and no rail filter can key
+   * off one.
    *
    * A shell still running holds its execution lease, so `deleteStream` answers
    * `'active'` and keeps it — the durable lease is the liveness authority here,
    * not an in-memory phase. The cost is that a shell whose host crashed inside
    * the lease's staleness window is retained (loudly) until the next launch.
    */
-  async sweepEphemeralStreams(
+  private async sweepEphemeralStreams(
     liveStreams: ReadonlySet<StreamTabId>,
   ): Promise<StreamTabId[]> {
     const swept: StreamTabId[] = [];
@@ -447,8 +470,19 @@ export class SessionStores {
       if (!isBackgroundShellStream(stream)) continue;
       // Serialized: the deletion queue behind `deleteStream` is per-stream, and
       // a swept stream releases resources its siblings' hooks may also touch.
-      if ((await this.deleteStream(stream)) === 'deleted') swept.push(stream);
-      else retained.push(stream);
+      // Per-stream failure isolation: one unreadable leftover must not abandon
+      // the rest of the sweep, and must not fail the load that called it.
+      try {
+        if ((await this.deleteStream(stream)) === 'deleted') swept.push(stream);
+        else retained.push(stream);
+      } catch (error) {
+        retained.push(stream);
+        logger.warn(
+          CHANNEL,
+          `Failed to sweep leftover background shell ${stream}: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
     }
     if (swept.length > 0) {
       logger.info(
