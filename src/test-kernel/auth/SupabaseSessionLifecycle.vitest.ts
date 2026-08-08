@@ -473,6 +473,33 @@ describe('SupabaseSession', () => {
       assert.equal(result.isAuthError, true);
     });
 
+    it('rewrites a missing-verifier exchange failure as a dead link', async () => {
+      const client = {
+        auth: {
+          exchangeCodeForSession: async () => ({
+            data: { session: null },
+            error: {
+              code: 'pkce_code_verifier_not_found',
+              message:
+                'PKCE code verifier not found in storage. ... use @supabase/ssr ...',
+            },
+          }),
+        },
+      } as unknown as Client;
+      const { coordinator } = createCoordinator({ client });
+
+      const result = await coordinator.createSessionFromCallback({
+        path: '/auth-callback',
+        query: 'code=stale-code',
+      });
+
+      assert.equal(result.success, false);
+      if (result.success) return;
+      assert.match(result.error, /no longer valid/);
+      assert.doesNotMatch(result.error, /supabase\/ssr/);
+      assert.equal(result.isAuthError, true);
+    });
+
     it('rejects retired implicit-token callbacks', async () => {
       const { coordinator } = createCoordinator();
 
