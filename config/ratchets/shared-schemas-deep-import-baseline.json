@@ -151,8 +151,8 @@
       "value": []
     },
     "@shared/schemas/log": {
-      "type": [],
-      "value": ["StreamLogEntrySchema"]
+      "type": ["LogLevel"],
+      "value": ["LOG_LEVELS", "StreamLogEntrySchema"]
     },
     "@shared/schemas/mainView": {
       "type": ["MainViewInboundMessage", "MainViewMessage"],
@@ -547,7 +547,10 @@
       "src/agent/output/diffComputation.ts (type-only)",
       "src/tools/approval/toolEditApproval.ts (type-only)"
     ],
-    "@shared/schemas/log": ["src/transcript/traceDocumentSchema.ts"],
+    "@shared/schemas/log": [
+      "src/logger/logUtils.ts",
+      "src/transcript/traceDocumentSchema.ts"
+    ],
     "@shared/schemas/mainView": [
       "packages/desktop/src/main/desktopShellIpc.ts",
       "packages/desktop/src/main/hostBridge.ts",
