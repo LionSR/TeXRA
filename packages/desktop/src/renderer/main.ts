@@ -61,7 +61,6 @@ import {
   SetThemeMessageSchema,
   type DesktopThemeKind,
 } from '@shared/schemas/commonViewMessages';
-import { ProgressViewOutboundMessageSchema } from '@shared/schemas/progressView';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
@@ -1569,9 +1568,8 @@ window.addEventListener('message', (event) => {
   }
   // Progress view messages dispatch directly into the shared
   // messageDispatcher, with no <progress-app> mounted for plumbing.
-  if (ProgressViewOutboundMessageSchema.safeParse(event.data).success) {
-    dispatchMessage(event.data);
-  }
+  // dispatchMessage validates internally and no-ops on a parse failure.
+  dispatchMessage(event.data);
 });
 
 // Keep the embedded browser aligned when the window resizes: its view is
