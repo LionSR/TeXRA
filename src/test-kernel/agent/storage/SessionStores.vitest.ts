@@ -45,6 +45,80 @@ function deletionSpy() {
 }
 
 describe('SessionStores deletion coordination', () => {
+  it('detaches durable child parent edges only after deleting the parent', async () => {
+    const session = createTestSession();
+    const parent = 'deleted-parent' as StreamTabId;
+    const child = 'retained-child' as StreamTabId;
+    session.transcripts.ensureStream(parent);
+    session.transcripts.ensureStream(child);
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setParentStream(child, parent);
+    await snapshots.flush();
+    const detached: Array<[StreamTabId, readonly StreamTabId[]]> = [];
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots,
+      onChildrenDetached: (deletedParent, children) => {
+        detached.push([deletedParent, children]);
+      },
+    });
+
+    try {
+      await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
+      expect(snapshots.getParentStreamId(child)).toBeUndefined();
+      expect(detached).toEqual([[parent, [child]]]);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('keeps a committed deletion successful when durable child repair fails', async () => {
+    const session = createTestSession();
+    const parent = 'repair-failure-parent' as StreamTabId;
+    session.transcripts.ensureStream(parent);
+    const snapshots = new StreamSnapshotStore();
+    vi.spyOn(snapshots, 'detachChildrenOf').mockRejectedValueOnce(
+      new Error('sidecar unavailable'),
+    );
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots,
+    });
+
+    try {
+      await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
+      expect(session.transcripts.has(parent)).toBe(false);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('keeps a committed deletion successful when child projection fails', async () => {
+    const session = createTestSession();
+    const parent = 'projection-failure-parent' as StreamTabId;
+    const child = 'projection-failure-child' as StreamTabId;
+    session.transcripts.ensureStream(parent);
+    session.transcripts.ensureStream(child);
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setParentStream(child, parent);
+    await snapshots.flush();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots,
+      onChildrenDetached: () => {
+        throw new Error('renderer unavailable');
+      },
+    });
+
+    try {
+      await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
+      expect(session.transcripts.has(parent)).toBe(false);
+      expect(snapshots.getParentStreamId(child)).toBeUndefined();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('tracks lease-gated deletion without blocking its artifact flush', async () => {
     const session = createTestSession();
     const stream = 'lease-gated-delete' as StreamTabId;

@@ -1176,6 +1176,26 @@ export class StreamSnapshotStore {
   }
 
   /**
+   * Clear durable parent edges that point at a stream whose transcript has
+   * already been removed. Ordinary parent changes still enter through the
+   * `setParentStream` session fact; this is the deletion lifecycle repair.
+   */
+  async detachChildrenOf(parent: StreamTabId): Promise<StreamTabId[]> {
+    await this.flush();
+    const streams = await this.listPersistedStreams();
+    const children: StreamTabId[] = [];
+    for (const stream of streams) {
+      if (stream === parent) continue;
+      const meta = await readMeta(this.kv(stream));
+      if (meta?.parentStreamId !== parent) continue;
+      this.queueMetaPatch(stream, { parentStreamId: undefined });
+      children.push(stream);
+    }
+    await this.flush();
+    return children;
+  }
+
+  /**
    * The stream's display description, projected from the one authority,
    * `ExecutionMeta.description` (#9590 A4) — live event or load-time
    * hydration. The legacy sidecar mirror is retired.

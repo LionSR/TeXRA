@@ -41,6 +41,11 @@ export interface SessionStoresOptions {
   goalEntries?: GoalEntryStore;
   /** Runs after a canonical transcript stream is committed as deleted. */
   onCanonicalStreamDeleted?: (stream: StreamTabId) => void | Promise<void>;
+  /** Projects parent-edge removals after their durable repair commits. */
+  onChildrenDetached?: (
+    parent: StreamTabId,
+    children: readonly StreamTabId[],
+  ) => void | Promise<void>;
 }
 
 export interface DeleteAllStreamsResult {
@@ -76,6 +81,12 @@ export class SessionStores {
   private readonly goalEntries: GoalEntryStore | undefined;
   private readonly onCanonicalStreamDeleted:
     ((stream: StreamTabId) => void | Promise<void>) | undefined;
+  private readonly onChildrenDetached:
+    | ((
+        parent: StreamTabId,
+        children: readonly StreamTabId[],
+      ) => void | Promise<void>)
+    | undefined;
   private readonly pendingStreamDeletions = new Map<
     StreamTabId,
     Promise<DeleteStreamResult>
@@ -91,6 +102,7 @@ export class SessionStores {
       options.listExecutionStreamReferences ?? listExecutionStreamReferences;
     this.goalEntries = options.goalEntries;
     this.onCanonicalStreamDeleted = options.onCanonicalStreamDeleted;
+    this.onChildrenDetached = options.onChildrenDetached;
   }
 
   async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
@@ -134,6 +146,7 @@ export class SessionStores {
     const hadCanonicalStream = this.streamLogs.has(stream);
     const result = await this.deleteStreamOnce(stream);
     if (result === 'deleted' && hadCanonicalStream) {
+      await this.detachChildrenAfterCanonicalDeletion(stream);
       await this.notifyDeleted(stream);
     }
     return result;
@@ -179,6 +192,34 @@ export class SessionStores {
       logger.warn(
         CHANNEL,
         `Stream ${stream} was deleted, but canonical session cleanup was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+    }
+  }
+
+  private async detachChildrenAfterCanonicalDeletion(
+    stream: StreamTabId,
+  ): Promise<void> {
+    let children: StreamTabId[];
+    try {
+      children = await this.snapshots.detachChildrenOf(stream);
+    } catch (error) {
+      // The transcript commit is irreversible, so preserve its successful
+      // result instead of reporting the parent as retained.
+      logger.warn(
+        CHANNEL,
+        `Stream ${stream} was deleted, but child parent-edge cleanup was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return;
+    }
+    if (children.length === 0 || !this.onChildrenDetached) return;
+    try {
+      await this.onChildrenDetached(stream, children);
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Stream ${stream} was deleted, but child-detachment projection was incomplete: ${toErrorMessage(error)}`,
         { data: error },
       );
     }
@@ -425,6 +466,11 @@ export class SessionStores {
         }
       }),
     );
+    const retainedStreams = new Set<StreamTabId>([...active, ...failed]);
+    for (const stream of canonicalStreams) {
+      if (retainedStreams.has(stream)) continue;
+      await this.detachChildrenAfterCanonicalDeletion(stream);
+    }
     return { active, failed };
   }
 
