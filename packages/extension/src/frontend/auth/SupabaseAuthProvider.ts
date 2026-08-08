@@ -337,11 +337,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /**
    * Remove the authentication session. Sign-out clears local storage only,
-   * matching the desktop and CLI hosts: the shared client runs with
-   * `persistSession: false`, so `auth.signOut()` has no session of this
-   * provider's to revoke and would target whatever session was last handed to
-   * the client, revoking every device's refresh tokens with its default
-   * global scope.
+   * matching the desktop and CLI hosts: the shared client never persists a
+   * session of its own (its storage holds PKCE flow state only), so
+   * `auth.signOut()` has no session of this provider's to revoke and would
+   * target whatever session was last handed to the client, revoking every
+   * device's refresh tokens with its default global scope.
    */
   async removeSession(sessionId: string): Promise<void> {
     await this.clearLocalSession(sessionId);

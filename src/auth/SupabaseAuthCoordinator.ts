@@ -33,7 +33,11 @@ export function createHostAuthCoordinator(
   init: HostAuthCoordinatorInit,
 ): SupabaseSessionCoordinator {
   try {
-    SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey);
+    SupabaseClient.initialize(
+      SUPABASE_CONFIG.url,
+      SUPABASE_CONFIG.publicKey,
+      init.secrets,
+    );
   } catch (error) {
     throw new Error(
       `Supabase authentication is not configured: ${toErrorMessage(error)}`,
