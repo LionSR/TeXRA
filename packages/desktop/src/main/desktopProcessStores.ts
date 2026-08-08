@@ -23,6 +23,9 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
       releaseStreamResources(stream, session);
     },
   });
+  // Leftover background shells go first: they leave the transcript index the
+  // orphan sweep then reads as its live set.
+  await stores.sweepEphemeralStreams(new Set(transcripts.keys()));
   await stores.sweepOrphanedStreams(new Set(transcripts.keys()));
 
   const detachStreamRemoval = session.events.subscribe(
