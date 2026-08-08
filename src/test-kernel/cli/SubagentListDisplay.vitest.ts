@@ -709,7 +709,7 @@ describe('CLI child list display model', () => {
 
     expect(output).toContain('reviewer completed');
     expect(output).toContain('critic error');
-    expect(output).toContain('editor waiting for you');
+    expect(output).toContain('editor idle');
     expect(output).toContain('attached');
     expect(output).not.toContain('attached —');
   });

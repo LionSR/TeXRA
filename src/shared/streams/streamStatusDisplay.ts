@@ -70,21 +70,10 @@ const STREAM_STATUS_LABELS = {
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
 
-// A child/subagent stream suspended at WAITING is stalled awaiting a
-// reply-or-stop decision from whoever is looking at it — a different
-// situation from the root session's ordinary idle-between-turns WAITING, so
-// the CLI styles ('cli'/'cliCompact', which otherwise fold WAITING into the
-// root's "idle" wording) use this distinct label instead. `progressHeader`
-// shows the same "Idle" for root and child, so it needs no such split.
-const CLI_CHILD_WAITING_LABEL = 'waiting for you';
-
 interface FormatStreamStatusLabelOptions {
   readonly style?: StreamStatusLabelStyle;
   readonly missingLabel?: string;
   readonly substate?: StreamSubstate;
-  /** True when `status` belongs to a child/subagent stream rather than the
-   *  root session — see `CLI_CHILD_WAITING_LABEL`. */
-  readonly isChildStream?: boolean;
 }
 
 export function formatStreamStatusLabel(
@@ -110,13 +99,6 @@ export function formatStreamStatusLabel(
   const style = options.style ?? 'progressHeader';
   const key = streamStatusDisplayKey(status, options.substate);
   if (!key) return status;
-  if (
-    options.isChildStream &&
-    key === STREAM_PHASE.WAITING &&
-    (style === 'cli' || style === 'cliCompact')
-  ) {
-    return CLI_CHILD_WAITING_LABEL;
-  }
   return STREAM_STATUS_LABELS[style][key];
 }
 
