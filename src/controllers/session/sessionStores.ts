@@ -27,5 +27,23 @@ export function createSessionStores(session: SessionHandle): SessionStores {
       session.status.clearStream(stream);
       releaseStreamResources(stream, session);
     },
+    onChildrenDetached: (parent, children) => {
+      const activeChildren = new Set(
+        session.executions
+          .getActiveChildren(parent)
+          .map(({ childStreamId }) => childStreamId),
+      );
+      session.executions.detachActiveChildren(parent);
+      for (const child of children) {
+        if (activeChildren.has(child)) continue;
+        session.events.emit({
+          scope: 'session',
+          event: {
+            type: 'setParentStream',
+            payload: { childStreamId: child, parentStreamId: null },
+          },
+        });
+      }
+    },
   });
 }

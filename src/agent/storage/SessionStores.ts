@@ -41,6 +41,11 @@ export interface SessionStoresOptions {
   goalEntries?: GoalEntryStore;
   /** Runs after a canonical transcript stream is committed as deleted. */
   onCanonicalStreamDeleted?: (stream: StreamTabId) => void | Promise<void>;
+  /** Projects parent-edge removals after their durable repair commits. */
+  onChildrenDetached?: (
+    parent: StreamTabId,
+    children: readonly StreamTabId[],
+  ) => void | Promise<void>;
 }
 
 export interface DeleteAllStreamsResult {
@@ -76,6 +81,12 @@ export class SessionStores {
   private readonly goalEntries: GoalEntryStore | undefined;
   private readonly onCanonicalStreamDeleted:
     ((stream: StreamTabId) => void | Promise<void>) | undefined;
+  private readonly onChildrenDetached:
+    | ((
+        parent: StreamTabId,
+        children: readonly StreamTabId[],
+      ) => void | Promise<void>)
+    | undefined;
   private readonly pendingStreamDeletions = new Map<
     StreamTabId,
     Promise<DeleteStreamResult>
@@ -91,6 +102,7 @@ export class SessionStores {
       options.listExecutionStreamReferences ?? listExecutionStreamReferences;
     this.goalEntries = options.goalEntries;
     this.onCanonicalStreamDeleted = options.onCanonicalStreamDeleted;
+    this.onChildrenDetached = options.onChildrenDetached;
   }
 
   async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
@@ -179,6 +191,22 @@ export class SessionStores {
       logger.warn(
         CHANNEL,
         `Stream ${stream} was deleted, but canonical session cleanup was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+    }
+  }
+
+  private async notifyChildrenDetached(
+    stream: StreamTabId,
+    children: readonly StreamTabId[],
+  ): Promise<void> {
+    if (!this.onChildrenDetached) return;
+    try {
+      await this.onChildrenDetached(stream, children);
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Stream ${stream} was deleted, but child-detachment projection was incomplete: ${toErrorMessage(error)}`,
         { data: error },
       );
     }
@@ -639,7 +667,10 @@ export class SessionStores {
   }
 
   private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
-    const snapshotDeletion = await this.snapshots.stageDeleteStream(stream);
+    const snapshotDeletion = await this.snapshots.stageDeleteStream(
+      stream,
+      (children) => this.notifyChildrenDetached(stream, children),
+    );
     try {
       // The transcript registry is the commit point for tab visibility.
       // Snapshot sidecars are only renamed before this, so a failure can roll
@@ -686,7 +717,12 @@ export class SessionStores {
     await Promise.all(
       streams.map(async (stream) => {
         try {
-          staged.set(stream, await this.snapshots.stageDeleteStream(stream));
+          staged.set(
+            stream,
+            await this.snapshots.stageDeleteStream(stream, (children) =>
+              this.notifyChildrenDetached(stream, children),
+            ),
+          );
         } catch (error) {
           failed.add(stream);
           failures.push(error);
