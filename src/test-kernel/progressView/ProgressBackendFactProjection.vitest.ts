@@ -1090,8 +1090,7 @@ describe('ProgressBackend', () => {
     const infos = buildStreamInfos(backend.state);
     expect(infos.map((info) => info.name)).toContain(stream);
     expect(infos.find((info) => info.name === stream)).toMatchObject({
-      // Pending (no identity yet) — never the raw `agent#executionId` id.
-      label: 'Pending session',
+      label: stream,
       agentCategory: AgentCategory.ToolUse,
       isRemote: true,
       executionId,

@@ -7,11 +7,14 @@ import type { StreamTabInfo } from '@shared/schemas';
  * `StreamTabInfo.label` is guaranteed non-empty by `buildStreamTabInfo()`
  * (`src/controllers/session/streamTabInfo.ts`) — this function exists so no
  * call site is tempted to add its own `?? info.name` / `?? streamId`
- * fallback. `.name` and `StreamTabId` are the opaque `agent#executionId`
- * handle (`src/agent/runtime/streamTab.ts`) and must never reach the user as
- * display text. Returns undefined when there's no entry to read from (e.g. a
- * lookup by id came back empty because that stream's tab was evicted) —
- * callers decide their own placeholder or omit the label entirely.
+ * fallback on top of it. `.label` itself may still equal the stream's own
+ * opaque id for a stream whose identity hasn't resolved yet — deliberately:
+ * that id's prefix already is the clean agent name (`getStreamTabId()`,
+ * `src/agent/runtime/streamTab.ts`), so it's the best available label, not a
+ * fallback to avoid. Returns undefined only when there's no entry to read
+ * from at all (e.g. a lookup by id came back empty because that stream's
+ * tab was evicted) — callers decide their own placeholder or omit the label
+ * entirely.
  */
 export function streamDisplayLabel(info: Pick<StreamTabInfo, 'label'>): string;
 export function streamDisplayLabel(
