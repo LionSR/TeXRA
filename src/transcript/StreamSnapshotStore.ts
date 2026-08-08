@@ -1188,6 +1188,10 @@ export class StreamSnapshotStore {
       if (stream === parent) continue;
       const meta = await readMeta(this.kv(stream));
       if (meta?.parentStreamId !== parent) continue;
+      // A lifecycle scan can encounter a persisted child that this process has
+      // never seeded. Preserve its execution FK before applying the patch.
+      const record = this.getOrCreateRecord(stream);
+      record.meta ??= meta;
       this.queueMetaPatch(stream, { parentStreamId: undefined });
       children.push(stream);
     }

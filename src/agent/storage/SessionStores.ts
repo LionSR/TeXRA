@@ -200,20 +200,20 @@ export class SessionStores {
   private async detachChildrenAfterCanonicalDeletion(
     stream: StreamTabId,
   ): Promise<void> {
-    let children: StreamTabId[];
+    let children: StreamTabId[] = [];
     try {
       children = await this.snapshots.detachChildrenOf(stream);
     } catch (error) {
       // The transcript commit is irreversible, so preserve its successful
-      // result instead of reporting the parent as retained.
+      // result instead of reporting the parent as retained. Runtime children
+      // still detach below even when durable discovery failed.
       logger.warn(
         CHANNEL,
         `Stream ${stream} was deleted, but child parent-edge cleanup was incomplete: ${toErrorMessage(error)}`,
         { data: error },
       );
-      return;
     }
-    if (children.length === 0 || !this.onChildrenDetached) return;
+    if (!this.onChildrenDetached) return;
     try {
       await this.onChildrenDetached(stream, children);
     } catch (error) {

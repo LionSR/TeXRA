@@ -30,6 +30,7 @@
       "attachSessionEvents",
       "deleteAll",
       "deleteStream",
+      "detachChildrenOf",
       "evictAll",
       "flush",
       "getCompileFailures",

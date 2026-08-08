@@ -49,15 +49,26 @@ describe('SessionStores deletion coordination', () => {
     const session = createTestSession();
     const parent = 'deleted-parent' as StreamTabId;
     const child = 'retained-child' as StreamTabId;
+    const childExecution = 'c9862001' as ExecutionId;
     session.transcripts.ensureStream(parent);
     session.transcripts.ensureStream(child);
     const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setRunConfig(
+      child,
+      AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'deepseekT',
+        agentCategory: 'toolUse',
+      }),
+      childExecution,
+    );
     snapshotFacts(snapshots).setParentStream(child, parent);
     await snapshots.flush();
+    const reloadedSnapshots = new StreamSnapshotStore();
     const detached: Array<[StreamTabId, readonly StreamTabId[]]> = [];
     const stores = new SessionStores({
       streamLogs: session.transcripts,
-      snapshots,
+      snapshots: reloadedSnapshots,
       onChildrenDetached: (deletedParent, children) => {
         detached.push([deletedParent, children]);
       },
@@ -65,7 +76,8 @@ describe('SessionStores deletion coordination', () => {
 
     try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
-      expect(snapshots.getParentStreamId(child)).toBeUndefined();
+      expect(reloadedSnapshots.getParentStreamId(child)).toBeUndefined();
+      expect(reloadedSnapshots.getExecutionId(child)).toBe(childExecution);
       expect(detached).toEqual([[parent, [child]]]);
     } finally {
       session.dispose();
@@ -80,14 +92,17 @@ describe('SessionStores deletion coordination', () => {
     vi.spyOn(snapshots, 'detachChildrenOf').mockRejectedValueOnce(
       new Error('sidecar unavailable'),
     );
+    const onChildrenDetached = vi.fn();
     const stores = new SessionStores({
       streamLogs: session.transcripts,
       snapshots,
+      onChildrenDetached,
     });
 
     try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(session.transcripts.has(parent)).toBe(false);
+      expect(onChildrenDetached).toHaveBeenCalledWith(parent, []);
     } finally {
       session.dispose();
     }
