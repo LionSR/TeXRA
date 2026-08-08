@@ -14,12 +14,12 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),
-  getAgent: vi.fn(),
+  getRosterAgent: vi.fn(),
   writeSessionDescription: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
-  getAgent: mocks.getAgent,
+  getRosterAgent: mocks.getRosterAgent,
 }));
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
@@ -92,7 +92,7 @@ describe('session description helpers', () => {
         .mockReturnValue({ text: 'Correcting derivation signs' }),
       initializeMessages: vi.fn().mockResolvedValue([]),
     };
-    mocks.getAgent.mockReturnValue({ description: 'Corrects a draft' });
+    mocks.getRosterAgent.mockReturnValue({ description: 'Corrects a draft' });
     mocks.createHelperModelKit.mockResolvedValue({
       kit: { client: {}, handler },
     });
@@ -105,11 +105,11 @@ describe('session description helpers', () => {
     );
     detach();
 
-    // A tool-use lookup would miss a workflow agent entirely, leaving the
-    // helper prompt without the agent's purpose.
-    expect(mocks.getAgent).toHaveBeenCalledWith(
-      'correct',
+    // Resolved in the workflow roster: a tool-use lookup would miss a workflow
+    // agent entirely, leaving the helper prompt without the agent's purpose.
+    expect(mocks.getRosterAgent).toHaveBeenCalledWith(
       AgentCategory.Workflow,
+      'correct',
     );
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
       'exec-workflow',
@@ -133,7 +133,9 @@ describe('session description helpers', () => {
     const session = createTestSession();
     const helperError = new Error('helper unavailable');
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    mocks.getAgent.mockReturnValue({ description: 'General chat assistant' });
+    mocks.getRosterAgent.mockReturnValue({
+      description: 'General chat assistant',
+    });
     mocks.createHelperModelKit.mockRejectedValueOnce(helperError);
 
     await expect(
@@ -149,7 +151,9 @@ describe('session description helpers', () => {
 
   it('does not reject when the diagnostic sink also fails', async () => {
     const session = createTestSession();
-    mocks.getAgent.mockReturnValue({ description: 'General chat assistant' });
+    mocks.getRosterAgent.mockReturnValue({
+      description: 'General chat assistant',
+    });
     mocks.createHelperModelKit.mockRejectedValueOnce(
       new Error('helper unavailable'),
     );
@@ -173,7 +177,9 @@ describe('session description helpers', () => {
       extractResponse: vi.fn().mockReturnValue({ text: 'Fixing proof typos' }),
       initializeMessages: vi.fn().mockResolvedValue([]),
     };
-    mocks.getAgent.mockReturnValue({ description: 'General chat assistant' });
+    mocks.getRosterAgent.mockReturnValue({
+      description: 'General chat assistant',
+    });
     mocks.createHelperModelKit.mockResolvedValue({
       kit: { client: {}, handler },
     });
