@@ -354,7 +354,6 @@ describe('CLI StatusBar display model', () => {
         foreground: { shortcutsActive: false },
         childList: {
           focused: true,
-          selectionKind: 'stream',
           selectionKillable: true,
         },
         shortcuts: {
@@ -386,7 +385,6 @@ describe('CLI StatusBar display model', () => {
         },
         childList: {
           focused: true,
-          selectionKind: 'stream',
           selectionKillable: true,
         },
         shortcuts: { parentNavigationAvailable: true },
