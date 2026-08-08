@@ -135,9 +135,7 @@ describe('shared Monaco loader', () => {
   it('maps general-programming extensions to the language ids Monaco bundles', async () => {
     const { monacoLanguageForPath } = await loadMockedMonaco();
 
-    expect(monacoLanguageForPath('/workspace/src/index.ts')).toBe(
-      'typescript',
-    );
+    expect(monacoLanguageForPath('/workspace/src/index.ts')).toBe('typescript');
     expect(monacoLanguageForPath('src/component.tsx')).toBe('typescript');
     expect(monacoLanguageForPath('scripts/check.mjs')).toBe('javascript');
     expect(monacoLanguageForPath('config/settings.json')).toBe('json');
