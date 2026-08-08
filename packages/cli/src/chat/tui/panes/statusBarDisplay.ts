@@ -141,7 +141,6 @@ interface StatusBarForegroundInput {
 interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
   readonly focused?: boolean;
-  readonly selectionKind?: 'stream';
   readonly selectionKillable?: boolean;
   /** True while the focused row is an in-flight workflow-script grandchild
    *  that can be skipped or retried. */
