@@ -17,7 +17,9 @@ import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
+  getGLMCodingPlan,
   getPreferKimiCode,
+  setGLMCodingPlan,
   setPreferKimiCode,
 } from '@utils/config/providerConfig';
 
@@ -53,17 +55,19 @@ export async function readCliModelAccessStatus(
   apiMode: ApiAccessMode,
 ): Promise<CliModelAccessStatus> {
   const secrets = platform().secrets;
-  const [chatGpt, grok, kimiCodeKeySet, configuredProviders] =
+  const [chatGpt, grok, kimiCodeKeySet, glmKeySet, configuredProviders] =
     await Promise.all([
       getCodexStatus(),
       getXaiStatus(),
       apiKeyExists(secrets, 'kimiCode'),
+      apiKeyExists(secrets, 'glm'),
       configuredApiKeyProviders(secrets),
     ]);
   const preferences = {
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
     grok: isPreferXaiSubscription() ? 'on' : 'off',
     kimiCode: getPreferKimiCode() ? 'on' : 'off',
+    glmCode: getGLMCodingPlan() ? 'on' : 'off',
   } as const;
   const personalKeyProviders = configuredProviders.map(
     (provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider,
@@ -76,6 +80,7 @@ export async function readCliModelAccessStatus(
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
     kimiCodeKeySet,
+    glmKeySet,
     personalKeyProviders,
   };
 }
@@ -127,6 +132,33 @@ export async function updateCliModelAccess(
     return {
       apiMode,
       message: `Prefer Kimi Code subscription enabled for Kimi models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
+    };
+  }
+
+  if (selection.provider === 'glm-code') {
+    if (selection.state === 'off') {
+      await setGLMCodingPlan(false);
+      invalidateModelOptionsCache();
+      return {
+        apiMode,
+        message: 'Prefer GLM Coding Plan disabled for GLM models.',
+      };
+    }
+
+    // The GLM API key is the Coding Plan credential — there is no separate
+    // sign-in flow.
+    if (!(await apiKeyExists(platform().secrets, 'glm'))) {
+      return {
+        apiMode,
+        message:
+          'No GLM API key configured — add one with /key or /config → API keys (get one at https://open.bigmodel.cn or https://z.ai).',
+      };
+    }
+    await setGLMCodingPlan(true);
+    invalidateModelOptionsCache();
+    return {
+      apiMode,
+      message: `Prefer GLM Coding Plan enabled for GLM models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
     };
   }
 
