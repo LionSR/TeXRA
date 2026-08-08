@@ -1,8 +1,8 @@
 // Scrollable, closable full-transcript reader. Ctrl-T's predecessor printed the
 // same content straight into terminal scrollback, which the terminal owns and
 // nothing can take back. This renders it in the live region instead, so Esc
-// restores the conversation exactly as it was. `p` still prints, for when the
-// point is to select and copy the text out of the terminal.
+// restores the conversation exactly as it was. ↑/↓ scrolls line by line;
+// PgUp/PgDn pages through the transcript.
 //
 // The TUI never enters the alternate screen (see tui/terminalCleanup.ts), so a
 // full-screen pager is not an option here — this is an ordinary foreground
@@ -38,14 +38,12 @@ export function TranscriptReader({
   availableRows,
   executionLabels,
   onClose,
-  onPrintToScrollback,
   streamId,
   title,
 }: {
   readonly availableRows: number;
   readonly executionLabels?: ExecutionLabels;
   readonly onClose: () => void;
-  readonly onPrintToScrollback: (streamId: StreamTabId) => void;
   readonly streamId: StreamTabId;
   readonly title: string;
 }): React.JSX.Element {
@@ -67,11 +65,6 @@ export function TranscriptReader({
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {
       onClose();
-      return;
-    }
-    if (input.toLowerCase() === 'p') {
-      onPrintToScrollback(streamId);
-      onClose();
     }
   });
 
@@ -84,7 +77,7 @@ export function TranscriptReader({
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'scroll' },
-            { key: 'p', action: 'print to scrollback' },
+            { key: 'PgUp/PgDn', action: 'page' },
             { key: 'Esc', action: 'close' },
           ]}
           confirmCancel={false}

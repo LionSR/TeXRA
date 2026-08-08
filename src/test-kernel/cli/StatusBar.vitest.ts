@@ -354,7 +354,6 @@ describe('CLI StatusBar display model', () => {
         foreground: { shortcutsActive: false },
         childList: {
           focused: true,
-          selectionKind: 'stream',
           selectionKillable: true,
         },
         shortcuts: {
@@ -367,7 +366,6 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toContain('↑/↓ select');
     expect(display.bindings).toContain('Enter focus');
-    expect(display.bindings).toContain('v full output');
     expect(display.bindings).not.toContain('i details');
     expect(display.bindings).toContain('k kill');
     expect(display.bindings).toContain('Tab input');
@@ -387,7 +385,6 @@ describe('CLI StatusBar display model', () => {
         },
         childList: {
           focused: true,
-          selectionKind: 'stream',
           selectionKillable: true,
         },
         shortcuts: { parentNavigationAvailable: true },
@@ -397,7 +394,6 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Esc close');
     expect(display.bindings).not.toContain('Esc back');
     expect(display.bindings).not.toContain('↑/↓ select');
-    expect(display.bindings).not.toContain('v full output');
   });
 
   it('keeps the full-output shortcut in narrow stream views', () => {

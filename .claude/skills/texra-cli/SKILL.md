@@ -41,8 +41,8 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
   belongs to that child's Static scrollback owner. Ctrl-T opens the focused
   stream's full output in a scrollable, closable `TranscriptReader`
   (`panes/TranscriptReader.tsx`) rendered in the live region — `Esc` closes it
-  and restores the conversation exactly as it was, `p` prints the transcript to
-  native scrollback (for selecting/copying text out of the terminal). The reader
+  and restores the conversation exactly as it was; `↑/↓` scrolls line by line
+  and `PgUp/PgDn` pages. The reader
   never takes over the viewport (the TUI avoids the alternate screen), so it is
   sized by the same row budget as every other foreground surface.
   Cap root panels (`BOTTOM_PANEL_MAX_ROWS` in `panes/ConversationRegion.tsx`) so
