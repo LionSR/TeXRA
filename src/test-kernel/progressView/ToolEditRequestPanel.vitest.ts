@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
@@ -40,12 +40,7 @@ function mountPanel(
   });
 }
 
-type DiffView = HTMLElement & { originalText?: string; proposedText?: string };
 type ApproveSplit = HTMLElement & { canBypass?: boolean };
-
-function queryDiffView(element: ToolEditRequestPanel): DiffView | null {
-  return element.shadowRoot?.querySelector<DiffView>('texra-diff-view') ?? null;
-}
 
 function querySplitButton(element: ToolEditRequestPanel): ApproveSplit | null {
   return (
@@ -68,28 +63,13 @@ describe('tool-edit-request-panel', () => {
     () => import('@progressView/frontend/components/ToolEditRequestPanel'),
   );
 
-  // This suite exercises the desktop, the only host that registers
-  // `<texra-diff-view>` and so the only one offering the inline diff. A stub
-  // stands in for the Monaco-backed element: the panel only sets properties on
-  // it, and registration is what the panel actually branches on. The
-  // extension/trace-viewer behavior lives in
-  // ToolEditRequestPanelWithoutMonaco.vitest.ts, which needs a registry that
-  // never sees this definition.
-  beforeAll(() => {
-    customElements.define('texra-diff-view', class extends HTMLElement {});
-  });
-
   it('uses a shared tooltip for the direct diff action', async () => {
-    const element = await mountPanel(
-      createPermission({ originalContent: 'before', proposedContent: 'after' }),
-    );
+    const element = await mountPanel(createPermission({}));
     const button = element.shadowRoot?.querySelector('#tool-edit-diff-button');
 
     expect(button).toBeTruthy();
     expect(button?.hasAttribute('title')).toBe(false);
-    expect(tooltipText(element, 'tool-edit-diff-button')).toBe(
-      'Open inline diff (d)',
-    );
+    expect(tooltipText(element, 'tool-edit-diff-button')).toBe('Open diff (d)');
   });
 
   it('anchors the line-change hint with wa-tooltip instead of title', async () => {
@@ -106,33 +86,21 @@ describe('tool-edit-request-panel', () => {
     );
   });
 
-  it.each([
-    {
-      name: 'only proposed content is available',
-      permission: { proposedContent: 'new content\n' },
-      originalText: '',
-      proposedText: 'new content\n',
-    },
-    {
-      name: 'only original content is available',
-      permission: { originalContent: 'deleted content\n' },
-      originalText: 'deleted content\n',
-      proposedText: '',
-    },
-  ])(
-    'renders inline diff when $name',
-    async ({ permission, originalText, proposedText }) => {
-      const element = await mountPanel(createPermission(permission));
+  it('delegates the diff action to the host on every press', async () => {
+    // Each host answers openDiff its own way — the extension opens a VS Code
+    // diff tab, the desktop posts desktop:showDiff to its Review workbench —
+    // so the panel never renders a diff itself and holds no toggle state.
+    const element = await mountPanel(createPermission({}));
+    const actions = recordPermissionActions(element);
 
-      element.handleKeyboardShortcut('d');
-      await element.updateComplete;
+    expect(element.handleKeyboardShortcut('d')).toBe(true);
+    await element.updateComplete;
+    expect(element.handleKeyboardShortcut('d')).toBe(true);
+    await element.updateComplete;
 
-      const diffView = queryDiffView(element);
-      expect(diffView).toBeTruthy();
-      expect(diffView?.originalText).toBe(originalText);
-      expect(diffView?.proposedText).toBe(proposedText);
-    },
-  );
+    expect(actions).toEqual([{ action: 'openDiff' }, { action: 'openDiff' }]);
+    expect(element.shadowRoot?.querySelector('texra-diff-view')).toBeNull();
+  });
 
   it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
     const element = await mountPanel(createPermission({ allowBypass: false }));
