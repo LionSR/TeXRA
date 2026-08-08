@@ -3,12 +3,12 @@
 // per screen, Esc cancels. Returns the collected answers, or `undefined` when
 // the user backs out. Pure config logic lives in runtime/initConfig.
 
-import { Box, Text, useApp } from 'ink';
+import { Text, useApp } from 'ink';
 import { useState } from 'react';
 
-import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { WizardStepShell } from '@cli/tui/ui/WizardStepShell';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
@@ -69,36 +69,11 @@ interface Draft {
   gitignore?: boolean;
 }
 
-function StepFrame(props: {
-  readonly stepNumber: number;
-  readonly stepCount: number;
-  readonly title: string;
-  readonly children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Box flexDirection="column" paddingX={1}>
-      <Text bold color={COLOR_HINT}>
-        texra init
-      </Text>
-      <Text dimColor>
-        Step {props.stepNumber}/{props.stepCount} · {props.title}
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        {props.children}
-      </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'select' },
-            { key: 'Esc', action: 'cancel' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
-  );
-}
+const WIZARD_KEY_HINTS = [
+  { key: '↑/↓', action: 'navigate' },
+  { key: 'Enter', action: 'select' },
+  { key: 'Esc', action: 'cancel' },
+] as const;
 
 export function initWizardModelSelectItems(
   models: readonly CliModelAccess[],
@@ -250,13 +225,17 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
   }
 
   return (
-    <StepFrame
-      stepNumber={index + 1}
-      stepCount={stepCount}
-      title={STEP_TITLES[step]}
+    <WizardStepShell
+      title={
+        <Text bold color={COLOR_HINT}>
+          texra init
+        </Text>
+      }
+      subtitle={`Step ${index + 1}/${stepCount} · ${STEP_TITLES[step]}`}
+      keyHints={WIZARD_KEY_HINTS}
     >
       {picker}
-    </StepFrame>
+    </WizardStepShell>
   );
 }
 
