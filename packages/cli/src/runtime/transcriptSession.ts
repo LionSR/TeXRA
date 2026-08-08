@@ -5,8 +5,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { createSessionStores } from '@controllers/session/sessionStores';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { releaseStreamResources } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 
 export type InteractiveTranscriptPolicy =
