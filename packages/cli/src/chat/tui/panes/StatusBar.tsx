@@ -48,6 +48,7 @@ interface StatusBarProps {
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
   readonly childListSelectionWorkflowControllable?: boolean;
+  readonly runningSessions?: number;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
@@ -213,6 +214,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     usage: statusSlice?.usage,
     stage: statusSlice?.stage,
     subagents: subagentCount,
+    runningSessions: props.runningSessions ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
     model: accessTarget.model,
