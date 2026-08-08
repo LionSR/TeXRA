@@ -3,7 +3,6 @@ import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { apiKeyExists, configuredApiKeyProviders } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
@@ -13,6 +12,7 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
