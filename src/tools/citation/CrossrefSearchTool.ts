@@ -9,14 +9,14 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
+import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { CROSSREF_CONSTANTS, CrossrefClient } from './constants';
-import { rateLimitedRequest } from './rateLimiter';
+import { rateLimitedApiCall } from './rateLimiter';
 
 const CROSSREF_SEARCH_FIELDS = {
   query: z.string().describe('Bibliographic search query for Crossref works.'),
@@ -76,24 +76,6 @@ export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
  */
 type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
 
-/** Rate-limited, cancellable Crossref call with uniform error wrapping. */
-function crossrefRequest<T>(
-  label: string,
-  failureMessage: string,
-  request: () => Promise<T>,
-): Promise<T> {
-  return wrapApiCall(
-    () =>
-      rateLimitedRequest(
-        'crossref',
-        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-        label,
-        request,
-      ),
-    failureMessage,
-  );
-}
-
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
   parallelSafe: true,
@@ -105,7 +87,9 @@ export class CrossrefSearchTool extends defineTool({
     if (input.command === 'doi') {
       const trimmedDoi = requireNonEmptyString(input.doi, 'DOI');
 
-      const response = await crossrefRequest(
+      const response = await rateLimitedApiCall(
+        'crossref',
+        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
         'Crossref DOI lookup',
         'Crossref lookup failed',
         () => CrossrefClient.work(trimmedDoi),
@@ -151,7 +135,9 @@ export class CrossrefSearchTool extends defineTool({
       ...(input.filter && { filter: input.filter }),
     };
 
-    const response = await crossrefRequest(
+    const response = await rateLimitedApiCall(
+      'crossref',
+      CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
       'Crossref search',
       'Crossref search failed',
       () => CrossrefClient.works(options),

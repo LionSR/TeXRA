@@ -4,6 +4,7 @@ import pThrottle from 'p-throttle';
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError } from '@shared/schemas/toolResult';
+import { wrapApiCall } from '@tools/utils';
 
 const limiters = new Map<
   string,
@@ -53,6 +54,25 @@ export async function rateLimitedRequest<T>(
 ): Promise<T> {
   await waitForRateLimit(apiName, minDelayMs);
   return abandonOnAbort(request(), getCurrentToolCallContext()?.signal, label);
+}
+
+/**
+ * Compose {@link rateLimitedRequest} with uniform error wrapping via
+ * {@link wrapApiCall}. The shape every arXiv/Crossref lookup repeats:
+ * rate-limit + cancellable request, then rethrow as a ToolError with a
+ * descriptive prefix.
+ */
+export async function rateLimitedApiCall<T>(
+  apiName: string,
+  minDelayMs: number,
+  label: string,
+  failureMessage: string,
+  request: () => Promise<T>,
+): Promise<T> {
+  return wrapApiCall(
+    () => rateLimitedRequest(apiName, minDelayMs, label, request),
+    failureMessage,
+  );
 }
 
 /**

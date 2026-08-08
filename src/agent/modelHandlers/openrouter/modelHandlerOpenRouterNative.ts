@@ -33,6 +33,10 @@ import { extractMimeSubtype } from '@utils/text/stringUtils';
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
 import { auxiliaryRetry } from '../support/auxiliaryRetry';
+import {
+  classifyMediaEntry,
+  unknownMediaCategoryWarning,
+} from '../support/mediaClassification';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
 import { OPENROUTER_BASE_URL } from '../support/ProxyConfigResolver';
 import {
@@ -475,39 +479,45 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
   createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
     return mediaMessage.flatMap((media): ChatContentItems[] => {
-      switch (media.media_category) {
-        case 'image':
-          return [
-            { type: 'text', text: `Image: ${media.file_name}` },
-            {
-              type: 'image_url',
-              imageUrl: {
-                url: toDataUrl(media.media_type, media.data),
-                detail: 'high',
-              },
-            } as ChatContentItems,
-          ];
-        case 'audio':
-          if (!this.capabilities.supportsNativeAudio) {
-            this.logger.warn(
-              `Audio input received (${media.file_name}) but native audio is not supported by this model. Skipping.`,
-            );
-            return [];
-          }
-          return [
-            { type: 'text', text: `Audio: ${media.file_name}` },
-            {
-              type: 'input_audio',
-              inputAudio: {
-                data: media.data,
-                format: extractMimeSubtype(media.media_type).toLowerCase(),
-              },
-            } as ChatContentItems,
-          ];
-        default:
-          this.logger.warn(`Unknown media category: ${media.media_category}`);
-          return [];
+      const classification = classifyMediaEntry(media);
+
+      // PDFs (image-category entries with an application/pdf media type) render
+      // through the same image_url path — OpenRouter has no document-specific
+      // channel here, matching the other chat-style handlers.
+      if (classification === 'image' || classification === 'pdf') {
+        return [
+          { type: 'text', text: `Image: ${media.file_name}` },
+          {
+            type: 'image_url',
+            imageUrl: {
+              url: toDataUrl(media.media_type, media.data),
+              detail: 'high',
+            },
+          } as ChatContentItems,
+        ];
       }
+
+      if (classification === 'audio') {
+        if (!this.capabilities.supportsNativeAudio) {
+          this.logger.warn(
+            `Audio input received (${media.file_name}) but native audio is not supported by this model. Skipping.`,
+          );
+          return [];
+        }
+        return [
+          { type: 'text', text: `Audio: ${media.file_name}` },
+          {
+            type: 'input_audio',
+            inputAudio: {
+              data: media.data,
+              format: extractMimeSubtype(media.media_type).toLowerCase(),
+            },
+          } as ChatContentItems,
+        ];
+      }
+
+      this.logger.warn(unknownMediaCategoryWarning(media));
+      return [];
     });
   }
 

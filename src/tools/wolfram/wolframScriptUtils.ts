@@ -31,14 +31,13 @@ function wolframFailure(error: string): WolframScriptResult {
 }
 
 /**
- * Internal helper to run wolframscript commands with installation check.
- * @param commandArgs Array of command-line arguments to pass to wolframscript (e.g., ['-code', 'expr'] or ['-file', 'path'])
- * @param timeout Execution timeout in milliseconds
- * @returns Promise resolving to execution result with success status, output, and error information
+ * Execute Wolfram Language code through wolframscript.
+ * @param code The Wolfram Language code to execute
+ * @param options.timeout Execution timeout in milliseconds (default: 30 s)
  */
-async function runWolfram(
-  commandArgs: string[],
-  timeout?: number,
+export async function executeWolframCode(
+  code: string,
+  options: { timeout?: number } = {},
 ): Promise<WolframScriptResult> {
   const isInstalled = await checkToolInstalled('wolframscript', false);
   if (!isInstalled) {
@@ -46,9 +45,9 @@ async function runWolfram(
   }
 
   try {
-    const result = await executeCommand(['wolframscript', ...commandArgs], {
+    const result = await executeCommand(['wolframscript', '-code', code], {
       truncate: false,
-      timeout,
+      timeout: options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS,
       channel: WOLFRAM_CHANNEL,
     });
 
@@ -62,19 +61,4 @@ async function runWolfram(
   } catch (err) {
     return wolframFailure(toErrorMessage(err));
   }
-}
-
-/**
- * Execute Wolfram Language code through wolframscript.
- * @param code The Wolfram Language code to execute
- * @param options.timeout Execution timeout in milliseconds (default: 30 s)
- */
-export async function executeWolframCode(
-  code: string,
-  options: { timeout?: number } = {},
-): Promise<WolframScriptResult> {
-  return runWolfram(
-    ['-code', code],
-    options.timeout ?? WOLFRAM_CODE_TIMEOUT_MS,
-  );
 }

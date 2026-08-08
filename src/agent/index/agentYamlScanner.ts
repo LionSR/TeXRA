@@ -14,7 +14,7 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
-import { filterNotNull } from '@utils/core';
+import { filterNotNull, groupBy } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
@@ -76,15 +76,7 @@ export async function scanDirectory(
 function entriesWithUniqueNames(
   entries: readonly ParsedAgentYaml[],
 ): ParsedAgentYaml[] {
-  const byName = new Map<string, ParsedAgentYaml[]>();
-  for (const entry of entries) {
-    const matches = byName.get(entry.name);
-    if (matches) {
-      matches.push(entry);
-    } else {
-      byName.set(entry.name, [entry]);
-    }
-  }
+  const byName = groupBy(entries, (entry) => entry.name);
 
   const unique: ParsedAgentYaml[] = [];
   for (const [name, matches] of byName) {
