@@ -10,9 +10,6 @@
 // Third-party imports
 import yaml from 'yaml';
 
-// Local imports - shared utilities
-import { isObject } from '@utils/core';
-
 /**
  * Result of stringifying a value with language metadata.
  */
@@ -39,25 +36,4 @@ export function stringifyWithLanguage(value: unknown): StringifyResult {
   } catch {
     return { text: String(value), language: 'plaintext' };
   }
-}
-
-/**
- * Extract the code/command field from a tool input object.
- * Supports 'code' field (wolfram) and 'command' field (bash).
- * Ignores metadata fields like `timeout` so the code is displayed
- * with proper syntax highlighting instead of falling back to YAML.
- */
-export function extractCodeOnlyInput(value: unknown): {
-  isCodeOnly: boolean;
-  code: string;
-} {
-  if (!isObject(value)) {
-    return { isCodeOnly: false, code: '' };
-  }
-  // Support both 'code' (wolfram) and 'command' (bash) field names
-  const codeValue = value.code ?? value.command;
-  if (typeof codeValue === 'string') {
-    return { isCodeOnly: true, code: codeValue };
-  }
-  return { isCodeOnly: false, code: '' };
 }

@@ -11,8 +11,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import {
@@ -208,29 +207,6 @@ export async function executeFileCommand(
 }
 
 /**
- * Prompt user to install Lean 4 extension if not already installed.
- * Used when Lean tools are invoked but the extension is not found.
- */
-async function promptLean4ExtensionInstall(): Promise<void> {
-  await showInstructionWithSuppress(
-    'lean4-install-tool',
-    'Lean 4 extension is required for this operation. Install now?',
-    [
-      {
-        title: 'Install',
-        callback: async () => {
-          await safeExecuteCommand(
-            'workbench.extensions.installExtension',
-            [LEAN4_EXTENSION_ID],
-            'lean',
-          );
-        },
-      },
-    ],
-  );
-}
-
-/**
  * Get the Lean 4 extension's client provider.
  * Returns null if the extension is not installed or not ready.
  * Prompts user to install the extension if not found.
@@ -239,7 +215,12 @@ async function getClientProvider(): Promise<LeanClientProvider | null> {
   const lean4Ext =
     vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
   if (!lean4Ext) {
-    await promptLean4ExtensionInstall();
+    await promptExtensionInstall({
+      suppressKey: 'lean4-install-tool',
+      message: 'Lean 4 extension is required for this operation. Install now?',
+      extensionId: LEAN4_EXTENSION_ID,
+      channel: 'lean',
+    });
     return null;
   }
 

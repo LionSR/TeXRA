@@ -3,11 +3,9 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
+import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
-import {
-  implicitDefaultToolUseAgents,
-  pickDefaultToolUseAgent,
-} from '../runtime/defaultAgents';
+import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';

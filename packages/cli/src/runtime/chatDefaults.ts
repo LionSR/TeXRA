@@ -10,6 +10,7 @@ import {
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
+import { isImplicitDefaultEligible } from '@shared/constants/agents';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
@@ -22,10 +23,7 @@ import {
   resolveKnownCliModelId,
   type CliConfigValues,
 } from './cliConfig';
-import {
-  isImplicitDefaultEligible,
-  pickDefaultToolUseAgent,
-} from './defaultAgents';
+import { pickDefaultToolUseAgent } from './defaultAgents';
 import { writeTextStderr } from './logSinks';
 
 /**

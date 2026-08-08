@@ -7,6 +7,7 @@ import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
 import { hasManagedDirectRoute } from '@model/openRouterRouting';
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
@@ -50,7 +51,6 @@ const KimiTokenEstimateResponseSchema = z.object({
 });
 
 const KIMI_TOKEN_ESTIMATE_TIMEOUT_MS = 20_000; // 20 s
-const KIMI_TOKEN_ESTIMATE_RETRIES = 2;
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -185,7 +185,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     const client = options?.client ?? (await this.getClient());
     const raw = await client.post<unknown>('/tokenizers/estimate-token-count', {
       body: { model: this.config.fullName, messages },
-      maxRetries: KIMI_TOKEN_ESTIMATE_RETRIES,
+      maxRetries: AUXILIARY_MAX_RETRIES,
       timeout: KIMI_TOKEN_ESTIMATE_TIMEOUT_MS,
       signal: options?.signal,
     });
