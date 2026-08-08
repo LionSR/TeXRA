@@ -271,6 +271,19 @@ export class StreamHeader extends LitElement {
         cursor: pointer;
         white-space: nowrap;
         border-radius: var(--border-radius-small);
+        /* Secondary to the active title (#activeStreamName, flex:1) — cap it
+           so a long parent label truncates instead of pushing the toolbar
+           off-screen or wrapping the header. */
+        flex-shrink: 1;
+        min-width: 0;
+        max-width: 40%;
+      }
+
+      .parent-link-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
       }
 
       .parent-link:hover {
@@ -570,7 +583,8 @@ export class StreamHeader extends LitElement {
         @click=${this.navigateToParent}
         @keydown=${this.handleParentLinkKey}
       >
-        ${waIcon('arrow-left')} ${displayName}
+        ${waIcon('arrow-left')}
+        <span class="parent-link-label">${displayName}</span>
       </span>
       <wa-tooltip for=${ELEMENT_IDS.PARENT_LINK}
         >Go to parent: ${displayName}</wa-tooltip
