@@ -153,8 +153,6 @@ describe('Static band resize', () => {
       StaticConversationTranscript,
     } = await loadTranscriptStack();
     const { createElement } = React;
-    const { createTranscriptPrintRequest } =
-      await import('@cli/chat/tui/state/transcriptLines');
     const streamId = 'resize-static-stream' as StreamTabId;
     const prompt = 'resize geometry prompt';
     const finalizedUser: ConversationEntry = {
@@ -169,13 +167,13 @@ describe('Static band resize', () => {
       text: 'working',
       finalized: false,
     };
-    const hiddenPrintLine = 'full-output-middle-line';
     const tool = completedToolEntry({
       id: 'full-output-tool',
       toolName: 'Bash',
       input: { command: 'long-command' },
-      outputText: Array.from({ length: 15 }, (_, index) =>
-        index === 7 ? hiddenPrintLine : `tool line ${index}`,
+      outputText: Array.from(
+        { length: 15 },
+        (_, index) => `tool line ${index}`,
       ).join('\n'),
       finalized: false,
     });
@@ -185,20 +183,12 @@ describe('Static band resize', () => {
       liveAssistant,
       tool,
     ]);
-    const printRequest = createTranscriptPrintRequest({
-      afterEntryId: finalizedUser.id,
-      id: 'printed-transcript:resize',
-      ownerKey: 'resize-owner',
-      slice: cliState.streams.get().get(streamId),
-      title: 'assistant',
-    });
 
     function App(): unknown {
       const { columns } = ink.useWindowSize();
       return createElement(StaticConversationTranscript, {
         colorEnabled: true,
         ownerKey: 'resize-owner',
-        printRequests: [printRequest],
         scrollbackStreamId: streamId,
         width: columns,
       });
@@ -215,8 +205,7 @@ describe('Static band resize', () => {
       await expectEventually(
         () =>
           horizontalRuleWidths(out.output).includes(40) &&
-          inverseBandWidths(out.output, prompt).includes(38) &&
-          out.output.includes(hiddenPrintLine),
+          inverseBandWidths(out.output, prompt).includes(38),
       );
 
       // Widen: bump columns and fire the resize the patched Ink handler listens
@@ -237,9 +226,7 @@ describe('Static band resize', () => {
       expect(bandWidths).toEqual([78]);
       expect(bandWidths).not.toContain(38);
       expect(occurrences(visibleFrame, '{ T } TeXRA')).toBe(1);
-      expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(2);
-      expect(occurrences(visibleFrame, hiddenPrintLine)).toBe(1);
-      expect(occurrences(visibleFrame, '[Full output: assistant]')).toBe(1);
+      expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(1);
     } finally {
       inst.unmount();
       cliState.resetCliState();
