@@ -320,8 +320,6 @@ export function App(props: AppProps): React.JSX.Element {
       : undefined;
   const selectedChildStreamId =
     childListStreamId(selectedChildValue) ?? selectedWorkflowChildStreamId;
-  const selectedChildKind =
-    selectedChildStreamId !== undefined ? 'stream' : undefined;
   const selectedChildKillable =
     selectedChildStreamId !== undefined &&
     activeSubagentExecutionIds.has(selectedChildStreamId);
@@ -735,7 +733,6 @@ export function App(props: AppProps): React.JSX.Element {
                 foregroundOpen || reverseSearchOpen || slashPaletteOpen
               }
               childListFocused={childListFocused}
-              childListSelectionKind={selectedChildKind}
               childListSelectionKillable={selectedChildKillable}
               childListSelectionWorkflowControllable={
                 selectedChildWorkflowControllable

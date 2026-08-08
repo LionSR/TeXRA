@@ -46,7 +46,6 @@ const RELAY_QUOTA_REFRESH_MS = 10_000;
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly childListFocused?: boolean;
-  readonly childListSelectionKind?: 'stream';
   readonly childListSelectionKillable?: boolean;
   readonly childListSelectionWorkflowControllable?: boolean;
   readonly childNavigationAvailable: boolean;
@@ -231,7 +230,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     childList: {
       focused: props.childListFocused,
-      selectionKind: props.childListSelectionKind,
       selectionKillable: props.childListSelectionKillable,
       selectionWorkflowControllable:
         props.childListSelectionWorkflowControllable,
