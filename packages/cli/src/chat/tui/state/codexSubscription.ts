@@ -3,7 +3,10 @@ import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
 } from '@model/codex/codexPreference';
-import { setGLMCodingPlan, setPreferKimiCode } from '@utils/config/providerConfig';
+import {
+  setGLMCodingPlan,
+  setPreferKimiCode,
+} from '@utils/config/providerConfig';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 
