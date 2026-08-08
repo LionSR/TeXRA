@@ -78,10 +78,7 @@ describe('formatSlashCommandHelp', () => {
     expect(macKittyHelp).toContain('`Esc 1..9`');
     expect(macKittyHelp).toContain('`Shift-Enter` or `Ctrl-J`');
     expect(macKittyHelp).toContain(
-      "`Ctrl-T` opens the focused stream's full output in a scrollable reader (`p` prints it to scrollback)",
-    );
-    expect(macKittyHelp).toContain(
-      "`v` prints the selected stream's full output",
+      "`Ctrl-T` opens the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
     );
   });
 

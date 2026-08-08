@@ -40,7 +40,6 @@ import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ChildListTarget } from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
-import type { TranscriptPrintRequest } from '../state/transcriptLines';
 import type { StreamView } from '../state/streamViews';
 
 // Cap the bottom subagent/todos panels so they never crowd out the
@@ -65,7 +64,6 @@ interface ConversationRegionSnapshot {
     string,
     readonly PendingApprovalKind[]
   >;
-  readonly transcriptPrints: readonly TranscriptPrintRequest[];
 }
 
 interface ConversationRegionProps {
@@ -82,7 +80,6 @@ interface ConversationRegionProps {
   readonly onKillExecution: (executionId: string) => void;
   readonly onSkipExecution: (executionId: string) => void;
   readonly onRetryExecution: (executionId: string) => void;
-  readonly onPrintStream: (streamId: StreamTabId) => void;
 }
 
 export function ConversationRegion({
@@ -94,7 +91,6 @@ export function ConversationRegion({
   onKillExecution,
   onSkipExecution,
   onRetryExecution,
-  onPrintStream,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -108,13 +104,6 @@ export function ConversationRegion({
     parentStream: snapshot.parentStream,
   });
   const scopedTranscript = isScopedTranscriptViewport(viewportKey);
-  const ownerPrintRequests = useMemo(
-    () =>
-      snapshot.transcriptPrints.filter(
-        (request) => request.ownerKey === viewportKey,
-      ),
-    [snapshot.transcriptPrints, viewportKey],
-  );
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
     rootStreamId: snapshot.rootStreamId,
@@ -228,7 +217,6 @@ export function ConversationRegion({
         ownerKey={scrollbackTarget.ownerKey}
         onRenderKeyChange={onStaticTranscriptChange}
         renderKey={staticTranscriptKey}
-        printRequests={ownerPrintRequests}
         scrollbackStreamId={scrollbackTarget.streamId}
         subagentExecutionLabels={snapshot.subagentExecutionLabels}
         width={transcriptWidth}
@@ -277,7 +265,6 @@ export function ConversationRegion({
               onSkipExecution={onSkipExecution}
               onRetryExecution={onRetryExecution}
               onSelectionChange={onChildSelectionChange}
-              onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
               listRootSlice={snapshot.childListTarget.slice}

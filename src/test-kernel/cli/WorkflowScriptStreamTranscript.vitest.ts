@@ -18,10 +18,7 @@ import {
   StaticConversationTranscript,
   appendStaticTranscriptItems,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import {
-  orderedStaticTranscriptEntries,
-  splitTranscriptEntries,
-} from '@cli/chat/tui/panes/transcriptEntries';
+import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   patchStream,
   resetCliState,
@@ -31,7 +28,6 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { createTranscriptPrintRequest } from '@cli/chat/tui/state/transcriptLines';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import {
   AgentCategory,
@@ -526,7 +522,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
   });
 
-  it('keeps declared-plan phase-task and print chronology identical live and cold', async () => {
+  it('keeps declared-plan phase-task ordering identical live and cold', async () => {
     const runTrace = openRunTrace(STREAM_ID);
     for (const [id, label] of [
       ['core', 'Audit core'],
@@ -606,38 +602,11 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(settledSlice?.entries.findLast((entry) => entry.finalized)?.id).toBe(
       'audit-phase',
     );
-    const printAnchor = settledSlice
-      ? orderedStaticTranscriptEntries(
-          settledSlice.entries,
-          settledSlice.status,
-        ).at(-1)?.id
-      : undefined;
-    expect(printAnchor).toBe('core-task');
-    const printRequest = createTranscriptPrintRequest({
-      afterEntryId: printAnchor,
-      id: 'printed-transcript:declared-plan',
-      ownerKey: 'root',
-      slice: settledSlice,
-      title: 'repository audit',
-    });
-    incrementalItems = appendItems(incrementalItems, {
-      printRequests: [printRequest],
-    });
-
-    const coldItems = appendItems([], { printRequests: [printRequest] });
 
     const incrementalEntryIds = entryIds(incrementalItems);
     expect(incrementalEntryIds.at(-2)).toBe('audit-phase');
     expect(incrementalEntryIds.at(-1)).toBe('core-task');
-    expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
-    expect(incrementalItems.map((item) => item.id).slice(-3)).toEqual([
-      'audit-phase',
-      'core-task',
-      'printed-transcript:declared-plan',
-    ]);
-    expect(coldItems.map((item) => item.id)).toEqual(
-      incrementalItems.map((item) => item.id),
-    );
+    expect(entryIds(appendItems([]))).toEqual(incrementalEntryIds);
     const coldOutput = await renderStaticTranscript();
     expectOutputOrder(coldOutput, [
       'Preparing repository audit',

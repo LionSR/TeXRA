@@ -714,7 +714,6 @@ function foregroundBindingsText(
 
 function childListBindingsText(
   {
-    selectionKind,
     selectionKillable = false,
     selectionWorkflowControllable = false,
   }: StatusBarChildListInput,
@@ -723,10 +722,6 @@ function childListBindingsText(
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const enterBinding = keyHintText({ key: 'Enter', action: 'focus' });
-  const fullOutputBinding =
-    selectionKind === 'stream'
-      ? keyHintText({ key: 'v', action: 'full output' })
-      : undefined;
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
     : undefined;
@@ -744,7 +739,6 @@ function childListBindingsText(
       statusBarBindingRow([
         selectBinding,
         enterBinding,
-        fullOutputBinding,
         killBinding,
         skipBinding,
         retryBinding,
@@ -755,7 +749,6 @@ function childListBindingsText(
       statusBarBindingRow([
         selectBinding,
         enterBinding,
-        fullOutputBinding,
         killBinding,
         tabBinding,
         escBinding,
