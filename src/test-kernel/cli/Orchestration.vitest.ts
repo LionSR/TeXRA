@@ -366,7 +366,12 @@ describe('CLI orchestration items', () => {
   it('keeps model access directly below new chat and presents every access route', () => {
     const status = {
       apiFallback: 'included' as const,
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' } as const,
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'off',
+        glmCode: 'off',
+      } as const,
       chatGptSignedIn: true,
       grokSignedIn: false,
       chatGptAccountLabel: 'researcher@example.com',
@@ -376,7 +381,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi Off · otherwise: included access',
+        'ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: included access',
       value: { kind: 'configure-model-access' },
     });
     expect(
@@ -410,6 +415,15 @@ describe('CLI orchestration items', () => {
         description: 'Off · key required to enable',
       },
       {
+        value: {
+          kind: 'subscription-preference',
+          provider: 'glm-code',
+          state: 'on',
+        },
+        label: 'Prefer GLM Coding Plan',
+        description: 'Off · key required to enable',
+      },
+      {
         value: { kind: 'api-fallback', apiMode: 'included' },
         label: 'Included access',
         description: 'Covered by your TeXRA plan',
@@ -425,7 +439,12 @@ describe('CLI orchestration items', () => {
   it('describes the Kimi Code route by key state and activity', () => {
     const kimiOff = kimiCodePreferenceItem({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'off',
+        glmCode: 'off',
+      },
       chatGptSignedIn: false,
       grokSignedIn: false,
       kimiCodeKeySet: true,
@@ -442,7 +461,12 @@ describe('CLI orchestration items', () => {
 
     const kimiOnAccess: CliModelAccessStatus = {
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'on',
+        glmCode: 'off',
+      },
       chatGptSignedIn: false,
       grokSignedIn: false,
       kimiCodeKeySet: true,
@@ -454,7 +478,7 @@ describe('CLI orchestration items', () => {
     expect(orchestrationItems({ modelAccess: kimiOnAccess })[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi On · otherwise: your own API keys',
+        'ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
       value: { kind: 'configure-model-access' },
     });
   });
@@ -464,7 +488,12 @@ describe('CLI orchestration items', () => {
       kind: 'loaded',
       access: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'on' },
+        preferences: {
+          chatGpt: 'on',
+          grok: 'off',
+          kimiCode: 'on',
+          glmCode: 'off',
+        },
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'researcher@example.com',
@@ -483,6 +512,7 @@ describe('CLI orchestration items', () => {
       chatgpt: 'On · researcher@example.com',
       grok: 'Off · sign in required to enable',
       'kimi-code': 'On · key configured',
+      'glm-code': 'Off · key required to enable',
     });
   });
 
@@ -563,7 +593,12 @@ describe('CLI orchestration items', () => {
         kind: 'loaded',
         access: {
           apiFallback: 'personal',
-          preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+          preferences: {
+            chatGpt: 'off',
+            grok: 'off',
+            kimiCode: 'off',
+            glmCode: 'off',
+          },
           chatGptSignedIn: false,
           grokSignedIn: false,
           texraSignedIn: false,

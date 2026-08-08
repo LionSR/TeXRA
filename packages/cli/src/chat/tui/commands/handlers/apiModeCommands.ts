@@ -33,7 +33,7 @@ import {
 import { loadCliAccountStatusLines } from './statusAssembly';
 
 const MODEL_ACCESS_USAGE =
-  'Usage: /api chatgpt | grok | kimi-code | included | personal | status';
+  'Usage: /api chatgpt | grok | kimi-code | glm-code | included | personal | status';
 
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
