@@ -186,6 +186,30 @@ function verifyDistEntrypoints(entries, failures) {
   }
 }
 
+// The extension host renders diffs through VS Code's own `vscode.diff` and
+// contains no Monaco code — Monaco belongs to the desktop renderer alone. But
+// Vite emits a worker bundle for every `import('...?worker')` expression it
+// sees in the module graph, at transform time, *before* tree-shaking: one
+// webview module importing anything out of `@shared/monaco/monacoLoader` wrote
+// ~12MB of unreachable Monaco language workers into the VSIX once already, with
+// nothing failing. Pin it — the workers are never referenced by shipped code,
+// so their presence is always a bundling accident.
+const MONACO_WORKER_ENTRY =
+  /\/(?:\w+\.worker-\w+\.js|editorWebWorkerMain\.js)$/;
+
+function verifyNoMonacoWorkers(entries, failures) {
+  const workers = [...entries].filter((entry) =>
+    MONACO_WORKER_ENTRY.test(entry),
+  );
+  assert(
+    workers.length === 0,
+    `VSIX contains Monaco worker bundles that no shipped code loads: ${workers.join(', ')}. ` +
+      'Something in a webview graph now imports @shared/monaco/monacoLoader — ' +
+      'import @shared/monaco/monacoLanguage instead if you only need a language id.',
+    failures,
+  );
+}
+
 function verifyPackagedDocs(vsixPath, entries, failures) {
   const manifest = readJson(path.join(extensionDir, 'package.json'));
   const repositoryUrl = String(manifest.repository?.url ?? '').replace(
@@ -237,6 +261,7 @@ verifyManifest(vsixPath, snapshot, failures);
 verifyRequiredPaths(entries, snapshot, failures);
 verifyResourceHashes(vsixPath, entries, failures);
 verifyDistEntrypoints(entries, failures);
+verifyNoMonacoWorkers(entries, failures);
 verifyPackagedDocs(vsixPath, entries, failures);
 
 if (failures.length > 0) {
