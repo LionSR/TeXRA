@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 import { getAgent } from '@agent/index';
-import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import type {
   computeAgentOptionsData,
   loadAgents,
@@ -13,14 +12,11 @@ import {
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@agent/templates/agentTemplateRenderer';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
-import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
-import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -137,13 +133,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly resourcesPath: string;
   private readonly agentActions;
   /** Path planners for custom-agent copy/delete/template writes. */
-  private readonly fileController = new SettingsAgentFileController();
-  private readonly remotePromptController =
-    new SettingsRemoteAgentPromptController({
-      getUserTier: () => SupabaseClient.getUserTier(),
-      getAccessToken: () => SupabaseClient.getAccessToken(),
-      fetchPromptConfig: fetchRemoteAgentConfigYaml,
-    });
+  private readonly fileController;
+  private readonly remotePromptController;
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
     const {
@@ -175,6 +166,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
+    this.fileController = controllers.fileController;
+    this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),

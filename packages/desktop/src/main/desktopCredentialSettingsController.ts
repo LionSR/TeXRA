@@ -12,7 +12,10 @@ import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
+import {
+  SettingsProfileController,
+  getSharedProviderProfileDefaults,
+} from '@controllers/settingsView/SettingsProfileController';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
@@ -37,25 +40,15 @@ import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
-import {
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_SETTINGS,
-  PROVIDER_URLS,
-} from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import { buildGrokAuthStatusMessage } from '@shared/settingsView/handlers/grokHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import {
-  getProviderDisplayName,
-  getProviderEndpoint,
-  getProviderKeyUrl,
-  getProviderStreaming,
   setGlobalStreaming,
   setProviderEndpoint,
   setProviderStreaming,
-  supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -151,22 +144,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       options.modelSelectionExtras,
     );
     this.profileController = new SettingsProfileController({
+      ...getSharedProviderProfileDefaults(),
       globalState: options.globalState,
-      providerIds: API_PROVIDERS,
-      providerSettings: PROVIDER_SETTINGS,
-      providerDisplayNames: PROVIDER_DISPLAY_NAMES,
-      providerKeyUrls: PROVIDER_URLS,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
-      getProviderDisplayName,
-      getProviderKeyUrl,
-      getProviderStreaming,
-      getProviderEndpoint,
-      supportsCustomEndpoint,
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
       updateConfig: (key, value) => options.config.update(key, value, 'global'),
       setUseIncludedModelAccess: options.setUseIncludedModelAccess,
-      invalidateModelOptionsCache,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: {
