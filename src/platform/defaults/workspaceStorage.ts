@@ -79,14 +79,14 @@ export function resolveWorkspaceStoragePath(
 export function resolveMemoryStoragePath(
   storagePath: string = MEMORY_STORAGE_DIR,
 ): string {
-  const normalized = posix.normalize(storagePath);
-  if (!isPathWithin(MEMORY_STORAGE_DIR, normalized)) {
+  const normalized = posix.normalize(storagePath.replaceAll('\\', '/'));
+  if (
+    normalized !== MEMORY_STORAGE_DIR &&
+    !normalized.startsWith(`${MEMORY_STORAGE_DIR}/`)
+  ) {
     throw new Error(`Invalid memory path: ${storagePath}`);
   }
-  return posix.join(
-    MEMORY_STORAGE_DIR,
-    posix.relative(MEMORY_STORAGE_DIR, normalized),
-  );
+  return normalized;
 }
 
 export function resolveRunStoragePath(...segments: string[]): string {

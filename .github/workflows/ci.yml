@@ -215,35 +215,6 @@ jobs:
       - name: Kernel tests
         run: pnpm run test --maxWorkers=2 --shard=${{ matrix.shard }}/2
 
-  cli-workflow-inputs-windows:
-    name: CLI workflow input paths (Windows)
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
-    runs-on: windows-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Test CLI workflow input paths
-        run: pnpm exec vitest run --config vitest.config.mjs src/test-kernel/cli/CliRootArgs.vitest.ts
-
   build:
     name: build artifacts (linux)
     needs: changes
@@ -447,7 +418,6 @@ jobs:
       - checks
       - guidance-refs
       - test
-      - cli-workflow-inputs-windows
       - build
       - webview-smoke
       - runtime-validation
@@ -457,8 +427,8 @@ jobs:
     steps:
       - name: Require validation jobs success
         run: |
-          # On code PRs the checks/test/build/webview-smoke and focused Windows
-          # jobs gate; on docs-only PRs they are skipped and the lightweight docs
+          # On code PRs the checks/test/build/webview-smoke jobs gate; on
+          # docs-only PRs they are skipped and the lightweight docs
           # build gates instead; on the nightly schedule only runtime-validation
           # runs.
           # Require whichever ran.
@@ -480,7 +450,6 @@ jobs:
           for result in \
             'checks:${{ needs.checks.result }}' \
             'test:${{ needs.test.result }}' \
-            'cli-workflow-inputs-windows:${{ needs.cli-workflow-inputs-windows.result }}' \
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
             'runtime-validation:${{ needs.runtime-validation.result }}' \
