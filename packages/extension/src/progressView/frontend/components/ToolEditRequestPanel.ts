@@ -19,7 +19,7 @@ import {
 
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
-import { monacoLanguageForPath } from '@shared/monaco/monacoLoader';
+import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { renderSplitButtonMenu } from '@shared/wa/splitButton';
