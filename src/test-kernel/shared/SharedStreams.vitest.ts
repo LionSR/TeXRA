@@ -224,6 +224,15 @@ describe('stream status display labels', () => {
     },
   );
 
+  it('labels a WAITING child stream with the same "idle" wording as the root', () => {
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cli' }),
+    ).toBe('idle');
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cliCompact' }),
+    ).toBe('idle');
+  });
+
   const substateWordingCases: Array<[StreamStatusLabelStyle, string]> = [
     ['cli', 'starting\u2026'],
     ['cliCompact', 'starting'],
@@ -241,43 +250,6 @@ describe('stream status display labels', () => {
       ).toBe(label);
     },
   );
-
-  it('labels a child stream WAITING distinctly from the root idle wording (cli)', () => {
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.WAITING, {
-        style: 'cli',
-        isChildStream: true,
-      }),
-    ).toBe('waiting for you');
-    // Unset (or false) isChildStream keeps the root's plain "idle" wording.
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cli' }),
-    ).toBe('idle');
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.WAITING, {
-        style: 'cli',
-        isChildStream: false,
-      }),
-    ).toBe('idle');
-  });
-
-  it('ignores isChildStream for the progressHeader style, which shows the same "Idle" for root and child', () => {
-    expect(
-      formatStreamStatusLabel(STREAM_STATUS.WAITING, {
-        style: 'progressHeader',
-        isChildStream: true,
-      }),
-    ).toBe('Idle');
-  });
-
-  it('ignores isChildStream for statuses other than WAITING', () => {
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.COMPLETED, {
-        style: 'cli',
-        isChildStream: true,
-      }),
-    ).toBe('completed');
-  });
 
   it('passes through unknown statuses and supports an explicit missing label', () => {
     expect(formatStreamStatusLabel('custom')).toBe('custom');
