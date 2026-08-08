@@ -45,6 +45,98 @@ function deletionSpy() {
 }
 
 describe('SessionStores deletion coordination', () => {
+  it('detaches durable child parent edges only after deleting the parent', async () => {
+    const session = createTestSession();
+    const parent = 'deleted-parent' as StreamTabId;
+    const child = 'retained-child' as StreamTabId;
+    const childExecution = 'c9862001' as ExecutionId;
+    session.transcripts.ensureStream(parent);
+    session.transcripts.ensureStream(child);
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setRunConfig(
+      child,
+      AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'deepseekT',
+        agentCategory: 'toolUse',
+      }),
+      childExecution,
+    );
+    snapshotFacts(snapshots).setParentStream(child, parent);
+    await snapshots.flush();
+    const reloadedSnapshots = new StreamSnapshotStore();
+    const projectionFacts = snapshotFacts(reloadedSnapshots);
+    const detached: Array<[StreamTabId, readonly StreamTabId[]]> = [];
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: reloadedSnapshots,
+      onChildrenDetached: (deletedParent, children) => {
+        detached.push([deletedParent, children]);
+        for (const detachedChild of children) {
+          projectionFacts.setParentStream(detachedChild, null);
+        }
+      },
+    });
+
+    try {
+      await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
+      expect(reloadedSnapshots.getParentStreamId(child)).toBeUndefined();
+      expect(reloadedSnapshots.getExecutionId(child)).toBe(childExecution);
+      expect(detached).toEqual([[parent, [child]]]);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('projects child detachment when durable discovery fails', async () => {
+    const session = createTestSession();
+    const parent = 'discovery-failure-parent' as StreamTabId;
+    session.transcripts.ensureStream(parent);
+    const snapshots = new StreamSnapshotStore();
+    vi.spyOn(snapshots, 'listPersistedStreams').mockRejectedValueOnce(
+      new Error('sidecar unavailable'),
+    );
+    const onChildrenDetached = vi.fn();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots,
+      onChildrenDetached,
+    });
+
+    try {
+      await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
+      expect(onChildrenDetached).toHaveBeenCalledWith(parent, []);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('keeps a committed deletion successful when child projection fails', async () => {
+    const session = createTestSession();
+    const parent = 'projection-failure-parent' as StreamTabId;
+    const child = 'projection-failure-child' as StreamTabId;
+    session.transcripts.ensureStream(parent);
+    session.transcripts.ensureStream(child);
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setParentStream(child, parent);
+    await snapshots.flush();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots,
+      onChildrenDetached: () => {
+        throw new Error('renderer unavailable');
+      },
+    });
+
+    try {
+      await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
+      expect(session.transcripts.has(parent)).toBe(false);
+      expect(snapshots.getParentStreamId(child)).toBe(parent);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('tracks lease-gated deletion without blocking its artifact flush', async () => {
     const session = createTestSession();
     const stream = 'lease-gated-delete' as StreamTabId;
@@ -395,7 +487,10 @@ describe('SessionStores orphan sweep', () => {
     const result = await stores.sweepOrphanedStreams(new Set());
 
     expect(result.streams).toEqual([orphan]);
-    expect(stageDeleteStream).toHaveBeenCalledWith(orphan);
+    expect(stageDeleteStream).toHaveBeenCalledWith(
+      orphan,
+      expect.any(Function),
+    );
   });
 
   it('removes an execution whose stream lost its sidecar FK before deletion', async () => {
