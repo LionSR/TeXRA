@@ -442,7 +442,7 @@ export class SessionStores {
     const orphans = await this.sweepOrphanedStreams(
       new Set(this.streamLogs.keys()),
     );
-    if (orphans.streams.length > 0) {
+    if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
       logger.info(
         CHANNEL,
         `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
@@ -612,6 +612,8 @@ export class SessionStores {
     }
 
     const swept: ExecutionId[] = [];
+    // Await each candidate so a large run history does not enqueue every
+    // deletion promise at once; the shared queue is serialized regardless.
     for (const { executionId, streamId } of references) {
       if (liveStreams.has(streamId) || this.streamLogs.has(streamId)) continue;
       try {

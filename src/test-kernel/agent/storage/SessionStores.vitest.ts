@@ -416,12 +416,18 @@ describe('SessionStores orphan sweep', () => {
     // The sidecar never received its execution FK, so normal stream deletion
     // removes only the transcript and sidecar state.
     await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
-    const result = await stores.sweepOrphanedStreams(
-      new Set(streamLogs.keys()),
-    );
+    const info = vi.spyOn(logUtils, 'info').mockImplementation(() => {});
 
-    expect(result.executionIds).toEqual([executionId]);
+    await stores.sweepLeftoverStreams();
+
     expect(deleteExecution).toHaveBeenCalledWith(executionId);
+    expect(info).toHaveBeenCalledWith(
+      'SessionStores',
+      'Removed 0 orphaned stream sidecar(s) and 1 execution dir(s).',
+      {
+        data: { streams: [], executionIds: [executionId] },
+      },
+    );
   });
 
   it('preserves an execution still referenced by a live transcript stream', async () => {
