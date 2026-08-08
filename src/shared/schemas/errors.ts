@@ -201,27 +201,6 @@ export function isChatGptSubscriptionLimitError(
   return errorDetails?.exhaustionReason === 'chatgpt-subscription';
 }
 
-/** Single source of truth for "this error is a Kimi Code (Moonshot
- *  coding-subscription) usage-limit rejection". Both hosts (VS Code progress
- *  view, CLI approval policy) branch on this to switch the retry from the
- *  relay/personal-key path to disabling the "Prefer Kimi Code" preference so
- *  dual-backend Kimi models re-route through the Moonshot open-platform key. */
-export function isKimiCodeSubscriptionLimitError(
-  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
-): boolean {
-  return errorDetails?.exhaustionReason === 'kimi-code-subscription';
-}
-
-/** Single source of truth for "this error is a GLM Coding Plan usage-limit
- *  rejection". Hosts branch on this to switch the retry from the coding-plan
- *  path to the regular GLM pay-as-you-go endpoint by turning off the Coding
- *  Plan toggle. */
-export function isGlmCodingPlanLimitError(
-  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
-): boolean {
-  return errorDetails?.exhaustionReason === 'glm-coding-plan';
-}
-
 /** Single source of truth for "the upstream provider account itself is out of
  *  credit/quota" — the key the user has IS the broken one, so the auto-resume
  *  handler must require a new key rather than reusing the depleted stored
