@@ -201,7 +201,6 @@ export class MediaAttachmentState {
 /** Internal schema for reasoning cache state. */
 const ReasoningCacheStateSchema = z.object({
   thinkingBlocks: z.array(ThinkingBlockSchema).prefault([]),
-  thinkingAdded: z.boolean().prefault(false),
 });
 
 type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
@@ -488,7 +487,6 @@ export class AgentWorkspaceState {
 
   resetReasoning(): void {
     this.reasoning.thinkingBlocks = [];
-    this.reasoning.thinkingAdded = false;
   }
 
   resetServerToolContent(): void {

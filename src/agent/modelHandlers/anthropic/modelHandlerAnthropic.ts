@@ -1502,7 +1502,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(`Found ${thinkingBlocks.length} thinking blocks`);
 
     // If workspaceState is provided, update it with all thinking blocks
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+    if (
+      workspaceState &&
+      workspaceState.reasoning.thinkingBlocks.length === 0
+    ) {
       // Store all thinking blocks for future reference
       if (
         regularThinkingContent &&
@@ -1513,7 +1516,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         workspaceState.reasoning.thinkingBlocks = [
           ...thinkingBlocks,
         ] as ThinkingBlock[];
-        workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
           `Added ${thinkingBlocks.length} thinking blocks to workspaceState`,
         );
