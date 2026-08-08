@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,12 +13,16 @@ import {
 import type { FileLocation } from '@shared/schemas';
 import { createWorkspaceLocation } from '@utils/files';
 
+function absolutePath(...segments: string[]): string {
+  return path.join(path.sep, ...segments);
+}
+
 /** The canonical base/edited pair most cases below are built on. */
 function paperPair(): { base: FileLocation; edited: FileLocation } {
   return {
-    base: createWorkspaceLocation('/ws/paper.tex', 'paper.tex'),
+    base: createWorkspaceLocation(absolutePath('ws', 'paper.tex'), 'paper.tex'),
     edited: createWorkspaceLocation(
-      '/ws/paper_correct.tex',
+      absolutePath('ws', 'paper_correct.tex'),
       'paper_correct.tex',
     ),
   };
@@ -38,14 +44,19 @@ function recordingDelete(): {
 describe('diffFileLocation', () => {
   it('computes the stale _diff sibling for a base/edited pair', () => {
     const base = createWorkspaceLocation(
-      '/ws/chapters/paper.tex',
+      absolutePath('ws', 'chapters', 'paper.tex'),
       'chapters/paper.tex',
     );
 
-    const loc = diffFileLocation(base, '/ws/chapters/paper_correct.tex');
+    const loc = diffFileLocation(
+      base,
+      absolutePath('ws', 'chapters', 'paper_correct.tex'),
+    );
 
     expect(loc.kind).toBe('workspace');
-    expect(loc.absolutePath).toBe('/ws/chapters/paper_correct_diff.tex');
+    expect(loc.absolutePath).toBe(
+      absolutePath('ws', 'chapters', 'paper_correct_diff.tex'),
+    );
     if (loc.kind === 'workspace') {
       expect(loc.relativePath).toBe('chapters/paper_correct_diff.tex');
     }
@@ -57,20 +68,32 @@ describe('cleanupStaleDiffFile', () => {
     const { base } = paperPair();
     const { deleted, deleteFile } = recordingDelete();
 
-    await cleanupStaleDiffFile(base, '/ws/paper_correct.tex', base, deleteFile);
+    await cleanupStaleDiffFile(
+      base,
+      absolutePath('ws', 'paper_correct.tex'),
+      base,
+      deleteFile,
+    );
 
     expect(deleted.length).toBe(1);
-    expect(deleted[0].absolutePath).toBe('/ws/paper_correct_diff.tex');
+    expect(deleted[0].absolutePath).toBe(
+      absolutePath('ws', 'paper_correct_diff.tex'),
+    );
   });
 
   it('skips deletion when the derived diff location is the accept target', async () => {
     const base = createWorkspaceLocation(
-      '/ws/paper_diff.tex',
+      absolutePath('ws', 'paper_diff.tex'),
       'paper_diff.tex',
     );
     const { deleted, deleteFile } = recordingDelete();
 
-    await cleanupStaleDiffFile(base, '/ws/paper.tex', base, deleteFile);
+    await cleanupStaleDiffFile(
+      base,
+      absolutePath('ws', 'paper.tex'),
+      base,
+      deleteFile,
+    );
 
     expect(deleted.length).toBe(0);
   });
@@ -78,14 +101,14 @@ describe('cleanupStaleDiffFile', () => {
   it('skips deletion when the target is not the base itself (copy/sibling write)', async () => {
     const { base } = paperPair();
     const sibling = createWorkspaceLocation(
-      '/ws/paper_copy.tex',
+      absolutePath('ws', 'paper_copy.tex'),
       'paper_copy.tex',
     );
     const { deleted, deleteFile } = recordingDelete();
 
     await cleanupStaleDiffFile(
       base,
-      '/ws/paper_correct.tex',
+      absolutePath('ws', 'paper_correct.tex'),
       sibling,
       deleteFile,
     );
@@ -120,7 +143,9 @@ describe('acceptEditedFileReplace', () => {
 
     expect(accepted).toBe(true);
     expect(ports.deleted.length).toBe(1);
-    expect(ports.deleted[0].absolutePath).toBe('/ws/paper_correct_diff.tex');
+    expect(ports.deleted[0].absolutePath).toBe(
+      absolutePath('ws', 'paper_correct_diff.tex'),
+    );
   });
 
   it('does not clean up when the user declines the confirmation', async () => {
@@ -138,10 +163,13 @@ describe('acceptEditedFileReplace', () => {
     // diffFileLocation would derive for this edited/base pair — so the
     // write target and the "stale diff" coincide.
     const base = createWorkspaceLocation(
-      '/ws/paper_diff.tex',
+      absolutePath('ws', 'paper_diff.tex'),
       'paper_diff.tex',
     );
-    const edited = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const edited = createWorkspaceLocation(
+      absolutePath('ws', 'paper.tex'),
+      'paper.tex',
+    );
     const ports = buildPorts();
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
@@ -154,7 +182,10 @@ describe('acceptEditedFileReplace', () => {
     // Different extensions -> getAcceptedFileTarget resolves to a new
     // sibling file, leaving base untouched, so its diff is still accurate.
     const { base } = paperPair();
-    const edited = createWorkspaceLocation('/ws/notes.md', 'notes.md');
+    const edited = createWorkspaceLocation(
+      absolutePath('ws', 'notes.md'),
+      'notes.md',
+    );
     const ports = buildPorts();
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);
@@ -196,7 +227,10 @@ describe('commitAcceptedFile', () => {
   } {
     return {
       ...paperPair(),
-      copy: createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex'),
+      copy: createWorkspaceLocation(
+        absolutePath('ws', 'paper_copy.tex'),
+        'paper_copy.tex',
+      ),
     };
   }
 

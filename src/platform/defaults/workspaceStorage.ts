@@ -1,7 +1,7 @@
 // Node imports
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, join, normalize, relative } from 'node:path';
+import { basename, join, posix, relative } from 'node:path';
 
 import {
   WORKSPACE_SIDECAR_FILE,
@@ -79,15 +79,18 @@ export function resolveWorkspaceStoragePath(
 export function resolveMemoryStoragePath(
   storagePath: string = MEMORY_STORAGE_DIR,
 ): string {
-  const normalized = normalize(storagePath);
+  const normalized = posix.normalize(storagePath);
   if (!isPathWithin(MEMORY_STORAGE_DIR, normalized)) {
     throw new Error(`Invalid memory path: ${storagePath}`);
   }
-  return join(MEMORY_STORAGE_DIR, relative(MEMORY_STORAGE_DIR, normalized));
+  return posix.join(
+    MEMORY_STORAGE_DIR,
+    posix.relative(MEMORY_STORAGE_DIR, normalized),
+  );
 }
 
 export function resolveRunStoragePath(...segments: string[]): string {
-  return join(RUNS_STORAGE_DIR, ...segments);
+  return posix.join(RUNS_STORAGE_DIR, ...segments);
 }
 
 export function resolveRunOriginalSnapshotPath(
