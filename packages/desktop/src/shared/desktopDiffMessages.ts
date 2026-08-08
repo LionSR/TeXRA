@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { getBasename } from '@utils/core';
-
 // IPC plumbing for the in-app Review workbench.
 //
 // The desktop main process used to satisfy `DiffViewHost.openDiff` by
@@ -50,46 +48,3 @@ export const DesktopCloseDiffMessageSchema = z.object({
 // (`DesktopCloseDiffMessageSchema`) remains the source of truth. No
 // `buildDesktopCloseDiffMessage` helper is defined to avoid dead code
 // (Cursor Bugbot review on PR #3815).
-
-// Map a file extension to a Monaco language id. Kept narrow on purpose —
-// Monaco's full registry is large and we only need the languages a TeXRA
-// workflow actually emits diffs for. Falls back to 'plaintext'.
-//
-// VS Code-free zone: pure string mapping, no `vscode.languages` lookup.
-const EXTENSION_TO_MONACO_LANGUAGE: Record<string, string> = {
-  '.tex': 'latex',
-  '.bib': 'bibtex',
-  '.cls': 'latex',
-  '.sty': 'latex',
-  '.md': 'markdown',
-  '.markdown': 'markdown',
-  '.json': 'json',
-  '.yaml': 'yaml',
-  '.yml': 'yaml',
-  '.ts': 'typescript',
-  '.tsx': 'typescript',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.html': 'html',
-  '.htm': 'html',
-  '.css': 'css',
-  '.scss': 'scss',
-  '.less': 'less',
-  '.py': 'python',
-  '.sh': 'shell',
-  '.bash': 'shell',
-  '.zsh': 'shell',
-};
-
-export function monacoLanguageForFilePath(
-  filePath: string | undefined,
-): string {
-  if (!filePath) return 'plaintext';
-  // Browser-safe (no node:path): getBasename handles both separators. We
-  // accept any segment after the last dot in the basename.
-  const basename = getBasename(filePath);
-  const dotIndex = basename.lastIndexOf('.');
-  if (dotIndex < 0) return 'plaintext';
-  const ext = basename.slice(dotIndex).toLowerCase();
-  return EXTENSION_TO_MONACO_LANGUAGE[ext] ?? 'plaintext';
-}
