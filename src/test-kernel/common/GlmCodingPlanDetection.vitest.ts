@@ -26,10 +26,26 @@ const FIVE_HOUR_LIMIT_BODY = {
 const CST_TIMESTAMP_BODY = {
   error: {
     code: '1308',
-    message:
-      '已达到 5 小时的使用上限。您的限额将在 2026-08-08 11:32:36 重置。',
+    message: '已达到 5 小时的使用上限。您的限额将在 2026-08-08 11:32:36 重置。',
   },
 } as const;
+
+/** Build a UTC+8 reset timestamp a fixed window in the future. */
+function futureCstTimestampBody(minutesFromNow: number): {
+  error: { code: string; message: string };
+} {
+  const resetMs = Date.now() + minutesFromNow * 60 * 1000;
+  // Convert to UTC+8 wall-clock, then format as YYYY-MM-DD HH:MM:SS.
+  const cst = new Date(resetMs + 8 * 60 * 60 * 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const timestamp = `${cst.getUTCFullYear()}-${pad(cst.getUTCMonth() + 1)}-${pad(cst.getUTCDate())} ${pad(cst.getUTCHours())}:${pad(cst.getUTCMinutes())}:${pad(cst.getUTCSeconds())}`;
+  return {
+    error: {
+      code: '1308',
+      message: `已达到 5 小时的使用上限。您的限额将在 ${timestamp} 重置。`,
+    },
+  };
+}
 
 describe('parseGlmCodingPlanLimit', () => {
   it('parses a GLM Coding Plan weekly-limit error', () => {
@@ -47,9 +63,10 @@ describe('parseGlmCodingPlanLimit', () => {
   });
 
   it('derives the reset window from a UTC+8 China-time timestamp in the message', () => {
-    const limit = parseGlmCodingPlanLimit(CST_TIMESTAMP_BODY);
+    const limit = parseGlmCodingPlanLimit(futureCstTimestampBody(30));
     expect(limit).not.toBeNull();
-    // The reset timestamp is in the future, so a finite seconds count is set.
+    // The reset timestamp is ~30 minutes in the future, so a finite seconds
+    // count is set.
     expect(limit?.resetsInSeconds).toBeTypeOf('number');
     expect(limit?.resetsInSeconds).toBeGreaterThan(0);
   });

@@ -66,3 +66,8 @@ export {
   parseKimiCodeSubscriptionLimit,
   describeKimiCodeSubscriptionLimit,
 } from './sdkError/kimiCodeSubscriptionDetection';
+
+export {
+  parseGlmCodingPlanLimit,
+  describeGlmCodingPlanLimit,
+} from './sdkError/glmCodingPlanDetection';
