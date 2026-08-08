@@ -917,17 +917,6 @@ export abstract class ModelHandler<
     );
   }
 
-  /** Runtime combinator (provider identity × reasoning capability), read by
-   * multiple call sites in `openai/` — kept as a named getter rather than
-   * inlined at each one (#7101 triage: DRY combinator, not per-provider
-   * override). */
-  get isOReasoningModel(): boolean {
-    return (
-      this.config.provider === ModelProvider.OPENAI &&
-      this.capabilities.supportsReasoning
-    );
-  }
-
   /**
    * Normalizes a reasoning-effort value for the concrete handler.
    * Provider handlers override this hook when their API supports a narrower

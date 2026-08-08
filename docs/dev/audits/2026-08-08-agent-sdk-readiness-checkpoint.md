@@ -91,6 +91,10 @@ the structural obstacle above, not a new boundary to invent.
 
 ### A. Ratchet blind spot: `packages/agent/src` is not scanned for `@agent/*` deep-import width — NEW
 
+> **Update (landed this PR):** the `agent` package is now a scanned member of
+> `host-agent-import-baseline`, snapshotted at its current 10 distinct `@agent/*`
+> specifiers, so the SDK barrel's internal-coupling width can only shrink.
+
 `host-agent-import-baseline` is the ratchet that freezes each host's distinct
 `@agent/*` deep-import specifier count (cli 31 / desktop 25 / extension 34). Its
 enforcement test scans only the three host packages —
@@ -109,6 +113,13 @@ it now costs nothing and prevents silent widening.
 
 ### B. `@shared/schemas` `forced` bucket — highest-leverage barrel shrink — NEW (actionable)
 
+> **Deferred to a focused follow-up PR.** Widening the barrel with `export *`
+> across 10 layered modules (incl. the 87-symbol `toolResult`) needs
+> collision-checking and correct layer placement, and the `gratuitous` bucket
+> recomputes against the live barrel at test time so the ratchet baseline must
+> be regenerated in the same PR. That is its own reviewable change, kept out of
+> this structural PR.
+
 `shared-schemas-deep-import-baseline.json` records **10 `forced` specifiers /
 ~182 statements** — production code forced past the `@shared/schemas` barrel only
 because the barrel does not re-export those leaves:
@@ -121,6 +132,11 @@ statements at ratchet-measure time and directly shrinks the frozen surface —
 highest-leverage "shrink the frozen list" move and is mechanical/low-risk.
 
 ### C. `isOReasoningModel` sits on the host-agnostic base but is OpenAI-only — NEW (net-negative cleanup)
+
+> **Update (landed this PR):** relocated from `ModelHandler` to
+> `OpenAICompatibleModelHandler` (the common ancestor of all four callers),
+> removing one provider-identity concept from the host-agnostic base with no
+> behavior change (724 model-handler tests green).
 
 `ModelHandler.isOReasoningModel` (`src/agent/modelHandlers/ModelHandler.ts:924`)
 hard-codes `config.provider === ModelProvider.OPENAI` and has **zero non-OpenAI
