@@ -1,3 +1,5 @@
+import { API_PROVIDERS } from '@model/apiProviders';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
@@ -7,12 +9,24 @@ import type {
   ProviderSetting,
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
-import type { ProviderSettingDef } from '@shared/constants/providers';
+import {
+  PROVIDER_DISPLAY_NAMES,
+  PROVIDER_SETTINGS,
+  PROVIDER_URLS,
+  type ProviderSettingDef,
+} from '@shared/constants/providers';
 import {
   DEFAULT_CORE_SETTINGS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas/coreSettings';
+import {
+  getProviderDisplayName,
+  getProviderEndpoint,
+  getProviderKeyUrl,
+  getProviderStreaming,
+  supportsCustomEndpoint,
+} from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
@@ -75,6 +89,26 @@ export interface SettingsProfileControllerDeps {
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
   invalidateModelOptionsCache(): void;
 }
+
+/**
+ * Provider wiring that is identical on every host: the provider catalog
+ * itself and the region-aware lookups built on it. Each host still supplies
+ * its own `globalState`, `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
+ * and `setUseIncludedModelAccess`, since those depend on host-specific
+ * storage and secrets.
+ */
+export const SHARED_PROVIDER_PROFILE_DEFAULTS = {
+  providerIds: API_PROVIDERS,
+  providerSettings: PROVIDER_SETTINGS,
+  providerDisplayNames: PROVIDER_DISPLAY_NAMES,
+  providerKeyUrls: PROVIDER_URLS,
+  getProviderDisplayName,
+  getProviderKeyUrl,
+  getProviderStreaming,
+  getProviderEndpoint,
+  supportsCustomEndpoint,
+  invalidateModelOptionsCache,
+} satisfies Partial<SettingsProfileControllerDeps>;
 
 export class SettingsProfileController {
   private readonly providerSettingsByKey: Map<string, ProviderSettingDef>;
