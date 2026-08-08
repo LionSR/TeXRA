@@ -46,6 +46,13 @@ const GLM_CODING_PLAN_EXHAUSTION_CODES: ReadonlySet<string> = new Set([
   '1321', // Usage limit reached for the past 7 days (monthly spend limit)
 ]);
 
+/** GLM Coding Plan transient rate-limit / overload codes (all HTTP 429). These
+ *  are retryable, not quota exhaustion — a moment's pause clears them. */
+const GLM_CODING_PLAN_RATE_LIMIT_CODES: ReadonlySet<string> = new Set([
+  '1302', // Rate limit reached for requests
+  '1305', // The service may be temporarily overloaded
+]);
+
 /** UTC+8 (China Standard Time) offset in milliseconds. */
 const CST_OFFSET_MS = 8 * 60 * 60 * 1000;
 
@@ -82,6 +89,31 @@ export function parseGlmCodingPlanLimit(
     return { resetsInSeconds };
   }
   return null;
+}
+
+/**
+ * Whether a GLM Coding Plan error is a transient rate limit / overload (codes
+ * 1302/1305) rather than quota exhaustion. These are retryable after a pause —
+ * they are deliberately NOT classified as a coding-plan exhaustion, so the
+ * retry UI keeps the ordinary retry affordance instead of the switch-to-regular
+ * endpoint one.
+ */
+export function isGlmCodingPlanRateLimit(rawErrorBody: unknown): boolean {
+  return errorBodyCandidates(rawErrorBody).some((candidate) => {
+    const code = pickStringField(candidate, 'code');
+    return code !== undefined && GLM_CODING_PLAN_RATE_LIMIT_CODES.has(code);
+  });
+}
+
+/**
+ * Human-readable message for a GLM Coding Plan rate-limit / overload error:
+ * a clear "retry in a moment" hint distinct from quota exhaustion.
+ */
+export function describeGlmCodingPlanRateLimit(): string {
+  return (
+    'GLM Coding Plan rate limit reached. Wait a moment and retry; the plan is ' +
+    'still active.'
+  );
 }
 
 /**
