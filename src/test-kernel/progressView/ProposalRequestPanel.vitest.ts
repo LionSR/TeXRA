@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import { AgentCategory } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -111,6 +112,27 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       { action: 'approveSuperYolo' },
       { action: 'approve' },
     ]);
+  });
+
+  it('renders archived proposal approval as a plain disabled button', async () => {
+    const element = await mountPanel();
+    (element as unknown as { archived: boolean }).archived = true;
+    element.requestUpdate();
+    await element.updateComplete;
+
+    const split = element.shadowRoot?.querySelector<ApproveSplitButton>(
+      'approve-split-button',
+    );
+    await split?.updateComplete;
+
+    expect(split?.disabled).toBe(true);
+    expect(split?.shadowRoot?.querySelector('wa-button-group')).toBeNull();
+    expect(split?.shadowRoot?.querySelector('wa-dropdown')).toBeNull();
+    expect(
+      split?.shadowRoot
+        ?.querySelector('wa-button[data-action="approve"]')
+        ?.hasAttribute('disabled'),
+    ).toBe(true);
   });
 
   it('attaches selected overrides only to approval decisions', async () => {
