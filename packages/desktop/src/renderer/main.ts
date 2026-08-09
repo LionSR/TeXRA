@@ -55,16 +55,14 @@ import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
+import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import {
   SetThemeMessageSchema,
   type DesktopThemeKind,
 } from '@shared/schemas/commonViewMessages';
-import {
-  applyHostBodyTheme,
-  getWindowTargetOrigin,
-} from '@shared/wa/hostTheme';
+import { applyHostBodyTheme } from '@shared/wa/hostTheme';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -1359,7 +1357,7 @@ function openSettingsTab(
   if (tabIndex == null) return;
   window.postMessage(
     buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
-    getWindowTargetOrigin(),
+    resolvePostMessageTargetOrigin(window.location.origin),
   );
 }
 
@@ -1394,7 +1392,7 @@ const desktopRendererCommandActions: DesktopCommandActions = {
     returnToLauncher();
     window.postMessage(
       buildDesktopMainViewResetMessage(),
-      getWindowTargetOrigin(),
+      resolvePostMessageTargetOrigin(window.location.origin),
     );
   },
 };

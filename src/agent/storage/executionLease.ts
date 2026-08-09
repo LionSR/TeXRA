@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
+import pDefer, { type DeferredPromise } from 'p-defer';
 import PQueue from 'p-queue';
 import { z } from 'zod';
 
@@ -88,9 +89,7 @@ class ExecutionLeaseCoordination {
   private readonly acquisitionIdleWaiters = new Set<() => void>();
   private readonly maintenanceQueue = new PQueue({ concurrency: 1 });
   private pendingMaintenanceCount = 0;
-  private maintenanceBarrier:
-    | { readonly promise: Promise<void>; readonly resolve: () => void }
-    | undefined;
+  private maintenanceBarrier: DeferredPromise<void> | undefined;
 
   async enterAcquisition(nested: boolean): Promise<void> {
     if (!nested) {
@@ -119,11 +118,7 @@ class ExecutionLeaseCoordination {
   ): Promise<T> {
     this.pendingMaintenanceCount += 1;
     if (!this.maintenanceBarrier) {
-      let resolve: () => void = () => undefined;
-      const promise = new Promise<void>((settle) => {
-        resolve = settle;
-      });
-      this.maintenanceBarrier = { promise, resolve };
+      this.maintenanceBarrier = pDefer<void>();
     }
     // `add` widens to `T | void` for abort/timeout options; neither is used.
     const queued = this.maintenanceQueue.add(async () => {
@@ -410,10 +405,7 @@ function rememberOwnership(
   ownerToken: string,
   root: string,
 ): void {
-  let resolveReleased: () => void = () => undefined;
-  const released = new Promise<void>((resolve) => {
-    resolveReleased = resolve;
-  });
+  const { promise: released, resolve: resolveReleased } = pDefer<void>();
   const lease: OwnedExecutionLease = {
     executionId,
     ownerToken,

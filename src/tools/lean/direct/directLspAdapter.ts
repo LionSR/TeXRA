@@ -31,6 +31,20 @@ import type {
 
 const LOG_CHANNEL = 'lean.direct';
 
+/**
+ * Lake arguments for project commands that fan out across all active sessions.
+ * Commands absent here (restart_server, stop_server, install_elan, …) are
+ * handled by their own dedicated branches.
+ */
+const LAKE_PROJECT_ARGS: Partial<
+  Record<LeanProjectCommand, readonly string[]>
+> = {
+  build: ['build'],
+  clean: ['clean'],
+  fetch_cache: ['exe', 'cache', 'get'],
+  fetch_file_cache: ['exe', 'cache', 'get'],
+};
+
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
   lakeCommand?: string;
@@ -221,23 +235,20 @@ export function createDirectLspLeanAdapter(
         case 'stop_server':
           await disposeAll();
           return;
-        case 'build':
-          await runForAllSessions(sessions, lakeCommand, ['build']);
-          return;
-        case 'clean':
-          await runForAllSessions(sessions, lakeCommand, ['clean']);
-          return;
         // `fetch_file_cache` normally needs the active editor's file; we don't
         // have one in CLI/desktop, so it falls back to the project-wide cache
-        // fetch (same as `fetch_cache`).
+        // fetch (same as `fetch_cache`). All four fan out one lake-arg set per
+        // active session via the LAKE_PROJECT_ARGS lookup below.
+        case 'build':
+        case 'clean':
         case 'fetch_cache':
-        case 'fetch_file_cache':
-          await runForAllSessions(sessions, lakeCommand, [
-            'exe',
-            'cache',
-            'get',
-          ]);
+        case 'fetch_file_cache': {
+          const lakeArgs = LAKE_PROJECT_ARGS[command];
+          if (lakeArgs) {
+            await runForAllSessions(sessions, lakeCommand, lakeArgs);
+          }
           return;
+        }
         case 'install_elan':
         case 'install_deps':
         case 'update_elan':

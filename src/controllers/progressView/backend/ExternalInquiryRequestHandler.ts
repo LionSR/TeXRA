@@ -6,7 +6,6 @@ import type {
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
   getOpenTurnDraft,
-  listOpenThreads,
   listThreadsByStatus,
   manifestToTranscript,
   readExternalInquiryThread,
@@ -59,7 +58,10 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
   }
 
   private async replayOpenPermissions(): Promise<void> {
-    const open = await listOpenThreads().catch((error) => {
+    const open = await listThreadsByStatus({
+      status: 'open',
+      scope: 'all',
+    }).catch((error) => {
       this.options.logger?.debug(
         `Failed to list open inquiry threads: ${error}`,
       );

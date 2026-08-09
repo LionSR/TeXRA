@@ -21,7 +21,7 @@ import {
   buildMemoryPathDisplay,
   buildExecutionsPathDisplay,
   buildStatusBadge,
-  SPINNER_ICON_NAME,
+  triStateStatusIcon,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import { stringifyWithLanguage } from '@progressView/frontend/formatters/parseUtils';
 import {
@@ -30,8 +30,7 @@ import {
 } from '@progressView/frontend/formatters/constants';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
-import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { executionsAction } from '@shared/tools/executionsDisplay';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -267,7 +266,7 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
   const execPath = asString(input.path) ?? '';
-  const action = asString(input.action) ?? EXECUTIONS_DEFAULT_ACTION;
+  const action = executionsAction(input);
   const sections: TemplateResult[] = [];
 
   if (execPath) {
@@ -513,18 +512,13 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
 
   if (typeof mcpOutput?.status === 'string') {
-    let statusIconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
-    if (mcpOutput.status === 'failed') {
-      statusIconName = 'circle-exclamation';
-    } else if (mcpOutput.status === 'in_progress') {
-      statusIconName = SPINNER_ICON_NAME;
-    } else {
-      statusIconName = 'check';
-    }
     sections.push(
       buildToolUseSection(
         'Status:',
-        buildStatusBadge(statusIconName, mcpOutput.status),
+        buildStatusBadge(
+          triStateStatusIcon(mcpOutput.status, 'in_progress'),
+          mcpOutput.status,
+        ),
       ),
     );
     renderedMcpOutput = true;

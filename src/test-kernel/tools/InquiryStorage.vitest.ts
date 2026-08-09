@@ -17,8 +17,6 @@ import { ToolError } from '@shared/schemas/toolResult';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getOpenTurnDraft,
-  listOpenThreads,
-  listOpenThreadsForStream,
   listThreadsByStatus,
   markDropped,
   manifestToTranscript,
@@ -95,7 +93,9 @@ describe('InquiryStorage', () => {
   });
 
   it('treats a missing inquiry history directory as empty', async () => {
-    await expect(listOpenThreads()).resolves.toEqual([]);
+    await expect(
+      listThreadsByStatus({ status: 'open', scope: 'all' }),
+    ).resolves.toEqual([]);
   });
 
   it('surfaces inquiry history directory read failures', async () => {
@@ -112,7 +112,9 @@ describe('InquiryStorage', () => {
       );
 
     try {
-      await expect(listOpenThreads()).rejects.toMatchObject({ code: 'EACCES' });
+      await expect(
+        listThreadsByStatus({ status: 'open', scope: 'all' }),
+      ).rejects.toMatchObject({ code: 'EACCES' });
       expect(readDirectorySpy).toHaveBeenCalledWith(threadsDir);
     } finally {
       readDirectorySpy.mockRestore();
@@ -131,7 +133,7 @@ describe('InquiryStorage', () => {
     expect(opened.manifest.turns).toHaveLength(1);
     expect(opened.turn.suggestSearch).toBe(false);
 
-    const open = await listOpenThreads();
+    const open = await listThreadsByStatus({ status: 'open', scope: 'all' });
     expect(open).toHaveLength(1);
     expect(open[0].status).toBe('open');
 
@@ -143,7 +145,10 @@ describe('InquiryStorage', () => {
     expect(answered!.manifest.status).toBe('answered');
     expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
 
-    const stillOpen = await listOpenThreads();
+    const stillOpen = await listThreadsByStatus({
+      status: 'open',
+      scope: 'all',
+    });
     expect(stillOpen).toHaveLength(0);
   });
 
@@ -274,8 +279,16 @@ describe('InquiryStorage', () => {
     });
     expect(fromB.manifest.parentStreamId).toBe(STREAM_B);
 
-    const openOnA = await listOpenThreadsForStream(STREAM_A);
-    const openOnB = await listOpenThreadsForStream(STREAM_B);
+    const openOnA = await listThreadsByStatus({
+      status: 'open',
+      scope: 'stream',
+      streamId: STREAM_A,
+    });
+    const openOnB = await listThreadsByStatus({
+      status: 'open',
+      scope: 'stream',
+      streamId: STREAM_B,
+    });
     expect(openOnA).toHaveLength(0);
     expect(openOnB).toHaveLength(1);
   });

@@ -2,7 +2,8 @@
 import { css } from 'lit';
 
 // Shared styles
-import { headerActionStyles, visuallyHiddenStyles } from '@shared/styles';
+import { visuallyHiddenStyles } from '@shared/styles';
+import { buttonStyles } from '@shared/styles/controlStyles';
 
 /** Layout and empty-state styles for the <progress-app> root component. */
 export const progressAppStyles = css`
@@ -49,7 +50,7 @@ export const progressAppStyles = css`
     cursor: default;
   }
 
-  ${headerActionStyles}
+  ${buttonStyles}
 
   ${visuallyHiddenStyles}
 

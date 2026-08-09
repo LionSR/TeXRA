@@ -35,7 +35,7 @@ import {
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import { scrollToBottom } from '@shared/utils/dom';
+import { scrollToBottom, vsCodeScrollExtent } from '@shared/utils/dom';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
@@ -383,16 +383,8 @@ export class TaskGroupList extends LitElement {
 
   private isNearBottom(threshold: number): boolean {
     if (!this.scrollContainer) return false;
-    const vsElement = this.scrollContainer as HTMLElement & {
-      scrollPos?: number;
-      scrollMax?: number;
-    };
-    if (
-      typeof vsElement.scrollPos === 'number' &&
-      typeof vsElement.scrollMax === 'number'
-    ) {
-      return vsElement.scrollMax - vsElement.scrollPos <= threshold;
-    }
+    const vs = vsCodeScrollExtent(this.scrollContainer);
+    if (vs) return vs.max - vs.pos <= threshold;
     const remaining =
       this.scrollContainer.scrollHeight -
       this.scrollContainer.scrollTop -

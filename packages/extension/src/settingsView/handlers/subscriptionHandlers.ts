@@ -18,12 +18,12 @@ import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionS
 import { signInWithGrokSubscription } from '@frontend/auth/xaiSubscriptionSignIn';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   UpdateChatGptAuthStatusMessage,
   UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
-import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
-import { buildGrokAuthStatusMessage } from '@shared/settingsView/handlers/grokHandlers';
+import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 
 import {
   withHandlerErrorHandling,
@@ -123,7 +123,10 @@ export const CHATGPT_SUBSCRIPTION_PROVIDER: SubscriptionProvider =
   Object.freeze({
     displayName: 'ChatGPT',
     buildStatusMessage: () =>
-      buildChatGptAuthStatusMessage(getChatGptAuthStatus),
+      buildAuthStatusMessage(
+        SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+        getChatGptAuthStatus,
+      ),
     signIn: async (channel: string) => {
       await signInWithChatGptSubscription(channel);
     },
@@ -137,7 +140,11 @@ export const CHATGPT_SUBSCRIPTION_PROVIDER: SubscriptionProvider =
  */
 export const GROK_SUBSCRIPTION_PROVIDER: SubscriptionProvider = Object.freeze({
   displayName: 'Grok',
-  buildStatusMessage: () => buildGrokAuthStatusMessage(getGrokAuthStatus),
+  buildStatusMessage: () =>
+    buildAuthStatusMessage(
+      SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+      getGrokAuthStatus,
+    ),
   signIn: async (channel: string) => {
     await signInWithGrokSubscription(channel);
   },

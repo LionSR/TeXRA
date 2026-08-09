@@ -10,10 +10,45 @@
 import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { type ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
+import {
+  type ProgressViewOutboundHandlerRegistry,
+  type StreamTabId,
+  type WorkflowStreamState,
+} from '@shared/schemas';
 
 import { setStreamStateForId } from '../progressState';
 import { updateWorkflowState, updateRounds } from '../stateUtils';
+
+/** Workflow round-keyed record fields updated by the three handlers below. */
+type RoundField = 'files' | 'missingOutputs' | 'compileFailures';
+
+/**
+ * Shared body of UPDATE_FILES / UPDATE_MISSING_OUTPUTS /
+ * UPDATE_COMPILE_FAILURES: replace (`reset`) or merge a round-keyed record on
+ * the workflow stream state. `field` keys both the state field and its element
+ * type, so each handler collapses to a one-liner.
+ */
+function applyRoundUpdate<K extends RoundField>(
+  data: {
+    stream: StreamTabId;
+    rounds?: WorkflowStreamState[K];
+    reset?: boolean;
+  },
+  field: K,
+): void {
+  const { stream, rounds, reset } = data;
+  updateWorkflowState(stream, (prev) =>
+    create(prev, (draft) => {
+      // updateRounds is generic over the element type, which TS cannot correlate
+      // with a generic field key; widen to unknown[] here and cast the merged
+      // record back to the field's concrete type.
+      draft[field] = updateRounds<unknown>(prev[field], {
+        rounds,
+        reset,
+      }) as WorkflowStreamState[K];
+    }),
+  );
+}
 
 // The composed registry is exhaustive (every ProgressView outbound command
 // needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
@@ -22,38 +57,14 @@ import { updateWorkflowState, updateRounds } from '../stateUtils';
 // slices together and is the actual exhaustiveness checkpoint TypeScript
 // enforces.
 export const runTrackingHandlers = {
-  [PROGRESS_VIEW_COMMANDS.UPDATE_FILES]: (data) => {
-    const { stream, rounds, reset } = data;
-    updateWorkflowState(stream, (prev) =>
-      create(prev, (draft) => {
-        draft.files = updateRounds(prev.files, { rounds, reset });
-      }),
-    );
-  },
+  [PROGRESS_VIEW_COMMANDS.UPDATE_FILES]: (data) =>
+    applyRoundUpdate(data, 'files'),
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS]: (data) => {
-    const { stream, rounds, reset } = data;
-    updateWorkflowState(stream, (prev) =>
-      create(prev, (draft) => {
-        draft.missingOutputs = updateRounds(prev.missingOutputs, {
-          rounds,
-          reset,
-        });
-      }),
-    );
-  },
+  [PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS]: (data) =>
+    applyRoundUpdate(data, 'missingOutputs'),
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES]: (data) => {
-    const { stream, rounds, reset } = data;
-    updateWorkflowState(stream, (prev) =>
-      create(prev, (draft) => {
-        draft.compileFailures = updateRounds(prev.compileFailures, {
-          rounds,
-          reset,
-        });
-      }),
-    );
-  },
+  [PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES]: (data) =>
+    applyRoundUpdate(data, 'compileFailures'),
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data) => {
     const { stream, runId, usage } = data;
