@@ -602,7 +602,7 @@ async function acquireExecutionLease(
     const key = ownershipKey(root, executionId);
     const existingOwnership = ownedLeases.get(key);
     if (mode === 'resume' && existingOwnership) {
-      let heartbeatResult: Awaited<ReturnType<typeof heartbeat>> | undefined;
+      let heartbeatResult: 'owned' | 'lost' | 'cancelled' | undefined;
       try {
         heartbeatResult = await heartbeat(existingOwnership, canAcquire);
       } catch (error) {

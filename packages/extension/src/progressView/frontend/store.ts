@@ -2,7 +2,6 @@
 import {
   createStreamState,
   type AgentCategory,
-  type ContextStateData,
   type LogMessageData,
   type StreamState,
   type StreamTabInfo,
@@ -20,9 +19,8 @@ export {
   type StreamState,
   type ToolUseStreamState,
   type WorkflowStreamState,
+  type ContextStateData,
 } from '@shared/schemas';
-
-export type { ContextStateData };
 
 /** Followup options derived from schema (minus command/stream fields) */
 export type FollowupOptionsState = Omit<

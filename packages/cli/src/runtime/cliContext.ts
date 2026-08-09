@@ -25,6 +25,7 @@ import {
   type CliConfigValues,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
+import type { Stats } from 'node:fs';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -367,7 +368,7 @@ export async function resolveCliCwd(
     return canonicalizeWorkspacePath(readCliCwd());
   }
   const requested = path.resolve(cwdFlag.trim());
-  let info: Awaited<ReturnType<typeof stat>>;
+  let info: Stats;
   try {
     info = await stat(requested);
   } catch (error: unknown) {

@@ -26,7 +26,6 @@ const CHANNEL = 'ApiKeyCommands';
 
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',
-  removeApiKey: 'texra.removeApiKey',
 };
 
 /**

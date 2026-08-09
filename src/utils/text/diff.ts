@@ -11,9 +11,9 @@ import { countLines } from './stringUtils';
 
 export { DIFF_DELETE, DIFF_EQUAL, DIFF_INSERT };
 
-type DiffMatchPatch = InstanceType<typeof diff_match_patch>;
-
-export type TextDiff = ReturnType<DiffMatchPatch['diff_main']>[number];
+export type TextDiff = ReturnType<
+  InstanceType<typeof diff_match_patch>['diff_main']
+>[number];
 
 export interface TextDiffOptions {
   /**

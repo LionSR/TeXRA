@@ -17,9 +17,6 @@ import {
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ChatUsage } from '@openrouter/sdk/models';
 
-/** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-type OpenRouterPricingConfig = StandardPricingConfig;
-
 /**
  * Prefer OpenRouter's billed cost for credit-backed requests. BYOK cost is
  * split between OpenRouter credits and the upstream provider account, so keep
@@ -27,7 +24,7 @@ type OpenRouterPricingConfig = StandardPricingConfig;
  */
 export function computeOpenRouterPrice(
   responseUsage: ChatUsage | null,
-  config: OpenRouterPricingConfig,
+  config: StandardPricingConfig,
 ): number {
   if (!responseUsage) return 0;
   if (responseUsage.isByok !== true && responseUsage.cost != null) {
@@ -51,7 +48,7 @@ export function normalizeOpenRouterUsage(
   rawUsage: ChatUsage | null,
   responseTimeMs: number,
   provider: NormalizedUsage['provider'],
-  config: OpenRouterPricingConfig,
+  config: StandardPricingConfig,
 ): NormalizedUsage {
   return normalizeUsage(
     {
