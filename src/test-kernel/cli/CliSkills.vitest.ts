@@ -45,8 +45,8 @@ afterEach(async () => {
 
 describe('CLI skills runtime', () => {
   it('resolves default, interop, and custom skill sources in precedence order', () => {
-    const cwd = path.join(path.sep, 'tmp', 'project');
-    const resourcesPath = path.join(
+    const cwd = path.resolve(path.sep, 'tmp', 'project');
+    const resourcesPath = path.resolve(
       path.sep,
       'tmp',
       'repo',
@@ -134,8 +134,8 @@ describe('CLI skills runtime', () => {
   it('deduplicates repeated source paths while preserving required custom roots', () => {
     const sources = defaultSkillSources(
       {
-        cwd: path.join(path.sep, 'tmp', 'project'),
-        resourcesPath: path.join(path.sep, 'tmp', 'resources'),
+        cwd: path.resolve(path.sep, 'tmp', 'project'),
+        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       },
       {
         additionalPaths: ['.texra/skills'],
@@ -146,7 +146,7 @@ describe('CLI skills runtime', () => {
       sources.filter(
         (source) =>
           source.path ===
-          path.join(path.sep, 'tmp', 'project', '.texra', 'skills'),
+          path.resolve(path.sep, 'tmp', 'project', '.texra', 'skills'),
       ),
     ).toEqual([
       expect.objectContaining({
@@ -252,8 +252,8 @@ describe('CLI skills runtime', () => {
   it('reports missing explicit custom skill sources', async () => {
     const result = await readCliSkills(
       {
-        cwd: path.join(path.sep, 'tmp', 'project'),
-        resourcesPath: path.join(path.sep, 'tmp', 'resources'),
+        cwd: path.resolve(path.sep, 'tmp', 'project'),
+        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       },
       {
         additionalPaths: ['missing-skills'],
@@ -265,7 +265,7 @@ describe('CLI skills runtime', () => {
       expect.objectContaining({
         severity: 'error',
         code: 'missing_source',
-        path: path.join(path.sep, 'tmp', 'project', 'missing-skills'),
+        path: path.resolve(path.sep, 'tmp', 'project', 'missing-skills'),
       }),
     );
   });

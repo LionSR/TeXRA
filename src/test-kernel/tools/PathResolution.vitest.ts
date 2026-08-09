@@ -24,8 +24,8 @@ describe('assertNoParentTraversal', () => {
 });
 
 describe('resolveWorkspaceRelativePath path protection', () => {
-  const workspacePath = path.join(path.sep, 'workspace');
-  const outsidePath = path.join(path.sep, 'outside', 'file.tex');
+  const workspacePath = path.resolve(path.sep, 'workspace');
+  const outsidePath = path.resolve(path.sep, 'outside', 'file.tex');
   it('rejects paths outside the working directory by default', async () => {
     await installPlatform({ workspacePath });
 

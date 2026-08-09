@@ -107,13 +107,7 @@ describe('OpenPdfTool', () => {
     expect(openPdf).toHaveBeenCalledWith({
       location: {
         kind: 'runStorage',
-        absolutePath: path.join(
-          path.sep,
-          'storage',
-          'executions',
-          'run-1',
-          'output.pdf',
-        ),
+        absolutePath: '/storage/executions/run-1/output.pdf',
         relativePath: 'output.pdf',
         executionId: 'run-1',
       },
