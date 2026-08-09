@@ -306,6 +306,22 @@ export async function coalesceAsync<Key, Value>(
 }
 
 /**
+ * Reduce a NON-EMPTY failure list to the value to throw: the lone failure
+ * unwrapped when there is exactly one, or an {@link AggregateError} carrying
+ * `message` when there are several. Use as `throw aggregateError(...)` where a
+ * failure is guaranteed, or to build an error for a `cause`. Callers that may
+ * have collected nothing want {@link throwAggregated} instead.
+ */
+export function aggregateError(
+  failures: readonly unknown[],
+  message: string,
+): unknown {
+  return failures.length === 1
+    ? failures[0]
+    : new AggregateError(failures, message);
+}
+
+/**
  * Rethrow a collected set of independent failures with the conventional
  * shape: a no-op when empty, the single error unwrapped when there is exactly
  * one, and an {@link AggregateError} carrying `message` when there are
@@ -316,8 +332,7 @@ export function throwAggregated(
   failures: readonly unknown[],
   message: string,
 ): void {
-  if (failures.length === 1) throw failures[0];
-  if (failures.length > 1) throw new AggregateError(failures, message);
+  if (failures.length > 0) throw aggregateError(failures, message);
 }
 
 // ---------------------------------------------------------------------------
