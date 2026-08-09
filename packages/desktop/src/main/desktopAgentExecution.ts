@@ -584,18 +584,15 @@ export class DesktopProgressBridge {
   private async applyFollowUpPolishResult(
     result: ProgressFollowUpPolishResult,
   ): Promise<void> {
+    if (result.kind === 'skipped') return;
+    this.postToRenderer(result.update);
     switch (result.kind) {
-      case 'skipped':
-        return;
       case 'updated':
-        this.postToRenderer(result.update);
         return;
       case 'failed':
-        this.postToRenderer(result.update);
         await this.options.host.showErrorMessage(result.userMessage);
         return;
       case 'exception':
-        this.postToRenderer(result.update);
         this.logger.error(result.logMessage, {
           data: result.logData ? toLogData(result.logData) : undefined,
         });

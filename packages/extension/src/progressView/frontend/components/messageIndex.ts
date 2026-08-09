@@ -35,13 +35,12 @@ function insertByTime<T>(
     target.push(entry);
     return target.length - 1;
   }
+  // findIndex always returns >= 0 here: we only reach this point when the
+  // target is non-empty and time < lastTime, so the last element satisfies
+  // the predicate.
   const idx = target.findIndex((item) => timeOf(item) > time);
-  if (idx >= 0) {
-    target.splice(idx, 0, entry);
-    return idx;
-  }
-  target.push(entry);
-  return target.length - 1;
+  target.splice(idx, 0, entry);
+  return idx;
 }
 
 function messageTime(message: LogMessageData): number {

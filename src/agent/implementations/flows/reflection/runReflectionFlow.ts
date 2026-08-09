@@ -15,6 +15,7 @@ import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import {
   PersistedFlowStateError,
@@ -143,15 +144,10 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  let requestCount: number;
-  if (Array.isArray(prompt.userRequest)) {
-    requestCount = prompt.userRequest.length;
-  } else if (prompt.userRequest) {
-    requestCount = 1;
-  } else {
-    requestCount = 0;
-  }
-  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
+  const totalRounds = Math.max(
+    setting.rounds ?? 2,
+    userRequestTemplateCount(prompt.userRequest),
+  );
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
