@@ -1,11 +1,4 @@
-import type { SubscriptionUsageWindow } from '@shared/schemas/subscriptionUsage';
-
-export {
-  SubscriptionUsageSnapshotSchema,
-  type SubscriptionUsageProvider,
-  type SubscriptionUsageSnapshot,
-  type SubscriptionUsageWindow,
-} from '@shared/schemas/subscriptionUsage';
+import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 export interface ParsedSubscriptionUsage {
   readonly planName?: string;

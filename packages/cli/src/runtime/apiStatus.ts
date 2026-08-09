@@ -2,15 +2,15 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { configuredApiKeyProviders } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
+import type {
+  SubscriptionUsageProvider,
+  SubscriptionUsageSnapshot,
+} from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
-import type {
-  SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
-} from '@shared/schemas/subscriptionUsage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 

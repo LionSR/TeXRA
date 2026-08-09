@@ -1,11 +1,8 @@
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
+import { isSpendingQuotaExceeded, type SpendingStatus } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  isSpendingQuotaExceeded,
-  type SpendingStatus,
-} from '@shared/schemas/spendingStatus';
 import type {
   ApiAccessMode,
   NumberSetting,

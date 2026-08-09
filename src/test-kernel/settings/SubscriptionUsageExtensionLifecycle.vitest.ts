@@ -7,10 +7,15 @@ vi.mock('@frontend/system/commandUtils', () => ({
 
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SubscriptionUsageProvider } from '@shared/schemas/subscriptionUsage';
+import type { SubscriptionUsageProvider } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type * as vscode from 'vscode';
 
 interface Harness {
+  handleSetProviderSetting(data: {
+    key: string;
+    value: boolean;
+  }): Promise<void>;
   refreshAfterKeyChange(provider: string): Promise<void>;
   refreshAfterSubscriptionAuthChange(provider?: 'chatgpt'): Promise<void>;
 }
@@ -34,8 +39,16 @@ function createHarness() {
   ) as Harness;
   Reflect.set(handler, 'viewName', 'SettingsView');
   Reflect.set(handler, 'subscriptionUsage', usage);
+  Reflect.set(handler, 'profileController', {
+    setProviderSetting: vi.fn(async () => ({
+      kind: 'updated',
+      affectsModelAvailability: false,
+    })),
+  });
+  Reflect.set(handler, 'sendProfileData', vi.fn());
   Reflect.set(handler, 'sendProfileAndModelSelectionData', vi.fn());
   Reflect.set(handler, 'sendModelSelectionData', vi.fn());
+  Reflect.set(handler, 'sendReliabilityAndOrchestrationSettings', vi.fn());
   Reflect.set(
     handler,
     'withActiveWebview',
@@ -70,6 +83,23 @@ describe('extension subscription usage credential lifecycle', () => {
     await handler.refreshAfterKeyChange('openai');
     expect(usage.invalidate).not.toHaveBeenCalled();
     expect(usage.getUsage).not.toHaveBeenCalled();
+  });
+
+  it('invalidates and replaces GLM usage after the region changes', async () => {
+    const { handler, posted, usage } = createHarness();
+
+    await handler.handleSetProviderSetting({
+      key: GlobalStateKey.GLM_USE_CHINA,
+      value: false,
+    });
+
+    expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
+    expect(usage.getUsage).toHaveBeenCalledTimes(4);
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+      }),
+    );
   });
 
   it('invalidates ChatGPT usage after account auth changes', async () => {

@@ -43,6 +43,7 @@ describe('included access exhaustion rendering', () => {
     group.value = 'included';
     group.dispatchEvent(new Event('change'));
     expect(mocks.postMessage).not.toHaveBeenCalled();
+    expect(group.value).toBe('personal');
 
     section.includedAccessExhausted = false;
     await section.updateComplete;
@@ -57,5 +58,26 @@ describe('included access exhaustion rendering', () => {
       SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
       { mode: 'included' },
     );
+    expect(group.value).toBe('personal');
+  });
+
+  it('keeps the authoritative mode selected while the host rejects a change', async () => {
+    const section = await mountComponent<ApiAccessElement>(
+      'api-access-section',
+      { mode: 'personal', includedAccessExhausted: false },
+    );
+    const group = section.shadowRoot?.querySelector<HTMLElement>(
+      'wa-radio-group',
+    ) as (HTMLElement & { value: string }) | null;
+    expect(group).not.toBeNull();
+    if (!group) return;
+
+    group.value = 'included';
+    group.dispatchEvent(new Event('change'));
+    expect(mocks.postMessage).toHaveBeenCalledWith(
+      SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      { mode: 'included' },
+    );
+    expect(group.value).toBe('personal');
   });
 });

@@ -1,7 +1,7 @@
 import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageWindow,
-} from '@shared/schemas/subscriptionUsage';
+} from '@shared/schemas';
 
 const STALE_AFTER_MS = 2 * 60_000;
 
@@ -34,7 +34,9 @@ export function subscriptionUsageWindowLabel(
 }
 
 export function formatSubscriptionUsagePercent(percentUsed: number): string {
-  const rounded = Math.round(percentUsed * 10) / 10;
+  let rounded = Math.round(percentUsed * 10) / 10;
+  if (percentUsed > 0 && rounded === 0) rounded = 0.1;
+  if (percentUsed < 100 && rounded === 100) rounded = 99.9;
   return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
 }
 

@@ -40,9 +40,12 @@ import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
+import type {
+  SettingsViewInboundHandlerRegistry,
+  SpendingStatus,
+} from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
@@ -416,6 +419,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
 
     await this.postProfileData();
+    if (key === GlobalStateKey.GLM_USE_CHINA) {
+      this.subscriptionUsage.invalidate('glmCodingPlan');
+      await this.postSubscriptionUsage();
+    }
     if (!result.affectsModelAvailability) return;
 
     await this.postModelSelectionData();

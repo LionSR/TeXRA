@@ -402,6 +402,29 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     ]);
   });
 
+  it('invalidates and replaces GLM usage after the region changes', async () => {
+    const fixture = await createFixture();
+
+    await assertSupported(
+      fixture.controller.profileHandlers.setProviderSetting,
+    )({
+      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
+      key: GlobalStateKey.GLM_USE_CHINA,
+      value: false,
+    });
+
+    expect(fixture.globalState.get(GlobalStateKey.GLM_USE_CHINA)).toBe(false);
+    expect(
+      fixture.subscriptionUsage.invalidate,
+    ).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
+    expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(4);
+    expect(fixture.posted).toContainEqual(
+      expect.objectContaining({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+      }),
+    );
+  });
+
   it.each([
     {
       name: 'provider streaming',

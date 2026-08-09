@@ -1,4 +1,4 @@
-import type { SubscriptionUsageWindow } from './subscriptionUsageTypes';
+import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 export type JsonObject = Record<string, unknown>;
 

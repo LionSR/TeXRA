@@ -1,3 +1,5 @@
+import type { SubscriptionUsageWindow } from '@shared/schemas';
+
 import {
   asObject,
   assertSubscriptionUsageResponse,
@@ -7,10 +9,7 @@ import {
   timestampField,
 } from './subscriptionUsageParsing';
 import type { SubscriptionUsageHttp } from './codexUsageAdapter';
-import type {
-  ParsedSubscriptionUsage,
-  SubscriptionUsageWindow,
-} from './subscriptionUsageTypes';
+import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 export const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
 

@@ -18,8 +18,7 @@ import {
   SubscriptionUsageService,
   type SubscriptionUsageCredentials,
 } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { SubscriptionUsageSnapshotSchema as ControllerSubscriptionUsageSnapshotSchema } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageTypes';
-import { SubscriptionUsageSnapshotSchema } from '@shared/schemas/subscriptionUsage';
+import { SubscriptionUsageSnapshotSchema } from '@shared/schemas';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -375,12 +374,6 @@ describe('subscription usage parsers', () => {
 });
 
 describe('SubscriptionUsageService', () => {
-  it('uses the shared IPC snapshot schema as its controller contract', () => {
-    expect(ControllerSubscriptionUsageSnapshotSchema).toBe(
-      SubscriptionUsageSnapshotSchema,
-    );
-  });
-
   it.each([
     {
       provider: 'chatgpt' as const,
@@ -460,6 +453,65 @@ describe('SubscriptionUsageService', () => {
       expect(http.mock.calls[0][0]).toBe(expectedUrl);
     },
   );
+
+  it('does not reuse GLM usage from the previous region after invalidation', async () => {
+    let useChina = true;
+    const http = vi.fn<SubscriptionUsageHttp>(async (url) =>
+      jsonResponse({
+        success: true,
+        data: {
+          limits: [
+            {
+              type: 'TOKENS_LIMIT',
+              percentage: url === GLM_CODING_PLAN_USAGE_URL ? 10 : 80,
+              unit: 3,
+            },
+          ],
+        },
+      }),
+    );
+    const service = serviceWith(
+      http,
+      credentials({ useGlmChina: () => useChina }),
+      { cacheTtlMs: 60_000 },
+    );
+
+    const china = await service.getUsage('glmCodingPlan');
+    useChina = false;
+    service.invalidate('glmCodingPlan');
+    const international = await service.getUsage('glmCodingPlan');
+
+    expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
+      GLM_CODING_PLAN_USAGE_URL,
+      GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
+    ]);
+    expect(china.state === 'available' && china.windows[0]?.percentUsed).toBe(
+      10,
+    );
+    expect(
+      international.state === 'available' &&
+        international.windows[0]?.percentUsed,
+    ).toBe(80);
+  });
+
+  it('does not fall back across GLM hosts when the selected region fails', async () => {
+    const http = vi.fn<SubscriptionUsageHttp>(async () =>
+      jsonResponse({ message: 'unavailable' }, 500),
+    );
+    const snapshot = await serviceWith(
+      http,
+      credentials({ useGlmChina: () => false }),
+    ).getUsage('glmCodingPlan');
+
+    expect(http).toHaveBeenCalledExactlyOnceWith(
+      GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
+      expect.any(Object),
+    );
+    expect(snapshot).toMatchObject({
+      state: 'unavailable',
+      reason: 'request_failed',
+    });
+  });
 
   it.each([
     ['chatgpt' as const, credentials({ loadChatGpt: async () => null })],

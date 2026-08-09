@@ -1,3 +1,5 @@
+import type { SubscriptionUsageWindow } from '@shared/schemas';
+
 import {
   asObject,
   assertSubscriptionUsageResponse,
@@ -7,10 +9,7 @@ import {
   usageWindow,
   type JsonObject,
 } from './subscriptionUsageParsing';
-import type {
-  ParsedSubscriptionUsage,
-  SubscriptionUsageWindow,
-} from './subscriptionUsageTypes';
+import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 export const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 

@@ -7,6 +7,7 @@ import {
   subscriptionUsage,
 } from '@settingsView/frontend/settingsState';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { formatSubscriptionUsagePercent } from '@shared/subscriptionUsagePresentation';
 import {
   dispatchSettingsViewOutbound,
   SettingsViewInboundMessageSchema,
@@ -71,6 +72,15 @@ describe('subscription usage settings IPC', () => {
       true,
     );
     expect(subscriptionUsage.get()).toStrictEqual(snapshots);
+  });
+
+  it.each([
+    [99.95, '99.9%'],
+    [0.05, '0.1%'],
+    [100, '100%'],
+    [0, '0%'],
+  ] as const)('formats boundary usage %s as %s', (percent, expected) => {
+    expect(formatSubscriptionUsagePercent(percent)).toBe(expected);
   });
 
   it('fetches every provider through the injected reader and posts no raw data', async () => {

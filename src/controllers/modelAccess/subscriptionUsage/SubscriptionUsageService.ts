@@ -1,6 +1,10 @@
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { lookupApiKey } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import type {
+  SubscriptionUsageProvider,
+  SubscriptionUsageSnapshot,
+} from '@shared/schemas';
 import { getGLMUseChina } from '@utils/config/providerConfig';
 
 import {
@@ -15,11 +19,7 @@ import {
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
 import { SubscriptionUsageHttpError } from './subscriptionUsageParsing';
-import type {
-  ParsedSubscriptionUsage,
-  SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
-} from './subscriptionUsageTypes';
+import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;

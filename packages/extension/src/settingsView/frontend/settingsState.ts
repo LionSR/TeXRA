@@ -25,22 +25,19 @@ import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type {
-  MemoryViewItem,
-  HistoryItem,
-  ProviderKeyStatus,
-  ModelSelectionItem,
-} from '@shared/schemas';
 import {
   byCategory,
   SETTINGS_TAB,
   type AgentCategory,
   type ByCategory,
+  type HistoryItem,
+  type MemoryViewItem,
+  type ModelSelectionItem,
+  type ProviderKeyStatus,
+  type SpendingStatus,
+  type SpendingStatusError,
+  type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import type {
-  SpendingStatus,
-  SpendingStatusError,
-} from '@shared/schemas/spendingStatus';
 import {
   type AgentSelectionItem,
   type ClaudeAgentEffort,
@@ -69,7 +66,6 @@ import {
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { AGENT_SKILLS_ENABLED_DEFAULT } from '@shared/schemas/agentSkills';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
-import type { SubscriptionUsageSnapshots } from '@shared/schemas/subscriptionUsage';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,

@@ -1,3 +1,5 @@
+import type { SubscriptionUsageWindow } from '@shared/schemas';
+
 import {
   asObject,
   assertSubscriptionUsageResponse,
@@ -7,10 +9,7 @@ import {
   usageWindow,
 } from './subscriptionUsageParsing';
 import type { SubscriptionUsageHttp } from './codexUsageAdapter';
-import type {
-  ParsedSubscriptionUsage,
-  SubscriptionUsageWindow,
-} from './subscriptionUsageTypes';
+import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 export const GLM_CODING_PLAN_USAGE_URL =
   'https://open.bigmodel.cn/api/monitor/usage/quota/limit';

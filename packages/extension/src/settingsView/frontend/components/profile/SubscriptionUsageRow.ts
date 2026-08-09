@@ -1,4 +1,11 @@
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  css,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -10,7 +17,7 @@ import {
   formatSubscriptionUsageUpdated,
   subscriptionUsageWindowLabel,
 } from '@shared/subscriptionUsagePresentation';
-import type { SubscriptionUsageSnapshot } from '@shared/schemas/subscriptionUsage';
+import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 
 function unavailableDetail(
   reason: Extract<
@@ -69,6 +76,11 @@ export class SubscriptionUsageRow extends LitElement {
         accent-color: var(--vscode-progressBar-background);
       }
 
+      .usage-window,
+      .usage-updated {
+        font-variant-numeric: tabular-nums;
+      }
+
       .usage-updated,
       .usage-unavailable-detail {
         color: var(--vscode-descriptionForeground);
@@ -80,6 +92,28 @@ export class SubscriptionUsageRow extends LitElement {
   @property({ attribute: false }) snapshot: SubscriptionUsageSnapshot | null =
     null;
   @property({ attribute: false }) now = Date.now();
+
+  private clock: ReturnType<typeof setInterval> | undefined;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.refreshNow();
+    this.clock = setInterval(() => this.refreshNow(), 60_000);
+  }
+
+  override disconnectedCallback(): void {
+    if (this.clock !== undefined) clearInterval(this.clock);
+    this.clock = undefined;
+    super.disconnectedCallback();
+  }
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('snapshot')) this.refreshNow();
+  }
+
+  private refreshNow(): void {
+    this.now = Date.now();
+  }
 
   override render(): TemplateResult | typeof nothing {
     const snapshot = this.snapshot;

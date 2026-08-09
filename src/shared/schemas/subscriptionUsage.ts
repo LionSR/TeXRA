@@ -14,8 +14,8 @@ const SubscriptionUsageWindowSchema = z.object({
   name: z.string().min(1),
   percentUsed: z.number().min(0).max(100),
   percentRemaining: z.number().min(0).max(100),
-  resetAt: z.number().int().nonnegative().optional(),
-  limitWindowSeconds: z.number().int().positive().optional(),
+  resetAt: z.int().nonnegative().optional(),
+  limitWindowSeconds: z.int().positive().optional(),
 });
 export type SubscriptionUsageWindow = z.infer<
   typeof SubscriptionUsageWindowSchema
@@ -25,7 +25,7 @@ const SubscriptionUsageSnapshotBaseSchema = z.object({
   provider: SubscriptionUsageProviderSchema,
   providerName: z.string().min(1),
   planName: z.string().min(1),
-  fetchedAt: z.number().int().nonnegative(),
+  fetchedAt: z.int().nonnegative(),
 });
 
 export const SubscriptionUsageSnapshotSchema = z.discriminatedUnion('state', [

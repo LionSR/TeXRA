@@ -39,6 +39,7 @@ export class ApiAccessSection extends LitElement {
   private handleModeChange(event: Event): void {
     const target = event.currentTarget as WaRadioGroup | null;
     const mode = target?.value === 'included' ? 'included' : 'personal';
+    if (target) target.value = this.mode;
     if (mode === 'included' && this.includedAccessExhausted) return;
     if (mode !== this.mode) {
       postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, { mode });

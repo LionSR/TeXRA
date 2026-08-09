@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ postMessage: vi.fn() }));
 vi.mock('@shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
@@ -63,12 +63,19 @@ type SubscriptionsTabElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
+type SubscriptionUsageRowElement = HTMLElement & {
+  snapshot: SubscriptionUsageSnapshot | null;
+  now: number;
+  updateComplete: Promise<boolean>;
+};
+
 describe('subscription usage rendering', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/SubscriptionsTab'),
   );
 
   beforeEach(() => mocks.postMessage.mockClear());
+  afterEach(() => vi.useRealTimers());
 
   it('renders native collapsed summaries, accessible meters, and one refresh action', async () => {
     const tab = await mountComponent<SubscriptionsTabElement>(
@@ -119,5 +126,42 @@ describe('subscription usage rendering', () => {
     );
     expect(kimiRow.shadowRoot?.textContent).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
+  });
+
+  it('advances its clock while connected and stops it after disconnect', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const row = await mountComponent<SubscriptionUsageRowElement>(
+      'subscription-usage-row',
+      { snapshot: snapshots.kimiCode },
+    );
+    expect(row.now).toBe(NOW);
+    expect(row.shadowRoot?.textContent).toContain('updated just now');
+
+    vi.advanceTimersByTime(3 * 60_000);
+    await row.updateComplete;
+    expect(row.now).toBe(NOW + 3 * 60_000);
+    expect(row.shadowRoot?.textContent).toContain('stale · updated 3m ago');
+
+    row.remove();
+    const disconnectedNow = row.now;
+    vi.advanceTimersByTime(2 * 60_000);
+    expect(row.now).toBe(disconnectedNow);
+  });
+
+  it('refreshes its clock when a fresh snapshot arrives', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const row = await mountComponent<SubscriptionUsageRowElement>(
+      'subscription-usage-row',
+      { snapshot: snapshots.kimiCode },
+    );
+    row.now = NOW - 10 * 60_000;
+    vi.setSystemTime(NOW + 30_000);
+    row.snapshot = { ...snapshots.kimiCode, fetchedAt: NOW + 30_000 };
+    await row.updateComplete;
+
+    expect(row.now).toBe(NOW + 30_000);
+    expect(row.shadowRoot?.textContent).toContain('updated just now');
   });
 });

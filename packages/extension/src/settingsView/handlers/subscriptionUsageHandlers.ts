@@ -2,7 +2,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
-} from '@shared/schemas/subscriptionUsage';
+} from '@shared/schemas';
 import type * as vscode from 'vscode';
 
 const SUBSCRIPTION_USAGE_PROVIDERS = [

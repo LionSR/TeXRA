@@ -66,6 +66,7 @@ import {
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import {
   applyStateSettingUpdate,
@@ -1049,12 +1050,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    const glmRegionChanged = data.key === GlobalStateKey.GLM_USE_CHINA;
+    if (glmRegionChanged) this.subscriptionUsage.invalidate('glmCodingPlan');
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
         this.sendReliabilityAndOrchestrationSettings(w),
         result.affectsModelAvailability
           ? this.sendModelSelectionData(w)
+          : Promise.resolve(),
+        glmRegionChanged
+          ? sendSubscriptionUsage(w, this.subscriptionUsage)
           : Promise.resolve(),
       ]);
     });
