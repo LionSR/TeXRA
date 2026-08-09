@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -6,9 +8,12 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { DiagnosticsTool, type DiagnosticsInput } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
+const WORKTREE_PATH = path.join(path.sep, 'worktree');
+const PAPER_PATH = path.join(WORKTREE_PATH, 'paper.tex');
+
 function worktreeContext(session: SessionHandle) {
   return createRunContext({
-    workingDirectory: '/worktree',
+    workingDirectory: WORKTREE_PATH,
     session,
   });
 }
@@ -73,9 +78,9 @@ describe('DiagnosticsTool', () => {
         new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
       );
 
-      expect(readDiagnostics).toHaveBeenCalledWith('/worktree/paper.tex');
+      expect(readDiagnostics).toHaveBeenCalledWith(PAPER_PATH);
       expect(result.diagnostics).toMatchObject({
-        path: '/worktree/paper.tex',
+        path: PAPER_PATH,
         command: 'list',
       });
     });
@@ -129,7 +134,7 @@ describe('DiagnosticsTool', () => {
 
       expect(entries).toEqual([
         {
-          absolutePath: '/worktree/paper.tex',
+          absolutePath: PAPER_PATH,
           line: 3,
           message: 'tighten this claim',
           severity: 4,
@@ -137,7 +142,7 @@ describe('DiagnosticsTool', () => {
         },
       ]);
       expect(result.summary).toBe(
-        'Added criticism for /worktree/paper.tex:3 (S4/C5)',
+        `Added criticism for ${PAPER_PATH}:3 (S4/C5)`,
       );
     });
   });

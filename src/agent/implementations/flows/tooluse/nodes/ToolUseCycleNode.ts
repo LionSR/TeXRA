@@ -219,7 +219,7 @@ export class ToolUseCycleNode<C> extends Node<
           (assemblyResponse !== prepRes.cycleStartLastResponse
             ? assemblyResponse
             : undefined));
-    shared.lastResponse = cycleResponse || shared.lastResponse;
+    shared.lastResponse = cycleResponse;
     if (cycleResponse) {
       this.services.onCycleResponse?.(cycleResponse);
     }

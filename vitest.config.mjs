@@ -9,6 +9,9 @@ const require = createRequire(import.meta.url);
 const QUICKJS_WASM_ID = '@jitl/quickjs-wasmfile-release-sync/wasm';
 const QUICKJS_WASM_VIRTUAL_ID = '\0texra-quickjs-wasm';
 const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
+// Full hosted Windows shards intermittently exceed 10s in unrelated suites;
+// retain the tighter timeout elsewhere so genuine local/Linux hangs fail fast.
+const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 export default defineConfig({
   plugins: [texTemplatePlugin(), quickJsWasmPlugin()],
@@ -26,7 +29,8 @@ export default defineConfig({
     include: ['src/test-kernel/**/*.vitest.ts'],
     passWithNoTests: false,
     setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
-    testTimeout: 10000,
+    testTimeout: kernelTimeoutMs,
+    hookTimeout: kernelTimeoutMs,
   },
 });
 

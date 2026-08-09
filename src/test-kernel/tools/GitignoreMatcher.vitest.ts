@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,7 +113,7 @@ describe('getGitignoreMatcher', () => {
   });
 
   it('uses an empty matcher when all ignore policies are absent', async () => {
-    fsState.homeDirectory = '/home/user';
+    fsState.homeDirectory = path.join(path.sep, 'home', 'user');
 
     expectEmptyMatcher(await loadMatcher());
   });
@@ -125,8 +127,11 @@ describe('getGitignoreMatcher', () => {
 
   it('rejects when a global ignore policy cannot be read', async () => {
     const error = eaccesError('Permission denied');
-    fsState.homeDirectory = '/home/user';
-    fsState.absoluteReadErrors.set('/home/user/.gitignore_global', error);
+    fsState.homeDirectory = path.join(path.sep, 'home', 'user');
+    fsState.absoluteReadErrors.set(
+      path.join(path.sep, 'home', 'user', '.gitignore_global'),
+      error,
+    );
 
     await expect(loadMatcher()).rejects.toBe(error);
   });

@@ -99,10 +99,10 @@ export async function inspectRunStorageEntry(
   const root = resolveRunStoragePath(executionId);
   const entry = resolveRunStoragePath(executionId, normalizedPath);
   const ancestors = [root];
-  let ancestorPath = root;
-  for (const segment of pathSegments.slice(0, -1)) {
-    ancestorPath = path.join(ancestorPath, segment);
-    ancestors.push(ancestorPath);
+  for (const [index] of pathSegments.slice(0, -1).entries()) {
+    ancestors.push(
+      resolveRunStoragePath(executionId, ...pathSegments.slice(0, index + 1)),
+    );
   }
   for (const ancestor of ancestors) {
     const ancestorType = await storageEntryType(ancestor);

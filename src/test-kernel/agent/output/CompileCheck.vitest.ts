@@ -217,11 +217,10 @@ describe('runCompileCheck', () => {
     await expect(AbsoluteFS.read(logLocation.absolutePath)).rejects.toThrow();
   });
 
-  it('clears a pre-hash-suffix legacy log left over from before this fix', async () => {
-    // Before the collision-free hash suffix, the log for "main.tex" at round 0
-    // would have been written to "r0_main.tex.log" (no hash). A run resumed
-    // under the fixed code must still clean that legacy name up on success,
-    // not just the new hashed name it now writes to.
+  it('clears legacy logs left over before path normalization', async () => {
+    // A Windows run before path normalization wrote its hash from
+    // "r0\\main.tex", leaving this exact log name behind. A resumed run must
+    // remove it with the other legacy spellings after succeeding.
     const executionId = 'compile-legacy-log';
     const texPath = path.join(runDir(executionId), 'r0', 'main.tex');
     const legacyLogPath = path.join(
@@ -229,20 +228,45 @@ describe('runCompileCheck', () => {
       'compile',
       'r0_main.tex.log',
     );
+    const rawWindowsLegacyLogPath = path.join(
+      runDir(executionId),
+      'compile',
+      'r0_r0_main.tex.log',
+    );
+    const rawWindowsHashedLogPath = path.join(
+      runDir(executionId),
+      'compile',
+      'r0_r0_main.tex_85c54784.log',
+    );
     await initLatexPlatform({
       [texPath]: COMPILABLE_TEX,
       [legacyLogPath]: 'Compile check failed for main.tex (pre-upgrade)\n',
+      [rawWindowsLegacyLogPath]:
+        'Compile check failed for main.tex (Windows pre-upgrade)\n',
+      [rawWindowsHashedLogPath]:
+        'Compile check failed for main.tex (Windows pre-normalization hash)\n',
     });
 
-    const outputState = seedMainTexOutput(executionId);
+    const filesModule = await import('@utils/files');
+    const comparablePathSpy = vi
+      .spyOn(filesModule, 'getComparablePath')
+      .mockReturnValueOnce('r0\\main.tex');
 
-    const result = await runCompileCheck(
-      compileContext(executionId, outputState),
-      0,
-    );
+    try {
+      const outputState = seedMainTexOutput(executionId);
 
-    expect(result.compileResult?.status).toBe('ok');
-    await expect(AbsoluteFS.read(legacyLogPath)).rejects.toThrow();
+      const result = await runCompileCheck(
+        compileContext(executionId, outputState),
+        0,
+      );
+
+      expect(result.compileResult?.status).toBe('ok');
+      await expect(AbsoluteFS.read(legacyLogPath)).rejects.toThrow();
+      await expect(AbsoluteFS.read(rawWindowsLegacyLogPath)).rejects.toThrow();
+      await expect(AbsoluteFS.read(rawWindowsHashedLogPath)).rejects.toThrow();
+    } finally {
+      comparablePathSpy.mockRestore();
+    }
   });
 
   it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {

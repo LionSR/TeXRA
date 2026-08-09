@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports - test support
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { normalizeFilePath } from '@utils/core';
 import {
   DESKTOP_SRC_DIR,
   REPO_ROOT,
@@ -155,7 +156,9 @@ describe('desktop composition root and launch environment', () => {
     for (const filePath of files) {
       const source = await readFile(filePath, 'utf8');
       if (source.includes('initPlatform(')) {
-        initPlatformFiles.push(relative(REPO_ROOT, filePath));
+        initPlatformFiles.push(
+          normalizeFilePath(relative(REPO_ROOT, filePath)),
+        );
       }
     }
 
