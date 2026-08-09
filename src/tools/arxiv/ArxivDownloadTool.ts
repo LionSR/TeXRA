@@ -18,12 +18,9 @@ const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
 
 function formatDirEntry(name: string, type: number): string {
-  const isDir = isDirectory(type);
-  let label = 'other';
-  if (isDir) label = 'dir';
-  else if (isFile(type)) label = 'file';
-  const suffix = isDir ? '/' : '';
-  return `${label.padEnd(4)} ${name}${suffix}`;
+  if (isDirectory(type)) return `dir  ${name}/`;
+  if (isFile(type)) return `file ${name}`;
+  return `other ${name}`;
 }
 
 /** List the freshly-extracted source directory, skipping VCS noise. */

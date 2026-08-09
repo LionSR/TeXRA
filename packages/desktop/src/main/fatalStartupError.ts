@@ -2,18 +2,12 @@ import { app, dialog } from 'electron';
 
 let fatalStartupErrorReported = false;
 
-function formatFatalStartupError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack ?? error.message;
-  }
-  return String(error);
-}
-
 export function reportFatalStartupError(error: unknown): void {
   if (fatalStartupErrorReported) return;
   fatalStartupErrorReported = true;
 
-  const detail = formatFatalStartupError(error);
+  const detail =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
   console.error(`Fatal TeXRA desktop error:\n${detail}`);
 
   const showFailureDialog = () => {

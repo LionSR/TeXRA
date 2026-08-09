@@ -106,10 +106,6 @@ export class ProviderKeyModal extends LitElement {
     this.dispatchEvent(createEvent('provider-key-cancel'));
   }
 
-  private handleCancelClick(): void {
-    this.close();
-  }
-
   private handleInput(event: Event): void {
     this.value = (event.target as WaInput).value ?? '';
     if (this.error) {
@@ -171,7 +167,7 @@ export class ProviderKeyModal extends LitElement {
             appearance="outlined"
             variant="neutral"
             type="button"
-            @click=${this.handleCancelClick}
+            @click=${() => this.close()}
           >
             Cancel
           </wa-button>
