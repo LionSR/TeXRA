@@ -184,6 +184,9 @@ function redactPathPrefixes(
     .filter((prefix): prefix is string => Boolean(prefix))
     .toSorted((a, b) => b.length - a.length)
     .reduce((redacted, prefix) => {
+      if (prefix === '/') {
+        return redacted.replaceAll(/(?<![A-Za-z0-9:/])\//g, '[path]');
+      }
       const boundary = /[\\/]$/.test(prefix)
         ? ''
         : `(?=$|[\\s\\\\/,:;!?\\])}'"])`;

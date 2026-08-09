@@ -115,6 +115,26 @@ describe('desktop app log', () => {
     expect(snapshot.text).toBe('Opened [path]Users\\alice\\paper.tex');
   });
 
+  it('redacts a POSIX-root path without rewriting URLs or relative separators', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    const userDataPath = join(root, 'userData');
+    const logsPath = join(userDataPath, 'logs');
+    const logPath = join(logsPath, 'texra-desktop.log');
+    await mkdir(logsPath, { recursive: true });
+    await writeFile(
+      logPath,
+      'Opened /Users/alice/paper.tex; fetched https://example.com; read src/file.ts',
+    );
+    configureElectronTestStub({ userDataPath });
+    const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+    const snapshot = readDesktopLogSnapshot({ workspacePath: '/' });
+
+    expect(snapshot.text).toBe(
+      'Opened [path]Users/alice/paper.tex; fetched https://example.com; read src/file.ts',
+    );
+  });
+
   it('redacts a workspace nested under the home directory before home redaction', async () => {
     const root = await makeTempDir('texra-electron-log-', tempDirs);
     const userDataPath = join(root, 'userData');
