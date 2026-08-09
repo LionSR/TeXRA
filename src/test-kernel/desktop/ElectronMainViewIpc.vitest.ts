@@ -75,7 +75,7 @@ interface MainViewIpcModule {
         copyLog(text: string): Promise<void>;
         exportLog(text: string): Promise<void>;
       };
-      executeAgent(message: unknown): Promise<void>;
+      handleExecuteMessage(message: unknown): Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -185,7 +185,7 @@ function createMainViewCommandCapabilities() {
     handleMessage: vi.fn(() => false),
   });
   return {
-    executeAgent: vi.fn(async (_message: unknown) => {}),
+    handleExecuteMessage: vi.fn(async (_message: unknown) => {}),
     fileSelection: createUnhandledCapability(),
     prompt: { ...createUnhandledCapability(), dispose: vi.fn() },
     settings: createUnhandledCapability(),
@@ -503,8 +503,8 @@ describe('desktop main-view IPC', () => {
 
   it('forwards EXECUTE messages to the injected executor', async () => {
     const harness = await createMainViewHarness();
-    const executeAgent = vi.fn(async (_message: unknown) => {});
-    installMainView(harness, { executeAgent });
+    const handleExecuteMessage = vi.fn(async (_message: unknown) => {});
+    installMainView(harness, { handleExecuteMessage });
     const { sendFromRenderer } = harness;
 
     const executeMessage = {
@@ -514,7 +514,7 @@ describe('desktop main-view IPC', () => {
     };
     sendFromRenderer(executeMessage);
     await Promise.resolve();
-    expect(executeAgent).toHaveBeenCalledWith(executeMessage);
+    expect(handleExecuteMessage).toHaveBeenCalledWith(executeMessage);
   });
 
   it('pushes the new theme when the native theme changes', async () => {

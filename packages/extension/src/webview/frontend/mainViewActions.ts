@@ -373,7 +373,8 @@ export function buildExecuteMessage(): MainViewExecuteMessage {
   });
 }
 
-export function executeAgent(): void {
+/** Post the current form state to the host as an EXECUTE message. */
+export function sendExecuteMessage(): void {
   postMessage(MAIN_VIEW_COMMANDS.EXECUTE, buildExecuteMessage());
 }
 

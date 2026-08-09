@@ -390,7 +390,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           getExecutionId: this.getExecutionId,
         },
         // Workflow actions intentionally wait for the run to finish.
-        executeAgent: (request) => this.executeValidated(request),
+        runExecutionRequest: (request) => this.executeValidated(request),
       },
       workflowFileActions: {
         state: {
