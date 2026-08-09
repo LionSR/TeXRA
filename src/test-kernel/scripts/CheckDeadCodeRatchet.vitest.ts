@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
+const {
   compareFindings,
   countByCategory,
   diffFindings,
@@ -8,7 +8,9 @@ import {
   findingKey,
   parseKnipIssues,
   readBaseline,
-} from '../../../scripts/check-dead-code-ratchet.mjs';
+} = await import(
+  new URL('../../../scripts/check-dead-code-ratchet.mjs', import.meta.url).href
+);
 type KnipFinding = {
   file: string;
   category: 'files' | 'exports' | 'types' | 'duplicates';
