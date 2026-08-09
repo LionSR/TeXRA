@@ -305,6 +305,21 @@ export async function coalesceAsync<Key, Value>(
   }
 }
 
+/**
+ * Rethrow a collected set of independent failures with the conventional
+ * shape: a no-op when empty, the single error unwrapped when there is exactly
+ * one, and an {@link AggregateError} carrying `message` when there are
+ * several. Centralizes the "run each teardown step, collect what threw, then
+ * surface them together" tail that session and run shutdown paths repeat.
+ */
+export function throwAggregated(
+  failures: readonly unknown[],
+  message: string,
+): void {
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, message);
+}
+
 // ---------------------------------------------------------------------------
 // comparators
 // ---------------------------------------------------------------------------

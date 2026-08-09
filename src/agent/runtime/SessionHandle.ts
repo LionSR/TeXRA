@@ -50,6 +50,7 @@ import {
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { throwAggregated } from '@utils/core';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
@@ -673,13 +674,7 @@ export class SessionHandle {
         failures.push(error);
       }
     }
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) {
-      throw new AggregateError(
-        failures,
-        'Multiple session trace writers failed to flush',
-      );
-    }
+    throwAggregated(failures, 'Multiple session trace writers failed to flush');
   }
 
   /** Register a session-owned durable writer such as a snapshot store. */
@@ -749,13 +744,10 @@ export class SessionHandle {
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
     );
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) {
-      throw new AggregateError(
-        failures,
-        'Multiple session artifact writers failed to flush',
-      );
-    }
+    throwAggregated(
+      failures,
+      'Multiple session artifact writers failed to flush',
+    );
   }
 
   /** Listeners for terminal run results in this session (the host channel). */
@@ -873,10 +865,7 @@ export class SessionHandle {
     } finally {
       liveSessions.delete(this);
     }
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) {
-      throw new AggregateError(failures, 'Session teardown failed');
-    }
+    throwAggregated(failures, 'Session teardown failed');
   }
 
   /** Dispose the runtime owners and drop result listeners. */

@@ -56,7 +56,7 @@ import type {
   ChildStream,
   ChildStreamOutcome,
 } from '@tools/delegation/childStream';
-import { formatDuration } from '@utils/core';
+import { formatDuration, throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
@@ -709,12 +709,12 @@ export function startChildRunLoop<TTurn>(
     cleanup(() => stopWatchingLease?.());
     cleanup(releaseChildActivation);
     cleanup(releaseSessionOwnershipOnce);
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [error, ...cleanupErrors],
-        `Child run ${executionId} setup failed and rollback was incomplete`,
-      );
-    }
+    // Non-empty by construction (the primary error is always first): one
+    // failure rethrows `error` unwrapped, several wrap into an AggregateError.
+    throwAggregated(
+      [error, ...cleanupErrors],
+      `Child run ${executionId} setup failed and rollback was incomplete`,
+    );
     throw error;
   }
 
