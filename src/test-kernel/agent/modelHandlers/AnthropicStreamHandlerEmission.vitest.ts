@@ -104,37 +104,86 @@ describe('AnthropicStreamHandler server-tool-result emission guard', () => {
 });
 
 describe('AnthropicStreamHandler compaction activity', () => {
-  it('marks a native compaction block active until it stops', () => {
-    const { logger, emit } = createHandlerHarness(true);
+  it('coalesces active blocks and terminalizes at the enclosing stream outcome', () => {
+    const { logger, handler, emit } = createHandlerHarness(true);
 
     emit({
       type: 'content_block_start',
       index: 0,
       content_block: { type: 'compaction', content: '' },
     });
+    emit({
+      type: 'content_block_start',
+      index: 1,
+      content_block: { type: 'compaction', content: '' },
+    });
+    const operationId = logger.info.mock.calls[0]?.[1]?.data.operationId;
 
-    expect(logger.info).toHaveBeenLastCalledWith(
-      'Compacting conversation context',
-      expect.objectContaining({
-        messageType: 'contextCompactionActivity',
-        data: {
-          activity: 'context_compaction',
-          state: 'started',
-        },
-      }),
-    );
-
+    emit({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'compaction_delta', content: 'usable summary' },
+    });
     emit({ type: 'content_block_stop', index: 0 });
+    emit({ type: 'content_block_stop', index: 1 });
+    expect(logger.info).toHaveBeenCalledTimes(1);
 
-    expect(logger.info).toHaveBeenLastCalledWith(
-      'Conversation context compaction finished',
-      expect.objectContaining({
-        messageType: 'contextCompactionActivity',
-        data: {
-          activity: 'context_compaction',
-          state: 'finished',
-        },
-      }),
-    );
+    handler.finalize('completed');
+    handler.finalize('failed');
+
+    expect(logger.info).toHaveBeenCalledTimes(2);
+    expect(logger.info.mock.calls.map(([, options]) => options.data)).toEqual([
+      {
+        activity: 'context_compaction',
+        operationId,
+        state: 'started',
+      },
+      {
+        activity: 'context_compaction',
+        operationId,
+        state: 'completed',
+      },
+    ]);
   });
+
+  it.each(['failed', 'cancelled'] as const)(
+    'preserves the enclosing %s outcome',
+    (outcome) => {
+      const { logger, handler, emit } = createHandlerHarness(true);
+      emit({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: '' },
+      });
+
+      handler.finalize(outcome);
+
+      expect(logger.info.mock.calls.at(-1)?.[1]?.data).toMatchObject({
+        state: outcome,
+      });
+    },
+  );
+
+  it.each(['', ' \n'])(
+    'marks successful stream content %j as skipped',
+    (content) => {
+      const { logger, handler, emit } = createHandlerHarness(true);
+      emit({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: '' },
+      });
+      emit({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'compaction_delta', content },
+      });
+
+      handler.finalize();
+
+      expect(logger.info.mock.calls.at(-1)?.[1]?.data).toMatchObject({
+        state: 'skipped',
+      });
+    },
+  );
 });

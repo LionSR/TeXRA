@@ -64,6 +64,7 @@ export function trimAssistantTranscriptLead(text: string): string {
 
 export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
   switch (entry.role) {
+    case 'activity':
     case 'assistant':
     case 'error':
     case 'user':
@@ -204,7 +205,11 @@ export function splitTranscriptEntries(
       finalized.push(entry);
       continue;
     }
-    if (entry.role === 'tool' || entry.role === 'workflowTask') {
+    if (
+      entry.role === 'activity' ||
+      entry.role === 'tool' ||
+      entry.role === 'workflowTask'
+    ) {
       pending.push(entry);
       continue;
     }

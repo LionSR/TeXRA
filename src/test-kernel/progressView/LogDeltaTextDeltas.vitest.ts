@@ -126,46 +126,42 @@ describe('LOG_DELTA text deltas', () => {
     expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
   });
 
-  it('drops non-presentational records before progress-log indexing', () => {
+  it('projects compaction start and terminal events into one stable row', () => {
     const getState = seedWorkflowStream();
     const activityEntry = (
-      id: string,
-      activityState: 'started' | 'finished',
+      seqNo: number,
+      state: 'started' | 'completed',
     ): StreamLogEntry => ({
-      seqNo: activityState === 'started' ? 1 : 3,
-      id,
+      seqNo,
+      id: `compaction-event-${seqNo}`,
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
-      timestamp: 100,
+      timestamp: seqNo * 100,
       messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-      text: `compaction ${activityState}`,
+      text: `compaction ${state}`,
       data: {
         activity: 'context_compaction',
-        state: activityState,
+        operationId: 'operation-1',
+        state,
       },
     });
 
-    dispatchLogDelta([
-      activityEntry('compaction-start', 'started'),
-      {
-        seqNo: 2,
-        id: 'internal-diagnostic',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: 'hidden diagnostic',
-        verbose: false,
-      },
-      modelResponseEntry('visible', 'completed'),
-      activityEntry('compaction-finish', 'finished'),
+    dispatchLogDelta([activityEntry(1, 'started')]);
+    expect(getState().streamLogs.get(STREAM_ID)?.logs).toEqual([
+      expect.objectContaining({
+        id: 'compaction:operation-1',
+        data: expect.objectContaining({ status: 'running' }),
+      }),
     ]);
 
+    dispatchLogDelta([activityEntry(2, 'completed')]);
     const streamLogs = getState().streamLogs.get(STREAM_ID);
-    expect(streamLogs?.logs.map(({ id }) => id)).toEqual(['model-response']);
-    expect([...(streamLogs?.logIndex.keys() ?? [])]).toEqual([
-      'model-response',
-    ]);
+    expect(streamLogs?.logs).toHaveLength(1);
+    expect(streamLogs?.logs[0]).toMatchObject({
+      id: 'compaction:operation-1',
+      data: { status: 'completed', operationId: 'operation-1' },
+    });
+    expect(streamLogs?.updatedMessageIndices).toEqual([0]);
   });
 
   it('keeps valid group-start fields when status is unrecognized', () => {

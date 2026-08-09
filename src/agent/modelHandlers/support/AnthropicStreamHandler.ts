@@ -4,9 +4,10 @@
  */
 // Third-party imports
 import {
-  logCompactionActivity,
   logWebFetch,
+  startCompactionActivity,
   type AgentTrace,
+  type CompactionActivityOperation,
 } from '@agent/trace';
 import {
   extractWebFetchResultFields,
@@ -105,7 +106,8 @@ interface StreamFactories {
  *   → Output #1 (text_0), WebSearch/WebFetch, Output #2 (text_3 + text_4 merged)
  */
 export class AnthropicStreamHandler {
-  private readonly compactionBlocks = new Set<number>();
+  private compactionActivity: CompactionActivityOperation | undefined;
+  private usableCompactionContent = false;
   private readonly thinkingStreams = new Map<
     number,
     ReturnType<AgentTrace['openStream']>
@@ -176,7 +178,8 @@ export class AnthropicStreamHandler {
    * Call this after stream.finalMessage() completes.
    * Sets finalized flag to prevent processing any subsequent events.
    */
-  finalize(): void {
+  finalize(outcome: 'completed' | 'failed' | 'cancelled' = 'completed'): void {
+    if (this.state.finalized) return;
     // Set flag first to prevent processing any events that arrive during cleanup
     this.state.finalized = true;
 
@@ -186,10 +189,11 @@ export class AnthropicStreamHandler {
     }
     this.thinkingStreams.clear();
 
-    if (this.compactionBlocks.size > 0) {
-      this.compactionBlocks.clear();
-      logCompactionActivity(this.logger, 'finished');
-    }
+    this.compactionActivity?.finish(
+      outcome === 'completed' && !this.usableCompactionContent
+        ? 'skipped'
+        : outcome,
+    );
 
     // Finalize output stream
     this.state.outputStream?.finalize();
@@ -267,10 +271,7 @@ export class AnthropicStreamHandler {
         this.factories.createThinkingStream(),
       );
     } else if (blockType === 'compaction') {
-      if (this.compactionBlocks.size === 0) {
-        logCompactionActivity(this.logger, 'started');
-      }
-      this.compactionBlocks.add(blockIndex);
+      this.compactionActivity ??= startCompactionActivity(this.logger);
       this.logger.debug('Compaction block started in stream');
     } else if (blockType === 'text') {
       if (!isConsecutiveText) {
@@ -316,12 +317,15 @@ export class AnthropicStreamHandler {
         // Accumulate input JSON for server tools to extract query/URL (with size limit)
         this.accumulateServerToolInput(event.index, event.delta.partial_json);
         break;
-      case 'compaction_delta':
+      case 'compaction_delta': {
         // Compaction content arrives as a single summary delta and is not user-visible output.
+        const contentLength = event.delta.content?.trim().length ?? 0;
+        this.usableCompactionContent ||= contentLength > 0;
         this.logger.debug(
-          `Compaction summary delta received (${event.delta.content?.length ?? 0} chars)`,
+          `Compaction summary delta received (${contentLength} chars)`,
         );
         break;
+      }
     }
   }
 
@@ -336,12 +340,6 @@ export class AnthropicStreamHandler {
     if (thinking) {
       thinking.finalize();
       this.thinkingStreams.delete(event.index);
-    }
-    if (
-      this.compactionBlocks.delete(event.index) &&
-      this.compactionBlocks.size === 0
-    ) {
-      logCompactionActivity(this.logger, 'finished');
     }
     // Text streams: don't finalize here - wait for non-text block or end
   }

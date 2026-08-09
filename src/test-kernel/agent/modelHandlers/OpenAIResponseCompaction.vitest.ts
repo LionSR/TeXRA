@@ -1,6 +1,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
+import { APIUserAbortError } from 'openai';
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -212,6 +213,19 @@ function withSdkOptions<T extends { responses: object }>(client: T) {
   });
 }
 
+function compactionActivityStates(
+  handler: ModelHandlerOpenAIResponse,
+): string[] {
+  const logger = (handler as unknown as { logger: AgentTrace }).logger;
+  return vi
+    .mocked(logger.info)
+    .mock.calls.flatMap(([, options]) =>
+      options?.messageType === 'contextCompactionActivity'
+        ? [(options.data as { state: string }).state]
+        : [],
+    );
+}
+
 function sendTurn(
   handler: ModelHandlerOpenAIResponse,
   client: unknown,
@@ -274,6 +288,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(requests[1].previous_response_id).toBeUndefined();
     expect(requests[1].input).toEqual(compactedMessages);
     expect(result.updatedMessages).toEqual(compactedMessages);
+    expect(compactionActivityStates(handler)).toEqual(['started', 'completed']);
   });
 
   it('mints a fresh ownership token for its own pre-flight compaction retry', async () => {
@@ -343,6 +358,51 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(requests).toHaveLength(1);
+    expect(compactionActivityStates(handler)).toEqual(['started', 'cancelled']);
+  });
+
+  it('propagates an SDK user abort when the request signal is not aborted', async () => {
+    const handler = createHandler();
+    const abortError = new APIUserAbortError();
+    const signal = new AbortController().signal;
+    const client = withSdkOptions({
+      responses: {
+        inputTokens: { count: OVER_THRESHOLD_COUNT },
+        compact: async () => Promise.reject(abortError),
+        create: async () => createResponse('resp-before-threshold', 800),
+      },
+    });
+
+    await sendTurn(handler, client, createMessages(2));
+    await expect(
+      sendTurn(handler, client, createMessages(3), signal),
+    ).rejects.toBe(abortError);
+
+    expect(signal.aborted).toBe(false);
+    expect(compactionActivityStates(handler)).toEqual(['started', 'cancelled']);
+  });
+
+  it('marks failed and empty compact responses without claiming success', async () => {
+    for (const [compact, expected] of [
+      [async () => Promise.reject(new Error('compact failed')), 'failed'],
+      [async () => ({ output: [], usage: { output_tokens: 0 } }), 'skipped'],
+    ] as const) {
+      const handler = createHandler();
+      const client = withSdkOptions({
+        responses: {
+          inputTokens: { count: OVER_THRESHOLD_COUNT },
+          compact,
+          create: recordCreate([], (attempt) =>
+            createResponse(`response-${attempt}`, attempt === 1 ? 800 : 150),
+          ),
+        },
+      });
+
+      await sendTurn(handler, client, createMessages(2));
+      await sendTurn(handler, client, createMessages(3));
+
+      expect(compactionActivityStates(handler)).toEqual(['started', expected]);
+    }
   });
 
   it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {

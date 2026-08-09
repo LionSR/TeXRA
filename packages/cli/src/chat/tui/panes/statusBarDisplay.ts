@@ -342,7 +342,7 @@ function queuedFollowUpsCountSegment(
 function subagentsSegment(subagents: number): StatusBarSegment | undefined {
   return subagents > 0
     ? {
-        text: formatResultCount(subagents, SUBAGENT.countNoun),
+        text: formatResultCount(subagents, 'agent'),
         compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
@@ -355,7 +355,7 @@ function runningSessionsSegment(
 ): StatusBarSegment | undefined {
   return runningSessions > 0
     ? {
-        text: formatResultCount(runningSessions, RUNNING_SESSION.countNoun),
+        text: `${runningSessions} active`,
         compactText: `${runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,

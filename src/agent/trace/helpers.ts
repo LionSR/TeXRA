@@ -16,6 +16,7 @@ import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
+  type CompactionActivityOutcome,
   type ContextManagementData,
   type ConversationProgress,
   type ErrorContext,
@@ -23,6 +24,7 @@ import {
   type MediaAttachmentKind,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
+import { generateShortId } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import type { AgentTrace } from './AgentTrace';
@@ -68,23 +70,49 @@ export function logProgressStatus(
   });
 }
 
-/** Mark the beginning or end of a context-compaction operation. */
-export function logCompactionActivity(
+const COMPACTION_ACTIVITY_LOG_TEXT: Record<
+  CompactionActivityData['state'],
+  string
+> = {
+  started: 'Compacting conversation context',
+  completed: 'Conversation context compaction completed',
+  failed: 'Conversation context compaction failed',
+  cancelled: 'Conversation context compaction cancelled',
+  skipped: 'Conversation context compaction skipped',
+};
+
+export interface CompactionActivityOperation {
+  readonly operationId: string;
+  /** Emit the first terminal result; later calls are no-ops. */
+  finish(outcome: CompactionActivityOutcome): void;
+}
+
+/** Start one idempotently-terminalized context-compaction operation. */
+export function startCompactionActivity(
   trace: AgentTrace,
-  state: CompactionActivityData['state'],
-): void {
-  trace.info(
-    state === 'started'
-      ? 'Compacting conversation context'
-      : 'Conversation context compaction finished',
-    {
+): CompactionActivityOperation {
+  const operationId = `compaction-${generateShortId()}`;
+  let finished = false;
+  const emit = (state: CompactionActivityData['state']): void => {
+    trace.info(COMPACTION_ACTIVITY_LOG_TEXT[state], {
       messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
       data: {
         activity: 'context_compaction',
+        operationId,
         state,
       } satisfies CompactionActivityData,
+    });
+  };
+
+  emit('started');
+  return {
+    operationId,
+    finish: (outcome) => {
+      if (finished) return;
+      finished = true;
+      emit(outcome);
     },
-  );
+  };
 }
 
 /**

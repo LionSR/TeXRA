@@ -6,12 +6,18 @@ import {
   ContextStateDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_STATUS,
   isToolUseState,
   type LogMessageData,
   type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
   type StreamLogTextDelta,
 } from '@shared/schemas';
+import {
+  applyCompactionActivityEntries,
+  interruptRunningCompactionActivities,
+} from '@shared/streams/compactionActivityProjection';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 
 import { appState } from '../progressState';
@@ -33,8 +39,54 @@ function toLogMessage(entry: StreamLogEntry): LogMessageData {
 interface EntryResult {
   logChanged: boolean;
   stateChanged: boolean;
-  /** Index of an existing log replaced in place; absent for appends. */
-  updatedIndex?: number;
+  /** Existing log indices replaced in place; appends are absent. */
+  updatedIndices: readonly number[];
+}
+
+function syncCompactionProjectionChanges(
+  streamLogs: StreamLogs,
+  changedIndices: readonly number[],
+): Pick<EntryResult, 'logChanged' | 'updatedIndices'> {
+  const updatedIndices: number[] = [];
+  let logChanged = false;
+
+  for (const blockIndex of changedIndices) {
+    const block = streamLogs.compactionProjection.blocks[blockIndex];
+    if (!block) continue;
+    const id = `compaction:${block.operationId}`;
+    const nextLog: LogMessageData = {
+      id,
+      text: '',
+      level: 'info',
+      timestamp: block.startedAt,
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: block,
+    };
+    const existingIndex = streamLogs.logIndex.get(id);
+    if (existingIndex === undefined) {
+      streamLogs.logIndex.set(id, streamLogs.logs.length);
+      streamLogs.logs.push(nextLog);
+    } else {
+      streamLogs.logs[existingIndex] = nextLog;
+      updatedIndices.push(existingIndex);
+    }
+    logChanged = true;
+  }
+
+  return { logChanged, updatedIndices };
+}
+
+/** Interrupt unmatched activity rows when the stream lifecycle becomes terminal. */
+export function interruptCompactionActivityLogs(
+  streamLogs: StreamLogs,
+  finishedAt?: number,
+): readonly number[] {
+  const changedIndices = interruptRunningCompactionActivities(
+    streamLogs.compactionProjection,
+    finishedAt,
+  );
+  return syncCompactionProjectionChanges(streamLogs, changedIndices)
+    .updatedIndices;
 }
 
 function applyEntry(
@@ -44,7 +96,7 @@ function applyEntry(
 ): EntryResult {
   if (entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS) {
     if (!isToolUseState(streamState)) {
-      return { logChanged: false, stateChanged: false };
+      return { logChanged: false, stateChanged: false, updatedIndices: [] };
     }
     const snapshot = ActiveSkillsSnapshotSchema.safeParse(entry.data);
     if (!snapshot.success) {
@@ -54,17 +106,20 @@ function applyEntry(
       );
     }
     streamState.activeSkills = snapshot.success ? snapshot.data.skills : [];
-    return { logChanged: false, stateChanged: true };
+    return { logChanged: false, stateChanged: true, updatedIndices: [] };
   }
 
-  // These records are persisted for diagnostics or live CLI/TUI state, not
-  // progress presentation. Drop them before invisible rows consume timeline
-  // windows or fall through to the default log formatter.
+  const compactionResult = syncCompactionProjectionChanges(
+    streamLogs,
+    applyCompactionActivityEntries(streamLogs.compactionProjection, [entry]),
+  );
+  // Internal records remain diagnostic-only. Raw compaction lifecycle records
+  // are replaced by the correlated stable row projected above.
   if (
     entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY ||
     entry.messageType === MESSAGE_TYPES.INTERNAL
   ) {
-    return { logChanged: false, stateChanged: false };
+    return { ...compactionResult, stateChanged: false };
   }
 
   let stateChanged = upsertTaskGroupFromStreamLog(
@@ -89,7 +144,7 @@ function applyEntry(
   }
 
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
-    return { logChanged: false, stateChanged };
+    return { ...compactionResult, stateChanged };
   }
 
   const nextLog = toLogMessage(entry);
@@ -97,11 +152,16 @@ function applyEntry(
   if (existingIndex === undefined) {
     streamLogs.logIndex.set(entry.id, streamLogs.logs.length);
     streamLogs.logs.push(nextLog);
-    return { logChanged: true, stateChanged };
+    return { ...compactionResult, logChanged: true, stateChanged };
   }
 
   streamLogs.logs[existingIndex] = nextLog;
-  return { logChanged: true, stateChanged, updatedIndex: existingIndex };
+  return {
+    ...compactionResult,
+    logChanged: true,
+    stateChanged,
+    updatedIndices: [...compactionResult.updatedIndices, existingIndex],
+  };
 }
 
 function applyTextDelta(
@@ -152,8 +212,8 @@ export const logHandlers = {
           const result = applyEntry(entry, streamLogs, streamState);
           logChanged ||= result.logChanged;
           stateChanged ||= result.stateChanged;
-          if (result.updatedIndex !== undefined) {
-            updatedMessageIndices.add(result.updatedIndex);
+          for (const index of result.updatedIndices) {
+            updatedMessageIndices.add(index);
           }
         };
 
@@ -169,12 +229,25 @@ export const logHandlers = {
             updatedMessageIndices.add(existingIndex);
           }
         }
+        if (
+          streamState.status !== STREAM_STATUS.READY &&
+          isTerminalOutcomePhase(streamState.status)
+        ) {
+          for (const index of interruptCompactionActivityLogs(
+            streamLogs,
+            streamState.lastTimestamp,
+          )) {
+            logChanged = true;
+            updatedMessageIndices.add(index);
+          }
+        }
 
         if (logChanged) {
           draft.streamLogs.set(streamId, {
             logs: streamLogs.logs,
             logIndex: streamLogs.logIndex,
             taskGroupIndex: streamLogs.taskGroupIndex,
+            compactionProjection: streamLogs.compactionProjection,
             updatedMessageIndices: [...updatedMessageIndices],
             updatedMessageBaseGeneration,
             generation: streamLogs.generation + 1,

@@ -17,7 +17,6 @@ import { redactSecrets } from '@logger/redaction';
 import {
   ActiveSkillsSnapshotSchema,
   AgentCategory,
-  CompactionActivityDataSchema,
   ErrorLogDataSchema,
   FileListEntrySchema,
   GroupLogPayloadSchema,
@@ -37,6 +36,10 @@ import {
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
+import {
+  COMPACTION_ACTIVITY_LABEL,
+  projectCompactionActivities,
+} from '@shared/streams/compactionActivityProjection';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
@@ -221,19 +224,6 @@ function latestLogActivityIsThinking(
     entry.messageType === MESSAGE_TYPES.THINKING &&
     logEntryStreamIsRunning(entry)
   );
-}
-
-function latestCompactionActivityIsRunning(
-  entries: readonly StreamLogEntry[],
-): boolean {
-  for (const entry of entries.toReversed()) {
-    if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
-      const activity = CompactionActivityDataSchema.safeParse(entry.data);
-      if (activity.success) return activity.data.state === 'started';
-    }
-    if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
-  }
-  return false;
 }
 
 /** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
@@ -567,6 +557,8 @@ function isSettledEntry(
   entries: readonly ConversationEntry[],
 ): boolean {
   switch (entry.role) {
+    case 'activity':
+      return entry.activity.status !== 'running';
     case 'user':
     case 'error':
     case 'phase':
@@ -816,7 +808,6 @@ export function syncStreamLog(
     : undefined;
   const taskGroups = projectTaskGroupsIncrementally(streamId, allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
-  const compactingActive = latestCompactionActivityIsRunning(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(
     streams.get().get(streamId),
   );
@@ -845,8 +836,31 @@ export function syncStreamLog(
           WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
     );
     const streamFinal = isFinalTranscriptStatus(lifecycle.status);
+    const compactionProjection = projectCompactionActivities(allEntries, {
+      streamTerminal: streamFinal,
+    });
+    const compactingActive = compactionProjection.blocks.some(
+      (block) => block.status === 'running',
+    );
     const logCandidates: TranscriptCandidate[] = [];
     const workflowLatestLineCandidates: TranscriptCandidate[] = [];
+    for (const block of compactionProjection.blocks) {
+      const id = `compaction:${block.operationId}`;
+      const next: ConversationEntry = {
+        id,
+        sourceSeqNo: block.startPosition,
+        role: 'activity',
+        text: COMPACTION_ACTIVITY_LABEL[block.status],
+        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+        finalized: block.status !== 'running',
+        activity: block,
+      };
+      logCandidates.push({
+        rendered: dedupeEntry(existing.get(id), next),
+        sortSeq: block.startPosition,
+        tieBreak: 0,
+      });
+    }
     for (const entry of allEntries) {
       const messageType = entry.messageType ?? '';
       const transcriptCandidate = transcriptMessageTypes.has(messageType);

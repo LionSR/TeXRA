@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module';
 
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -197,6 +197,8 @@ vi.mock('@cli/chat/chatSessionController', async (importOriginal) => {
   };
 });
 
+const ORIGINAL_REDUCED_MOTION = process.env.TEXRA_REDUCED_MOTION;
+
 const INTERACTIVE_CONTEXT: CliContext = createTestCliContext({
   cwd: '/tmp/texra-chat',
   mode: 'interactive',
@@ -257,6 +259,7 @@ describe('runChat signal ownership wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
+    delete process.env.TEXRA_REDUCED_MOTION;
 
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');
@@ -331,6 +334,14 @@ describe('runChat signal ownership wiring', () => {
     });
   });
 
+  afterEach(() => {
+    if (ORIGINAL_REDUCED_MOTION === undefined) {
+      delete process.env.TEXRA_REDUCED_MOTION;
+    } else {
+      process.env.TEXRA_REDUCED_MOTION = ORIGINAL_REDUCED_MOTION;
+    }
+  });
+
   it('initializes the interactive platform and hands signal ownership to the mounted TUI', async () => {
     const targetSignals = ['SIGINT', 'SIGTERM', 'SIGTSTP', 'SIGCONT'] as const;
     type TargetSignal = (typeof targetSignals)[number];
@@ -380,6 +391,10 @@ describe('runChat signal ownership wiring', () => {
         quietLogs: true,
       });
       expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+      expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
+        INTERACTIVE_CONTEXT.cwd,
+        { motion: 'allowed' },
+      );
       expect(mocks.handOffCliShutdownSignalHandlers).toHaveBeenCalledTimes(1);
       expect(mocks.callOrder).toEqual([
         'initInteractiveCliPlatform',
@@ -486,6 +501,7 @@ describe('runChat signal ownership wiring', () => {
         delegationAgentScope,
       }),
     });
+    process.env.TEXRA_REDUCED_MOTION = '1';
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {
       initialResume: {
@@ -499,6 +515,10 @@ describe('runChat signal ownership wiring', () => {
         expect(submit.current).toBeTypeOf('function');
         expect(mocks.onSkillSelect).toBeTypeOf('function');
       });
+      expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
+        INTERACTIVE_CONTEXT.cwd,
+        { motion: 'reduced' },
+      );
       mocks.onSkillSelect?.({ name: 'proof-audit', activationPrompt });
       submit.current?.('', mediaFiles);
 

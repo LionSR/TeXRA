@@ -1445,6 +1445,56 @@ describe('ModelHandlerAnthropic forced compaction', () => {
     assert.equal(JSON.stringify(nextMessages).includes('partial'), false);
   });
 
+  it('uses the last usable compaction block after an empty block', async () => {
+    const handler = createCompactionEligibleHandler({
+      capabilities: { supportsTokenCounting: true },
+    });
+    const activityStates = captureCompactionActivity(handler);
+    const response = anthropicMessage('claude-opus-4-6', {
+      content: [
+        { type: 'compaction', content: '' },
+        { type: 'compaction', content: '<summary>older</summary>' },
+        { type: 'text', text: 'obsolete continuation' },
+        { type: 'compaction', content: '<summary>latest</summary>' },
+        { type: 'text', text: 'kept continuation' },
+      ],
+    });
+    const client = {
+      beta: {
+        messages: {
+          countTokens: async () => ({ input_tokens: 160_000 }),
+          create: async () => response,
+        },
+      },
+    } as any;
+    const messages = helloMessages();
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+    handler.updateMessageContent(
+      messages,
+      '',
+      'obsolete continuationkept continuation',
+      AgentWorkspaceState.create(),
+      response,
+    );
+
+    assert.deepEqual(activityStates, ['started', 'completed']);
+    assert.equal(messages.length, 1);
+    const compactedContent = messages[0].content as Array<{
+      type: string;
+      content?: string;
+      text?: string;
+    }>;
+    assert.deepEqual(
+      compactedContent.map((block) => block.type),
+      ['compaction', 'text'],
+    );
+    assert.equal(compactedContent[0].content, '<summary>latest</summary>');
+    assert.equal(compactedContent[1].text, 'kept continuation');
+    assert.equal(JSON.stringify(messages).includes('older'), false);
+    assert.equal(JSON.stringify(messages).includes('obsolete'), false);
+  });
+
   it('keeps the prior transcript when Anthropic reports a null compaction block', () => {
     const handler = createAnthropicHandler({
       supportsAssistantPrefill: false,
@@ -1660,7 +1710,144 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       temperature: 0,
     });
 
-    assert.deepEqual(activityStates, ['started', 'finished']);
+    assert.deepEqual(activityStates, ['started', 'completed']);
+  });
+
+  it.each([null, '', ' \n'])(
+    'marks non-streaming compaction content %j as skipped',
+    async (content) => {
+      const handler = createCompactionEligibleHandler({
+        capabilities: { supportsTokenCounting: true },
+      });
+      const activityStates = captureCompactionActivity(handler);
+      const client = {
+        beta: {
+          messages: {
+            countTokens: async () => ({ input_tokens: 160_000 }),
+            create: async () =>
+              anthropicMessage('claude-opus-4-6', {
+                content: [
+                  { type: 'compaction', content },
+                  { type: 'text', text: 'ok' },
+                ],
+              }),
+          },
+        },
+      } as any;
+
+      await handler.createResponse({
+        client,
+        messages: helloMessages(),
+        temperature: 0,
+      });
+
+      assert.deepEqual(activityStates, ['started', 'skipped']);
+    },
+  );
+
+  it.each(['', ' \n'])(
+    'records below-threshold unexpected compaction content %j as one skipped lifecycle',
+    async (content) => {
+      const handler = createCompactionEligibleHandler({
+        capabilities: { supportsTokenCounting: true },
+      });
+      const activityStates = captureCompactionActivity(handler);
+      const client = {
+        beta: {
+          messages: {
+            countTokens: async () => ({ input_tokens: 1 }),
+            create: async () =>
+              anthropicMessage('claude-opus-4-6', {
+                content: [
+                  { type: 'compaction', content },
+                  { type: 'text', text: 'ok' },
+                ],
+              }),
+          },
+        },
+      } as any;
+
+      await handler.createResponse({
+        client,
+        messages: helloMessages(),
+        temperature: 0,
+      });
+
+      assert.deepEqual(activityStates, ['started', 'skipped']);
+    },
+  );
+
+  it('emits exactly one correlated lifecycle for streaming compaction', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    const activityEvents: Array<{
+      activity: string;
+      operationId: string;
+      state: string;
+    }> = [];
+    handler.setLogger({
+      ...noopTrace,
+      info: (_message, options) => {
+        const data = options?.data as
+          (typeof activityEvents)[number] | undefined;
+        if (data?.activity === 'context_compaction') activityEvents.push(data);
+      },
+    });
+    handler.getStreamingConfig = () => true;
+    let streamEventHandler: ((event: unknown) => void) | undefined;
+    const response = anthropicMessage(handler.config.fullName, {
+      content: [
+        { type: 'compaction', content: 'usable summary' },
+        { type: 'text', text: 'ok' },
+      ],
+    });
+    const client = {
+      beta: {
+        messages: {
+          stream: () => ({
+            on: (eventName: string, callback: (event: unknown) => void) => {
+              if (eventName === 'streamEvent') streamEventHandler = callback;
+            },
+            controller: { abort: () => {} },
+            finalMessage: async () => {
+              streamEventHandler?.({
+                type: 'content_block_start',
+                index: 0,
+                content_block: { type: 'compaction', content: '' },
+              });
+              streamEventHandler?.({
+                type: 'content_block_delta',
+                index: 0,
+                delta: {
+                  type: 'compaction_delta',
+                  content: 'usable summary',
+                },
+              });
+              return response;
+            },
+            currentMessage: response,
+            request_id: 'req_compaction',
+          }),
+        },
+      },
+    } as any;
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    });
+
+    assert.deepEqual(
+      activityEvents.map(({ state }) => state),
+      ['started', 'completed'],
+    );
+    assert.equal(
+      activityEvents[0]?.operationId,
+      activityEvents[1]?.operationId,
+    );
   });
 });
 
@@ -1771,7 +1958,7 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
       ],
       trackedPdfPages: 0,
       expectedAtRequest: ['started'],
-      expectedFinal: ['started', 'finished'],
+      expectedFinal: ['started', 'completed'],
     },
     {
       label: 'file-backed',
@@ -1792,14 +1979,14 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
       ],
       trackedPdfPages: 50,
       expectedAtRequest: ['started'],
-      expectedFinal: ['started', 'finished'],
+      expectedFinal: ['started', 'completed'],
     },
     {
       label: 'small',
       messages: helloMessages(),
       trackedPdfPages: 0,
       expectedAtRequest: [],
-      expectedFinal: [],
+      expectedFinal: ['started', 'completed'],
     },
   ])(
     'uses a fallback estimate for a $label unmeasured non-streaming request',
@@ -1924,7 +2111,7 @@ describe('ModelHandlerAnthropic file-reference token estimation', () => {
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
-    assert.deepEqual(activityStates, ['started', 'finished']);
+    assert.deepEqual(activityStates, ['started', 'skipped']);
   });
 
   it('recovers PDF page estimates for resumed file references', async () => {

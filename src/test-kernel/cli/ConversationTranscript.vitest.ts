@@ -88,6 +88,22 @@ function entry(
   return { id, role, text, finalized };
 }
 
+function compactionEntry(status: 'running' | 'completed'): ConversationEntry {
+  return {
+    id: 'compaction:operation-1',
+    role: 'activity',
+    text: status === 'running' ? 'Compacting context…' : 'Context compacted',
+    finalized: status !== 'running',
+    activity: {
+      operationId: 'operation-1',
+      status,
+      startPosition: 1,
+      startedAt: 100,
+      ...(status === 'completed' ? { finishedAt: 200 } : {}),
+    },
+  };
+}
+
 function toolEntry(
   id: string,
   status: NormalizedToolUse['status'],
@@ -153,6 +169,40 @@ describe('CLI conversation transcript', () => {
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
     expect(waitingBeforeFinalize.pending).toEqual([]);
+  });
+
+  it('keeps running compaction live and promotes its terminal update once', () => {
+    const running = compactionEntry('running');
+    expect(
+      splitTranscriptEntries([running], STREAM_PHASE.RUNNING).pending,
+    ).toEqual([running]);
+    expect(staticItemIds([running])).toEqual(['session-header']);
+
+    const completed = compactionEntry('completed');
+    expect(
+      splitTranscriptEntries([completed], STREAM_PHASE.RUNNING).finalized,
+    ).toEqual([completed]);
+    expect(staticItemIds([completed])).toEqual([
+      'session-header',
+      'compaction:operation-1',
+    ]);
+    expect(
+      staticItemIds([completed], {
+        currentItems: staticItems([completed]),
+      }),
+    ).toEqual(['session-header', 'compaction:operation-1']);
+  });
+
+  it('wraps compaction activity within a narrow viewport', () => {
+    const layout = transcriptEntryLayout(compactionEntry('completed'), {
+      width: 8,
+    });
+
+    expect(layout.role).toBe('activity');
+    expect(layout.lines.length).toBeGreaterThan(1);
+    expect(layout.lines.every((line) => textDisplayWidth(line) <= 8)).toBe(
+      true,
+    );
   });
 
   it('freezes assistant entries before they enter static scrollback', () => {

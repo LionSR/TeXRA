@@ -10,7 +10,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports
-import { logCompactionActivity } from '@agent/trace';
+import { startCompactionActivity } from '@agent/trace';
 import {
   type AgentSetting,
   hasEndTag,
@@ -180,10 +180,26 @@ const isBetaTextBlock = (
 ): block is Extract<BetaContentBlock, { type: 'text' }> =>
   block.type === 'text';
 
-const hasSuccessfulBetaCompactionBlock = (message: BetaMessage): boolean =>
-  message.content.some(
-    (block) => block.type === 'compaction' && block.content !== null,
+type BetaCompactionOutcome =
+  { state: 'completed'; content: BetaContentBlock[] } | { state: 'skipped' };
+
+const betaCompactionOutcome = (
+  message: BetaMessage,
+): BetaCompactionOutcome | undefined => {
+  const lastUsableIndex = message.content.findLastIndex(
+    (block) => block.type === 'compaction' && !!block.content?.trim(),
   );
+  if (lastUsableIndex >= 0) {
+    return {
+      state: 'completed',
+      // Anthropic ignores everything before the last compaction boundary.
+      content: message.content.slice(lastUsableIndex),
+    };
+  }
+  return message.content.some((block) => block.type === 'compaction')
+    ? { state: 'skipped' }
+    : undefined;
+};
 
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
@@ -596,6 +612,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       },
     );
 
+    let streamOutcome: 'completed' | 'failed' | 'cancelled' = 'completed';
     try {
       streamHandler.attachToStream(stream);
       // A clean close before message_stop rejects finalMessage() natively
@@ -607,6 +624,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.processThinkingBlock(response);
       return response;
     } catch (streamError) {
+      streamOutcome = isUserAbort(streamError) ? 'cancelled' : 'failed';
       return handleStreamingFailure(streamError, {
         // Anthropic finalizes unconditionally below, including on success.
         partialTail: () =>
@@ -620,7 +638,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ),
       });
     } finally {
-      streamHandler.finalize();
+      streamHandler.finalize(streamOutcome);
       signal?.removeEventListener('abort', abortStream);
     }
   }
@@ -841,19 +859,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
       compactionTrigger !== undefined &&
       inputTokensForCompaction >= compactionTrigger;
 
-    if (nonStreamingCompactionExpected) {
-      logCompactionActivity(this.logger, 'started');
-    }
+    const compactionActivity = nonStreamingCompactionExpected
+      ? startCompactionActivity(this.logger)
+      : undefined;
 
     let response: BetaMessage;
     try {
       response = useStreaming
         ? await this.executeStreamingResponse(client, options, signal)
         : await client.beta.messages.create(options, { signal });
-    } finally {
-      if (nonStreamingCompactionExpected) {
-        logCompactionActivity(this.logger, 'finished');
+      if (!useStreaming) {
+        const outcome = betaCompactionOutcome(response);
+        if (outcome) {
+          const activity =
+            compactionActivity ?? startCompactionActivity(this.logger);
+          activity.finish(outcome.state);
+        } else {
+          compactionActivity?.finish('skipped');
+        }
       }
+    } catch (error) {
+      compactionActivity?.finish(isUserAbort(error) ? 'cancelled' : 'failed');
+      throw error;
     }
 
     if (compactionConsumed && pendingCompactionRequestId !== undefined) {
@@ -1155,11 +1182,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     responseObject: BetaMessage,
     text: string,
   ): MessageParam {
-    if (!hasSuccessfulBetaCompactionBlock(responseObject)) {
+    const outcome = betaCompactionOutcome(responseObject);
+    if (outcome?.state !== 'completed') {
       return this.createAssistantMessage(text);
     }
 
-    const content = this.extractAssistantContent(responseObject);
+    const content = this.extractAssistantContent({
+      ...responseObject,
+      content: outcome.content,
+    });
     return content.length > 0
       ? { role: 'assistant', content: content as ContentBlockParam[] }
       : this.createAssistantMessage(text);
@@ -1172,7 +1203,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     workspaceState: AgentWorkspaceState,
     responseObject?: BetaMessage,
   ): void {
-    if (responseObject && hasSuccessfulBetaCompactionBlock(responseObject)) {
+    if (
+      responseObject &&
+      betaCompactionOutcome(responseObject)?.state === 'completed'
+    ) {
       messages.length = 0;
       messages.push(
         this.createAssistantMessageFromResponse(responseObject, newResponse),

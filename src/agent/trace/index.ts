@@ -37,7 +37,8 @@ export {
 export {
   logSdkError,
   logErrorData,
-  logCompactionActivity,
+  startCompactionActivity,
+  type CompactionActivityOperation,
   logProgressStatus,
   logUserMessage,
   logInternal,

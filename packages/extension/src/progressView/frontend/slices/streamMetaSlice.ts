@@ -8,15 +8,35 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   STREAM_PHASE,
+  STREAM_STATUS,
   type ProgressViewOutboundHandlerRegistry,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
-import { isToolUseState } from '../store';
+import { isToolUseState, type StreamLogs } from '../store';
+import { interruptCompactionActivityLogs } from './logSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';
+
+function interruptTerminalCompaction(
+  streamLogs: StreamLogs,
+  finishedAt?: number,
+): StreamLogs | undefined {
+  const updatedMessageIndices = interruptCompactionActivityLogs(
+    streamLogs,
+    finishedAt,
+  );
+  if (updatedMessageIndices.length === 0) return undefined;
+  return {
+    ...streamLogs,
+    updatedMessageIndices: [...updatedMessageIndices],
+    updatedMessageBaseGeneration: streamLogs.generation,
+    generation: streamLogs.generation + 1,
+  };
+}
 
 /**
  * Buffer for subagent descriptions that race their own UPDATE_STREAMS
@@ -85,7 +105,22 @@ export const streamMetaHandlers = {
           draft.streamById.set(name, streamInfo);
         }
 
-        if (mergedState) draft.streamStates.set(name, mergedState);
+        if (mergedState) {
+          draft.streamStates.set(name, mergedState);
+          if (
+            mergedState.status !== STREAM_STATUS.READY &&
+            isTerminalOutcomePhase(mergedState.status)
+          ) {
+            const streamLogs = draft.streamLogs.get(name);
+            if (streamLogs) {
+              const updated = interruptTerminalCompaction(
+                streamLogs,
+                mergedState.lastTimestamp,
+              );
+              if (updated) draft.streamLogs.set(name, updated);
+            }
+          }
+        }
 
         if (data.activeStream !== undefined) {
           draft.activeStreamId = data.activeStream || null;
@@ -114,6 +149,20 @@ export const streamMetaHandlers = {
         }
       }),
     );
+
+    if (isTerminalOutcomePhase(status)) {
+      appState.set(
+        create(appState.get(), (draft) => {
+          const streamLogs = draft.streamLogs.get(stream);
+          if (!streamLogs) return;
+          const updated = interruptTerminalCompaction(
+            streamLogs,
+            lastTimestamp,
+          );
+          if (updated) draft.streamLogs.set(stream, updated);
+        }),
+      );
+    }
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data) => {
