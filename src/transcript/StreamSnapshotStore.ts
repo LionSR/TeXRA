@@ -53,7 +53,7 @@ import {
   type TokenUsageStats,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { mapToRecord } from '@utils/core';
+import { mapToRecord, throwAggregated } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -1437,10 +1437,7 @@ export class StreamSnapshotStore {
     const remainingFailures = dirtyWritesDurable
       ? failures.filter((error) => !(error instanceof DirtySidecarWritesError))
       : failures;
-    if (remainingFailures.length === 1) throw remainingFailures[0];
-    if (remainingFailures.length > 1) {
-      throw new AggregateError(remainingFailures, 'Snapshot flush failed');
-    }
+    throwAggregated(remainingFailures, 'Snapshot flush failed');
   }
 
   // ==========================================================================

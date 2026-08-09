@@ -5,6 +5,7 @@ import * as assert from 'node:assert';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  aggregateError,
   coalesceAsync,
   createFlushableDebounce,
   delay,
@@ -14,6 +15,7 @@ import {
   getBasename,
   getFileStem,
   KeyedMutex,
+  throwAggregated,
   toNewestFirstByTimestamp,
   type FlushableDebounce,
 } from '@utils/core';
@@ -81,6 +83,56 @@ describe('core type guard predicates', () => {
 
   it('wraps scalar values in an array', () => {
     expect(ensureArray('alpha')).toEqual(['alpha']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Failure aggregation
+// ---------------------------------------------------------------------------
+
+describe('aggregateError', () => {
+  it('unwraps the lone failure when exactly one is collected', () => {
+    const only = new Error('boom');
+    expect(aggregateError([only], 'ignored')).toBe(only);
+  });
+
+  it('wraps several failures in an AggregateError carrying the message', () => {
+    const a = new Error('a');
+    const b = new Error('b');
+    const result = aggregateError([a, b], 'both failed');
+    expect(result).toBeInstanceOf(AggregateError);
+    const aggregate = result as AggregateError;
+    expect(aggregate.message).toBe('both failed');
+    expect(aggregate.errors).toEqual([a, b]);
+  });
+
+  it('preserves a lone falsy failure rather than aggregating it', () => {
+    // A single collected `undefined` must round-trip unwrapped, matching a
+    // bare `throw failures[0]`.
+    expect(aggregateError([undefined], 'ignored')).toBeUndefined();
+  });
+});
+
+describe('throwAggregated', () => {
+  it('is a no-op when no failures were collected', () => {
+    expect(() => throwAggregated([], 'nothing failed')).not.toThrow();
+  });
+
+  it('throws the lone failure unwrapped', () => {
+    const only = new Error('boom');
+    expect(() => throwAggregated([only], 'ignored')).toThrow(only);
+  });
+
+  it('throws an AggregateError when several failed', () => {
+    const a = new Error('a');
+    const b = new Error('b');
+    try {
+      throwAggregated([a, b], 'both failed');
+      assert.fail('expected throwAggregated to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AggregateError);
+      expect((error as AggregateError).errors).toEqual([a, b]);
+    }
   });
 });
 
