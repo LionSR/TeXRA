@@ -286,10 +286,11 @@ async function compileOne(
     'compile',
     `r${currentRound}_${safeName}.log`,
   );
-  // Pre-fix builds wrote to this un-hashed name. Windows builds before path
-  // normalization also retained the `r<N>\\` prefix while sanitizing. The
-  // first normalized builds hashed that raw path, so a resumed run must clear
-  // all three legacy spellings on success.
+  // Compatibility introduced 2026-08-09: pre-fix builds wrote to this
+  // un-hashed name. Windows builds before path normalization also retained the
+  // `r<N>\\` prefix while sanitizing, and the first normalized builds hashed
+  // that raw path. Remove these three legacy spellings after 2026-11-09, once
+  // runs created before normalization are no longer expected to be resumed.
   const rawLegacySafeName = sanitizePathSegment(rawPathForSafeName, {
     invalidCharPattern: /[^a-zA-Z0-9._-]/g,
     replacement: '_',
