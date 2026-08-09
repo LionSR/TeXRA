@@ -21,7 +21,7 @@ import {
   type ArxivSearchResult,
   createArxivClient,
   extractBasePaperMetadata,
-} from '@tools/latex/arxivShared';
+} from '@tools/arxiv/arxivShared';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 

@@ -133,6 +133,23 @@ function buildCopyButton(
 export const SPINNER_ICON_NAME = '__spinner__';
 
 /**
+ * Map a status string to the failed / in-progress / else icon tri-state shared
+ * by the codex-turn, codex-patch, and MCP status sections. `spinnerKey` is the
+ * status value that means "in progress" for the caller (`'running'` for codex
+ * turns, `'in_progress'` for MCP); pass `null` for a two-state caller that only
+ * distinguishes failed from not.
+ */
+export function triStateStatusIcon(
+  status: string,
+  spinnerKey: string | null,
+  fallback: TeXRAIconName = 'check',
+): TeXRAIconName | typeof SPINNER_ICON_NAME {
+  if (status === 'failed') return 'circle-exclamation';
+  if (spinnerKey !== null && status === spinnerKey) return SPINNER_ICON_NAME;
+  return fallback;
+}
+
+/**
  * Render a `<wa-icon>`, or a `<wa-spinner>` when the sentinel
  * {@link SPINNER_ICON_NAME} is passed.
  */

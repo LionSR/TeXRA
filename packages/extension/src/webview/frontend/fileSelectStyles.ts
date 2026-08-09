@@ -9,10 +9,8 @@
  */
 
 import { css } from 'lit';
-import {
-  compactFormControlStyles,
-  compactIconActionButtonStyles,
-} from '@shared/styles';
+import { compactFormControlStyles } from '@shared/styles';
+import { buttonStyles } from '@shared/styles/controlStyles';
 
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
@@ -170,8 +168,7 @@ const multiFilesStyles = css`
   }
 
   /* .move-button / .remove-button are wa-button.action-icon-button now; sizing
-     comes from compactIconActionButtonStyles. Only the per-row layout shrink
-     survives here. */
+     comes from buttonStyles. Only the per-row layout shrink survives here. */
   .move-button,
   .remove-button {
     flex-shrink: 0;
@@ -196,7 +193,7 @@ const dropdownStyles = css`
 
 /** Combined file-select styles for components that need all of them. */
 export const fileSelectStyles = [
-  compactIconActionButtonStyles,
+  buttonStyles,
   compactFormControlStyles,
   fileSelectLayoutStyles,
   multiFilesStyles,

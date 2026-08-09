@@ -47,16 +47,3 @@ export function applyHostBodyTheme(theme: Theme): void {
   body.dataset.vscodeThemeKind = theme;
   setWaColorScheme(themeIsDark(theme));
 }
-
-/**
- * Resolve a `targetOrigin` suitable for `window.postMessage`. Electron loads
- * the desktop renderer over `file://`, where `window.location.origin` is the
- * literal string `"null"`. In that case we have to pass `"*"` to avoid the
- * browser dropping the message. VS Code webviews load over `vscode-webview://`
- * with a real origin and pass that through.
- */
-export function getWindowTargetOrigin(): string {
-  if (typeof window === 'undefined') return '*';
-  const { origin } = window.location;
-  return origin && origin !== 'null' ? origin : '*';
-}

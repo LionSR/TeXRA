@@ -42,8 +42,7 @@ import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
-import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
-import { buildGrokAuthStatusMessage } from '@shared/settingsView/handlers/grokHandlers';
+import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import {
   setGlobalStreaming,
@@ -504,13 +503,19 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private async postChatGptAuthStatus(): Promise<void> {
     this.options.renderer.postToRenderer(
-      await buildChatGptAuthStatusMessage(getChatGptAuthStatus),
+      await buildAuthStatusMessage(
+        SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+        getChatGptAuthStatus,
+      ),
     );
   }
 
   private async postGrokAuthStatus(): Promise<void> {
     this.options.renderer.postToRenderer(
-      await buildGrokAuthStatusMessage(getGrokAuthStatus),
+      await buildAuthStatusMessage(
+        SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+        getGrokAuthStatus,
+      ),
     );
   }
 

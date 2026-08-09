@@ -9,19 +9,6 @@ export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
   workflowSingle: 'agentTemplate-workflowSingle.yaml',
 };
 
-/**
- * Variables the bundled templates accept.
- *
- * Only `AGENT_NAME` and `DESCRIPTION` are required. `TOOLS_YAML` is used by
- * the tool-use template and defaults to the standard tool set.
- */
-export interface AgentTemplateVars {
-  agentName: string;
-  description: string;
-  /** YAML list string for the tool-use template, e.g. `    - bash\n    - read_file`. */
-  toolsYaml?: string;
-}
-
 // Isolated Nunjucks environment so `autoescape: false` does not leak into the
 // shared singleton that `nunjucks.configure` / `nunjucks.renderString` would
 // otherwise set for every other caller.

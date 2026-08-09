@@ -3,13 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { isTexFile } from '@common/files/fileTypeUtils';
+import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { ensureFileOpen } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 
 // Local imports
-import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'LinterUtils';
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
@@ -45,11 +44,10 @@ async function triggerLaTeXBuild(
   );
 
   try {
-    await vscode.commands.executeCommand('latex-workshop.build', fileUri);
-  } catch (err) {
-    logger.warn(
+    await invokeLatexWorkshopBuild(
+      fileUri,
       CHANNEL,
-      `Failed to trigger LaTeX build: ${toErrorMessage(err)}`,
+      'Failed to trigger LaTeX build',
     );
   } finally {
     await diagnosticsWait;

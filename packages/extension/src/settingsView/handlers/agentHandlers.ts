@@ -4,9 +4,16 @@
  * Handles agent enable/disable, create/customize/delete, YAML editing,
  * custom agent directories, and agent teams.
  */
+import * as path from 'node:path';
+
 import * as vscode from 'vscode';
 
 import { getAgent, loadAgents, refresh as refreshAgents } from '@agent/index';
+import {
+  AGENT_TEMPLATE_FILES,
+  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
+  renderAgentTemplateString,
+} from '@agent/templates/agentTemplateRenderer';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
@@ -18,7 +25,6 @@ import type { SettingsAgentFileController } from '@controllers/settingsView/Sett
 import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
-import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
@@ -450,14 +456,18 @@ export class AgentHandlers {
           return;
         }
 
-        const template = await renderAgentTemplateFromBundle(
-          this.ctx.extensionContext,
-          templatePlan.templateKind,
-          {
-            agentName: templatePlan.baseName,
-            description: templatePlan.description,
-          },
+        const templatePath = path.join(
+          this.ctx.extensionContext.extensionPath,
+          'resources',
+          'templates',
+          AGENT_TEMPLATE_FILES[templatePlan.templateKind],
         );
+        const templateRaw = await AbsoluteFS.read(templatePath);
+        const template = renderAgentTemplateString(templateRaw, {
+          AGENT_NAME: templatePlan.baseName,
+          DESCRIPTION: templatePlan.description,
+          TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
+        });
 
         await AbsoluteFS.write(templatePlan.filePath, template);
         const doc = await vscode.workspace.openTextDocument(

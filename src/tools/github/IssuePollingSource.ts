@@ -22,13 +22,15 @@ import {
   formatIssueReopened,
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
-import { getNewestTimestamp, issueRef, withSince } from './formatUtils';
+import { issueRef, withSince } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
-  DedupedResource,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
-  PollingSourceBase,
   type BasePollSubscriptionState,
+  createBasePollState,
+  DEFAULT_POLLING_BACKOFF_CONFIG,
+  dedupeComments,
+  type DedupedResource,
+  PollingSourceBase,
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import {
@@ -37,8 +39,6 @@ import {
   type GhIssue,
   type GhIssueComment,
 } from './prTypes';
-
-const MAX_SEEN_IDS = 1000;
 
 export interface IssueKey {
   owner: string;
@@ -64,18 +64,11 @@ function createInitialState(issue: IssueKey): SubscriptionState {
   return {
     issue,
     slug: `${issue.owner}/${issue.repo}`,
-    listeners: new Set(),
+    ...createBasePollState(),
     initialized: false,
     state: undefined,
-    comments: new DedupedResource<GhIssueComment>({
-      getId: (comment: GhIssueComment) => comment.id,
-      getCursor: getNewestTimestamp,
-      maxSeenIds: MAX_SEEN_IDS,
-    }),
+    comments: dedupeComments<GhIssueComment>(),
     etags: {},
-    lastSuccessAt: Date.now(),
-    consecutiveFailures: 0,
-    skipPollUntilMs: 0,
   };
 }
 

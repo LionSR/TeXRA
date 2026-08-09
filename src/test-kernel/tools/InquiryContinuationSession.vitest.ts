@@ -9,7 +9,7 @@ const submitFollowUpMock = vi.hoisted(() =>
   })),
 );
 const getThreadSummaryMock = vi.hoisted(() => vi.fn());
-const listOpenThreadsForStreamMock = vi.hoisted(() => vi.fn(async () => []));
+const listThreadsByStatusMock = vi.hoisted(() => vi.fn(async () => []));
 const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
@@ -24,7 +24,7 @@ vi.mock('@platform/platform', () => ({
 
 vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
   getThreadSummary: getThreadSummaryMock,
-  listOpenThreadsForStream: listOpenThreadsForStreamMock,
+  listThreadsByStatus: listThreadsByStatusMock,
   readExternalInquiryThread: readExternalInquiryThreadMock,
 }));
 
@@ -87,7 +87,7 @@ describe('external inquiry continuation session routing', () => {
       lastActivityIso: '2026-06-14T08:01:00.000Z',
       turnCount: 1,
     });
-    listOpenThreadsForStreamMock.mockClear();
+    listThreadsByStatusMock.mockClear();
     readExternalInquiryThreadMock.mockClear();
   });
 

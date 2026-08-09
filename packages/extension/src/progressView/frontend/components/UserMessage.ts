@@ -15,7 +15,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { compactIconActionButtonStyles } from '@shared/styles';
 import {
   decodeXmlEntities,
   deliveryTagOf,
@@ -24,7 +23,7 @@ import {
 import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import { focusRingStyles } from '@shared/styles/controlStyles';
+import { buttonStyles, focusRingStyles } from '@shared/styles/controlStyles';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -55,7 +54,7 @@ type DisplayState = {
 export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
-    compactIconActionButtonStyles,
+    buttonStyles,
     // The only markdownStyles consumer that does not compose commonViewStyles,
     // so it is also the only one that would not inherit the shared focus ring.
     // A user message can contain \ref{}/\cref{}, which render as focusable

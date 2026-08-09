@@ -74,6 +74,15 @@ describe('fileDropHandler', () => {
     ]);
   });
 
+  it('ignores malformed percent-encoded file URIs', () => {
+    const transfer = dataTransfer(['text/uri-list'], {
+      'text/uri-list': 'file:///tmp/%E0%A4%A',
+    });
+
+    expect(hasDroppedFilePayload(transfer)).toBe(false);
+    expect(extractDroppedFilePaths(transfer)).toEqual([]);
+  });
+
   it('preserves hosts when extracting UNC-style file URIs', () => {
     const paths = extractDroppedFilePaths(
       dataTransfer(['text/uri-list'], {

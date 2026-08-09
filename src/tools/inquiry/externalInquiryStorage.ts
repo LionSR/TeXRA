@@ -713,15 +713,3 @@ export async function listThreadsByStatus(params: {
   const trimmed = params.limit != null ? sorted.slice(0, params.limit) : sorted;
   return trimmed.map(manifestToSummary);
 }
-
-export async function listOpenThreads(): Promise<
-  ExternalInquiryThreadSummary[]
-> {
-  return listThreadsByStatus({ status: 'open', scope: 'all' });
-}
-
-export async function listOpenThreadsForStream(
-  streamId: StreamTabId,
-): Promise<ExternalInquiryThreadSummary[]> {
-  return listThreadsByStatus({ status: 'open', scope: 'stream', streamId });
-}

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
+import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin.js';
 import { installElectronHostBridge } from './hostBridge.js';
 import {
   hasResolvedWorkspacePath,
@@ -16,11 +17,6 @@ const rendererWindow = globalThis as typeof globalThis & {
   postMessage?: (message: unknown, targetOrigin: string) => void;
 };
 
-function getRendererTargetOrigin(): string {
-  const origin = rendererWindow.location?.origin;
-  return origin && origin !== 'null' ? origin : '*';
-}
-
 installElectronHostBridge({
   exposeInMainWorld: (name, api) => contextBridge.exposeInMainWorld(name, api),
   onHostMessage: (channel, listener) => {
@@ -34,7 +30,10 @@ installElectronHostBridge({
     );
   },
   postToRenderer: (message) =>
-    rendererWindow.postMessage?.(message, getRendererTargetOrigin()),
+    rendererWindow.postMessage?.(
+      message,
+      resolvePostMessageTargetOrigin(rendererWindow.location?.origin),
+    ),
   sendToMain: (channel, message) => ipcRenderer.send(channel, message),
 });
 

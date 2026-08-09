@@ -14,6 +14,12 @@ export interface CliSubscriptionLoginTransportInit {
   readonly noBrowser: boolean;
 }
 
+/** Progress sink + cancellation signal shared by every provider login wrapper. */
+export interface CliSubscriptionLoginOptions {
+  readonly writeProgress: (message: string) => void;
+  readonly signal?: AbortSignal;
+}
+
 /**
  * Device-code is the right default when the browser callback is likely
  * unreachable: remote shells, non-text output, non-TTY/headless/dumb terminals,
