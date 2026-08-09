@@ -189,7 +189,7 @@ function redactPathPrefixes(
       }
       const boundary = /[\\/]$/.test(prefix)
         ? ''
-        : `(?=$|[\\s\\\\/,:;!?\\])}'"])`;
+        : `(?=$|[\\s\\\\/,:;!?\\])}'"]|\\.(?:$|\\s))`;
       return redacted.replaceAll(
         new RegExp(`${escapeRegex(prefix)}${boundary}`, 'g'),
         '[path]',

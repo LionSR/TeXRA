@@ -86,7 +86,7 @@ describe('desktop app log', () => {
     await mkdir(logsPath, { recursive: true });
     await writeFile(
       logPath,
-      `Opened ${workspacePath}\\paper.tex; queued ${workspacePath}, completed ${workspacePath} successfully; retained ${workspacePath}-archive\\paper.tex and ${workspacePath}.archive\\paper.tex`,
+      `Opened ${workspacePath}\\paper.tex; queued ${workspacePath}, completed ${workspacePath} successfully; finished ${workspacePath}. retained ${workspacePath}-archive\\paper.tex and ${workspacePath}.archive\\paper.tex`,
     );
     configureElectronTestStub({ userDataPath });
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
@@ -96,6 +96,7 @@ describe('desktop app log', () => {
     expect(snapshot.text).toContain('Opened [path]\\paper.tex');
     expect(snapshot.text).toContain('queued [path],');
     expect(snapshot.text).toContain('completed [path] successfully');
+    expect(snapshot.text).toContain('finished [path].');
     expect(snapshot.text).toContain(`${workspacePath}-archive\\paper.tex`);
     expect(snapshot.text).toContain(`${workspacePath}.archive\\paper.tex`);
   });
