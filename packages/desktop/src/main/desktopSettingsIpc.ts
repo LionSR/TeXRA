@@ -6,16 +6,16 @@ import {
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
-import {
-  applyStateSettingUpdate,
-  postStateSettingSnapshot,
-  type SettingsSnapshotPosters,
-} from '@controllers/settingsView/StateSettingUpdateController';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  applyStateSettingUpdate,
+  postStateSettingSnapshot,
+  type SettingsSnapshotPosters,
+} from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
