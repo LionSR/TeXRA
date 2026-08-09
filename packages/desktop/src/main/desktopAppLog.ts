@@ -186,7 +186,7 @@ function redactPathPrefixes(
     .reduce(
       (redacted, prefix) =>
         redacted.replaceAll(
-          new RegExp(`${escapeRegex(prefix)}(?=$|[\\\\/,:;!?\\])}'"])`, 'g'),
+          new RegExp(`${escapeRegex(prefix)}(?=$|[\\s\\\\/,:;!?\\])}'"])`, 'g'),
           '[path]',
         ),
       text,
