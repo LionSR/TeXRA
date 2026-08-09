@@ -43,6 +43,7 @@
       "getRunConfig",
       "getRunIdentity",
       "getRunUsage",
+      "getUserFollowUpSupport",
       "getWorkPlan",
       "hasPersistedWorkPlan",
       "listPersistedStreams",

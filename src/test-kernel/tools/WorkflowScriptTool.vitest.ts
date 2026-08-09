@@ -15,6 +15,7 @@ import { withRunContext } from '@agent/runtime/RunContext';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -116,14 +117,24 @@ function runExecutionIdFor(name: string): ExecutionId {
   return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
 }
 
+/** The exact durable run record a launch of `name` must preserve. */
+function registrationRecordFor(name: string, model = 'parent-model') {
+  return {
+    name,
+    instruction: `Workflow script '${name}'`,
+    model,
+  };
+}
+
 /** The registration options a launch of `name` must record. */
 function registrationOptionsFor(name: string) {
-  return {
+  return expect.objectContaining({
     streamId: `workflow-script#${runExecutionIdFor(name)}`,
     identity: { kind: 'multiAgentWorkflow', workflowName: name },
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     parentExecutionId: executionId,
     description: 'tests the workflow script tool',
-  };
+  });
 }
 
 async function writeWorkspaceScript(
@@ -358,12 +369,8 @@ describe('WorkflowScriptTool', () => {
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionId,
       // The durable record is honest: workflow name, launch summary, and the
-      // real delegation model — no fabricated agent identity or category.
-      {
-        name: 'tool-test',
-        instruction: "Workflow script 'tool-test'",
-        model: 'parent-model',
-      },
+      // real delegation model. It has no fabricated agent identity or category.
+      registrationRecordFor('tool-test'),
       'tool-test',
       registrationOptionsFor('tool-test'),
     );
@@ -455,7 +462,7 @@ describe('WorkflowScriptTool', () => {
     expect(result.output).toContain(`Script file: ${scriptPath}`);
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionIdFor('edited-tool-test'),
-      expect.anything(),
+      registrationRecordFor('edited-tool-test'),
       'edited-tool-test',
       registrationOptionsFor('edited-tool-test'),
     );
@@ -629,7 +636,7 @@ describe('WorkflowScriptTool', () => {
     });
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionIdFor('tool-test'),
-      expect.objectContaining({ model: 'served-model' }),
+      registrationRecordFor('tool-test', 'served-model'),
       'tool-test',
       registrationOptionsFor('tool-test'),
     );
