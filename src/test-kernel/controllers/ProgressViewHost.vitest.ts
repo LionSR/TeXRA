@@ -52,7 +52,7 @@ function createHostHarness(
           identity ?? { kind: 'agent', agent: runConfig.agent },
         getExecutionId: () => 'exec-1',
       },
-      executeAgent: async (request) => {
+      runExecutionRequest: async (request) => {
         executed.push(request);
       },
     },

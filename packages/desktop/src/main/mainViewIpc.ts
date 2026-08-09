@@ -46,7 +46,7 @@ export interface DesktopMainViewIpcOptions {
   shellActions: DesktopShellActions;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadStartupOptions?: () => Promise<MainViewStartupOptions>;
-  executeAgent(message: MainViewExecuteMessage): Promise<void>;
+  handleExecuteMessage(message: MainViewExecuteMessage): Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -77,7 +77,7 @@ export function installDesktopMainViewIpc(
   });
   const shell = createDesktopShellIpc(options.shellActions);
   const execution = createDesktopExecutionIpc({
-    executeAgent: options.executeAgent,
+    handleExecuteMessage: options.handleExecuteMessage,
     onAsyncError: options.onAsyncError,
   });
   const logs = createDesktopLogIpc(bridge, {

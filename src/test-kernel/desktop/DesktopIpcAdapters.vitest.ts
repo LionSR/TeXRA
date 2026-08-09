@@ -335,16 +335,16 @@ describe('desktop IPC adapters', () => {
       agent: 'direct-agent',
       model: 'gpt-5.4',
     };
-    const executeAgent = vi.fn(async (_message: unknown) => {});
-    const executionIpc = createDesktopExecutionIpc({ executeAgent });
+    const handleExecuteMessage = vi.fn(async (_message: unknown) => {});
+    const executionIpc = createDesktopExecutionIpc({ handleExecuteMessage });
 
     expect(executionIpc.handleMessage(executeMessage)).toBe(true);
     await Promise.resolve();
-    expect(executeAgent).toHaveBeenCalledWith(executeMessage);
+    expect(handleExecuteMessage).toHaveBeenCalledWith(executeMessage);
 
     const malformedError = vi.fn();
     const malformedExecutionIpc = createDesktopExecutionIpc({
-      executeAgent,
+      handleExecuteMessage,
       onAsyncError: malformedError,
     });
     expect(
@@ -353,13 +353,13 @@ describe('desktop IPC adapters', () => {
         files: { inputFiles: 'main.tex' },
       }),
     ).toBe(true);
-    expect(executeAgent).toHaveBeenCalledTimes(1);
+    expect(handleExecuteMessage).toHaveBeenCalledTimes(1);
     expect(malformedError).toHaveBeenCalledWith(expect.any(Error));
 
     const error = new Error('execution failed');
     const onAsyncError = vi.fn();
     createDesktopExecutionIpc({
-      executeAgent: vi.fn(async () => {
+      handleExecuteMessage: vi.fn(async () => {
         throw error;
       }),
       onAsyncError,
