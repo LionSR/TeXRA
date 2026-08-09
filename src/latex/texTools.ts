@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Local imports
 import * as logger from '@logger/logUtils';
-import type { FileLocation } from '@shared/schemas';
+import type { ExecResult, FileLocation } from '@shared/schemas';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -224,7 +224,7 @@ export async function compileLatex2Pdf(
       });
     }
 
-    let result: Awaited<ReturnType<typeof runToolWithCheck>>;
+    let result: ExecResult | false;
     if (compiler === 'latexmk') {
       result = await runToolWithCheck('latexmk', latexmkArgs, {
         channel,

@@ -12,7 +12,6 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { isNonEmptyString } from '@utils/core';
 
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
-import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
 /**
  * Client setup and the media-attachment pipeline for `ModelHandlerGoogleInteractions`,
@@ -104,8 +103,6 @@ interface UploadGoogleMediaEntriesOptions<T> {
   onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
-type GoogleMediaUploadSummary = Pick<MediaFileResult, 'path' | 'ok'>;
-
 /**
  * Media-attachment pipeline for the Interactions handler, kept here alongside
  * the client setup so the handler file stays focused on wire logic. Entries
@@ -123,7 +120,7 @@ export async function uploadGoogleMediaEntries<T>(
     options;
   const client = await getClient();
   const parts: T[] = [];
-  const summaries: GoogleMediaUploadSummary[] = [];
+  let hadFailure = false;
   const failures: string[] = [];
 
   for (const entry of entries) {
@@ -139,7 +136,6 @@ export async function uploadGoogleMediaEntries<T>(
         );
         parts.push(buildMedia({ data: inlinePayload }, mimeType));
         onInsertedEntry?.(entry);
-        summaries.push({ path: fileName, ok: true });
         continue;
       }
       logger.debug(
@@ -156,7 +152,7 @@ export async function uploadGoogleMediaEntries<T>(
       logger.error(
         `Skipping media entry ${fileName} due to missing upload source`,
       );
-      summaries.push({ path: fileName, ok: false });
+      hadFailure = true;
       continue;
     }
 
@@ -173,21 +169,20 @@ export async function uploadGoogleMediaEntries<T>(
         logger.error(
           `Upload result for ${fileName} is missing a URI. Skipping entry.`,
         );
-        summaries.push({ path: fileName, ok: false });
+        hadFailure = true;
         continue;
       }
       const resolvedMimeType =
         uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
       parts.push(buildMedia({ uri: fileUri }, resolvedMimeType));
       onInsertedEntry?.(entry);
-      summaries.push({ path: fileName, ok: true });
     } catch (error) {
-      summaries.push({ path: fileName, ok: false });
+      hadFailure = true;
       failures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
     }
   }
 
-  if (summaries.some((summary) => !summary.ok)) {
+  if (hadFailure) {
     const failureSummary = failures.join('; ');
     logger.warn(
       failureSummary

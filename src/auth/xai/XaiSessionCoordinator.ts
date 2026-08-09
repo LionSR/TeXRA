@@ -38,7 +38,6 @@ import {
 export type XaiSessionStorage = SubscriptionSessionStorage;
 export type XaiOAuthClient = SubscriptionOAuthClient;
 export type XaiSessionStatus = SubscriptionSessionStatus;
-type XaiAuthorizeRequest = SubscriptionAuthorizeRequest;
 
 export interface XaiSessionCoordinatorInit {
   storage: XaiSessionStorage;
@@ -114,7 +113,7 @@ export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSessi
     });
   }
 
-  buildAuthorizeRequest(_port?: number): XaiAuthorizeRequest {
+  buildAuthorizeRequest(_port?: number): SubscriptionAuthorizeRequest {
     // Port is fixed by the Grok-CLI registration; policy ignores the argument.
     return super.buildAuthorizeRequest(0);
   }

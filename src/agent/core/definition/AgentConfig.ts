@@ -10,8 +10,6 @@ import { AgentCategory } from './AgentDataclass';
 /** Agent assumed when a config omits `agent`, and sorted first in the workflow dropdown. */
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 
-const DEFAULT_AGENT_INSTRUCTION = '';
-
 /** Fields shared by both category-specific config variants. */
 const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault(DEFAULT_WORKFLOW_AGENT),
@@ -24,7 +22,7 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
    */
   agentSource: AgentSourceSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
-  instruction: z.string().prefault(DEFAULT_AGENT_INSTRUCTION),
+  instruction: z.string().prefault(''),
   /** Original user instruction preserved across nested tool-use delegation. */
   rootUserInstruction: z.string().nullish(),
   /** Optional user-facing text for logs when instruction contains hidden context. */

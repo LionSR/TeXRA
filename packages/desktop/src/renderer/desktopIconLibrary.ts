@@ -174,15 +174,6 @@ function lucideSvg(name: string): string | undefined {
  * ordering that reliably wins.
  */
 
-/**
- * Resolves a TeXRA icon name to Lucide geometry.
- *
- * Direct lookup: canonical name → Lucide equivalent → fallback to name.
- */
-function resolveLucideName(name: string): string {
-  return LUCIDE_NAME_BY_TEXRA_NAME[name] ?? name;
-}
-
 function svgDataUri(svg: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
@@ -201,7 +192,7 @@ const missingIconUri = svgDataUri(
  * or silently introduce a different visual family.
  */
 const desktopIconResolver: IconLibraryResolver = (name) => {
-  const svg = lucideSvg(resolveLucideName(name));
+  const svg = lucideSvg(LUCIDE_NAME_BY_TEXRA_NAME[name] ?? name);
   return svg ? svgDataUri(svg) : missingIconUri;
 };
 
