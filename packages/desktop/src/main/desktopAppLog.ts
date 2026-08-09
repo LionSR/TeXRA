@@ -183,14 +183,15 @@ function redactPathPrefixes(
   return prefixes
     .filter((prefix): prefix is string => Boolean(prefix))
     .toSorted((a, b) => b.length - a.length)
-    .reduce(
-      (redacted, prefix) =>
-        redacted.replaceAll(
-          new RegExp(`${escapeRegex(prefix)}(?=$|[\\s\\\\/,:;!?\\])}'"])`, 'g'),
-          '[path]',
-        ),
-      text,
-    );
+    .reduce((redacted, prefix) => {
+      const boundary = /[\\/]$/.test(prefix)
+        ? ''
+        : `(?=$|[\\s\\\\/,:;!?\\])}'"])`;
+      return redacted.replaceAll(
+        new RegExp(`${escapeRegex(prefix)}${boundary}`, 'g'),
+        '[path]',
+      );
+    }, text);
 }
 
 function escapeRegex(value: string): string {
