@@ -10,7 +10,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { waIcon } from './webAwesomeIcons';
 import type { TeXRAIconName } from './iconNames';
 
-type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
+type ActionButtonAppearance = 'accent' | 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
 type ActionButtonKind = 'primary' | 'secondary' | 'ghost' | 'link' | 'danger';
 /**
@@ -82,6 +82,8 @@ export interface LabeledActionButtonOptions extends Omit<
   readonly icon?: TeXRAIconName;
   readonly text: string;
   readonly label?: string;
+  /** Let a containing Web Awesome primitive own the button's native chrome. */
+  readonly nativeChrome?: boolean;
 }
 
 interface ActionButtonBaseOptions extends Omit<
@@ -91,6 +93,7 @@ interface ActionButtonBaseOptions extends Omit<
   readonly icon?: TeXRAIconName;
   readonly label?: string;
   readonly text?: string;
+  readonly nativeChrome?: boolean;
 }
 
 /** The button and its (optional) sibling `<wa-tooltip>`, kept apart so a
@@ -121,10 +124,13 @@ function renderActionButtonParts({
   tooltip,
   hidden,
   ariaHidden,
+  nativeChrome,
   onClick,
 }: ActionButtonBaseOptions): ActionButtonParts {
+  let baseClass: string | undefined;
+  if (!nativeChrome) baseClass = text ? 'action-button' : 'action-icon-button';
   const classes = [
-    text ? 'action-button' : 'action-icon-button',
+    baseClass,
     kind ? KIND_CLASS[kind] : undefined,
     busy ? 'is-busy' : undefined,
     // Only meaningful on the square icon variant; a labeled button is sized by
