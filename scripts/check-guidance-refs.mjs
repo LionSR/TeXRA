@@ -242,7 +242,7 @@ function referenceLabel(value) {
 function referenceDefinitions(lines) {
   const definitions = new Map();
   for (const line of lines) {
-    const match = /^\s{0,3}\[([^\]]+)\]:\s*(.+)$/u.exec(line);
+    const match = /^\s{0,3}\[([^\]]+)\]:\s*(.+)$/u.exec(line.trimEnd());
     if (!match) continue;
     const destination = localMarkdownDestination(match[2]);
     if (destination) definitions.set(referenceLabel(match[1]), destination);

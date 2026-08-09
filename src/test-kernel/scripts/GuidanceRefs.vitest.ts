@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -36,6 +38,26 @@ describe('check-guidance-refs Markdown links', () => {
       'nowhere.png',
     ]) {
       expect(result.stderr).toContain(missing);
+    }
+  });
+
+  it('reports CRLF reference definitions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'guidance-refs-'));
+
+    try {
+      mkdirSync(join(root, 'src'));
+      writeFileSync(
+        join(root, 'src', 'README.md'),
+        '[missing][target]\r\n\r\n[target]: crlf-reference-only.md\r\n',
+      );
+      const result = spawnSync(process.execPath, [scriptPath, root], {
+        encoding: 'utf8',
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('crlf-reference-only.md');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

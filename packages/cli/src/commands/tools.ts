@@ -113,11 +113,6 @@ function shellRun(command: string): Promise<number> {
       child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
     };
 
-    if (process.platform === 'win32') {
-      wireChild(spawn(command, { shell: true, stdio: 'inherit' }));
-      return;
-    }
-
     let parts: string[];
     try {
       const parsed = shellParse(command);
@@ -128,6 +123,10 @@ function shellRun(command: string): Promise<number> {
       parts = parsed;
     } catch {
       resolve(CliExitCode.AgentError);
+      return;
+    }
+    if (process.platform === 'win32') {
+      wireChild(spawn(command, { shell: true, stdio: 'inherit' }));
       return;
     }
     const [cmd, ...args] = parts;

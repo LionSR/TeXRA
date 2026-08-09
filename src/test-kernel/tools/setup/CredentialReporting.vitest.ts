@@ -14,6 +14,17 @@ import { createFakeSetupPlatform } from './fixtures';
 const mocks = vi.hoisted(() => ({
   apiKeyOrigin: vi.fn<() => Promise<'secret' | 'env' | 'none' | 'unknown'>>(),
   anyUsableCredentialExists: vi.fn<() => Promise<boolean>>(),
+  locateTool:
+    vi.fn<
+      (
+        name: string,
+      ) => Promise<{ name: string; installed: boolean; path?: string }>
+    >(),
+}));
+
+vi.mock('@tools/setup/toolProbing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/setup/toolProbing')>()),
+  locateTool: mocks.locateTool,
 }));
 
 vi.mock('@tools/setup/platform', async (importOriginal) => {
@@ -64,6 +75,11 @@ beforeEach(() => {
   setSetupPlatform(createFakeSetupPlatform());
   mocks.apiKeyOrigin.mockReset().mockResolvedValue('none');
   mocks.anyUsableCredentialExists.mockReset().mockResolvedValue(false);
+  mocks.locateTool.mockReset().mockImplementation(async (name) => ({
+    name,
+    installed: true,
+    path: '/test/tool',
+  }));
 });
 
 afterEach(() => {

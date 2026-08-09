@@ -58,7 +58,7 @@ function createUi(
     promptAgentName: vi.fn(async () => 'editor'),
     promptDescription: vi.fn(async () => 'Edit documents'),
     pickTools: vi.fn(async () => ({ tools: ['edit_file'], groups: [] })),
-    getCustomAgentDir: vi.fn(async () => '/agents'),
+    getCustomAgentDir: vi.fn(async () => resolve('/agents')),
     showCreatedInfo: vi.fn(() => events.push('show')),
     promptAddToConfig: vi.fn(async () => {
       events.push('register');
@@ -106,7 +106,7 @@ describe('agent creator orchestration', () => {
     );
     expect(ui.pickTools).not.toHaveBeenCalled();
     expect(AbsoluteFS.write).toHaveBeenCalledWith(
-      '/agents/editor.yaml',
+      resolve('/agents/editor.yaml'),
       'generated: true',
     );
     expect(ui.promptAddToConfig).toHaveBeenCalledWith(
@@ -114,7 +114,9 @@ describe('agent creator orchestration', () => {
       false,
       'workflow',
     );
-    expect(ui.openCreatedFile).toHaveBeenCalledWith('/agents/editor.yaml');
+    expect(ui.openCreatedFile).toHaveBeenCalledWith(
+      resolve('/agents/editor.yaml'),
+    );
     expect(events).toEqual(['write', 'show', 'register', 'open']);
   });
 
@@ -213,7 +215,7 @@ describe('agent creator orchestration', () => {
       }),
     );
     expect(AbsoluteFS.write).toHaveBeenCalledWith(
-      '/agents/editor.yaml',
+      resolve('/agents/editor.yaml'),
       'valid: true',
     );
   });
@@ -233,7 +235,7 @@ describe('agent creator orchestration', () => {
       DESCRIPTION: 'Edit documents',
     });
     expect(AbsoluteFS.write).toHaveBeenCalledWith(
-      '/agents/editor.yaml',
+      resolve('/agents/editor.yaml'),
       'fallback yaml',
     );
   });
