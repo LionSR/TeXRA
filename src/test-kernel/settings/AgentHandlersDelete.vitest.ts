@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -166,15 +168,17 @@ describe('AgentHandlers custom-agent file actions', () => {
 
   it('preserves the source-relative path when creating a custom copy', async () => {
     mocks.getAgent.mockReturnValueOnce({
-      path: '/bundled/writing/my-agent.yaml',
+      path: path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
     });
-    mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
+    mocks.getSourceDirectory.mockResolvedValueOnce(
+      path.join(path.sep, 'bundled'),
+    );
 
     await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.copyFile).toHaveBeenCalledWith(
-      '/bundled/writing/my-agent.yaml',
-      '/custom/writing/my-agent.yaml',
+      path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
+      path.join(path.sep, 'custom', 'writing', 'my-agent.yaml'),
       { overwrite: true },
     );
     expect(mocks.refreshAfterAgentMutation).toHaveBeenCalledOnce();

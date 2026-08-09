@@ -7,7 +7,7 @@ import { platform } from '@platform/platform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files';
 
-const WORKSPACE_PATH = path.join(path.sep, 'workspace');
+const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
 const CONFIG = { workingDirectory: WORKSPACE_PATH };
 
 function statError(code: string, message: string): Error {
