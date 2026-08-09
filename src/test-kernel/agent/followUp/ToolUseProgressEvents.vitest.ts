@@ -323,7 +323,7 @@ describe('tool-use progress events', () => {
     });
 
     expect(onCycleResponse).not.toHaveBeenCalled();
-    expect(shared.lastResponse).toBe('previous turn response');
+    expect(shared.lastResponse).toBeUndefined();
   });
 
   it('does not return the previous cycle response for an answerless failed cycle', async () => {
