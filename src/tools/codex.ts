@@ -74,6 +74,7 @@ import {
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
   buildCodexUsageStats,
+  type ToolUseStatus,
 } from './codexShared';
 
 // Third-party imports
@@ -156,8 +157,6 @@ function formatCodexDelivery(
 // ============================================================================
 // Stream tab helpers
 // ============================================================================
-
-type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 export function publishCodexTodos(
   childStreamId: StreamTabId,

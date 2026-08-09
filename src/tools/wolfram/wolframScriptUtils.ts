@@ -11,7 +11,6 @@ const WOLFRAM_NOT_INSTALLED_ERROR =
   'Wolfram Engine (https://www.wolfram.com/engine/) which includes WolframScript.';
 const WOLFRAM_CHANNEL = 'WolframTool';
 
-// Interface for execution result
 export interface WolframScriptResult {
   success: boolean;
   output: string | null;
