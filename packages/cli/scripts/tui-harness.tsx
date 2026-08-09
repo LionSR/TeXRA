@@ -274,8 +274,6 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
-const RETARGET_FOCUSED_ESCAPE =
-  process.env.HARNESS_RETARGET_FOCUSED_ESCAPE === '1';
 // Opt-in fixture for the PTY ordering tests (issue #7972, follow-up from
 // #7967 / the "PTY ordering tests" section of
 // docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md): drives one child
@@ -1811,6 +1809,8 @@ if (SHOW_CHILDREN) {
     if (addNestedChildren) projectChildRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
+      category: AgentCategory.ToolUse,
+      identity: child.identity,
       description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       // One child carries usage so scenarios pin the row metadata column's
@@ -1834,6 +1834,8 @@ if (SHOW_CHILDREN) {
     );
     patchStream('harness-nested-local-checker-stream', (slice) => ({
       ...slice,
+      category: AgentCategory.ToolUse,
+      identity: nestedStrategyChild.identity,
       description: 'localChecker nested proof check',
       entries: makeChildEntries('localChecker', 'nested proof check'),
     }));
@@ -2033,23 +2035,11 @@ function markHarnessInterrupted(): void {
   }
 }
 
-let focusedEscapeRetargeted = false;
-
 function canInterruptHarnessStream(streamId: StreamTabId): boolean {
   return isInFlightPhase(streams.get().get(streamId)?.status);
 }
 
 function markHarnessStreamInterrupted(streamId: StreamTabId): void {
-  if (
-    RETARGET_FOCUSED_ESCAPE &&
-    !focusedEscapeRetargeted &&
-    streamId === 'harness-child-strategy-stream'
-  ) {
-    focusedEscapeRetargeted = true;
-    setTimeout(() => {
-      activeStreamIdSignal.set('harness-child-review-stream');
-    }, 50);
-  }
   clearApprovalsWhere(
     (payload) => approvalPayloadStreamId(payload) === streamId,
   );

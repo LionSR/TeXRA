@@ -107,7 +107,7 @@ import {
 import { parentStream as parentStreamSignal } from './state/childExecutions';
 import {
   focusedChildFollowUpRoute,
-  stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
+  stoppedFocusedChildFollowUpMessage,
   type FocusedChildFollowUpRoute,
 } from './state/focusedChildFollowUp';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
@@ -212,10 +212,6 @@ export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
     parentStream: parentStreamSignal.get(),
     streams: streamsSignal.get(),
   });
-}
-
-function stoppedFocusedChildFollowUpMessage(): string {
-  return focusedChildStoppedMessage();
 }
 
 const CHAT_STARTUP_MODEL_RECOVERY = {

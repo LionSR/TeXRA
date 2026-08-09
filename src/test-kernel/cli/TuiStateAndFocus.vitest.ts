@@ -1370,6 +1370,19 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
+  const childCapabilityStatuses = [
+    STREAM_PHASE.RUNNING,
+    STREAM_PHASE.WAITING,
+    STREAM_PHASE.COMPLETED,
+    STREAM_PHASE.CANCELLED,
+    STREAM_PHASE.FAILED,
+  ] as const;
+  const terminalChildStatuses = [
+    STREAM_PHASE.COMPLETED,
+    STREAM_PHASE.CANCELLED,
+    STREAM_PHASE.FAILED,
+  ] as const;
+
   it.each([
     {
       name: 'tool-use agent running',
@@ -1385,26 +1398,14 @@ describe('CLI TUI row allocation', () => {
       status: STREAM_PHASE.WAITING,
       expected: 'accept',
     },
-    ...[
-      STREAM_PHASE.RUNNING,
-      STREAM_PHASE.WAITING,
-      STREAM_PHASE.COMPLETED,
-      STREAM_PHASE.CANCELLED,
-      STREAM_PHASE.FAILED,
-    ].map((status) => ({
+    ...childCapabilityStatuses.map((status) => ({
       name: `workflow agent ${status}`,
       identity: { kind: 'agent' as const, agent: 'review-workflow' },
       category: AgentCategory.Workflow,
       status,
       expected: 'reject',
     })),
-    ...[
-      STREAM_PHASE.RUNNING,
-      STREAM_PHASE.WAITING,
-      STREAM_PHASE.COMPLETED,
-      STREAM_PHASE.CANCELLED,
-      STREAM_PHASE.FAILED,
-    ].map((status) => ({
+    ...childCapabilityStatuses.map((status) => ({
       name: `multi-agent workflow ${status}`,
       identity: {
         kind: 'multiAgentWorkflow' as const,
@@ -1414,26 +1415,14 @@ describe('CLI TUI row allocation', () => {
       status,
       expected: 'reject',
     })),
-    ...[
-      STREAM_PHASE.RUNNING,
-      STREAM_PHASE.WAITING,
-      STREAM_PHASE.COMPLETED,
-      STREAM_PHASE.CANCELLED,
-      STREAM_PHASE.FAILED,
-    ].map((status) => ({
+    ...childCapabilityStatuses.map((status) => ({
       name: `background bash process ${status}`,
       identity: { kind: 'process' as const, tool: 'bash' },
       category: AgentCategory.ToolUse,
       status,
       expected: 'reject',
     })),
-    ...[
-      STREAM_PHASE.RUNNING,
-      STREAM_PHASE.WAITING,
-      STREAM_PHASE.COMPLETED,
-      STREAM_PHASE.CANCELLED,
-      STREAM_PHASE.FAILED,
-    ].map((status) => ({
+    ...childCapabilityStatuses.map((status) => ({
       name: `terminal-backed agent ${status}`,
       identity: {
         kind: 'agent' as const,
@@ -1444,11 +1433,7 @@ describe('CLI TUI row allocation', () => {
       status,
       expected: 'reject',
     })),
-    ...[
-      STREAM_PHASE.COMPLETED,
-      STREAM_PHASE.CANCELLED,
-      STREAM_PHASE.FAILED,
-    ].map((status) => ({
+    ...terminalChildStatuses.map((status) => ({
       name: `tool-use agent ${status}`,
       identity: { kind: 'agent' as const, agent: 'critic' },
       category: AgentCategory.ToolUse,

@@ -202,12 +202,9 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm !== undefined ||
     infoPane !== undefined ||
     transcriptReaderStreamId !== undefined;
-  const focusedChildFollowUp = focusedChildFollowUpRoute({
-    activeStreamId,
-    parentStream,
-    streams,
-  });
-  const childInputHidden = focusedChildFollowUp.kind === 'reject';
+  const childInputHidden =
+    focusedChildFollowUpRoute({ activeStreamId, parentStream, streams })
+      .kind === 'reject';
   const appInputDisabled =
     props.inputDisabled === true || foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
