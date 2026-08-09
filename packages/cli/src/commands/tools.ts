@@ -106,6 +106,17 @@ async function toggleTool(
 // provide. `command` always comes from the static EXTERNAL_TOOL_DEFS registry,
 // never from user or LLM input. POSIX commands run as argv; Windows uses the
 // shell so npm/gh `.cmd` shims resolve through PATHEXT.
+function parsePosixGuideCommand(command: string): string[] | null {
+  try {
+    const parsed = shellParse(command);
+    return parsed.every((arg): arg is string => typeof arg === 'string')
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function shellRun(command: string): Promise<number> {
   return new Promise((resolve) => {
     const wireChild = (child: ReturnType<typeof spawn>) => {
@@ -113,21 +124,13 @@ function shellRun(command: string): Promise<number> {
       child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
     };
 
-    if (process.platform === 'win32') {
-      wireChild(spawn(command, { shell: true, stdio: 'inherit' }));
+    const parts = parsePosixGuideCommand(command);
+    if (!parts) {
+      resolve(CliExitCode.AgentError);
       return;
     }
-
-    let parts: string[];
-    try {
-      const parsed = shellParse(command);
-      if (!parsed.every((arg): arg is string => typeof arg === 'string')) {
-        resolve(CliExitCode.AgentError);
-        return;
-      }
-      parts = parsed;
-    } catch {
-      resolve(CliExitCode.AgentError);
+    if (process.platform === 'win32') {
+      wireChild(spawn(command, { shell: true, stdio: 'inherit' }));
       return;
     }
     const [cmd, ...args] = parts;

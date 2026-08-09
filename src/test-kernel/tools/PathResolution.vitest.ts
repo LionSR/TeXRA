@@ -42,15 +42,16 @@ describe('resolveWorkspaceRelativePath path protection', () => {
       },
     });
 
+    const logicalOutsidePath = outsidePath.replaceAll('\\', '/');
     expect(resolveWorkspaceRelativePath(outsidePath, workspacePath)).toEqual({
-      relative: outsidePath,
+      relative: logicalOutsidePath,
       absolute: outsidePath,
       fsPath: outsidePath,
     });
     expect(
       resolveWorkspaceRelativePath('../outside/file.tex', workspacePath),
     ).toEqual({
-      relative: outsidePath,
+      relative: logicalOutsidePath,
       absolute: outsidePath,
       fsPath: outsidePath,
     });

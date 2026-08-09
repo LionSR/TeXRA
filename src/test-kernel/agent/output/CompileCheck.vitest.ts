@@ -229,20 +229,37 @@ describe('runCompileCheck', () => {
       'compile',
       'r0_main.tex.log',
     );
+    const rawWindowsLegacyLogPath = path.join(
+      runDir(executionId),
+      'compile',
+      'r0_r0_main.tex.log',
+    );
     await initLatexPlatform({
       [texPath]: COMPILABLE_TEX,
       [legacyLogPath]: 'Compile check failed for main.tex (pre-upgrade)\n',
+      [rawWindowsLegacyLogPath]:
+        'Compile check failed for main.tex (Windows pre-upgrade)\n',
     });
 
-    const outputState = seedMainTexOutput(executionId);
+    const filesModule = await import('@utils/files');
+    const comparablePathSpy = vi
+      .spyOn(filesModule, 'getComparablePath')
+      .mockReturnValueOnce('r0\\main.tex');
 
-    const result = await runCompileCheck(
-      compileContext(executionId, outputState),
-      0,
-    );
+    try {
+      const outputState = seedMainTexOutput(executionId);
 
-    expect(result.compileResult?.status).toBe('ok');
-    await expect(AbsoluteFS.read(legacyLogPath)).rejects.toThrow();
+      const result = await runCompileCheck(
+        compileContext(executionId, outputState),
+        0,
+      );
+
+      expect(result.compileResult?.status).toBe('ok');
+      await expect(AbsoluteFS.read(legacyLogPath)).rejects.toThrow();
+      await expect(AbsoluteFS.read(rawWindowsLegacyLogPath)).rejects.toThrow();
+    } finally {
+      comparablePathSpy.mockRestore();
+    }
   });
 
   it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {

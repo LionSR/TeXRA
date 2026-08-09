@@ -249,11 +249,15 @@ async function compileOne(
   // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
   // it is already added explicitly as `r${currentRound}_` below — without
   // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
-  const comparablePath = getComparablePath(outputFile.location);
+  const rawComparablePath = getComparablePath(outputFile.location);
+  const comparablePath = rawComparablePath.replaceAll('\\', '/');
   const roundPrefix = `r${currentRound}/`;
   const pathForSafeName = comparablePath.startsWith(roundPrefix)
     ? comparablePath.slice(roundPrefix.length)
     : comparablePath;
+  const rawPathForSafeName = rawComparablePath.startsWith(roundPrefix)
+    ? rawComparablePath.slice(roundPrefix.length)
+    : rawComparablePath;
   // Sanitizing to a filesystem-safe name is lossy: two distinct paths that
   // differ only in characters outside [a-zA-Z0-9._-] (e.g. "a:b.tex" and
   // "a_b.tex") both collapse to the same string, so a second file's log
@@ -282,19 +286,27 @@ async function compileOne(
     'compile',
     `r${currentRound}_${safeName}.log`,
   );
-  // Pre-fix builds wrote to this un-hashed name. A run resumed under this
-  // fix must still clean it up on success, or a leftover legacy log from
-  // before the upgrade would keep reading as a failure forever.
-  const legacyLogDest = pathToLocation(
-    path.join(opts.compileRoot, `r${currentRound}_${legacySafeName}.log`),
+  // Pre-fix builds wrote to this un-hashed name. Windows builds before path
+  // normalization also retained the `r<N>\\` prefix while sanitizing. A run
+  // resumed under this fix must clear either legacy spelling on success.
+  const legacySafeNames = new Set([
+    legacySafeName,
+    sanitizePathSegment(rawPathForSafeName, {
+      invalidCharPattern: /[^a-zA-Z0-9._-]/g,
+      replacement: '_',
+    }),
+  ]);
+  const legacyLogPaths = [...legacySafeNames].map((name) =>
+    path.join(opts.compileRoot, `r${currentRound}_${name}.log`),
   );
   const { executionId } = ctx.fileService;
 
   const clearStaleLogs = (): Promise<void[]> =>
-    Promise.all([
-      AbsoluteFS.delete(logDest.absolutePath).catch(() => undefined),
-      AbsoluteFS.delete(legacyLogDest.absolutePath).catch(() => undefined),
-    ]);
+    Promise.all(
+      [logDest.absolutePath, ...legacyLogPaths].map((logPath) =>
+        AbsoluteFS.delete(logPath).catch(() => undefined),
+      ),
+    );
 
   let compileResult: CompileLatex2PdfResult;
   try {

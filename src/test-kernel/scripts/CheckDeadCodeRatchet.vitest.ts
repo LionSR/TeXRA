@@ -9,7 +9,11 @@ import {
   parseKnipIssues,
   readBaseline,
 } from '../../../scripts/check-dead-code-ratchet.mjs';
-import type { KnipFinding } from '../../../scripts/check-dead-code-ratchet.d.mts';
+type KnipFinding = {
+  file: string;
+  category: 'files' | 'exports' | 'types' | 'duplicates';
+  name: string;
+};
 
 // Captured verbatim from a real `knip --reporter json` run against this repo
 // (knip 6.24.0, `--include files,exports,types,duplicates`) and trimmed to a

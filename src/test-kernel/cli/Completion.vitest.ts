@@ -185,7 +185,11 @@ fi
       const completions = probeBashCompletion(
         bash,
         `
-export PATH=${bashQuote(bin)}:$PATH
+if command -v cygpath >/dev/null; then
+  export PATH="$(cygpath -u ${bashQuote(bin)}):$PATH"
+else
+  export PATH=${bashQuote(bin)}:$PATH
+fi
 COMP_WORDS=(texra run p)
 COMP_CWORD=2
 _texra
