@@ -11,6 +11,10 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
 
+type SplitButtonAppearance = 'filled' | 'outlined' | 'plain';
+type SplitButtonVariant = 'brand' | 'neutral';
+type SplitButtonSize = 's' | 'm' | 'l';
+
 export interface SplitButtonMenuOptions {
   /**
    * Component-specific class prefix ('approve-split', 'diff-dropdown'). The
@@ -23,6 +27,9 @@ export interface SplitButtonMenuOptions {
   /** Trigger button id; the tooltip anchors to it via `for`. */
   readonly triggerId: string;
   readonly triggerAriaLabel: string;
+  readonly triggerAppearance?: SplitButtonAppearance;
+  readonly triggerVariant?: SplitButtonVariant;
+  readonly triggerSize?: SplitButtonSize;
   readonly tooltip: string;
   /** The `wa-dropdown-item` entries. */
   readonly items: TemplateResult;
@@ -34,43 +41,66 @@ export interface SplitButtonMenuOptions {
   readonly onSelect: (value: string) => void;
 }
 
+interface SplitButtonMenuParts {
+  readonly menu: TemplateResult;
+  readonly tooltip: TemplateResult;
+}
+
 /**
  * The caret half of a split button: a `<wa-dropdown>` with a chevron trigger
  * plus its `<wa-tooltip>`. The caller renders the main action button and the
  * `<div class="<prefix> split-button">` wrapper (which owns the width budget)
  * and decides whether the menu renders at all.
  */
-export function renderSplitButtonMenu({
+export function renderSplitButtonMenu(
+  options: SplitButtonMenuOptions,
+): TemplateResult {
+  const { menu, tooltip } = renderSplitButtonMenuParts(options);
+  return html`${menu}${tooltip}`;
+}
+
+/**
+ * Returns the dropdown and tooltip separately for a native
+ * `<wa-button-group>` caller, which must keep the tooltip outside the group so
+ * the dropdown remains its trailing segment.
+ */
+export function renderSplitButtonMenuParts({
   classPrefix,
   triggerId,
   triggerAriaLabel,
+  triggerAppearance = 'plain',
+  triggerVariant = 'neutral',
+  triggerSize = 's',
   tooltip,
   items,
   onSelect,
-}: SplitButtonMenuOptions): TemplateResult {
-  return html`
-    <wa-dropdown
-      class="${classPrefix}-menu split-button-menu"
-      placement="bottom-end"
-      @wa-select=${(event: CustomEvent<{ item: HTMLElement }>) =>
-        onSelect(
-          (event.detail?.item as HTMLElement & { value?: string })?.value ?? '',
-        )}
-    >
-      <wa-button
-        id=${triggerId}
-        slot="trigger"
-        class="${classPrefix}-trigger split-button-trigger"
-        appearance="plain"
-        variant="neutral"
-        size="s"
-        type="button"
-        aria-label=${triggerAriaLabel}
+}: SplitButtonMenuOptions): SplitButtonMenuParts {
+  return {
+    menu: html`
+      <wa-dropdown
+        class="${classPrefix}-menu split-button-menu"
+        placement="bottom-end"
+        @wa-select=${(event: CustomEvent<{ item: HTMLElement }>) =>
+          onSelect(
+            (event.detail?.item as HTMLElement & { value?: string })?.value ??
+              '',
+          )}
       >
-        ${waIcon('chevron-down')}
-      </wa-button>
-      ${items}
-    </wa-dropdown>
-    <wa-tooltip for=${triggerId}>${tooltip}</wa-tooltip>
-  `;
+        <wa-button
+          id=${triggerId}
+          slot="trigger"
+          class="${classPrefix}-trigger split-button-trigger"
+          appearance=${triggerAppearance}
+          variant=${triggerVariant}
+          size=${triggerSize}
+          type="button"
+          aria-label=${triggerAriaLabel}
+        >
+          ${waIcon('chevron-down')}
+        </wa-button>
+        ${items}
+      </wa-dropdown>
+    `,
+    tooltip: html`<wa-tooltip for=${triggerId}>${tooltip}</wa-tooltip>`,
+  };
 }

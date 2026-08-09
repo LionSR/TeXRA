@@ -17,6 +17,7 @@ function mount(options: {
   canBypass?: boolean;
   bypassAction?: string;
   canApproveAllDelegatedWork?: boolean;
+  disabled?: boolean;
 }): Promise<ApproveSplitButton> {
   return mountComponent<ApproveSplitButton>('approve-split-button', {
     approveTitle: 'Approve',
@@ -24,6 +25,7 @@ function mount(options: {
     bypassAction:
       options.bypassAction ?? DELEGATION_APPROVAL_COPY.progressViewEditAction,
     canApproveAllDelegatedWork: options.canApproveAllDelegatedWork ?? false,
+    disabled: options.disabled ?? false,
   });
 }
 
@@ -71,7 +73,45 @@ describe('approve-split-button', () => {
     );
     expect(approve).toBeTruthy();
     clickApproveButton(element);
-    expect(events).toEqual(['approve']);
+    expect(events).toStrictEqual(['approve']);
+  });
+
+  it('keeps disabled controls as a plain inert Approve button', async () => {
+    const element = await mount({ canBypass: true, disabled: true });
+    const approve = element.shadowRoot?.querySelector<HTMLElement>(
+      'wa-button[data-action="approve"]',
+    );
+
+    expect(element.shadowRoot?.querySelector('wa-button-group')).toBeFalsy();
+    expect(element.shadowRoot?.querySelector('wa-dropdown')).toBeFalsy();
+    expect(approve?.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('uses the native group with matching primary segments and accessible labels', async () => {
+    const element = await mount({ canBypass: true });
+    const group = element.shadowRoot?.querySelector('wa-button-group');
+    const approve = group?.querySelector<HTMLElement>(
+      'wa-button[data-action="approve"]',
+    );
+    const menu = group?.querySelector('wa-dropdown');
+    const trigger = menu?.querySelector<HTMLElement>(
+      'wa-button[slot="trigger"]',
+    );
+
+    expect(group?.getAttribute('label')).toBe('Approve');
+    expect(approve?.parentElement).toBe(group);
+    expect(menu?.parentElement).toBe(group);
+    expect(approve?.classList.contains('action-button')).toBe(false);
+    expect(approve?.getAttribute('appearance')).toBe('filled');
+    expect(approve?.getAttribute('variant')).toBe('brand');
+    expect(approve?.getAttribute('size')).toBe('s');
+    expect(trigger?.getAttribute('appearance')).toBe('filled');
+    expect(trigger?.getAttribute('variant')).toBe('brand');
+    expect(trigger?.getAttribute('size')).toBe('s');
+    expect(trigger?.getAttribute('aria-label')).toBe('More approve options');
+    expect(element.shadowRoot?.querySelector('wa-tooltip')?.parentNode).toBe(
+      element.shadowRoot,
+    );
   });
 
   it('names only the kind the panel grants when canBypass is true', async () => {
@@ -101,7 +141,7 @@ describe('approve-split-button', () => {
     const events = recordEvents(element);
 
     clickApproveButton(element);
-    expect(events).toEqual(['approve']);
+    expect(events).toStrictEqual(['approve']);
   });
 
   it('emits approve-session only for the run-scoped bypass menu item', async () => {
@@ -112,10 +152,10 @@ describe('approve-split-button', () => {
 
     // An unrecognized menu value is a no-op.
     selectMenuItem(element, 'nope');
-    expect(events).toEqual([]);
+    expect(events).toStrictEqual([]);
 
     selectMenuItem(element, 'approve-session');
-    expect(events).toEqual(['approve-session']);
+    expect(events).toStrictEqual(['approve-session']);
   });
 
   it('names and emits the delegated-task approve-all action', async () => {
@@ -134,6 +174,6 @@ describe('approve-split-button', () => {
     );
     expect(tooltip?.textContent).not.toMatch(/stream|yolo/i);
     selectMenuItem(element, 'approve-all-delegated-work');
-    expect(events).toEqual(['approve-all-delegated-work']);
+    expect(events).toStrictEqual(['approve-all-delegated-work']);
   });
 });
