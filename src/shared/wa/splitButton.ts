@@ -13,15 +13,13 @@ import { waIcon } from './webAwesomeIcons';
 
 type SplitButtonAppearance = 'filled' | 'outlined' | 'plain';
 type SplitButtonVariant = 'brand' | 'neutral';
-type SplitButtonSize = 's' | 'm' | 'l';
 
 export interface SplitButtonMenuOptions {
   /**
    * Component-specific class prefix ('approve-split', 'diff-dropdown'). The
    * menu renders `<prefix>-menu split-button-menu` and the caret trigger
    * `<prefix>-trigger split-button-trigger`: the prefixed names sit alongside
-   * the shared ones (skinned by `splitButtonStyles`) because component tests
-   * query them.
+   * the shared ones so callers can style and query each part.
    */
   readonly classPrefix: string;
   /** Trigger button id; the tooltip anchors to it via `for`. */
@@ -29,7 +27,6 @@ export interface SplitButtonMenuOptions {
   readonly triggerAriaLabel: string;
   readonly triggerAppearance?: SplitButtonAppearance;
   readonly triggerVariant?: SplitButtonVariant;
-  readonly triggerSize?: SplitButtonSize;
   readonly tooltip: string;
   /** The `wa-dropdown-item` entries. */
   readonly items: TemplateResult;
@@ -48,9 +45,8 @@ interface SplitButtonMenuParts {
 
 /**
  * The caret half of a split button: a `<wa-dropdown>` with a chevron trigger
- * plus its `<wa-tooltip>`. The caller renders the main action button and the
- * `<div class="<prefix> split-button">` wrapper (which owns the width budget)
- * and decides whether the menu renders at all.
+ * plus its `<wa-tooltip>`. The caller renders the main action button, owns the
+ * split-button container, and decides whether the menu renders at all.
  */
 export function renderSplitButtonMenu(
   options: SplitButtonMenuOptions,
@@ -70,7 +66,6 @@ export function renderSplitButtonMenuParts({
   triggerAriaLabel,
   triggerAppearance = 'plain',
   triggerVariant = 'neutral',
-  triggerSize = 's',
   tooltip,
   items,
   onSelect,
@@ -92,7 +87,7 @@ export function renderSplitButtonMenuParts({
           class="${classPrefix}-trigger split-button-trigger"
           appearance=${triggerAppearance}
           variant=${triggerVariant}
-          size=${triggerSize}
+          size="s"
           type="button"
           aria-label=${triggerAriaLabel}
         >

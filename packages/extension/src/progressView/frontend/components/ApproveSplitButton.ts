@@ -117,7 +117,6 @@ export class ApproveSplitButton extends LitElement {
       triggerAriaLabel: 'More approve options',
       triggerAppearance: 'filled',
       triggerVariant: 'brand',
-      triggerSize: 's',
       tooltip: this.canApproveAllDelegatedWork
         ? `${DELEGATION_APPROVAL_COPY.progressViewExplanation} (a)`
         : `${this.bypassAction} (a)`,
