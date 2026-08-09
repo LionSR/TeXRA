@@ -164,6 +164,7 @@ import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 const STREAM_ID = 'harness-stream-1';
 const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
+const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
   process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
@@ -1457,6 +1458,32 @@ function seedRunningWorkflow(): void {
   });
 }
 
+function seedRunningProcessChild(): void {
+  const childStreamId = 'bash#aaaa0003f10e' as StreamTabId;
+  patchStream(childStreamId, (slice) => ({
+    ...slice,
+    identity: { kind: 'process', tool: 'bash' },
+    // Matches the synthetic run config emitted by background Bash.
+    category: AgentCategory.ToolUse,
+    description: 'sleep 30',
+  }));
+  setStreamStatusInCliState({
+    streamId: childStreamId,
+    status: STREAM_PHASE.RUNNING,
+  });
+  projectChildRoster(STREAM_ID, [
+    {
+      executionId: 'aaaa0003f10e',
+      agentName: 'bash',
+      childStreamId,
+      identity: { kind: 'process', tool: 'bash' },
+      status: STREAM_PHASE.RUNNING,
+    },
+  ]);
+  setParentStream(childStreamId, STREAM_ID);
+  activeStreamIdSignal.set(childStreamId);
+}
+
 // One child stream, its attachment/roster/edge/status/removal facts driven
 // through the real production subscription path rather than the CHILD_STREAMS
 // map mutators (`projectChildRoster`/`setParentStream`) directly — a
@@ -2206,11 +2233,7 @@ function handleHarnessSubmit(line: string): void {
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
-      stoppedFocusedChildFollowUpMessage({
-        parentStream: parentStream.get(),
-        streamId: focusedChildRoute.streamId,
-        streams: streams.get(),
-      }),
+      stoppedFocusedChildFollowUpMessage(),
       focusedChildRoute.streamId,
     );
     return;
@@ -2438,6 +2461,10 @@ if (SHOW_WORKFLOW_TIMELINE) {
 
 if (SHOW_WORKFLOW_RUNNING) {
   seedRunningWorkflow();
+}
+
+if (SHOW_PROCESS_CHILD) {
+  seedRunningProcessChild();
 }
 
 if (CHILD_EVENT_ORDER) {

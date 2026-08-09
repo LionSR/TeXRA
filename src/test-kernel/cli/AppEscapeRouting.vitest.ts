@@ -21,6 +21,7 @@ import {
   rootStreamId,
   setStreamStatusInCliState,
   streams,
+  transcriptReaderStreamId,
 } from '@cli/chat/tui/state/cliState';
 import {
   projectChildRoster,
@@ -71,6 +72,16 @@ function setRunning(...streamIds: StreamTabId[]): void {
   }
 }
 
+function markToolUseAgent(...streamIds: StreamTabId[]): void {
+  for (const streamId of streamIds) {
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      identity: { kind: 'agent', agent: 'child' },
+      category: AgentCategory.ToolUse,
+    }));
+  }
+}
+
 function runningChild(
   executionId: string,
   agentName: string,
@@ -95,6 +106,7 @@ function seedRootStream(): void {
 function seedChildHierarchy(): void {
   seedRootStream();
   setRunning(CHILD, GRANDCHILD);
+  markToolUseAgent(CHILD, GRANDCHILD);
   projectChildRoster(ROOT, [
     runningChild('escape-child-execution', 'child', CHILD),
   ]);
@@ -726,6 +738,147 @@ describe('App foreground Escape ownership', () => {
       instance.unmount();
     }
   });
+
+  it('collapses an incapable child composer while preserving navigation and the root draft', async () => {
+    seedChildHierarchy();
+    focusStream(ROOT);
+    const onSubmit = vi.fn();
+    const onInterruptStream = vi.fn();
+    const { ink, React } = await loadInk();
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, {
+        ...appProps(onInterruptStream),
+        onSubmit,
+      }),
+      { columns: 100, debug: true, rows: 30 },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('preserved root draft');
+      await waitFor(() => currentFrame().includes('preserved root draft'));
+
+      patchStream(CHILD, (slice) => ({
+        ...slice,
+        identity: { kind: 'process', tool: 'bash' },
+        // Background Bash carries this synthetic category; identity remains
+        // authoritative for the composer capability.
+        category: AgentCategory.ToolUse,
+      }));
+      focusStream(CHILD);
+      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => !currentFrame().includes('preserved root draft'));
+
+      stdin.write('ignored printable submit\r');
+      await sleep(30);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(currentFrame()).not.toContain('ignored printable submit');
+
+      stdin.write('\t');
+      await sleep(30);
+      stdin.write('\x14');
+      await sleep(30);
+      expect(transcriptReaderStreamId.get()).toBeUndefined();
+      stdin.write('\t');
+      await sleep(30);
+
+      stdin.write('\x14');
+      await waitFor(() => transcriptReaderStreamId.get() === CHILD);
+      stdin.write(ESC);
+      await waitFor(() => transcriptReaderStreamId.get() === undefined);
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => currentFrame().includes('preserved root draft'));
+      stdin.write('\r');
+      await waitFor(() => onSubmit.mock.calls.length === 1);
+
+      expect(onSubmit).toHaveBeenCalledWith('preserved root draft', undefined);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it.each([STREAM_PHASE.RUNNING, STREAM_PHASE.WAITING])(
+    'keeps the composer enabled for a %s tool-use agent child',
+    async (status) => {
+      seedChildHierarchy();
+      setStreamStatusInCliState({ streamId: CHILD, status });
+      focusStream(CHILD);
+      const onSubmit = vi.fn();
+      const { instance, stdin } = await renderWithInterrupt({ onSubmit });
+
+      try {
+        stdin.write('child follow-up\r');
+        await waitFor(() => onSubmit.mock.calls.length === 1);
+        expect(onSubmit).toHaveBeenCalledWith('child follow-up', undefined);
+      } finally {
+        instance.unmount();
+      }
+    },
+  );
+
+  it.each([
+    {
+      name: 'workflow agent',
+      identity: { kind: 'agent' as const, agent: 'workflow-child' },
+      category: AgentCategory.Workflow,
+    },
+    {
+      name: 'multi-agent workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'workflow-child',
+      },
+      category: AgentCategory.Workflow,
+    },
+    {
+      name: 'background bash process',
+      identity: { kind: 'process' as const, tool: 'bash' },
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'terminal-backed agent',
+      identity: {
+        kind: 'agent' as const,
+        agent: 'codex',
+        tool: 'codex',
+      },
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'missing metadata',
+      identity: undefined,
+      category: undefined,
+    },
+  ])(
+    'ignores printable submission for a running $name child',
+    async (fixture) => {
+      seedChildHierarchy();
+      patchStream(CHILD, (slice) => ({
+        ...slice,
+        identity: fixture.identity,
+        category: fixture.category,
+      }));
+      focusStream(CHILD);
+      const onSubmit = vi.fn();
+      const { instance, stdin, stdout } = await renderWithInterrupt({
+        onSubmit,
+      });
+
+      try {
+        stdin.write('must not submit\r');
+        await sleep(30);
+        expect(stdout.output).not.toContain('must not submit');
+        expect(onSubmit).not.toHaveBeenCalled();
+      } finally {
+        instance.unmount();
+      }
+    },
+  );
 
   it('treats list Escape as cancel and Tab as the explicit ownership transfer', async () => {
     seedChildHierarchy();

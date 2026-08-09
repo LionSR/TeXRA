@@ -1,4 +1,4 @@
-import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 
@@ -10,6 +10,7 @@ export type FocusedChildFollowUpRoute =
   | { readonly kind: 'accept'; readonly streamId: StreamTabId }
   | { readonly kind: 'reject'; readonly streamId: StreamTabId };
 
+/** Select both the focused-child composer presentation and submission route. */
 export function focusedChildFollowUpRoute(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -23,44 +24,18 @@ export function focusedChildFollowUpRoute(init: {
     return { kind: 'none' };
   }
 
-  const status = init.streams.get(scope.streamId)?.status;
-  // A focused child normally has a status. Keep the previous permissive
-  // behavior during the brief edge where parent focus arrives first.
-  if (status !== undefined && !isInFlightPhase(status)) {
+  const slice = init.streams.get(scope.streamId);
+  if (
+    slice?.identity?.kind !== 'agent' ||
+    slice.identity.tool !== undefined ||
+    slice.category !== AgentCategory.ToolUse ||
+    !isInFlightPhase(slice.status)
+  ) {
     return { kind: 'reject', streamId: scope.streamId };
   }
   return { kind: 'accept', streamId: scope.streamId };
 }
 
-export function focusedChildInputDisabledMessage(init: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly status: StreamPhase | undefined;
-}): string | undefined {
-  const scope = activeStreamScope({
-    activeStreamId: init.activeStreamId,
-    parentStream: init.parentStream,
-  });
-  if (
-    scope.kind !== 'child' ||
-    init.status === undefined ||
-    isInFlightPhase(init.status)
-  ) {
-    return undefined;
-  }
-  return FOCUSED_BACKGROUND_TASK.noLongerAccepting;
-}
-
-export function stoppedFocusedChildFollowUpMessage(init: {
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streamId: StreamTabId;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): string {
-  return (
-    focusedChildInputDisabledMessage({
-      activeStreamId: init.streamId,
-      parentStream: init.parentStream,
-      status: init.streams.get(init.streamId)?.status,
-    }) ?? FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting
-  );
+export function stoppedFocusedChildFollowUpMessage(): string {
+  return FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting;
 }

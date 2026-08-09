@@ -60,7 +60,6 @@ const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
   // Keep in sync with FOCUSED_BACKGROUND_TASK in src/shared/copy/nestedRuns.ts.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
-const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START}.`;
 const STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE =
   // Keep in sync with FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting.
   'The selected background task is no longer accepting follow-ups.';
@@ -190,6 +189,46 @@ const SCENARIOS = [
       'Proofread (1/1)',
       'correct running',
       '2 subagents',
+    ],
+  },
+  {
+    name: 'workflow-running-composer-hidden',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_WORKFLOW_RUNNING: '1',
+    },
+    bootExpect: "Workflow script 'live-workflow-validation'",
+    keys: ['must not reach workflow', '\r'],
+    expect: [
+      "Workflow script 'live-workflow-validation'",
+      'Proofread (1/1) · 0/2 done',
+      'Esc back',
+    ],
+    unexpect: [
+      'must not reach workflow',
+      'Harness received: must not reach workflow',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
+    ],
+  },
+  {
+    name: 'process-child-composer-hidden',
+    frame: 'viewport',
+    rows: 24,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_PROCESS_CHILD: '1',
+    },
+    bootExpect: 'Esc back',
+    keys: ['must not reach bash', '\r'],
+    expect: ['1 running session', 'Esc back'],
+    unexpect: [
+      'must not reach bash',
+      'Harness received: must not reach bash',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
     ],
   },
   {
@@ -3106,13 +3145,8 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
-    expect: [
-      '◆ stopped',
-      'root active',
-      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
-      'Ctrl-C stop root',
-    ],
-    expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
+    expect: ['◆ stopped', 'root active', 'Ctrl-C stop root', 'Esc back'],
+    unexpect: [STOPPED_SUBAGENT_INPUT_MESSAGE_START],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
@@ -3152,11 +3186,12 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    expect: ['◆ stopped', 'root active', STOPPED_SUBAGENT_INPUT_MESSAGE_START],
-    expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
+    expect: ['◆ stopped', 'root active', 'Esc back'],
     unexpect: [
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
       'Harness received: can you still receive this?',
+      'can you still receive this?',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },

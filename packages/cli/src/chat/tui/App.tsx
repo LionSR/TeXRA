@@ -86,7 +86,7 @@ import {
   parentStream as parentStreamSignal,
   subagentExecutionLabels as subagentExecutionLabelsSignal,
 } from './state/childExecutions';
-import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
+import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
 import {
   childListStreamId,
   childStreamListValue,
@@ -202,17 +202,18 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm !== undefined ||
     infoPane !== undefined ||
     transcriptReaderStreamId !== undefined;
-  const childInputDisabledMessage = focusedChildInputDisabledMessage({
+  const focusedChildFollowUp = focusedChildFollowUpRoute({
     activeStreamId,
     parentStream,
-    status: activeStreamId ? streams.get(activeStreamId)?.status : undefined,
+    streams,
   });
+  const childInputHidden = focusedChildFollowUp.kind === 'reject';
   const appInputDisabled =
     props.inputDisabled === true || foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
     ? SESSION_LIST.choosing
-    : childInputDisabledMessage;
-  const inputDisabled = appInputDisabled || inputDisabledMessage !== undefined;
+    : undefined;
+  const inputDisabled = appInputDisabled || childInputHidden;
   const escapeInterruptState: EscapeInterruptState = {
     inputDisabled: appInputDisabled,
     reverseSearchOpen,
@@ -224,7 +225,7 @@ export function App(props: AppProps): React.JSX.Element {
   useLayoutEffect(() => {
     escapeInterruptStateRef.current = escapeInterruptState;
   });
-  const inputBarVisible = !foregroundOpen;
+  const inputBarVisible = !foregroundOpen && !childInputHidden;
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.

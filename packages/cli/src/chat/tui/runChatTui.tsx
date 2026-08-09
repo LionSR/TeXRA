@@ -214,12 +214,8 @@ export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
   });
 }
 
-function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
-  return focusedChildStoppedMessage({
-    parentStream: parentStreamSignal.get(),
-    streamId,
-    streams: streamsSignal.get(),
-  });
+function stoppedFocusedChildFollowUpMessage(): string {
+  return focusedChildStoppedMessage();
 }
 
 const CHAT_STARTUP_MODEL_RECOVERY = {
@@ -656,7 +652,7 @@ export async function runChat(
     const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
     if (focusedChildRoute.kind === 'reject') {
       appendLocalAssistantTranscript(
-        stoppedFocusedChildFollowUpMessage(focusedChildRoute.streamId),
+        stoppedFocusedChildFollowUpMessage(),
         focusedChildRoute.streamId,
       );
       return;
@@ -758,7 +754,7 @@ export async function runChat(
             session.stopRequested = true;
           } else {
             appendLocalAssistantTranscript(
-              stoppedFocusedChildFollowUpMessage(followUpTarget),
+              stoppedFocusedChildFollowUpMessage(),
               followUpTarget,
             );
           }
