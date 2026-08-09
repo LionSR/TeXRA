@@ -75,19 +75,14 @@ export async function loadCliMultiAgentRunPlan(
       remoteAgentLoadAttempted: false,
     };
   }
-  const result = await refreshRemoteCatalogForGaps(
+  const result = await reloadRemoteAgentsForGaps(
     localPlan,
     teamPlanHasGaps,
     () => planCurrentMultiAgentRun(init),
-    {
-      canAccessRemoteCatalog: () =>
-        SupabaseClient.canAccessRemoteAgentCatalog(),
-      refreshRemote: () => refresh({ includeRemote: true }),
-    },
   );
   return {
     plan: result.value,
-    remoteAgentLoadAttempted: result.remoteCatalogRefreshAttempted,
+    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
   };
 }
 
@@ -95,18 +90,28 @@ export async function loadCliMultiAgentPresetPlanSet(
   presets: readonly CliMultiAgentPreset[],
 ): Promise<MultiAgentPresetPlansLoadResult> {
   await loadAgents({ includeRemote: false });
-  const result = await refreshRemoteCatalogForGaps(
+  const result = await reloadRemoteAgentsForGaps(
     planLoadedCliMultiAgentPresets(presets),
     (plans) => plans.some(teamPlanHasGaps),
     () => planLoadedCliMultiAgentPresets(presets),
-    {
-      canAccessRemoteCatalog: () =>
-        SupabaseClient.canAccessRemoteAgentCatalog(),
-      refreshRemote: () => refresh({ includeRemote: true }),
-    },
   );
   return {
     plans: result.value,
+    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
+  };
+}
+
+async function reloadRemoteAgentsForGaps<T>(
+  value: T,
+  hasGaps: (value: T) => boolean,
+  replan: () => T,
+): Promise<{ readonly value: T; readonly remoteAgentLoadAttempted: boolean }> {
+  const result = await refreshRemoteCatalogForGaps(value, hasGaps, replan, {
+    canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+    refreshRemote: () => refresh({ includeRemote: true }),
+  });
+  return {
+    value: result.value,
     remoteAgentLoadAttempted: result.remoteCatalogRefreshAttempted,
   };
 }

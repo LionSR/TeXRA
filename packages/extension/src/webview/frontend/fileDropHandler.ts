@@ -28,7 +28,12 @@ function decodeFileUri(value: string): string | null {
 
   const url = tryParseUrl(value);
   if (!url || url.protocol !== 'file:') return null;
-  const pathname = decodeURIComponent(url.pathname);
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    return null;
+  }
   if (url.hostname && url.hostname !== 'localhost') {
     return `//${url.hostname}${pathname}`;
   }
