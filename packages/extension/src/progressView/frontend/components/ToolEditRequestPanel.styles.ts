@@ -3,11 +3,8 @@
 import { css, type CSSResult } from 'lit';
 
 import { sp } from '@shared/styles';
-import { splitButtonStyles } from '@shared/styles/controlStyles';
 
 export const toolEditRequestPanelStyles: CSSResult = css`
-  ${splitButtonStyles}
-
   .approval-request__path {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
@@ -39,17 +36,42 @@ export const toolEditRequestPanelStyles: CSSResult = css`
     font-size: var(--font-size-xs);
   }
 
-  /*
-   * The diff control is a split button. Its fused-pill chrome — squared inner
-   * corners, the pulled-in caret, the hover outline that boxes both halves —
-   * comes from the shared splitButtonStyles above, which this component's
-   * markup opts into by carrying both the shared .split-button* classes and
-   * its own .diff-* names. Only the action-row width budget is local: the
-   * button sits among Approve/Reject siblings and must not grow to fill a wide
-   * panel.
-   */
+  /* Web Awesome owns the split geometry. Keep the diff control compact among
+     its Approve/Reject siblings and reserve a narrow trailing caret segment. */
   .approval-request__actions .diff-dropdown {
-    flex: 1 1 7rem;
+    flex: 0 1 8.25rem;
+    min-width: 0;
     max-width: min(8.25rem, 100%);
+  }
+
+  .approval-request__actions .diff-dropdown .diff-main-button {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .diff-dropdown-trigger {
+    width: 1.5rem;
+    min-width: 1.5rem;
+  }
+
+  .diff-dropdown-trigger::part(base) {
+    padding-inline: 0;
+  }
+
+  .diff-dropdown-trigger wa-icon {
+    font-size: var(--font-size-sm);
+    transition: transform var(--transition-fast);
+  }
+
+  .diff-dropdown-menu[open] .diff-dropdown-trigger wa-icon {
+    transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .diff-dropdown-trigger wa-icon {
+      transition: none;
+    }
   }
 `;
