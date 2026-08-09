@@ -86,6 +86,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   MESSAGE_TYPES,
   STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   type ActiveChildInfo,
   type ExecutionId,
@@ -309,6 +310,7 @@ function markToolUseAgent(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => ({
     ...slice,
     identity: { kind: 'agent', agent: 'critic' },
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     category: AgentCategory.ToolUse,
   }));
 }
@@ -1387,6 +1389,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'tool-use agent running',
       identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: AgentCategory.ToolUse,
       status: STREAM_PHASE.RUNNING,
       expected: 'accept',
@@ -1394,13 +1397,23 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'tool-use agent waiting',
       identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: AgentCategory.ToolUse,
       status: STREAM_PHASE.WAITING,
       expected: 'accept',
     },
     ...childCapabilityStatuses.map((status) => ({
+      name: `structured single-cycle call ${status}`,
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.ToolUse,
+      status,
+      expected: 'reject',
+    })),
+    ...childCapabilityStatuses.map((status) => ({
       name: `workflow agent ${status}`,
       identity: { kind: 'agent' as const, agent: 'review-workflow' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category: AgentCategory.Workflow,
       status,
       expected: 'reject',
@@ -1411,6 +1424,7 @@ describe('CLI TUI row allocation', () => {
         kind: 'multiAgentWorkflow' as const,
         workflowName: 'review-workflow',
       },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category: AgentCategory.Workflow,
       status,
       expected: 'reject',
@@ -1418,6 +1432,7 @@ describe('CLI TUI row allocation', () => {
     ...childCapabilityStatuses.map((status) => ({
       name: `background bash process ${status}`,
       identity: { kind: 'process' as const, tool: 'bash' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category: AgentCategory.ToolUse,
       status,
       expected: 'reject',
@@ -1429,6 +1444,7 @@ describe('CLI TUI row allocation', () => {
         agent: 'codex',
         tool: 'codex',
       },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
       category: AgentCategory.ToolUse,
       status,
       expected: 'reject',
@@ -1436,6 +1452,7 @@ describe('CLI TUI row allocation', () => {
     ...terminalChildStatuses.map((status) => ({
       name: `tool-use agent ${status}`,
       identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: AgentCategory.ToolUse,
       status,
       expected: 'reject',
@@ -1445,6 +1462,7 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (slice) => ({
       ...slice,
       identity: fixture.identity,
+      userFollowUpSupport: fixture.userFollowUpSupport,
       category: fixture.category,
     }));
     setParentStream(child1, root);
@@ -1459,10 +1477,22 @@ describe('CLI TUI row allocation', () => {
   });
 
   it.each([
-    { name: 'identity', identity: undefined, category: AgentCategory.ToolUse },
+    {
+      name: 'identity',
+      identity: undefined,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'runtime support',
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: undefined,
+      category: AgentCategory.ToolUse,
+    },
     {
       name: 'category',
       identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: undefined,
     },
   ])('fails closed when child $name metadata is missing', (fixture) => {
@@ -1470,6 +1500,7 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (slice) => ({
       ...slice,
       identity: fixture.identity,
+      userFollowUpSupport: fixture.userFollowUpSupport,
       category: fixture.category,
     }));
     setParentStream(child1, root);
@@ -2894,6 +2925,52 @@ describe('CLI transcript state', () => {
 });
 
 describe('sessionSignalsAdapter run facts', () => {
+  it('clears follow-up routing when current run metadata omits capability', () => {
+    withRunFacts((hub) => {
+      const executionId = 'e9911-adapter' as ExecutionId;
+      setStatus(child1, STREAM_PHASE.WAITING);
+      setParentStream(child1, root);
+      emitRunConfig(hub, child1, executionId);
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'run.start',
+          streamId: child1,
+          executionId,
+          identity: { kind: 'agent', agent: 'search' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        },
+      });
+
+      expect(streams.get().get(child1)?.userFollowUpSupport).toBe(
+        USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      );
+      focusStream(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'accept',
+        streamId: child1,
+      });
+
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'run.start',
+          streamId: child1,
+          executionId,
+          identity: { kind: 'agent', agent: 'search' },
+        },
+      });
+
+      expect(streams.get().get(child1)?.userFollowUpSupport).toBeUndefined();
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'reject',
+        streamId: child1,
+      });
+    });
+  });
+
   it('keeps a session-scoped fact subscription live after state reset', () => {
     withRunFacts((hub) => {
       const nextRoot = 'root-after-clear' as StreamTabId;

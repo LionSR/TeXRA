@@ -1,5 +1,5 @@
 import type { StreamTabId } from '@shared/schemas';
-import { streamAcceptsFollowUps } from '@shared/streams/followUpCapability';
+import { streamAllowsChildFollowUpComposer } from '@shared/streams/followUpCapability';
 
 import { activeStreamScope } from './streamViews';
 import type { StreamSlice } from './cliState';
@@ -24,7 +24,7 @@ export function focusedChildFollowUpRoute(init: {
   }
 
   const slice = init.streams.get(scope.streamId);
-  if (slice && streamAcceptsFollowUps(slice)) {
+  if (slice && streamAllowsChildFollowUpComposer(slice)) {
     return { kind: 'accept', streamId: scope.streamId };
   }
   return { kind: 'reject', streamId: scope.streamId };

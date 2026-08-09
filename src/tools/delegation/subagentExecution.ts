@@ -28,6 +28,7 @@ import { getStreamTabId } from '@agent/runtime/streamTab';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import {
   AgentCategory,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -165,6 +166,10 @@ export async function executeSubagent(
   await registerExecution(executionId, config, agentName, {
     streamId: childStreamId,
     identity: { kind: 'agent', agent: config.agent },
+    userFollowUpSupport:
+      config.agentCategory === AgentCategory.ToolUse
+        ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+        : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     parentExecutionId,
   });
   const runWithOwnership = captureOwnedExecutionLease(executionId);

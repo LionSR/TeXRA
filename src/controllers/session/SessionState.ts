@@ -24,6 +24,7 @@ import {
   type RunIdentity,
   type StreamPhase,
   type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -50,6 +51,7 @@ interface SessionStreamConfigDetails {
 export interface SessionStreamMetadata {
   /** The run's identity, verbatim from `run.start` or the durable store. */
   identity?: RunIdentity;
+  userFollowUpSupport?: UserFollowUpSupport;
   agentCategory?: AgentCategory;
   isRemote?: boolean;
   creationTimestamp: number;
@@ -270,7 +272,8 @@ export class SessionState {
 
   /**
    * Build the snapshot-owned slice of a metadata patch: `identity` is set
-   * only once the snapshot store has one, and `agentCategory`/`config` are
+   * only once the snapshot store has one, while follow-up support is always
+   * replaced because absence must fail closed. `agentCategory`/`config` are
    * set together from one resolved `AgentConfig` — never patched to
    * `undefined` while still pending. `executionId`, `parentStreamId`, and
    * `description` fall back to the current value when the snapshot store
@@ -284,6 +287,7 @@ export class SessionState {
     const patch: Partial<StoredStreamMetadata> = {};
     const identity = this.snapshots.getRunIdentity(stream);
     if (identity) patch.identity = identity;
+    patch.userFollowUpSupport = this.snapshots.getUserFollowUpSupport(stream);
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
       patch.agentCategory = config.agentCategory;

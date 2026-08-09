@@ -11,7 +11,10 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { STREAM_TAB_META_SCHEMA_VERSION } from '@shared/schemas';
+import {
+  STREAM_TAB_META_SCHEMA_VERSION,
+  USER_FOLLOW_UP_SUPPORT,
+} from '@shared/schemas';
 import type {
   CompileFailure,
   ExecutionId,
@@ -267,6 +270,7 @@ describe('StreamSnapshotStore', () => {
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
       identity: { kind: 'agent', agent: 'session-label' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       description: 'session-search / kimi26T',
     });
 
@@ -278,6 +282,7 @@ describe('StreamSnapshotStore', () => {
         streamId: STREAM,
         executionId,
         identity: { kind: 'agent', agent: 'session-label' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       },
     });
     events.emit({
@@ -400,6 +405,12 @@ describe('StreamSnapshotStore', () => {
     // authority, ExecutionMeta — it rides the same read as identity. Nothing
     // writes a sidecar copy, so the assembled snapshot carries none.
     expect(reader.getDescription(STREAM)).toBe('session-search / kimi26T');
+    expect(writer.getUserFollowUpSupport(STREAM)).toBe(
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    );
+    expect(reader.getUserFollowUpSupport(STREAM)).toBe(
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    );
     expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
     expect(reader.getRunConfig(STREAM)).toEqual(runConfig);

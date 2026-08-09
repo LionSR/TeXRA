@@ -23,11 +23,12 @@ import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionConte
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { RunContext } from '@agent/runtime/RunContext';
-import type {
-  ExecutionId,
-  StorageKey,
-  StreamTabId,
-  TokenUsageStats,
+import {
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type StorageKey,
+  type StreamTabId,
+  type TokenUsageStats,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
@@ -215,6 +216,7 @@ export async function launchAgentCliSession(
     await registerExecution(executionId, params.config, params.agentName, {
       streamId: childStreamId,
       identity,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
       parentExecutionId: params.parentExecutionId,
       description: childStreamDescription(params.description),
     });
@@ -229,6 +231,7 @@ export async function launchAgentCliSession(
       childStream = createChildStream(executionId, params.parentStreamId, {
         streamPrefix: params.streamPrefix,
         run: identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
         description: params.description,
         config: params.config,
       });

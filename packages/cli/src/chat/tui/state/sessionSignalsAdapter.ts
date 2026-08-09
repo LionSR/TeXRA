@@ -114,6 +114,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     // alone is not focusable until attachment (`setActiveStream`) creates one.
     const hasDisplayFields =
       metadata.identity != null ||
+      metadata.userFollowUpSupport != null ||
       metadata.agentCategory != null ||
       metadata.description != null ||
       config != null;
@@ -132,6 +133,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     patchStream(streamId, (slice) => ({
       ...slice,
       identity: metadata.identity ?? slice.identity,
+      userFollowUpSupport: metadata.userFollowUpSupport,
       agent: config?.agent ?? identityAgent ?? slice.agent,
       model: config?.model ?? slice.model,
       category:

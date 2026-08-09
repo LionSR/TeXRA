@@ -44,6 +44,7 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
+  USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
@@ -1809,6 +1810,7 @@ if (SHOW_CHILDREN) {
       ...slice,
       category: AgentCategory.ToolUse,
       identity: child.identity,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       // One child carries usage so scenarios pin the row metadata column's

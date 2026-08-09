@@ -28,7 +28,12 @@ import {
   setParentStream,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   loadInk,
   renderInteractive,
@@ -77,6 +82,7 @@ function markToolUseAgent(...streamIds: StreamTabId[]): void {
     patchStream(streamId, (slice) => ({
       ...slice,
       identity: { kind: 'agent', agent: 'child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: AgentCategory.ToolUse,
     }));
   }
@@ -844,6 +850,11 @@ describe('App foreground Escape ownership', () => {
 
       for (const fixture of [
         {
+          identity: { kind: 'agent' as const, agent: 'structured-child' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          category: AgentCategory.ToolUse,
+        },
+        {
           identity: { kind: 'agent' as const, agent: 'workflow-child' },
           category: AgentCategory.Workflow,
         },
@@ -862,7 +873,11 @@ describe('App foreground Escape ownership', () => {
       ]) {
         const writesBeforePatch = stdout.writes.length;
         patchStream(CHILD, (slice) => ({ ...slice, ...fixture }));
-        await waitFor(() => stdout.writes.length > writesBeforePatch);
+        await waitFor(
+          () =>
+            stdout.writes.length > writesBeforePatch &&
+            visibleTranscriptRows() === 10,
+        );
         expect(visibleTranscriptRows()).toBe(10);
       }
     } finally {
@@ -891,8 +906,15 @@ describe('App foreground Escape ownership', () => {
 
   it.each([
     {
+      name: 'structured single-cycle workflow call',
+      identity: { kind: 'agent' as const, agent: 'structured-child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.ToolUse,
+    },
+    {
       name: 'workflow agent',
       identity: { kind: 'agent' as const, agent: 'workflow-child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category: AgentCategory.Workflow,
     },
     {
@@ -901,11 +923,13 @@ describe('App foreground Escape ownership', () => {
         kind: 'multiAgentWorkflow' as const,
         workflowName: 'workflow-child',
       },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category: AgentCategory.Workflow,
     },
     {
       name: 'background bash process',
       identity: { kind: 'process' as const, tool: 'bash' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category: AgentCategory.ToolUse,
     },
     {
@@ -915,11 +939,13 @@ describe('App foreground Escape ownership', () => {
         agent: 'codex',
         tool: 'codex',
       },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
       category: AgentCategory.ToolUse,
     },
     {
       name: 'missing metadata',
       identity: undefined,
+      userFollowUpSupport: undefined,
       category: undefined,
     },
   ])(
@@ -929,6 +955,7 @@ describe('App foreground Escape ownership', () => {
       patchStream(CHILD, (slice) => ({
         ...slice,
         identity: fixture.identity,
+        userFollowUpSupport: fixture.userFollowUpSupport,
         category: fixture.category,
       }));
       focusStream(CHILD);
