@@ -63,6 +63,7 @@ export * from './commonViewMessages';
 // the symbols consumers need. They are not re-exported directly here, so each
 // family is published through exactly one barrel path.
 export * from './settingsViewMessages';
+export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './streamState';

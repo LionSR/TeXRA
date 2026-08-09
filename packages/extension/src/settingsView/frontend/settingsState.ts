@@ -69,6 +69,7 @@ import {
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { AGENT_SKILLS_ENABLED_DEFAULT } from '@shared/schemas/agentSkills';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import type { SubscriptionUsageSnapshots } from '@shared/schemas/subscriptionUsage';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -247,6 +248,8 @@ export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
 export const grokAuth = trackedSignal<GrokAuthStatus>(() => ({
   ...DEFAULT_GROK_AUTH,
 }));
+export const subscriptionUsage =
+  trackedSignal<SubscriptionUsageSnapshots | null>(() => null);
 export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(
   () => [],
 );

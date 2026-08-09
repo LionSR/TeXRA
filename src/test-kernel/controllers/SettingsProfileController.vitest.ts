@@ -8,6 +8,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProviderSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 const MAX_ATTEMPTS_KEY = 'texra.model.retry.maxAttempts';
@@ -54,6 +55,7 @@ function createController(
   options: {
     state?: StateStore;
     config?: Record<string, SettingsProfileConfigValue>;
+    getSpendingStatus?: () => SpendingStatus | null;
   } = {},
 ): {
   controller: SettingsProfileController;
@@ -99,6 +101,7 @@ function createController(
       setUseIncludedModelAccess: async (enabled) => {
         includedAccessUpdates.push(enabled);
       },
+      getSpendingStatus: options.getSpendingStatus ?? (() => null),
       invalidateModelOptionsCache: () => {
         invalidations.count += 1;
       },
@@ -121,6 +124,7 @@ describe('SettingsProfileController', () => {
     expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
     expect(invalidations.count).toBe(1);
     expect(update).toEqual({
+      kind: 'updated',
       mode: 'included',
       openRouterDisabled: true,
     });
@@ -137,9 +141,43 @@ describe('SettingsProfileController', () => {
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
     expect(invalidations.count).toBe(1);
     expect(update).toEqual({
+      kind: 'updated',
       mode: 'personal',
       openRouterDisabled: false,
     });
+  });
+
+  it('rejects exhausted included access without changing routing and accepts it after refresh', async () => {
+    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
+    let remaining = 0;
+    const { controller, includedAccessUpdates, invalidations } =
+      createController({
+        state,
+        getSpendingStatus: () => ({
+          currentSpend: 100 - remaining,
+          limit: 100,
+          remaining,
+          percentUsed: 100 - remaining,
+        }),
+      });
+
+    await expect(controller.setApiAccessMode('included')).resolves.toEqual({
+      kind: 'rejected',
+      reason: 'quota_exhausted',
+    });
+    expect(includedAccessUpdates).toEqual([]);
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
+    expect(invalidations.count).toBe(0);
+
+    remaining = 25;
+    await expect(controller.setApiAccessMode('included')).resolves.toEqual({
+      kind: 'updated',
+      mode: 'included',
+      openRouterDisabled: true,
+    });
+    expect(includedAccessUpdates).toEqual([true]);
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
+    expect(invalidations.count).toBe(1);
   });
 
   it('updates only whitelisted provider settings', async () => {

@@ -109,6 +109,7 @@ import {
   sessionProblem,
   spendingStatus,
   spendingStatusError,
+  subscriptionUsage,
   tier,
   telemetryEnabled,
   toolDashboardItems,
@@ -364,6 +365,7 @@ export class SettingsApp extends SettingsAppBase {
           <subscriptions-tab
             .chatgptAuth=${chatgptAuth.get()}
             .grokAuth=${grokAuth.get()}
+            .usage=${subscriptionUsage.get()}
             .copilotModels=${copilotRouteInfos.get()}
           ></subscriptions-tab>
         `;
@@ -372,6 +374,7 @@ export class SettingsApp extends SettingsAppBase {
           <models-tab
             .authenticated=${authenticated.get()}
             .apiAccessMode=${apiAccessMode.get()}
+            .spendingStatus=${spendingStatus.get()}
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}

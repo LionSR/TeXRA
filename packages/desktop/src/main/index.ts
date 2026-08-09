@@ -36,6 +36,7 @@ import {
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -661,6 +662,7 @@ function createWindow(options: {
     notifications: { showInfoMessage, showErrorMessage },
     resourcesPath: options.resourcesPath,
   });
+  const subscriptionUsage = new SubscriptionUsageService();
   const credentialSettingsController =
     new DefaultDesktopCredentialSettingsController({
       workspaceState: platform().workspaceState,
@@ -710,6 +712,8 @@ function createWindow(options: {
       },
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      getSpendingStatus: () => getServerSideKeyService().getSpendingStatus(),
+      subscriptionUsage,
       modelSelectionExtras: {
         useIncludedAccess: () =>
           getServerSideKeyService().getUseIncludedModelAccess(),

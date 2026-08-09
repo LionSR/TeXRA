@@ -215,6 +215,82 @@ describe('desktop settings IPC', () => {
     });
   }, 15_000);
 
+  it('loads usage only for the subscription command and rejects malformed refresh payloads', async () => {
+    const postSubscriptionUsage = vi.fn(async () => undefined);
+    const onError = vi.fn();
+    const credentialSettingsController =
+      createStubDesktopCredentialSettingsController(
+        {
+          globalState: new FakeStateStore(),
+          workspaceState: new FakeStateStore(),
+        },
+        { postSubscriptionUsage },
+      );
+    const { settings } = createSettingsFixture({
+      credentialSettingsController,
+      ui: { onError },
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'settings',
+    });
+    await flushAsyncWork();
+    expect(postSubscriptionUsage).not.toHaveBeenCalled();
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
+        forceRefresh: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+    expect(postSubscriptionUsage).toHaveBeenCalledExactlyOnceWith(true);
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
+        forceRefresh: 'yes',
+      } as never),
+    ).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('routes a close-during-usage-fetch failure without an unhandled rejection', async () => {
+    let rejectFetch: ((error: Error) => void) | undefined;
+    const postSubscriptionUsage = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectFetch = reject;
+        }),
+    );
+    const onError = vi.fn();
+    const credentialSettingsController =
+      createStubDesktopCredentialSettingsController(
+        {
+          globalState: new FakeStateStore(),
+          workspaceState: new FakeStateStore(),
+        },
+        { postSubscriptionUsage },
+      );
+    const { settings } = createSettingsFixture({
+      credentialSettingsController,
+      ui: { onError },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
+      }),
+    ).toBe(true);
+    rejectFetch?.(new Error('renderer closed'));
+    await flushAsyncWork();
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'renderer closed' }),
+    );
+  });
+
   it('delegates agent-selection commands to the required controller', async () => {
     const baseController = createStubDesktopAgentSettingsController();
     const setAgentEnabled = vi.fn(async () => undefined);

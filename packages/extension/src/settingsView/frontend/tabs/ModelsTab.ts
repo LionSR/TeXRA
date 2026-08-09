@@ -11,6 +11,8 @@ import type {
   ModelSelectionItem,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import { isSpendingQuotaExceeded } from '@shared/schemas/spendingStatus';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
@@ -34,6 +36,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
+  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
@@ -45,6 +48,11 @@ export class ModelsTab extends LitElement {
     const apiAccessSection = this.authenticated
       ? html`<api-access-section
           .mode=${this.apiAccessMode}
+          .includedAccessExhausted=${
+            this.spendingStatus
+              ? isSpendingQuotaExceeded(this.spendingStatus)
+              : false
+          }
         ></api-access-section>`
       : nothing;
 

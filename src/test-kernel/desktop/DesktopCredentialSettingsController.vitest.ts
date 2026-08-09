@@ -98,6 +98,18 @@ async function createFixture({
   const onCredentialChanged = vi.fn(async () => {
     events.push('credential');
   });
+  const subscriptionUsage = {
+    getUsage: vi.fn(async (provider: string) => ({
+      state: 'unavailable' as const,
+      provider: provider as 'chatgpt',
+      providerName: provider,
+      planName: provider,
+      fetchedAt: 0,
+      windows: [] as [],
+      reason: 'missing_credentials' as const,
+    })),
+    invalidate: vi.fn(),
+  };
 
   await installPlatform(
     { workspacePath: '/workspace' },
@@ -150,6 +162,7 @@ async function createFixture({
       signOut,
     },
     setUseIncludedModelAccess,
+    subscriptionUsage,
     modelSelectionExtras: {
       useIncludedAccess: () => false,
       getUserTier: () => undefined,
@@ -173,6 +186,7 @@ async function createFixture({
     signOut,
     onCredentialChanged,
     setUseIncludedModelAccess,
+    subscriptionUsage,
   };
 }
 
@@ -274,6 +288,33 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     ]);
   });
 
+  it.each([
+    ['kimiCode', 'kimiCode'],
+    ['glm', 'glmCodingPlan'],
+  ] as const)(
+    'invalidates and refreshes %s subscription usage after a key change',
+    async (provider, usageProvider) => {
+      const fixture = await createFixture();
+
+      await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
+        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+        provider,
+        apiKey: 'new-secret',
+      });
+
+      expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
+        usageProvider,
+      );
+      expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(4);
+      expect(fixture.posted).toContainEqual(
+        expect.objectContaining({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+        }),
+      );
+      expect(JSON.stringify(fixture.posted)).not.toContain('new-secret');
+    },
+  );
+
   it('persists included access and clears OpenRouter before refreshing', async () => {
     const globalState = new FakeStateStore({
       [GlobalStateKey.USE_OPENROUTER]: true,
@@ -300,6 +341,45 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     });
     expect(fixture.setUseIncludedModelAccess).toHaveBeenLastCalledWith(false);
     expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects exhausted included access and accepts it after refreshed headroom', async () => {
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.USE_OPENROUTER]: true,
+    });
+    let remaining = 0;
+    const fixture = await createFixture({
+      globalState,
+      getSpendingStatus: () => ({
+        currentSpend: 100 - remaining,
+        limit: 100,
+        remaining,
+        percentUsed: 100 - remaining,
+      }),
+    });
+    const setMode = assertSupported(
+      fixture.controller.profileHandlers.setApiAccessMode,
+    );
+
+    await setMode({
+      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      mode: 'included',
+    });
+    expect(fixture.setUseIncludedModelAccess).not.toHaveBeenCalled();
+    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
+    expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
+    expect(fixture.infos).toContain(
+      'Included access is unavailable because this month’s quota is exhausted.',
+    );
+
+    remaining = 25;
+    await setMode({
+      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      mode: 'included',
+    });
+    expect(fixture.setUseIncludedModelAccess).toHaveBeenCalledOnce();
+    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+    expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
   });
 
   it('applies native provider settings and refreshes model availability', async () => {

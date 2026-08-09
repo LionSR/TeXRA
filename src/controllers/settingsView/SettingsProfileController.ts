@@ -2,6 +2,10 @@ import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import {
+  isSpendingQuotaExceeded,
+  type SpendingStatus,
+} from '@shared/schemas/spendingStatus';
 import type {
   ApiAccessMode,
   NumberSetting,
@@ -65,10 +69,13 @@ export type ProviderSettingUpdateResult =
   | { kind: 'updated'; affectsModelAvailability: boolean }
   | { kind: 'rejected'; key: string };
 
-export interface ApiAccessModeUpdate {
-  readonly mode: ApiAccessMode;
-  readonly openRouterDisabled: boolean;
-}
+export type ApiAccessModeUpdate =
+  | {
+      readonly kind: 'updated';
+      readonly mode: ApiAccessMode;
+      readonly openRouterDisabled: boolean;
+    }
+  | { readonly kind: 'rejected'; readonly reason: 'quota_exhausted' };
 
 export interface SettingsProfileControllerDeps {
   readonly globalState: StateStore;
@@ -87,6 +94,7 @@ export interface SettingsProfileControllerDeps {
   getConfig<T>(key: string, defaultValue: T): T;
   updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
+  getSpendingStatus(): SpendingStatus | null;
   invalidateModelOptionsCache(): void;
 }
 
@@ -172,6 +180,14 @@ export class SettingsProfileController {
 
   async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {
     const includedAccess = mode === 'included';
+    const spendingStatus = this.deps.getSpendingStatus();
+    if (
+      includedAccess &&
+      spendingStatus !== null &&
+      isSpendingQuotaExceeded(spendingStatus)
+    ) {
+      return { kind: 'rejected', reason: 'quota_exhausted' };
+    }
     await this.deps.setUseIncludedModelAccess(includedAccess);
 
     let openRouterDisabled = false;
@@ -185,7 +201,7 @@ export class SettingsProfileController {
     }
 
     this.deps.invalidateModelOptionsCache();
-    return { mode, openRouterDisabled };
+    return { kind: 'updated', mode, openRouterDisabled };
   }
 
   async setProviderSetting(input: {
