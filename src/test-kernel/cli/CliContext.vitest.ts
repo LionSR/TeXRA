@@ -17,6 +17,7 @@ import {
   type CliAmbientState,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 
 const ambient = {
   isCi: true,
@@ -205,7 +206,7 @@ describe('CLI context config defaults', () => {
       globalArgs: { cwd: link },
     });
 
-    expect(context.cwd).toBe(await realpath(workspace));
+    expect(context.cwd).toBe(canonicalizeWorkspacePath(workspace));
     expect(context.outputFormat).toBe('json');
   });
 
@@ -215,7 +216,7 @@ describe('CLI context config defaults', () => {
     const loaded = await loadWorkspaceCliConfig(workspace);
 
     expect(loaded.values).toEqual({});
-    expect(loaded.path).toContain('.texra/config.json');
+    expect(loaded.path).toContain(join('.texra', 'config.json'));
     expect(loaded.warnings.join('\n')).toContain('Could not parse');
   });
 
@@ -228,7 +229,7 @@ describe('CLI context config defaults', () => {
     const loaded = await loadWorkspaceCliConfig(workspace);
 
     expect(loaded.values).toEqual({});
-    expect(loaded.path).toContain('.texra/config.json');
+    expect(loaded.path).toContain(join('.texra', 'config.json'));
     expect(loaded.warnings.join('\n')).toContain('Could not read');
   });
 
@@ -296,7 +297,7 @@ describe('CLI --cwd validation', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-'));
 
     await expect(resolveCliCwd(workspace)).resolves.toBe(
-      await realpath(workspace),
+      canonicalizeWorkspacePath(workspace),
     );
   });
 

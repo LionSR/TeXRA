@@ -2,6 +2,8 @@
  * Vitests for the inquiry storage layer: open → answer round-trip,
  * dropped path, follow-up turn semantics, and listing filters.
  */
+import * as path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as logUtils from '@logger/logUtils';
@@ -46,7 +48,11 @@ function captureLogLines(): string[] {
 }
 
 function threadDirFor(threadId: string): string {
-  return `${platform().storage.getGlobalStoragePath()}/ei_threads/${threadId}`;
+  return path.join(
+    platform().storage.getGlobalStoragePath(),
+    'ei_threads',
+    threadId,
+  );
 }
 
 async function writeTextFile(target: string, text: string): Promise<void> {
@@ -68,7 +74,7 @@ async function expectUnreadableManifest(
   expectedLog: string,
 ): Promise<string> {
   const threadDir = threadDirFor(threadId);
-  const manifestPath = `${threadDir}/manifest.json`;
+  const manifestPath = path.join(threadDir, 'manifest.json');
   await platform().fs.createDirectory(threadDir);
   await writeTextFile(manifestPath, body);
   const logLines = captureLogLines();
@@ -93,7 +99,10 @@ describe('InquiryStorage', () => {
   });
 
   it('surfaces inquiry history directory read failures', async () => {
-    const threadsDir = `${platform().storage.getGlobalStoragePath()}/ei_threads`;
+    const threadsDir = path.join(
+      platform().storage.getGlobalStoragePath(),
+      'ei_threads',
+    );
     const readDirectorySpy = vi
       .spyOn(platform().fs, 'readDirectory')
       .mockRejectedValueOnce(
@@ -315,7 +324,7 @@ describe('InquiryStorage', () => {
       question: 'Q1',
     });
 
-    const manifestPath = `${threadDirFor(t.threadId)}/manifest.json`;
+    const manifestPath = path.join(threadDirFor(t.threadId), 'manifest.json');
     const persisted = JSON.parse(await readTextFile(manifestPath)) as {
       schemaVersion?: number;
     };

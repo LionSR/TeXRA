@@ -16,7 +16,7 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import { redactSecrets, type LogRedactionOptions } from '@logger/redaction';
+import { redactSecrets } from '@logger/redaction';
 import { normalizeFilePath } from '@utils/core';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
@@ -61,7 +61,9 @@ export function readDesktopLogSnapshot(options: {
 }): DesktopLogSnapshot {
   const path = getDesktopLogFilePath();
   const maxBytes = Math.max(0, options.maxBytes ?? MAX_VIEWER_LOG_BYTES);
-  const redactionOptions = makeDesktopLogRedactionOptions(options);
+  const workspacePath = options.workspacePath;
+  const displayWorkspacePath =
+    workspacePath == null ? undefined : normalizeFilePath(workspacePath);
   try {
     const buffer = readFileSync(path);
     const truncated = buffer.length > maxBytes;
@@ -69,17 +71,17 @@ export function readDesktopLogSnapshot(options: {
       ? buffer.subarray(buffer.length - maxBytes)
       : buffer;
     return {
-      path: redactSecrets(normalizeFilePath(path), redactionOptions),
+      path: redactDesktopLogPath(normalizeFilePath(path), displayWorkspacePath),
       truncated,
-      text: redactSecrets(excerpt.toString('utf8'), redactionOptions),
+      text: redactDesktopLogText(excerpt.toString('utf8'), workspacePath),
     };
   } catch (error) {
     return {
-      path: redactSecrets(normalizeFilePath(path), redactionOptions),
+      path: redactDesktopLogPath(normalizeFilePath(path), displayWorkspacePath),
       truncated: false,
-      text: redactSecrets(
+      text: redactDesktopLogText(
         format('Desktop log is not available: %s', error),
-        redactionOptions,
+        workspacePath,
       ),
     };
   }
@@ -158,13 +160,45 @@ function rotateDesktopLogFile(path: string): void {
   }
 }
 
-function makeDesktopLogRedactionOptions(options: {
-  workspacePath?: string | undefined;
-}): LogRedactionOptions {
-  return {
-    homeDir: homedir(),
-    workspacePath: options.workspacePath,
-  };
+function redactDesktopLogText(
+  text: string,
+  workspacePath: string | undefined,
+): string {
+  return redactSecrets(redactPathPrefixes(text, workspacePath, homedir()));
+}
+
+function redactDesktopLogPath(
+  path: string,
+  workspacePath: string | undefined,
+): string {
+  return redactSecrets(
+    redactPathPrefixes(path, workspacePath, normalizeFilePath(homedir())),
+  );
+}
+
+function redactPathPrefixes(
+  text: string,
+  ...prefixes: readonly (string | undefined)[]
+): string {
+  return prefixes
+    .filter((prefix): prefix is string => Boolean(prefix))
+    .toSorted((a, b) => b.length - a.length)
+    .reduce((redacted, prefix) => {
+      if (prefix === '/') {
+        return redacted.replaceAll(/(?<![A-Za-z0-9:/])\//g, '[path]');
+      }
+      const boundary = /[\\/]$/.test(prefix)
+        ? ''
+        : `(?=$|[\\s\\\\/,:;!?\\])}'"]|\\.(?:$|\\s))`;
+      return redacted.replaceAll(
+        new RegExp(`${escapeRegex(prefix)}${boundary}`, 'g'),
+        '[path]',
+      );
+    }, text);
+}
+
+function escapeRegex(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function toConsoleLevel(

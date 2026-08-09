@@ -24,7 +24,7 @@ const originalFullPath = StorageFS.fullPath;
 setupPlatform({ storagePath: storageRoot, workspacePath: workspaceRoot });
 
 function primaryEntry(...segments: string[]): string {
-  return path.join('executions', executionId, ...segments);
+  return path.posix.join('executions', executionId, ...segments);
 }
 
 function storagePath(...segments: string[]): string {

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
@@ -257,7 +258,7 @@ describe('CLI Overleaf clone command', () => {
 
   it('refuses to clone into a nonempty destination', async () => {
     await writeFile(path.join(workspacePath, 'paper.tex'), 'source');
-    const canonicalWorkspacePath = await realpath(workspacePath);
+    const canonicalWorkspacePath = canonicalizeWorkspacePath(workspacePath);
 
     const result = await runCli([
       'clone',

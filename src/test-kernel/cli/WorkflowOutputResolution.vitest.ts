@@ -327,7 +327,7 @@ describe('CLI workflow output resolution', () => {
         join(external, 'paper', 'main.tex'),
         join(external, 'paper', 'chapters', 'series.tex'),
       ]),
-    ).toEqual(['main.tex', join('chapters', 'series.tex')]);
+    ).toEqual(['main.tex', 'chapters/series.tex']);
   });
 
   it('does not remap output paths on partial original-path segment matches', async () => {

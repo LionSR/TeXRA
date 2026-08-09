@@ -91,6 +91,24 @@ describe('workspace storage defaults', () => {
     );
   });
 
+  it('normalizes logical memory paths independently of the host separator', () => {
+    expect(resolveMemoryStoragePath('memories/./project.md')).toBe(
+      'memories/project.md',
+    );
+    expect(resolveMemoryStoragePath(String.raw`memories\project.md`)).toBe(
+      'memories/project.md',
+    );
+  });
+
+  it.each(['memories/../outside', String.raw`memories\..\outside`])(
+    'rejects memory path traversal: %s',
+    (storagePath) => {
+      expect(() => resolveMemoryStoragePath(storagePath)).toThrow(
+        'Invalid memory path',
+      );
+    },
+  );
+
   it('creates workspace-scoped storage roots on demand', async () => {
     const root = await makeStorageRoot();
     let workspacePath: string | undefined = '/workspace/a';

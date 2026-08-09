@@ -2,6 +2,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -223,7 +224,7 @@ describe('desktop agent directory bootstrap', () => {
     const { listRuntimeSkillSources } = await import('@skills/runtimeSkills');
 
     initializeNodeRuntimeSkills({
-      cwd: '/tmp/project',
+      cwd: path.resolve(path.sep, 'tmp', 'project'),
       resourcesPath,
       skillSourceOptions: {
         includeInterop: true,
@@ -236,16 +237,16 @@ describe('desktop agent directory bootstrap', () => {
       expect.arrayContaining([
         expect.objectContaining({
           scope: 'custom',
-          path: '/tmp/project/vendor/skills',
+          path: path.resolve(path.sep, 'tmp', 'project', 'vendor', 'skills'),
           required: true,
         }),
         expect.objectContaining({
           scope: 'project',
-          path: '/tmp/project/.texra/skills',
+          path: path.resolve(path.sep, 'tmp', 'project', '.texra', 'skills'),
         }),
         expect.objectContaining({
           scope: 'interop',
-          path: '/tmp/project/.codex/skills',
+          path: path.resolve(path.sep, 'tmp', 'project', '.codex', 'skills'),
         }),
         expect.objectContaining({
           scope: 'bundled',
