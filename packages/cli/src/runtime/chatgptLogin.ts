@@ -4,42 +4,29 @@ import {
   loginWithLoopback,
   type CodexSession,
 } from '@auth/codex';
-import {
-  setPreferCodexSubscription,
-  type CodexSubscriptionPreferenceUpdate,
-} from '@model/codex/codexPreference';
+import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
   signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
+  type CliSubscriptionLoginOptions,
   type CliSubscriptionLoginTransportInit,
   type CliSubscriptionSignOutResult,
 } from './subscriptionLogin';
 import type { CliContext } from './cliContext';
 
-export type CliChatGptLoginInit = CliSubscriptionLoginTransportInit;
-
-export interface CliChatGptLoginOptions {
-  readonly writeProgress: (message: string) => void;
-  readonly signal?: AbortSignal;
-}
-
-export type CliChatGptSignOutResult = CliSubscriptionSignOutResult & {
-  readonly preferenceUpdate?: CodexSubscriptionPreferenceUpdate;
-};
-
 export function shouldUseChatGptDeviceCode(
   context: CliContext,
-  init: CliChatGptLoginInit,
+  init: CliSubscriptionLoginTransportInit,
 ): boolean {
   return shouldUseSubscriptionDeviceCode(context, init);
 }
 
 export async function signInCliChatGpt(
-  init: CliChatGptLoginInit,
-  options: CliChatGptLoginOptions,
+  init: CliSubscriptionLoginTransportInit,
+  options: CliSubscriptionLoginOptions,
 ): Promise<CodexSession> {
   return signInCliSubscription({
     coordinator: codexCoordinator(),
@@ -53,7 +40,7 @@ export async function signInCliChatGpt(
 }
 
 export function chatGptSignOutPreferenceMessage(
-  result: CliChatGptSignOutResult,
+  result: CliSubscriptionSignOutResult,
 ): string {
   return subscriptionSignOutPreferenceMessage({
     displayName: 'ChatGPT',
@@ -62,7 +49,7 @@ export function chatGptSignOutPreferenceMessage(
   });
 }
 
-export async function signOutCliChatGpt(): Promise<CliChatGptSignOutResult> {
+export async function signOutCliChatGpt(): Promise<CliSubscriptionSignOutResult> {
   return signOutCliSubscription({
     coordinator: codexCoordinator(),
     disablePreference: () => setPreferCodexSubscription(false),

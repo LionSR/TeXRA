@@ -4,11 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Subject under test - the host-neutral theme helpers shared between the
 // VS Code BaseWebviewApp and the Electron renderer.
-import {
-  applyHostBodyTheme,
-  getWindowTargetOrigin,
-  themeIsDark,
-} from '@shared/wa/hostTheme';
+import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import { applyHostBodyTheme, themeIsDark } from '@shared/wa/hostTheme';
 
 const originalGlobals = {
   document: globalThis.document,
@@ -71,21 +68,21 @@ describe('applyHostBodyTheme', () => {
   });
 });
 
-describe('getWindowTargetOrigin', () => {
-  afterEach(() => {
-    restoreDom();
+describe('resolvePostMessageTargetOrigin', () => {
+  it('returns the origin when it is a real http origin', () => {
+    expect(resolvePostMessageTargetOrigin('http://localhost:5173')).toBe(
+      'http://localhost:5173',
+    );
   });
 
-  it('returns the origin when loaded over http(s)://', () => {
-    installDom('http://localhost:5173/');
-    expect(getWindowTargetOrigin()).toBe('http://localhost:5173');
+  it('falls back to "*" when origin is the literal string "null" (file://)', () => {
+    // Chromium returns the literal string "null" for file:// URLs. The helper
+    // must not pass that through to window.postMessage or messages get
+    // silently dropped.
+    expect(resolvePostMessageTargetOrigin('null')).toBe('*');
   });
 
-  it('falls back to "*" when loaded over file:// (origin === "null")', () => {
-    installDom('file:///path/to/index.html');
-    // JSDOM returns the literal string "null" for file:// URLs, matching
-    // Chromium's behaviour. The helper must not pass that through to
-    // window.postMessage or messages get silently dropped.
-    expect(getWindowTargetOrigin()).toBe('*');
+  it('falls back to "*" when origin is undefined', () => {
+    expect(resolvePostMessageTargetOrigin(undefined)).toBe('*');
   });
 });

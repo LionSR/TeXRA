@@ -62,6 +62,7 @@ import {
   unknownMediaCategoryWarning,
 } from '../support/mediaClassification';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
+import { emitServerToolResult } from '../support/serverToolResultEmission';
 import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
@@ -483,7 +484,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         this.createThinkingStream({ atPhaseSignal: true }),
       createOutputStream: () => this.createOutputStream(),
       extractText: (response) => this.extractResponse(response, '').text,
-      emitWebSearchResult: (result) => this.emitWebSearchResult(result),
+      emitWebSearchResult: (result) =>
+        emitServerToolResult(this.logger, this.progressViewEnabled, result),
       logger: this.logger,
     });
   }

@@ -55,10 +55,7 @@ import {
   type ResponseTextProcessing,
 } from '@agent/runtime/responseTextProcessing';
 import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
-import type {
-  ServerToolExtractionResult,
-  WebSearchResult,
-} from '@agent/types/ServerToolTypes';
+import type { ServerToolExtractionResult } from '@agent/types/ServerToolTypes';
 import {
   getSdkErrorMessage,
   isContextWindowError,
@@ -111,7 +108,6 @@ import {
   reportMediaAttachmentFailure,
   type MediaAttachmentContext,
 } from './support/mediaAttachmentPolicy';
-import { emitServerToolResult } from './support/serverToolResultEmission';
 import {
   resolveBaseUrl,
   shouldUseOpenRouter,
@@ -425,15 +421,6 @@ export abstract class ModelHandler<
       deferStart: !options?.atPhaseSignal,
       phaseOnly: !this.outputStreaming,
     });
-  }
-
-  /**
-   * Emit web search result to progress view during streaming.
-   * This allows search results to appear in correct order based on when
-   * they occurred in the response, rather than being logged after streaming.
-   */
-  protected emitWebSearchResult(result: WebSearchResult): void {
-    emitServerToolResult(this.logger, this.progressViewEnabled, result);
   }
 
   /**
