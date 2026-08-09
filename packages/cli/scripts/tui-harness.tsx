@@ -56,6 +56,7 @@ import {
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isActivePhase,
@@ -107,10 +108,7 @@ import {
   setParentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
-import {
-  focusedChildFollowUpRoute,
-  stoppedFocusedChildFollowUpMessage,
-} from '../src/chat/tui/state/focusedChildFollowUp';
+import { focusedChildFollowUpRoute } from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
@@ -2223,7 +2221,7 @@ function handleHarnessSubmit(line: string): void {
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
-      stoppedFocusedChildFollowUpMessage(),
+      FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
       focusedChildRoute.streamId,
     );
     return;

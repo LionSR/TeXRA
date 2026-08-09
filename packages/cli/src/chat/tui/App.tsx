@@ -715,6 +715,7 @@ export function App(props: AppProps): React.JSX.Element {
       <ConversationRegion
         colorEnabled={props.colorEnabled}
         columns={columns}
+        inputBarVisible={inputBarVisible}
         onStaticTranscriptChange={props.onStaticTranscriptChange}
         renderFooterChrome={() => (
           <>

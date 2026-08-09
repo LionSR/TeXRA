@@ -1,6 +1,5 @@
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import type { StreamTabId } from '@shared/schemas';
+import { streamAcceptsFollowUps } from '@shared/streams/followUpCapability';
 
 import { activeStreamScope } from './streamViews';
 import type { StreamSlice } from './cliState';
@@ -25,17 +24,8 @@ export function focusedChildFollowUpRoute(init: {
   }
 
   const slice = init.streams.get(scope.streamId);
-  if (
-    slice?.identity?.kind !== 'agent' ||
-    slice.identity.tool !== undefined ||
-    slice.category !== AgentCategory.ToolUse ||
-    !isInFlightPhase(slice.status)
-  ) {
-    return { kind: 'reject', streamId: scope.streamId };
+  if (slice && streamAcceptsFollowUps(slice)) {
+    return { kind: 'accept', streamId: scope.streamId };
   }
-  return { kind: 'accept', streamId: scope.streamId };
-}
-
-export function stoppedFocusedChildFollowUpMessage(): string {
-  return FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting;
+  return { kind: 'reject', streamId: scope.streamId };
 }

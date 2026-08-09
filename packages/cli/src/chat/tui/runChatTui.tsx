@@ -61,6 +61,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { getFirstRunDone } from '@shared/state/onboardingState';
@@ -107,7 +108,6 @@ import {
 import { parentStream as parentStreamSignal } from './state/childExecutions';
 import {
   focusedChildFollowUpRoute,
-  stoppedFocusedChildFollowUpMessage,
   type FocusedChildFollowUpRoute,
 } from './state/focusedChildFollowUp';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
@@ -648,7 +648,7 @@ export async function runChat(
     const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
     if (focusedChildRoute.kind === 'reject') {
       appendLocalAssistantTranscript(
-        stoppedFocusedChildFollowUpMessage(),
+        FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
         focusedChildRoute.streamId,
       );
       return;
@@ -750,7 +750,7 @@ export async function runChat(
             session.stopRequested = true;
           } else {
             appendLocalAssistantTranscript(
-              stoppedFocusedChildFollowUpMessage(),
+              FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
               followUpTarget,
             );
           }

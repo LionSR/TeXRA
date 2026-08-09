@@ -802,6 +802,74 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('returns hidden child composer rows to the conversation at narrow widths', async () => {
+    seedChildHierarchy();
+    const transcriptText = Array.from(
+      { length: 20 },
+      (_, index) => `layout line ${index + 1}`,
+    ).join('\n');
+    for (const streamId of [ROOT, CHILD]) {
+      patchStream(streamId, (slice) => ({
+        ...slice,
+        entries: [
+          {
+            id: `layout-${streamId}`,
+            role: 'assistant' as const,
+            text: transcriptText,
+            finalized: false,
+          },
+        ],
+      }));
+    }
+    const { ink, React } = await loadInk();
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, appProps(vi.fn())),
+      { columns: 40, debug: true, rows: 12 },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+    const visibleTranscriptRows = (): number =>
+      (currentFrame().match(/layout line \d+/gu) ?? []).length;
+
+    try {
+      await waitFor(() => visibleTranscriptRows() > 0);
+      const rootRows = visibleTranscriptRows();
+
+      focusStream(CHILD);
+      await waitFor(() => currentFrame().includes('Esc back'));
+      const supportedChildRows = visibleTranscriptRows();
+      expect(rootRows).toBe(2);
+      expect(supportedChildRows).toBe(7);
+
+      for (const fixture of [
+        {
+          identity: { kind: 'agent' as const, agent: 'workflow-child' },
+          category: AgentCategory.Workflow,
+        },
+        {
+          identity: { kind: 'process' as const, tool: 'bash' },
+          category: AgentCategory.ToolUse,
+        },
+        {
+          identity: {
+            kind: 'agent' as const,
+            agent: 'codex',
+            tool: 'codex',
+          },
+          category: AgentCategory.ToolUse,
+        },
+      ]) {
+        const writesBeforePatch = stdout.writes.length;
+        patchStream(CHILD, (slice) => ({ ...slice, ...fixture }));
+        await waitFor(() => stdout.writes.length > writesBeforePatch);
+        expect(visibleTranscriptRows()).toBe(10);
+      }
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it.each([STREAM_PHASE.RUNNING, STREAM_PHASE.WAITING])(
     'keeps the composer enabled for a %s tool-use agent child',
     async (status) => {
