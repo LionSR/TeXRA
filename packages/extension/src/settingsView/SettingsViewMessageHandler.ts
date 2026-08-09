@@ -27,6 +27,10 @@ import {
   SettingsProfileController,
   getSharedProviderProfileDefaults,
 } from '@controllers/settingsView/SettingsProfileController';
+import {
+  applyStateSettingUpdate,
+  postStateSettingSnapshot as dispatchStateSettingSnapshot,
+} from '@controllers/settingsView/StateSettingUpdateController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -66,10 +70,6 @@ import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
-import {
-  applyStateSettingUpdate,
-  postStateSettingSnapshot as dispatchStateSettingSnapshot,
-} from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
