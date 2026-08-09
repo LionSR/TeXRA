@@ -8,7 +8,10 @@ import { describe, it, afterEach, vi } from 'vitest';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import {
+  resolveRunStoragePath,
+  RUNS_STORAGE_DIR,
+} from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { WorkspaceFS, StorageFS } from '@utils/files';
@@ -70,11 +73,14 @@ describe('maybeSaveDebugObject', () => {
       },
     });
 
-    const expectedDir = path.join(RUNS_STORAGE_DIR, executionId);
+    const expectedDir = resolveRunStoragePath(executionId);
     assert.deepEqual(ensured, [RUNS_STORAGE_DIR, expectedDir]);
 
     assert.equal(storageWrites.length, 1);
-    const expectedRelativePath = path.join(expectedDir, 'response.json');
+    const expectedRelativePath = resolveRunStoragePath(
+      executionId,
+      'response.json',
+    );
     assert.equal(storageWrites[0].relativePath, expectedRelativePath);
     assert.equal(workspaceWrites.length, 0);
 

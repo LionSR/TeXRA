@@ -45,8 +45,16 @@ afterEach(async () => {
 
 describe('CLI skills runtime', () => {
   it('resolves default, interop, and custom skill sources in precedence order', () => {
-    const cwd = '/tmp/project';
-    const resourcesPath = '/tmp/repo/packages/cli/dist/resources';
+    const cwd = path.resolve(path.sep, 'tmp', 'project');
+    const resourcesPath = path.resolve(
+      path.sep,
+      'tmp',
+      'repo',
+      'packages',
+      'cli',
+      'dist',
+      'resources',
+    );
     const extensionBundledSourcePath = path.resolve(
       resourcesPath,
       '../../..',
@@ -69,18 +77,18 @@ describe('CLI skills runtime', () => {
     );
 
     expect(sources.map((source) => source.path)).toEqual([
-      '/tmp/project/vendor/skills',
-      '/tmp/project/.texra/skills',
-      '/tmp/project/.agents/skills',
-      '/tmp/project/.claude/skills',
-      '/tmp/project/.codex/skills',
-      '/tmp/project/.gemini/skills',
+      path.join(cwd, 'vendor', 'skills'),
+      path.join(cwd, '.texra', 'skills'),
+      path.join(cwd, '.agents', 'skills'),
+      path.join(cwd, '.claude', 'skills'),
+      path.join(cwd, '.codex', 'skills'),
+      path.join(cwd, '.gemini', 'skills'),
       path.join(os.homedir(), '.texra', 'skills'),
       path.join(os.homedir(), '.agents', 'skills'),
       path.join(os.homedir(), '.claude', 'skills'),
       path.join(os.homedir(), '.codex', 'skills'),
       path.join(os.homedir(), '.gemini', 'skills'),
-      '/tmp/repo/packages/cli/dist/resources/skills',
+      path.join(resourcesPath, 'skills'),
       extensionBundledSourcePath,
       cliDistBundledSourcePath,
     ]);
@@ -117,15 +125,17 @@ describe('CLI skills runtime', () => {
       'bundled source',
     ]);
     expect(
-      sources.find((source) => source.path === '/tmp/project/vendor/skills'),
+      sources.find(
+        (source) => source.path === path.join(cwd, 'vendor', 'skills'),
+      ),
     ).toMatchObject({ required: true, scope: 'custom' });
   });
 
   it('deduplicates repeated source paths while preserving required custom roots', () => {
     const sources = defaultSkillSources(
       {
-        cwd: '/tmp/project',
-        resourcesPath: '/tmp/resources',
+        cwd: path.resolve(path.sep, 'tmp', 'project'),
+        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       },
       {
         additionalPaths: ['.texra/skills'],
@@ -133,7 +143,11 @@ describe('CLI skills runtime', () => {
     );
 
     expect(
-      sources.filter((source) => source.path === '/tmp/project/.texra/skills'),
+      sources.filter(
+        (source) =>
+          source.path ===
+          path.resolve(path.sep, 'tmp', 'project', '.texra', 'skills'),
+      ),
     ).toEqual([
       expect.objectContaining({
         scope: 'custom',
@@ -238,8 +252,8 @@ describe('CLI skills runtime', () => {
   it('reports missing explicit custom skill sources', async () => {
     const result = await readCliSkills(
       {
-        cwd: '/tmp/project',
-        resourcesPath: '/tmp/resources',
+        cwd: path.resolve(path.sep, 'tmp', 'project'),
+        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       },
       {
         additionalPaths: ['missing-skills'],
@@ -251,7 +265,7 @@ describe('CLI skills runtime', () => {
       expect.objectContaining({
         severity: 'error',
         code: 'missing_source',
-        path: '/tmp/project/missing-skills',
+        path: path.resolve(path.sep, 'tmp', 'project', 'missing-skills'),
       }),
     );
   });

@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { listExecutionWorkspaceFiles } from '@agent/storage';
@@ -5,19 +7,20 @@ import { platform } from '@platform/platform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files';
 
-const CONFIG = { workingDirectory: '/workspace' };
+const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
+const CONFIG = { workingDirectory: WORKSPACE_PATH };
 
 function statError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
 }
 
 describe('listExecutionWorkspaceFiles', () => {
-  setupPlatform({ workspacePath: '/workspace' });
+  setupPlatform({ workspacePath: WORKSPACE_PATH });
   afterEach(() => vi.restoreAllMocks());
 
   it('lists unique contained entries in path order and omits missing paths', async () => {
-    await AbsoluteFS.createDir('/workspace/z-dir');
-    await AbsoluteFS.write('/workspace/a-file.tex', 'content');
+    await AbsoluteFS.createDir(path.join(WORKSPACE_PATH, 'z-dir'));
+    await AbsoluteFS.write(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
 
     await expect(
       listExecutionWorkspaceFiles(CONFIG, [
@@ -31,14 +34,14 @@ describe('listExecutionWorkspaceFiles', () => {
       {
         path: 'a-file.tex',
         displayPath: 'workspace/a-file.tex',
-        absolutePath: '/workspace/a-file.tex',
+        absolutePath: path.join(WORKSPACE_PATH, 'a-file.tex'),
         size: 7,
         isDirectory: false,
       },
       {
         path: 'z-dir',
         displayPath: 'workspace/z-dir',
-        absolutePath: '/workspace/z-dir',
+        absolutePath: path.join(WORKSPACE_PATH, 'z-dir'),
         size: 0,
         isDirectory: true,
       },

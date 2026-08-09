@@ -91,5 +91,5 @@ export function getExtractedDocOutputFileName(
     safe.dir === '' && safe.name === WORKFLOW_OUTPUT_BASENAME
       ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
       : safe.name;
-  return path.join(roundDir, safe.dir, `${safeName}${safe.ext}`);
+  return path.posix.join(roundDir, safe.dir, `${safeName}${safe.ext}`);
 }

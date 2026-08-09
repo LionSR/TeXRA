@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -570,7 +572,7 @@ describe('cross-process execution leases', () => {
     const originalDelete = fs.delete.bind(fs);
     // Restored by the afterEach vi.restoreAllMocks().
     vi.spyOn(fs, 'delete').mockImplementation((target, options) => {
-      if (target.includes(`executions/${failedId}`)) {
+      if (target.includes(path.join('executions', failedId))) {
         return Promise.reject(new Error('permission denied'));
       }
       return originalDelete(target, options);

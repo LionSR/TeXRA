@@ -1,3 +1,6 @@
+// Node imports
+import { join } from 'node:path';
+
 // Third-party imports
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -485,7 +488,7 @@ describe('DesktopHistoryHandlers', () => {
 
     expect(chatExportMocks.exportAsHtml).toHaveBeenCalledWith(
       'abc',
-      `${RESOURCES_PATH}/traceViewer/index.html`,
+      join(RESOURCES_PATH, 'traceViewer', 'index.html'),
     );
     expect(openPath).toHaveBeenCalledWith('/tmp/executions/abc/chat.html');
   });
