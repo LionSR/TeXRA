@@ -9,7 +9,6 @@ const require = createRequire(import.meta.url);
 const QUICKJS_WASM_ID = '@jitl/quickjs-wasmfile-release-sync/wasm';
 const QUICKJS_WASM_VIRTUAL_ID = '\0texra-quickjs-wasm';
 const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
-const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 export default defineConfig({
   plugins: [texTemplatePlugin(), quickJsWasmPlugin()],
@@ -27,8 +26,7 @@ export default defineConfig({
     include: ['src/test-kernel/**/*.vitest.ts'],
     passWithNoTests: false,
     setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
-    testTimeout: kernelTimeoutMs,
-    hookTimeout: kernelTimeoutMs,
+    testTimeout: 10000,
   },
 });
 
