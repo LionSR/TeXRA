@@ -1,10 +1,5 @@
 // Core styles
-export {
-  commonViewStyles,
-  compactIconActionButtonStyles,
-  headerActionStyles,
-  visuallyHiddenStyles,
-} from './commonViewStyles';
+export { commonViewStyles, visuallyHiddenStyles } from './commonViewStyles';
 export { designTokens } from './litStyles';
 
 // The canonical button/input/focus-ring/settings-row skins reach consumers

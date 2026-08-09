@@ -1,5 +1,9 @@
 // Local imports - tools
-import { DedupedResource } from '@tools/github/PollingSourceBase';
+import {
+  createBasePollState,
+  DedupedResource,
+  MAX_SEEN_IDS,
+} from '@tools/github/PollingSourceBase';
 import type {
   PRCurrentShaState,
   PRSubscriptionState,
@@ -16,8 +20,6 @@ import type {
  * state, so building it through the production types is what makes a new
  * state field a compile error here instead of a silently-stale test double.
  */
-
-const MAX_SEEN_IDS = 1000;
 
 export function createPRCurrentShaState(
   sha: string,
@@ -40,7 +42,7 @@ export function createPRSubscriptionState(
   return {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
-    listeners: new Set(),
+    ...createBasePollState(),
     initialized: true,
     issueComments: new DedupedResource<GhIssueComment>({
       getId: (comment) => comment.id,
@@ -62,9 +64,6 @@ export function createPRSubscriptionState(
     merged: false,
     mergeableState: undefined,
     etags: {},
-    lastSuccessAt: Date.now(),
-    consecutiveFailures: 0,
-    skipPollUntilMs: 0,
     ...overrides,
   };
 }

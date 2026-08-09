@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
@@ -83,7 +83,7 @@ describe('settingsView notification message builders', () => {
     });
   });
 
-  it('buildChatGptAuthStatusMessage wraps the resolved status', async () => {
+  it('buildAuthStatusMessage wraps the resolved status', async () => {
     const status = {
       signedIn: true,
       email: 'user@example.com',
@@ -92,7 +92,10 @@ describe('settingsView notification message builders', () => {
     };
     const getStatus = vi.fn().mockResolvedValue(status);
 
-    const message = await buildChatGptAuthStatusMessage(getStatus);
+    const message = await buildAuthStatusMessage(
+      SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      getStatus,
+    );
 
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,

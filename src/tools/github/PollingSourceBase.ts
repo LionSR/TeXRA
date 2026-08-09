@@ -23,6 +23,7 @@ import {
   createBoundedIdSet,
   type BoundedIdSet,
 } from '@utils/core/boundedIdSet';
+import { getNewestTimestamp } from './formatUtils';
 import {
   type ConditionalResponse,
   GitHubAuthError,
@@ -38,6 +39,22 @@ export interface BasePollSubscriptionState {
   consecutiveFailures: number;
   /** Epoch-ms until which this subscription skips polling (rate-limit or backoff). */
   skipPollUntilMs: number;
+}
+
+/**
+ * The four invariant fields every `createInitialState()` populates identically.
+ * Spread into a subscription state so the base shape stays canonical here
+ * instead of copy-pasted across each poller.
+ */
+export function createBasePollState(
+  now = Date.now(),
+): BasePollSubscriptionState {
+  return {
+    listeners: new Set(),
+    lastSuccessAt: now,
+    consecutiveFailures: 0,
+    skipPollUntilMs: 0,
+  };
 }
 
 interface PollingSourceConfig {
@@ -113,6 +130,37 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
     const newest = this.getCursor?.(items);
     if (newest) this.sinceCursor = newest;
   }
+}
+
+/**
+ * Per-resource id history is trimmed to this many entries so long-running
+ * subscriptions don't grow the dedup set unboundedly. Shared by every
+ * comment-shaped poller (issue comments, PR review comments, repo-wide
+ * issue/review comments).
+ */
+export const MAX_SEEN_IDS = 1000;
+
+interface CommentShape {
+  id: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/**
+ * Build a {@link DedupedResource} for comment-shaped items, hardcoding the
+ * three options every comment poller agrees on: id-keyed dedup, newest-
+ * timestamp cursor advance (via {@link getNewestTimestamp}), and the shared
+ * {@link MAX_SEEN_IDS} window. Callers pass only an optional seed cursor.
+ */
+export function dedupeComments<T extends CommentShape>(options?: {
+  sinceCursor?: string;
+}): DedupedResource<T> {
+  return new DedupedResource<T>({
+    getId: (item) => item.id,
+    getCursor: getNewestTimestamp,
+    maxSeenIds: MAX_SEEN_IDS,
+    sinceCursor: options?.sinceCursor,
+  });
 }
 
 /**

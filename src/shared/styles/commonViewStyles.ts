@@ -9,26 +9,6 @@ import {
 } from './controlStyles';
 
 /**
- * Header action button. Kept as a named export because two root components
- * compose it without the full common sheet; the skin itself now lives in
- * `buttonStyles` (`.header-action` is one of its `.btn-ghost` aliases), so
- * this is the button layer scoped down, not a second definition.
- */
-export const headerActionStyles: CSSResult = buttonStyles;
-
-/**
- * Compact icon-only action button, for components that pull just the
- * icon-button rules without the full common sheet (file-select rows, the
- * user-message toolbar).
- *
- * The 20×20 opacity-driven skin this used to declare is gone: hover is now a
- * background fill from `--surface-hover` (opacity could not compose with the
- * surface ladder, so the same button read differently on each surface), and
- * the geometry comes off the `--control-size` scale.
- */
-export const compactIconActionButtonStyles: CSSResult = buttonStyles;
-
-/**
  * Available to the accessibility tree, absent from the layout. The canonical
  * copy across every view surface (InstructionPanel and WorktreeChip both
  * used to carry their own). Exported on its own — interpolated into

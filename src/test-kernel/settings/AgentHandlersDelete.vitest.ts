@@ -57,9 +57,6 @@ vi.mock(
     SettingsRemoteAgentPromptController: class {},
   }),
 );
-vi.mock('@frontend/agents/agentTemplateBundle', () => ({
-  renderAgentTemplateFromBundle: vi.fn(),
-}));
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
   withAgentCatalogAuthRefreshDeferred: vi.fn(),
 }));
