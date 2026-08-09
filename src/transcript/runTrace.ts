@@ -64,7 +64,10 @@ export function createRunTrace(
       new Error(`Execution ${ownerKey} already owns a run trace.`),
     ];
     collectFailure(failures, () => writer.close());
-    throw aggregateError(failures, 'Duplicate run trace setup and cleanup failed');
+    throw aggregateError(
+      failures,
+      'Duplicate run trace setup and cleanup failed',
+    );
   }
   const trace = new TraceEmitter();
   let unsubscribeChannel: (() => void) | undefined;
