@@ -10,7 +10,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { waIcon } from './webAwesomeIcons';
 import type { TeXRAIconName } from './iconNames';
 
-type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
+type ActionButtonAppearance = 'accent' | 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
 type ActionButtonKind = 'primary' | 'secondary' | 'ghost' | 'link' | 'danger';
 /**

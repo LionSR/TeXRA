@@ -71,6 +71,17 @@ export class ApproveSplitButton extends LitElement {
 
       .approve-split-trigger wa-icon {
         font-size: var(--font-size-sm);
+        transition: transform var(--transition-fast);
+      }
+
+      .approve-split-menu[open] .approve-split-trigger wa-icon {
+        transform: rotate(180deg);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .approve-split-trigger wa-icon {
+          transition: none;
+        }
       }
     `,
   ];
@@ -103,7 +114,7 @@ export class ApproveSplitButton extends LitElement {
       action: 'approve',
       kind: hasMenu ? undefined : 'primary',
       nativeChrome: hasMenu,
-      appearance: hasMenu ? 'filled' : undefined,
+      appearance: hasMenu ? 'accent' : undefined,
       variant: hasMenu ? 'brand' : undefined,
       className: 'approve-split-main',
       disabled: this.disabled,
@@ -115,7 +126,7 @@ export class ApproveSplitButton extends LitElement {
       classPrefix: 'approve-split',
       triggerId: 'approve-split-trigger-button',
       triggerAriaLabel: 'More approve options',
-      triggerAppearance: 'filled',
+      triggerAppearance: 'accent',
       triggerVariant: 'brand',
       tooltip: this.canApproveAllDelegatedWork
         ? `${DELEGATION_APPROVAL_COPY.progressViewExplanation} (a)`

@@ -48,9 +48,11 @@ function clickApproveButton(element: ApproveSplitButton): void {
 }
 
 function selectMenuItem(element: ApproveSplitButton, value: string): void {
+  const item = document.createElement('wa-dropdown-item');
+  item.value = value;
   element.shadowRoot?.querySelector('.approve-split-menu')?.dispatchEvent(
     new CustomEvent('wa-select', {
-      detail: { item: { value } },
+      detail: { item },
       bubbles: true,
     }),
   );
@@ -102,10 +104,10 @@ describe('approve-split-button', () => {
     expect(approve?.parentElement).toBe(group);
     expect(menu?.parentElement).toBe(group);
     expect(approve?.classList.contains('action-button')).toBe(false);
-    expect(approve?.getAttribute('appearance')).toBe('filled');
+    expect(approve?.getAttribute('appearance')).toBe('accent');
     expect(approve?.getAttribute('variant')).toBe('brand');
     expect(approve?.getAttribute('size')).toBe('s');
-    expect(trigger?.getAttribute('appearance')).toBe('filled');
+    expect(trigger?.getAttribute('appearance')).toBe('accent');
     expect(trigger?.getAttribute('variant')).toBe('brand');
     expect(trigger?.getAttribute('size')).toBe('s');
     expect(trigger?.getAttribute('aria-label')).toBe('More approve options');
