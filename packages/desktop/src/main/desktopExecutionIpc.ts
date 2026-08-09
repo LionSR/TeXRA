@@ -10,7 +10,13 @@ import {
 } from './desktopIpcTypes.js';
 
 export interface DesktopExecutionIpcOptions {
-  executeAgent(message: MainViewExecuteMessage): Promise<void>;
+  /**
+   * Handle a validated EXECUTE message from the renderer. Named apart from
+   * `@agent/runtime`'s `executeAgent`/`runAgent` pair — this is a raw IPC
+   * message handler, not either of those functions, though it eventually
+   * reaches `runAgent`.
+   */
+  handleExecuteMessage(message: MainViewExecuteMessage): Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -35,7 +41,7 @@ export function createDesktopExecutionIpc(
           );
           return;
         }
-        return options.executeAgent(parsed.data);
+        return options.handleExecuteMessage(parsed.data);
       },
     },
     { onAsyncError: options.onAsyncError },
