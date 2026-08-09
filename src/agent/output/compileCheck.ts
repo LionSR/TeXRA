@@ -287,18 +287,22 @@ async function compileOne(
     `r${currentRound}_${safeName}.log`,
   );
   // Pre-fix builds wrote to this un-hashed name. Windows builds before path
-  // normalization also retained the `r<N>\\` prefix while sanitizing. A run
-  // resumed under this fix must clear either legacy spelling on success.
-  const legacySafeNames = new Set([
-    legacySafeName,
-    sanitizePathSegment(rawPathForSafeName, {
-      invalidCharPattern: /[^a-zA-Z0-9._-]/g,
-      replacement: '_',
-    }),
-  ]);
-  const legacyLogPaths = [...legacySafeNames].map((name) =>
-    path.join(opts.compileRoot, `r${currentRound}_${name}.log`),
-  );
+  // normalization also retained the `r<N>\\` prefix while sanitizing. The
+  // first normalized builds hashed that raw path, so a resumed run must clear
+  // all three legacy spellings on success.
+  const rawLegacySafeName = sanitizePathSegment(rawPathForSafeName, {
+    invalidCharPattern: /[^a-zA-Z0-9._-]/g,
+    replacement: '_',
+  });
+  const rawSafeName = `${rawLegacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH)}_${createHash(
+    'sha1',
+  )
+    .update(rawPathForSafeName)
+    .digest('hex')
+    .slice(0, PATH_HASH_LENGTH)}`;
+  const legacyLogPaths = [
+    ...new Set([legacySafeName, rawLegacySafeName, rawSafeName]),
+  ].map((name) => path.join(opts.compileRoot, `r${currentRound}_${name}.log`));
   const { executionId } = ctx.fileService;
 
   const clearStaleLogs = (): Promise<void[]> =>

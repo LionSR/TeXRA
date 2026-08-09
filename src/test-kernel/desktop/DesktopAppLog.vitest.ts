@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -86,7 +86,7 @@ describe('desktop app log', () => {
     await mkdir(logsPath, { recursive: true });
     await writeFile(
       logPath,
-      `Opened ${workspacePath}\\paper.tex; retained ${workspacePath}-archive\\paper.tex`,
+      `Opened ${workspacePath}\\paper.tex; queued ${workspacePath}, retained ${workspacePath}-archive\\paper.tex and ${workspacePath}.archive\\paper.tex`,
     );
     configureElectronTestStub({ userDataPath });
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
@@ -94,7 +94,9 @@ describe('desktop app log', () => {
     const snapshot = readDesktopLogSnapshot({ workspacePath });
 
     expect(snapshot.text).toContain('Opened [path]\\paper.tex');
+    expect(snapshot.text).toContain('queued [path],');
     expect(snapshot.text).toContain(`${workspacePath}-archive\\paper.tex`);
+    expect(snapshot.text).toContain(`${workspacePath}.archive\\paper.tex`);
   });
 
   it('redacts a workspace nested under the home directory before home redaction', async () => {
@@ -105,6 +107,22 @@ describe('desktop app log', () => {
     const workspacePath = join(homedir(), 'texra-project');
     await mkdir(logsPath, { recursive: true });
     await writeFile(logPath, `Opened ${workspacePath}/paper.tex`);
+    configureElectronTestStub({ userDataPath });
+    const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+    const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+    expect(snapshot.text).toBe('Opened [path]/paper.tex');
+  });
+
+  it('prefers home redaction when the workspace is its ancestor', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    const userDataPath = join(root, 'userData');
+    const logsPath = join(userDataPath, 'logs');
+    const logPath = join(logsPath, 'texra-desktop.log');
+    const workspacePath = dirname(homedir());
+    await mkdir(logsPath, { recursive: true });
+    await writeFile(logPath, `Opened ${homedir()}/paper.tex`);
     configureElectronTestStub({ userDataPath });
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 

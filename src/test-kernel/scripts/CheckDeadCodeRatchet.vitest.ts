@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-// @ts-expect-error This internal JavaScript script intentionally has no declaration file.
-const ratchet = await import('../../../scripts/check-dead-code-ratchet.mjs');
+const ratchet = await import(
+  // @ts-expect-error This internal JavaScript script intentionally has no declaration file.
+  '../../../scripts/check-dead-code-ratchet-core.mjs'
+);
 const {
   compareFindings,
   countByCategory,

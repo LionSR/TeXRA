@@ -164,29 +164,33 @@ function redactDesktopLogText(
   text: string,
   workspacePath: string | undefined,
 ): string {
-  return redactSecrets(redactWorkspacePath(text, workspacePath), {
-    homeDir: homedir(),
-  });
+  return redactSecrets(redactPathPrefixes(text, workspacePath, homedir()));
 }
 
 function redactDesktopLogPath(
   path: string,
   workspacePath: string | undefined,
 ): string {
-  return redactSecrets(redactWorkspacePath(path, workspacePath), {
-    homeDir: normalizeFilePath(homedir()),
-  });
+  return redactSecrets(
+    redactPathPrefixes(path, workspacePath, normalizeFilePath(homedir())),
+  );
 }
 
-function redactWorkspacePath(
+function redactPathPrefixes(
   text: string,
-  workspacePath: string | undefined,
+  ...prefixes: readonly (string | undefined)[]
 ): string {
-  if (workspacePath == null) return text;
-  return text.replaceAll(
-    new RegExp(`${escapeRegex(workspacePath)}(?=$|[\\\\/])`, 'g'),
-    '[path]',
-  );
+  return prefixes
+    .filter((prefix): prefix is string => Boolean(prefix))
+    .toSorted((a, b) => b.length - a.length)
+    .reduce(
+      (redacted, prefix) =>
+        redacted.replaceAll(
+          new RegExp(`${escapeRegex(prefix)}(?=$|[\\\\/,:;!?\\])}'"])`, 'g'),
+          '[path]',
+        ),
+      text,
+    );
 }
 
 function escapeRegex(value: string): string {
