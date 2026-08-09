@@ -712,7 +712,8 @@ function createWindow(options: {
       },
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      getSpendingStatus: () => getServerSideKeyService().getSpendingStatus(),
+      refreshSpendingStatus: () =>
+        getServerSideKeyService().refreshSpendingStatus(),
       subscriptionUsage,
       modelSelectionExtras: {
         useIncludedAccess: () =>

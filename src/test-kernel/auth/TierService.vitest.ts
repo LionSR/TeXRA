@@ -158,6 +158,34 @@ describe('TierService', () => {
     expect(service.getSpendingStatus()).toBeNull();
   });
 
+  it('bypasses the cache when refreshing spending status', async () => {
+    let remaining = 0;
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse(
+          tierConfig({
+            spendingStatus: spendingStatus(
+              300 - remaining,
+              remaining,
+              100 - remaining / 3,
+            ),
+          }),
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new TierService('https://example.test');
+
+    await service.getConfig('token');
+    expect(service.getSpendingStatus()?.remaining).toBe(0);
+
+    remaining = 300;
+    await service.refreshSpendingStatus('token');
+
+    expect(service.getSpendingStatus()?.remaining).toBe(300);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('parses and reports an authenticated spend-check failure', async () => {
     stubFetchResponse(
       tierConfig({

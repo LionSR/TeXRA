@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { CodexAuthError } from '@auth/codex';
 import {
   CHATGPT_USAGE_URL,
   parseChatGptUsage,
@@ -574,6 +575,27 @@ describe('SubscriptionUsageService', () => {
       expect(JSON.stringify(snapshot)).not.toContain('secret');
     },
   );
+
+  it.each([
+    ['fatal' as const, 'invalid_credentials'],
+    ['expired' as const, 'invalid_credentials'],
+    ['transient' as const, 'request_failed'],
+  ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
+    const http = vi.fn<SubscriptionUsageHttp>();
+    const source = credentials({
+      loadChatGpt: async () => {
+        throw new CodexAuthError('refresh failed', kind);
+      },
+    });
+
+    await expect(
+      serviceWith(http, source).getUsage('chatgpt'),
+    ).resolves.toMatchObject({
+      state: 'unavailable',
+      reason,
+    });
+    expect(http).not.toHaveBeenCalled();
+  });
 
   it('normalizes malformed bodies and HTTP failures without exposing details', async () => {
     const malformed = vi.fn<SubscriptionUsageHttp>(async () =>

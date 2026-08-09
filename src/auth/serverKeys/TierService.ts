@@ -304,6 +304,20 @@ export class TierService {
   }
 
   /**
+   * Bypass the authenticated cache slot and replace the spending snapshot.
+   * Clearing the old snapshot first prevents a failed refresh from presenting
+   * last month's exhausted quota as current.
+   */
+  async refreshSpendingStatus(
+    authToken?: string,
+  ): Promise<TierModelConfig | null> {
+    this.configCache.delete('auth');
+    this.spendingStatus = null;
+    this.spendingStatusError = null;
+    return authToken ? this.getConfig(authToken) : null;
+  }
+
+  /**
    * Get the cached tier configuration (synchronous).
    * Returns null if config hasn't been fetched yet.
    */

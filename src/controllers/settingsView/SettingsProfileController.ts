@@ -1,3 +1,4 @@
+import { createChannelTrace } from '@agent/trace';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
@@ -29,6 +30,8 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
+
+const logger = createChannelTrace('SettingsProfileController');
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;
@@ -91,7 +94,7 @@ export interface SettingsProfileControllerDeps {
   getConfig<T>(key: string, defaultValue: T): T;
   updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
-  getSpendingStatus(): SpendingStatus | null;
+  refreshSpendingStatus(): Promise<SpendingStatus | null>;
   invalidateModelOptionsCache(): void;
 }
 
@@ -177,12 +180,19 @@ export class SettingsProfileController {
 
   async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {
     const includedAccess = mode === 'included';
-    const spendingStatus = this.deps.getSpendingStatus();
-    if (
-      includedAccess &&
-      spendingStatus !== null &&
-      isSpendingQuotaExceeded(spendingStatus)
-    ) {
+    let spendingStatus: SpendingStatus | null = null;
+    if (includedAccess) {
+      try {
+        spendingStatus = await this.deps.refreshSpendingStatus();
+      } catch (error) {
+        // The relay remains authoritative, so an unknown local result must not
+        // block the mutation. Preserve the refresh failure in the trace only.
+        logger.warn('Included Access quota refresh failed; proceeding', {
+          data: { error },
+        });
+      }
+    }
+    if (spendingStatus !== null && isSpendingQuotaExceeded(spendingStatus)) {
       return { kind: 'rejected', reason: 'quota_exhausted' };
     }
     await this.deps.setUseIncludedModelAccess(includedAccess);

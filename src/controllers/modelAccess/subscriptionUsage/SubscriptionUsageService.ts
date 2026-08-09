@@ -60,18 +60,11 @@ interface CacheEntry {
 
 const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
   async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
-    try {
-      const session = await codexCoordinator().getFreshSession();
-      return {
-        accessToken: session.accessToken,
-        ...(session.accountId ? { accountId: session.accountId } : {}),
-      };
-    } catch (error: unknown) {
-      if (error instanceof CodexAuthError && error.kind === 'expired') {
-        return null;
-      }
-      throw error;
-    }
+    const session = await codexCoordinator().getFreshSession();
+    return {
+      accessToken: session.accessToken,
+      ...(session.accountId ? { accountId: session.accountId } : {}),
+    };
   },
   loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined> {
     return lookupApiKey(platform().secrets, provider);
@@ -202,6 +195,9 @@ export class SubscriptionUsageService {
         { state: 'unavailable' }
       >['reason'] = 'request_failed';
       if (error instanceof SyntaxError) reason = 'malformed_response';
+      if (error instanceof CodexAuthError && error.needsReauth) {
+        reason = 'invalid_credentials';
+      }
       if (
         error instanceof SubscriptionUsageHttpError &&
         (error.status === 401 || error.status === 403)

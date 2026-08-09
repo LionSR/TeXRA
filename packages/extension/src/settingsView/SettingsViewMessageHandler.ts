@@ -179,7 +179,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         updateConfig(key, value, { target: 'global', prefix: false }),
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      getSpendingStatus: () => getServerSideKeyService().getSpendingStatus(),
+      refreshSpendingStatus: () =>
+        getServerSideKeyService().refreshSpendingStatus(),
     });
     this.subscriptionUsage = subscriptionUsage;
     this.profileKeyController = new SettingsProfileKeyController({

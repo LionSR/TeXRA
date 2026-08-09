@@ -95,6 +95,7 @@ async function createFixture({
   const setUseIncludedModelAccess = vi.fn(async (enabled: boolean) => {
     events.push(`access:${enabled}`);
   });
+  const refreshSpendingStatus = vi.fn(async () => null);
   const onCredentialChanged = vi.fn(async () => {
     events.push('credential');
   });
@@ -117,6 +118,7 @@ async function createFixture({
   );
   vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
     canUseServerSideKeys: async () => false,
+    refreshSpendingStatus: async () => null,
     getUseIncludedModelAccess: () => false,
     wasQuotaAutoSwitched: () => false,
     isRelayQuotaExceeded: () => false,
@@ -162,6 +164,7 @@ async function createFixture({
       signOut,
     },
     setUseIncludedModelAccess,
+    refreshSpendingStatus,
     subscriptionUsage,
     modelSelectionExtras: {
       useIncludedAccess: () => false,
@@ -186,6 +189,7 @@ async function createFixture({
     signOut,
     onCredentialChanged,
     setUseIncludedModelAccess,
+    refreshSpendingStatus,
     subscriptionUsage,
   };
 }
@@ -350,7 +354,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     let remaining = 0;
     const fixture = await createFixture({
       globalState,
-      getSpendingStatus: () => ({
+      refreshSpendingStatus: async () => ({
         currentSpend: 100 - remaining,
         limit: 100,
         remaining,

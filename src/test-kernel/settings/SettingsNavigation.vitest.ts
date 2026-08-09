@@ -12,6 +12,8 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
+import { postMessage } from '@shared/hostBridge';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_TAB, SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 
 import {
@@ -20,6 +22,9 @@ import {
 } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
+
+const MAX_TIMEOUT_MS = 2_147_483_647;
+const THIRTY_ONE_DAYS_MS = 31 * 24 * 60 * 60 * 1_000;
 
 let navGroups: readonly SettingsNavGroup[] = [];
 let settingsState: typeof import('@settingsView/frontend/settingsState');
@@ -80,6 +85,74 @@ describe('hierarchical settings navigation', () => {
 
   beforeEach(() => {
     setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
+  });
+
+  it('refreshes settings at the UTC monthly quota rollover', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T23:59:59.000Z'));
+    try {
+      const app = await mountSettingsApp();
+      vi.mocked(postMessage).mockClear();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(postMessage).toHaveBeenCalledExactlyOnceWith(
+        SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+        { view: 'settings' },
+      );
+      app.remove();
+      vi.mocked(postMessage).mockClear();
+      await vi.advanceTimersByTimeAsync(31 * 24 * 60 * 60 * 1_000);
+      expect(postMessage).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('follows the max-delay clamp through a 31-day UTC month boundary', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-01T00:00:00.000Z'));
+    try {
+      const app = await mountSettingsApp();
+      vi.mocked(postMessage).mockClear();
+
+      await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS);
+      expect(postMessage).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(THIRTY_ONE_DAYS_MS - MAX_TIMEOUT_MS);
+      expect(postMessage).toHaveBeenCalledExactlyOnceWith(
+        SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+        { view: 'settings' },
+      );
+      app.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refreshes exactly once at rollover after disconnecting and reconnecting', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T23:59:58.000Z'));
+    try {
+      const app = await mountSettingsApp();
+      vi.mocked(postMessage).mockClear();
+
+      await vi.advanceTimersByTimeAsync(500);
+      app.remove();
+      await vi.advanceTimersByTimeAsync(500);
+      document.body.append(app);
+      await app.updateComplete;
+      vi.mocked(postMessage).mockClear();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(postMessage).toHaveBeenCalledExactlyOnceWith(
+        SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+        { view: 'settings' },
+      );
+      app.remove();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders category navigation plus only the active category pages', async () => {

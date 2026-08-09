@@ -79,7 +79,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     signOut(): Promise<void>;
   };
   readonly setUseIncludedModelAccess: (enabled: boolean) => Promise<void>;
-  readonly getSpendingStatus?: () => SpendingStatus | null;
+  readonly refreshSpendingStatus: () => Promise<SpendingStatus | null>;
   readonly subscriptionUsage?: Pick<
     SubscriptionUsageService,
     'getUsage' | 'invalidate'
@@ -167,7 +167,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
       updateConfig: (key, value) => options.config.update(key, value, 'global'),
       setUseIncludedModelAccess: options.setUseIncludedModelAccess,
-      getSpendingStatus: () => options.getSpendingStatus?.() ?? null,
+      refreshSpendingStatus: options.refreshSpendingStatus,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: {
