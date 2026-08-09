@@ -93,7 +93,6 @@ import {
   changeWorkingDirectory,
   emptyFile,
   emptyFiles,
-  executeAgent,
   getCurrentFile,
   refreshEditedFiles,
   refreshInstructionPlaceholder,
@@ -103,6 +102,7 @@ import {
   runLatexDiffsAction,
   runPanelAction,
   selectMultipleFiles,
+  sendExecuteMessage,
   setBaseFile,
   setInstruction,
   updateCheckboxValue,
@@ -263,7 +263,7 @@ export class MainApp extends MainAppBase {
       this.logSchemaError(context, error),
     );
     if (restored && message.executeImmediately) {
-      executeAgent();
+      sendExecuteMessage();
     }
   }
 
@@ -436,7 +436,7 @@ export class MainApp extends MainAppBase {
         @instruction-input=${this.onInstructionInput}
         @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
           runPanelAction(detail.action)}
-        @execute=${() => executeAgent()}
+        @execute=${() => sendExecuteMessage()}
         @agent-settings=${() => runAgentConfigAction('edit')}
         @browse-all-agents=${() => runAgentConfigAction('edit')}
         @team-settings=${this.onOpenMultiAgentSettings}

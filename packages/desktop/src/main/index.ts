@@ -1028,7 +1028,7 @@ function createWindow(options: {
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     workspace: workspaceIpc,
-    executeAgent: async (message) => {
+    handleExecuteMessage: async (message) => {
       const execution = await getAgentExecution();
       void execution.handleExecute(message).catch(reportAsyncError);
     },

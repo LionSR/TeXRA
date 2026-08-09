@@ -762,7 +762,7 @@ export class DesktopProgressBridge {
             this.state.snapshots.getRunIdentity(stream),
           getExecutionId: (stream) => this.getStreamExecutionId(stream),
         },
-        executeAgent: (request) => {
+        runExecutionRequest: (request) => {
           const validated = validateExecutionRequest(request);
           if (!validated.valid) {
             this.logger.error('Invalid desktop workflow execution request', {

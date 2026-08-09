@@ -53,7 +53,13 @@ interface ProgressViewRunState {
 
 interface ProgressViewRunDependencies {
   readonly state: ProgressViewRunState;
-  executeAgent(request: ExecutionRequest): Promise<void>;
+  /**
+   * Launch or resume a run for this request. This is a host callback, not
+   * the `@agent/runtime` `executeAgent`/`runAgent` functions it dispatches
+   * to — hosts wire it to their own command/IPC handling, which eventually
+   * reaches `runAgent`.
+   */
+  runExecutionRequest(request: ExecutionRequest): Promise<void>;
 }
 
 /**
@@ -80,7 +86,7 @@ async function resumeStream(
   }
 
   const executionId = dependencies.state.getExecutionId(stream);
-  await dependencies.executeAgent({
+  await dependencies.runExecutionRequest({
     config,
     ...(executionId && { executionId }),
   });
@@ -98,7 +104,7 @@ async function runNewStream(
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
-  await dependencies.executeAgent({ config });
+  await dependencies.runExecutionRequest({ config });
 }
 
 export interface ProgressViewHostOptions {
