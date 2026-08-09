@@ -51,8 +51,8 @@ import {
   LeanFileTool,
   LeanProjectTool,
   LeanInspectTool,
-  LeanLoogleTool,
-} from './lean';
+} from './lean/LspTools';
+import { LeanLoogleTool } from './lean/LoogleTool';
 import {
   WorkflowAgentTool,
   DelegateAgentTool,
