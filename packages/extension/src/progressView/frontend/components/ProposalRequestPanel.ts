@@ -115,6 +115,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
         .approveTitle=${approveTitle}
         .canBypass=${false}
         .canApproveAllDelegatedWork=${true}
+        .disabled=${this.archived}
         @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-all-delegated-work=${() =>
           this.emitAction(this.approveAllDelegatedWorkDecision)}

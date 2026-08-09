@@ -6,7 +6,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components used by this template
-// (the split-button caret/menu registrations come from @shared/wa/splitButton)
+import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
@@ -19,9 +19,12 @@ import {
 
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import {
+  renderLabeledActionButton,
+  renderLabeledActionButtonParts,
+} from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
-import { renderSplitButtonMenu } from '@shared/wa/splitButton';
+import { renderSplitButtonMenuParts } from '@shared/wa/splitButton';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -75,39 +78,41 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   // ===========================================================================
 
   private renderDiffActions(): TemplateResult {
-    const data = this.permission.data;
-    const showDropdown = Boolean(data.isLatex);
+    const hasMenu = Boolean(this.permission.data.isLatex && !this.archived);
+    const buttonOptions = {
+      id: 'tool-edit-diff-button',
+      icon: 'code-compare' as const,
+      text: 'Open diff',
+      tooltip: 'Open diff (d)',
+      action: 'openDiff',
+      className: 'diff-main-button',
+      disabled: this.archived,
+      onClick: this.handleDiffAction,
+    };
+
+    if (!hasMenu) return renderLabeledActionButton(buttonOptions);
+
+    const diffButton = renderLabeledActionButtonParts({
+      ...buttonOptions,
+      nativeChrome: true,
+    });
+    const diffMenu = renderSplitButtonMenuParts({
+      classPrefix: 'diff-dropdown',
+      triggerId: 'tool-edit-diff-dropdown-trigger',
+      triggerAriaLabel: 'More diff actions',
+      tooltip: 'More diff actions',
+      items: html`
+        <wa-dropdown-item value="previewProposed">Preview</wa-dropdown-item>
+        <wa-dropdown-item value="showLatexdiff">LaTeXdiff</wa-dropdown-item>
+      `,
+      onSelect: this.handleMenuSelect,
+    });
 
     return html`
-      <div class="diff-dropdown split-button">
-        ${renderLabeledActionButton({
-          id: 'tool-edit-diff-button',
-          icon: 'code-compare',
-          text: 'Open diff',
-          tooltip: 'Open diff (d)',
-          className: 'diff-main-button split-button-main',
-          onClick: this.handleDiffAction,
-        })}
-        ${
-          showDropdown
-            ? renderSplitButtonMenu({
-                classPrefix: 'diff-dropdown',
-                triggerId: 'tool-edit-diff-dropdown-trigger',
-                triggerAriaLabel: 'More diff actions',
-                tooltip: 'More diff actions',
-                items: html`
-                  <wa-dropdown-item value="previewProposed">
-                    Preview
-                  </wa-dropdown-item>
-                  <wa-dropdown-item value="showLatexdiff">
-                    LaTeXdiff
-                  </wa-dropdown-item>
-                `,
-                onSelect: this.handleMenuSelect,
-              })
-            : nothing
-        }
-      </div>
+      <wa-button-group class="diff-dropdown" label="Diff actions">
+        ${diffButton.button} ${diffMenu.menu}
+      </wa-button-group>
+      ${diffButton.tooltip} ${diffMenu.tooltip}
     `;
   }
 
