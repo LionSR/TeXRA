@@ -27,13 +27,14 @@ criteria:
   attempt to resolve import gaps. The 492 escapes represent the raw import surface.
 - **Round 2 — absorb support, refuse latex+auth:** Round 1 plus any support files that
   resolve transitive import gaps (bridge modules, utility helpers, type re-exports),
-  while intentionally excluding `@latex`, `@auth`, and their dependents as product-domain
-  exclusions. This is the "how big is the real graph" measurement.
+  while intentionally excluding `@latex`, TeXRA-hosted credential-plane `@auth` modules,
+  and their dependents as product-domain exclusions. The documented user-owned provider OAuth
+  exceptions `@auth/codex/**` and `@auth/xai/**` are not TeXRA-hosted credential-plane modules. This is the "how big is the real graph" measurement.
 - **Round 3** was an intermediate measurement that merged bridge files differently; it was
   superseded by Round 4 and is omitted.
 - **Round 4 — SDK-shaped floor:** applies **principled exclusions** of product-domain
-  modules (latex, auth, replacement engine, reflection, controllers, telemetry) that an
-  SDK consumer would not need. Fewer files than Round 2, but **more escapes** — Round 2
+  modules (latex, TeXRA-hosted auth, replacement engine, reflection, controllers, telemetry)
+  that an SDK consumer would not need. Fewer files than Round 2, but **more escapes** — Round 2
   pulled in bridge/support files to close import gaps, while Round 4 intentionally
   excludes those adapters and marks each product-domain dependency as a deliberate escape
   site that needs an architectural decision, not a transitive resolution. The 53 escapes
@@ -88,7 +89,15 @@ The split itself is clean: **20 generic tools (18,649 LoC) vs 34 domain tools
 (14,834 LoC)**, connected only through `registry.ts`, `externalToolDefs.ts` (5 edges), and
 `PlanTool.ts:46 → @tools/goal`.
 
-### B2. The credential plane — `@auth` × 13, including the `ModelHandler` base class
+### B2. The TeXRA-hosted credential plane — historical `@auth` × 13 census, including the `ModelHandler` base class
+
+The historical census used `@auth` as shorthand for the credential-plane problem; it was not
+a broad zero-`@auth` policy. `@auth/codex/**` and `@auth/xai/**` are explicitly permitted
+because their current provider trees are user-owned OAuth backed by `platform().secrets`, with no
+TeXRA-hosted relay or Supabase dependency. The root-aware model/runtime test enforces only their
+consumer roots; retain that provider-tree property by review. All other `@auth/*` roots in the
+model/runtime boundary are forbidden unless policy and the architecture-test allowlist are
+deliberately updated.
 
 `serverKeys` ×6, `codex` ×4, `SupabaseClient` ×2 — one of them in `ModelHandler.ts:59-61`.
 TeXRA's subscription relay is welded into the model layer; **an external consumer has no
