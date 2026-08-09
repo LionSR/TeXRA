@@ -1,3 +1,6 @@
+// Node imports
+import * as path from 'node:path';
+
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
@@ -78,7 +81,7 @@ describe('OpenPdfTool', () => {
     expect(openPdf).toHaveBeenCalledWith({
       location: {
         kind: 'workspace',
-        absolutePath: '/workspace/figures/result.pdf',
+        absolutePath: path.join(path.sep, 'workspace', 'figures', 'result.pdf'),
         relativePath: 'figures/result.pdf',
       },
       preserveFocus: true,
@@ -104,7 +107,13 @@ describe('OpenPdfTool', () => {
     expect(openPdf).toHaveBeenCalledWith({
       location: {
         kind: 'runStorage',
-        absolutePath: '/storage/executions/run-1/output.pdf',
+        absolutePath: path.join(
+          path.sep,
+          'storage',
+          'executions',
+          'run-1',
+          'output.pdf',
+        ),
         relativePath: 'output.pdf',
         executionId: 'run-1',
       },
