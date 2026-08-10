@@ -26,6 +26,7 @@ import {
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import {
+  allocateConversationAuxiliaryRows,
   allocateConversationBottomPanelRows,
   allocateMiddleRows,
   allocateSidePanelRows,
@@ -833,6 +834,41 @@ describe('CLI TUI row allocation', () => {
         rows: 1,
       }),
     ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
+  });
+
+  it('reserves a conversation row before skills, todos, and focused children', () => {
+    for (const transcriptRows of [1, 2, 3]) {
+      const auxiliary = allocateConversationAuxiliaryRows({
+        desiredSkillsRows: 3,
+        transcriptRows,
+      });
+      const bottom = allocateConversationBottomPanelRows({
+        maxRows: 10 - auxiliary.skillsRows,
+        sessionCount: 4,
+        childListFocused: true,
+        todosPlanContentRows: 2,
+        transcriptRows: auxiliary.otherPanelRows,
+      });
+      expect(
+        transcriptRows - auxiliary.skillsRows - bottom.bottomPanelRows,
+      ).toBe(1);
+    }
+
+    const auxiliary = allocateConversationAuxiliaryRows({
+      desiredSkillsRows: 3,
+      transcriptRows: 8,
+    });
+    const bottom = allocateConversationBottomPanelRows({
+      maxRows: 10 - auxiliary.skillsRows,
+      sessionCount: 4,
+      childListFocused: true,
+      todosPlanContentRows: 2,
+      transcriptRows: auxiliary.otherPanelRows,
+    });
+    expect(auxiliary.skillsRows).toBe(3);
+    expect(bottom.sessionPanelRows).toBeGreaterThanOrEqual(2);
+    expect(bottom.todosPlanRows).toBeGreaterThanOrEqual(2);
+    expect(8 - auxiliary.skillsRows - bottom.bottomPanelRows).toBe(1);
   });
 
   it('hides the child list when its gap and content cannot both fit', () => {
@@ -1728,6 +1764,58 @@ describe('CLI transcript state', () => {
   // it in place here so store-backed tests need no reset of their own.
   beforeEach(async () => {
     await defaultSession().transcripts.clear();
+  });
+
+  it('restores the latest active skills per stream and clears malformed snapshots', () => {
+    patchStream(root, (slice) => ({
+      ...slice,
+      category: AgentCategory.ToolUse,
+    }));
+    patchStream(child1, (slice) => ({
+      ...slice,
+      category: AgentCategory.ToolUse,
+    }));
+    const logger = runTrace(root);
+    logger.emit({
+      type: 'skills.snapshot',
+      skills: [
+        {
+          name: 'proof-audit',
+          description: 'Check proof steps.',
+          source: 'project',
+        },
+      ],
+    });
+
+    syncStreamLog(root);
+    syncStreamLog(child1);
+    expect(streams.get().get(root)?.activeSkills).toMatchObject([
+      { name: 'proof-audit', source: 'project' },
+    ]);
+    expect(streams.get().get(child1)?.activeSkills).toEqual([]);
+
+    resetCliState();
+    patchStream(root, (slice) => ({
+      ...slice,
+      category: AgentCategory.ToolUse,
+    }));
+    syncStreamLog(root);
+    expect(streams.get().get(root)?.activeSkills).toMatchObject([
+      { name: 'proof-audit' },
+    ]);
+
+    defaultSession()
+      .transcripts.get(root)
+      ?.appendSettled({
+        id: 'malformed-skills',
+        type: 'log',
+        level: 'info',
+        timestamp: 2,
+        messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
+        data: { skills: [{ path: '/secret' }] },
+      });
+    syncStreamLog(root);
+    expect(streams.get().get(root)?.activeSkills).toEqual([]);
   });
 
   it('renders orchestrator follow-ups without protocol tags', () => {

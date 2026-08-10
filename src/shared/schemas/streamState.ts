@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ActiveSkillSummarySchema } from './activeSkills';
 import { GoalStatusSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
 import { RunIdentitySchema } from './runIdentity';
@@ -179,6 +180,7 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   todos: z.array(TodoItemSchema).prefault([]),
   plan: PlanSchema.nullable().prefault(null),
   queuedFollowUps: z.array(z.string()).prefault([]),
+  activeSkills: z.array(ActiveSkillSummarySchema).prefault([]),
   bashBypass: z.boolean().optional(),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),

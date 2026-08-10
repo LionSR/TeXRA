@@ -14,6 +14,7 @@ import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
 import {
+  allocateConversationAuxiliaryRows,
   allocateConversationBottomPanelRows,
   allocateMiddleRows,
   PINNED_CHROME_ROWS,
@@ -25,6 +26,10 @@ import {
   isScopedTranscriptViewport,
   transcriptViewportKey,
 } from '../state/transcriptViewportMode';
+import {
+  ActiveSkillsPanel,
+  activeSkillsPanelRowCount,
+} from './ActiveSkillsPanel';
 import { ConversationPane } from './ConversationPane';
 import {
   QueuedFollowUpsPanel,
@@ -181,20 +186,27 @@ export function ConversationRegion({
     workflowDashboardItemCount > 0
       ? workflowDashboardItemCount
       : snapshot.sessionViews.length;
+  const desiredSkillsRows = foregroundOpen
+    ? 0
+    : activeSkillsPanelRowCount(activeSlice?.activeSkills ?? [], columns);
+  const { skillsRows, otherPanelRows } = allocateConversationAuxiliaryRows({
+    desiredSkillsRows,
+    transcriptRows,
+  });
   const minimumSessionPanelRows = workflowDashboardItemCount > 0 ? 3 : 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
-    maxRows: BOTTOM_PANEL_MAX_ROWS,
+    maxRows: BOTTOM_PANEL_MAX_ROWS - skillsRows,
     sessionCount: foregroundOpen ? 0 : sessionPanelItemCount,
     childListFocused: snapshot.childListFocused,
     minimumSessionPanelRows,
     todosPlanContentRows,
-    transcriptRows,
+    transcriptRows: otherPanelRows,
   });
-  const conversationRows = transcriptRows - bottomPanelBudget;
+  const conversationRows = transcriptRows - skillsRows - bottomPanelBudget;
   const childListHasRows = sessionPanelItemCount > 0;
   const childListVisible =
     childListHasRows && subagentRows >= minimumSessionPanelRows;
@@ -255,8 +267,13 @@ export function ConversationRegion({
           />
         ) : null}
         {renderFooterChrome()}
-        {bottomPanelBudget > 0 ? (
+        {skillsRows + bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
+            <ActiveSkillsPanel
+              columns={columns}
+              maxRows={skillsRows}
+              skills={activeSlice?.activeSkills ?? []}
+            />
             <SubagentList
               keyboardActive={snapshot.childListFocused && childListVisible}
               maxRows={subagentRows}
