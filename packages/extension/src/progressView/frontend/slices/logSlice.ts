@@ -6,7 +6,6 @@ import {
   ContextStateDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_STATUS,
   isToolUseState,
   type LogMessageData,
   type ProgressViewOutboundHandlerRegistry,
@@ -17,7 +16,7 @@ import {
   applyCompactionActivityEntries,
   interruptRunningCompactionActivities,
 } from '@shared/streams/compactionActivityProjection';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 
 import { appState } from '../progressState';
@@ -76,7 +75,7 @@ function syncCompactionProjectionChanges(
   return { logChanged, updatedIndices };
 }
 
-/** Interrupt unmatched activity rows when the stream lifecycle becomes terminal. */
+/** Interrupt unmatched activity rows when the current transcript turn settles. */
 export function interruptCompactionActivityLogs(
   streamLogs: StreamLogs,
   finishedAt?: number,
@@ -229,10 +228,7 @@ export const logHandlers = {
             updatedMessageIndices.add(existingIndex);
           }
         }
-        if (
-          streamState.status !== STREAM_STATUS.READY &&
-          isTerminalOutcomePhase(streamState.status)
-        ) {
+        if (isTranscriptSettlementPhase(streamState.status)) {
           for (const index of interruptCompactionActivityLogs(
             streamLogs,
             streamState.lastTimestamp,

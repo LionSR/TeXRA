@@ -8,20 +8,19 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   STREAM_PHASE,
-  STREAM_STATUS,
   type ProgressViewOutboundHandlerRegistry,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 
 import { isToolUseState, type StreamLogs } from '../store';
 import { interruptCompactionActivityLogs } from './logSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';
 
-function interruptTerminalCompaction(
+function interruptSettledCompaction(
   streamLogs: StreamLogs,
   finishedAt?: number,
 ): StreamLogs | undefined {
@@ -107,13 +106,10 @@ export const streamMetaHandlers = {
 
         if (mergedState) {
           draft.streamStates.set(name, mergedState);
-          if (
-            mergedState.status !== STREAM_STATUS.READY &&
-            isTerminalOutcomePhase(mergedState.status)
-          ) {
+          if (isTranscriptSettlementPhase(mergedState.status)) {
             const streamLogs = draft.streamLogs.get(name);
             if (streamLogs) {
-              const updated = interruptTerminalCompaction(
+              const updated = interruptSettledCompaction(
                 streamLogs,
                 mergedState.lastTimestamp,
               );
@@ -150,15 +146,12 @@ export const streamMetaHandlers = {
       }),
     );
 
-    if (isTerminalOutcomePhase(status)) {
+    if (isTranscriptSettlementPhase(status)) {
       appState.set(
         create(appState.get(), (draft) => {
           const streamLogs = draft.streamLogs.get(stream);
           if (!streamLogs) return;
-          const updated = interruptTerminalCompaction(
-            streamLogs,
-            lastTimestamp,
-          );
+          const updated = interruptSettledCompaction(streamLogs, lastTimestamp);
           if (updated) draft.streamLogs.set(stream, updated);
         }),
       );

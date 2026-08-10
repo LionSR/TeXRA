@@ -58,7 +58,6 @@ export function createCompactionActivityProjection(): CompactionActivityProjecti
 
 const STREAM_ADVANCING_MESSAGE_TYPES: ReadonlySet<string> = new Set([
   MESSAGE_TYPES.USER_MESSAGE,
-  MESSAGE_TYPES.MODEL_RESPONSE,
   MESSAGE_TYPES.TOOL_USE,
   MESSAGE_TYPES.ERROR,
 ]);
@@ -135,7 +134,7 @@ export function applyCompactionActivityEntries(
   return [...changedIndices];
 }
 
-/** Close unmatched starts when the hydrated stream lifecycle is terminal. */
+/** Close unmatched starts when the current transcript turn settles. */
 export function interruptRunningCompactionActivities(
   projection: CompactionActivityProjection,
   finishedAt?: number,

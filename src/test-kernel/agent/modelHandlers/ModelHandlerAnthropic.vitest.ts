@@ -33,6 +33,7 @@ import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   enforceCacheControlLimit,
   logContextManagementFromResponse,
+  resolveAnthropicCompactionOutcome,
   SHORT_CACHE_CONTROL,
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 import * as serverKeysModule from '@auth/serverKeys';
@@ -398,7 +399,10 @@ function createCapturingAnthropicClient(model: string): {
 }
 
 /** Record `context_compaction` activity states emitted through the logger. */
-function captureCompactionActivity(handler: ModelHandlerAnthropic): string[] {
+function captureCompactionActivity(
+  handler: ModelHandlerAnthropic,
+  contextManagementEvents?: string[],
+): string[] {
   const activityStates: string[] = [];
   stubHandlerForTest(handler, {
     info: (_message: string, options?: { data?: unknown }) => {
@@ -409,6 +413,11 @@ function captureCompactionActivity(handler: ModelHandlerAnthropic): string[] {
         typeof data.state === 'string'
       ) {
         activityStates.push(data.state);
+      }
+    },
+    domain: (event: { key: string; text?: string }) => {
+      if (event.key === 'contextManagement' && event.text) {
+        contextManagementEvents?.push(event.text);
       }
     },
   });
@@ -1719,7 +1728,11 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       const handler = createCompactionEligibleHandler({
         capabilities: { supportsTokenCounting: true },
       });
-      const activityStates = captureCompactionActivity(handler);
+      const contextManagementEvents: string[] = [];
+      const activityStates = captureCompactionActivity(
+        handler,
+        contextManagementEvents,
+      );
       const client = {
         beta: {
           messages: {
@@ -1742,6 +1755,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       });
 
       assert.deepEqual(activityStates, ['started', 'skipped']);
+      assert.deepEqual(contextManagementEvents, []);
     },
   );
 
@@ -1751,7 +1765,11 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       const handler = createCompactionEligibleHandler({
         capabilities: { supportsTokenCounting: true },
       });
-      const activityStates = captureCompactionActivity(handler);
+      const contextManagementEvents: string[] = [];
+      const activityStates = captureCompactionActivity(
+        handler,
+        contextManagementEvents,
+      );
       const client = {
         beta: {
           messages: {
@@ -1774,10 +1792,11 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       });
 
       assert.deepEqual(activityStates, ['started', 'skipped']);
+      assert.deepEqual(contextManagementEvents, []);
     },
   );
 
-  it('emits exactly one correlated lifecycle for streaming compaction', async () => {
+  it('uses the final streaming response as the canonical compaction outcome', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
       supportsReasoning: false,
@@ -1787,12 +1806,18 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       operationId: string;
       state: string;
     }> = [];
+    const contextManagementEvents: string[] = [];
     handler.setLogger({
       ...noopTrace,
       info: (_message, options) => {
         const data = options?.data as
           (typeof activityEvents)[number] | undefined;
         if (data?.activity === 'context_compaction') activityEvents.push(data);
+      },
+      domain: (event) => {
+        if (event.key === 'contextManagement' && event.text) {
+          contextManagementEvents.push(event.text);
+        }
       },
     });
     handler.getStreamingConfig = () => true;
@@ -1817,14 +1842,6 @@ describe('ModelHandlerAnthropic forced compaction', () => {
                 index: 0,
                 content_block: { type: 'compaction', content: '' },
               });
-              streamEventHandler?.({
-                type: 'content_block_delta',
-                index: 0,
-                delta: {
-                  type: 'compaction_delta',
-                  content: 'usable summary',
-                },
-              });
               return response;
             },
             currentMessage: response,
@@ -1848,7 +1865,62 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       activityEvents[0]?.operationId,
       activityEvents[1]?.operationId,
     );
+    assert.equal(contextManagementEvents.length, 1);
   });
+
+  it.each([null, '', ' \n'])(
+    'does not report summarized context for streaming compaction content %j',
+    async (content) => {
+      const handler = createAnthropicHandler({
+        supportsTokenCounting: false,
+        supportsReasoning: false,
+      });
+      const contextManagementEvents: string[] = [];
+      const activityStates = captureCompactionActivity(
+        handler,
+        contextManagementEvents,
+      );
+      handler.getStreamingConfig = () => true;
+      let streamEventHandler: ((event: unknown) => void) | undefined;
+      const response = anthropicMessage(handler.config.fullName, {
+        content: [
+          { type: 'compaction', content },
+          { type: 'text', text: 'ok' },
+        ],
+      });
+      const client = {
+        beta: {
+          messages: {
+            stream: () => ({
+              on: (eventName: string, callback: (event: unknown) => void) => {
+                if (eventName === 'streamEvent') streamEventHandler = callback;
+              },
+              controller: { abort: () => {} },
+              finalMessage: async () => {
+                streamEventHandler?.({
+                  type: 'content_block_start',
+                  index: 0,
+                  content_block: { type: 'compaction', content: '' },
+                });
+                return response;
+              },
+              currentMessage: response,
+              request_id: 'req_compaction_skipped',
+            }),
+          },
+        },
+      } as any;
+
+      await handler.createResponse({
+        client,
+        messages: helloMessages(),
+        temperature: 0,
+      });
+
+      assert.deepEqual(activityStates, ['started', 'skipped']);
+      assert.deepEqual(contextManagementEvents, []);
+    },
+  );
 });
 
 describe('ModelHandlerAnthropic file-reference token estimation', () => {
@@ -2372,9 +2444,8 @@ describe('ModelHandlerAnthropic usage and server-side compaction reporting', () 
     );
   });
 
-  it('logs server-side compaction events from compaction blocks', () => {
+  it('logs the summary and statistics from the last usable compaction boundary', () => {
     const events: Array<{ message: string; data: unknown }> = [];
-
     const logger = {
       ...noopTrace,
       domain: (event: { key: string; text?: string; data?: unknown }) => {
@@ -2383,41 +2454,58 @@ describe('ModelHandlerAnthropic usage and server-side compaction reporting', () 
         }
       },
     } as AgentTrace;
-
-    logContextManagementFromResponse(
-      {
-        content: [
-          { type: 'compaction', content: '<summary>state</summary>' },
-          { type: 'text', text: 'ok' },
+    const response = {
+      content: [
+        { type: 'compaction', content: '<summary>older</summary>' },
+        { type: 'text', text: 'intermediate' },
+        { type: 'compaction', content: '<summary>latest</summary>' },
+        { type: 'text', text: 'ok' },
+      ],
+      usage: {
+        input_tokens: 24000,
+        output_tokens: 1200,
+        cache_read_input_tokens: 1200,
+        cache_creation_input_tokens: 400,
+        iterations: [
+          {
+            type: 'compaction',
+            input_tokens: 180000,
+            output_tokens: 3200,
+            cache_read_input_tokens: 4000,
+            cache_creation_input_tokens: 1000,
+            cache_creation: null,
+          },
+          {
+            type: 'message',
+            input_tokens: 120000,
+            output_tokens: 2000,
+            cache_read_input_tokens: 3000,
+            cache_creation_input_tokens: 500,
+            cache_creation: null,
+          },
+          {
+            type: 'compaction',
+            input_tokens: 90000,
+            output_tokens: 1600,
+            cache_read_input_tokens: 2500,
+            cache_creation_input_tokens: 500,
+            cache_creation: null,
+          },
+          {
+            type: 'message',
+            input_tokens: 23000,
+            output_tokens: 1000,
+            cache_read_input_tokens: 1000,
+            cache_creation_input_tokens: 200,
+            cache_creation: null,
+          },
         ],
-        usage: {
-          input_tokens: 24000,
-          output_tokens: 1200,
-          cache_read_input_tokens: 1200,
-          cache_creation_input_tokens: 400,
-          iterations: [
-            {
-              type: 'compaction',
-              input_tokens: 180000,
-              output_tokens: 3200,
-              cache_read_input_tokens: 4000,
-              cache_creation_input_tokens: 1000,
-              cache_creation: null,
-            },
-            {
-              type: 'message',
-              input_tokens: 23000,
-              output_tokens: 1000,
-              cache_read_input_tokens: 1000,
-              cache_creation_input_tokens: 200,
-              cache_creation: null,
-            },
-          ],
-        },
-      } as any,
-      200000,
-      logger,
-    );
+      },
+    } as any;
+    const outcome = resolveAnthropicCompactionOutcome(response);
+    assert.ok(outcome?.state === 'completed');
+
+    logContextManagementFromResponse(response, outcome, 200000, logger);
 
     assert.equal(
       events.length,
@@ -2432,9 +2520,9 @@ describe('ModelHandlerAnthropic usage and server-side compaction reporting', () 
       summary?: string;
     };
     assert.equal(eventData.action, 'compaction');
-    assert.equal(eventData.tokensBefore, 185000);
+    assert.equal(eventData.tokensBefore, 93000);
     assert.equal(eventData.tokensAfter, 25600);
-    assert.equal(eventData.summary, '<summary>state</summary>');
+    assert.equal(eventData.summary, '<summary>latest</summary>');
   });
 });
 

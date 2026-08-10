@@ -104,6 +104,24 @@ describe('compaction activity projection', () => {
     expect(incremental).toEqual(projectCompactionActivities(entries));
   });
 
+  it('keeps compaction active while the same response starts streaming text', () => {
+    const projection = createCompactionActivityProjection();
+
+    applyCompactionActivityEntries(projection, [
+      activityEntry(1, 'live', 'started'),
+      advancingEntry(2, MESSAGE_TYPES.MODEL_RESPONSE),
+    ]);
+    expect(projection.blocks[0]?.status).toBe('running');
+
+    applyCompactionActivityEntries(projection, [
+      activityEntry(3, 'live', 'completed'),
+    ]);
+    expect(projection.blocks[0]).toMatchObject({
+      status: 'completed',
+      finishedAt: 30,
+    });
+  });
+
   it('interrupts unmatched starts only after meaningful later activity', () => {
     const projection = projectCompactionActivities([
       advancingEntry(1),
@@ -112,7 +130,9 @@ describe('compaction activity projection', () => {
     ]);
     expect(projection.blocks[0]?.status).toBe('running');
 
-    applyCompactionActivityEntries(projection, [advancingEntry(4)]);
+    applyCompactionActivityEntries(projection, [
+      advancingEntry(4, MESSAGE_TYPES.USER_MESSAGE),
+    ]);
     expect(projection.blocks[0]).toMatchObject({
       status: 'interrupted',
       finishedAt: 40,

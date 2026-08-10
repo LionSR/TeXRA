@@ -2553,6 +2553,47 @@ describe('CLI transcript state', () => {
     });
   });
 
+  it('moves compaction to Static while its response text keeps streaming', () => {
+    const logger = runTrace(root);
+    const activity = startCompactionActivity(logger);
+    const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('Visible answer');
+
+    syncStreamLog(root);
+
+    let entries = streamEntries(root);
+    expect(entries).toMatchObject([
+      {
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: false,
+        activity: { status: 'running' },
+      },
+      { role: 'assistant', text: 'Visible answer', finalized: false },
+    ]);
+
+    activity.finish('completed');
+    syncStreamLog(root);
+
+    entries = streamEntries(root);
+    expect(entries).toMatchObject([
+      {
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: true,
+        activity: { status: 'completed' },
+      },
+      { role: 'assistant', text: 'Visible answer', finalized: false },
+    ]);
+    const split = splitTranscriptEntries(entries, STREAM_PHASE.RUNNING);
+    expect(split.finalized.map((entry) => entry.id)).toEqual([
+      `compaction:${activity.operationId}`,
+    ]);
+    expect(split.pending.map((entry) => entry.role)).toEqual(['assistant']);
+
+    output.finalize();
+  });
+
   it('clears an unmatched compaction start when later live activity arrives', () => {
     const logger = runTrace(root);
 

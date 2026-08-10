@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { logHandlers } from '@progressView/frontend/slices/logSlice';
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
@@ -18,6 +19,8 @@ import {
 import {
   AgentCategory,
   createStreamState,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ProgressViewOutboundHandlerRegistry,
@@ -82,6 +85,37 @@ function seedStream(
     );
   }
   return seedState(state);
+}
+
+function startCompaction(streamId: StreamTabId): void {
+  dispatch(logHandlers, {
+    command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+    streamId,
+    entries: [
+      {
+        seqNo: 1,
+        id: 'compaction-start',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: 'info',
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+        data: {
+          activity: 'context_compaction',
+          operationId: 'operation-1',
+          state: 'started',
+        },
+      },
+    ],
+    updates: [],
+    textDeltas: [],
+  });
+}
+
+function compactionStatus(
+  state: ProgressState,
+  streamId: StreamTabId,
+): unknown {
+  return state.streamLogs.get(streamId)?.logs[0]?.data;
 }
 
 /** A metadata patch as the webview receives it, after the postMessage JSON round-trip. */
@@ -204,6 +238,52 @@ describe('stream meta frontend state', () => {
     });
     expect(getState().activeStreamId).toBe(siblingId);
     expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
+  });
+
+  it('settles abandoned compaction when restart metadata hydrates to waiting', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
+    startCompaction(streamId);
+
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      streamInfo: {
+        name: streamId,
+        label: streamId,
+        agentCategory: AgentCategory.Workflow,
+        creationTimestamp: 1,
+      },
+      streamState: {
+        category: AgentCategory.Workflow,
+        status: STREAM_PHASE.WAITING,
+        lastTimestamp: 250,
+        conversationProgress: { toolCallCount: 0 },
+        subagents: [],
+      },
+    });
+
+    expect(compactionStatus(getState(), streamId)).toMatchObject({
+      status: 'interrupted',
+      finishedAt: 250,
+    });
+  });
+
+  it('settles abandoned compaction on a direct waiting status update', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
+    startCompaction(streamId);
+
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.WAITING,
+      lastTimestamp: 300,
+    });
+
+    expect(compactionStatus(getState(), streamId)).toMatchObject({
+      status: 'interrupted',
+      finishedAt: 300,
+    });
   });
 
   it('updates and clears stream substate with status changes', () => {

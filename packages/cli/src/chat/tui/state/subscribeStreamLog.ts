@@ -40,7 +40,10 @@ import {
   COMPACTION_ACTIVITY_LABEL,
   projectCompactionActivities,
 } from '@shared/streams/compactionActivityProjection';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import {
+  isActivePhase,
+  isTranscriptSettlementPhase,
+} from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -66,7 +69,6 @@ import {
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
-import { isFinalTranscriptStatus } from './transcript';
 
 const MAX_ERROR_DETAIL_LENGTH = 240;
 
@@ -835,7 +837,7 @@ export function syncStreamLog(
         (!workflowOperationalOnly ||
           WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
     );
-    const streamFinal = isFinalTranscriptStatus(lifecycle.status);
+    const streamFinal = isTranscriptSettlementPhase(lifecycle.status);
     const compactionProjection = projectCompactionActivities(allEntries, {
       streamTerminal: streamFinal,
     });

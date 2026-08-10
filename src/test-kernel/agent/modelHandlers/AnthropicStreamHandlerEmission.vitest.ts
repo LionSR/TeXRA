@@ -146,8 +146,8 @@ describe('AnthropicStreamHandler compaction activity', () => {
     ]);
   });
 
-  it.each(['failed', 'cancelled'] as const)(
-    'preserves the enclosing %s outcome',
+  it.each(['failed', 'cancelled', 'skipped'] as const)(
+    'preserves the canonical %s outcome',
     (outcome) => {
       const { logger, handler, emit } = createHandlerHarness(true);
       emit({
@@ -160,29 +160,6 @@ describe('AnthropicStreamHandler compaction activity', () => {
 
       expect(logger.info.mock.calls.at(-1)?.[1]?.data).toMatchObject({
         state: outcome,
-      });
-    },
-  );
-
-  it.each(['', ' \n'])(
-    'marks successful stream content %j as skipped',
-    (content) => {
-      const { logger, handler, emit } = createHandlerHarness(true);
-      emit({
-        type: 'content_block_start',
-        index: 0,
-        content_block: { type: 'compaction', content: '' },
-      });
-      emit({
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'compaction_delta', content },
-      });
-
-      handler.finalize();
-
-      expect(logger.info.mock.calls.at(-1)?.[1]?.data).toMatchObject({
-        state: 'skipped',
       });
     },
   );

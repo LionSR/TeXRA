@@ -44,6 +44,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type {
+  CompactionActivityOutcome,
   FileLocation,
   MediaAttachmentKind,
   StreamDiagnostics,
@@ -92,8 +93,10 @@ import {
   ensureBeta,
   hasLongCacheControlMarker,
   setupContextManagement,
+  resolveAnthropicCompactionOutcome,
   logContextManagementFromResponse,
   enforceCacheControlLimit,
+  type AnthropicCompactionOutcome,
 } from './anthropicContextManagement';
 import {
   extractDocumentBlocks,
@@ -179,27 +182,6 @@ const isBetaTextBlock = (
   block: BetaContentBlock,
 ): block is Extract<BetaContentBlock, { type: 'text' }> =>
   block.type === 'text';
-
-type BetaCompactionOutcome =
-  { state: 'completed'; content: BetaContentBlock[] } | { state: 'skipped' };
-
-const betaCompactionOutcome = (
-  message: BetaMessage,
-): BetaCompactionOutcome | undefined => {
-  const lastUsableIndex = message.content.findLastIndex(
-    (block) => block.type === 'compaction' && !!block.content?.trim(),
-  );
-  if (lastUsableIndex >= 0) {
-    return {
-      state: 'completed',
-      // Anthropic ignores everything before the last compaction boundary.
-      content: message.content.slice(lastUsableIndex),
-    };
-  }
-  return message.content.some((block) => block.type === 'compaction')
-    ? { state: 'skipped' }
-    : undefined;
-};
 
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
@@ -612,7 +594,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       },
     );
 
-    let streamOutcome: 'completed' | 'failed' | 'cancelled' = 'completed';
+    let compactionOutcome: CompactionActivityOutcome = 'skipped';
     try {
       streamHandler.attachToStream(stream);
       // A clean close before message_stop rejects finalMessage() natively
@@ -620,11 +602,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // and #getFinalMessage throws when none was recorded), so no separate
       // truncation check is needed here.
       const response = await stream.finalMessage();
+      compactionOutcome =
+        resolveAnthropicCompactionOutcome(response)?.state ?? 'skipped';
 
       this.processThinkingBlock(response);
       return response;
     } catch (streamError) {
-      streamOutcome = isUserAbort(streamError) ? 'cancelled' : 'failed';
+      compactionOutcome = isUserAbort(streamError) ? 'cancelled' : 'failed';
       return handleStreamingFailure(streamError, {
         // Anthropic finalizes unconditionally below, including on success.
         partialTail: () =>
@@ -638,7 +622,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ),
       });
     } finally {
-      streamHandler.finalize(streamOutcome);
+      streamHandler.finalize(compactionOutcome);
       signal?.removeEventListener('abort', abortStream);
     }
   }
@@ -864,16 +848,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
       : undefined;
 
     let response: BetaMessage;
+    let compactionOutcome: AnthropicCompactionOutcome | undefined;
     try {
       response = useStreaming
         ? await this.executeStreamingResponse(client, options, signal)
         : await client.beta.messages.create(options, { signal });
+      compactionOutcome = resolveAnthropicCompactionOutcome(response);
       if (!useStreaming) {
-        const outcome = betaCompactionOutcome(response);
-        if (outcome) {
+        if (compactionOutcome) {
           const activity =
             compactionActivity ?? startCompactionActivity(this.logger);
-          activity.finish(outcome.state);
+          activity.finish(compactionOutcome.state);
         } else {
           compactionActivity?.finish('skipped');
         }
@@ -887,12 +872,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.clearCompactionRequest(pendingCompactionRequestId);
     }
 
-    // Log server-side compaction events when present in response content.
-    logContextManagementFromResponse(
-      response,
-      effectiveContextWindow,
-      this.logger,
-    );
+    if (compactionOutcome?.state === 'completed') {
+      logContextManagementFromResponse(
+        response,
+        compactionOutcome,
+        effectiveContextWindow,
+        this.logger,
+      );
+    }
 
     return { response };
   }
@@ -1182,7 +1169,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     responseObject: BetaMessage,
     text: string,
   ): MessageParam {
-    const outcome = betaCompactionOutcome(responseObject);
+    const outcome = resolveAnthropicCompactionOutcome(responseObject);
     if (outcome?.state !== 'completed') {
       return this.createAssistantMessage(text);
     }
@@ -1205,7 +1192,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): void {
     if (
       responseObject &&
-      betaCompactionOutcome(responseObject)?.state === 'completed'
+      resolveAnthropicCompactionOutcome(responseObject)?.state === 'completed'
     ) {
       messages.length = 0;
       messages.push(

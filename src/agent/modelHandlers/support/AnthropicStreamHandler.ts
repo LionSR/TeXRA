@@ -15,7 +15,10 @@ import {
   type WebFetchResult,
 } from '@agent/types/ServerToolTypes';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import type { StreamDiagnostics } from '@shared/schemas';
+import type {
+  CompactionActivityOutcome,
+  StreamDiagnostics,
+} from '@shared/schemas';
 import { emitServerToolResult } from './serverToolResultEmission';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 // BetaMessageStream is only exported from lib/ — not re-exported from the SDK's
@@ -107,7 +110,6 @@ interface StreamFactories {
  */
 export class AnthropicStreamHandler {
   private compactionActivity: CompactionActivityOperation | undefined;
-  private usableCompactionContent = false;
   private readonly thinkingStreams = new Map<
     number,
     ReturnType<AgentTrace['openStream']>
@@ -175,10 +177,10 @@ export class AnthropicStreamHandler {
 
   /**
    * Finalizes all remaining streams and clears state.
-   * Call this after stream.finalMessage() completes.
+   * Call this with the canonical final-response compaction outcome.
    * Sets finalized flag to prevent processing any subsequent events.
    */
-  finalize(outcome: 'completed' | 'failed' | 'cancelled' = 'completed'): void {
+  finalize(compactionOutcome: CompactionActivityOutcome): void {
     if (this.state.finalized) return;
     // Set flag first to prevent processing any events that arrive during cleanup
     this.state.finalized = true;
@@ -189,11 +191,7 @@ export class AnthropicStreamHandler {
     }
     this.thinkingStreams.clear();
 
-    this.compactionActivity?.finish(
-      outcome === 'completed' && !this.usableCompactionContent
-        ? 'skipped'
-        : outcome,
-    );
+    this.compactionActivity?.finish(compactionOutcome);
 
     // Finalize output stream
     this.state.outputStream?.finalize();
@@ -318,9 +316,9 @@ export class AnthropicStreamHandler {
         this.accumulateServerToolInput(event.index, event.delta.partial_json);
         break;
       case 'compaction_delta': {
-        // Compaction content arrives as a single summary delta and is not user-visible output.
+        // Compaction content is not user-visible output. The final response is
+        // the authority for whether the summary is usable.
         const contentLength = event.delta.content?.trim().length ?? 0;
-        this.usableCompactionContent ||= contentLength > 0;
         this.logger.debug(
           `Compaction summary delta received (${contentLength} chars)`,
         );
