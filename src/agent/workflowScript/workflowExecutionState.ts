@@ -4,11 +4,10 @@ import {
   WORKFLOW_EXECUTION_LIFECYCLE,
   type ExecutionId,
   type StreamTabId,
+  type WorkflowCallIdentity,
   type WorkflowExecutionCall,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
-
-import type { WorkflowScriptTask } from './types';
 
 interface WorkflowCallDefinition {
   readonly id: string;
@@ -28,7 +27,7 @@ export class WorkflowExecutionState {
 
   constructor(options: {
     readonly phases: readonly { readonly title: string }[];
-    readonly tasks: readonly WorkflowScriptTask[];
+    readonly tasks: readonly WorkflowCallIdentity[];
     readonly initialSnapshot?: WorkflowExecutionSnapshot;
     readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
   }) {
@@ -88,7 +87,7 @@ export class WorkflowExecutionState {
     return structuredClone(this.#snapshot);
   }
 
-  enterStage(title: string): number {
+  enterStage(title: string): void {
     if (this.#sealed) throw new Error('Workflow execution state is sealed.');
     let nextIndex = this.#snapshot.stages.findIndex(
       (stage) => stage.title === title,
@@ -111,7 +110,7 @@ export class WorkflowExecutionState {
         `Workflow stages must advance monotonically; cannot enter "${title}" after ${this.currentPhase ?? 'the same stage'}.`,
       );
     }
-    if (nextIndex === currentStageIndex) return nextIndex;
+    if (nextIndex === currentStageIndex) return;
 
     const transitionAt = now();
     const prior = this.#snapshot.stages[currentStageIndex];
@@ -142,7 +141,6 @@ export class WorkflowExecutionState {
       }
     }
     this.#emit();
-    return nextIndex;
   }
 
   issueCall(definition: WorkflowCallDefinition): void {
@@ -204,18 +202,15 @@ export class WorkflowExecutionState {
     this.#emit();
   }
 
-  call(id: string): WorkflowExecutionCall {
+  #call(id: string): WorkflowExecutionCall {
     const call = this.#snapshot.calls.find((candidate) => candidate.id === id);
     if (!call) throw new Error(`Workflow snapshot call ${id} is missing.`);
     return call;
   }
 
-  updateCall(
-    id: string,
-    patch: Partial<WorkflowExecutionCall>,
-  ): WorkflowExecutionCall {
-    const call = this.call(id);
-    if (this.#sealed) return call;
+  updateCall(id: string, patch: Partial<WorkflowExecutionCall>): void {
+    const call = this.#call(id);
+    if (this.#sealed) return;
     Object.assign(call, patch);
     call.timestamps.updatedAt = now();
     if (
@@ -227,11 +222,27 @@ export class WorkflowExecutionState {
     }
     this.#refreshExitedStage(call.stageId);
     this.#emit();
-    return call;
+  }
+
+  /**
+   * Terminalize one call: the caller owns the status (and error); the
+   * completion stamp is this owner's, so no caller re-reads and re-writes the
+   * timestamps it does not own.
+   */
+  settleCall(
+    id: string,
+    patch: Pick<WorkflowExecutionCall, 'status'> &
+      Partial<Pick<WorkflowExecutionCall, 'error'>>,
+  ): void {
+    const call = this.#call(id);
+    this.updateCall(id, {
+      ...patch,
+      timestamps: { ...call.timestamps, completedAt: now() },
+    });
   }
 
   queueCall(id: string): void {
-    const call = this.call(id);
+    const call = this.#call(id);
     const queuedAt = now();
     // Interactive retry re-queues a still-live call: keep the logical start so
     // duration covers every physical attempt. A terminal call re-queued after
@@ -257,7 +268,7 @@ export class WorkflowExecutionState {
 
   beginAttempt(id: string): void {
     if (this.#sealed) return;
-    const call = this.call(id);
+    const call = this.#call(id);
     const startedAt = now();
     call.attempts.push({ number: call.attempts.length + 1, startedAt });
     call.status = WORKFLOW_CALL_STATUS.STARTING;
@@ -269,7 +280,7 @@ export class WorkflowExecutionState {
 
   reportChildExecution(id: string, executionId: ExecutionId): void {
     if (this.#sealed) return;
-    const call = this.call(id);
+    const call = this.#call(id);
     call.childExecutionId = executionId;
     const attempt = call.attempts.at(-1);
     if (attempt) attempt.id = executionId;
@@ -279,7 +290,7 @@ export class WorkflowExecutionState {
 
   reportChildStream(id: string, streamId: StreamTabId): void {
     if (this.#sealed) return;
-    const call = this.call(id);
+    const call = this.#call(id);
     call.childStreamId = streamId;
     const attempt = call.attempts.at(-1);
     if (attempt) attempt.childStreamId = streamId;
@@ -289,7 +300,7 @@ export class WorkflowExecutionState {
 
   reportModel(id: string, model: string): void {
     if (this.#sealed) return;
-    const call = this.call(id);
+    const call = this.#call(id);
     call.model = model;
     const attempt = call.attempts.at(-1);
     if (attempt) attempt.model = model;
@@ -299,7 +310,7 @@ export class WorkflowExecutionState {
 
   reportCostUsd(id: string, costUsd: number): void {
     if (this.#sealed) return;
-    const call = this.call(id);
+    const call = this.#call(id);
     const attempt = call.attempts.at(-1);
     if (attempt) attempt.costUsd = costUsd;
     call.costUsd = totalAttemptCost(call.attempts);
@@ -309,7 +320,7 @@ export class WorkflowExecutionState {
 
   settleAttempt(id: string): boolean {
     if (this.#sealed) return false;
-    const call = this.call(id);
+    const call = this.#call(id);
     const attempt = call.attempts.at(-1);
     if (attempt && attempt.completedAt === undefined) {
       attempt.completedAt = now();

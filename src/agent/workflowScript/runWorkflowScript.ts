@@ -8,6 +8,7 @@ import {
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   type StreamTabId,
+  type WorkflowCallIdentity,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import {
@@ -32,7 +33,6 @@ import {
   type WorkflowScriptProgressId,
   type WorkflowScriptRunOptions,
   type WorkflowScriptRunResult,
-  type WorkflowScriptTask,
 } from './types';
 
 /**
@@ -86,10 +86,6 @@ const WORKFLOW_AGENT_OPTION_FIELDS = new Set<string>([
   ...FILE_AGENT_OPTION_FIELDS,
 ]);
 
-type WorkflowScriptFailedEvent = Extract<
-  WorkflowScriptEvent,
-  { type: 'agent:end'; outcome: 'failed' }
->;
 /** Progress-only attempt facts shared by every settled `agent:end` outcome. */
 type WorkflowScriptAttemptMetadata = Pick<
   Extract<WorkflowScriptEvent, { type: 'agent:end'; outcome: 'completed' }>,
@@ -297,10 +293,6 @@ class CoalescedSnapshotWriter {
   }
 }
 
-function now(): string {
-  return new Date().toISOString();
-}
-
 /**
  * Runs a workflow script: deterministic JS orchestration over host-executed
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
@@ -339,6 +331,16 @@ export async function runWorkflowScript(
     runAbort.abort(fault);
     return firstFatalFault ?? fault;
   };
+  // Every guest-contract violation (bad agent() options, an undeclared or
+  // out-of-order phase, a duplicate call id) stops the run with one fault
+  // shape; the caller throws the returned fault.
+  const contractFault = (error: unknown): WorkflowRunAbortError =>
+    failRun(
+      new WorkflowRunAbortError(toErrorMessage(error), {
+        kind: 'contract',
+        cause: error,
+      }),
+    );
   // One record per in-flight call, keyed by call index and linked to runAbort
   // (a run abort cascades to every entry; a per-call abort leaves the others
   // running). skip()/retry() target a single entry; the entry is removed as
@@ -447,17 +449,12 @@ export async function runWorkflowScript(
     try {
       callOptions = normalizeAgentOptions(rawOptions);
     } catch (error) {
-      throw failRun(
-        new WorkflowRunAbortError(toErrorMessage(error), {
-          kind: 'contract',
-          cause: error,
-        }),
-      );
+      throw contractFault(error);
     }
     const index = callCounter;
     callCounter += 1;
 
-    let plannedTask: WorkflowScriptTask | undefined;
+    let plannedTask: WorkflowCallIdentity | undefined;
     if (hasTaskPlan) {
       if (!callOptions.id) {
         throw failRun(
@@ -558,12 +555,7 @@ export async function runWorkflowScript(
       try {
         executionState.enterStage(callOptions.phase);
       } catch (error) {
-        throw failRun(
-          new WorkflowRunAbortError(toErrorMessage(error), {
-            kind: 'contract',
-            cause: error,
-          }),
-        );
+        throw contractFault(error);
       }
     }
     try {
@@ -581,12 +573,7 @@ export async function runWorkflowScript(
         },
       });
     } catch (error) {
-      throw failRun(
-        new WorkflowRunAbortError(toErrorMessage(error), {
-          kind: 'contract',
-          cause: error,
-        }),
-      );
+      throw contractFault(error);
     }
     if (issuedCallKeys.has(key)) {
       throw failRun(
@@ -626,14 +613,13 @@ export async function runWorkflowScript(
       error: unknown,
       metadata: Partial<WorkflowScriptAttemptMetadata> = {},
     ): void => {
-      const event: WorkflowScriptFailedEvent = {
+      emit({
         type: 'agent:end',
         ...eventBase,
         outcome: 'failed',
         error: toErrorMessage(error),
         ...metadata,
-      };
-      emit(event);
+      });
     };
 
     // Serialize (and round-trip deserialize) a result value for the journal,
@@ -674,18 +660,9 @@ export async function runWorkflowScript(
         prior.result,
         'Cached agent() result',
       );
-      journal.set(index, {
-        ...prior,
-        key,
-        result: normalizedResult,
-      });
-      executionState.updateCall(progressId, {
+      journal.set(index, { index, key, result: normalizedResult });
+      executionState.settleCall(progressId, {
         status: WORKFLOW_CALL_STATUS.CACHED,
-        timestamps: {
-          ...executionState.call(progressId).timestamps,
-          updatedAt: now(),
-          completedAt: now(),
-        },
       });
       emit({ type: 'agent:end', ...eventBase, outcome: 'cached' });
       return payload;
@@ -819,13 +796,8 @@ export async function runWorkflowScript(
         continue;
       }
       if (action === 'skip') {
-        executionState.updateCall(progressId, {
+        executionState.settleCall(progressId, {
           status: WORKFLOW_CALL_STATUS.SKIPPED,
-          timestamps: {
-            ...executionState.call(progressId).timestamps,
-            updatedAt: now(),
-            completedAt: now(),
-          },
         });
         emit({
           type: 'agent:end',
@@ -863,16 +835,11 @@ export async function runWorkflowScript(
         }
         // A failed agent resolves to null and is deliberately NOT journaled, so
         // a resume retries it. Callers also exclude the truthy skip sentinel.
-        executionState.updateCall(progressId, {
+        executionState.settleCall(progressId, {
           status: options.signal?.aborted
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED,
           error: toErrorMessage(attemptError.error),
-          timestamps: {
-            ...executionState.call(progressId).timestamps,
-            updatedAt: now(),
-            completedAt: now(),
-          },
         });
         emitFailedEnd(attemptError.error, attemptMetadata());
         return 'null';
@@ -892,13 +859,8 @@ export async function runWorkflowScript(
             key,
             result: normalizedResult,
           });
-          executionState.updateCall(progressId, {
+          executionState.settleCall(progressId, {
             status: WORKFLOW_CALL_STATUS.COMPLETED,
-            timestamps: {
-              ...executionState.call(progressId).timestamps,
-              updatedAt: now(),
-              completedAt: now(),
-            },
           });
           emit({
             type: 'agent:end',
@@ -951,12 +913,7 @@ export async function runWorkflowScript(
             try {
               executionState.enterStage(nextPhase);
             } catch (error) {
-              throw failRun(
-                new WorkflowRunAbortError(toErrorMessage(error), {
-                  kind: 'contract',
-                  cause: error,
-                }),
-              );
+              throw contractFault(error);
             }
             const { phaseIndex, phaseTotal } = phaseContextFor(nextPhase);
             emit({

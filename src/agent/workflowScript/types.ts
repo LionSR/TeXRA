@@ -27,8 +27,6 @@ const WorkflowScriptPhaseSchema = z.union([
   WorkflowScriptPhaseTitleSchema.transform((title) => ({ title })),
 ]);
 
-export type WorkflowScriptTask = WorkflowCallIdentity;
-
 /**
  * The `export const meta = {...}` block every workflow script must begin
  * with. Must be a pure object literal — parsed and validated before the
@@ -102,21 +100,17 @@ interface WorkflowAgentCallBaseOptions {
   model?: string;
 }
 
-interface WorkflowAgentFileOptions {
+/** A script call to a file-editing workflow agent. */
+interface WorkflowEditAgentCallOptions extends WorkflowAgentCallBaseOptions {
+  /** Named TeXRA agent to run; defaults to the host runner's choice. */
+  agentName?: string;
+  schema?: never;
   /** Workspace or run-storage files the workflow agent may rewrite. */
   inputFiles?: WorkflowScriptFiles['inputFiles'];
   /** Read-only supporting documents for the workflow agent. */
   contextFiles?: WorkflowScriptFiles['contextFiles'];
   /** Read-only visual or audio inputs for the workflow agent. */
   mediaFiles?: WorkflowScriptFiles['mediaFiles'];
-}
-
-/** A script call to a file-editing workflow agent. */
-interface WorkflowEditAgentCallOptions
-  extends WorkflowAgentCallBaseOptions, WorkflowAgentFileOptions {
-  /** Named TeXRA agent to run; defaults to the host runner's choice. */
-  agentName?: string;
-  schema?: never;
 }
 
 /** A script call to a tool-use agent that returns a structured value. */
@@ -219,7 +213,7 @@ interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
 export type WorkflowScriptEvent =
   | {
       type: 'plan';
-      tasks: readonly WorkflowScriptTask[];
+      tasks: readonly WorkflowCallIdentity[];
     }
   | {
       type: 'phase';
