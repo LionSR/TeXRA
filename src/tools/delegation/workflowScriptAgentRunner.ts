@@ -375,7 +375,9 @@ export function createWorkflowScriptAgentRunner(
               // Stamp progressive spend onto the live snapshot attempt so a
               // failed/cancelled/retried attempt still shows what it consumed
               // even when execution never reaches the success path below.
-              invocation.reportCostUsd?.(totalCostUsd);
+              if (totalCostUsd !== undefined) {
+                invocation.reportCostUsd?.(totalCostUsd);
+              }
             },
           };
         },

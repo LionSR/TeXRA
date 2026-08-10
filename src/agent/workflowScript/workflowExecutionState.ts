@@ -176,12 +176,17 @@ export class WorkflowExecutionState {
       );
     }
     const timestamp = now();
+    // Only assign agent when the call definition supplies one. Engine issue
+    // often omits agentName; reportAgent later fills the host-resolved name.
+    // Re-issuing on resume must not wipe a hydrated agent with undefined —
+    // the journal-cache path only patches status/timestamps and would leave
+    // /executions without the resolved agent after a cached replay.
     const canonical = {
       label: definition.label,
       stageId: stageIndex < 0 ? undefined : stageIdFor(stageIndex),
       stageTitle: definition.phase,
-      agent: definition.agent,
       files: definition.files,
+      ...(definition.agent !== undefined && { agent: definition.agent }),
     };
     if (!call) {
       call = {
