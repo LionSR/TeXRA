@@ -38,9 +38,6 @@ export const ELEMENT_IDS = {
   TODO_LIST: 'todoList',
   PLAN_VIEW_CONTAINER: 'planViewContainer',
   PLAN_VIEW: 'planView',
-  ACTIVE_SKILLS_CONTAINER: 'activeSkillsContainer',
-  ACTIVE_SKILLS_LIST: 'activeSkillsList',
-
   TOOLBAR_CONTAINER: 'toolbarContainer',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',

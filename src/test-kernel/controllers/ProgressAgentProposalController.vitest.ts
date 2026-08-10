@@ -11,6 +11,7 @@ import {
 } from '@controllers/progressView/ProgressAgentProposalController';
 import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
 function createWorkflowProposal(): AgentProposalPermission {
   return {
@@ -40,6 +41,9 @@ function createController(
     getPendingProposal: () => createWorkflowProposal(),
     restoreRunConfig: async () => {
       throw new Error('restore should not run');
+    },
+    openFile: async () => {
+      throw new Error('open should not run');
     },
     settleProposal: (proposalId, result) => {
       resolved.push({ proposalId, result });
@@ -86,6 +90,89 @@ describe('ProgressAgentProposalController', () => {
       editedFiles: [],
       memories: [],
     });
+  });
+
+  it('opens the saved workflow script instead of restoring a run config on setup', async () => {
+    const base = createWorkflowProposal();
+    if (base.agentCategory !== AgentCategory.Workflow) {
+      throw new Error('expected workflow proposal');
+    }
+    const proposal = {
+      ...base,
+      workingDirectory: '.texra/worktrees/review',
+      workflowScript: {
+        name: 'review-team',
+        description: 'Review in parallel',
+        scriptPath: '.texra/workflow-scripts/review-team.mjs',
+        phases: [{ title: 'Review' }],
+        tasks: [{ id: 'review', label: 'Review draft', phase: 'Review' }],
+      },
+    } satisfies AgentProposalPermission;
+    const opened: string[] = [];
+    const { controller, resolved } = createController({
+      getPendingProposal: () => proposal,
+      openFile: async (path) => {
+        opened.push(path);
+      },
+    });
+
+    assert.equal(
+      await controller.handleAction({
+        proposalId: proposal.proposalId,
+        action: 'setup',
+      }),
+      true,
+    );
+    assert.deepEqual(opened, [
+      resolveWorkspaceRelativePath(
+        proposal.workflowScript.scriptPath,
+        proposal.workingDirectory,
+      ).fsPath,
+    ]);
+    assert.deepEqual(resolved, [
+      { proposalId: 'proposal-1', result: { action: 'setup' } },
+    ]);
+  });
+
+  it('rejects setup when the saved workflow script cannot be opened', async () => {
+    const base = createWorkflowProposal();
+    if (base.agentCategory !== AgentCategory.Workflow) {
+      throw new Error('expected workflow proposal');
+    }
+    const proposal = {
+      ...base,
+      workflowScript: {
+        name: 'review-team',
+        description: 'Review in parallel',
+        scriptPath: '.texra/workflow-scripts/review-team.mjs',
+        phases: [{ title: 'Review' }],
+        tasks: [{ id: 'review', label: 'Review draft', phase: 'Review' }],
+      },
+    } satisfies AgentProposalPermission;
+    const { controller, resolved } = createController({
+      getPendingProposal: () => proposal,
+      openFile: async () => {
+        throw new Error('file is unavailable');
+      },
+    });
+
+    assert.equal(
+      await controller.handleAction({
+        proposalId: proposal.proposalId,
+        action: 'setup',
+      }),
+      false,
+    );
+    assert.deepEqual(resolved, [
+      {
+        proposalId: 'proposal-1',
+        result: {
+          action: 'reject',
+          feedback:
+            'Unable to open the workflow script for setup: file is unavailable',
+        },
+      },
+    ]);
   });
 
   it('returns false for missing setup proposals', async () => {

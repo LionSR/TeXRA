@@ -9,6 +9,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -128,11 +129,14 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const modelOptions = this.permission.modelOptions ?? [];
     const agentOptions = this.permission.agentOptions ?? [];
     const isWorkflow = data.agentCategory === AgentCategory.Workflow;
-    const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
+    const workflowScript = isWorkflow ? data.workflowScript : undefined;
+    let categoryLabel = 'Tool-Use';
+    if (isWorkflow) categoryLabel = 'Workflow';
+    if (workflowScript) categoryLabel = 'Multi-agent workflow';
     const currentModel = this.selectedModel ?? data.model;
     const currentAgent = this.selectedAgent ?? data.agent;
-    const hasModelOptions = modelOptions.length > 0;
-    const hasAgentOptions = agentOptions.length > 0;
+    const hasModelOptions = !workflowScript && modelOptions.length > 0;
+    const hasAgentOptions = !workflowScript && agentOptions.length > 0;
 
     return this.renderRequestShell({
       prefix: 'workflow-proposal',
@@ -181,9 +185,13 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                 >`
           }
         </div>
-        ${this.renderInstruction(data.instruction)}
-        ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-        ${this.renderProposalFiles(data)}
+        ${
+          workflowScript
+            ? this.renderWorkflowScriptSummary(data)
+            : html`${this.renderInstruction(data.instruction)}
+              ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+              ${this.renderProposalFiles(data)}`
+        }
       `,
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
@@ -201,6 +209,60 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   // ===========================================================================
   // Proposal-specific rendering
   // ===========================================================================
+
+  private renderWorkflowScriptSummary(
+    data: AgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    if (data.agentCategory !== AgentCategory.Workflow || !data.workflowScript) {
+      return nothing;
+    }
+    const workflow = data.workflowScript;
+    const phaseCount = workflow.phases.length;
+    const taskCount = workflow.tasks.length;
+    const activeSummary = workflow.phases[0]?.title ?? 'No declared phases';
+    const fullName = `${workflow.name}: ${workflow.description}`;
+
+    return html`
+      <div class="workflow-proposal__workflow-summary">
+        ${waIcon('list-ul', { label: 'Proposed' })}
+        <span class="workflow-proposal__workflow-name" title=${fullName}
+          >${workflow.name}</span
+        >
+        <span class="workflow-proposal__workflow-progress"
+          >${taskCount} tasks · ${phaseCount} phases</span
+        >
+        <span class="workflow-proposal__workflow-phase" title=${activeSummary}
+          >${activeSummary}</span
+        >
+      </div>
+      <div class="workflow-proposal__cost-warning">
+        ${waIcon('triangle-exclamation')} May run tasks concurrently and incur
+        high model cost. Default agent: ${data.agent} (${data.model}).
+      </div>
+      <wa-details
+        class="workflow-proposal__workflow-details"
+        summary="Workflow details"
+      >
+        ${this.renderInstruction(workflow.description)}
+        ${
+          workflow.tasks.length > 0
+            ? html`<ul class="workflow-proposal__task-list">
+                ${repeat(
+                  workflow.tasks,
+                  (task) => task.id,
+                  (task) =>
+                    html`<li>
+                      ${task.label}${task.phase ? ` · ${task.phase}` : ''}
+                    </li>`,
+                )}
+              </ul>`
+            : nothing
+        }
+        ${this.renderProposalFiles(data)}
+        ${this.renderProposalFileList('Script', [workflow.scriptPath], true)}
+      </wa-details>
+    `;
+  }
 
   private renderInstruction(instruction: string): TemplateResult {
     const markdownHtml = processMarkdownContent(instruction);

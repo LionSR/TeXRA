@@ -28,7 +28,9 @@ import {
   AgentCategory,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
+  DEFAULT_TOOL_CONFIG,
   type StreamTabId,
+  type WorkflowAgentProposal,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
@@ -58,6 +60,8 @@ import {
 } from './workflowScriptStrategy';
 import { rejectOversizedBibAttachments } from './inputFields';
 import {
+  proposalResultToToolResult,
+  requestDelegationProposal,
   requireWorkflowOrToolUseAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
@@ -380,6 +384,40 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       AgentConfigSchema.parse(runConfigPayload),
     );
 
+    const proposal: WorkflowAgentProposal = {
+      agent: defaultAgent.name,
+      agentSource: defaultAgent.source,
+      agentCategory: AgentCategory.Workflow,
+      model: runModel,
+      instruction: meta.description,
+      memories: [],
+      inputFiles: [...files.inputFiles],
+      contextFiles: [...files.contextFiles],
+      mediaFiles: [...files.mediaFiles],
+      outputFiles: [],
+      toolConfig: DEFAULT_TOOL_CONFIG,
+      ...(runScope.workingDirectory !== undefined && {
+        workingDirectory: runScope.workingDirectory,
+      }),
+      workflowScript: {
+        name: meta.name,
+        description: meta.description,
+        scriptPath,
+        phases: [...(meta.phases ?? [])],
+        tasks: [...(meta.tasks ?? [])],
+      },
+    };
+    const proposalDecision = await requestDelegationProposal(
+      proposal,
+      runScope.streamId,
+    );
+    const declined = proposalResultToToolResult(
+      proposalDecision.result,
+      defaultAgent.name,
+      proposal,
+    );
+    if (declined) return withScriptReference(declined, scriptPath);
+
     // Capture any prior workflow snapshot *before* registerExecution overwrites
     // meta.json. Deterministic meta.name reuses the same execution id, so a
     // post-register read always sees a fresh meta with no workflow field and
@@ -478,12 +516,13 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         );
         runChildStreamId = childStream.childStreamId;
 
-        // The run's own stream inherits the orchestrator's bypass so grandchild
-        // agent() calls, which link to this stream, still resolve it transitively.
+        // A proposal-bypass approval carries the same explicit child edit
+        // grant as delegate_agent/delegate_workflow. A human one-off approval
+        // inherits only the parent's ordinary per-kind bypass state.
         configureDelegatedChildApprovals(
           runChildStreamId,
           runScope.streamId,
-          'inherit',
+          proposalDecision.autoApproved ? 'auto-approved' : 'inherit',
           runScope.session,
         );
 

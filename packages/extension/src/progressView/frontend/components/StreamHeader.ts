@@ -463,6 +463,8 @@ export class StreamHeader extends LitElement {
           }
           <span
             id=${ELEMENT_IDS.STATUS_INDICATOR}
+            role="img"
+            aria-label=${statusLabel}
             class=${classMap({
               'status-indicator': true,
               ...(statusClass ? { [statusClass]: true } : {}),

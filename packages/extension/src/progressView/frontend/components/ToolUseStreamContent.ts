@@ -14,7 +14,6 @@ import { totalRunUsage } from '../stateUtils';
 import { isToolUseState, type ToolUseStreamState } from '../store';
 
 // Side-effect imports - sibling components
-import './ActiveSkillsDetails';
 import './RequestPanels';
 import './TodoList';
 import './PlanView';
@@ -61,11 +60,6 @@ export class ToolUseStreamContent extends BaseStreamContent {
         }
 
         <div class="conversation-column conversation-prelude">
-          <active-skills-details
-            .skills=${currentState.activeSkills}
-            .collapseKey=${streamInfo.name}
-          ></active-skills-details>
-
           <todo-list
             .todos=${currentState.todos}
             .collapseKey=${streamInfo.name}

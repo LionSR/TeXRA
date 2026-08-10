@@ -93,9 +93,9 @@ export const streamTabStyles = css`
     text-overflow: ellipsis;
   }
 
-  /* The label and glyph are redundant non-color cues. The glyph uses the
-     semantic foreground while the text keeps normal-text contrast; selection
-     overrides both below so row hierarchy remains stronger than lifecycle. */
+  /* Canonical states use only the glyph; defensive unknown states retain text.
+     Selection overrides both below so row hierarchy remains stronger than
+     lifecycle. */
   .tab-status {
     display: inline-flex;
     align-items: center;
