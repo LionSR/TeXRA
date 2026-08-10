@@ -326,6 +326,8 @@ export async function runPersistedWorkflowScriptWithProgress(
       case 'log':
         info(event.message, openPhaseStage(currentPhase));
         break;
+      case 'agent:queued':
+        break;
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
         callPhases.set(event.progressId, phaseTitle);

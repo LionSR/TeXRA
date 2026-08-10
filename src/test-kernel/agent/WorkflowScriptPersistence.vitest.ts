@@ -12,7 +12,11 @@ import {
   type ExecutionKVStore,
 } from '@agent/storage';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
-import type { ExecutionId } from '@shared/schemas';
+import {
+  WorkflowExecutionSnapshotSchema,
+  type ExecutionId,
+  type WorkflowExecutionSnapshot,
+} from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { delay } from '@utils/core';
 
@@ -69,7 +73,146 @@ describe('workflow-script persistence', () => {
     });
 
     expect(restarted.result).toEqual(['result:first', 'result:second']);
+    expect(restarted.snapshot.counts.cached).toBe(2);
+    await expect(
+      readWorkflowScriptCheckpoint(getExecutionStore(executionId), 'call-1'),
+    ).resolves.toMatchObject({
+      journal: [{ result: 'result:first' }, { result: 'result:second' }],
+    });
     expect(restartedRunner).not.toHaveBeenCalled();
+  });
+
+  it('persists and hydrates runtime-valid unbounded snapshot fields', async () => {
+    const store = getExecutionStore(executionId);
+    const longId = `call-${'i'.repeat(2_500)}`;
+    const longPhase = `Phase ${'p'.repeat(3_000)}`;
+    const longError = `failure-${'e'.repeat(4_000)}`;
+    const files = Array.from(
+      { length: 513 },
+      (_, index) => `/workspace/${'f'.repeat(600)}-${index}.tex`,
+    );
+    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const adversarialScript = `export const meta = {
+  name: 'unbounded-snapshot',
+  description: 'persists runtime-valid snapshot fields',
+}
+phase(${JSON.stringify(longPhase)})
+return await agent('fail after snapshotting', {
+  id: ${JSON.stringify(longId)},
+  label: '   ',
+  inputFiles: ${JSON.stringify(files)},
+})`;
+
+    const result = await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'unbounded-snapshot',
+      script: adversarialScript,
+      fingerprintAgentDependencies: async () => 'fingerprint',
+      runAgent: async () => {
+        throw new Error(longError);
+      },
+      onSnapshot: async (snapshot) => {
+        snapshots.push(snapshot);
+      },
+    });
+
+    expect(result.snapshot.calls[0]).toMatchObject({
+      id: longId,
+      label: '',
+      error: longError,
+    });
+    expect(result.snapshot.stages[0]?.title).toBe(longPhase);
+    expect(result.snapshot.calls[0]?.files.input).toHaveLength(513);
+    expect(result.snapshot.calls[0]?.files.input[0]?.length).toBeGreaterThan(
+      512,
+    );
+    expect(() =>
+      WorkflowExecutionSnapshotSchema.parse(result.snapshot),
+    ).not.toThrow();
+    expect(snapshots.at(-1)).toEqual(result.snapshot);
+
+    const hydrated = await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'unbounded-snapshot',
+      initialSnapshot: result.snapshot,
+      fingerprintAgentDependencies: async () => 'fingerprint',
+      runAgent: async () => {
+        throw new Error(longError);
+      },
+    });
+    expect(hydrated.snapshot.calls[0]).toMatchObject({
+      id: longId,
+      label: '',
+      error: longError,
+    });
+    expect(hydrated.snapshot.stages[0]?.title).toBe(longPhase);
+    expect(hydrated.snapshot.calls[0]?.files.input).toHaveLength(513);
+    expect(() =>
+      WorkflowExecutionSnapshotSchema.parse(hydrated.snapshot),
+    ).not.toThrow();
+  });
+
+  it('seals snapshots and checkpoints after a late child exceeds drain grace', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const store = getExecutionStore(executionId);
+      const snapshots: WorkflowExecutionSnapshot[] = [];
+      let resolveChild!: (value: string) => void;
+      let markStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      const child = new Promise<string>((resolve) => {
+        resolveChild = resolve;
+      });
+      const run = runPersistedWorkflowScript({
+        store,
+        checkpointId: 'late-sealed-child',
+        script: `export const meta = {
+  name: 'late-sealed-child',
+  description: 'late sealed child',
+}
+agent('ignores cancellation')
+return 'guest success'`,
+        runAgent: async () => {
+          markStarted();
+          return child;
+        },
+        onSnapshot: async (snapshot) => {
+          snapshots.push(snapshot);
+        },
+      });
+
+      await started;
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result = await run;
+      const terminalWriteCount = snapshots.length;
+      const terminalSnapshot = snapshots.at(-1);
+      expect(terminalSnapshot).toEqual(result.snapshot);
+      expect(terminalSnapshot?.calls[0]?.attempts[0]?.completedAt).toEqual(
+        expect.any(String),
+      );
+      expect(() =>
+        WorkflowExecutionSnapshotSchema.parse(result.snapshot),
+      ).not.toThrow();
+      await expect(
+        readWorkflowScriptCheckpoint(store, 'late-sealed-child'),
+      ).resolves.toMatchObject({ journal: [] });
+
+      resolveChild('late result');
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(snapshots).toHaveLength(terminalWriteCount);
+      expect(snapshots.at(-1)).toEqual(result.snapshot);
+      expect(result.journal).toEqual([]);
+      await expect(
+        readWorkflowScriptCheckpoint(store, 'late-sealed-child'),
+      ).resolves.toMatchObject({ journal: [] });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps checkpoints isolated by tool call id', async () => {

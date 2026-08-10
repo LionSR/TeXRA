@@ -164,6 +164,7 @@ function invocation(
 ): WorkflowAgentInvocation {
   return {
     index: 0,
+    progressId: 'call-0',
     key: '0123456789abcdef',
     prompt: 'Draft the section.',
     options,
@@ -294,8 +295,12 @@ describe('createWorkflowScriptAgentRunner', () => {
       inputFiles: ['paper.tex'],
       contextFiles: ['notes.tex'],
       mediaFiles: ['figure.pdf'],
+      label: 'Draft paper',
     });
     call.reportModel = vi.fn();
+    call.reportAgent = vi.fn();
+    call.reportChildExecution = vi.fn();
+    call.reportCostUsd = vi.fn();
     call.reportChildStream = vi.fn();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
@@ -363,6 +368,11 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
     );
     expect(call.reportModel).toHaveBeenCalledWith('child-model');
+    expect(call.reportAgent).toHaveBeenCalledWith('correct');
+    expect(call.reportChildExecution).toHaveBeenCalledWith(
+      expect.stringMatching(/^[a-f0-9]{24}$/),
+    );
+    expect(call.reportCostUsd).toHaveBeenCalledWith(result.cost);
     expect(call.reportChildStream).toHaveBeenCalledWith(
       expect.stringMatching(/^correct@child-model#[a-f0-9]{24}$/),
     );

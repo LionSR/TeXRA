@@ -8,8 +8,13 @@ import { strict as assert } from 'node:assert';
 import { afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
-import { registerExecution } from '@agent/storage';
+import {
+  getExecutionStore,
+  registerExecution,
+  writeWorkflowExecutionSnapshot,
+} from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
@@ -137,7 +142,10 @@ async function registerProcessExecution(
       agentCategory: AgentCategory.ToolUse,
     }),
     'bash',
-    { streamId, identity: { kind: 'process', tool: 'bash' } },
+    {
+      streamId,
+      identity: { kind: 'process', tool: 'bash' },
+    },
   );
   return { executionId, streamId };
 }
@@ -396,6 +404,123 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(
       (result.output ?? '').includes(`/executions/${executionId}/conversation`),
     );
+  });
+
+  it('exposes the canonical workflow aggregate without full instructions', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      { name: 'observable', instruction: 'Workflow script observable' },
+      'observable',
+      {
+        streamId: `workflow-script#${executionId}` as StreamTabId,
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'observable',
+        },
+      },
+    );
+    const timestamp = new Date().toISOString();
+    const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
+    const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
+    const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
+    const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
+    const longFiles = Array.from(
+      { length: 513 },
+      (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
+    );
+    await captureOwnedExecutionLease(executionId)(() =>
+      writeWorkflowExecutionSnapshot(executionId, {
+        lifecycle: 'active',
+        currentStageId: longStageId,
+        stages: [
+          {
+            id: longStageId,
+            title: longTitle,
+            order: 0,
+            lifecycle: 'active',
+            startedAt: timestamp,
+          },
+        ],
+        calls: [
+          {
+            id: longCallId,
+            label: '   ',
+            stageId: longStageId,
+            stageTitle: longTitle,
+            agent: 'writer',
+            model: 'model-a',
+            files: { input: longFiles, context: [], media: [] },
+            childExecutionId: 'abcdef123456',
+            childStreamId: 'writer#abcdef123456',
+            attempts: [
+              {
+                number: 1,
+                id: '111111111111',
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+              {
+                number: 2,
+                id: '222222222222',
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+              {
+                number: 3,
+                id: 'abcdef123456',
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+            ],
+            status: 'failed',
+            error: longError,
+            timestamps: {
+              createdAt: timestamp,
+              queuedAt: timestamp,
+              startedAt: timestamp,
+              updatedAt: timestamp,
+              completedAt: timestamp,
+            },
+          },
+        ],
+        counts: {
+          total: 1,
+          waiting: 0,
+          planned: 0,
+          stageBlocked: 0,
+          queued: 0,
+          starting: 0,
+          running: 0,
+          completed: 0,
+          failed: 1,
+          cancelled: 0,
+          skipped: 0,
+          cached: 0,
+        },
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
+      }),
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${executionId}`,
+    });
+    const output = result.output ?? '';
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"currentStage"'));
+    assert.ok(output.includes('"calls"'));
+    assert.ok(output.includes('"stageBlocked": 0'));
+    assert.ok(output.includes('"childExecutionId": "abcdef123456"'));
+    assert.ok(output.includes('"number": 3'));
+    assert.ok(!output.includes('"number": 1'));
+    assert.ok(!output.includes('private full instruction'));
+    assert.ok(!output.includes('stage-tail'));
+    assert.ok(!output.includes('call-tail'));
+    assert.ok(!output.includes('title-tail'));
+    assert.ok(!output.includes('error-tail'));
+    assert.ok(!output.includes('file-tail'));
+    assert.ok(output.length < 20_000);
+    assert.ok((await getExecutionStore(executionId).readMeta())?.workflow);
   });
 
   it('errors on an unknown execution id', async () => {

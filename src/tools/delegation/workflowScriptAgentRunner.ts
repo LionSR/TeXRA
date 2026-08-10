@@ -229,6 +229,7 @@ export function createWorkflowScriptAgentRunner(
         signal: invocation.signal,
         onActiveExecutionId: (executionId) => {
           activeExecutionId = executionId;
+          invocation.reportChildExecution?.(executionId);
           hooks?.onChildActive?.(executionId, invocation, true);
         },
         prepare: async () => {
@@ -340,6 +341,7 @@ export function createWorkflowScriptAgentRunner(
           // Surface the resolved child model so the engine can attach it to
           // this call's `agent:end` progress event.
           invocation.reportModel?.(configPayload.model);
+          invocation.reportAgent?.(agentName);
           return {
             configPayload,
             agentName,
@@ -399,6 +401,7 @@ export function createWorkflowScriptAgentRunner(
           'Workflow subagent completed without producing any output files.',
         );
       }
+      invocation.reportCostUsd?.(result.cost);
       return result;
     } catch (error) {
       if (error instanceof SubagentDurabilityError) {
