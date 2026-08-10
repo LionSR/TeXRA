@@ -136,7 +136,7 @@ function renderConversationPaneEntry({
  * degraded run does not read as a clean one. Separators are added by the
  * renderer, never stored here, so the data stays a clean logical list.
  */
-export interface WorkflowStatusSegment {
+interface WorkflowStatusSegment {
   readonly text: string;
   readonly tone: 'muted' | 'warning';
 }
