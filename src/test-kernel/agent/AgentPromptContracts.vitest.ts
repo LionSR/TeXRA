@@ -159,6 +159,29 @@ describe('review agent prompt', () => {
   });
 });
 
+describe('code reviewer prompts', () => {
+  const codeReviewer = loadAgentYaml<ToolUseAgentYaml>(
+    'packages/extension/resources/tool_use_agents/codeReviewer.yaml',
+  );
+  const changeReviewer = loadAgentYaml<ToolUseAgentYaml>(
+    'packages/extension/resources/tool_use_agents/changeReviewer.yaml',
+  );
+
+  it('uses the concise review finding format', () => {
+    expect(codeReviewer.prompts.systemPrompt).toContain(
+      '`file:line: problem. Suggested fix: ...`',
+    );
+  });
+
+  it.each([codeReviewer, changeReviewer])(
+    'keeps $name authored copy free of em dashes',
+    (agent) => {
+      const authoredCopy = `${agent.description}\n${agent.prompts.systemPrompt}`;
+      expect(authoredCopy).not.toContain('\u2014');
+    },
+  );
+});
+
 describe('setup agent credential guidance', () => {
   const agent = loadAgentYaml<ToolUseAgentYaml>(
     'packages/extension/resources/tool_use_agents/setup.yaml',
