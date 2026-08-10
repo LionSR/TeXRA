@@ -21,6 +21,7 @@ import {
   RUN_OUTCOME,
   type ExecutionId,
   type RunOutcome,
+  type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -48,6 +49,34 @@ function expectParseWarning(
     expect.stringContaining(`Failed to parse execution ${id} ${fileName}`),
     { data: expect.any(Error) },
   );
+}
+
+function validWorkflowSnapshot(): WorkflowExecutionSnapshot {
+  const timestamp = '2026-07-04T00:00:00.000Z';
+  return {
+    lifecycle: 'completed',
+    stages: [],
+    calls: [],
+    counts: {
+      total: 0,
+      waiting: 0,
+      planned: 0,
+      stageBlocked: 0,
+      queued: 0,
+      starting: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      skipped: 0,
+      cached: 0,
+    },
+    timestamps: {
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      completedAt: timestamp,
+    },
+  };
 }
 
 /** The shared subagent result-meta envelope the projection tests permute. */
@@ -224,6 +253,60 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(clearTerminalExecutionState(id)).resolves.toBeUndefined();
 
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
+  });
+
+  it('drops only malformed workflow observability from ordinary metadata reads', async () => {
+    const id = 'bad-workflow-meta' as ExecutionId;
+    const warnSpy = mockWarn();
+    const store = getExecutionStore(id);
+    await store.write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      outcome: RUN_OUTCOME.CANCELLED,
+      identity: { kind: 'process', tool: 'bash' },
+      description: 'Readable core metadata',
+      workflow: { lifecycle: 'active' },
+    });
+
+    const expectedCore = {
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      timestamp: '2026-07-04T00:00:00.000Z',
+      outcome: RUN_OUTCOME.CANCELLED,
+      identity: { kind: 'process', tool: 'bash' },
+      description: 'Readable core metadata',
+    };
+    // Ordinary reads keep core metadata available for listing/finalization.
+    await expect(store.readMeta()).resolves.toEqual(expectedCore);
+    // Strict recovery must fail closed so a present corrupt snapshot is never
+    // treated as "no prior workflow state."
+    await expect(store.readMetaStrict()).rejects.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} meta.json workflow`,
+      ),
+      { data: expect.any(Error) },
+    );
+  });
+
+  it('round-trips valid workflow metadata and rejects malformed writes', async () => {
+    const id = 'strict-workflow-meta' as ExecutionId;
+    const store = getExecutionStore(id);
+    const workflow = validWorkflowSnapshot();
+
+    await store.writeMeta({
+      timestamp: '2026-07-04T00:00:00.000Z',
+      workflow,
+    });
+    await expect(store.readMeta()).resolves.toMatchObject({ workflow });
+
+    const malformed = structuredClone(workflow);
+    malformed.currentStageId = '';
+    await expect(
+      store.writeMeta({
+        timestamp: '2026-07-04T00:00:00.000Z',
+        workflow: malformed,
+      }),
+    ).rejects.toThrow();
   });
 
   it('warns when execution meta is malformed instead of silently dropping it', async () => {

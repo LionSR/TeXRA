@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - storage
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import { WorkflowExecutionSnapshotSchema } from '@shared/schemas';
 import {
   WorkflowScriptFilesSchema,
   type WorkflowScriptFiles,
@@ -252,25 +253,26 @@ async function runPersistedWorkflowScriptLocked(
   const journalByIndex = new Map(
     (prior?.journal ?? []).map((entry) => [entry.index, entry]),
   );
-  const persistJournal = (journal: WorkflowJournalEntry[]): Promise<void> =>
+  const persistCheckpoint = (): Promise<void> =>
     writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args,
       files,
-      journal,
+      journal: orderedJournal(journalByIndex.values()),
     });
-  await persistJournal(orderedJournal(journalByIndex.values()));
 
   let acceptingEntries = true;
   const writeQueue = new PQueue({ concurrency: 1 });
   const persistEntry = async (entry: WorkflowJournalEntry): Promise<void> => {
     if (!acceptingEntries) return;
     journalByIndex.set(entry.index, entry);
-    const snapshot = orderedJournal(journalByIndex.values());
-    await writeQueue.add(() => persistJournal(snapshot));
+    await writeQueue.add(persistCheckpoint);
   };
 
   try {
+    // Establish the checkpoint once before execution. Snapshot transitions are
+    // persisted separately and never rewrite script or journal metadata.
+    await persistCheckpoint();
     const result = await runWorkflowScript({
       ...runOptions,
       script,
@@ -278,10 +280,18 @@ async function runPersistedWorkflowScriptLocked(
       files,
       journal: prior?.journal,
       onJournalEntry: persistEntry,
+      // The caller supplies snapshots from the detached execution that owns
+      // their writes. The checkpoint store may belong to its orchestrator.
+      onSnapshot: async (snapshot) => {
+        await runOptions.onSnapshot?.(
+          WorkflowExecutionSnapshotSchema.parse(snapshot),
+        );
+      },
     });
     acceptingEntries = false;
+    for (const entry of result.journal) journalByIndex.set(entry.index, entry);
     await writeQueue.onIdle();
-    await persistJournal(result.journal);
+    await persistCheckpoint();
     return result;
   } catch (error) {
     acceptingEntries = false;

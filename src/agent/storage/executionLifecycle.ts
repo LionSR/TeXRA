@@ -20,6 +20,7 @@ import {
   type RunOutcome,
   type StreamTabId,
   type UserFollowUpSupport,
+  type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { KeyedMutex } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
@@ -77,6 +78,14 @@ function enqueueMetaUpdate(
     }
     await store.writeMeta({ ...existing, ...updater(existing) });
   });
+}
+
+/** Persist the workflow runner's canonical execution snapshot on its run. */
+export function writeWorkflowExecutionSnapshot(
+  executionId: ExecutionId,
+  workflow: WorkflowExecutionSnapshot,
+): Promise<void> {
+  return enqueueMetaUpdate(executionId, () => ({ workflow }));
 }
 
 /**
