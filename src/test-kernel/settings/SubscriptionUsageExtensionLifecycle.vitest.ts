@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ safeExecuteCommand: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getMainWebview: vi.fn(async () => undefined),
+  safeExecuteCommand: vi.fn(),
+}));
 vi.mock('@frontend/system/commandUtils', () => ({
+  getMainWebview: mocks.getMainWebview,
   safeExecuteCommand: mocks.safeExecuteCommand,
 }));
 
@@ -16,11 +20,11 @@ interface Harness {
     key: string;
     value: boolean;
   }): Promise<void>;
-  refreshAfterKeyChange(provider: string): Promise<void>;
+  refreshAfterProviderKeyChange(provider: string): Promise<void>;
   refreshAfterSubscriptionAuthChange(provider?: 'chatgpt'): Promise<void>;
 }
 
-function createHarness() {
+function createHarness(activeView = true) {
   const posted: unknown[] = [];
   const usage = {
     invalidate: vi.fn(),
@@ -53,6 +57,7 @@ function createHarness() {
     handler,
     'withActiveWebview',
     async (callback: (webview: vscode.Webview) => Promise<void>) => {
+      if (!activeView) return;
       await callback({
         postMessage: async (message: unknown) => {
           posted.push(message);
@@ -68,7 +73,7 @@ describe('extension subscription usage credential lifecycle', () => {
   it('invalidates only coding-plan providers and replaces visible usage after key changes', async () => {
     const { handler, posted, usage } = createHarness();
 
-    await handler.refreshAfterKeyChange('glm');
+    await handler.refreshAfterProviderKeyChange('glm');
 
     expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
     expect(usage.getUsage).toHaveBeenCalledTimes(4);
@@ -80,9 +85,23 @@ describe('extension subscription usage credential lifecycle', () => {
 
     usage.invalidate.mockClear();
     usage.getUsage.mockClear();
-    await handler.refreshAfterKeyChange('openai');
+    await handler.refreshAfterProviderKeyChange('openai');
     expect(usage.invalidate).not.toHaveBeenCalled();
     expect(usage.getUsage).not.toHaveBeenCalled();
+  });
+
+  it('invalidates coding-plan usage when no Settings view is active', async () => {
+    const { handler, posted, usage } = createHarness(false);
+
+    await handler.refreshAfterProviderKeyChange('kimiCode');
+    await handler.refreshAfterProviderKeyChange('glm');
+
+    expect(usage.invalidate.mock.calls).toStrictEqual([
+      ['kimiCode'],
+      ['glmCodingPlan'],
+    ]);
+    expect(usage.getUsage).not.toHaveBeenCalled();
+    expect(posted).toStrictEqual([]);
   });
 
   it('replaces GLM usage after the region changes', async () => {

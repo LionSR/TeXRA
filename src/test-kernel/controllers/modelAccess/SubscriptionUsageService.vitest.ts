@@ -581,6 +581,76 @@ describe('SubscriptionUsageService', () => {
     },
   );
 
+  it('keeps a newer GLM success when an older region resolver fails later', async () => {
+    let rejectOlder!: (error: Error) => void;
+    const olderRegion = new Promise<boolean>((_resolve, reject) => {
+      rejectOlder = reject;
+    });
+    let regionCall = 0;
+    const http = vi.fn<SubscriptionUsageHttp>(async () =>
+      jsonResponse({
+        success: true,
+        data: {
+          limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
+        },
+      }),
+    );
+    const service = serviceWith(
+      http,
+      credentials({
+        useGlmChina: () => (regionCall++ === 0 ? olderRegion : false),
+      }),
+    );
+
+    const olderRequest = service.getUsage('glmCodingPlan');
+    const newer = await service.getUsage('glmCodingPlan');
+    rejectOlder(new Error('stale region lookup failed'));
+    const olderCaller = await olderRequest;
+
+    expect(newer).toMatchObject({
+      state: 'available',
+      windows: [expect.objectContaining({ percentUsed: 80 })],
+    });
+    expect(olderCaller).toStrictEqual(newer);
+  });
+
+  it('lets a newer GLM region failure supersede an older in-flight result', async () => {
+    let resolveOlder!: (response: Response) => void;
+    const olderResponse = new Promise<Response>((resolve) => {
+      resolveOlder = resolve;
+    });
+    let regionCall = 0;
+    const http = vi.fn<SubscriptionUsageHttp>(() => olderResponse);
+    const service = serviceWith(
+      http,
+      credentials({
+        useGlmChina: () => {
+          if (regionCall++ === 0) return true;
+          return Promise.reject(new Error('new region lookup failed'));
+        },
+      }),
+    );
+
+    const olderRequest = service.getUsage('glmCodingPlan');
+    await vi.waitFor(() => expect(http).toHaveBeenCalledOnce());
+    const newer = await service.getUsage('glmCodingPlan');
+    resolveOlder(
+      jsonResponse({
+        success: true,
+        data: {
+          limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
+        },
+      }),
+    );
+    const olderCaller = await olderRequest;
+
+    expect(newer).toMatchObject({
+      state: 'unavailable',
+      reason: 'request_failed',
+    });
+    expect(olderCaller).toStrictEqual(newer);
+  });
+
   it('does not fall back across GLM hosts when the selected region fails', async () => {
     const http = vi.fn<SubscriptionUsageHttp>(async () =>
       jsonResponse({ message: 'unavailable' }, 500),

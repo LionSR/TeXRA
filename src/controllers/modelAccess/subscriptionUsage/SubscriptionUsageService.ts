@@ -62,6 +62,7 @@ interface ResolvedRequest {
   readonly id: number;
   readonly key: string;
   readonly useGlmChina: boolean | undefined;
+  readonly regionResolutionFailed: boolean;
 }
 
 const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
@@ -133,18 +134,23 @@ export class SubscriptionUsageService {
   ): Promise<SubscriptionUsageSnapshot> {
     const requestId = ++this.nextRequestId;
     let useGlmChina: boolean | undefined;
+    let regionResolutionFailed = false;
     try {
       if (provider === 'glmCodingPlan') {
         useGlmChina = (await this.credentials.useGlmChina?.()) ?? true;
       }
     } catch {
-      return this.unavailable(provider, 'request_failed');
+      regionResolutionFailed = true;
     }
 
+    const regionKey = regionResolutionFailed
+      ? 'region-error'
+      : (useGlmChina ?? 'default');
     const resolved: ResolvedRequest = {
       id: requestId,
-      key: `${provider}:${useGlmChina ?? 'default'}`,
+      key: `${provider}:${regionKey}`,
       useGlmChina,
+      regionResolutionFailed,
     };
     const latest = this.latestRequests.get(provider);
     if (!latest || latest.id < requestId) {
@@ -164,6 +170,10 @@ export class SubscriptionUsageService {
     resolved: ResolvedRequest,
     forceRefresh: boolean,
   ): Promise<SubscriptionUsageSnapshot> {
+    if (resolved.regionResolutionFailed) {
+      return this.unavailable(provider, 'request_failed');
+    }
+
     if (!forceRefresh) {
       const cached = this.cache.get(resolved.key);
       if (cached && cached.expiresAt > this.now()) return cached.snapshot;

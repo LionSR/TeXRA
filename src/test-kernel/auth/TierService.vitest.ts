@@ -158,6 +158,30 @@ describe('TierService', () => {
     expect(service.getSpendingStatus()).toBeNull();
   });
 
+  it('coalesces overlapping authoritative spending refreshes', async () => {
+    const { pending, fetchMock } = stubPendingFetch();
+    const service = new TierService('https://example.test');
+
+    const monthlyRefresh = service.refreshSpendingStatus('token');
+    await Promise.resolve();
+    const includedAccessCheck = service.refreshSpendingStatus('token');
+    await Promise.resolve();
+
+    expect(pending).toHaveLength(1);
+    pending[0].resolve(
+      jsonResponse(tierConfig({ spendingStatus: spendingStatus(300, 0, 100) })),
+    );
+
+    const [monthlyResult, mutationResult] = await Promise.all([
+      monthlyRefresh,
+      includedAccessCheck,
+    ]);
+    expect(monthlyResult).not.toBeNull();
+    expect(mutationResult).toStrictEqual(monthlyResult);
+    expect(service.isQuotaExceeded()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('bypasses the cache when refreshing spending status', async () => {
     let remaining = 0;
     const fetchMock = vi.fn(() =>

@@ -57,6 +57,11 @@ export class SettingsViewProvider
     return 'settingsView';
   }
 
+  /** Refresh every credential-dependent surface after any API-key mutation. */
+  public refreshAfterProviderKeyChange(provider: string): Promise<void> {
+    return this.messageHandler.refreshAfterProviderKeyChange(provider);
+  }
+
   /**
    * Create and show the webview panel (for command palette activation)
    * @param tabIndex Optional tab to switch to after showing

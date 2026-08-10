@@ -30,7 +30,10 @@ import {
 } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import {
+  getMainWebview,
+  safeExecuteCommand,
+} from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
@@ -64,7 +67,7 @@ import {
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
@@ -194,7 +197,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         SecretManager.getApiKeySecretName(provider as ApiProvider),
       setSecret: (key, value) => SecretManager.set(key, value),
       deleteSecret: (key) => SecretManager.delete(key),
-      refreshAfterKeyChange: (provider) => this.refreshAfterKeyChange(provider),
+      refreshAfterKeyChange: (provider) =>
+        this.refreshAfterProviderKeyChange(provider),
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -925,7 +929,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * data after key changes. Model selection availability depends on provider
    * key state, so keep it paired with the profile refresh.
    */
-  private async refreshAfterKeyChange(provider: string): Promise<void> {
+  public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     // Invalidate caches so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     invalidateApiKeyCache();
@@ -934,6 +938,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (provider === 'glm') usageProvider = 'glmCodingPlan';
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
+    const mainView = await getMainWebview(this.viewName);
+    if (mainView) {
+      const anyKeyExists = await SecretManager.anyApiKeyExists();
+      mainView.webview.postMessage({
+        command: anyKeyExists
+          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+      });
+    }
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendProfileAndModelSelectionData(w)),

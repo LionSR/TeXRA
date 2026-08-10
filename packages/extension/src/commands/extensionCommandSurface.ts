@@ -75,6 +75,9 @@ export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
   settingsViewProvider: SettingsViewProvider,
 ): ExtensionCommandActions {
+  const refreshAfterProviderKeyChange = (provider: string) =>
+    settingsViewProvider.refreshAfterProviderKeyChange(provider);
+
   return {
     showSettings(tabIndex, agentSubTab) {
       return settingsViewProvider.showSettingsView(tabIndex, agentSubTab);
@@ -140,7 +143,7 @@ export function createExtensionCommandActions(
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
     cloneOverleafProject: gitCloneOverleafProject,
-    removeApiKey: apiRemoveApiKey,
+    removeApiKey: () => apiRemoveApiKey(refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     async toggleView() {
       const target =
@@ -150,7 +153,8 @@ export function createExtensionCommandActions(
       await vscode.commands.executeCommand(target);
     },
     showProgressView: progressShowProgressView,
-    setApiKey: apiSetApiKey,
+    setApiKey: (provider) =>
+      apiSetApiKey(refreshAfterProviderKeyChange, provider),
     createAgentWithAI: (category) =>
       agentHandleCreateAgentWithAI(context, category),
     execute: agentRunExecuteCommand,
