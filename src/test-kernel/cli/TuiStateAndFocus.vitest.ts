@@ -8,13 +8,14 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
+  beginWorkPlanReaderRequest,
   closeInfoPane,
   type ConversationEntry,
+  finishWorkPlanReaderRequest,
   focusStream,
   foregroundReader,
   infoPane,
   openInfoPane,
-  openWorkPlanReader,
   rootRunPending,
   rootRunStartAvailable,
   rootRunStreamId,
@@ -506,7 +507,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
   it('closes a foreground reader when its captured stream is removed', () => {
     mintSlice(child1);
-    openWorkPlanReader(child1);
+    finishWorkPlanReaderRequest(beginWorkPlanReaderRequest(child1));
 
     removeStream(child1);
 
@@ -3225,7 +3226,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
       patchStream(root, (slice) => ({ ...slice }));
       patchStream(child1, (slice) => ({ ...slice }));
-      openWorkPlanReader(root);
+      finishWorkPlanReaderRequest(beginWorkPlanReaderRequest(root));
       activeStreamId.set(child1);
       hub.emit({
         scope: 'run',

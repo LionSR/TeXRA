@@ -576,10 +576,6 @@ export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });
 }
 
-export function openWorkPlanReader(streamId: StreamTabId): void {
-  FOREGROUND_READER.set({ kind: 'workPlan', streamId });
-}
-
 /** Capture one `/plan` invocation as the sole owner of async reader output. */
 export function beginWorkPlanReaderRequest(
   streamId: StreamTabId,
