@@ -5,7 +5,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
-import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   POINTER,
   STATUS_DIAMOND,
@@ -26,6 +26,7 @@ import {
 } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
+  workflowCallFailureTally,
   workflowPhaseCallProgress,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
@@ -377,9 +378,8 @@ function WorkflowDashboard({
       value: workflowTaskListValue(entry.id),
     })),
   ]);
-  const { done, total } = workflowPhaseCallProgress(
-    tasks.map((entry) => entry.task),
-  );
+  const calls = tasks.map((entry) => entry.task);
+  const { done, total } = workflowPhaseCallProgress(calls);
   const contentRows =
     maxRows === undefined ? undefined : Math.max(0, maxRows - 2);
 
@@ -410,6 +410,7 @@ function WorkflowDashboard({
     return null;
   }
   const heading = `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
+  const { failed } = workflowCallFailureTally(calls);
   const renderTask = (
     item: SelectItem<ChildListValue>,
     state: { readonly focused: boolean },
@@ -460,6 +461,9 @@ function WorkflowDashboard({
     >
       <Text bold wrap="truncate-end">
         {heading}
+        {failed > 0 ? (
+          <Text bold color={COLOR_WARNING}>{` · ${failed} failed`}</Text>
+        ) : null}
       </Text>
       {wide ? (
         <Box flexDirection="row" height={contentRows} minWidth={0}>
