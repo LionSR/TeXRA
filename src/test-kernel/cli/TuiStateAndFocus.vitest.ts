@@ -26,8 +26,8 @@ import {
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import {
-  allocateConversationAuxiliaryRows,
   allocateConversationBottomPanelRows,
+  allocateConversationPanelRows,
   allocateMiddleRows,
   allocateSidePanelRows,
   shouldShowTodosPlanPanel,
@@ -836,40 +836,57 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
   });
 
-  it('reserves a conversation row before skills, todos, and focused children', () => {
-    for (const transcriptRows of [1, 2, 3]) {
-      const auxiliary = allocateConversationAuxiliaryRows({
-        desiredSkillsRows: 3,
-        transcriptRows,
-      });
-      const bottom = allocateConversationBottomPanelRows({
-        maxRows: 10 - auxiliary.skillsRows,
-        sessionCount: 4,
-        childListFocused: true,
-        todosPlanContentRows: 2,
-        transcriptRows: auxiliary.otherPanelRows,
-      });
-      expect(
-        transcriptRows - auxiliary.skillsRows - bottom.bottomPanelRows,
-      ).toBe(1);
-    }
-
-    const auxiliary = allocateConversationAuxiliaryRows({
-      desiredSkillsRows: 3,
+  it.each([
+    {
+      transcriptRows: 1,
+      expected: {
+        bottomPanelRows: 0,
+        conversationRows: 1,
+        sessionPanelRows: 0,
+        todosPlanRows: 0,
+      },
+    },
+    {
+      transcriptRows: 2,
+      expected: {
+        bottomPanelRows: 0,
+        conversationRows: 2,
+        sessionPanelRows: 0,
+        todosPlanRows: 0,
+      },
+    },
+    {
+      transcriptRows: 3,
+      expected: {
+        bottomPanelRows: 2,
+        conversationRows: 1,
+        sessionPanelRows: 2,
+        todosPlanRows: 0,
+      },
+    },
+    {
       transcriptRows: 8,
-    });
-    const bottom = allocateConversationBottomPanelRows({
-      maxRows: 10 - auxiliary.skillsRows,
-      sessionCount: 4,
-      childListFocused: true,
-      todosPlanContentRows: 2,
-      transcriptRows: auxiliary.otherPanelRows,
-    });
-    expect(auxiliary.skillsRows).toBe(3);
-    expect(bottom.sessionPanelRows).toBeGreaterThanOrEqual(2);
-    expect(bottom.todosPlanRows).toBeGreaterThanOrEqual(2);
-    expect(8 - auxiliary.skillsRows - bottom.bottomPanelRows).toBe(1);
-  });
+      expected: {
+        bottomPanelRows: 7,
+        conversationRows: 1,
+        sessionPanelRows: 4,
+        todosPlanRows: 3,
+      },
+    },
+  ])(
+    'reserves a live conversation row with $transcriptRows transcript rows',
+    ({ transcriptRows, expected }) => {
+      expect(
+        allocateConversationPanelRows({
+          maxRows: 10,
+          sessionCount: 4,
+          childListFocused: true,
+          todosPlanContentRows: 2,
+          transcriptRows,
+        }),
+      ).toEqual(expected);
+    },
+  );
 
   it('hides the child list when its gap and content cannot both fit', () => {
     expect(
