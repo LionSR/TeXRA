@@ -276,6 +276,7 @@ function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
     case MESSAGE_TYPES.INTERNAL:
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT:
     case MESSAGE_TYPES.CONTEXT_STATE:
+    case MESSAGE_TYPES.ACTIVE_SKILLS:
     case MESSAGE_TYPES.WORKFLOW_TASK:
     case MESSAGE_TYPES.DEFAULT:
       return [];

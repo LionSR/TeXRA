@@ -1,28 +1,13 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - utilities
+// Local imports - shared schemas and utilities
+import { SkillNameSchema } from '@shared/schemas';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
-const SKILL_NAME_MAX_LENGTH = 64;
-export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
+export { SkillNameSchema } from '@shared/schemas';
 
-export const SkillNameSchema = z
-  .string()
-  .transform((name) => collapseWhitespace(name))
-  .refine((name) => name.length > 0, 'Skill name is required')
-  .refine(
-    (name) => name.length <= SKILL_NAME_MAX_LENGTH,
-    `Skill name must be at most ${SKILL_NAME_MAX_LENGTH} characters`,
-  )
-  .refine(
-    (name) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name),
-    'Skill name must contain only lowercase letters, digits, and hyphens',
-  )
-  .refine(
-    (name) => !name.includes('--'),
-    'Skill name must not contain repeated hyphens',
-  );
+export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
 
 const SkillDescriptionSchema = z
   .string()

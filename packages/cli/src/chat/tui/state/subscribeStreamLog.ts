@@ -15,6 +15,7 @@ import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPrompts';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
+  ActiveSkillsSnapshotSchema,
   AgentCategory,
   CompactionActivityDataSchema,
   ErrorLogDataSchema,
@@ -807,6 +808,12 @@ export function syncStreamLog(
   if (!log) return;
 
   const allEntries = log.getRange(0);
+  const activeSkillsEntry = allEntries.findLast(
+    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
+  );
+  const parsedActiveSkills = activeSkillsEntry
+    ? ActiveSkillsSnapshotSchema.safeParse(activeSkillsEntry.data)
+    : undefined;
   const taskGroups = projectTaskGroupsIncrementally(streamId, allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
   const compactingActive = latestCompactionActivityIsRunning(allEntries);
@@ -823,6 +830,12 @@ export function syncStreamLog(
   patchStream(streamId, (slice, lifecycle) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const workflowStream = slice.category === AgentCategory.Workflow;
+    let activeSkills = slice.activeSkills;
+    if (slice.category === AgentCategory.ToolUse && parsedActiveSkills) {
+      activeSkills = parsedActiveSkills.success
+        ? parsedActiveSkills.data.skills
+        : [];
+    }
     const workflowOperationalOnly =
       workflowStream && !isFullLogChildStream(slice);
     const syntheticEntries = slice.entries.filter(
@@ -964,6 +977,7 @@ export function syncStreamLog(
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
+      isDeepStrictEqual(slice.activeSkills, activeSkills) &&
       slice.taskGroups === taskGroups
     ) {
       return slice;
@@ -972,6 +986,7 @@ export function syncStreamLog(
       ...slice,
       latestLine,
       entries: nextEntries,
+      activeSkills,
       thinkingActive,
       compactingActive,
       taskGroups,

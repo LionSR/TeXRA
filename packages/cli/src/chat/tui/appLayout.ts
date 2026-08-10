@@ -151,6 +151,26 @@ export function allocateSidePanelRows({
   return { subagentRows, todosPlanRows: available - subagentRows };
 }
 
+/**
+ * Reserve one live conversation row before skills and other bottom panels
+ * divide the remaining transcript budget.
+ */
+export function allocateConversationAuxiliaryRows({
+  desiredSkillsRows,
+  transcriptRows,
+}: {
+  readonly desiredSkillsRows: number;
+  readonly transcriptRows: number;
+}): { readonly skillsRows: number; readonly otherPanelRows: number } {
+  const available = Math.max(0, transcriptRows);
+  const auxiliaryRows = Math.max(0, available - 1);
+  const skillsRows = Math.min(Math.max(0, desiredSkillsRows), auxiliaryRows);
+  return {
+    skillsRows,
+    otherPanelRows: auxiliaryRows - skillsRows,
+  };
+}
+
 export function allocateConversationBottomPanelRows({
   maxRows,
   sessionCount,
