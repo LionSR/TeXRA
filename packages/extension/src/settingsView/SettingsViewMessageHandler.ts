@@ -145,6 +145,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly subscriptionUsage: SubscriptionUsageReader;
+  public readonly signInChatGpt: () => Promise<void>;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -216,6 +217,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ctx,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
+    this.signInChatGpt = this.chatgptHandlers.handleSignIn;
     this.grokHandlers = new SubscriptionHandlers(
       GROK_SUBSCRIPTION_PROVIDER,
       ctx,
@@ -457,7 +459,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.githubHandlers.handleUnsubscribePR(message),
       openPRSubscriptionStream: (message) =>
         this.githubHandlers.handleOpenPRSubscriptionStream(message),
-      signInChatGpt: () => this.chatgptHandlers.handleSignIn(),
+      signInChatGpt: this.signInChatGpt,
       signOutChatGpt: () => this.chatgptHandlers.handleSignOut(),
       setChatGptPreferSubscription: (message) =>
         this.chatgptHandlers.handleSetPreferSubscription(message.enabled),

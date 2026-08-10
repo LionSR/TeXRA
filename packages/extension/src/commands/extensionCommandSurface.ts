@@ -54,7 +54,6 @@ import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/wa
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { signInWithGrokSubscription } from '@frontend/auth/xaiSubscriptionSignIn';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -68,7 +67,6 @@ import {
 } from './extensionCommandHandlers';
 
 const RESET_CHANNEL = 'mainViewCommands';
-const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
 const GROK_SIGN_IN_CHANNEL = 'GrokSubscription';
 
 export function createExtensionCommandActions(
@@ -108,16 +106,7 @@ export function createExtensionCommandActions(
     acceptEdited: latexHandleAcceptEdited,
     indentTeX: handleIndentTeX,
     signIn: authSignIn,
-    async signInChatGpt() {
-      const signedIn = await signInWithChatGptSubscription(
-        CHATGPT_SIGN_IN_CHANNEL,
-      );
-      await Promise.all([
-        vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-        vscode.commands.executeCommand('texra.refreshAllOptions'),
-      ]);
-      return signedIn;
-    },
+    signInChatGpt: settingsViewProvider.signInChatGpt,
     async signInGrok() {
       const signedIn = await signInWithGrokSubscription(GROK_SIGN_IN_CHANNEL);
       await Promise.all([

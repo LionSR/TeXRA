@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import * as codexAuth from '@auth/codex';
 import { CodexAuthError } from '@auth/codex';
 import {
   CHATGPT_USAGE_URL,
@@ -375,6 +376,34 @@ describe('subscription usage parsers', () => {
 });
 
 describe('SubscriptionUsageService', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reports an absent stored ChatGPT session as missing credentials', async () => {
+    const loadSession = vi.fn(async () => null);
+    const getFreshSession = vi.fn(async () => {
+      throw new CodexAuthError('Sign in with ChatGPT to continue.', 'expired');
+    });
+    vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
+      loadSession,
+      getFreshSession,
+    } as never);
+    const http = vi.fn<SubscriptionUsageHttp>();
+
+    const snapshot = await new SubscriptionUsageService({ http }).getUsage(
+      'chatgpt',
+    );
+
+    expect(snapshot).toMatchObject({
+      state: 'unavailable',
+      reason: 'missing_credentials',
+    });
+    expect(loadSession).toHaveBeenCalledOnce();
+    expect(getFreshSession).not.toHaveBeenCalled();
+    expect(http).not.toHaveBeenCalled();
+  });
+
   it.each([
     {
       provider: 'chatgpt' as const,

@@ -67,7 +67,9 @@ interface ResolvedRequest {
 
 const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
   async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
-    const session = await codexCoordinator().getFreshSession();
+    const coordinator = codexCoordinator();
+    if (!(await coordinator.loadSession())) return null;
+    const session = await coordinator.getFreshSession();
     return {
       accessToken: session.accessToken,
       ...(session.accountId ? { accountId: session.accountId } : {}),

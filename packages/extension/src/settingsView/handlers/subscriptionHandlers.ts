@@ -44,7 +44,7 @@ export interface SubscriptionProvider {
   /** Current sign-in status, already wrapped as its outbound wire message. */
   readonly buildStatusMessage: () => Promise<SubscriptionAuthStatusMessage>;
   /** Run the provider's OAuth sign-in against the given log channel. */
-  readonly signIn: (channel: string) => Promise<void>;
+  readonly signIn: (channel: string) => Promise<boolean>;
   /** Clear the stored session through the provider's auth coordinator. */
   readonly signOut: () => Promise<void>;
   /** Apply the routing preference; `effective` is the value that actually won. */
@@ -72,10 +72,10 @@ export class SubscriptionHandlers {
     ]);
   }
 
-  async handleSignIn(): Promise<void> {
+  readonly handleSignIn = async (): Promise<void> => {
     await this.provider.signIn(this.ctx.channel);
     await this.refreshState();
-  }
+  };
 
   async handleSignOut(): Promise<void> {
     const { displayName } = this.provider;
@@ -127,9 +127,7 @@ export const CHATGPT_SUBSCRIPTION_PROVIDER: SubscriptionProvider =
         SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
         getChatGptAuthStatus,
       ),
-    signIn: async (channel: string) => {
-      await signInWithChatGptSubscription(channel);
-    },
+    signIn: signInWithChatGptSubscription,
     signOut: () => codexCoordinator().signOut(),
     setPreferSubscription: setPreferCodexSubscription,
   });
@@ -145,9 +143,7 @@ export const GROK_SUBSCRIPTION_PROVIDER: SubscriptionProvider = Object.freeze({
       SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
       getGrokAuthStatus,
     ),
-  signIn: async (channel: string) => {
-    await signInWithGrokSubscription(channel);
-  },
+  signIn: signInWithGrokSubscription,
   signOut: () => xaiCoordinator().signOut(),
   setPreferSubscription: setPreferXaiSubscription,
 });
