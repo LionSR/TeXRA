@@ -20,10 +20,6 @@ interface DiffViewElement extends HTMLElement {
   proposedText: string;
 }
 
-interface ReviewEntry extends DesktopShowDiffMessage {
-  readonly path: string;
-}
-
 export interface ReviewPaneController {
   readonly element: HTMLElement;
   clear(): void;
@@ -38,21 +34,21 @@ export function createReviewPane(): ReviewPaneController {
   diffView.className = 'desktop-review-diff';
   diffView.fill = true;
 
-  const entries = new Map<string, ReviewEntry>();
+  const entries = new Map<string, DesktopShowDiffMessage>();
   let selectedPath: string | undefined;
   let filter = '';
 
-  function visibleEntries(): readonly ReviewEntry[] {
+  function visibleEntries(): readonly DesktopShowDiffMessage[] {
     const query = filter.trim().toLocaleLowerCase();
     const values = [...entries.values()];
     if (!query) return values;
     return values.filter((entry) =>
-      `${entry.path} ${entry.title}`.toLocaleLowerCase().includes(query),
+      `${entry.displayPath} ${entry.title}`.toLocaleLowerCase().includes(query),
     );
   }
 
-  function select(entry: ReviewEntry): void {
-    selectedPath = entry.path;
+  function select(entry: DesktopShowDiffMessage): void {
+    selectedPath = entry.displayPath;
     diffView.originalText = entry.originalText;
     diffView.proposedText = entry.proposedText;
     diffView.language = entry.language;
@@ -82,7 +78,7 @@ export function createReviewPane(): ReviewPaneController {
       }
       const entry = entries.get(node.path);
       if (!entry) return html``;
-      const active = entry.path === selectedPath;
+      const active = entry.displayPath === selectedPath;
       return html`
         <wa-button
           type="button"
@@ -91,7 +87,7 @@ export function createReviewPane(): ReviewPaneController {
           appearance="plain"
           size="s"
           data-active=${active ? 'true' : 'false'}
-          title=${entry.path}
+          title=${entry.displayPath}
           @click=${() => select(entry)}
         >
           ${waIcon('file-code', { slot: 'start' })}
@@ -177,7 +173,7 @@ export function createReviewPane(): ReviewPaneController {
                   ? renderTree(
                       buildEditorTree(
                         visible.map((entry) => ({
-                          path: entry.path,
+                          path: entry.displayPath,
                           isDirectory: false,
                         })),
                       ),
@@ -207,10 +203,8 @@ export function createReviewPane(): ReviewPaneController {
       rerender();
     },
     open(payload) {
-      const path = payload.displayPath;
-      const entry = { ...payload, path };
-      entries.set(path, entry);
-      select(entry);
+      entries.set(payload.displayPath, payload);
+      select(payload);
     },
     setTheme(nextTheme) {
       diffView.hostTheme = nextTheme;

@@ -43,12 +43,6 @@ type TemplateFormatterFn = (
   options?: FormatOptions & { isRunning?: boolean },
 ) => FormatResult;
 
-/** Message types that auto-expand when defaultOpen is set. */
-const AUTO_EXPANDED_TYPES: Set<MessageType> = new Set([
-  'thinking',
-  'scratchpad',
-]);
-
 /** Message types that render nothing when the formatter produces no result. */
 const NULLABLE_TYPES: Set<MessageType> = new Set([
   'thinking',
@@ -147,18 +141,11 @@ export function formatLogEntry(
 ): TemplateResult | typeof nothing {
   const { messageType } = logMessage;
 
-  // Determine if details should be open (undefined = no preference)
-  const autoExpand =
-    options.defaultOpen === true &&
-    messageType !== undefined &&
-    AUTO_EXPANDED_TYPES.has(messageType);
-  const isOpen = options.preservedOpen ?? (autoExpand || undefined);
   // While the entry is still streaming in, skip markdown parsing (cheap
   // per-chunk repaint) but keep the same banner shell — never fall back to
   // the plain log-line template, or thinking blocks flash as generic info
   // logs until the stream finalizes (#7276).
   const templateOptions = {
-    defaultOpen: isOpen,
     executionLabels: options.executionLabels,
     isRunning: isStreamingTextLogMessage(logMessage),
   };

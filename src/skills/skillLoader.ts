@@ -207,18 +207,12 @@ export async function loadSkillDirectory(
     errors.push(...descriptionResult.errors);
     if (!descriptionResult.description) return { errors };
 
-    const normalizedFrontmatter = {
-      ...frontmatter,
-      name: nameResult.name,
-      description: descriptionResult.description,
-    };
     const skill = SkillSchema.parse({
       name: nameResult.name,
       description: descriptionResult.description,
       body,
       baseDir: skillDir,
       path: skillPath,
-      frontmatter: normalizedFrontmatter,
     });
 
     return { skill, errors };

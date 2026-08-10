@@ -235,17 +235,12 @@ export function generateNestedDecoratorShortcuts(
 export function generateLegacyTextCommandNormalization(
   terms: string[],
   targetCommand: string,
-  variant?: string,
+  variant: string,
 ): PatternDict {
-  const allVariants = ['rm', 'bf', 'cal'];
-  const variantsToUse = variant ? [variant] : allVariants;
-
-  return createPatterns(variantsToUse, (v) =>
-    terms.flatMap((term) => [
-      [`{\\${v} ${term}}`, `\\${targetCommand}{${term}}`],
-      [`{\\${v}{${term}}}`, `\\${targetCommand}{${term}}`],
-    ]),
-  );
+  return createPatterns(terms, (term) => [
+    [`{\\${variant} ${term}}`, `\\${targetCommand}{${term}}`],
+    [`{\\${variant}{${term}}}`, `\\${targetCommand}{${term}}`],
+  ]);
 }
 
 /**

@@ -9,7 +9,9 @@ import type {
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import {
+  type AgentProposalPermission,
   type ApprovalDecision,
+  type PlanApprovalPermission,
   type RetryPermission,
   type UserQuestionAnswers,
 } from '@shared/schemas';
@@ -31,12 +33,12 @@ import {
   queueCliApprovalQuestion,
 } from './approval/approvalPrompts';
 import {
+  formatAgentProposalApprovalSummary,
   formatBashApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
   formatUserQuestionPrompt,
 } from './approval/approvalSummaries';
-import { summarizeApprovalEvent } from './approval/eventDispatch';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
@@ -68,6 +70,30 @@ async function decideToolEdit(
     hooks,
   );
   return toToolEditResult(decision, request.proposedContent);
+}
+
+function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
+  event: K,
+  payload: CliDecisionApprovalPayloads[K],
+): string {
+  switch (event) {
+    case 'showPlanApproval': {
+      const data = payload as PlanApprovalPermission;
+      return `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`;
+    }
+    case 'showAgentProposal': {
+      const data = payload as AgentProposalPermission;
+      return formatAgentProposalApprovalSummary(data);
+    }
+    case 'showRetryRequest': {
+      const data = payload as RetryPermission;
+      return `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
+    }
+    default: {
+      const never: never = event;
+      return String(never);
+    }
+  }
 }
 
 async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(

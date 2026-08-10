@@ -138,10 +138,10 @@ export class SettingsViewHost {
     pinned: boolean,
     respond?: SettingsRespond,
   ): Promise<void> {
-    const message = pinned
-      ? await this.memoryController.pinMemory(storagePath)
-      : await this.memoryController.unpinMemory(storagePath);
-    await this.postMaybe(message, respond);
+    await this.postMaybe(
+      await this.memoryController.setMemoryPinned(storagePath, pinned),
+      respond,
+    );
   }
 
   async sendModelSelectionData(respond?: SettingsRespond): Promise<void> {

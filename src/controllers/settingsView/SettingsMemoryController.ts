@@ -95,17 +95,7 @@ export class SettingsMemoryController {
     return this.getMemoryEnabledMessage();
   }
 
-  async pinMemory(storagePath: string): Promise<SettingsMemoryMessage | null> {
-    return this.updatePinned(storagePath, true);
-  }
-
-  async unpinMemory(
-    storagePath: string,
-  ): Promise<SettingsMemoryMessage | null> {
-    return this.updatePinned(storagePath, false);
-  }
-
-  private async updatePinned(
+  async setMemoryPinned(
     storagePath: string,
     pinned: boolean,
   ): Promise<SettingsMemoryMessage | null> {

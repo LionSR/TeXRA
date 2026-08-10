@@ -80,7 +80,7 @@ const BANNER_CONFIG: Record<string, BannerConfig> = {
  */
 export function formatBannerContentTemplate(
   message: LogMessageData,
-  options?: { defaultOpen?: boolean; isRunning?: boolean },
+  options?: { isRunning?: boolean },
 ): FormatResult {
   const { id, groupId, timestamp, verbose, text, level, messageType } = message;
   const trimmedContent = (text ?? '').trim();
@@ -91,11 +91,10 @@ export function formatBannerContentTemplate(
     formatDisplayTimestamp(new Date(timestamp));
   // Auto-expand while streaming in, so the block is visibly "live" instead
   // of hiding the growing text behind a closed summary row; collapses back
-  // once finalized unless the caller pins it open (mirrors the "thought for
-  // Xs, tap to expand" pattern other chat UIs use for reasoning output).
-  // Model responses stay open by default once finalized.
-  const shouldOpen =
-    options?.isRunning || (options?.defaultOpen ?? config.defaultOpen);
+  // once finalized (mirrors the "thought for Xs, tap to expand" pattern
+  // other chat UIs use for reasoning output). Model responses stay open by
+  // default once finalized.
+  const shouldOpen = options?.isRunning || config.defaultOpen;
   const contentClass = config.levelClass
     ? `${config.contentClass} message-${level}`
     : config.contentClass;

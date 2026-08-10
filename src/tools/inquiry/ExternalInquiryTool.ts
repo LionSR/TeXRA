@@ -407,9 +407,10 @@ export class ExternalInquiryTool extends defineTool({
       suggestSearch: input.suggestSearch ?? undefined,
       attachFiles: input.attachFiles ?? undefined,
     });
-    const manifest =
-      (await readExternalInquiryThread(persisted.threadId)) ??
-      persisted.manifest;
+    // Use the manifest recordOpenQuestion just wrote under the thread lock —
+    // a re-read would only reintroduce the write/read race the continuation
+    // injectors already avoid via writer snapshots.
+    const manifest = persisted.manifest;
 
     if (executionId) {
       await mirrorThreadToExecution(executionId, persisted.threadId);

@@ -21,18 +21,12 @@ const SkillDescriptionSchema = z
     `Skill description must be at most ${SKILL_DESCRIPTION_MAX_LENGTH} characters`,
   );
 
-const SkillFrontmatterSchema = z.looseObject({
-  name: SkillNameSchema,
-  description: SkillDescriptionSchema,
-});
-
 export const SkillSchema = z.strictObject({
   name: SkillNameSchema,
   description: SkillDescriptionSchema,
   body: z.string().min(1),
   baseDir: z.string().min(1),
   path: z.string().min(1),
-  frontmatter: SkillFrontmatterSchema,
 });
 
 export type Skill = z.infer<typeof SkillSchema>;

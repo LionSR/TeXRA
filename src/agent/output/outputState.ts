@@ -153,7 +153,7 @@ function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   const extras = new Map<string, FileLocation>();
   for (const value of allPaths) {
     if (!value) continue;
-    const location = typeof value === 'string' ? pathToLocation(value) : value;
+    const location = pathToLocation(value);
     extras.set(getComparablePath(location), location);
   }
 

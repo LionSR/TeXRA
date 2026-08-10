@@ -525,7 +525,7 @@ export function resolveAgentForLaunch(
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * Priority: custom > remote > builtInWorkflow > builtInToolUse.
+ * Priority: inline > custom > remote > builtInWorkflow > builtInToolUse.
  * When the same agent name exists in multiple sources (e.g. local + remote),
  * only the highest-priority version appears in the dropdown.
  */

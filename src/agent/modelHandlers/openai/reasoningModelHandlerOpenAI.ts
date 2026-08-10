@@ -5,8 +5,6 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
-// Type imports
-
 /**
  * Intermediate base for OpenAI-compatible providers that expose a separate
  * reasoning channel (`reasoning_content` / `reasoning_details`): DeepSeek,

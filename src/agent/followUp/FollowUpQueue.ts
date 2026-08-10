@@ -97,14 +97,9 @@ export class FollowUpQueue {
     return this.queued.length === 0;
   }
 
-  drain(): string[] {
-    return this.drainItems().map(displayTextForItem);
-  }
-
   /**
    * Drain queued visible follow-ups together with their media file paths.
-   * Used by resume to replay queued user input without losing pasted images;
-   * the text-only {@link drain} stays for display/back-compat.
+   * Used by resume to replay queued user input without losing pasted images.
    */
   drainItems(): DrainedFollowUpItem[] {
     return this.queued.splice(0).filter(isVisibleItem);

@@ -51,7 +51,7 @@ const LeanLoogleInputSchema = z.strictObject({
     .describe('Max results per query (default: 10)'),
 });
 
-export type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
+type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
 
 // ============================================================================
 // Response schemas (Loogle is an external network boundary — validate it)

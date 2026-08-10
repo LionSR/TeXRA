@@ -18,6 +18,7 @@ import {
   signInCliGrok,
   signOutCliGrok,
 } from '@cli/runtime/grokLogin';
+import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
   githubSelectAccountWarning,
@@ -51,7 +52,6 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import { loadCliAccountStatusLines } from './statusAssembly';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
@@ -271,10 +271,10 @@ export async function logoutFromChat(
   }
 
   try {
-    const statusLines = await loadCliAccountStatusLines({
+    const overview = await loadCliModelAccessOverview({
       apiMode: sessionMeta.get().apiMode,
     });
-    lines.push(...statusLines);
+    lines.push(...overview.lines);
   } catch (error: unknown) {
     lines.push(toErrorMessage(error));
   }

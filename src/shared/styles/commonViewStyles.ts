@@ -60,18 +60,6 @@ const busyIconButtonStyles: CSSResult = css`
   }
 `;
 
-/**
- * Single-line text truncation declarations (no selector). Interpolate this
- * into a rule; the 14 call sites that need it are all shadow parts (e.g.
- * `::part(label)`) or already-classed elements, which is why there is no
- * companion utility class.
- */
-export const truncateTextRule: CSSResult = css`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
 export const commonViewStyles: CSSResult = css`
   .view-header {
     display: flex;

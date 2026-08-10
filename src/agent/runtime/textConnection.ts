@@ -33,27 +33,6 @@ function buildPrompt(str1: string, str2: string): string {
 const SYSTEM_PROMPT =
   'Choose the grammatically correct string for its LaTeX document context.';
 
-function getMajorityChoice(choices: string[]): ConnectionResult {
-  const counts = new Map<string, number>();
-  for (const choice of choices) {
-    counts.set(choice, (counts.get(choice) ?? 0) + 1);
-  }
-
-  const majorityChoice = [...counts.entries()].reduce((a, b) =>
-    b[1] > a[1] ? b : a,
-  )[0];
-
-  const connector = CASE_CONNECTORS[majorityChoice];
-  if (connector === undefined) {
-    logger.debug(
-      CHANNEL,
-      `Invalid choice: ${majorityChoice}. Defaulting to space.`,
-    );
-    return DEFAULT_RESULT;
-  }
-  return { connector, choice: majorityChoice };
-}
-
 /**
  * Determines the best way to connect two strings in a LaTeX context, using
  * the configured helper model.
@@ -61,7 +40,6 @@ function getMajorityChoice(choices: string[]): ConnectionResult {
 export async function bestConnectionMethod(
   str1: string,
   str2: string,
-  n: number = 1,
 ): Promise<ConnectionResult> {
   try {
     const helperResult = await createHelperModelKit();
@@ -73,17 +51,17 @@ export async function bestConnectionMethod(
       return DEFAULT_RESULT;
     }
 
-    const prompt = buildPrompt(str1, str2);
-    const choices: string[] = [];
-    for (let i = 0; i < Math.max(1, n); i += 1) {
-      const text = await runHelperModelCompletion(helperResult.kit, {
-        userPrompt: prompt,
-        systemPrompt: SYSTEM_PROMPT,
-      });
-      choices.push(text.trim());
+    const text = await runHelperModelCompletion(helperResult.kit, {
+      userPrompt: buildPrompt(str1, str2),
+      systemPrompt: SYSTEM_PROMPT,
+    });
+    const choice = text.trim();
+    const connector = CASE_CONNECTORS[choice];
+    if (connector === undefined) {
+      logger.debug(CHANNEL, `Invalid choice: ${choice}. Defaulting to space.`);
+      return DEFAULT_RESULT;
     }
-
-    return getMajorityChoice(choices);
+    return { connector, choice };
   } catch (err) {
     const log =
       classifyAgentError(err) === 'missing-api-key'

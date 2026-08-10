@@ -22,7 +22,15 @@
 
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
-import { truncateTextRule } from './commonViewStyles';
+/**
+ * Single-line text truncation declarations (no selector), interpolated into
+ * shadow-part rules below — parts can't take a utility class.
+ */
+const truncateTextRule: CSSResult = css`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
 
 /**
  * Shared selector groups for :is() consolidation.

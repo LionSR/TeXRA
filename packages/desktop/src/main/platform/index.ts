@@ -6,7 +6,6 @@ import { isFileNotFoundError } from '@common/errors';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
 import { initPlatform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';

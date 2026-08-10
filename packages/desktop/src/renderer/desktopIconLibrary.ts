@@ -18,9 +18,7 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 /**
  * Our icon name -> Lucide icon name.
  *
- * Only names that differ need an entry; identical names resolve directly. Kept
- * as data rather than 120 imports because `lucide-static` ships one SVG per
- * icon and Vite's `?raw` glob loads them lazily.
+ * Only names that differ need an entry; identical names resolve directly.
  */
 const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   // Punctuation / chrome
