@@ -36,6 +36,7 @@ import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextU
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import {
+  ActiveSkillsSnapshotSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -430,6 +431,26 @@ export function attachTranscriptRecorder(
             if (terminal) writer.appendSettled(taskEntry);
             else writer.append(taskEntry);
           }
+          return;
+        }
+
+        case 'skills.snapshot': {
+          const snapshot = ActiveSkillsSnapshotSchema.parse({
+            skills: event.skills.map((skill) => ({
+              ...skill,
+              description: redactSecrets(skill.description),
+            })),
+          });
+          writer.appendSettled({
+            id: generateShortId(),
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
+            data: snapshot,
+            verbose: false,
+          });
           return;
         }
 

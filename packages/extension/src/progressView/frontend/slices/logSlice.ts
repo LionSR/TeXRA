@@ -2,9 +2,11 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  ActiveSkillsSnapshotSchema,
   ContextStateDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  isToolUseState,
   type LogMessageData,
   type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
@@ -40,6 +42,21 @@ function applyEntry(
   streamLogs: StreamLogs,
   streamState: StreamState,
 ): EntryResult {
+  if (entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS) {
+    if (!isToolUseState(streamState)) {
+      return { logChanged: false, stateChanged: false };
+    }
+    const snapshot = ActiveSkillsSnapshotSchema.safeParse(entry.data);
+    if (!snapshot.success) {
+      console.warn(
+        '[logSlice] Cleared malformed active-skills entry',
+        snapshot.error,
+      );
+    }
+    streamState.activeSkills = snapshot.success ? snapshot.data.skills : [];
+    return { logChanged: false, stateChanged: true };
+  }
+
   // These records are persisted for diagnostics or live CLI/TUI state, not
   // progress presentation. Drop them before invisible rows consume timeline
   // windows or fall through to the default log formatter.
