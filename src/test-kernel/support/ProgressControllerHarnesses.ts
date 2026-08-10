@@ -120,6 +120,7 @@ export interface ProgressWorkflowActionsHarnessOptions {
 
 export interface ProgressWorkflowActionsHarness {
   controller: ProgressWorkflowActionsController;
+  metadataReads: StreamTabId[];
   diffs: WorkflowDiffRequest[];
   fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -130,6 +131,7 @@ export interface ProgressWorkflowActionsHarness {
 export function createProgressWorkflowActionsHarness(
   options: ProgressWorkflowActionsHarnessOptions = {},
 ): ProgressWorkflowActionsHarness {
+  const metadataReads: StreamTabId[] = [];
   const diffs: WorkflowDiffRequest[] = [];
   const fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -139,8 +141,13 @@ export function createProgressWorkflowActionsHarness(
   return {
     controller: new ProgressWorkflowActionsController({
       state: {
-        getRunConfig: (stream) => options.runConfigs?.get(stream),
-        getExecutionId: (stream) => options.executionIds?.get(stream),
+        getRunMetadata: (stream) => {
+          metadataReads.push(stream);
+          return {
+            config: options.runConfigs?.get(stream),
+            executionId: options.executionIds?.get(stream),
+          };
+        },
         getOutputFiles: (stream) => options.outputs?.get(stream) ?? {},
         getKnownWorkspaceOutputPaths: (stream) =>
           new Set(options.knownWorkspaceOutputs?.get(stream) ?? []),
@@ -152,6 +159,7 @@ export function createProgressWorkflowActionsHarness(
         fileOperations.push({ operation, request });
       },
     }),
+    metadataReads,
     diffs,
     fileOperations,
   };

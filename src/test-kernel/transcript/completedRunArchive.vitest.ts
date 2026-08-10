@@ -453,8 +453,8 @@ describe('completedRunArchive facade', () => {
       });
 
     const resolveResumeState = vi.fn(async (requestedStreamId: StreamTabId) => {
-      const runState = snapshots.getRunConfig(requestedStreamId);
-      const resolvedExecutionId = snapshots.getExecutionId(requestedStreamId);
+      const { config: runState, executionId: resolvedExecutionId } =
+        snapshots.getRunMetadata(requestedStreamId);
       return runState && resolvedExecutionId
         ? { runState, executionId: resolvedExecutionId }
         : undefined;

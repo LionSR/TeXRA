@@ -34,7 +34,11 @@ import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -436,6 +440,7 @@ async function executeInBand(
     await registerExecution(executionId, config, options.agentName, {
       streamId: getStreamTabId(config.agent, { executionId }),
       identity: { kind: 'agent', agent: config.agent },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       parentExecutionId: options.parentExecutionId,
     });
   } catch (cause) {

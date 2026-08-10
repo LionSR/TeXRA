@@ -298,9 +298,9 @@ describe('SessionHandle restart repair', () => {
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();
 
-    expect(session.snapshots.getExecutionId(resumableStreamId)).toBe(
-      resumableExecutionId,
-    );
+    expect(
+      session.snapshots.getRunMetadata(resumableStreamId).executionId,
+    ).toBe(resumableExecutionId);
     expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.WAITING);
     await expect(
       executionStore.read(flowKey(resumableExecutionId)),
@@ -330,7 +330,7 @@ describe('SessionHandle restart repair', () => {
 
     // A mapped stream keeps its recovery state: failing it blindly could
     // destroy a flow record that is in fact resumable.
-    expect(session.snapshots.getExecutionId(degradedStreamId)).toBe(
+    expect(session.snapshots.getRunMetadata(degradedStreamId).executionId).toBe(
       degradedExecutionId,
     );
     expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.RUNNING);

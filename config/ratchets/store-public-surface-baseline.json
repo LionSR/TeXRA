@@ -1,5 +1,5 @@
 {
-  "semantics": "Public (static + instance) method declarations of StreamLogStore and StreamSnapshotStore, per issue #9590 Stage 5 (proof obligation 10). Every listed method is a caller-verified operation: transcript row mutation is writer-only (TranscriptWriter via acquireWriter/loadAndAcquireWriter), and snapshot event projection enters only through attachSessionEvents. The ratchet fails only when a store's public method count exceeds this baseline; 'protected' counts as public (neither class is subclassed, so protected would be a visibility trick, not encapsulation); counting is caller-honest — hiding equivalent operations behind params objects, aggregate getters, ports, or facades is not a reduction. When the surface genuinely shrinks (e.g. Stage 6 description-authority migration, Stage 7 legacy retirement), lower this baseline in the same PR.",
+  "semantics": "Public (static + instance) method declarations of StreamLogStore and StreamSnapshotStore, per issue #9590 Stage 5 (proof obligation 10). Every public method is a caller-verified contract, and every field exposed by a configured aggregate snapshot getter is one caller-visible contract unit. Replacing five field getters with getRunMetadata therefore leaves the StreamSnapshotStore contract budget unchanged: the aggregate method contributes five units, not one. Transcript row mutation is writer-only (TranscriptWriter via acquireWriter/loadAndAcquireWriter), snapshot event projection enters only through attachSessionEvents, and 'protected' counts as public because neither class is subclassed. The ratchet rejects growth in either public methods or configured aggregate fields. When the surface genuinely shrinks, lower this baseline in the same PR.",
   "stores": {
     "StreamLogStore": [
       "acquireWriter",
@@ -33,15 +33,12 @@
       "evictAll",
       "flush",
       "getCompileFailures",
-      "getDescription",
-      "getExecutionId",
       "getExecutionIdMap",
       "getKnownFilePaths",
       "getMissingOutputs",
       "getOutputFiles",
       "getParentStreamId",
-      "getRunConfig",
-      "getRunIdentity",
+      "getRunMetadata",
       "getRunUsage",
       "getWorkPlan",
       "hasPersistedWorkPlan",
@@ -55,5 +52,16 @@
       "reconcileStagedDeletions",
       "stageDeleteStream"
     ]
+  },
+  "aggregateContracts": {
+    "StreamSnapshotStore": {
+      "getRunMetadata": [
+        "config",
+        "description",
+        "executionId",
+        "identity",
+        "userFollowUpSupport"
+      ]
+    }
   }
 }

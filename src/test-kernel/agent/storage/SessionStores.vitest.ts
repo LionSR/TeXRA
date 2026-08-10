@@ -81,7 +81,9 @@ describe('SessionStores deletion coordination', () => {
     try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(reloadedSnapshots.getParentStreamId(child)).toBeUndefined();
-      expect(reloadedSnapshots.getExecutionId(child)).toBe(childExecution);
+      expect(reloadedSnapshots.getRunMetadata(child).executionId).toBe(
+        childExecution,
+      );
       expect(detached).toEqual([[parent, [child]]]);
     } finally {
       session.dispose();

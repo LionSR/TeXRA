@@ -323,7 +323,7 @@ export class SessionHandle {
    * runtime that owns the stream phase.
    */
   async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
-    const executionId = this.snapshots.getExecutionId(streamId);
+    const executionId = this.snapshots.getRunMetadata(streamId).executionId;
     const inFlight = this.waitingRepairProbes.get(streamId);
     if (
       inFlight &&
@@ -363,7 +363,7 @@ export class SessionHandle {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
     if (
-      this.snapshots.getExecutionId(streamId) !== executionId ||
+      this.snapshots.getRunMetadata(streamId).executionId !== executionId ||
       !this.status.isCurrentGeneration(streamId, statusGeneration)
     ) {
       return false;

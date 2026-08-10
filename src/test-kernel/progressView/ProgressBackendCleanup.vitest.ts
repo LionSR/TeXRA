@@ -149,10 +149,10 @@ describe('ProgressBackend cleanup', () => {
       await expect(backend.state.clearStream(stream)).resolves.toBe('failed');
 
       expect(backend.state.streamLogs.has(stream)).toBe(true);
-      expect(backend.state.snapshots.getExecutionId(stream)).toBe(executionId);
-      expect(backend.state.snapshots.getRunConfig(stream)).toEqual(
-        toolUseConfig('search', 'deepseekproT'),
-      );
+      expect(backend.state.snapshots.getRunMetadata(stream)).toMatchObject({
+        config: toolUseConfig('search', 'deepseekproT'),
+        executionId,
+      });
       await expectStored(`executions/${executionId}`, true);
     } finally {
       snapshotDeleteSpy.mockRestore();
@@ -176,7 +176,9 @@ describe('ProgressBackend cleanup', () => {
       await expect(backend.state.clearStream(stream)).resolves.toBe('deleted');
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
-      expect(backend.state.snapshots.getRunConfig(stream)).toBeUndefined();
+      expect(
+        backend.state.snapshots.getRunMetadata(stream).config,
+      ).toBeUndefined();
       await expectStored(`executions/${executionId}`, true);
     } finally {
       deleteExecutionSpy.mockRestore();
@@ -400,9 +402,9 @@ describe('ProgressBackend cleanup', () => {
       });
       expect(backend.state.streamLogs.has(failedStream)).toBe(true);
       expect(backend.state.streamLogs.has(deletedStream)).toBe(false);
-      expect(backend.state.snapshots.getExecutionId(failedStream)).toBe(
-        executionId,
-      );
+      expect(
+        backend.state.snapshots.getRunMetadata(failedStream).executionId,
+      ).toBe(executionId);
       await expectStored(streamDataDir(failedStream), true);
       await expectStored(`executions/${executionId}`, true);
 
@@ -659,9 +661,9 @@ describe('ProgressBackend cleanup', () => {
       await second.backend.state.load();
 
       expect(second.backend.state.streamLogs.has(stream)).toBe(true);
-      expect(second.backend.state.snapshots.getExecutionId(stream)).toBe(
-        executionId,
-      );
+      expect(
+        second.backend.state.snapshots.getRunMetadata(stream).executionId,
+      ).toBe(executionId);
       await expectStored(streamDataDir(stream), true);
       await expectStored(`executions/${executionId}`, true);
     } finally {

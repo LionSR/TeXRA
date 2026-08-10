@@ -99,10 +99,9 @@ function createCompileFailure(
 }
 
 const emptyFollowUpState: ProgressFollowUpState = {
-  getRunConfig: () => undefined,
+  getRunMetadata: () => ({}),
   getOutputFiles: () => ({}),
   getCompileFailures: () => ({}),
-  getExecutionId: () => undefined,
 };
 
 function createController({
@@ -164,13 +163,16 @@ describe('ProgressFollowUpController', () => {
   it('builds a stream-scoped tool-use plan from snapshot state', async () => {
     const runConfig = createFollowUpWorkflowConfig();
     const outputFile = createRunStorageOutputFile();
+    const metadataReads: string[] = [];
     const controller = createController({
       modelOptions: [{ value: 'gemini31p' }],
       state: {
-        getRunConfig: () => runConfig,
+        getRunMetadata: (stream) => {
+          metadataReads.push(stream);
+          return { config: runConfig, executionId: 'exec-123' };
+        },
         getOutputFiles: () => ({ 2: [outputFile] }),
         getCompileFailures: () => ({}),
-        getExecutionId: () => 'exec-123',
       },
     });
 
@@ -182,6 +184,7 @@ describe('ProgressFollowUpController', () => {
       executeImmediately: false,
     });
 
+    expect(metadataReads).toEqual(['stream-a']);
     expect(plan.kind).toBe('restoreState');
     if (plan.kind !== 'restoreState') return;
     expect(plan.executeImmediately).toBe(false);

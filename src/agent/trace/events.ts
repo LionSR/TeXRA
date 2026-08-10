@@ -24,6 +24,7 @@ import type {
   StreamPhase,
   StreamSubstate,
   StreamTabId,
+  UserFollowUpSupport,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
@@ -90,6 +91,7 @@ interface RunStartEvent extends StageStamp {
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
   readonly identity: RunIdentity;
+  readonly userFollowUpSupport?: UserFollowUpSupport;
 }
 
 /** Mutable persisted run config changed after run.start, e.g. model switch. */

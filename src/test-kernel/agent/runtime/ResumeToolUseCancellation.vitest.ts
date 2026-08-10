@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   abandonOwnedExecutionLease: vi.fn(),
   buildAgentLaunchContext: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
+  getPersistedUserFollowUpSupport: vi.fn(),
   hasPersistedParent: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
 
 vi.mock('@agent/storage/executionLifecycle', () => ({
   clearTerminalExecutionState: mocks.clearTerminalExecutionState,
+  getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 
@@ -73,6 +75,7 @@ import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import {
   RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -136,6 +139,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
     mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
+      USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    );
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
@@ -177,6 +183,36 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
     expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(executionId);
     expect(order).toEqual(['clear', 'launch', 'flow']);
+  });
+
+  it('preserves persisted native follow-up support across resumed waiting turns', async () => {
+    const executionId = 'e9911-native-resume' as ExecutionId;
+    const streamId = 'stream-9911-native-resume' as StreamTabId;
+    const snapshot = createToolUseResumeData({ executionId, streamId });
+    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    );
+    mocks.hasPersistedParent.mockResolvedValue(true);
+    mocks.buildAgentLaunchContext
+      .mockResolvedValueOnce(buildResumeContext(executionId, streamId))
+      .mockResolvedValueOnce(buildResumeContext(executionId, streamId));
+    mocks.runToolUseFlow.mockResolvedValue({
+      outcome: 'waiting',
+      response: 'ready for another follow-up',
+    });
+
+    await resumeToolUseFromResumeData(snapshot);
+    await resumeToolUseFromResumeData(snapshot);
+
+    expect(mocks.runFlowWithLifecycle).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.runFlowWithLifecycle.mock.calls.map(
+        (call) => call[2]?.userFollowUpSupport,
+      ),
+    ).toEqual([
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    ]);
   });
 
   it('releases the resumed lease when the terminal-fact clear fails', async () => {

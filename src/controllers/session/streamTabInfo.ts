@@ -76,6 +76,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
     name: streamId,
     label: identityName,
     identity,
+    userFollowUpSupport: metadata.userFollowUpSupport,
     agentCategory: metadata.agentCategory,
     model,
     modelLabel: model

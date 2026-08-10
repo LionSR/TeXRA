@@ -387,6 +387,7 @@ export class WebviewUpdater {
       category: streamInfo.agentCategory,
       status: streamState?.phase,
       substate: streamState?.substate,
+      userFollowUpSupport: streamInfo.userFollowUpSupport,
       lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
       conversationProgress: current?.conversationProgress,
       stage: current?.stage,

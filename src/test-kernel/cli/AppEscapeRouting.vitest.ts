@@ -21,13 +21,19 @@ import {
   rootStreamId,
   setStreamStatusInCliState,
   streams,
+  transcriptReaderStreamId,
 } from '@cli/chat/tui/state/cliState';
 import {
   projectChildRoster,
   setParentStream,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   loadInk,
   renderInteractive,
@@ -71,6 +77,17 @@ function setRunning(...streamIds: StreamTabId[]): void {
   }
 }
 
+function markToolUseAgent(...streamIds: StreamTabId[]): void {
+  for (const streamId of streamIds) {
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      identity: { kind: 'agent', agent: 'child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: AgentCategory.ToolUse,
+    }));
+  }
+}
+
 function runningChild(
   executionId: string,
   agentName: string,
@@ -95,6 +112,7 @@ function seedRootStream(): void {
 function seedChildHierarchy(): void {
   seedRootStream();
   setRunning(CHILD, GRANDCHILD);
+  markToolUseAgent(CHILD, GRANDCHILD);
   projectChildRoster(ROOT, [
     runningChild('escape-child-execution', 'child', CHILD),
   ]);
@@ -726,6 +744,294 @@ describe('App foreground Escape ownership', () => {
       instance.unmount();
     }
   });
+
+  it('collapses an incapable child composer while preserving navigation and the root draft', async () => {
+    seedChildHierarchy();
+    focusStream(ROOT);
+    const onSubmit = vi.fn();
+    const onInterruptStream = vi.fn();
+    const { ink, React } = await loadInk();
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, {
+        ...appProps(onInterruptStream),
+        onSubmit,
+      }),
+      { columns: 100, debug: true, rows: 30 },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('preserved root draft');
+      await waitFor(() => currentFrame().includes('preserved root draft'));
+
+      patchStream(CHILD, (slice) => ({
+        ...slice,
+        identity: { kind: 'process', tool: 'bash' },
+        // Background Bash carries this synthetic category; identity remains
+        // authoritative for the composer capability.
+        category: AgentCategory.ToolUse,
+      }));
+      focusStream(CHILD);
+      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => !currentFrame().includes('preserved root draft'));
+
+      stdin.write('ignored printable submit\r');
+      await sleep(30);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(currentFrame()).not.toContain('ignored printable submit');
+
+      stdin.write('\t');
+      await sleep(30);
+      stdin.write('\x14');
+      await sleep(30);
+      expect(transcriptReaderStreamId.get()).toBeUndefined();
+      stdin.write('\t');
+      await sleep(30);
+
+      stdin.write('\x14');
+      await waitFor(() => transcriptReaderStreamId.get() === CHILD);
+      stdin.write(ESC);
+      await waitFor(() => transcriptReaderStreamId.get() === undefined);
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => currentFrame().includes('preserved root draft'));
+      stdin.write('\r');
+      await waitFor(() => onSubmit.mock.calls.length === 1);
+
+      expect(onSubmit).toHaveBeenCalledWith('preserved root draft', undefined);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('returns hidden child composer rows to the conversation at narrow widths', async () => {
+    seedChildHierarchy();
+    const transcriptText = Array.from(
+      { length: 20 },
+      (_, index) => `layout line ${index + 1}`,
+    ).join('\n');
+    for (const streamId of [ROOT, CHILD]) {
+      patchStream(streamId, (slice) => ({
+        ...slice,
+        entries: [
+          {
+            id: `layout-${streamId}`,
+            role: 'assistant' as const,
+            text: transcriptText,
+            finalized: false,
+          },
+        ],
+      }));
+    }
+    const { ink, React } = await loadInk();
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, appProps(vi.fn())),
+      { columns: 40, debug: true, rows: 12 },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+    const visibleTranscriptRows = (): number =>
+      (currentFrame().match(/layout line \d+/gu) ?? []).length;
+
+    try {
+      await waitFor(() => visibleTranscriptRows() > 0);
+      const rootRows = visibleTranscriptRows();
+
+      focusStream(CHILD);
+      await waitFor(() => currentFrame().includes('Esc back'));
+      const supportedChildRows = visibleTranscriptRows();
+      expect(rootRows).toBe(2);
+      expect(supportedChildRows).toBe(7);
+
+      for (const fixture of [
+        {
+          identity: { kind: 'agent' as const, agent: 'structured-child' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          category: AgentCategory.ToolUse,
+        },
+        {
+          identity: { kind: 'agent' as const, agent: 'workflow-child' },
+          category: AgentCategory.Workflow,
+        },
+        {
+          identity: { kind: 'process' as const, tool: 'bash' },
+          category: AgentCategory.ToolUse,
+        },
+        {
+          identity: {
+            kind: 'agent' as const,
+            agent: 'codex',
+            tool: 'codex',
+          },
+          category: AgentCategory.ToolUse,
+        },
+      ]) {
+        const writesBeforePatch = stdout.writes.length;
+        patchStream(CHILD, (slice) => ({ ...slice, ...fixture }));
+        await waitFor(
+          () =>
+            stdout.writes.length > writesBeforePatch &&
+            visibleTranscriptRows() === 10,
+        );
+        expect(visibleTranscriptRows()).toBe(10);
+      }
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('paints the choosing hint and reserves its rows for an unsupported child list', async () => {
+    const viewport = { columns: 40, rows: 12 } as const;
+
+    seedChildHierarchy();
+    patchStream(CHILD, (slice) => ({
+      ...slice,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    }));
+    focusStream(CHILD);
+    const transcriptText = Array.from(
+      { length: 20 },
+      (_, index) => `unsupported list line ${index + 1}`,
+    ).join('\n');
+    patchStream(CHILD, (slice) => ({
+      ...slice,
+      entries: [
+        {
+          id: 'unsupported-list-layout',
+          role: 'assistant',
+          text: transcriptText,
+          finalized: false,
+        },
+      ],
+    }));
+    const { ink, React } = await loadInk();
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, appProps(vi.fn())),
+      { ...viewport, debug: true },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+    const visibleTranscriptRows = (): number =>
+      (currentFrame().match(/unsupported list line \d+/gu) ?? []).length;
+
+    try {
+      await waitFor(() => visibleTranscriptRows() === 10);
+      expect(visibleTranscriptRows()).toBe(10);
+      expect(currentFrame()).not.toContain('Choosing a session');
+
+      stdin.write('\t');
+      await waitFor(
+        () =>
+          currentFrame().includes('Choosing a session') &&
+          visibleTranscriptRows() === 4,
+      );
+      expect(currentFrame()).toContain('Choosing a session');
+      expect(visibleTranscriptRows()).toBe(4);
+
+      stdin.write('\t');
+      await waitFor(() => visibleTranscriptRows() === 10);
+      expect(visibleTranscriptRows()).toBe(10);
+      expect(currentFrame()).not.toContain('Choosing a session');
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it.each([STREAM_PHASE.RUNNING, STREAM_PHASE.WAITING])(
+    'keeps the composer enabled for a %s tool-use agent child',
+    async (status) => {
+      seedChildHierarchy();
+      setStreamStatusInCliState({ streamId: CHILD, status });
+      focusStream(CHILD);
+      const onSubmit = vi.fn();
+      const { instance, stdin } = await renderWithInterrupt({ onSubmit });
+
+      try {
+        stdin.write('child follow-up\r');
+        await waitFor(() => onSubmit.mock.calls.length === 1);
+        expect(onSubmit).toHaveBeenCalledWith('child follow-up', undefined);
+      } finally {
+        instance.unmount();
+      }
+    },
+  );
+
+  it.each([
+    {
+      name: 'structured single-cycle workflow call',
+      identity: { kind: 'agent' as const, agent: 'structured-child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'workflow agent',
+      identity: { kind: 'agent' as const, agent: 'workflow-child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.Workflow,
+    },
+    {
+      name: 'multi-agent workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'workflow-child',
+      },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.Workflow,
+    },
+    {
+      name: 'background bash process',
+      identity: { kind: 'process' as const, tool: 'bash' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'terminal-backed agent',
+      identity: {
+        kind: 'agent' as const,
+        agent: 'codex',
+        tool: 'codex',
+      },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'missing metadata',
+      identity: undefined,
+      userFollowUpSupport: undefined,
+      category: undefined,
+    },
+  ])(
+    'ignores printable submission for a running $name child',
+    async (fixture) => {
+      seedChildHierarchy();
+      patchStream(CHILD, (slice) => ({
+        ...slice,
+        identity: fixture.identity,
+        userFollowUpSupport: fixture.userFollowUpSupport,
+        category: fixture.category,
+      }));
+      focusStream(CHILD);
+      const onSubmit = vi.fn();
+      const { instance, stdin, stdout } = await renderWithInterrupt({
+        onSubmit,
+      });
+
+      try {
+        stdin.write('must not submit\r');
+        await sleep(30);
+        expect(stdout.output).not.toContain('must not submit');
+        expect(onSubmit).not.toHaveBeenCalled();
+      } finally {
+        instance.unmount();
+      }
+    },
+  );
 
   it('treats list Escape as cancel and Tab as the explicit ownership transfer', async () => {
     seedChildHierarchy();

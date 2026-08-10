@@ -24,6 +24,7 @@ import {
   type RunIdentity,
   type StreamPhase,
   type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -50,6 +51,7 @@ interface SessionStreamConfigDetails {
 export interface SessionStreamMetadata {
   /** The run's identity, verbatim from `run.start` or the durable store. */
   identity?: RunIdentity;
+  userFollowUpSupport?: UserFollowUpSupport;
   agentCategory?: AgentCategory;
   isRemote?: boolean;
   creationTimestamp: number;
@@ -270,7 +272,8 @@ export class SessionState {
 
   /**
    * Build the snapshot-owned slice of a metadata patch: `identity` is set
-   * only once the snapshot store has one, and `agentCategory`/`config` are
+   * only once the snapshot store has one, while follow-up support is always
+   * replaced because absence must fail closed. `agentCategory`/`config` are
    * set together from one resolved `AgentConfig` — never patched to
    * `undefined` while still pending. `executionId`, `parentStreamId`, and
    * `description` fall back to the current value when the snapshot store
@@ -282,9 +285,10 @@ export class SessionState {
     current: StoredStreamMetadata,
   ): Partial<StoredStreamMetadata> {
     const patch: Partial<StoredStreamMetadata> = {};
-    const identity = this.snapshots.getRunIdentity(stream);
-    if (identity) patch.identity = identity;
-    const config = this.snapshots.getRunConfig(stream);
+    const runMetadata = this.snapshots.getRunMetadata(stream);
+    if (runMetadata.identity) patch.identity = runMetadata.identity;
+    patch.userFollowUpSupport = runMetadata.userFollowUpSupport;
+    const { config } = runMetadata;
     if (config) {
       patch.agentCategory = config.agentCategory;
       patch.config = {
@@ -294,12 +298,10 @@ export class SessionState {
       };
     }
 
-    patch.executionId =
-      this.snapshots.getExecutionId(stream) ?? current.executionId;
+    patch.executionId = runMetadata.executionId ?? current.executionId;
     patch.parentStreamId =
       this.snapshots.getParentStreamId(stream) ?? current.parentStreamId;
-    patch.description =
-      this.snapshots.getDescription(stream) ?? current.description;
+    patch.description = runMetadata.description ?? current.description;
 
     return patch;
   }
