@@ -373,6 +373,59 @@ return [failed, passed]`,
     ).toBe(true);
   });
 
+  it('marks the active stage failed when orchestration throws with no failed call', async () => {
+    const snapshots: WorkflowExecutionSnapshot[] = [];
+    await expect(
+      runWorkflowScript({
+        script: `export const meta = {
+  name: 'orchestration-fail',
+  description: 'stage fails without a failed call',
+  phases: ['Merge'],
+}
+phase('Merge')
+const ok = await agent('already done', { id: 'done' })
+throw new Error('reduce failed after success')`,
+        runAgent: async () => 'done',
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
+      }),
+    ).rejects.toThrow(/reduce failed after success/);
+
+    // Script throw after a successful call must not leave Merge as completed
+    // just because call-derived settlement saw only completed work.
+    const terminal = finalSnapshot(snapshots);
+    expect(terminal.lifecycle).toBe('failed');
+    expect(terminal.stages[0]?.lifecycle).toBe('failed');
+    expect(terminal.calls[0]?.status).toBe('completed');
+  });
+
+  it('marks a call-less active stage failed on orchestration throw', async () => {
+    const snapshots: WorkflowExecutionSnapshot[] = [];
+    await expect(
+      runWorkflowScript({
+        script: `export const meta = {
+  name: 'empty-stage-fail',
+  description: 'phase with no agent() then throw',
+  phases: ['Merge'],
+}
+phase('Merge')
+throw new Error('reduce only')`,
+        runAgent: async () => {
+          throw new Error('must not run');
+        },
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
+      }),
+    ).rejects.toThrow(/reduce only/);
+
+    const terminal = finalSnapshot(snapshots);
+    expect(terminal.lifecycle).toBe('failed');
+    // Without the active-stage override, call-less stages settle as skipped.
+    expect(terminal.stages[0]?.lifecycle).toBe('failed');
+  });
+
   it('terminalizes cancellation with no live tasks and balanced counts', async () => {
     const controller = new AbortController();
     const snapshots: WorkflowExecutionSnapshot[] = [];

@@ -370,7 +370,13 @@ export function createWorkflowScriptAgentRunner(
                 runScope.session,
               );
             },
-            onCost: (totalCostUsd) => hooks?.onCost?.(invocation, totalCostUsd),
+            onCost: (totalCostUsd) => {
+              hooks?.onCost?.(invocation, totalCostUsd);
+              // Stamp progressive spend onto the live snapshot attempt so a
+              // failed/cancelled/retried attempt still shows what it consumed
+              // even when execution never reaches the success path below.
+              invocation.reportCostUsd?.(totalCostUsd);
+            },
           };
         },
       });
@@ -395,6 +401,14 @@ export function createWorkflowScriptAgentRunner(
         }
       }
       const { result } = completed;
+      // Live physical attempts always charge the terminal result cost (covers
+      // failed/cancelled outcomes and empty-output validation throws that
+      // never reach a success-only callback). Recovered durable results must
+      // not charge the synthetic resume attempt — the interrupted snapshot may
+      // already hold the same cost on a closed prior attempt.
+      if (!recovered) {
+        invocation.reportCostUsd?.(result.cost);
+      }
       if (result.outcome !== 'completed') {
         throw new Error(
           `Workflow subagent ended with ${result.outcome} outcome.`,
@@ -404,13 +418,6 @@ export function createWorkflowScriptAgentRunner(
         throw new Error(
           'Workflow subagent completed without producing any output files.',
         );
-      }
-      // Live physical attempts always charge. Recovered durable results must
-      // not charge the synthetic resume attempt — the interrupted snapshot may
-      // already hold the same cost on a closed prior attempt, and double-counting
-      // would inflate totalAttemptCost on /executions/{id}.
-      if (!recovered) {
-        invocation.reportCostUsd?.(result.cost);
       }
       return result;
     } catch (error) {

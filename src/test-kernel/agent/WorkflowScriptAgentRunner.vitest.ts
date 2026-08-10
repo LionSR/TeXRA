@@ -634,6 +634,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('reports live child cost with its workflow invocation identity', async () => {
     const onCost = vi.fn();
+    const reportCostUsd = vi.fn();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
         options.onActiveExecutionId?.(options.executionId);
@@ -643,11 +644,39 @@ describe('createWorkflowScriptAgentRunner', () => {
       },
     );
     const runner = defaultRunner({ onCost });
-    const call = invocation();
+    const call = { ...invocation(), reportCostUsd };
 
     await runner(call);
 
     expect(onCost).toHaveBeenCalledWith(call, 0.25);
+    // Progressive onCost stamps the live snapshot attempt (not only success).
+    expect(reportCostUsd).toHaveBeenCalledWith(0.25);
+    // Terminal result cost is also stamped (same value here).
+    expect(reportCostUsd).toHaveBeenCalledWith(result.cost);
+  });
+
+  it('stamps terminal cost on failed outcomes before throwing', async () => {
+    const reportCostUsd = vi.fn();
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
+        await options.prepare();
+        return {
+          executionId: 'bbbbbb222222',
+          result: {
+            ...result,
+            outcome: 'failed',
+            cost: 0.42,
+          },
+        };
+      },
+    );
+    const runner = defaultRunner();
+
+    await expect(
+      runner({ ...invocation(), reportCostUsd }),
+    ).rejects.toThrow(/ended with failed outcome/);
+    expect(reportCostUsd).toHaveBeenCalledWith(0.42);
   });
 
   it('does not report recovered stable child cost as live execution', async () => {
