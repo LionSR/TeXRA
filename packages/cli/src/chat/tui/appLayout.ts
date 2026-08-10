@@ -1,12 +1,6 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import {
-  TODO_STATUS,
-  type StreamPhase,
-  type StreamTabId,
-  type TodoItem,
-} from '@shared/schemas';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import { TODO_STATUS, type StreamTabId, type TodoItem } from '@shared/schemas';
 import { clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
@@ -337,22 +331,13 @@ export function staticScrollbackTarget({
 export function shouldShowTodosPlanPanel({
   foregroundOpen,
   hasPlan,
-  status,
   todos,
 }: {
   readonly foregroundOpen: boolean;
   readonly hasPlan: boolean;
-  readonly status: StreamPhase | undefined;
   readonly todos: readonly TodoItem[];
 }): boolean {
   if (foregroundOpen) return false;
-  const hasTodos = todos.length > 0;
-  if (!hasTodos && !hasPlan) return false;
-  if (
-    hasTodos &&
-    todos.every((todo) => todo.status === TODO_STATUS.COMPLETED)
-  ) {
-    return false;
-  }
-  return isActivePhase(status);
+  if (hasPlan) return true;
+  return todos.some((todo) => todo.status !== TODO_STATUS.COMPLETED);
 }

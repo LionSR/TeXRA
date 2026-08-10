@@ -26,8 +26,10 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
+  closeForegroundReader,
   closeInfoPane,
   codexPreferenceVersion,
+  foregroundReader,
   infoPane,
   patchSessionMeta,
   resetCliState,
@@ -37,6 +39,7 @@ import {
   type ConversationEntry,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -48,7 +51,9 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   STREAM_PHASE,
   type ExecutionId,
+  type Plan,
   type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -145,6 +150,26 @@ function silentOutput(): SlashCommandOutput {
   return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
 }
 
+function workPlanSnapshots(
+  read: (streamId: StreamTabId) => {
+    readonly plan: Plan | null;
+    readonly todos: readonly TodoItem[];
+  },
+  preload: StreamArtifactReader['preload'] = async () => undefined,
+): StreamArtifactReader {
+  return {
+    preload: vi.fn(preload),
+    getOutputFiles: () => ({}),
+    getMissingOutputs: () => ({}),
+    getCompileFailures: () => ({}),
+    getRunUsage: () => new Map(),
+    getWorkPlan: (streamId) => {
+      const { plan, todos } = read(streamId);
+      return { plan, todos: [...todos], planSummary: null };
+    },
+  };
+}
+
 /** A sign-in mock whose promise rejects when its abort signal fires. */
 function abortRejection(): {
   mock: (options: { signal?: AbortSignal }) => Promise<never>;
@@ -210,6 +235,206 @@ describe('handleTuiSlashCommand', () => {
       'Goal mode starts from an approved plan',
     );
     expect(localEntries()).toEqual([]);
+  });
+
+  it('opens a live work-plan reader for the focused stream', async () => {
+    let canonical = { plan: null, todos: [] } as {
+      plan: Plan | null;
+      todos: readonly TodoItem[];
+    };
+    const snapshots = workPlanSnapshots(() => canonical);
+    registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
+    const context = createContext();
+
+    await handleTuiSlashCommand('/plan', context);
+    expect(transientNotice.get()?.text).toBe('No focused session.');
+
+    const streamId = 'plan-reader' as StreamTabId;
+    patchStream(streamId, (slice) => ({ ...slice }));
+    activeStreamId.set(streamId);
+    await handleTuiSlashCommand('/plan', context);
+    expect(transientNotice.get()?.text).toBe(
+      'The focused session has no work plan.',
+    );
+
+    canonical = {
+      plan: { objective: 'Check every case.' },
+      todos: [
+        {
+          content: 'Check the base case',
+          activeForm: 'Checking the base case',
+          status: 'in_progress',
+        },
+      ],
+    };
+    await handleTuiSlashCommand('/plan', context);
+    expect(streams.get().get(streamId)).toMatchObject(canonical);
+    expect(snapshots.preload).toHaveBeenCalledTimes(2);
+    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+
+    activeStreamId.set('another-stream');
+    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+    expect(localEntries()).toEqual([]);
+    closeForegroundReader();
+  });
+
+  it('waits for canonical hydration before deciding a focused plan is empty', async () => {
+    let resolvePreload: () => void = () => undefined;
+    const preload = new Promise<void>((resolve) => {
+      resolvePreload = resolve;
+    });
+    const streamId = 'historical-plan' as StreamTabId;
+    registerBuiltinSlashCommands({
+      workPlanSnapshots: workPlanSnapshots(
+        () => ({
+          plan: { objective: 'Hydrated historical objective.' },
+          todos: [],
+        }),
+        () => preload,
+      ),
+    });
+    patchStream(streamId, (slice) => ({ ...slice }));
+    activeStreamId.set(streamId);
+
+    const dispatched = handleTuiSlashCommand('/plan', createContext());
+    expect(foregroundReader.get()).toMatchObject({
+      kind: 'workPlan',
+      streamId,
+      loading: true,
+    });
+    expect(transientNotice.get()).toBeUndefined();
+
+    resolvePreload();
+    await dispatched;
+
+    expect(streams.get().get(streamId)?.plan?.objective).toBe(
+      'Hydrated historical objective.',
+    );
+    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+  });
+
+  it('lets a newer plan request win when preloads resolve in reverse order', async () => {
+    const streamA = 'plan-a' as StreamTabId;
+    const streamB = 'plan-b' as StreamTabId;
+    const resolvers = new Map<StreamTabId, () => void>();
+    const snapshots = workPlanSnapshots(
+      (streamId) => {
+        return streamId === streamB
+          ? { plan: { objective: 'Plan B.' }, todos: [] }
+          : { plan: null, todos: [] };
+      },
+      async ([streamId]) =>
+        new Promise<void>((resolve) => {
+          resolvers.set(streamId, resolve);
+        }),
+    );
+    registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
+    patchStream(streamA, (slice) => ({ ...slice }));
+    patchStream(streamB, (slice) => ({ ...slice }));
+
+    activeStreamId.set(streamA);
+    const requestA = handleTuiSlashCommand('/plan', createContext());
+    activeStreamId.set(streamB);
+    const requestB = handleTuiSlashCommand('/plan', createContext());
+    expect(foregroundReader.get()).toMatchObject({
+      kind: 'workPlan',
+      streamId: streamB,
+      loading: true,
+    });
+
+    resolvers.get(streamB)?.();
+    await requestB;
+    expect(foregroundReader.get()).toEqual({
+      kind: 'workPlan',
+      streamId: streamB,
+    });
+    expect(transientNotice.get()).toBeUndefined();
+
+    resolvers.get(streamA)?.();
+    await requestA;
+    expect(foregroundReader.get()).toEqual({
+      kind: 'workPlan',
+      streamId: streamB,
+    });
+    expect(transientNotice.get()).toBeUndefined();
+  });
+
+  it('lets a newer no-focus request cancel pending ownership', async () => {
+    let resolvePreload: () => void = () => undefined;
+    const preload = new Promise<void>((resolve) => {
+      resolvePreload = resolve;
+    });
+    const streamId = 'superseded-loading-plan' as StreamTabId;
+    registerBuiltinSlashCommands({
+      workPlanSnapshots: workPlanSnapshots(
+        () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
+        () => preload,
+      ),
+    });
+    patchStream(streamId, (slice) => ({ ...slice }));
+    activeStreamId.set(streamId);
+
+    const first = handleTuiSlashCommand('/plan', createContext());
+    activeStreamId.set(undefined);
+    await handleTuiSlashCommand('/plan', createContext());
+    expect(foregroundReader.get()).toBeUndefined();
+    expect(transientNotice.get()?.text).toBe('No focused session.');
+
+    resolvePreload();
+    await first;
+    expect(foregroundReader.get()).toBeUndefined();
+    expect(transientNotice.get()?.text).toBe('No focused session.');
+  });
+
+  it('does not reopen a loading plan reader after Escape', async () => {
+    let resolvePreload: () => void = () => undefined;
+    const preload = new Promise<void>((resolve) => {
+      resolvePreload = resolve;
+    });
+    const streamId = 'escape-loading-plan' as StreamTabId;
+    registerBuiltinSlashCommands({
+      workPlanSnapshots: workPlanSnapshots(
+        () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
+        () => preload,
+      ),
+    });
+    patchStream(streamId, (slice) => ({ ...slice }));
+    activeStreamId.set(streamId);
+
+    const dispatched = handleTuiSlashCommand('/plan', createContext());
+    expect(foregroundReader.get()).toMatchObject({ loading: true, streamId });
+    closeForegroundReader();
+    resolvePreload();
+    await dispatched;
+
+    expect(foregroundReader.get()).toBeUndefined();
+    expect(transientNotice.get()).toBeUndefined();
+  });
+
+  it('closes a loading reader and reports a current preload error', async () => {
+    let rejectPreload: (error: unknown) => void = () => undefined;
+    const preload = new Promise<void>((_resolve, reject) => {
+      rejectPreload = reject;
+    });
+    const streamId = 'error-loading-plan' as StreamTabId;
+    registerBuiltinSlashCommands({
+      workPlanSnapshots: workPlanSnapshots(
+        () => ({ plan: null, todos: [] }),
+        () => preload,
+      ),
+    });
+    patchStream(streamId, (slice) => ({ ...slice }));
+    activeStreamId.set(streamId);
+
+    const dispatched = handleTuiSlashCommand('/plan', createContext());
+    expect(foregroundReader.get()).toMatchObject({ loading: true, streamId });
+    rejectPreload(new Error('historical sidecar unreadable'));
+    await dispatched;
+
+    expect(foregroundReader.get()).toBeUndefined();
+    expect(transientNotice.get()?.text).toBe(
+      'Could not load workflow artifacts: historical sidecar unreadable',
+    );
   });
 
   it('opens memory list and preview output in the reference pane', async () => {

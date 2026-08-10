@@ -545,23 +545,90 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
-/**
- * Stream whose full transcript is open in the scrollable foreground reader,
- * or `undefined` when the reader is closed. Holding the id rather than a text
- * snapshot keeps the reader live: a run that is still producing rows updates
- * under the reader instead of freezing at the moment it was opened.
- */
-const TRANSCRIPT_READER_STREAM = signal<StreamTabId | undefined>(undefined);
-export const transcriptReaderStreamId: Signal.Computed<
-  StreamTabId | undefined
-> = computed(() => TRANSCRIPT_READER_STREAM.get());
-
-export function openTranscriptReader(streamId: StreamTabId): void {
-  TRANSCRIPT_READER_STREAM.set(streamId);
+/** Passive reader target. Holding the captured stream id rather than a text
+ * snapshot keeps each reader live even if transcript focus moves elsewhere. */
+export interface WorkPlanReaderRequest {
+  readonly revision: number;
+  readonly streamId: StreamTabId;
 }
 
-export function closeTranscriptReader(): void {
-  TRANSCRIPT_READER_STREAM.set(undefined);
+export type ForegroundReaderTarget =
+  | { readonly kind: 'transcript'; readonly streamId: StreamTabId }
+  | {
+      readonly kind: 'workPlan';
+      readonly streamId: StreamTabId;
+      readonly loading?: false;
+    }
+  | {
+      readonly kind: 'workPlan';
+      readonly streamId: StreamTabId;
+      readonly loading: true;
+      readonly requestRevision: number;
+    };
+
+const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
+let WORK_PLAN_REQUEST_REVISION = 0;
+export const foregroundReader: Signal.Computed<
+  ForegroundReaderTarget | undefined
+> = computed(() => FOREGROUND_READER.get());
+
+export function openTranscriptReader(streamId: StreamTabId): void {
+  FOREGROUND_READER.set({ kind: 'transcript', streamId });
+}
+
+/** Capture one `/plan` invocation as the sole owner of async reader output. */
+export function beginWorkPlanReaderRequest(
+  streamId: StreamTabId,
+): WorkPlanReaderRequest {
+  const request = { streamId, revision: ++WORK_PLAN_REQUEST_REVISION };
+  FOREGROUND_READER.set({
+    kind: 'workPlan',
+    streamId,
+    loading: true,
+    requestRevision: request.revision,
+  });
+  return request;
+}
+
+export function workPlanReaderRequestIsCurrent(
+  request: WorkPlanReaderRequest,
+): boolean {
+  const target = FOREGROUND_READER.get();
+  return (
+    target?.kind === 'workPlan' &&
+    target.loading === true &&
+    target.streamId === request.streamId &&
+    target.requestRevision === request.revision
+  );
+}
+
+/** Resolve the loading reader without allowing an older request to replace it. */
+export function finishWorkPlanReaderRequest(
+  request: WorkPlanReaderRequest,
+): boolean {
+  if (!workPlanReaderRequestIsCurrent(request)) return false;
+  FOREGROUND_READER.set({ kind: 'workPlan', streamId: request.streamId });
+  return true;
+}
+
+export function cancelPendingWorkPlanReaderRequest(): void {
+  const target = FOREGROUND_READER.get();
+  if (target?.kind === 'workPlan' && target.loading === true) {
+    FOREGROUND_READER.set(undefined);
+  }
+}
+
+/** Close only the loading reader owned by this invocation. */
+export function cancelWorkPlanReaderRequest(
+  request: WorkPlanReaderRequest,
+): boolean {
+  if (!workPlanReaderRequestIsCurrent(request)) return false;
+  FOREGROUND_READER.set(undefined);
+  return true;
+}
+
+export function closeForegroundReader(): void {
+  FOREGROUND_READER.set(undefined);
 }
 
 /** True while the slash-command palette is mounted in the InputBar. App-level
@@ -688,6 +755,9 @@ export function removeStream(streamId: StreamTabId): void {
   if (activeStreamId.get() === streamId) {
     activeStreamId.set(undefined);
   }
+  if (FOREGROUND_READER.get()?.streamId === streamId) {
+    FOREGROUND_READER.set(undefined);
+  }
   applyChildStreamRemoval(streamId);
 }
 
@@ -743,7 +813,7 @@ export function resetCliState(
   resetChildStreamEntries();
   activeForm.set(undefined);
   INFO_PANE_QUEUE.set([]);
-  TRANSCRIPT_READER_STREAM.set(undefined);
+  FOREGROUND_READER.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   clearTransientNotice();

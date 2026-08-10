@@ -37,6 +37,7 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
+import { WorkPlanReader, workPlanReaderTitle } from './panes/WorkPlanReader';
 import {
   TranscriptReader,
   transcriptReaderTitle,
@@ -70,11 +71,11 @@ import {
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
-  closeTranscriptReader,
+  closeForegroundReader,
+  foregroundReader as foregroundReaderSignal,
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
-  transcriptReaderStreamId as transcriptReaderStreamIdSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   streams as streamsSignal,
@@ -161,7 +162,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const infoPane = useSignal(infoPaneSignal);
-  const transcriptReaderStreamId = useSignal(transcriptReaderStreamIdSignal);
+  const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
@@ -201,7 +202,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeApprovalVisible ||
     activeForm !== undefined ||
     infoPane !== undefined ||
-    transcriptReaderStreamId !== undefined;
+    foregroundReader !== undefined;
   const childInputHidden =
     focusedChildFollowUpRoute({ activeStreamId, parentStream, streams })
       .kind === 'reject';
@@ -407,7 +408,7 @@ export function App(props: AppProps): React.JSX.Element {
     formBusy,
     infoPaneOpen: infoPane !== undefined,
     pendingApproval: activeApprovalVisible,
-    transcriptReaderOpen: transcriptReaderStreamId !== undefined,
+    readerKind: foregroundReader?.kind,
   });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
@@ -443,12 +444,12 @@ export function App(props: AppProps): React.JSX.Element {
           <ApprovalModal pending={pending} availableRows={availableRows} />
         ) : null;
       case 'transcriptReader': {
-        if (!transcriptReaderStreamId) return null;
+        if (foregroundReader?.kind !== 'transcript') return null;
         const title = transcriptReaderTitle(
           streamDisplayLabel({
             childStreamEntries,
             parentStream,
-            streamId: transcriptReaderStreamId,
+            streamId: foregroundReader.streamId,
             streams,
           }),
         );
@@ -456,8 +457,28 @@ export function App(props: AppProps): React.JSX.Element {
           <TranscriptReader
             availableRows={availableRows}
             executionLabels={subagentExecutionLabels}
-            onClose={closeTranscriptReader}
-            streamId={transcriptReaderStreamId}
+            onClose={closeForegroundReader}
+            streamId={foregroundReader.streamId}
+            title={title}
+          />
+        );
+      }
+      case 'workPlanReader': {
+        if (foregroundReader?.kind !== 'workPlan') return null;
+        const title = workPlanReaderTitle(
+          streamDisplayLabel({
+            childStreamEntries,
+            parentStream,
+            streamId: foregroundReader.streamId,
+            streams,
+          }),
+        );
+        return (
+          <WorkPlanReader
+            availableRows={availableRows}
+            loading={foregroundReader.loading === true}
+            onClose={closeForegroundReader}
+            streamId={foregroundReader.streamId}
             title={title}
           />
         );

@@ -4,6 +4,9 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
+  beginWorkPlanReaderRequest,
+  finishWorkPlanReaderRequest,
+  foregroundReader,
   patchStream,
   removeStream,
   resetCliState,
@@ -11,6 +14,7 @@ import {
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import {
+  hydrateStreamArtifacts,
   subscribeStreamArtifacts,
   type StreamArtifactReader,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
@@ -21,6 +25,8 @@ import type {
   RoundIndexed,
   StreamTabId,
   TokenUsageStats,
+  TodoItem,
+  Plan,
 } from '@shared/schemas';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
@@ -33,6 +39,8 @@ interface StubStoreState {
   missingOutputs?: RoundIndexed<string>;
   compileFailures?: RoundIndexed<CompileFailure>;
   runUsage?: ReadonlyMap<string, TokenUsageStats>;
+  todos?: readonly TodoItem[];
+  plan?: Plan | null;
 }
 
 function stubReader(
@@ -45,6 +53,11 @@ function stubReader(
     getMissingOutputs: () => ({ ...(state.missingOutputs ?? {}) }),
     getCompileFailures: () => ({ ...(state.compileFailures ?? {}) }),
     getRunUsage: () => new Map(state.runUsage ?? []),
+    getWorkPlan: () => ({
+      todos: [...(state.todos ?? [])],
+      plan: state.plan ?? null,
+      planSummary: null,
+    }),
   };
 }
 
@@ -93,6 +106,14 @@ describe('subscribeStreamArtifacts', () => {
       outputFiles: { 0: [outputFile] },
       missingOutputs: { 0: ['store.tex'], 1: ['disk.tex'] },
       compileFailures: {},
+      todos: [
+        {
+          content: 'Use canonical plan state',
+          activeForm: 'Using canonical plan state',
+          status: 'in_progress',
+        },
+      ],
+      plan: { objective: 'Read the canonical objective.' },
       runUsage: new Map([
         ['run-1', { inputTokens: 100, outputTokens: 20, cost: 1 }],
         ['run-2', { inputTokens: 40, outputTokens: 10, cost: 0.5 }],
@@ -105,6 +126,14 @@ describe('subscribeStreamArtifacts', () => {
     patchStream(STREAM_A, (slice) => ({
       ...slice,
       missingOutputsByRound: { 0: ['live.tex'] },
+      todos: [
+        {
+          content: 'Stale local todo',
+          activeForm: 'Keeping stale local todo',
+          status: 'pending',
+        },
+      ],
+      plan: { objective: 'Stale local objective.' },
     }));
     activeStreamId.set(STREAM_A);
     const dispose = subscribeStreamArtifacts(reader);
@@ -116,6 +145,14 @@ describe('subscribeStreamArtifacts', () => {
       outputFilesByRound: { 0: [outputFile] },
       missingOutputsByRound: { 0: ['store.tex'], 1: ['disk.tex'] },
       compileFailuresByRound: {},
+      todos: [
+        {
+          content: 'Use canonical plan state',
+          activeForm: 'Using canonical plan state',
+          status: 'in_progress',
+        },
+      ],
+      plan: { objective: 'Read the canonical objective.' },
       cumulativeUsage: {
         inputTokens: 140,
         outputTokens: 30,
@@ -171,6 +208,7 @@ describe('subscribeStreamArtifacts', () => {
       getMissingOutputs: (streamId) => store.getMissingOutputs(streamId),
       getCompileFailures: (streamId) => store.getCompileFailures(streamId),
       getRunUsage: (streamId) => store.getRunUsage(streamId),
+      getWorkPlan: (streamId) => store.getWorkPlan(streamId),
     };
 
     try {
@@ -278,6 +316,22 @@ describe('subscribeStreamArtifacts', () => {
       dispose();
       resetCliState();
     }
+  });
+
+  it('ignores late reader hydration after its captured stream is removed', async () => {
+    const { reader, resolvePreload } = deferredReader({
+      plan: { objective: 'Must not return after removal.' },
+    });
+    patchStream(STREAM_A, (slice) => ({ ...slice }));
+    finishWorkPlanReaderRequest(beginWorkPlanReaderRequest(STREAM_A));
+
+    const hydration = hydrateStreamArtifacts(reader, STREAM_A);
+    removeStream(STREAM_A);
+    resolvePreload();
+    await hydration;
+
+    expect(streams.get().has(STREAM_A)).toBe(false);
+    expect(foregroundReader.get()).toBeUndefined();
   });
 
   it('surfaces a preload failure as a transient notice instead of silence', async () => {

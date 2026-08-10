@@ -180,11 +180,26 @@ interface RoundOverlay<T> {
  * {@link StreamSnapshotStore.mutateWithOverlay} take the field name instead of
  * a getter/setter pair per call site.
  */
+/** Partial work-plan fields recorded while a stream is unseeded. */
+interface WorkPlanOverlay {
+  todos?: readonly TodoItem[];
+  plan?: Plan | null;
+}
+
 interface OverlayPatches {
   outputFiles: OutputFilesPatch;
   missingOutputs: RoundOverlay<string>;
   compileFailures: Map<number, CompileFailure[] | null>;
   usage: Map<StorageKey, TokenUsageStats>;
+  workPlan: WorkPlanOverlay;
+}
+
+/** Later unseeded todos/plan patches win per field. */
+function mergeWorkPlanOverlay(
+  existing: WorkPlanOverlay | undefined,
+  patch: WorkPlanOverlay,
+): WorkPlanOverlay {
+  return { ...existing, ...patch };
 }
 
 /**
@@ -1043,23 +1058,44 @@ export class StreamSnapshotStore {
   }
 
   private setTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    this.mutate(stream, () => {
-      const record = this.getOrCreateRecord(stream);
-      record.workPlan = { ...record.workPlan, todos };
-      this.writeWorkPlan(stream, record.workPlan);
-    });
+    // Same eager-apply + overlay shape as the round/usage mutators: a live
+    // updateTodos must be readable via getWorkPlan before the stream seeds,
+    // and must survive applyStreamData's disk baseline.
+    this.mutateWithOverlay(
+      stream,
+      'workPlan',
+      { todos },
+      mergeWorkPlanOverlay,
+      () => {
+        const record = this.getOrCreateRecord(stream);
+        record.workPlan = { ...record.workPlan, todos };
+      },
+      () => {
+        const record = this.records.get(stream);
+        if (record) this.writeWorkPlan(stream, record.workPlan);
+      },
+    );
   }
 
   private setPlan(stream: StreamTabId, plan: Plan | null): void {
-    this.mutate(stream, () => {
-      const record = this.getOrCreateRecord(stream);
-      record.workPlan = {
-        ...record.workPlan,
-        plan,
-        planSummary: plan ? planSummaryLine(plan.objective) : null,
-      };
-      this.writeWorkPlan(stream, record.workPlan);
-    });
+    this.mutateWithOverlay(
+      stream,
+      'workPlan',
+      { plan },
+      mergeWorkPlanOverlay,
+      () => {
+        const record = this.getOrCreateRecord(stream);
+        record.workPlan = {
+          ...record.workPlan,
+          plan,
+          planSummary: plan ? planSummaryLine(plan.objective) : null,
+        };
+      },
+      () => {
+        const record = this.records.get(stream);
+        if (record) this.writeWorkPlan(stream, record.workPlan);
+      },
+    );
   }
 
   getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
@@ -1769,6 +1805,23 @@ export class StreamSnapshotStore {
       sidecarsToWrite.add(STREAM_DATA_KEYS.USAGE_STATS);
       overlays.usage = undefined;
     }
+    if (overlays.workPlan) {
+      const overlay = overlays.workPlan;
+      if (overlay.todos !== undefined) {
+        record.workPlan = { ...record.workPlan, todos: [...overlay.todos] };
+      }
+      if (overlay.plan !== undefined) {
+        record.workPlan = {
+          ...record.workPlan,
+          plan: overlay.plan,
+          planSummary: overlay.plan
+            ? planSummaryLine(overlay.plan.objective)
+            : null,
+        };
+      }
+      sidecarsToWrite.add(STREAM_DATA_KEYS.WORK_PLAN);
+      overlays.workPlan = undefined;
+    }
     record.seeded = true;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
   }
@@ -1798,6 +1851,9 @@ export class StreamSnapshotStore {
           break;
         case STREAM_DATA_KEYS.COMPILE_FAILURES:
           this.write(stream, key, { ...record.compileFailures });
+          break;
+        case STREAM_DATA_KEYS.WORK_PLAN:
+          this.writeWorkPlan(stream, record.workPlan);
           break;
       }
     }
@@ -1830,6 +1886,10 @@ export class StreamSnapshotStore {
     if (overlays.usage) {
       keys.add(STREAM_DATA_KEYS.USAGE_STATS);
       overlays.usage = undefined;
+    }
+    if (overlays.workPlan) {
+      keys.add(STREAM_DATA_KEYS.WORK_PLAN);
+      overlays.workPlan = undefined;
     }
     this.writeMergedSidecars(stream, record, keys);
   }
