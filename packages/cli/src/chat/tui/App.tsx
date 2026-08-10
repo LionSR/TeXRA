@@ -300,8 +300,9 @@ export function App(props: AppProps): React.JSX.Element {
     childListTarget.slice?.identity?.kind === 'multiAgentWorkflow'
       ? childListTarget.slice
       : undefined;
-  // The same derivation `SubagentList` renders from: rows must not be grouped,
-  // ordered, or deduplicated twice or the keyboard drifts off the screen.
+  // The only derivation: `SubagentList` renders this instance and
+  // `ConversationRegion` budgets its rows from it, so rows cannot be grouped,
+  // ordered, or deduplicated twice and drift the keyboard off the screen.
   const workflowDashboard = useMemo(
     () =>
       workflowDashboardRoot
@@ -789,6 +790,8 @@ export function App(props: AppProps): React.JSX.Element {
           childListFocused,
           sessionViews,
           selectedChildValue,
+          selectedChildStreamId,
+          workflowDashboard,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,

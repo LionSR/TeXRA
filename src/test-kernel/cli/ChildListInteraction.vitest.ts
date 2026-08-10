@@ -4,13 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
 import {
-  childPhaseListValue,
+  childListStreamId,
   childStreamListValue,
   workflowPhaseListValue,
   workflowTaskListValue,
   type ChildListValue,
 } from '@cli/chat/tui/state/childListSelection';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import {
+  uniqueWorkflowChildStreamId,
+  workflowDashboardModel,
+} from '@cli/chat/tui/state/workflowDashboardModel';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
@@ -42,8 +46,7 @@ function waitForInput(stdin: FakeStdin): Promise<void> {
 
 /**
  * A controlled SubagentList whose selection lives in React state, mirroring
- * the app's wiring. `current()` reads the latest selection; `reset()` moves
- * the initial value before a remount.
+ * the app's wiring. `current()` reads the latest selection.
  */
 function controlledList(
   React: any,
@@ -52,7 +55,6 @@ function controlledList(
 ): {
   Harness: () => any;
   current: () => ChildListValue;
-  reset: (next: ChildListValue) => void;
 } {
   let selected = initial;
   function Harness() {
@@ -70,15 +72,14 @@ function controlledList(
         setValue(next);
       },
       selectedValue: value,
+      // `App` resolves the highlighted row to a stream once and hands the
+      // result down; a plain session row resolves to its own stream.
+      selectedChildStreamId:
+        childListStreamId(value) ??
+        (props.selectedChildStreamId as StreamTabId | undefined),
     });
   }
-  return {
-    Harness,
-    current: () => selected,
-    reset: (next: ChildListValue) => {
-      selected = next;
-    },
-  };
+  return { Harness, current: () => selected };
 }
 
 function workflowRootSlice(entries: StreamSlice['entries']): StreamSlice {
@@ -171,6 +172,7 @@ describe('CLI child list interaction', () => {
         onRetryExecution,
         onSelectionChange: vi.fn(),
         selectedValue: childStreamListValue(child),
+        selectedChildStreamId: child,
         sessions: [session(root, true), session(child)],
       }),
     );
@@ -189,7 +191,7 @@ describe('CLI child list interaction', () => {
     }
   });
 
-  it('skips disabled phase headers and clamps at selectable boundaries', async () => {
+  it('walks to the child row and clamps at the selectable boundaries', async () => {
     const { ink, React } = await loadInk();
     const onCancel = vi.fn();
     const onFocusStream = vi.fn();
@@ -204,14 +206,7 @@ describe('CLI child list interaction', () => {
         onCancel,
         onFocusStream,
         onSelectionChange,
-        sessions: [
-          session(root, true),
-          {
-            ...session(child),
-            parentId: root,
-            workflowPhase: 'Map:review|draft',
-          },
-        ],
+        sessions: [session(root, true), { ...session(child), parentId: root }],
       },
     );
 
@@ -223,10 +218,8 @@ describe('CLI child list interaction', () => {
     try {
       await waitFor(
         () =>
-          stdin.listenerCount('readable') > 0 &&
-          stdout.output.includes('◆ Map:review|draft'),
+          stdin.listenerCount('readable') > 0 && stdout.output.includes(child),
       );
-      expect(stdout.output).toContain('◆ Map:review|draft');
       stdin.write('\u001B[A');
       stdin.write('\u001B[A');
       await sleep(30);
@@ -246,44 +239,6 @@ describe('CLI child list interaction', () => {
       stdin.write('\r');
       await waitFor(() => onFocusStream.mock.calls.length === 1);
       expect(onFocusStream).toHaveBeenCalledWith(child);
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('keeps a controlled phase-header selection inert', async () => {
-    const { ink, React } = await loadInk();
-    const callbacks = {
-      onFocusStream: vi.fn(),
-      onKillExecution: vi.fn(),
-      onRetryExecution: vi.fn(),
-      onSkipExecution: vi.fn(),
-    };
-    const { instance, stdin } = renderChildList(
-      ink,
-      React.createElement(SubagentList, {
-        activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
-        keyboardActive: true,
-        listRootStreamId: root,
-        maxRows: 5,
-        onCancel: vi.fn(),
-        selectedValue: childPhaseListValue(0),
-        sessions: [
-          session(root, true),
-          { ...session(child), parentId: root, workflowPhase: 'Map' },
-        ],
-        ...callbacks,
-      }),
-    );
-
-    try {
-      await waitForInput(stdin);
-      for (const input of ['k', 's', 'r', '\r']) stdin.write(input);
-      await sleep(30);
-
-      for (const callback of Object.values(callbacks)) {
-        expect(callback).not.toHaveBeenCalled();
-      }
     } finally {
       instance.unmount();
     }
@@ -369,10 +324,9 @@ describe('CLI child list interaction', () => {
         },
       },
     ]);
-    const { Harness, current, reset } = controlledList(React, phaseValue, {
+    const listProps = {
       keyboardActive: true,
       listRootStreamId: root,
-      listRootSlice: rootSlice,
       maxRows: 6,
       onCancel: vi.fn(),
       onFocusStream,
@@ -383,6 +337,12 @@ describe('CLI child list interaction', () => {
         [root, rootSlice],
         [child, emptySlice(child)],
       ]),
+    };
+    // `App` derives the dashboard at the live terminal width and hands the
+    // instance down, so each mount gets the model for its own columns.
+    const { Harness, current } = controlledList(React, phaseValue, {
+      ...listProps,
+      dashboard: workflowDashboardModel(rootSlice, 100),
     });
 
     const { instance, stdin } = renderChildList(
@@ -410,21 +370,26 @@ describe('CLI child list interaction', () => {
       instance.unmount();
     }
 
-    reset(childTaskValue);
     onFocusStream.mockClear();
-    const narrow = renderInteractive(ink, React.createElement(Harness), {
-      columns: 99,
+    const narrowList = controlledList(React, childTaskValue, {
+      ...listProps,
+      dashboard: workflowDashboardModel(rootSlice, 99),
     });
+    const narrow = renderInteractive(
+      ink,
+      React.createElement(narrowList.Harness),
+      { columns: 99 },
+    );
     try {
       await waitForInput(narrow.stdin);
       narrow.stdin.write('\u001B[B');
-      await waitFor(() => current() === plannedTaskValue);
+      await waitFor(() => narrowList.current() === plannedTaskValue);
       narrow.stdin.write('\r');
       await sleep(30);
       expect(onFocusStream).not.toHaveBeenCalled();
 
       narrow.stdin.write('\u001B[A');
-      await waitFor(() => current() === childTaskValue);
+      await waitFor(() => narrowList.current() === childTaskValue);
       narrow.stdin.write('\r');
       await waitFor(() => onFocusStream.mock.calls.length === 1);
       expect(onFocusStream).toHaveBeenCalledWith(child);
@@ -464,20 +429,37 @@ describe('CLI child list interaction', () => {
       },
     ]);
 
-    async function expectControlsInert(
-      props: Record<string, unknown>,
-    ): Promise<void> {
+    const dashboard = workflowDashboardModel(rootSlice, 100);
+
+    async function expectControlsInert(props: {
+      readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
+      readonly selectedValue: ChildListValue;
+      readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+    }): Promise<void> {
+      // `App` owns the selection-to-stream resolution and hands the result
+      // down: an ambiguous or absent child resolves to no stream, so the row
+      // carries nothing for k/s/r to act on.
+      const entry = dashboard.taskByValue.get(props.selectedValue);
+      const selectedChildStreamId = entry
+        ? uniqueWorkflowChildStreamId(
+            entry,
+            dashboard.childTaskIndex,
+            props.streams,
+          )
+        : undefined;
+      expect(selectedChildStreamId).toBeUndefined();
       const { instance, stdin } = renderChildList(
         ink,
         React.createElement(SubagentList, {
           keyboardActive: true,
           listRootStreamId: root,
-          listRootSlice: rootSlice,
+          dashboard,
           maxRows: 6,
           onCancel: vi.fn(),
           onFocusStream,
           onSkipExecution,
           sessions: [],
+          selectedChildStreamId,
           ...props,
         }),
       );

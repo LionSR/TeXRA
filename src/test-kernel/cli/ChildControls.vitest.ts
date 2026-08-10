@@ -7,7 +7,6 @@ import {
 } from '@cli/chat/tui/state/childControls';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
-  groupWorkflowPhaseEntries,
   streamTreeEntries,
   streamTreeViews,
 } from '@cli/chat/tui/state/streamViews';
@@ -151,30 +150,10 @@ describe('CLI child controls', () => {
     ).toBe(leaf);
   });
 
-  it('returns phase-less ordering unchanged', () => {
-    const ordered = [
-      { id: 'newest', workflowPhase: undefined },
-      { id: 'oldest', workflowPhase: undefined },
-    ] as const;
-
-    expect(groupWorkflowPhaseEntries(ordered)).toBe(ordered);
-  });
-
-  // A header opens a group and nothing closes one, so an untagged row left
-  // between or after groups would render under a phase it is not part of.
-  it('partitions untagged rows ahead of every phase group', () => {
-    expect(
-      groupWorkflowPhaseEntries([
-        { id: 'a', workflowPhase: 'Map' },
-        { id: 'b', workflowPhase: undefined },
-        { id: 'c', workflowPhase: 'Map' },
-        { id: 'd', workflowPhase: undefined },
-        { id: 'e', workflowPhase: 'Reduce' },
-      ]).map(({ id }) => id),
-    ).toEqual(['b', 'd', 'a', 'c', 'e']);
-  });
-
-  it('stably groups phases before assigning visible shortcut indices', () => {
+  // Row order is newest-first over the retained roster and nothing else: a
+  // child's workflow phase never regroups or reorders the list, so the
+  // Alt+1..9 numbers follow the rows exactly as the tree yields them.
+  it('assigns visible shortcut indices in newest-first roster order', () => {
     const ids = ['a', 'b', 'c', 'd', 'e'].map((id) => id as StreamTabId);
     const [a, b, c, d, e] = ids as [
       StreamTabId,
@@ -212,14 +191,14 @@ describe('CLI child controls', () => {
         rootStreamId: root,
         streams,
       }),
-      // `d` carries no phase, so it heads the list rather than trailing the
-      // `Map` group, whose header would otherwise appear to own it.
+      // Retained oldest-first (a…e), reversed for display; the `Map`/`Reduce`
+      // tags on the roster rows do not move anybody.
     ).toEqual([
       { id: root },
-      { id: d, shortcutIndex: 1 },
-      { id: e, shortcutIndex: 2 },
-      { id: b, shortcutIndex: 3 },
-      { id: c, shortcutIndex: 4 },
+      { id: e, shortcutIndex: 1 },
+      { id: d, shortcutIndex: 2 },
+      { id: c, shortcutIndex: 3 },
+      { id: b, shortcutIndex: 4 },
       { id: a, shortcutIndex: 5 },
     ]);
     const views = streamTreeViews({
@@ -229,11 +208,10 @@ describe('CLI child controls', () => {
       rootStreamId: root,
       streams,
     });
-    expect(views.map(({ id }) => id)).toEqual([root, d, e, b, c, a]);
+    expect(views.map(({ id }) => id)).toEqual([root, e, d, c, b, a]);
+    // `b` has no parent edge yet still rides the roster order.
     expect(views.find(({ id }) => id === b)).toMatchObject({
       parentId: undefined,
-      shortcutIndex: 3,
-      workflowPhase: 'Map',
     });
     expect(
       numericFocusTargetForActiveStream({
@@ -241,7 +219,7 @@ describe('CLI child controls', () => {
         childStreamEntries: entries,
         parentStream,
         streams,
-        zeroBasedIndex: 2,
+        zeroBasedIndex: 3,
       }),
     ).toBe(b);
   });

@@ -5,7 +5,6 @@
 
 // Local imports - shared schemas
 import type { RunIdentity, StreamTabId } from '@shared/schemas';
-import { groupBy } from '@utils/core';
 
 // Local imports - CLI state
 import {
@@ -21,13 +20,10 @@ export interface StreamView {
   readonly label: string;
   /** What owns the child stream, retained with the child execution. */
   readonly identity?: RunIdentity;
-  /** Workflow-script phase owning this child, when its parent runs a script. */
-  readonly workflowPhase?: string;
   readonly parentId?: StreamTabId;
   readonly parentLabel?: string;
   readonly slice: StreamSlice | undefined;
   readonly active: boolean;
-  readonly shortcutIndex?: number;
 }
 
 export type ActiveStreamScope =
@@ -135,7 +131,6 @@ export function streamViewForId(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly shortcutIndex?: number;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StreamView {
@@ -147,7 +142,6 @@ export function streamViewForId(init: {
     id: init.streamId,
     label: streamDisplayLabel(init),
     identity: liveSummary?.identity,
-    workflowPhase: liveSummary?.workflowPhase,
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({
@@ -159,7 +153,6 @@ export function streamViewForId(init: {
       : undefined,
     slice: init.streams.get(init.streamId),
     active: init.streamId === init.activeStreamId,
-    shortcutIndex: init.shortcutIndex,
   };
 }
 
@@ -171,34 +164,6 @@ interface StreamTreeViewInput {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
-/** Stable group-by for phase-tagged rows. Each phase occupies its first-seen
- *  position and row order within a phase is unchanged.
- *
- *  Untagged rows are partitioned *ahead* of every group rather than left at
- *  their own position, keeping their relative order. They cannot sit between or
- *  after groups: the list only ever *opens* a group with a `◆ {phase}` header
- *  and paints no closing boundary, so an untagged row trailing a group would
- *  render directly under that group's rows and read as part of a phase it does
- *  not belong to — which is what an `agent()` call issued outside any `phase()`,
- *  or a roster row from before the field existed, is not. Ahead of the first
- *  header they belong to the run itself, which is also where the tree puts them,
- *  and it costs no terminal row (a closing divider would cost one per boundary).
- *
- *  Return the original list when grouping is inapplicable. */
-export function groupWorkflowPhaseEntries<
-  T extends { readonly workflowPhase?: string },
->(entries: readonly T[]): readonly T[] {
-  const untagged: T[] = [];
-  const tagged: T[] = [];
-  for (const entry of entries) {
-    if (entry.workflowPhase === undefined) untagged.push(entry);
-    else tagged.push(entry);
-  }
-  if (tagged.length === 0) return entries;
-  const phaseGroups = groupBy(tagged, (entry) => entry.workflowPhase);
-  return [...untagged, ...[...phaseGroups.values()].flat()];
-}
-
 export function streamTreeEntries(
   init: StreamTreeViewInput,
 ): readonly ActiveStreamTreeEntry[] {
@@ -208,18 +173,11 @@ export function streamTreeEntries(
   // then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
-  const ordered = groupWorkflowPhaseEntries(
-    focusOrderDescendants(root, init.childStreamEntries, init.streams)
-      .toReversed()
-      .map((id) => {
-        const entry = init.childStreamEntries.get(id);
-        return {
-          id,
-          workflowPhase:
-            entry?.kind === 'live' ? entry.summary?.workflowPhase : undefined,
-        };
-      }),
-  ).map((entry) => entry.id);
+  const ordered = focusOrderDescendants(
+    root,
+    init.childStreamEntries,
+    init.streams,
+  ).toReversed();
   const out: ActiveStreamTreeEntry[] = [];
   if (init.streams.has(root)) out.push({ id: root });
   for (const [index, id] of ordered.entries()) {
@@ -241,7 +199,6 @@ export function streamTreeViews(
       activeStreamId: init.activeStreamId,
       childStreamEntries: init.childStreamEntries,
       parentStream: init.parentStream,
-      shortcutIndex: entry.shortcutIndex,
       streamId: entry.id,
       streams: init.streams,
     }),
