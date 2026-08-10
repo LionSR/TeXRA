@@ -2,8 +2,9 @@
  * Channel-keyed logging primitives.
  *
  * Functional callers use `debug/info/warn/error(channel, message, options)`.
- * Protocol adapters use `createChannelWriter(channel, isAgent)` to reach the
- * same sink without making this module depend on their event types.
+ * Channel-trace infrastructure and callers in `src/agent/trace/channelTrace.ts`
+ * use `createChannelWriter(channel, isAgent)` to reach the same sink without
+ * making this module depend on their event types.
  *
  * Output-channel creation is host-injected via {@link setOutputChannelFactory};
  * the VS Code extension provides a factory that returns VS Code
