@@ -11,6 +11,7 @@
  * layer above.
  */
 
+import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -79,7 +80,6 @@ import {
   type GhReview,
   type GhReviewComment,
 } from './prTypes';
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 function createInitialState(pr: PRKey): PRSubscriptionState {
   return {
@@ -264,7 +264,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedEvent(keys: readonly string[]): void {
-    emitGitHubSubscriptionChanged('prSubscriptionsChanged', { keys });
+    appSignals.emit('prSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

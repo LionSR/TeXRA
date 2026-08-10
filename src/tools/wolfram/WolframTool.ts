@@ -49,7 +49,7 @@ const WolframInputSchema = z.strictObject({
     ),
 });
 
-export type WolframInput = z.infer<typeof WolframInputSchema>;
+type WolframInput = z.infer<typeof WolframInputSchema>;
 
 export class WolframTool extends defineTool({
   name: 'wolfram',

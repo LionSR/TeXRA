@@ -51,14 +51,13 @@ import type { FormatResult } from '../baseLogFormatter';
  */
 function buildFileListDetails(options: {
   logId: string | undefined;
-  open: boolean;
   iconName: TeXRAIconName;
   label: string;
   items: unknown;
   trailing?: unknown;
 }): TemplateResult {
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${options.open}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details">${buildDetailsSummary({
     iconName: options.iconName,
     label: options.label,
     labelClass: 'summary-text',
@@ -66,10 +65,7 @@ function buildFileListDetails(options: {
 }
 
 /** Format file list entry as TemplateResult. */
-export function formatFileListTemplate(
-  message: LogMessageData,
-  options?: { defaultOpen?: boolean },
-): FormatResult {
+export function formatFileListTemplate(message: LogMessageData): FormatResult {
   const { id, data, text } = message;
   // Validate with Zod schema - renderer handles display field computation
   const parseResult = z.array(FileListEntrySchema).safeParse(data);
@@ -78,7 +74,6 @@ export function formatFileListTemplate(
   if (!parseResult.success) {
     return buildFileListDetails({
       logId: id,
-      open: options?.defaultOpen ?? false,
       iconName: 'file',
       label: 'Files (raw)',
       items: html`<pre>${text ?? ''}</pre>`,
@@ -88,7 +83,6 @@ export function formatFileListTemplate(
   const { items, summary } = buildFileListRender(parseResult.data);
   return buildFileListDetails({
     logId: id,
-    open: options?.defaultOpen ?? false,
     iconName: 'file',
     label: summary,
     items,
@@ -105,7 +99,6 @@ function renderXmlLink(xmlFile: string): TemplateResult {
 /** Format missing outputs entry as TemplateResult. */
 export function formatMissingOutputsTemplate(
   message: LogMessageData,
-  options?: { defaultOpen?: boolean },
 ): FormatResult {
   const { id, data } = message;
   // Parse with Zod schema
@@ -129,7 +122,6 @@ export function formatMissingOutputsTemplate(
   });
   return buildFileListDetails({
     logId: id,
-    open: options?.defaultOpen ?? false,
     iconName: 'triangle-exclamation',
     label: `Missing outputs (${missing.length})`,
     items: listItems,
@@ -142,10 +134,7 @@ export function formatMissingOutputsTemplate(
 // =============================================================================
 
 /** Format latexdiff entry as TemplateResult. */
-export function formatLatexdiffTemplate(
-  message: LogMessageData,
-  _options?: { defaultOpen?: boolean },
-): FormatResult {
+export function formatLatexdiffTemplate(message: LogMessageData): FormatResult {
   const { id, data } = message;
   const entries = parseDiffResultEntries(data);
   if (entries.length === 0) return null;
@@ -219,7 +208,6 @@ const STATISTICS_CONFIG = Object.freeze({
 /** Format statistics entry as TemplateResult. */
 export function formatStatisticsTemplate(
   message: LogMessageData,
-  _options?: { defaultOpen?: boolean },
 ): FormatResult {
   const { id, data } = message;
   // Use partial schema to allow missing optional fields

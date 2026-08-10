@@ -21,10 +21,6 @@ function sourcedSkill(options: {
       body: `Use ${options.name}.`,
       baseDir,
       path: skillPath,
-      frontmatter: {
-        name: options.name,
-        description: options.description,
-      },
     },
     source: {
       scope: options.scope,

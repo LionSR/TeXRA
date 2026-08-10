@@ -15,7 +15,7 @@ import yaml from 'yaml';
  */
 type StringifyResult = {
   text: string;
-  language: 'yaml' | 'json' | 'plaintext';
+  language: 'yaml' | 'plaintext';
 };
 
 /**

@@ -210,9 +210,8 @@ export function createChatSessionController(
       'agent' | 'model' | 'cliMultiAgentPresetId' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
-  ): { readonly currentModel: string; readonly sessionContext: CliContext } => {
-    const currentModel = config.model;
-    const sessionContext = getSessionContext(currentModel);
+  ): CliContext => {
+    const sessionContext = getSessionContext(config.model);
     patchSessionMeta({
       agent: config.agent,
       model: config.model,
@@ -224,7 +223,7 @@ export function createChatSessionController(
       cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
       delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
-    return { currentModel, sessionContext };
+    return sessionContext;
   };
 
   const supersedeInterruptedRecovery = ():
@@ -363,7 +362,7 @@ export function createChatSessionController(
 
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
-    const { sessionContext } = beginRunContext(config);
+    const sessionContext = beginRunContext(config);
     const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
@@ -486,10 +485,7 @@ export function createChatSessionController(
       session.executionId = resolution.executionId;
       rootStreamId.set(resolution.streamId);
 
-      const { currentModel, sessionContext } = beginRunContext(
-        resolution.agentConfig,
-        'history',
-      );
+      const sessionContext = beginRunContext(resolution.agentConfig, 'history');
 
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
@@ -534,7 +530,7 @@ export function createChatSessionController(
         return;
       }
 
-      const runChain = setCliHelperModel(currentModel)
+      const runChain = setCliHelperModel(resolution.agentConfig.model)
         .then(() =>
           resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
@@ -548,7 +544,7 @@ export function createChatSessionController(
             isCancellationRequested: () => session.stopRequested,
           }),
         )
-        .then((result) => settleResumedTurn(result.outcome, sessionContext))
+        .then((result) => settleResumedTurn(result.outcome))
         .catch(reportRunFailure)
         .finally(finalize);
       // `session.runPromise` was already claimed synchronously above with
@@ -575,7 +571,6 @@ export function createChatSessionController(
    */
   const settleResumedTurn = (
     outcome: Parameters<typeof runOutcomeExitCode>[0],
-    sessionContext: CliContext,
   ): void => {
     if (session.streamId) {
       projectStreamTranscript(session.streamId, { finalize: true });
@@ -619,10 +614,7 @@ export function createChatSessionController(
         if (session.stopRequested) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
 
-        const { currentModel, sessionContext } = beginRunContext(
-          config,
-          'history',
-        );
+        const sessionContext = beginRunContext(config, 'history');
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;
@@ -651,7 +643,7 @@ export function createChatSessionController(
 
         let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
           RUN_OUTCOME.COMPLETED;
-        const resumed = await setCliHelperModel(currentModel).then(() =>
+        const resumed = await setCliHelperModel(config.model).then(() =>
           resolveAndResumeStream(
             streamId,
             {
@@ -704,7 +696,7 @@ export function createChatSessionController(
         );
 
         if (resumed) {
-          settleResumedTurn(resumedOutcome, sessionContext);
+          settleResumedTurn(resumedOutcome);
         } else if (session.stopRequested) {
           session.runExitCode = CliExitCode.Interrupted;
         }

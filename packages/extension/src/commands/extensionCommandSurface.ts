@@ -49,7 +49,6 @@ import {
   openProgressViewInTab as progressOpenInTab,
   showProgressView as progressShowProgressView,
 } from '@commands/progress/progressViewCommands';
-import { openDoc as sysOpenDoc } from '@commands/system/helpCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
@@ -123,7 +122,12 @@ export function createExtensionCommandActions(
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
     downloadArXivSource: latexDownloadArXivSource,
     openProgressViewInTab: progressOpenInTab,
-    openDoc: sysOpenDoc,
+    async openDoc(page) {
+      if (!page) return;
+      await vscode.env.openExternal(
+        vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
+      );
+    },
     stopAgent: agentStopAgent,
     compactResponse: agentCompactResponse,
     indentCurrentTeX: latexIndentCurrentTeX,

@@ -1,9 +1,35 @@
 import * as vscode from 'vscode';
+import { nanoid } from 'nanoid';
 
 import * as logger from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { buildWebviewHtml } from './html';
+/**
+ * Build HTML content for a webview by replacing placeholder tokens.
+ */
+function buildWebviewHtml(
+  webview: vscode.Webview,
+  htmlPath: vscode.Uri,
+  replacements: Record<string, vscode.Uri | string>,
+): string {
+  const htmlContent = AbsoluteFS.readSync(htmlPath.fsPath);
+  const nonce = nanoid(32);
+
+  let result = htmlContent
+    .replaceAll('${nonce}', nonce)
+    .replaceAll('${cspSource}', webview.cspSource);
+
+  for (const [key, value] of Object.entries(replacements)) {
+    const resolved =
+      value instanceof vscode.Uri
+        ? webview.asWebviewUri(value).toString()
+        : value;
+    result = result.replaceAll(`\${${key}}`, resolved);
+  }
+
+  return result;
+}
 
 /** Where a view's Vite-built assets land and the template keys they fill. */
 export interface ViewBundle {

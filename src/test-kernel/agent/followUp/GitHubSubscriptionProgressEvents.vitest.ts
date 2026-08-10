@@ -21,7 +21,6 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { emitGitHubSubscriptionChanged } from '@tools/github/subscriptionEventEmitter';
 import { GitHubAuthError } from '@tools/github/githubClient';
 import {
   PollingSourceBase,
@@ -138,9 +137,19 @@ describe('GitHub subscription app signals and follow-ups', () => {
     'issueSubscriptionBindingsChanged',
   ] as const)('publishes %s through app signals', (event) => {
     const signal = recordAppSignal(event);
+    const source = new RegistryTestSource();
+    const registry = new StreamSubscriptionRegistry<string, string>({
+      name: 'test subscriptions',
+      source,
+      keyOf: (input) => input,
+      bindingsChangedEvent: event,
+    });
 
     try {
-      emitGitHubSubscriptionChanged(event, undefined);
+      // Binding a new key defers to the source's keys-changed event; unbind is
+      // the registry-owned emission.
+      registry.bind('stream-a' as StreamTabId, 'owner/repo');
+      registry.unbind('stream-a' as StreamTabId, 'owner/repo');
 
       expect(signal.events).toEqual([{ event, payload: undefined }]);
     } finally {

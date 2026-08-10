@@ -36,6 +36,7 @@
 
 import { LRUCache } from 'lru-cache';
 
+import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -67,7 +68,6 @@ import {
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these
@@ -172,7 +172,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   }
 
   protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
-    emitGitHubSubscriptionChanged('repoSubscriptionsChanged', { keys });
+    appSignals.emit('repoSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

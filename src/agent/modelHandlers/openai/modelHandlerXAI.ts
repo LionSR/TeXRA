@@ -106,7 +106,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     return super.getBaseUrl();
   }
 
-  protected override async createOpenAIClient(
+  override async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<OpenAI> {
     if (!(await this.wantsSubscriptionRoute(selection))) {
@@ -115,7 +115,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
           'Prefer Grok subscription is on but no signed-in session: using the xAI API key path.',
         );
       }
-      return super.createOpenAIClient(selection);
+      return super.getClient(selection);
     }
 
     const apiKey = await this.resolveAccessToken();

@@ -176,10 +176,9 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   return isRoutingConfigured();
 }
 
-export type SetupAssistantLaunchResult =
-  'launched' | 'already-running' | 'not-started';
-
-export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult> {
+export async function launchSetupAssistant(): Promise<
+  'launched' | 'already-running' | 'not-started'
+> {
   try {
     // Every setup entry point funnels through here (command, status pill,
     // walkthrough, onboarding setup card), so one guard covers them all:

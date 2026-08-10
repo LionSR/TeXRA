@@ -344,15 +344,11 @@ function logEntryRole(
 }
 
 function renderLogEntryText(
-  role: 'assistant' | 'error' | 'user',
+  role: 'error' | 'user',
   text: string,
   data: unknown,
 ): string {
   switch (role) {
-    case 'assistant':
-      return normalizeKnownHtmlForCliMarkdown(
-        trimAssistantTranscriptLead(text),
-      );
     case 'error': {
       const safeSummary = redactSecrets(safeTerminalText(text));
       const parsed = ErrorLogDataSchema.safeParse(data);
@@ -522,9 +518,14 @@ function renderLogEntry(
 
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
-  const assistantTranscript =
-    role === 'assistant' ? trimAssistantTranscriptLead(text) : undefined;
-  let renderedText = renderLogEntryText(role, text, entry.data);
+  let assistantTranscript: string | undefined;
+  let renderedText: string;
+  if (role === 'assistant') {
+    assistantTranscript = trimAssistantTranscriptLead(text);
+    renderedText = normalizeKnownHtmlForCliMarkdown(assistantTranscript);
+  } else {
+    renderedText = renderLogEntryText(role, text, entry.data);
+  }
   if (
     role === 'assistant' &&
     entry.messageType === MESSAGE_TYPES.DEFAULT &&

@@ -327,7 +327,7 @@ export class ExecutionRegistry {
   }
 
   /** Remove `handle` only if it is still the current registration. */
-  untrackIfCurrent(handle: ExecutionHandle): boolean {
+  private untrackIfCurrent(handle: ExecutionHandle): boolean {
     if (this.handles.get(handle.executionId) !== handle) return false;
     this.untrackHandle(handle);
     return true;

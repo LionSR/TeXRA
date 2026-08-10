@@ -42,14 +42,29 @@ export const TokenUsageStatsBaseSchema = z.strictObject({
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsBaseSchema>;
 
-export const TokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
-  viaChatGptSubscription: z.boolean().optional(),
-}).transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
+/**
+ * Migrate the retired `viaChatGptSubscription` boolean into the canonical
+ * `usageRoute` field. Single source of the mapping for every usage schema
+ * that still accepts the legacy flag on parse (`TokenUsageStatsSchema` here,
+ * `TokenUsageStatsParsingBaseSchema` in `streamData.ts`) — persisted usage
+ * rows written before `usageRoute` existed are reparsed on every load, so
+ * the copies must not drift.
+ */
+export function resolveLegacyUsageRoute<T extends { usageRoute?: UsageRoute }>(
+  usage: T,
+  viaChatGptSubscription: boolean | undefined,
+): T {
   const usageRoute =
     usage.usageRoute ??
     (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
   return usageRoute == null ? usage : { ...usage, usageRoute };
-});
+}
+
+export const TokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
+  viaChatGptSubscription: z.boolean().optional(),
+}).transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
+  resolveLegacyUsageRoute(usage, viaChatGptSubscription),
+);
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;

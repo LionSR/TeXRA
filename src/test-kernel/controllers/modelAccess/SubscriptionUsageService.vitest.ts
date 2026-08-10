@@ -5,8 +5,8 @@ import { CodexAuthError } from '@auth/codex';
 import {
   CHATGPT_USAGE_URL,
   parseChatGptUsage,
-  type SubscriptionUsageHttp,
 } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
+import type { SubscriptionUsageHttp } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
 import {
   GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
   GLM_CODING_PLAN_USAGE_URL,

@@ -19,8 +19,6 @@ type NotificationKind = 'agentFinished' | 'approvalNeeded';
 
 export interface NotifyInit {
   readonly kind: NotificationKind;
-  readonly title?: string;
-  readonly body?: string;
 }
 
 const BEL = '';
@@ -37,7 +35,7 @@ function osc99(message: string): string {
 
 export function notify(init: NotifyInit): void {
   const caps = terminalCapabilities.get();
-  const message = formatMessage(init);
+  const message = defaultMessageFor(init.kind);
   if (caps.oscColorReports) {
     // OSC-capable terminal — use the structured notification protocol.
     writeRawStdout(osc99(message));
@@ -45,11 +43,6 @@ export function notify(init: NotifyInit): void {
     return;
   }
   writeRawStdout(BEL);
-}
-
-function formatMessage(init: NotifyInit): string {
-  if (init.title && init.body) return `${init.title}: ${init.body}`;
-  return init.title ?? init.body ?? defaultMessageFor(init.kind);
 }
 
 function defaultMessageFor(kind: NotificationKind): string {

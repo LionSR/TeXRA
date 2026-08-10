@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components used by this template

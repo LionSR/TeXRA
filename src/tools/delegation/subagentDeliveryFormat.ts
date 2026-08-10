@@ -43,7 +43,6 @@ export async function buildSubagentResult(
   result: AgentFlowResult,
   options: {
     readonly startedAt: number;
-    readonly workingDirectory?: string;
     readonly parentExecutionId?: ExecutionId;
   },
 ): Promise<BuiltSubagentResult> {

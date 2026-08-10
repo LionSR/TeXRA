@@ -1,4 +1,3 @@
-import { delimiter } from 'node:path';
 import fixPath from 'fix-path';
 
 const MACOS_PATH_ENTRIES = [
@@ -15,11 +14,6 @@ interface LaunchPathRepairOptions {
   env?: Pick<NodeJS.ProcessEnv, 'PATH'>;
   fixPath?: () => void;
   platform?: NodeJS.Platform;
-}
-
-/** The PATH list separator for a platform (':' on POSIX, ';' on Windows). */
-function pathDelimiterFor(platform: NodeJS.Platform): string {
-  return platform === 'win32' ? ';' : ':';
 }
 
 function prependMissingPathEntries(
@@ -45,11 +39,8 @@ export function repairLaunchPath(
     } else if (env === process.env) {
       fixPath();
     }
-    env.PATH = prependMissingPathEntries(
-      env.PATH,
-      MACOS_PATH_ENTRIES,
-      pathDelimiterFor(platform),
-    );
+    // ':' is the POSIX PATH separator; this branch only runs on darwin.
+    env.PATH = prependMissingPathEntries(env.PATH, MACOS_PATH_ENTRIES, ':');
   }
   return env.PATH ?? '';
 }

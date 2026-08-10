@@ -164,13 +164,7 @@ async function listEnabledModels(context: CliContext): Promise<number> {
       json: { enabled, catalog },
       ndjson: [
         { kind: 'models-enabled' as const, models: enabled },
-        ...catalog.map(
-          (model) =>
-            ({ kind: 'model-catalog' as const, model }) satisfies {
-              kind: 'model-catalog';
-              model: typeof model;
-            },
-        ),
+        ...catalog.map((model) => ({ kind: 'model-catalog' as const, model })),
       ],
       text: catalog
         .map(

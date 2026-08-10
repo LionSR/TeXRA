@@ -7,9 +7,9 @@ import {
   stringField,
   timestampField,
   usageWindow,
+  type ParsedSubscriptionUsage,
+  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
-import type { SubscriptionUsageHttp } from './codexUsageAdapter';
-import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 export const GLM_CODING_PLAN_USAGE_URL =
   'https://open.bigmodel.cn/api/monitor/usage/quota/limit';

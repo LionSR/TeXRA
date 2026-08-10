@@ -10,7 +10,6 @@ import { getGLMUseChina } from '@utils/config/providerConfig';
 import {
   fetchChatGptUsage,
   type ChatGptUsageCredential,
-  type SubscriptionUsageHttp,
 } from './codexUsageAdapter';
 import {
   fetchGlmCodingPlanUsage,
@@ -18,8 +17,11 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import { SubscriptionUsageHttpError } from './subscriptionUsageParsing';
-import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
+import {
+  SubscriptionUsageHttpError,
+  type ParsedSubscriptionUsage,
+  type SubscriptionUsageHttp,
+} from './subscriptionUsageParsing';
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;

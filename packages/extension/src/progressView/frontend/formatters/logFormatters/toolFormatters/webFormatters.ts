@@ -42,10 +42,7 @@ const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
 };
 
 /** Format web search results as TemplateResult. */
-export function formatWebSearchTemplate(
-  message: LogMessageData,
-  options?: { defaultOpen?: boolean },
-): FormatResult {
+export function formatWebSearchTemplate(message: LogMessageData): FormatResult {
   const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
@@ -101,7 +98,6 @@ export function formatWebSearchTemplate(
     label: titleText,
     isError: statusKey === 'failed',
     content: contentTemplate,
-    defaultOpen: options?.defaultOpen,
   });
 }
 
@@ -118,10 +114,7 @@ const FETCH_ERROR_LABELS: Record<string, string> = {
 };
 
 /** Format web fetch results as TemplateResult. */
-export function formatWebFetchTemplate(
-  message: LogMessageData,
-  options?: { defaultOpen?: boolean },
-): FormatResult {
+export function formatWebFetchTemplate(message: LogMessageData): FormatResult {
   const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
@@ -167,6 +160,5 @@ export function formatWebFetchTemplate(
     label: titleText,
     isError: isFailed,
     content: contentTemplate,
-    defaultOpen: options?.defaultOpen,
   });
 }
