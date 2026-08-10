@@ -4,8 +4,9 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
+  beginWorkPlanReaderRequest,
+  finishWorkPlanReaderRequest,
   foregroundReader,
-  openWorkPlanReader,
   patchStream,
   removeStream,
   resetCliState,
@@ -322,7 +323,7 @@ describe('subscribeStreamArtifacts', () => {
       plan: { objective: 'Must not return after removal.' },
     });
     patchStream(STREAM_A, (slice) => ({ ...slice }));
-    openWorkPlanReader(STREAM_A);
+    finishWorkPlanReaderRequest(beginWorkPlanReaderRequest(STREAM_A));
 
     const hydration = hydrateStreamArtifacts(reader, STREAM_A);
     removeStream(STREAM_A);
