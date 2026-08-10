@@ -477,29 +477,18 @@ return await parallel([
       undefined,
       'second',
     ]);
+    expect(invocations.map(({ progressId }) => progressId)).toEqual([
+      'first',
+      'call-1',
+      'second',
+    ]);
 
-    const reusedIdInvocations: WorkflowAgentInvocation[] = [];
-    const reusedIdEvents: WorkflowScriptEvent[] = [];
-    await runWorkflowScript({
-      script: `${META}return await parallel([
+    await expect(
+      runScript(`return await parallel([
   () => agent('first prompt', { id: 'shared-id' }),
   () => agent('second prompt', { id: 'shared-id' }),
-])`,
-      runAgent: (invocation) => {
-        reusedIdInvocations.push(invocation);
-        return echoRunner(invocation);
-      },
-      onEvent: (event) => reusedIdEvents.push(event),
-    });
-    expect(reusedIdInvocations).toHaveLength(2);
-    expect(
-      reusedIdInvocations.map((invocation) => invocation.options.id),
-    ).toEqual(['shared-id', 'shared-id']);
-    expect(
-      reusedIdEvents
-        .filter((event) => event.type === 'agent:start')
-        .map((event) => event.progressId),
-    ).toEqual(['call-0', 'call-1']);
+])`),
+    ).rejects.toThrow(/call id "shared-id" may be issued only once/i);
 
     await expect(
       runScript(`return await parallel([
@@ -513,7 +502,7 @@ return await parallel([
   () => agent('same', { id: 'same-id' }),
   () => agent('same', { id: ' same-id ' }),
         ])`),
-    ).rejects.toThrow(/require distinct non-empty "id" options/i);
+    ).rejects.toThrow(/call id "same-id" may be issued only once/i);
   });
 
   it('passes typed workflow outputs into the next stage input files', async () => {
@@ -1552,6 +1541,13 @@ while (true) {}`,
     ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
     expect(events).toEqual([
       {
+        type: 'agent:queued',
+        progressId: 'call-0',
+        index: 0,
+        label: 'function-result',
+        phase: undefined,
+      },
+      {
         type: 'agent:start',
         progressId: 'call-0',
         index: 0,
@@ -1930,7 +1926,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([0, 2]);
     expect(events).toContainEqual({
       type: 'agent:end',
-      progressId: 'call-1',
+      progressId: 'b',
       index: 1,
       label: 'b',
       phase: undefined,
@@ -2070,6 +2066,78 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
 
     await expect(runPromise).rejects.toMatchObject({ name: 'AbortError' });
     expect(aborted).toEqual(new Set([0, 1]));
+  });
+
+  it('owns a terminal canonical snapshot with direct-call counts', async () => {
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+    const result = await runWorkflowScript({
+      script: `export const meta = {
+  name: 'observable',
+  description: 'observable workflow',
+  phases: ['Draft', 'Review'],
+  tasks: [
+    { id: 'draft', label: 'Draft paper', phase: 'Draft' },
+    { id: 'review', label: 'Review paper', phase: 'Review' },
+  ],
+}
+phase('Draft')
+await agent('draft instruction', { id: 'draft' })
+return 'done'`,
+      runAgent: async (invocation) => {
+        invocation.reportAgent?.('writer');
+        invocation.reportModel?.('model-a');
+        invocation.reportChildExecution?.('abcdef123456');
+        invocation.reportChildStream?.('writer#abcdef123456');
+        return 'drafted';
+      },
+      onSnapshot: (snapshot) => {
+        snapshots.push(snapshot);
+      },
+    });
+
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(result.snapshot).toMatchObject({
+      lifecycle: 'completed',
+      currentStageId: undefined,
+      counts: { completed: 1, skipped: 1 },
+      calls: [
+        {
+          id: 'draft',
+          status: 'completed',
+          agent: 'writer',
+          model: 'model-a',
+          childExecutionId: 'abcdef123456',
+          childStreamId: 'writer#abcdef123456',
+          attempts: [{ number: 1, id: 'abcdef123456' }],
+        },
+        { id: 'review', status: 'skipped' },
+      ],
+    });
+    expect(result.snapshot.counts.total).toBe(result.snapshot.calls.length);
+  });
+
+  it('uses safe canonical labels for dynamic calls', async () => {
+    const result = await runWorkflowScript({
+      script: `export const meta = {
+  name: 'labels',
+  description: 'label workflow',
+}
+return await agent('secret full instruction', {
+  inputFiles: ['/private/host/path/paper.tex'],
+  agentName: 'proofreader',
+})`,
+      fingerprintAgentDependencies: async () => 'fingerprint',
+      runAgent: async () => 'done',
+    });
+
+    expect(result.snapshot.calls[0]).toMatchObject({
+      label: 'paper.tex: proofreader',
+      files: { input: ['paper.tex'], context: [], media: [] },
+    });
+    expect(JSON.stringify(result.snapshot)).not.toContain('/private/host/path');
+    expect(JSON.stringify(result.snapshot)).not.toContain(
+      'secret full instruction',
+    );
   });
 
   it('removes Intl so scripts cannot read the wall clock implicitly', async () => {

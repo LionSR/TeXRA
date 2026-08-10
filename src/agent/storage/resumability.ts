@@ -7,7 +7,7 @@ import {
 } from '@agent/node/persistedFlow';
 import * as logger from '@logger/logUtils';
 import {
-  ExecutionMetaSchema,
+  ExecutionMetaCoreSchema,
   RUN_OUTCOME,
   type ExecutionId,
   type ExecutionMeta,
@@ -101,7 +101,7 @@ export async function deriveResumability(
 
   let meta: ExecutionMeta | null = null;
   if (rawMeta != null) {
-    const metaResult = ExecutionMetaSchema.safeParse(rawMeta);
+    const metaResult = ExecutionMetaCoreSchema.safeParse(rawMeta);
     if (!metaResult.success) {
       logger.debug(
         CHANNEL,

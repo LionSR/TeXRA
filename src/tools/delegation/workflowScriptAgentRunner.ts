@@ -229,6 +229,7 @@ export function createWorkflowScriptAgentRunner(
         signal: invocation.signal,
         onActiveExecutionId: (executionId) => {
           activeExecutionId = executionId;
+          invocation.reportChildExecution?.(executionId);
           hooks?.onChildActive?.(executionId, invocation, true);
         },
         prepare: async () => {
@@ -340,6 +341,7 @@ export function createWorkflowScriptAgentRunner(
           // Surface the resolved child model so the engine can attach it to
           // this call's `agent:end` progress event.
           invocation.reportModel?.(configPayload.model);
+          invocation.reportAgent?.(agentName);
           return {
             configPayload,
             agentName,
@@ -368,27 +370,47 @@ export function createWorkflowScriptAgentRunner(
                 runScope.session,
               );
             },
-            onCost: (totalCostUsd) => hooks?.onCost?.(invocation, totalCostUsd),
+            onCost: (totalCostUsd) => {
+              hooks?.onCost?.(invocation, totalCostUsd);
+              // Stamp progressive spend onto the live snapshot attempt so a
+              // failed/cancelled/retried attempt still shows what it consumed
+              // even when execution never reaches the success path below.
+              if (totalCostUsd !== undefined) {
+                invocation.reportCostUsd?.(totalCostUsd);
+              }
+            },
           };
         },
       });
-      if (
-        activeExecutionId === undefined &&
-        invocation.reportChildStream !== undefined
-      ) {
-        try {
-          const recoveredStreamId = (
-            await getExecutionStore(completed.executionId).readMeta()
-          )?.streamId;
-          if (recoveredStreamId !== undefined) {
-            invocation.reportChildStream(recoveredStreamId);
+      const recovered = activeExecutionId === undefined;
+      if (recovered) {
+        // Durable recovery never fires onActiveExecutionId; re-attach the
+        // known child id (and stream when available) so /executions/{id}
+        // can navigate to the child that supplied the result.
+        invocation.reportChildExecution?.(completed.executionId);
+        if (invocation.reportChildStream !== undefined) {
+          try {
+            const recoveredStreamId = (
+              await getExecutionStore(completed.executionId).readMeta()
+            )?.streamId;
+            if (recoveredStreamId !== undefined) {
+              invocation.reportChildStream(recoveredStreamId);
+            }
+          } catch {
+            // A recovered result is authoritative. Navigation metadata is
+            // optional and must not invalidate the completed computation.
           }
-        } catch {
-          // A recovered result is authoritative. Navigation metadata is
-          // optional and must not invalidate the completed computation.
         }
       }
       const { result } = completed;
+      // Live physical attempts always charge the terminal result cost (covers
+      // failed/cancelled outcomes and empty-output validation throws that
+      // never reach a success-only callback). Recovered durable results must
+      // not charge the synthetic resume attempt — the interrupted snapshot may
+      // already hold the same cost on a closed prior attempt.
+      if (!recovered) {
+        invocation.reportCostUsd?.(result.cost);
+      }
       if (result.outcome !== 'completed') {
         throw new Error(
           `Workflow subagent ended with ${result.outcome} outcome.`,

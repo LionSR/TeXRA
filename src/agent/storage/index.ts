@@ -34,6 +34,7 @@ export {
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
   writeSessionDescription,
+  writeWorkflowExecutionSnapshot,
 } from './executionLifecycle';
 export {
   type AgentExecutionListingEntry,
