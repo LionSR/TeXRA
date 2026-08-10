@@ -13,6 +13,7 @@ import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
 import type {
   ActiveChildInfo,
+  RawAcceptedSkill,
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
@@ -142,6 +143,12 @@ interface WorkflowCallEvent extends StageStamp {
   readonly type: 'workflow.call';
   readonly logId: string;
   readonly call: WorkflowCallProgress;
+}
+
+/** Exact raw skill catalog accepted for this run's initial prompt. */
+interface ActiveSkillsEvent extends StageStamp {
+  readonly type: 'skills.snapshot';
+  readonly skills: readonly RawAcceptedSkill[];
 }
 
 /** Token-usage report. */
@@ -356,6 +363,7 @@ export type AgentEvent =
   | ToolStartEvent
   | ToolEndEvent
   | WorkflowCallEvent
+  | ActiveSkillsEvent
   | UsageEvent
   | StatusEvent
   | ChildActivityEvent

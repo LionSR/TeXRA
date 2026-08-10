@@ -10,6 +10,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   AgentCategory,
+  type ActiveSkillSummary,
   type CompileFailure,
   type ConversationProgress,
   type MessageType,
@@ -219,6 +220,7 @@ export interface StreamSlice {
   readonly stage?: StreamStage | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUpMessages: readonly string[];
+  readonly activeSkills: readonly ActiveSkillSummary[];
   readonly todos: readonly TodoItem[];
   readonly plan: Plan | null;
   /** YOLO / auto-approval state is stream-scoped upstream (see
@@ -279,6 +281,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     stage: undefined,
     entries: [],
     queuedFollowUpMessages: [],
+    activeSkills: [],
     todos: [],
     plan: null,
     bypass: NO_BYPASS,

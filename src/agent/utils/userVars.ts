@@ -186,12 +186,16 @@ export async function buildUserVars(
       getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT),
     )
       ? loadRuntimeSkillCatalog()
-      : Promise.resolve({ catalog: '', issues: [] }),
+      : Promise.resolve({ catalog: '', skills: [], issues: [] }),
   ]);
 
   for (const issue of runtimeSkills.issues) {
     const location = issue.path ? ` (${issue.path})` : '';
     logger.warn(`Skill import ${issue.severity}: ${issue.message}${location}`);
+  }
+
+  if (agentSetting.agentCategory === AgentCategory.ToolUse) {
+    logger.emit({ type: 'skills.snapshot', skills: runtimeSkills.skills });
   }
 
   // Merge all variable sources using spread operator.
