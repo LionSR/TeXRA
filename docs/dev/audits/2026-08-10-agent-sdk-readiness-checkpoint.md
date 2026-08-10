@@ -67,7 +67,7 @@ numbers and the reconciliation.
   blocks are the sanctioned diagnostic-guard exception.
 - **Surface.** `@texra-ai/agent` still mirrors the Anthropic `Query` pattern
   one-for-one (`runAgent(input): AgentRun`, `AgentRun extends
-  AsyncIterable<AgentEvent>` + `result`/`interrupt`, six-field `RunAgentInput`).
+AsyncIterable<AgentEvent>` + `result`/`interrupt`, six-field `RunAgentInput`).
   Three curated entry points (`.`, `./schemas`, `./node`), no `export *`, no
   barrel re-export. The `import X as Y` aliasing in `index.ts` is genuine
   boundary translation (the package redeclares its own minimal `HostInteractions`
@@ -75,16 +75,16 @@ numbers and the reconciliation.
 
 ## 2. Baseline re-measurement (the moving numbers, at `0c6e2b9`)
 
-| Ratchet (`config/ratchets/`)          | 2026-08-08                | HEAD `0c6e2b9`                          | Direction |
-| ------------------------------------- | ------------------------- | --------------------------------------- | --------- |
-| `host-agent-import` — extension       | 34                        | **34**                                  | held      |
-| `host-agent-import` — cli             | 31                        | **31**                                  | held      |
-| `host-agent-import` — desktop         | 25                        | **25**                                  | held      |
-| `host-agent-import` — agent (SDK pkg) | 10 (newly added §3-A)     | **10**                                  | frozen    |
-| `shared-schemas-deep-import` forced   | 10 specifiers / ~182 stmt | **0** — barrel-published (#9899)        | ↓ retired |
-| `shared-schemas-deep-import` gratuit. | —                         | **36 specifiers / ~394 stmt / 302 files** | mechanical tail |
-| `host-agent-mock`                     | 38                        | **38**                                  | held      |
-| `architecture-edges`                  | 96                        | **96**                                  | held      |
+| Ratchet (`config/ratchets/`)          | 2026-08-08                | HEAD `0c6e2b9`                                   | Direction       |
+| ------------------------------------- | ------------------------- | ------------------------------------------------ | --------------- |
+| `host-agent-import` — extension       | 34                        | **34**                                           | held            |
+| `host-agent-import` — cli             | 31                        | **31**                                           | held            |
+| `host-agent-import` — desktop         | 25                        | **25**                                           | held            |
+| `host-agent-import` — agent (SDK pkg) | 10 (newly added §3-A)     | **10**                                           | frozen          |
+| `shared-schemas-deep-import` forced   | 10 specifiers / ~182 stmt | **0** — barrel-published (#9899)                 | ↓ retired       |
+| `shared-schemas-deep-import` gratuit. | —                         | **36 specifiers / ~394 stmt / 302 unique files** | mechanical tail |
+| `host-agent-mock`                     | 38                        | **38**                                           | held            |
+| `architecture-edges`                  | 96                        | **96**                                           | held            |
 
 Against the 2026-08-04 review's 39/32/25, the host deep-import width has held at
 its lowered 34/31/25 — the north-star's "shrink, never widen" invariant is
@@ -93,12 +93,12 @@ draining to 0**: see §3.
 
 ## 3. 2026-08-08 §3 deltas — reconciled at HEAD
 
-| 08-08 item                                              | Status at `0c6e2b9`                                                                                     |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| §3-A — ratchet the SDK package's `@agent/*` width       | **Landed** (in the 08-08 PR). `agent: 10` is a scanned, frozen member of `host-agent-import`.           |
-| §3-B — `@shared/schemas` `forced` barrel shrink         | **Barrel-publish half landed** via `80be67e` (#9899): `forced` 10 → **0**; debt reclassified to the mechanical `gratuitous` rewrite tail (§4.3). |
-| §3-C — relocate `isOReasoningModel` off the core base   | **Landed** (in the 08-08 PR). Now on `OpenAICompatibleModelHandler`.                                     |
-| §3-D — stale `DomainEvent` `missingOutputs` comment      | **Landed** via `1758fa7` (#9898, "clarify domain event run-fact carve-out"). Comment absent at HEAD; the six `RunFactEvent` arms stay first-class discriminants by design (`RUN_FACT_EVENT_TYPES` / `SessionFactApplier` depend on them). |
+| 08-08 item                                            | Status at `0c6e2b9`                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §3-A — ratchet the SDK package's `@agent/*` width     | **Landed** (in the 08-08 PR). `agent: 10` is a scanned, frozen member of `host-agent-import`.                                                                                                                                             |
+| §3-B — `@shared/schemas` `forced` barrel shrink       | **Barrel-publish half landed** via `80be67e` (#9899): `forced` 10 → **0**; debt reclassified to the mechanical `gratuitous` rewrite tail (§4.3).                                                                                          |
+| §3-C — relocate `isOReasoningModel` off the core base | **Landed** (in the 08-08 PR). Now on `OpenAICompatibleModelHandler`.                                                                                                                                                                      |
+| §3-D — stale `DomainEvent` `missingOutputs` comment   | **Landed** via `1758fa7` (#9898, "clarify domain event run-fact carve-out"). Comment absent at HEAD; the six `RunFactEvent` arms stay first-class discriminants by design (`RUN_FACT_EVENT_TYPES` / `SessionFactApplier` depend on them). |
 
 The one real, still-open sub-item under §3-D is unchanged: several public
 `AgentEvent` arms tie their shape to internal `@shared/schemas` host types
@@ -109,23 +109,27 @@ refactor.
 ## 4. Fresh / still-open minor items (small, non-urgent, none blocking)
 
 1. **`createChannelWriter` carries a stale docstring — NEW (cosmetic).**
-   `src/logger/logUtils.ts:135` claims "Protocol adapters use
-   `createChannelWriter`," but there are **no protocol adapters left**: its only
-   two production callers are both inside `channelTrace.ts` (`:34`, `:57`). Fix
-   is a one-line comment correction (or acknowledge it as a single-module seam),
-   not an inline — the two call sites are distinct (`createChannelTrace` vs
-   `attachChannelSubscriber`). Flag, not executed, per the series' flag-then-
-   focused-PR discipline.
+   The file-level JSDoc at `src/logger/logUtils.ts:5` claims "Protocol adapters
+   use `createChannelWriter`," but there are **no protocol adapters left**: its
+   only two production callers are both inside `channelTrace.ts` (`:34`, `:57`).
+   (Line 135 is the `export function createChannelWriter` declaration; the
+   function-level JSDoc at 131–134 says "protocol-neutral," not "protocol
+   adapters.") Fix is a one-line comment correction (or acknowledge it as a
+   single-module seam), not an inline — the two call sites are distinct
+   (`createChannelTrace` vs `attachChannelSubscriber`). Flag, not executed, per
+   the series' flag-then-focused-PR discipline.
 2. **PT-2 `SessionHandle.useHostInteractions` per-concern pass-through** — still
    present (`SessionHandle.ts:642`), still tracked in the tech-debt / SSOT
    proposals, still used by the package itself (`packages/agent/src/index.ts`).
    Worth clearing before the SDK surface is frozen; ~90 call sites, mostly tests.
    Unchanged since 08-08.
 3. **`@shared/schemas` gratuitous rewrite tail** — 36 specifiers / ~394
-   statements / 302 files, now all `gratuitous` (0 forced), i.e. mechanically
-   rewritable to the `@shared/schemas` barrel with no barrel change. Hot spots:
-   `toolResult`, `settingsViewMessages`, `agent`. Pure mechanical debt, best done
-   per-specifier in reviewable slices — a decrease, never a widen.
+   statements / 302 unique files (336 baseline path entries when type-only
+   suffixes are counted as distinct), now all `gratuitous` (0 forced), i.e.
+   mechanically rewritable to the `@shared/schemas` barrel with no barrel
+   change. Hot spots: `toolResult`, `settingsViewMessages`, `agent`. Pure
+   mechanical debt, best done per-specifier in reviewable slices — a decrease,
+   never a widen.
 4. **Two constrained model-handler micro-cleanups.** `utils/toolCallAccumulator.ts`
    (single consumer, `channelStreamAggregator.ts:17`) could inline; the
    `modelHandlerValidation.ts` mock (334 LoC with embedded hard-coded answers,
