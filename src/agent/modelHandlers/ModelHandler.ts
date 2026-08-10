@@ -11,8 +11,8 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import {
   attachChannelSubscriber,
-  logCompactionActivity,
   logContextManagementEvent,
+  startCompactionActivity,
   TraceEmitter,
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -59,6 +59,7 @@ import type { ServerToolExtractionResult } from '@agent/types/ServerToolTypes';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  isUserAbort,
   attachContextWindowError,
   attachMissingApiKeyError,
 } from '@common/errors/sdkErrorUtils';
@@ -1436,7 +1437,7 @@ export abstract class ModelHandler<
       return { compactedMessages: messages, didCompact: false };
     }
 
-    logCompactionActivity(this.logger, 'started');
+    const activity = startCompactionActivity(this.logger);
     try {
       const { summaryText, outputTokens } = await summarize(
         conversationMessages,
@@ -1444,6 +1445,7 @@ export abstract class ModelHandler<
       );
       if (!summaryText) {
         this.logger.warn('Compaction returned empty summary, skipping');
+        activity.finish('skipped');
         return { compactedMessages: messages, didCompact: false };
       }
 
@@ -1463,18 +1465,18 @@ export abstract class ModelHandler<
         tokensAfterIsEstimate: true,
       });
 
+      activity.finish('completed');
       return {
         compactedMessages,
         didCompact: true,
       };
     } catch (err) {
+      activity.finish(isUserAbort(err) ? 'cancelled' : 'failed');
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
         { data: err },
       );
       return { compactedMessages: messages, didCompact: false };
-    } finally {
-      logCompactionActivity(this.logger, 'finished');
     }
   }
 

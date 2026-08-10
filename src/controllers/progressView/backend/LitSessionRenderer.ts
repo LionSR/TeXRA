@@ -109,12 +109,14 @@ export class LitSessionRenderer implements SessionRendererPort {
   onStreamStatusChanged(
     streamId: StreamTabId,
     status: StreamPhase,
+    logHead: number,
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
     this.webviewUpdater.updateStreamStatus(
       streamId,
       status,
+      logHead,
       lastTimestamp,
       substate,
     );

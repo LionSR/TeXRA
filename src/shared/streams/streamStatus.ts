@@ -9,6 +9,7 @@ import {
   type ExecutionStatus,
   type RunOutcome,
   type StreamPhase,
+  type StreamLifecycleStatus,
 } from '@shared/schemas/stream';
 
 // ============================================================================
@@ -102,13 +103,20 @@ export type StreamTransitionCause =
  *  (COMPLETED | CANCELLED | FAILED). This is the single enumeration of that
  *  set — hosts must consume it rather than hand-rolling their own. */
 export function isTerminalOutcomePhase(
-  phase: StreamPhase | undefined,
+  phase: StreamLifecycleStatus | undefined,
 ): phase is RunOutcome {
   return (
     phase === STREAM_PHASE.COMPLETED ||
     phase === STREAM_PHASE.CANCELLED ||
     phase === STREAM_PHASE.FAILED
   );
+}
+
+/** Whether transcript content is settled for the current turn. */
+export function isTranscriptSettlementPhase(
+  phase: StreamLifecycleStatus | undefined,
+): boolean {
+  return phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
 export function isActivePhase(phase: StreamPhase | undefined): boolean {

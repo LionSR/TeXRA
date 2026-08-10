@@ -30,6 +30,7 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import type { CompactionActivityBlock } from '@shared/streams/compactionActivityProjection';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
@@ -100,6 +101,10 @@ export type ConversationEntry = ConversationEntryOrigin &
   (
     | (ConversationEntryBase & {
         readonly role: 'assistant' | 'error' | 'user';
+      })
+    | (ConversationEntryBase & {
+        readonly role: 'activity';
+        readonly activity: CompactionActivityBlock;
       })
     | (ConversationEntryBase & {
         readonly role: 'workflowTask';
