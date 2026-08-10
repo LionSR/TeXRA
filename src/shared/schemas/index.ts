@@ -18,6 +18,8 @@ export * from './onboarding';
 
 // Layer 1b: Standalone schemas and shared settings
 export * from './agentSkills';
+export * from './activeSkills';
+export * from './skillName';
 export * from './codex';
 export * from './coreSettings';
 export * from './opResults';

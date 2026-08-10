@@ -585,3 +585,78 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     }
   });
 });
+
+describe('attachTranscriptRecorder active skills', () => {
+  it('persists only sanitized summaries and lets the latest empty snapshot clear state', () => {
+    const { trace, rows } = attachRecorder();
+
+    trace.emit({
+      type: 'skills.snapshot',
+      skills: [
+        {
+          name: 'proof-audit',
+          description:
+            'Review   proofs from /Users/researcher/private/checklist.md with API_KEY=secret-value.',
+          source: 'project',
+        },
+      ],
+    });
+    trace.emit({ type: 'skills.snapshot', skills: [] });
+
+    const records = rows().filter(
+      (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
+    );
+    expect(records).toHaveLength(2);
+    expect(records[0]?.data).toStrictEqual({
+      skills: [
+        {
+          name: 'proof-audit',
+          description: 'Details available on activation.',
+          source: 'project',
+        },
+      ],
+    });
+    expect(JSON.stringify(records[0]?.data)).not.toContain('/Users/researcher');
+    expect(JSON.stringify(records[0]?.data)).not.toContain('baseDir');
+    expect(JSON.stringify(records[0]?.data)).not.toContain('instructions');
+    expect(records.at(-1)?.data).toStrictEqual({ skills: [] });
+  });
+
+  it('records fallback summaries for ANSI-only and controls-only descriptions', () => {
+    const { trace, rows } = attachRecorder();
+
+    trace.emit({
+      type: 'skills.snapshot',
+      skills: [
+        {
+          name: 'ansi-only',
+          description: '\u001b[31m\u001b[0m',
+          source: 'project',
+        },
+        {
+          name: 'controls-only',
+          description: '\u0001\u0002\u007f\u009b',
+          source: 'project',
+        },
+      ],
+    });
+
+    expect(
+      rows().find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
+        ?.data,
+    ).toStrictEqual({
+      skills: [
+        {
+          name: 'ansi-only',
+          description: 'Details available on activation.',
+          source: 'project',
+        },
+        {
+          name: 'controls-only',
+          description: 'Details available on activation.',
+          source: 'project',
+        },
+      ],
+    });
+  });
+});

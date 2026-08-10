@@ -1,3 +1,9 @@
+import { redactSecrets } from '@logger/redaction';
+import {
+  ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
+  ActiveSkillsSnapshotSchema,
+  type ActiveSkillSummary,
+} from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 import {
@@ -11,6 +17,7 @@ let runtimeSkillSources: readonly SkillSource[] = [];
 
 export interface RuntimeSkillCatalogResult {
   catalog: string;
+  skills: ActiveSkillSummary[];
   issues: SkillLoadIssue[];
 }
 
@@ -56,11 +63,22 @@ export function formatRuntimeSkillActivation({
 
 export async function loadRuntimeSkillCatalog(): Promise<RuntimeSkillCatalogResult> {
   const sources = listRuntimeSkillSources();
-  if (sources.length === 0) return { catalog: '', issues: [] };
+  if (sources.length === 0) return { catalog: '', skills: [], issues: [] };
 
   const result = await discoverSkillSources(sources);
+  // Discovery already orders by source precedence and then skill directory.
+  // Bound that accepted set once here, before either prompt or event projection.
+  const accepted = result.skills.slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
+  const snapshot = ActiveSkillsSnapshotSchema.parse({
+    skills: accepted.map(({ skill, source }) => ({
+      name: skill.name,
+      description: redactSecrets(skill.description),
+      source: source.scope,
+    })),
+  });
   return {
-    catalog: formatRuntimeSkillCatalog(result.skills),
+    catalog: formatRuntimeSkillCatalog(accepted),
+    skills: snapshot.skills,
     issues: result.errors,
   };
 }

@@ -114,15 +114,16 @@ describe('buildUserVars runtime skill diagnostics', () => {
     await fakeConfig.update('texra.skills.enabled', undefined);
   });
 
-  it('emits catalog load issues through the agent trace', async () => {
+  it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {
     const warn = vi.fn();
+    const emit = vi.fn();
     const vars = await buildUserVars(
       baseConfig,
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
       '/agents/generic',
       { isOpenai: false, isAnthropic: false, isGoogle: false },
-      spiedTrace({ warn }),
+      spiedTrace({ warn, emit }),
       { workspacePath: '/workspace' },
     );
 
@@ -130,6 +131,25 @@ describe('buildUserVars runtime skill diagnostics', () => {
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       `Skill import error: Skill source does not exist (${missingSource})`,
     );
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      type: 'skills.snapshot',
+      skills: [],
+    });
+  });
+
+  it('does not publish a parent catalog for workflow runs', async () => {
+    const emit = vi.fn();
+    await buildUserVars(
+      baseConfig,
+      baseSetting,
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      spiedTrace({ emit }),
+      { workspacePath: '/workspace' },
+    );
+
+    expect(emit).not.toHaveBeenCalled();
   });
 });
 
