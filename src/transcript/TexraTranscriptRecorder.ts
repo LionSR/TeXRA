@@ -435,11 +435,9 @@ export function attachTranscriptRecorder(
         }
 
         case 'skills.snapshot': {
+          // Schema owns redaction + sanitize + truncate for descriptions.
           const snapshot = ActiveSkillsSnapshotSchema.parse({
-            skills: event.skills.map((skill) => ({
-              ...skill,
-              description: redactSecrets(skill.description),
-            })),
+            skills: event.skills,
           });
           writer.appendSettled({
             id: generateShortId(),
