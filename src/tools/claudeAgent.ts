@@ -32,11 +32,6 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
-  getRunContextWorkingDirectory,
-} from '@agent/runtime/RunContext';
-import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
   MESSAGE_TYPES,
@@ -50,7 +45,6 @@ import type {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { type ToolResult } from '@shared/schemas/toolResult';
-import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -66,10 +60,9 @@ import {
 import { type ChildStream } from './delegation/childStream';
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
+  dispatchAgentCliTool,
   launchAgentCliSession,
-  resumeOrLaunchAgentCliSession,
   startAgentCliLoop,
-  withAgentCliApproval,
 } from './agentCliShared';
 import {
   formatChildRunDelivery,
@@ -515,40 +508,30 @@ export class ClaudeAgentTool extends defineTool({
     const model = input.model ?? config.getClaudeAgentModel();
     const effort = input.effort ?? config.getClaudeAgentEffort();
 
-    return withAgentCliApproval(
-      CLAUDE_AGENT_NAME,
-      `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
-      (runContext) => {
-        return resumeOrLaunchAgentCliSession(ClaudeAgentSessions, {
-          id: input.session_id ?? undefined,
-          prompt: input.prompt,
-          callerStreamId: getRunContextStreamId(runContext),
-          labels: {
-            notActiveLabel: 'Claude Code CLI session',
-            idParamName: 'session_id',
-            summaryLabel: 'Claude Code CLI',
-            queuedLabel: 'Claude Code session',
-          },
-          launch: (releaseClaim) => {
-            // A missing in-memory entry denotes a disk-based SDK fallback.
-            const { streamId } = requireRunStream(
-              CLAUDE_AGENT_NAME,
-              runContext,
-            );
-            return launchClaudeAgentSession(
-              input,
-              permissionMode,
-              model,
-              effort,
-              streamId,
-              getRunContextExecutionId(runContext),
-              getRunContextWorkingDirectory(runContext),
-              releaseClaim,
-            );
-          },
-        });
+    return dispatchAgentCliTool({
+      agentName: CLAUDE_AGENT_NAME,
+      approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
+      store: ClaudeAgentSessions,
+      resumeId: input.session_id ?? undefined,
+      prompt: input.prompt,
+      labels: {
+        notActiveLabel: 'Claude Code CLI session',
+        idParamName: 'session_id',
+        summaryLabel: 'Claude Code CLI',
+        queuedLabel: 'Claude Code session',
       },
-    );
+      launch: (context) =>
+        launchClaudeAgentSession(
+          input,
+          permissionMode,
+          model,
+          effort,
+          context.parentStreamId,
+          context.parentExecutionId,
+          context.parentWorkingDirectory,
+          context.releaseFallbackClaim,
+        ),
+    });
   }
 }
 

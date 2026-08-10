@@ -22,7 +22,12 @@ import {
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import type { RunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
+  type RunContext,
+} from '@agent/runtime/RunContext';
 import {
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
@@ -31,6 +36,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { requireRunStream } from '@tools/contextHelpers';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
@@ -142,7 +148,7 @@ async function queueAgentCliFollowUp(
  * cleanup so an acknowledged follow-up can never be stranded behind a failed
  * initial turn.
  */
-export async function resumeOrLaunchAgentCliSession(
+async function resumeOrLaunchAgentCliSession(
   store: ClaimableAgentCliStore,
   params: {
     id: string | undefined;
@@ -277,7 +283,7 @@ export async function launchAgentCliSession(
  * in a turn that never happens and the child's result is stranded. Fail before
  * prompting for approval rather than launching work nobody collects.
  */
-export async function withAgentCliApproval(
+async function withAgentCliApproval(
   toolName: string,
   approvalLabel: string,
   run: (runContext: RunContext | undefined) => ToolResult | Promise<ToolResult>,
@@ -296,6 +302,59 @@ export async function withAgentCliApproval(
 
   contexts?.callContext?.hooks?.onExecutionReady?.();
   return run(contexts?.runContext);
+}
+
+/** Run context resolved for an agent-CLI launch, handed to the provider's
+ * `launch` callback by {@link dispatchAgentCliTool}. */
+export interface AgentCliLaunchContext {
+  parentStreamId: StreamTabId;
+  parentExecutionId: ExecutionId | undefined;
+  parentWorkingDirectory: string | undefined;
+  /** Release the disk-based fallback claim if the launch fails before promoting
+   * it. Undefined for a fresh (non-resumed) launch. */
+  releaseFallbackClaim: (() => void) | undefined;
+}
+
+/**
+ * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
+ * boilerplate-identical chain both providers (codex, claudeAgent) run: request
+ * approval for the labelled command, choose atomically between queueing onto an
+ * owned session and launching a disk-based fallback, and resolve the run context
+ * a launch needs (parent stream/execution/working-directory). A missing
+ * in-memory entry denotes a disk-based SDK fallback, so `launch` receives the
+ * `releaseFallbackClaim` it must promote or release. Callers supply only their
+ * approval label, session store, resume id, resume labels, and the
+ * provider-specific launch.
+ */
+export function dispatchAgentCliTool(params: {
+  agentName: string;
+  approvalLabel: string;
+  store: ClaimableAgentCliStore;
+  resumeId: string | undefined;
+  prompt: string;
+  labels: AgentCliResumeLabels;
+  launch: (context: AgentCliLaunchContext) => Promise<ToolResult>;
+}): Promise<ToolResult> {
+  const { agentName, approvalLabel, store, resumeId, prompt, labels, launch } =
+    params;
+  return withAgentCliApproval(agentName, approvalLabel, (runContext) =>
+    resumeOrLaunchAgentCliSession(store, {
+      id: resumeId,
+      prompt,
+      callerStreamId: getRunContextStreamId(runContext),
+      labels,
+      launch: (releaseFallbackClaim) => {
+        // A missing in-memory entry denotes a disk-based SDK fallback.
+        const { streamId } = requireRunStream(agentName, runContext);
+        return launch({
+          parentStreamId: streamId,
+          parentExecutionId: getRunContextExecutionId(runContext),
+          parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
+          releaseFallbackClaim,
+        });
+      },
+    }),
+  );
 }
 
 // ============================================================================
