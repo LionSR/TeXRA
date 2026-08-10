@@ -227,7 +227,85 @@ describe('CLI child list display model', () => {
 
     // Only the current phase's tasks are folded, and the phase segment leads so
     // it survives truncation on a narrow terminal.
-    expect(workflowRunStatusSummary(slice)).toBe('Map (1/3) · 1/2 done');
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+    ).toEqual(['Map (1/3)', '1/2 done']);
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.tone),
+    ).toEqual(['muted', 'muted']);
+  });
+
+  it('appends a warning failure tally when any call has failed', () => {
+    const slice = workflowAgentSlice('partial-failure', {
+      files: files(['paper.tex']),
+      entries: [
+        phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 1 }),
+        workflowTaskEntry(
+          'task-ok',
+          'Finished: Map the seams',
+          {
+            id: 'seams',
+            label: 'Map the seams',
+            phase: 'Map',
+            status: 'completed',
+            durationMs: 1_000,
+          },
+          true,
+        ),
+        workflowTaskEntry('task-bad', 'Failed: Read the contracts', {
+          id: 'contracts',
+          label: 'Read the contracts',
+          phase: 'Map',
+          status: 'failed',
+          error: 'Runner stopped.',
+        }),
+      ],
+    });
+
+    // A failed call is terminal, so it still counts toward `done` — the
+    // warning-toned failure tally is what distinguishes a degraded run from a
+    // clean one at the status level.
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+    ).toEqual(['Map (1/1)', '2/2 done', '1 failed']);
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.tone),
+    ).toEqual(['muted', 'muted', 'warning']);
+  });
+
+  it('tallys failures across the whole run, not just the current phase', () => {
+    // A failure in an earlier phase must persist in the band after the run
+    // advances, unlike the current-phase done/total. The whole-run tally keeps
+    // it visible.
+    const slice = workflowAgentSlice('cross-phase-failure', {
+      files: files(['paper.tex']),
+      entries: [
+        phaseEntry('phase-write', 'Write', { phaseIndex: 1, phaseTotal: 2 }),
+        workflowTaskEntry('task-old-bad', 'Failed: Map the seams', {
+          id: 'seams',
+          label: 'Map the seams',
+          phase: 'Map',
+          status: 'failed',
+          error: 'Runner stopped.',
+        }),
+        workflowTaskEntry('task-now', 'Running: Draft', {
+          id: 'draft',
+          label: 'Draft',
+          phase: 'Write',
+          status: 'running',
+        }),
+        workflowTaskEntry('task-now2', 'Running: Edit', {
+          id: 'edit',
+          label: 'Edit',
+          phase: 'Write',
+          status: 'running',
+        }),
+      ],
+    });
+
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+    ).toEqual(['Write (2/2)', '0/2 done', '1 failed']);
   });
 
   it('does not invent a phase fold for phase-less tasks', () => {
@@ -280,7 +358,9 @@ describe('CLI child list display model', () => {
       ],
     });
 
-    expect(workflowRunStatusSummary(slice)).toBe('Map (1/2) · 0/1 done');
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+    ).toEqual(['Map (1/2)', '0/1 done']);
   });
 
   it('prioritizes live workflow activity over metadata in a one-row viewport', async () => {
