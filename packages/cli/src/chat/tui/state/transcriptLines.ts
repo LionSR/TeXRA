@@ -2,6 +2,8 @@
 // display lines. Unlike the finalized scrollback and the live region, this
 // renders every tool-output line.
 
+import { LRUCache } from 'lru-cache';
+
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
@@ -35,17 +37,18 @@ function labelsToken(executionLabels: ExecutionLabels): number {
 }
 
 // Cap each entry's composite-key slots so a long session with many terminal
-// resizes / labels-roster changes can't grow an entry's inner Map forever —
+// resizes / labels-roster changes can't grow an entry's inner cache forever —
 // only the outer WeakMap's entry-level eviction is free (GC-tied); the
 // `${token}:${cols}` keys inside it are strong references the entry itself
 // won't drop on its own. In practice only the current width and the current
 // labels snapshot are re-rendered at once, so a small cap costs no realistic
-// hit rate.
+// hit rate. Genuine LRU (not insertion-order) eviction costs nothing extra
+// here and avoids evicting a slot that was just re-hit.
 const MAX_LINES_PER_ENTRY = 4;
 
 const entryLinesCache = new WeakMap<
   ConversationEntry,
-  Map<string, readonly string[]>
+  LRUCache<string, readonly string[]>
 >();
 
 function transcriptEntryLines(
@@ -59,13 +62,13 @@ function transcriptEntryLines(
   if (cached) return cached;
   const lines = fullTranscriptEntryLayout(entry, cols, executionLabels).lines;
   if (cachedByEntry) {
-    if (cachedByEntry.size >= MAX_LINES_PER_ENTRY) {
-      const oldestKey = cachedByEntry.keys().next().value;
-      if (oldestKey !== undefined) cachedByEntry.delete(oldestKey);
-    }
     cachedByEntry.set(key, lines);
   } else {
-    entryLinesCache.set(entry, new Map([[key, lines]]));
+    const cache = new LRUCache<string, readonly string[]>({
+      max: MAX_LINES_PER_ENTRY,
+    });
+    cache.set(key, lines);
+    entryLinesCache.set(entry, cache);
   }
   return lines;
 }
