@@ -653,6 +653,8 @@ describe('createWorkflowScriptAgentRunner', () => {
   it('does not report recovered stable child cost as live execution', async () => {
     const onCost = vi.fn();
     const reportChildStream = vi.fn();
+    const reportChildExecution = vi.fn();
+    const reportCostUsd = vi.fn();
     const recoveredStreamId = 'correct@child-model#bbbbbb222222' as StreamTabId;
     mocks.readExecutionMeta.mockResolvedValueOnce({
       streamId: recoveredStreamId,
@@ -663,10 +665,20 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
     const runner = defaultRunner({ onCost });
 
-    await runner({ ...invocation(), index: 3, reportChildStream });
+    await runner({
+      ...invocation(),
+      index: 3,
+      reportChildStream,
+      reportChildExecution,
+      reportCostUsd,
+    });
 
     expect(onCost).not.toHaveBeenCalled();
+    // Recovered durable children never fire onActiveExecutionId — re-attach the
+    // known child id, but do not charge the synthetic resume attempt.
+    expect(reportChildExecution).toHaveBeenCalledWith('bbbbbb222222');
     expect(reportChildStream).toHaveBeenCalledWith(recoveredStreamId);
+    expect(reportCostUsd).not.toHaveBeenCalled();
   });
 
   it('keeps a recovered result when navigation metadata cannot be read', async () => {

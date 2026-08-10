@@ -228,6 +228,12 @@ export class WorkflowExecutionState {
   queueCall(id: string): void {
     const call = this.call(id);
     const queuedAt = now();
+    // Interactive retry re-queues a still-live call: keep the logical start so
+    // duration covers every physical attempt. A terminal call re-queued after
+    // identity change / resume must start a fresh execution window instead.
+    const preserveStartedAt =
+      call.timestamps.startedAt !== undefined &&
+      !TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status);
     this.updateCall(id, {
       status: WORKFLOW_CALL_STATUS.QUEUED,
       childExecutionId: undefined,
@@ -237,6 +243,7 @@ export class WorkflowExecutionState {
       error: undefined,
       timestamps: {
         createdAt: call.timestamps.createdAt,
+        ...(preserveStartedAt && { startedAt: call.timestamps.startedAt }),
         queuedAt,
         updatedAt: queuedAt,
       },
