@@ -52,11 +52,34 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
+export const WorkflowScriptProposalDetailsSchema = z.strictObject({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  scriptPath: z.string().min(1),
+  phases: z.array(
+    z.strictObject({
+      title: z.string().min(1),
+      detail: z.string().optional(),
+    }),
+  ),
+  tasks: z.array(
+    z.strictObject({
+      id: z.string().min(1),
+      label: z.string(),
+      phase: z.string().optional(),
+    }),
+  ),
+});
+export type WorkflowScriptProposalDetails = z.infer<
+  typeof WorkflowScriptProposalDetailsSchema
+>;
+
 /** Workflow agent proposal - includes file fields for document processing */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend(
   WorkflowSpecificFieldsSchema.shape,
 ).extend({
   agentCategory: z.literal(AgentCategory.Workflow),
+  workflowScript: WorkflowScriptProposalDetailsSchema.optional(),
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 

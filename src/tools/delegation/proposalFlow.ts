@@ -126,7 +126,7 @@ function summarizeProposal(
 }
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
-function proposalResultToToolResult(
+export function proposalResultToToolResult(
   result: ProposalResult,
   agentName: string,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
@@ -154,6 +154,32 @@ function proposalResultToToolResult(
   }
 }
 
+export interface DelegationProposalDecision {
+  readonly result: ProposalResult;
+  /** True only when the stream's proposal-bypass policy supplied approval. */
+  readonly autoApproved: boolean;
+}
+
+/** Request the shared proposal decision, honoring the stream's bypass policy. */
+export async function requestDelegationProposal(
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+  streamId: StreamTabId,
+): Promise<DelegationProposalDecision> {
+  if (proposalApprovals().isBypassed(streamId)) {
+    return { result: { action: 'approve' }, autoApproved: true };
+  }
+
+  const interaction = currentSession().interactions.requestAgentProposal({
+    proposalId: generateShortId(),
+    streamId,
+    ...proposal,
+  });
+  if (!interaction) {
+    throw new Error('HostInteractions.requestAgentProposal is required');
+  }
+  return { result: await interaction, autoApproved: false };
+}
+
 /**
  * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
  *
@@ -165,7 +191,8 @@ export async function proposeAndExecute(
   agentName: string,
   streamId: StreamTabId,
 ): Promise<ToolResult> {
-  if (proposalApprovals().isBypassed(streamId)) {
+  const decision = await requestDelegationProposal(proposal, streamId);
+  if (decision.autoApproved) {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return executeSubagent(proposal, agentName, streamId, {
@@ -173,17 +200,7 @@ export async function proposeAndExecute(
     });
   }
 
-  const proposalId = generateShortId();
-
-  const interaction = currentSession().interactions.requestAgentProposal({
-    proposalId,
-    streamId,
-    ...proposal,
-  });
-  if (!interaction) {
-    throw new Error('HostInteractions.requestAgentProposal is required');
-  }
-  const result = await interaction;
+  const { result } = decision;
 
   const nonApproveResult = proposalResultToToolResult(
     result,

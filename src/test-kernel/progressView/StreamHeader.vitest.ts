@@ -142,6 +142,18 @@ describe('stream-header', () => {
       );
     });
 
+    it('keeps the icon-only stream status accessible and available on hover', async () => {
+      const element = await mount({ status: STREAM_PHASE.FAILED });
+      const indicator = element.shadowRoot?.querySelector(
+        `#${ELEMENT_IDS.STATUS_INDICATOR}`,
+      );
+
+      expect(indicator?.textContent?.trim()).toBe('');
+      expect(indicator?.getAttribute('role')).toBe('img');
+      expect(indicator?.getAttribute('aria-label')).toBe('Error');
+      expectAnchoredTooltip(element, ELEMENT_IDS.STATUS_INDICATOR, 'Error');
+    });
+
     it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
       const element = await mount({
         goalActive: true,
