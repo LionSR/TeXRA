@@ -102,7 +102,8 @@ export abstract class BaseFeedbackPanel<
           id="feedback-input"
           class=${inputClass}
           placeholder="Optional — this is sent back to the agent"
-          rows="3"
+          rows="2"
+          resize="vertical"
           data-feedback-input
         ></wa-textarea>
       </div>
