@@ -7,7 +7,7 @@ import { describe, it, afterEach, vi } from 'vitest';
 // Local imports
 import * as bibliographyModule from '@latex/extractBibliography';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { ExtractBibliographyTool } from '@tools/latex';
+import { ExtractBibliographyTool } from '@tools/latex/ExtractBibliographyTool';
 
 type BibliographyContext = Awaited<
   ReturnType<typeof bibliographyModule.extractBibliographyContext>
