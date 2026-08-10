@@ -6,6 +6,8 @@ import {
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
 import type { ProgressAgentProposalActionMessage } from '@shared/schemas/progressView';
+import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type WithoutCommand<Message> = Message extends unknown
   ? Omit<Message, 'command'>
@@ -16,6 +18,7 @@ type AgentProposalActionInput =
 export interface ProgressAgentProposalControllerDeps {
   getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
   restoreRunConfig(config: AgentConfig): Promise<boolean>;
+  openFile(path: string): Promise<void>;
   settleProposal(proposalId: string, result: ProposalResult): void;
   onMissingProposal?(proposalId: string): void;
   onInvalidProposal?(issues: unknown): void;
@@ -61,13 +64,29 @@ export class ProgressAgentProposalController {
       return false;
     }
 
-    const restored = await this.restoreProposalConfig(proposal);
-    if (!restored) {
-      this.deps.settleProposal(proposalId, {
-        action: 'reject',
-        feedback: 'Unable to restore the proposal configuration for setup.',
-      });
-      return false;
+    if ('workflowScript' in proposal && proposal.workflowScript) {
+      try {
+        const scriptPath = resolveWorkspaceRelativePath(
+          proposal.workflowScript.scriptPath,
+          proposal.workingDirectory ?? undefined,
+        );
+        await this.deps.openFile(scriptPath.fsPath);
+      } catch (error) {
+        this.deps.settleProposal(proposalId, {
+          action: 'reject',
+          feedback: `Unable to open the workflow script for setup: ${toErrorMessage(error)}`,
+        });
+        return false;
+      }
+    } else {
+      const restored = await this.restoreProposalConfig(proposal);
+      if (!restored) {
+        this.deps.settleProposal(proposalId, {
+          action: 'reject',
+          feedback: 'Unable to restore the proposal configuration for setup.',
+        });
+        return false;
+      }
     }
 
     this.deps.settleProposal(proposalId, { action: 'setup' });

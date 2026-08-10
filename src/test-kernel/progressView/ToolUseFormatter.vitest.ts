@@ -118,9 +118,7 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = renderTemplate(
-      formatToolUseTemplate(message, { defaultOpen: true }),
-    );
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     const details = container.querySelector('wa-details.tool-use-details') as
       (HTMLElement & { open: boolean }) | null;
@@ -134,7 +132,10 @@ return { papers, question: args.question };`;
       (label) => label.textContent,
     );
 
-    expect(details?.open).toBe(true);
+    expect(details?.open).toBe(false);
+    expect(container.querySelector('.tool-use-title')?.textContent).toContain(
+      'Literature synthesis',
+    );
     expect(container.querySelector('wa-icon[name="list-ul"]')).not.toBeNull();
     expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Files:']);
     expect(container.textContent).toContain('research');
@@ -152,6 +153,30 @@ return { papers, question: args.question };`;
     expect(container.textContent).not.toContain('"compared":2');
     expect(container.textContent).not.toContain('journal');
     expect(container.querySelector('.proposal-banner-setup')).toBeNull();
+  });
+
+  it('keeps an in-progress workflow script compact by default', () => {
+    const container = renderTemplate(
+      formatToolUseTemplate(
+        toolUseMessage('workflow-script-running', {
+          toolName: 'delegate_multi_agents',
+          status: 'in_progress',
+          input: {
+            agent: 'research',
+            script:
+              "export const meta = { name: 'Review team', description: 'Review' }; return null;",
+          },
+        }),
+      ),
+    );
+    const details = container.querySelector('wa-details.tool-use-details') as
+      (HTMLElement & { open: boolean }) | null;
+
+    expect(details?.open).toBe(false);
+    expect(container.querySelector('.tool-use-title')?.textContent).toContain(
+      'Review team',
+    );
+    expect(container.querySelector('tool-timer')).not.toBeNull();
   });
 
   it('shows explicit null workflow-script arguments as JSON', () => {

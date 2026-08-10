@@ -191,8 +191,11 @@ export function formatToolUseTemplate(
         })
       : html`${sections}`;
 
-  // Auto-open in-progress tools so users see the command immediately
-  const shouldOpen = options?.defaultOpen ?? isInProgress;
+  // Workflow scripts already have a compact live summary and can be very
+  // large, so keep their source behind disclosure even while launching.
+  const shouldOpen =
+    options?.defaultOpen ??
+    (isInProgress && toolName !== DELEGATE_MULTI_AGENTS_TOOL_NAME);
 
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);

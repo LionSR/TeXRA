@@ -174,6 +174,56 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     ]);
   });
 
+  it('renders a compact, explicit multi-agent workflow proposal with saved-script access', async () => {
+    const permission = createPermission();
+    if (permission.data.agentCategory !== AgentCategory.Workflow) {
+      throw new Error('expected workflow proposal');
+    }
+    permission.data.workflowScript = {
+      name: 'review-team',
+      description: 'Review the draft in parallel',
+      scriptPath: '.texra/workflow-scripts/review-team.mjs',
+      phases: [{ title: 'Review' }, { title: 'Synthesize' }],
+      tasks: [
+        { id: 'review', label: 'Review draft', phase: 'Review' },
+        { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
+      ],
+    };
+    permission.modelOptions = [{ value: 'sonnet', label: 'Sonnet' }];
+    permission.agentOptions = [{ value: 'writer', label: 'Writer' }];
+
+    const element = await mountPanel(permission);
+    const summary = element.shadowRoot?.querySelector(
+      '.workflow-proposal__workflow-summary',
+    );
+    const details = element.shadowRoot?.querySelector(
+      'wa-details.workflow-proposal__workflow-details',
+    );
+
+    expect(summary?.textContent).toContain('review-team');
+    expect(summary?.textContent).toContain('2 tasks · 2 phases');
+    expect(summary?.textContent).toContain('Review');
+    expect(element.shadowRoot?.textContent).toContain('Multi-agent workflow');
+    expect(element.shadowRoot?.textContent).toContain('Default agent: writer');
+    expect(element.shadowRoot?.textContent).toContain('high model cost');
+    expect(details?.hasAttribute('open')).toBe(false);
+    expect(
+      element.shadowRoot?.querySelector('.proposal-agent-dropdown'),
+    ).toBeNull();
+    expect(
+      element.shadowRoot?.querySelector('.proposal-model-dropdown'),
+    ).toBeNull();
+    const script = element.shadowRoot?.querySelector(
+      '.workflow-proposal__script-files [data-file]',
+    );
+    expect(script?.getAttribute('data-file')).toBe(
+      '.texra/workflow-scripts/review-team.mjs',
+    );
+    expect(
+      element.shadowRoot?.querySelector('#proposal-setup-button'),
+    ).toBeTruthy();
+  });
+
   it('exposes role=button and tabindex=0 on every clickable file-name span', async () => {
     const element = await mountPanel();
     const names = element.shadowRoot?.querySelectorAll(

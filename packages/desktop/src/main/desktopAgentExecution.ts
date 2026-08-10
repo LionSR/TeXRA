@@ -805,6 +805,7 @@ export class DesktopProgressBridge {
         getPendingProposal: (proposalId) =>
           this.backend.approvalHandlers.proposal.get(proposalId),
         restoreRunConfig: async (config) => this.restoreRunConfig(config),
+        openFile: (file) => this.options.host.openPath(file),
         settleProposal: (proposalId, result) => {
           const resolved = this.hostInteractions.submitProposalDecision(
             proposalId,

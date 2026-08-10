@@ -42,6 +42,13 @@ export function deriveToolInputPreview(
   if (!isObject(input)) return '';
   const name = normalizeToolName(toolName);
   if (name === 'executions') return executionsInputPreview(input);
+  if (name === 'delegate_multi_agents') {
+    const script = typeof input.script === 'string' ? input.script : '';
+    const workflowName = script.match(/\bname\s*:\s*(['"])(?<name>.*?)\1/)
+      ?.groups?.name;
+    if (workflowName) return workflowName;
+    return typeof input.scriptPath === 'string' ? input.scriptPath : '';
+  }
   const key = TOOL_PREVIEW_INPUT_KEY[name];
   if (!key) return '';
   const value = input[key];
