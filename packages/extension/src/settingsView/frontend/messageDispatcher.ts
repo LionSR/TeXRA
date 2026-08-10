@@ -37,6 +37,7 @@ import {
 } from './slices/miscSettingsSlice';
 import { modelSelectionHandlers } from './slices/modelSelectionSlice';
 import { profileHandlers } from './slices/profileSlice';
+import { subscriptionUsageHandlers } from './slices/subscriptionUsageSlice';
 import { tabHandlers } from './slices/tabSlice';
 
 /** Composed registry: every SETTINGS_VIEW_COMMANDS outbound handler, keyed by command. */
@@ -54,6 +55,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   ...approvalSettingsHandlers,
   ...toolDashboardHandlers,
   ...gitHandlers,
+  ...subscriptionUsageHandlers,
   ...latexHandlers,
   ...goalHandlers,
 };

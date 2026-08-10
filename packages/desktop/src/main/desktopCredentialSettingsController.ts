@@ -11,6 +11,7 @@ import { relayTokenSignOutNotice } from '@auth/relayToken';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import {
   SettingsProfileController,
@@ -39,7 +40,11 @@ import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
+import type {
+  SettingsViewInboundHandlerRegistry,
+  SpendingStatus,
+} from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
@@ -74,6 +79,11 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     signOut(): Promise<void>;
   };
   readonly setUseIncludedModelAccess: (enabled: boolean) => Promise<void>;
+  readonly refreshSpendingStatus: () => Promise<SpendingStatus | null>;
+  readonly subscriptionUsage?: Pick<
+    SubscriptionUsageService,
+    'getUsage' | 'invalidate'
+  >;
   /**
    * Included-Access entitlement readers. Injected rather than imported so the
    * controller stays unit-testable; without them the model list would omit the
@@ -120,6 +130,7 @@ export interface DesktopCredentialSettingsController {
   readonly modelSelectionController: SettingsModelSelectionController;
   postMainModelOptionsData(): Promise<void>;
   postStartupData(): Promise<void>;
+  postSubscriptionUsage(forceRefresh?: boolean): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
   signInChatGpt(): Promise<void>;
   signInGrok(): Promise<void>;
@@ -134,10 +145,16 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
+  private readonly subscriptionUsage: Pick<
+    SubscriptionUsageService,
+    'getUsage' | 'invalidate'
+  >;
 
   constructor(
     private readonly options: DesktopCredentialSettingsControllerOptions,
   ) {
+    this.subscriptionUsage =
+      options.subscriptionUsage ?? new SubscriptionUsageService();
     this.modelSelectionController = createModelSelectionController(
       options,
       options.modelSelectionExtras,
@@ -150,6 +167,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
       updateConfig: (key, value) => options.config.update(key, value, 'global'),
       setUseIncludedModelAccess: options.setUseIncludedModelAccess,
+      refreshSpendingStatus: options.refreshSpendingStatus,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: {
@@ -173,7 +191,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       },
       setSecret: (key, value) => options.secrets.set(key, value),
       deleteSecret: (key) => options.secrets.delete(key),
-      refreshAfterKeyChange: () => this.refreshAfterProviderKeyChange(),
+      refreshAfterKeyChange: (provider) =>
+        this.refreshAfterProviderKeyChange(provider),
     });
     this.profileHandlers = {
       signIn: () => options.auth.signIn(),
@@ -214,6 +233,19 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       this.postChatGptAuthStatus(),
       this.postGrokAuthStatus(),
     ]);
+  }
+
+  async postSubscriptionUsage(forceRefresh = false): Promise<void> {
+    const [chatgpt, kimiCode, glmCodingPlan, grok] = await Promise.all([
+      this.subscriptionUsage.getUsage('chatgpt', { forceRefresh }),
+      this.subscriptionUsage.getUsage('kimiCode', { forceRefresh }),
+      this.subscriptionUsage.getUsage('glmCodingPlan', { forceRefresh }),
+      this.subscriptionUsage.getUsage('grok', { forceRefresh }),
+    ]);
+    this.options.renderer.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+      snapshots: { chatgpt, kimiCode, glmCodingPlan, grok },
+    });
   }
 
   async postMainModelOptionsData(): Promise<void> {
@@ -336,8 +368,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   private async setApiAccessMode(mode: ApiAccessMode): Promise<void> {
-    await this.profileController.setApiAccessMode(mode);
+    const update = await this.profileController.setApiAccessMode(mode);
     await this.postProfileData();
+    if (update.kind === 'rejected') {
+      await this.options.notifications.showInfoMessage(
+        'Included access is unavailable because this month’s quota is exhausted.',
+      );
+      return;
+    }
     await this.postModelSelectionData();
     await this.options.onCredentialChanged();
   }
@@ -381,6 +419,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
 
     await this.postProfileData();
+    if (key === GlobalStateKey.GLM_USE_CHINA) {
+      await this.postSubscriptionUsage();
+    }
     if (!result.affectsModelAvailability) return;
 
     await this.postModelSelectionData();
@@ -388,30 +429,39 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
-  private async refreshAfterProviderKeyChange(): Promise<void> {
+  private async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
+    let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
+    if (provider === 'kimiCode') usageProvider = 'kimiCode';
+    if (provider === 'glm') usageProvider = 'glmCodingPlan';
+    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await this.postProfileData();
     await this.postModelSelectionData();
     await this.postMainModelOptionsData();
+    if (usageProvider) await this.postSubscriptionUsage();
     await this.options.onCredentialChanged();
   }
 
   private async refreshAfterSubscriptionAuthChange(
     postStatus: () => Promise<void>,
+    usageProvider?: 'chatgpt',
   ): Promise<void> {
     invalidateModelOptionsCache();
+    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await Promise.all([
       postStatus(),
       this.postModelSelectionData(),
       this.postMainModelOptionsData(),
+      ...(usageProvider ? [this.postSubscriptionUsage()] : []),
     ]);
     await this.options.onCredentialChanged();
   }
 
   private refreshAfterChatGptAuthChange(): Promise<void> {
-    return this.refreshAfterSubscriptionAuthChange(() =>
-      this.postChatGptAuthStatus(),
+    return this.refreshAfterSubscriptionAuthChange(
+      () => this.postChatGptAuthStatus(),
+      'chatgpt',
     );
   }
 

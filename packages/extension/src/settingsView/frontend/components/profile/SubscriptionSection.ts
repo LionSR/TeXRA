@@ -18,7 +18,11 @@ import { xaiAccountLabel } from '@auth/xai/xaiSessionTypes';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { ChatGptAuthStatus, GrokAuthStatus } from '@shared/schemas';
+import type {
+  ChatGptAuthStatus,
+  GrokAuthStatus,
+  SubscriptionUsageSnapshot,
+} from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
   renderSettingsSectionHeading,
@@ -32,6 +36,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
+
+import './SubscriptionUsageRow';
 
 /** Sign-in status shared by every subscription provider. */
 export type SubscriptionAuthStatus = ChatGptAuthStatus | GrokAuthStatus;
@@ -74,6 +80,9 @@ export class SubscriptionSection extends LitElement {
 
   @property({ attribute: false }) provider!: SubscriptionSectionProvider;
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
+  @property({ attribute: false }) usage: SubscriptionUsageSnapshot | null =
+    null;
+  @property({ attribute: false }) now = 0;
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     const enabled = (event.target as WaSwitch).checked;
@@ -142,6 +151,10 @@ export class SubscriptionSection extends LitElement {
               }
             </div>
           </div>
+          <subscription-usage-row
+            .snapshot=${this.usage}
+            .now=${this.now}
+          ></subscription-usage-row>
         </div>
       </section>
     `;

@@ -191,13 +191,13 @@ export class ServerSideKeyService {
   /**
    * Refresh the relay spend snapshot without touching the access decision.
    * canUseServerSideKeys() cannot serve this: in personal mode it clears the
-   * tier cache and returns early. Shares TierService's authenticated cache
-   * slot, so it costs nothing next to a primed included-access check.
+   * tier cache and returns early. This always bypasses the authenticated tier
+   * cache so quota decisions use the current billing month.
    */
-  async refreshSpendingStatus(): Promise<void> {
+  async refreshSpendingStatus(): Promise<SpendingStatus | null> {
     const authToken = await SupabaseClient.getRelayAccessToken();
-    if (!authToken) return;
-    await this.tierService.getConfig(authToken);
+    await this.tierService.refreshSpendingStatus(authToken ?? undefined);
+    return this.tierService.getSpendingStatus();
   }
 
   async setUseIncludedModelAccess(
