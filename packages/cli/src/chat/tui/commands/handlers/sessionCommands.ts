@@ -9,11 +9,22 @@ import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
   activeStreamId as activeStreamIdSignal,
+  beginWorkPlanReaderRequest,
+  cancelPendingWorkPlanReaderRequest,
+  cancelWorkPlanReaderRequest,
+  clearTransientNotice,
+  finishWorkPlanReaderRequest,
   openInfoPane,
   sessionMeta,
+  setTransientNotice,
   streamAccessTarget,
   streams,
+  workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
+import {
+  hydrateStreamArtifacts,
+  type StreamArtifactReader,
+} from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import {
@@ -23,6 +34,7 @@ import {
 } from '@model/providerCapabilities';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { GoalStore } from '@tools/goal';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
@@ -40,6 +52,38 @@ export function showCliSlashCommandHelp(): void {
 
 export function showCliGoalModeHelp(): void {
   openInfoPane('/goal', GOAL_MODE_HELP);
+}
+
+export async function showCliWorkPlan(
+  snapshots: StreamArtifactReader = defaultSession().snapshots,
+): Promise<void> {
+  const streamId = activeStreamIdSignal.get();
+  if (!streamId) {
+    cancelPendingWorkPlanReaderRequest();
+    setTransientNotice('No focused session.');
+    return;
+  }
+  clearTransientNotice();
+  const request = beginWorkPlanReaderRequest(streamId);
+  const hydrated = await hydrateStreamArtifacts(
+    snapshots,
+    streamId,
+    () => workPlanReaderRequestIsCurrent(request),
+    (error) => {
+      if (!cancelWorkPlanReaderRequest(request)) return;
+      setTransientNotice(
+        `Could not load workflow artifacts: ${toErrorMessage(error)}`,
+      );
+    },
+  );
+  if (!hydrated || !workPlanReaderRequestIsCurrent(request)) return;
+  const slice = streams.get().get(streamId);
+  if (!slice || (slice.plan === null && slice.todos.length === 0)) {
+    if (!cancelWorkPlanReaderRequest(request)) return;
+    setTransientNotice('The focused session has no work plan.');
+    return;
+  }
+  finishWorkPlanReaderRequest(request);
 }
 
 export async function showCliSessionStatus(

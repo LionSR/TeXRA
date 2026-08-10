@@ -159,6 +159,7 @@ describe('slashRegistry', () => {
         'approval',
         'yolo',
         'status',
+        'plan',
         'goal',
         'resume',
         'memory',
@@ -202,6 +203,7 @@ describe('slashRegistry', () => {
           ...withForm,
         },
       ],
+      ['plan', { description: 'Read the focused session work plan' }],
       ['compact', { description: 'Request context compaction' }],
     ];
     for (const [name, shape] of expectedShapes) {
