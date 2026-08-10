@@ -164,6 +164,7 @@ function invocation(
 ): WorkflowAgentInvocation {
   return {
     index: 0,
+    progressId: 'call-0',
     key: '0123456789abcdef',
     prompt: 'Draft the section.',
     options,
@@ -294,8 +295,12 @@ describe('createWorkflowScriptAgentRunner', () => {
       inputFiles: ['paper.tex'],
       contextFiles: ['notes.tex'],
       mediaFiles: ['figure.pdf'],
+      label: 'Draft paper',
     });
     call.reportModel = vi.fn();
+    call.reportAgent = vi.fn();
+    call.reportChildExecution = vi.fn();
+    call.reportCostUsd = vi.fn();
     call.reportChildStream = vi.fn();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
@@ -363,6 +368,11 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
     );
     expect(call.reportModel).toHaveBeenCalledWith('child-model');
+    expect(call.reportAgent).toHaveBeenCalledWith('correct');
+    expect(call.reportChildExecution).toHaveBeenCalledWith(
+      expect.stringMatching(/^[a-f0-9]{24}$/),
+    );
+    expect(call.reportCostUsd).toHaveBeenCalledWith(result.cost);
     expect(call.reportChildStream).toHaveBeenCalledWith(
       expect.stringMatching(/^correct@child-model#[a-f0-9]{24}$/),
     );
@@ -624,6 +634,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('reports live child cost with its workflow invocation identity', async () => {
     const onCost = vi.fn();
+    const reportCostUsd = vi.fn();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
         options.onActiveExecutionId?.(options.executionId);
@@ -633,16 +644,46 @@ describe('createWorkflowScriptAgentRunner', () => {
       },
     );
     const runner = defaultRunner({ onCost });
-    const call = invocation();
+    const call = { ...invocation(), reportCostUsd };
 
     await runner(call);
 
     expect(onCost).toHaveBeenCalledWith(call, 0.25);
+    // Progressive onCost stamps the live snapshot attempt (not only success).
+    expect(reportCostUsd).toHaveBeenCalledWith(0.25);
+    // Terminal result cost is also stamped (same value here).
+    expect(reportCostUsd).toHaveBeenCalledWith(result.cost);
+  });
+
+  it('stamps terminal cost on failed outcomes before throwing', async () => {
+    const reportCostUsd = vi.fn();
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
+        await options.prepare();
+        return {
+          executionId: 'bbbbbb222222',
+          result: {
+            ...result,
+            outcome: 'failed',
+            cost: 0.42,
+          },
+        };
+      },
+    );
+    const runner = defaultRunner();
+
+    await expect(runner({ ...invocation(), reportCostUsd })).rejects.toThrow(
+      /ended with failed outcome/,
+    );
+    expect(reportCostUsd).toHaveBeenCalledWith(0.42);
   });
 
   it('does not report recovered stable child cost as live execution', async () => {
     const onCost = vi.fn();
     const reportChildStream = vi.fn();
+    const reportChildExecution = vi.fn();
+    const reportCostUsd = vi.fn();
     const recoveredStreamId = 'correct@child-model#bbbbbb222222' as StreamTabId;
     mocks.readExecutionMeta.mockResolvedValueOnce({
       streamId: recoveredStreamId,
@@ -653,10 +694,20 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
     const runner = defaultRunner({ onCost });
 
-    await runner({ ...invocation(), index: 3, reportChildStream });
+    await runner({
+      ...invocation(),
+      index: 3,
+      reportChildStream,
+      reportChildExecution,
+      reportCostUsd,
+    });
 
     expect(onCost).not.toHaveBeenCalled();
+    // Recovered durable children never fire onActiveExecutionId — re-attach the
+    // known child id, but do not charge the synthetic resume attempt.
+    expect(reportChildExecution).toHaveBeenCalledWith('bbbbbb222222');
     expect(reportChildStream).toHaveBeenCalledWith(recoveredStreamId);
+    expect(reportCostUsd).not.toHaveBeenCalled();
   });
 
   it('keeps a recovered result when navigation metadata cannot be read', async () => {

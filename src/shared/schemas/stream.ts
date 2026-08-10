@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
+import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 
 /**
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
@@ -78,8 +79,8 @@ export const USER_FOLLOW_UP_SUPPORT = {
 export const UserFollowUpSupportSchema = z.enum(USER_FOLLOW_UP_SUPPORT);
 export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
 
-/** Execution metadata stored alongside config at launch time. */
-export const ExecutionMetaSchema = z.object({
+/** Core execution metadata that remains readable without workflow observability. */
+export const ExecutionMetaCoreSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
@@ -104,6 +105,12 @@ export const ExecutionMetaSchema = z.object({
    * no persisted stream; nothing re-derives it from names or scans.
    */
   streamId: StreamTabIdSchema.optional(),
+});
+
+/** Execution metadata stored alongside config at launch time. */
+export const ExecutionMetaSchema = ExecutionMetaCoreSchema.extend({
+  /** Canonical execution state for a detached workflow run. */
+  workflow: WorkflowExecutionSnapshotSchema.optional(),
 });
 
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;

@@ -4,7 +4,9 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
+  runWorkflowScript,
   type WorkflowJournalEntry,
+  type WorkflowScriptControl,
 } from '@agent/workflowScript';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -59,6 +61,43 @@ function toolUseResult(cost: number): unknown {
 beforeEach(() => clearStoreCache());
 
 describe('workflow attempt cost', () => {
+  it('aggregates observability cost across physical interactive attempts', async () => {
+    let control!: WorkflowScriptControl;
+    let attempt = 0;
+    const run = runWorkflowScript({
+      script: `${meta}
+return await agent('retry cost')`,
+      runAgent: async (invocation) => {
+        attempt += 1;
+        invocation.reportCostUsd?.(attempt === 1 ? 0.2 : 0.3);
+        if (attempt === 1) {
+          await new Promise<void>((_resolve, reject) =>
+            invocation.signal.addEventListener(
+              'abort',
+              () => reject(new Error('retrying')),
+              { once: true },
+            ),
+          );
+        }
+        return 'done';
+      },
+      onControl: (value) => {
+        control = value;
+      },
+    });
+
+    await vi.waitFor(() => expect(attempt).toBe(1));
+    control.retry(0);
+    await vi.waitFor(() => expect(attempt).toBe(2));
+    const result = await run;
+
+    expect(result.snapshot.calls[0]?.attempts).toMatchObject([
+      { number: 1, costUsd: 0.2 },
+      { number: 2, costUsd: 0.3 },
+    ]);
+    expect(result.snapshot.calls[0]?.costUsd).toBeCloseTo(0.5);
+  });
+
   it('adds discarded retry cost before an undefined final observer fallback', () => {
     const completed = entry(0, workflowResult(0.5), 'completed');
     const tracker = createWorkflowAttemptCostTracker();
