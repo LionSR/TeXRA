@@ -119,38 +119,19 @@ const TERMINAL_LIFECYCLES = new Set<WorkflowExecutionLifecycle>([
   WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED,
 ]);
 
-const WorkflowExecutionSnapshotShapeSchema = z.strictObject({
-  lifecycle: WorkflowExecutionLifecycleSchema,
-  currentStageId: z.string().min(1).optional(),
-  stages: z.array(WorkflowExecutionStageSchema),
-  calls: z.array(WorkflowExecutionCallSchema),
-  error: z.string().optional(),
-  timestamps: z.strictObject({
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-    completedAt: z.iso.datetime().optional(),
-  }),
-});
-
-/**
- * Transitional legacy member: snapshots persisted while `counts` was a stored
- * field (introduced and retired within 0.40.x, never in a released binary)
- * carry that copy in `meta.json`. Strip it on the way in so a same-era
- * execution still hydrates instead of failing `readMetaStrict` closed and
- * blocking resume. Every write normalizes through this schema, so the key is
- * gone the first time such a meta is rewritten — delete this member (and the
- * union) after 2026-10-12 (ledgered in #9627).
- */
-const LegacyCountsWorkflowExecutionSnapshotSchema =
-  WorkflowExecutionSnapshotShapeSchema.extend({
-    counts: z.unknown(),
-  }).transform(({ counts: _storedCounts, ...snapshot }) => snapshot);
-
 export const WorkflowExecutionSnapshotSchema = z
-  .union([
-    WorkflowExecutionSnapshotShapeSchema,
-    LegacyCountsWorkflowExecutionSnapshotSchema,
-  ])
+  .strictObject({
+    lifecycle: WorkflowExecutionLifecycleSchema,
+    currentStageId: z.string().min(1).optional(),
+    stages: z.array(WorkflowExecutionStageSchema),
+    calls: z.array(WorkflowExecutionCallSchema),
+    error: z.string().optional(),
+    timestamps: z.strictObject({
+      createdAt: z.iso.datetime(),
+      updatedAt: z.iso.datetime(),
+      completedAt: z.iso.datetime().optional(),
+    }),
+  })
   .superRefine((snapshot, context) => {
     const stageIds = new Set<string>();
     const stageOrders = new Set<number>();
