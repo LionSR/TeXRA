@@ -134,6 +134,18 @@ interface HydratedRunState {
 }
 
 /**
+ * The five execution-scoped facts owned by one run record and replaced or
+ * hydrated together when a stream changes execution.
+ */
+export interface RunMetadata {
+  readonly executionId?: ExecutionId;
+  readonly identity?: RunIdentity;
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly config?: AgentConfig;
+  readonly description?: string;
+}
+
+/**
  * Merge a round-keyed patch (per round: a value list, or `null` to delete
  * that round) into an existing overlay patch, later entries winning. Shared
  * by every round-keyed accumulator overlay (output files, missing outputs,
@@ -1175,20 +1187,20 @@ export class StreamSnapshotStore {
     record.description = description;
   }
 
-  getRunIdentity(stream: StreamTabId): RunIdentity | undefined {
-    return this.records.get(stream)?.runIdentity;
-  }
-
-  getUserFollowUpSupport(stream: StreamTabId): UserFollowUpSupport | undefined {
-    return this.records.get(stream)?.userFollowUpSupport;
-  }
-
-  getRunConfig(stream: StreamTabId): AgentConfig | undefined {
-    return this.records.get(stream)?.runConfig;
-  }
-
-  getExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    return this.records.get(stream)?.runExecutionId;
+  /**
+   * Canonical immutable run record projected from live facts or hydrated from
+   * the execution record named by the stream sidecar. All five fields share
+   * that execution owner and replacement lifecycle.
+   */
+  getRunMetadata(stream: StreamTabId): RunMetadata {
+    const record = this.records.get(stream);
+    return Object.freeze({
+      executionId: record?.runExecutionId,
+      identity: record?.runIdentity,
+      userFollowUpSupport: record?.userFollowUpSupport,
+      config: record?.runConfig,
+      description: record?.description,
+    });
   }
 
   /** Streams with persisted sidecars under `streamData/`. */
@@ -1240,15 +1252,6 @@ export class StreamSnapshotStore {
     }
     await this.preload(children);
     return children.filter((child) => this.getParentStreamId(child) === parent);
-  }
-
-  /**
-   * The stream's display description, projected from the one authority,
-   * `ExecutionMeta.description` (#9590 A4) — live event or load-time
-   * hydration. The legacy sidecar mirror is retired.
-   */
-  getDescription(stream: StreamTabId): string | undefined {
-    return this.records.get(stream)?.description;
   }
 
   /** Read-only view of stream→executionId for waiting-stream detection. */

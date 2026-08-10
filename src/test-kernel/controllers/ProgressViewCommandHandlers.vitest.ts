@@ -139,8 +139,10 @@ function createSecondTierActions(
         requestManualCompaction: vi.fn(),
       },
     },
+    getRunMetadata: vi.fn(() => ({
+      identity: { kind: 'agent' as const, agent: 'chat' },
+    })),
     getRunConfig: vi.fn(),
-    getRunIdentity: vi.fn(() => ({ kind: 'agent' as const, agent: 'chat' })),
     restoreRunConfig: vi.fn(),
     applyFollowUpPlan: vi.fn(),
     applyPolishResult: vi.fn(),
@@ -938,8 +940,12 @@ describe('createProgressViewSecondTierHandlers', () => {
   it('leaves restore failure reporting to the host callback', async () => {
     const failure = new Error('restore failed');
     const runConfig = {};
+    const getRunMetadata = vi.fn().mockReturnValue({
+      config: runConfig,
+      identity: { kind: 'agent', agent: 'chat' },
+    });
     const actions = createSecondTierActions({
-      getRunConfig: vi.fn().mockReturnValue(runConfig),
+      getRunMetadata,
       restoreRunConfig: vi.fn().mockRejectedValue(failure),
     });
     const handlers = createProgressViewSecondTierHandlers(actions);
@@ -950,6 +956,7 @@ describe('createProgressViewSecondTierHandlers', () => {
         stream: 'stream-1',
       }),
     ).rejects.toBe(failure);
+    expect(getRunMetadata).toHaveBeenCalledOnce();
     expect(actions.restoreRunConfig).toHaveBeenCalledWith(runConfig);
   });
 
@@ -961,8 +968,7 @@ describe('createProgressViewSecondTierHandlers', () => {
     'refuses RESTORE_STATE with feedback for non-native identity %j',
     async (identity) => {
       const actions = createSecondTierActions({
-        getRunConfig: vi.fn().mockReturnValue({}),
-        getRunIdentity: vi.fn().mockReturnValue(identity),
+        getRunMetadata: vi.fn().mockReturnValue({ config: {}, identity }),
       });
       const handlers = createProgressViewSecondTierHandlers(actions);
 

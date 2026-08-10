@@ -285,10 +285,10 @@ export class SessionState {
     current: StoredStreamMetadata,
   ): Partial<StoredStreamMetadata> {
     const patch: Partial<StoredStreamMetadata> = {};
-    const identity = this.snapshots.getRunIdentity(stream);
-    if (identity) patch.identity = identity;
-    patch.userFollowUpSupport = this.snapshots.getUserFollowUpSupport(stream);
-    const config = this.snapshots.getRunConfig(stream);
+    const runMetadata = this.snapshots.getRunMetadata(stream);
+    if (runMetadata.identity) patch.identity = runMetadata.identity;
+    patch.userFollowUpSupport = runMetadata.userFollowUpSupport;
+    const { config } = runMetadata;
     if (config) {
       patch.agentCategory = config.agentCategory;
       patch.config = {
@@ -298,12 +298,10 @@ export class SessionState {
       };
     }
 
-    patch.executionId =
-      this.snapshots.getExecutionId(stream) ?? current.executionId;
+    patch.executionId = runMetadata.executionId ?? current.executionId;
     patch.parentStreamId =
       this.snapshots.getParentStreamId(stream) ?? current.parentStreamId;
-    patch.description =
-      this.snapshots.getDescription(stream) ?? current.description;
+    patch.description = runMetadata.description ?? current.description;
 
     return patch;
   }

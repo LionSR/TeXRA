@@ -222,7 +222,8 @@ export function App(props: AppProps): React.JSX.Element {
   useLayoutEffect(() => {
     escapeInterruptStateRef.current = escapeInterruptState;
   });
-  const inputBarVisible = !foregroundOpen && !childInputHidden;
+  const inputBarVisible =
+    !foregroundOpen && (!childInputHidden || childListFocused);
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.

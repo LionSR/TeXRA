@@ -1,5 +1,9 @@
-import type { StreamTabId } from '@shared/schemas';
-import { streamAllowsChildFollowUpComposer } from '@shared/streams/followUpCapability';
+import {
+  AgentCategory,
+  USER_FOLLOW_UP_SUPPORT,
+  type StreamTabId,
+} from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 import { activeStreamScope } from './streamViews';
 import type { StreamSlice } from './cliState';
@@ -24,7 +28,16 @@ export function focusedChildFollowUpRoute(init: {
   }
 
   const slice = init.streams.get(scope.streamId);
-  if (slice && streamAllowsChildFollowUpComposer(slice)) {
+  // Terminal-backed agents consume follow-up queues at runtime, but the TUI
+  // keeps their composer hidden until terminal-backed interaction has parity.
+  const acceptsFollowUps =
+    slice?.userFollowUpSupport === USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE &&
+    slice.identity?.kind === 'agent' &&
+    slice.identity.tool === undefined &&
+    slice.category === AgentCategory.ToolUse &&
+    slice.status !== undefined &&
+    isInFlightPhase(slice.status);
+  if (acceptsFollowUps) {
     return { kind: 'accept', streamId: scope.streamId };
   }
   return { kind: 'reject', streamId: scope.streamId };

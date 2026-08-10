@@ -79,8 +79,7 @@ function executeValidatedUntilStarted(
 
 function createProgressViewProvider(): ProgressViewProviderFake {
   const snapshots = {
-    getRunConfig: vi.fn(),
-    getExecutionId: vi.fn(),
+    getRunMetadata: vi.fn(() => ({})),
     getOutputFiles: vi.fn(() => new Map()),
     getKnownFilePaths: vi.fn(() => new Set()),
     getCompileFailures: vi.fn(() => new Map()),
@@ -387,10 +386,10 @@ describe('progress-view onboarding refresh wiring', () => {
     const provider = createProgressViewProvider();
     const runConfig = createWorkflowConfig({ outputFiles: ['declared.tex'] });
     const output = createOutputFile();
-    vi.mocked(provider.state.snapshots.getRunConfig).mockReturnValue(runConfig);
-    vi.mocked(provider.state.snapshots.getExecutionId).mockReturnValue(
-      'exec-123',
-    );
+    vi.mocked(provider.state.snapshots.getRunMetadata).mockReturnValue({
+      config: runConfig,
+      executionId: 'exec-123',
+    });
     vi.mocked(provider.state.snapshots.getOutputFiles).mockReturnValue({
       1: [output],
     });

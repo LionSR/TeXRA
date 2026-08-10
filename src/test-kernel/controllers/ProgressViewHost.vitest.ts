@@ -28,6 +28,7 @@ import {
 interface HostHarness {
   readonly host: ProgressViewHost;
   readonly executed: unknown[];
+  readonly metadataReads: string[];
   readonly openedLabels: string[];
   readonly infoMessages: string[];
   readonly bypassInfoMessages: string[];
@@ -39,6 +40,7 @@ function createHostHarness(
   identity?: RunIdentity,
 ): HostHarness {
   const executed: unknown[] = [];
+  const metadataReads: string[] = [];
   const openedLabels: string[] = [];
   const infoMessages: string[] = [];
   const bypassInfoMessages: string[] = [];
@@ -47,10 +49,14 @@ function createHostHarness(
   const host = new ProgressViewHost({
     run: {
       state: {
-        getRunConfig: () => runConfig,
-        getRunIdentity: () =>
-          identity ?? { kind: 'agent', agent: runConfig.agent },
-        getExecutionId: () => 'exec-1',
+        getRunMetadata: (stream) => {
+          metadataReads.push(stream);
+          return {
+            config: runConfig,
+            identity: identity ?? { kind: 'agent', agent: runConfig.agent },
+            executionId: 'exec-1',
+          };
+        },
       },
       runExecutionRequest: async (request) => {
         executed.push(request);
@@ -59,9 +65,8 @@ function createHostHarness(
     workflowFileActions: {
       state: {
         getActiveStream: () => 'stream-a',
-        getExecutionId: () => 'exec-1',
+        getRunMetadata: () => ({ executionId: 'exec-1' }),
         getOutputFiles: () => ({}),
-        getAgentModel: () => undefined,
       },
       host: {
         compareFiles: vi.fn(),
@@ -124,6 +129,7 @@ function createHostHarness(
   return {
     host,
     executed,
+    metadataReads,
     openedLabels,
     infoMessages,
     bypassInfoMessages,
@@ -170,6 +176,7 @@ describe('ProgressViewHost', () => {
       { config: runConfig },
       { config: runConfig, executionId: 'exec-1' },
     ]);
+    assert.deepEqual(harness.metadataReads, ['stream-a', 'stream-a']);
     assert.equal(tryResumeStreamMock.mock.calls.length, 0);
     assert.deepEqual(harness.openedLabels, ['main-thm']);
     assert.deepEqual(harness.infoMessages, ['Label "main-thm" not found.']);
@@ -191,6 +198,7 @@ describe('ProgressViewHost', () => {
 
     assert.deepEqual(tryResumeStreamMock.mock.calls, [['stream-a']]);
     assert.deepEqual(harness.executed, []);
+    assert.deepEqual(harness.metadataReads, ['stream-a']);
   });
 
   it('starts a fresh run for a tool-use stream on Run New', async () => {

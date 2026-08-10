@@ -572,14 +572,14 @@ describe('executeCliRequest', () => {
     expect(snapshot.executionId).toBe(executionId);
     // Current records read the description via ExecutionMeta (#9590 Stage 6);
     // the snapshot field is the legacy sidecar mirror and stays unwritten.
-    expect(reader.getDescription(streamId)).toBe('chat / gpt54');
+    expect(reader.getRunMetadata(streamId).description).toBe('chat / gpt54');
     expect(snapshot.description).toBeUndefined();
     const { getExecutionStore } = await import('@agent/storage');
     expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
       'chat / gpt54',
     );
     expect(snapshot.parentStreamId).toBe(parentStreamId);
-    expect(reader.getRunConfig(streamId)).toMatchObject({
+    expect(reader.getRunMetadata(streamId).config).toMatchObject({
       agent: 'chat',
       model: 'gpt54',
       agentCategory: 'toolUse',

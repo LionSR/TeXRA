@@ -109,7 +109,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     if (this.isStaleDispatch(streamId)) return;
     if (isChildStreamRemoved(streamId)) return;
     const metadata = this.state.getStreamMetadata(streamId);
-    const config = this.state.snapshots.getRunConfig(streamId);
+    const config = this.state.snapshots.getRunMetadata(streamId).config;
     // Parent-only metadata refreshes must not mint a StreamSlice: an edge
     // alone is not focusable until attachment (`setActiveStream`) creates one.
     const hasDisplayFields =

@@ -885,6 +885,64 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('paints the choosing hint and reserves its rows for an unsupported child list', async () => {
+    const viewport = { columns: 40, rows: 12 } as const;
+
+    seedChildHierarchy();
+    patchStream(CHILD, (slice) => ({
+      ...slice,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    }));
+    focusStream(CHILD);
+    const transcriptText = Array.from(
+      { length: 20 },
+      (_, index) => `unsupported list line ${index + 1}`,
+    ).join('\n');
+    patchStream(CHILD, (slice) => ({
+      ...slice,
+      entries: [
+        {
+          id: 'unsupported-list-layout',
+          role: 'assistant',
+          text: transcriptText,
+          finalized: false,
+        },
+      ],
+    }));
+    const { ink, React } = await loadInk();
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, appProps(vi.fn())),
+      { ...viewport, debug: true },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+    const visibleTranscriptRows = (): number =>
+      (currentFrame().match(/unsupported list line \d+/gu) ?? []).length;
+
+    try {
+      await waitFor(() => visibleTranscriptRows() === 10);
+      expect(visibleTranscriptRows()).toBe(10);
+      expect(currentFrame()).not.toContain('Choosing a session');
+
+      stdin.write('\t');
+      await waitFor(
+        () =>
+          currentFrame().includes('Choosing a session') &&
+          visibleTranscriptRows() === 4,
+      );
+      expect(currentFrame()).toContain('Choosing a session');
+      expect(visibleTranscriptRows()).toBe(4);
+
+      stdin.write('\t');
+      await waitFor(() => visibleTranscriptRows() === 10);
+      expect(visibleTranscriptRows()).toBe(10);
+      expect(currentFrame()).not.toContain('Choosing a session');
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it.each([STREAM_PHASE.RUNNING, STREAM_PHASE.WAITING])(
     'keeps the composer enabled for a %s tool-use agent child',
     async (status) => {

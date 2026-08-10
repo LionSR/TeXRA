@@ -98,6 +98,7 @@ import type { FileOpResult } from '@shared/schemas/opResults';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
+import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -440,7 +441,7 @@ export class DesktopProgressBridge {
     // Seed it only after attaching the presentation and every live-event
     // subscription, so the first renderer output cannot precede either.
     for (const streamId of this.streamLogs.keys()) {
-      const runConfig = this.state.snapshots.getRunConfig(streamId);
+      const runConfig = this.state.snapshots.getRunMetadata(streamId).config;
       if (runConfig) {
         this.state.getOrCreateStreamState(streamId, runConfig.agentCategory);
       }
@@ -472,8 +473,7 @@ export class DesktopProgressBridge {
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
       state: {
-        getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
-        getExecutionId: (stream) => this.getStreamExecutionId(stream),
+        getRunMetadata: (stream) => this.getRunMetadata(stream),
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getKnownWorkspaceOutputPaths: (stream) =>
           this.state.snapshots.getKnownFilePaths(stream, {
@@ -550,11 +550,10 @@ export class DesktopProgressBridge {
         getAgent(agent, AgentCategory.ToolUse)?.category,
       loadModelOptions: () => computeModelOptionsData(),
       state: {
-        getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
+        getRunMetadata: (stream) => this.getRunMetadata(stream),
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getCompileFailures: (stream) =>
           this.state.snapshots.getCompileFailures(stream),
-        getExecutionId: (stream) => this.getStreamExecutionId(stream),
       },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
@@ -754,10 +753,7 @@ export class DesktopProgressBridge {
     return new ProgressViewHost({
       run: {
         state: {
-          getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
-          getRunIdentity: (stream) =>
-            this.state.snapshots.getRunIdentity(stream),
-          getExecutionId: (stream) => this.getStreamExecutionId(stream),
+          getRunMetadata: (stream) => this.getRunMetadata(stream),
         },
         runExecutionRequest: (request) => {
           const validated = validateExecutionRequest(request);
@@ -775,13 +771,9 @@ export class DesktopProgressBridge {
       workflowFileActions: {
         state: {
           getActiveStream: () => this.state.activeStream,
-          getExecutionId: (stream) => this.getStreamExecutionId(stream),
+          getRunMetadata: (stream) => this.getRunMetadata(stream),
           getOutputFiles: (stream) =>
             this.state.snapshots.getOutputFiles(stream),
-          // The desktop bridge has no quick-pick UI, so Accept always replaces
-          // the workspace file. Returning undefined keeps the controller from
-          // building copy metadata that the desktop host would silently drop.
-          getAgentModel: () => undefined,
         },
         host: {
           compareFiles: (baseFile, editedFile) =>
@@ -912,7 +904,7 @@ export class DesktopProgressBridge {
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
-      getRunIdentity: (stream) => this.state.snapshots.getRunIdentity(stream),
+      getRunMetadata: (stream) => this.getRunMetadata(stream),
       workflowActions: this.workflowActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -923,7 +915,8 @@ export class DesktopProgressBridge {
         },
       },
       session: this.session,
-      getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
+      getRunConfig: (stream) =>
+        this.state.snapshots.getRunMetadata(stream).config,
       restoreRunConfig: async (config) => {
         const restored = this.restoreRunConfig(config);
         if (!restored) {
@@ -1069,11 +1062,14 @@ export class DesktopProgressBridge {
     }
   }
 
-  private getStreamExecutionId(streamId: StreamTabId): ExecutionId | undefined {
-    return (
-      this.state.snapshots.getExecutionId(streamId) ??
-      this.state.getStreamMetadata(streamId).executionId
-    );
+  private getRunMetadata(streamId: StreamTabId): RunMetadata {
+    const metadata = this.state.snapshots.getRunMetadata(streamId);
+    return {
+      ...metadata,
+      executionId:
+        metadata.executionId ??
+        this.state.getStreamMetadata(streamId).executionId,
+    };
   }
 
   /**
@@ -1202,12 +1198,14 @@ export class DesktopProgressBridge {
     // sort needed. A defensive re-sort would only mask a schema regression,
     // not add safety.
     const outputsByRound = this.state.snapshots.getOutputFiles(stream);
-    const workspaceScan = this.getLatexdiffWorkspaceScan(stream, editedFile);
+    const { config, executionId } = this.getRunMetadata(stream);
+    const workspaceScan = config
+      ? this.getLatexdiffWorkspaceScan(config, editedFile)
+      : undefined;
     if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
       return undefined;
     }
 
-    const executionId = this.getStreamExecutionId(stream);
     return {
       outputsByRound,
       ...(executionId && { executionId }),
@@ -1216,12 +1214,9 @@ export class DesktopProgressBridge {
   }
 
   private getLatexdiffWorkspaceScan(
-    stream: StreamTabId,
+    config: AgentConfig,
     editedFile: string,
-  ): DesktopLatexdiffWorkspaceScan | undefined {
-    const config = this.state.snapshots.getRunConfig(stream);
-    if (!config) return undefined;
-
+  ): DesktopLatexdiffWorkspaceScan {
     const { agent, model, inputFiles, outputFiles } = config;
     const inputFile = inputFiles.at(0) ?? editedFile;
     // Thread the run's output files so multi-document runs resolved via the

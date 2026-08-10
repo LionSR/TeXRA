@@ -14,6 +14,7 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { pluralize } from '@utils/text/stringUtils';
 
 export interface ProgressFollowUpModelOption {
@@ -38,10 +39,9 @@ export interface ProgressFollowUpControllerDeps {
 }
 
 export interface ProgressFollowUpState {
-  getRunConfig(stream: StreamTabId): AgentConfig | undefined;
+  getRunMetadata(stream: StreamTabId): RunMetadata;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure>;
-  getExecutionId(stream: StreamTabId): string | undefined;
 }
 
 interface CompileFixerTarget {
@@ -109,13 +109,16 @@ export class ProgressFollowUpController {
     const outputFiles = Object.values(
       this.deps.state.getOutputFiles(input.streamId),
     ).flat();
+    const { config: runConfig, executionId } = this.deps.state.getRunMetadata(
+      input.streamId,
+    );
 
     return this.planToolUseFollowUp({
       ...input,
-      runConfig: this.deps.state.getRunConfig(input.streamId),
+      runConfig,
       outputFiles,
       modelOptions,
-      executionId: this.deps.state.getExecutionId(input.streamId),
+      executionId,
     });
   }
 
@@ -126,14 +129,16 @@ export class ProgressFollowUpController {
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(streamId),
     ).flat();
+    const { config: runConfig, executionId } =
+      this.deps.state.getRunMetadata(streamId);
 
     return this.planCompileFixer({
       streamId,
-      runConfig: this.deps.state.getRunConfig(streamId),
+      runConfig,
       compileFailures,
       runOutputs: this.deps.state.getOutputFiles(streamId),
       modelOptions,
-      executionId: this.deps.state.getExecutionId(streamId),
+      executionId,
     });
   }
 

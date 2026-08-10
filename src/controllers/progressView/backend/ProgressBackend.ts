@@ -237,7 +237,7 @@ export class ProgressBackend {
   private hasDeletableStreamData(stream: StreamTabId): boolean {
     return (
       this.state.streamLogs.has(stream) ||
-      Boolean(this.state.snapshots.getRunConfig(stream))
+      Boolean(this.state.snapshots.getRunMetadata(stream).config)
     );
   }
 

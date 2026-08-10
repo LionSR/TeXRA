@@ -2,11 +2,13 @@
 // The two transcript stores' public method counts are pinned by a checked-in
 // baseline: equal is allowed, growth fails, and a genuine reduction should
 // shrink config/ratchets/store-public-surface-baseline.json in the same PR.
-// Counting is caller-honest per the issue's correction: only real public
-// method declarations count — moving an operation behind a params object,
-// aggregate getter, port, or facade does not reduce this number, and making
-// a projection target private (writer-only transcript mutation, event-fed
-// snapshot projection) does. Clones the checked-in-baseline + AST-scanning
+// Counting is caller-honest per the issue's correction: each public method is
+// one contract unit, while every field exposed by a configured aggregate
+// snapshot getter is one unit. Replacing five getters with getRunMetadata thus
+// keeps five caller-visible units instead of gaming the method count down to
+// one. Making a projection target private (writer-only transcript mutation,
+// event-fed snapshot projection) genuinely reduces reachability.
+// Clones the checked-in-baseline + AST-scanning
 // vitest pattern from hostAgentDeepImportRatchet.vitest.ts.
 
 // Node imports
@@ -32,6 +34,7 @@ type StoreName = keyof typeof STORES;
 interface SurfaceBaseline {
   semantics: string;
   stores: Record<StoreName, string[]>;
+  aggregateContracts: Partial<Record<StoreName, Record<string, string[]>>>;
 }
 
 function isPublicMethod(
@@ -72,24 +75,77 @@ function publicMethodNames(store: StoreName): string[] {
   return [...new Set(names)].toSorted((a, b) => a.localeCompare(b));
 }
 
+function aggregateFieldNames(store: StoreName, methodName: string): string[] {
+  const file = resolve(REPO_ROOT, STORES[store]);
+  const sourceFile = ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  let returnTypeName: string | undefined;
+  const visit = (node: ts.Node): void => {
+    if (ts.isClassDeclaration(node) && node.name?.text === store) {
+      const method = node.members.find(
+        (member): member is ts.MethodDeclaration =>
+          isPublicMethod(member) &&
+          ts.isIdentifier(member.name) &&
+          member.name.text === methodName,
+      );
+      if (method?.type && ts.isTypeReferenceNode(method.type)) {
+        const { typeName } = method.type;
+        if (ts.isIdentifier(typeName)) returnTypeName = typeName.text;
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (!returnTypeName) return [];
+
+  const declaration = sourceFile.statements.find(
+    (statement): statement is ts.InterfaceDeclaration =>
+      ts.isInterfaceDeclaration(statement) &&
+      statement.name.text === returnTypeName,
+  );
+  if (!declaration) return [];
+  return declaration.members
+    .filter(
+      (member): member is ts.PropertySignature =>
+        ts.isPropertySignature(member) && ts.isIdentifier(member.name),
+    )
+    .map((member) => (member.name as ts.Identifier).text)
+    .toSorted((a, b) => a.localeCompare(b));
+}
+
+function contractUnits(
+  methods: readonly string[],
+  aggregates: Record<string, string[]> | undefined,
+): number {
+  return (
+    methods.length +
+    Object.values(aggregates ?? {}).reduce(
+      (extra, fields) => extra + Math.max(0, fields.length - 1),
+      0,
+    )
+  );
+}
+
 function readBaseline(): SurfaceBaseline {
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as SurfaceBaseline;
 }
 
 function reportGrowth(
   store: StoreName,
-  baseline: string[],
-  current: string[],
+  baseline: number,
+  current: number,
 ): string {
-  const baselineSet = new Set(baseline);
-  const added = current.filter((name) => !baselineSet.has(name));
   return (
-    `${store} public methods grew from ${baseline.length} to ${current.length}:\n` +
-    added.map((name) => `  + ${name}`).join('\n') +
-    `\n\nEvery public store method is a caller-verified operation (#9590). ` +
-    `If this growth is a deliberate new operation, update ${BASELINE_FILE} ` +
-    `in this PR; when you reduce the surface further, lower the baseline ` +
-    `to the new count instead.`
+    `${store} caller-visible contract units grew from ${baseline} to ${current}.` +
+    `\n\nEach public method counts once, and each field in a configured ` +
+    `aggregate snapshot contract counts once. If this growth is deliberate, ` +
+    `update ${BASELINE_FILE} in this PR; when the surface truly shrinks, ` +
+    `lower the baseline instead.`
   );
 }
 
@@ -97,15 +153,36 @@ describe('#9590 store public-surface budget ratchet', () => {
   const baseline = readBaseline();
 
   it.each(Object.keys(STORES) as StoreName[])(
-    'does not increase the public method count of %s',
+    'does not increase the caller-visible contract budget of %s',
     (store) => {
-      const current = publicMethodNames(store);
+      const currentMethods = publicMethodNames(store);
+      const aggregateContracts = baseline.aggregateContracts[store];
+      const baselineUnits = contractUnits(
+        baseline.stores[store],
+        aggregateContracts,
+      );
+      const currentUnits = contractUnits(currentMethods, aggregateContracts);
       expect(
-        current.length,
-        reportGrowth(store, baseline.stores[store], current),
-      ).toBeLessThanOrEqual(baseline.stores[store].length);
+        currentUnits,
+        reportGrowth(store, baselineUnits, currentUnits),
+      ).toBeLessThanOrEqual(baselineUnits);
     },
   );
+
+  it('pins every configured aggregate snapshot contract', () => {
+    for (const store of Object.keys(
+      baseline.aggregateContracts,
+    ) as StoreName[]) {
+      for (const [method, fields] of Object.entries(
+        baseline.aggregateContracts[store] ?? {},
+      )) {
+        expect(
+          aggregateFieldNames(store, method),
+          `${store}.${method} aggregate fields`,
+        ).toEqual(fields);
+      }
+    }
+  });
 
   it('keeps the baseline ordered and duplicate-free per store', () => {
     for (const store of Object.keys(STORES) as StoreName[]) {
