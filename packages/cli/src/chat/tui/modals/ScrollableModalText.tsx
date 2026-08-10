@@ -61,6 +61,7 @@ export function scrollableModalTextRowsBudget({
 export function modalTextDisplayLines({
   continuationPrefix = '',
   firstLinePrefix = '',
+  minContentWidth = MIN_MODAL_CONTENT_WIDTH,
   preWrapped = false,
   text,
   trimWrappedLeadingWhitespace = false,
@@ -68,6 +69,7 @@ export function modalTextDisplayLines({
 }: {
   readonly continuationPrefix?: string;
   readonly firstLinePrefix?: string;
+  readonly minContentWidth?: number;
   /** The caller already wrapped `text` to `width`. Re-running wrap-ansi over
    *  content that already fits costs a full grapheme-segmentation pass per
    *  render for identical output — worth skipping for a large body that
@@ -79,7 +81,7 @@ export function modalTextDisplayLines({
   readonly trimWrappedLeadingWhitespace?: boolean;
   readonly width: number;
 }): ModalTextDisplayLine[] {
-  const contentWidth = clampModalWidth(width);
+  const contentWidth = clampModalWidth(width, minContentWidth);
   return text.split('\n').flatMap((line, index) => {
     const prefixed = `${index === 0 ? firstLinePrefix : continuationPrefix}${line}`;
     const wrapped = ((): readonly string[] => {
@@ -145,6 +147,8 @@ interface ScrollableModalTextProps {
   readonly hiddenNoun?: string;
   /** Rows granted to the text body — see scrollableModalTextRowsBudget. */
   readonly maxRows: number;
+  /** Override the shared modal floor for exceptionally narrow readers. */
+  readonly minContentWidth?: number;
   /** Suppress the spacious blank margin (e.g. a metadata row sits above). */
   readonly marginWhenSpacious?: boolean;
   /** Release ↑/↓ while another surface owns them (feedback input). */
@@ -180,6 +184,7 @@ export function ScrollableModalText(
       modalTextDisplayLines({
         continuationPrefix: props.continuationPrefix,
         firstLinePrefix: props.firstLinePrefix,
+        minContentWidth: props.minContentWidth,
         preWrapped: props.preWrapped,
         text,
         trimWrappedLeadingWhitespace: props.trimWrappedLeadingWhitespace,
@@ -188,6 +193,7 @@ export function ScrollableModalText(
     [
       props.continuationPrefix,
       props.firstLinePrefix,
+      props.minContentWidth,
       props.preWrapped,
       props.trimWrappedLeadingWhitespace,
       text,
@@ -216,7 +222,7 @@ export function ScrollableModalText(
     scrollOffset,
     width,
   });
-  const contentWidth = clampModalWidth(width);
+  const contentWidth = clampModalWidth(width, props.minContentWidth);
 
   return (
     <>

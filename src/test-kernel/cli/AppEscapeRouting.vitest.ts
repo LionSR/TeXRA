@@ -13,6 +13,7 @@ import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   activeStreamId,
   focusStream,
+  foregroundReader,
   infoPane,
   openInfoPane,
   patchStream,
@@ -21,7 +22,6 @@ import {
   rootStreamId,
   setStreamStatusInCliState,
   streams,
-  transcriptReaderStreamId,
 } from '@cli/chat/tui/state/cliState';
 import {
   projectChildRoster,
@@ -787,14 +787,18 @@ describe('App foreground Escape ownership', () => {
       await sleep(30);
       stdin.write('\x14');
       await sleep(30);
-      expect(transcriptReaderStreamId.get()).toBeUndefined();
+      expect(foregroundReader.get()).toBeUndefined();
       stdin.write('\t');
       await sleep(30);
 
       stdin.write('\x14');
-      await waitFor(() => transcriptReaderStreamId.get() === CHILD);
+      await waitFor(
+        () =>
+          foregroundReader.get()?.kind === 'transcript' &&
+          foregroundReader.get()?.streamId === CHILD,
+      );
       stdin.write(ESC);
-      await waitFor(() => transcriptReaderStreamId.get() === undefined);
+      await waitFor(() => foregroundReader.get() === undefined);
       stdin.write(ESC);
       await waitFor(() => activeStreamId.get() === ROOT);
       await waitFor(() => currentFrame().includes('preserved root draft'));

@@ -6,7 +6,11 @@
 // load just copies the store's accumulated state into the slice — there is
 // no CLI-side live/durable merge.
 
-import { sumUsageStats, type StreamTabId } from '@shared/schemas';
+import {
+  sumUsageStats,
+  type StreamTabId,
+  type WorkPlanSnapshot,
+} from '@shared/schemas';
 import type { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -28,57 +32,71 @@ export type StreamArtifactReader = Pick<
   | 'getMissingOutputs'
   | 'getCompileFailures'
   | 'getRunUsage'
+  | 'getWorkPlan'
 >;
 
 function streamCanReceiveArtifacts(
   streamId: StreamTabId,
   generation: number,
-  focusIsCurrent: () => boolean,
+  requestIsCurrent: () => boolean,
 ): boolean {
   return (
-    focusIsCurrent() &&
+    requestIsCurrent() &&
     generation === getCliStateGeneration() &&
-    activeStreamId.get() === streamId &&
     !isCliStreamRetired(streamId) &&
     !isChildStreamRemoved(streamId)
   );
 }
 
-async function hydrateFocusedStream(
+/**
+ * Preload and project one stream from the canonical artifact accumulator.
+ * Callers own request currentness: focus hydration invalidates on a focus
+ * change, while `/plan` keeps the stream id it captured before awaiting.
+ */
+export async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
   streamId: StreamTabId,
-  focusIsCurrent: () => boolean,
-): Promise<void> {
+  requestIsCurrent: () => boolean = () => true,
+  onError?: (error: unknown) => void,
+): Promise<boolean> {
   const generation = getCliStateGeneration();
   try {
     // `preload` warms only this stream. `load([streamId])` would incorrectly
     // claim an authoritative complete stream set and evict sibling state.
     await store.preload([streamId]);
   } catch (error) {
-    if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
-      return;
+    if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
+      return false;
     }
-    setTransientNotice(
-      `Could not load workflow artifacts: ${toErrorMessage(error)}`,
-    );
-    return;
+    if (onError) {
+      onError(error);
+    } else {
+      setTransientNotice(
+        `Could not load workflow artifacts: ${toErrorMessage(error)}`,
+      );
+    }
+    return false;
   }
-  if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
-    return;
+  if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
+    return false;
   }
   // The store already ordered the seed against live facts (including a
   // `clearMissingOutputs` reset — see its overlay `reset` flag), so its
   // accumulated state replaces the slice's wholesale.
   const runUsage = [...store.getRunUsage(streamId).values()];
+  const workPlan: WorkPlanSnapshot = store.getWorkPlan(streamId);
   patchStream(streamId, (slice) => ({
     ...slice,
     outputFilesByRound: store.getOutputFiles(streamId),
     missingOutputsByRound: store.getMissingOutputs(streamId),
     compileFailuresByRound: store.getCompileFailures(streamId),
+    todos: workPlan.todos,
+    plan: workPlan.plan,
     cumulativeUsage: runUsage.length
       ? sumUsageStats(runUsage)
       : slice.cumulativeUsage,
   }));
+  return true;
 }
 
 /**
@@ -95,10 +113,10 @@ export function subscribeStreamArtifacts(
   let focusRevision = 0;
   const hydrate = (streamId: StreamTabId): void => {
     const revision = ++focusRevision;
-    void hydrateFocusedStream(
+    void hydrateStreamArtifacts(
       store,
       streamId,
-      () => focusRevision === revision,
+      () => focusRevision === revision && activeStreamId.get() === streamId,
     );
   };
   if (previous) hydrate(previous);

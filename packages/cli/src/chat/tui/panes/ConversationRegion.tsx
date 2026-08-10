@@ -147,7 +147,6 @@ export function ConversationRegion({
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
-    status: activeSlice?.status,
     todos: activeSlice?.todos ?? [],
   });
   const transcriptWidth = clampModalWidth(columns);

@@ -145,20 +145,20 @@ export function digitFromMetaShortcut(value: string): number | undefined {
 }
 
 export type ForegroundSurfaceKind =
-  'form' | 'infoPane' | 'approval' | 'transcriptReader';
+  'form' | 'infoPane' | 'approval' | 'transcriptReader' | 'workPlanReader';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
   formBusy,
   infoPaneOpen,
   pendingApproval,
-  transcriptReaderOpen,
+  readerKind,
 }: {
   readonly activeFormOpen: boolean;
   readonly formBusy: boolean;
   readonly infoPaneOpen: boolean;
   readonly pendingApproval: boolean;
-  readonly transcriptReaderOpen: boolean;
+  readonly readerKind: 'transcript' | 'workPlan' | undefined;
 }): ForegroundSurfaceKind | undefined {
   if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
@@ -166,7 +166,8 @@ export function foregroundSurfaceKind({
   if (infoPaneOpen) return 'infoPane';
   // Lowest precedence: the reader is a passive view, so anything that needs an
   // answer from the user takes the foreground away from it.
-  if (transcriptReaderOpen) return 'transcriptReader';
+  if (readerKind === 'workPlan') return 'workPlanReader';
+  if (readerKind === 'transcript') return 'transcriptReader';
   return undefined;
 }
 
@@ -198,6 +199,7 @@ export function foregroundEscapeAction({
       return activeFormEscapeAction ?? 'close';
     case 'infoPane':
     case 'transcriptReader':
+    case 'workPlanReader':
       return 'close';
     case 'approval':
       // Esc rejects (confirmCardKeyAction); label the consequence, not "cancel".
@@ -245,6 +247,7 @@ export function foregroundMaxRowsForKind({
     // takes every row the layout can spare rather than a modal-sized window.
     case 'infoPane':
     case 'transcriptReader':
+    case 'workPlanReader':
       return undefined;
     case 'approval':
       return approvalForegroundMaxRows(approvalKind);
