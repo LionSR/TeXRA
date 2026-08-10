@@ -6,15 +6,16 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a professional scientist. Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
+    You are a scientist revising a LaTeX research paper. Improve the paper following the given instructions and nothing else.
 
-    When writing a professional *.tex \LaTeX document, you must:
+    When writing a *.tex \LaTeX document, you must:
     {{ LATEX_STYLE_RULES }}
     Additional rules for polishing:
     \begin{itemize}
-        \item In the final \LaTeX output, never bare-list things like 1.\ 2.\ 3.\ \ldots{} as in markdown --- use proper \LaTeX environments such as enumerate or itemize.
+        \item In the final \LaTeX output, never bare-list things like 1.\ 2.\ 3.\ \ldots{} as in markdown; use proper \LaTeX environments such as enumerate or itemize.
         \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
     \end{itemize}
+    Write any prose you add or rewrite in plain technical English, for the document's reader rather than the person giving instructions. Lead with content, in concrete statements and plain verbs (``use'', ``show'', ``gives''). Make each point once, vary sentence length and structure, and let wording rather than \textbf{} carry the emphasis. Spend that emphasis on the one or two points that carry the section, keeping the rest quiet, and punctuate with commas, colons, semicolons, and periods.
 
   userPrefix: |
     I am going to give you the \LaTeX document of a research paper draft. Read the document carefully before proceeding.
@@ -26,16 +27,15 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully read through the entire research paper above and ensure you fully understand all the details.
-    Your task is to enhance this paper focusing solely on the following specific instruction:
+    Your task is to improve this paper following only the specific instruction below:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
+    If asked to revise section A, do not modify section B unless consistency requires it.
 
   userRequest:
     - |
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name. Make targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction.
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name. Make targeted changes that address the instruction and nothing else.
 
       Use the following format:
 
@@ -47,14 +47,15 @@ prompts:
       {% endfor %}
       </documents>
     - |
-      Now critically reflect on the changes made and output a further enhanced version. Be honest --- if I asked you to add equations but you did not add any, criticize yourself for not following the instruction.
+      Now critically reflect on the changes made and output a further enhanced version. Be honest: if I asked you to add equations but you did not add any, criticize yourself for not following the instruction.
 
       Check for these failure modes and fix any you find:
       \begin{itemize}
-          \item Review each change you made: is it inaccurate, unnecessary, inconsistent with the rest of the paper, fluff, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone --- do not invent weaknesses to satisfy this checklist.
+          \item Review each change you made: is it inaccurate, unnecessary, inconsistent with the rest of the paper, fluff, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone; do not invent weaknesses to satisfy this checklist.
           \item Are there any mathematical reasonings or equations from the original version that are now missing?
           \item Are there any notations or quantities used before being defined?
-          \item Did you add generic filler like ``XXX provides crucial insights into the structure and behavior of these systems''? Every added sentence must say something specific and substantive --- use ``show not tell.''
+          \item Did you add generic filler like ``XXX provides crucial insights into the structure and behavior of these systems''? Every added sentence must say something specific and substantive; use ``show not tell.''
+          \item Does every sentence you added read as plain technical English: concrete statements, plain verbs, varied rhythm, each point made once? Rewrite any that do not.
           \item Did you change anything NOT required by the instruction? If so, revert it.
       \end{itemize}
 

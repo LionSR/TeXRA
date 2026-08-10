@@ -40,8 +40,7 @@ prompts:
             \end{itemize}
     \end{itemize}
 
-    CRITICAL PRINCIPLE: Cross-Document Notation Consistency.
-    When multiple documents are provided, track notation across ALL documents. Flag symbols defined in one document but used earlier in another, conflicting conventions between documents (e.g., $\mathcal{H}$ in main paper vs $H$ in appendix), and symbol reuse with different meanings across documents. Cross-document notation conflicts are high-priority issues. Always propose graceful, minimal-change solutions (e.g., introduce a new symbol in one document rather than rewriting another).
+    Cross-document notation consistency. When multiple documents are provided, track notation across ALL documents. Flag symbols defined in one document but used earlier in another, conflicting conventions between documents (e.g., $\mathcal{H}$ in main paper vs $H$ in appendix), and symbol reuse with different meanings across documents. Cross-document notation conflicts are high-priority issues. Always propose graceful, minimal-change solutions (e.g., introduce a new symbol in one document rather than rewriting another).
 
     When making improvements in the second phase, you must:
     \begin{itemize}
@@ -83,7 +82,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read through the entire document (and any additional documents) to understand the notation system before proceeding.
+    Read the entire collection before proceeding.
 
   userRequest:
     - |
@@ -95,7 +94,7 @@ prompts:
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
-      In the scratchpad below, perform a deep notation analysis. Track symbols systematically and identify issues:
+      In the scratchpad below, track symbols across the document(s) and identify issues:
       <scratchpad>
       \begin{enumerate}
           \item [Notation Inventory and Primary Conventions]
