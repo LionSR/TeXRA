@@ -139,7 +139,7 @@ const WorkflowExecutionSnapshotShapeSchema = z.strictObject({
  * execution still hydrates instead of failing `readMetaStrict` closed and
  * blocking resume. Every write normalizes through this schema, so the key is
  * gone the first time such a meta is rewritten — delete this member (and the
- * union) after 0.41.
+ * union) after 2026-10-12 (ledgered in #9627).
  */
 const LegacyCountsWorkflowExecutionSnapshotSchema =
   WorkflowExecutionSnapshotShapeSchema.extend({
