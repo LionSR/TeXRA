@@ -7,7 +7,7 @@ import { describe, it, afterEach, vi } from 'vitest';
 // Local imports
 import * as figureModule from '@latex/extractFigure';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { ExtractLatexFiguresTool } from '@tools/latex';
+import { ExtractLatexFiguresTool } from '@tools/latex/ExtractFiguresTool';
 
 function installPlatform(files: Record<string, string>) {
   return installFakePlatform({ workspacePath: '/workspace', files });
