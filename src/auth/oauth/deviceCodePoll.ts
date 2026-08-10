@@ -9,19 +9,19 @@
 import { setTimeout as defaultSleep } from 'node:timers/promises';
 
 /** Soft continue: keep polling; optionally grow the interval (slow_down). */
-export type DeviceCodePollPending = {
+type DeviceCodePollPending = {
   readonly ok: false;
   /** Extra milliseconds to add to the poll interval (RFC 8628 slow_down). */
   readonly intervalDeltaMs?: number;
 };
 
 /** Authorized: stop polling and return the value. */
-export type DeviceCodePollAuthorized<T> = {
+type DeviceCodePollAuthorized<T> = {
   readonly ok: true;
   readonly value: T;
 };
 
-export type DeviceCodePollAttemptResult<T> =
+type DeviceCodePollAttemptResult<T> =
   DeviceCodePollAuthorized<T> | DeviceCodePollPending;
 
 /** Mark a poll attempt as authorized (fixes generic inference at call sites). */
@@ -41,7 +41,7 @@ export function deviceCodePending(
     : { ok: false, intervalDeltaMs };
 }
 
-export interface DeviceCodePollOptions<T> {
+interface DeviceCodePollOptions<T> {
   /** Initial poll interval in milliseconds. */
   readonly intervalMs: number;
   /** Absolute deadline (epoch ms). */
