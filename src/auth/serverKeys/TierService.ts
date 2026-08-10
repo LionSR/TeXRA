@@ -91,6 +91,9 @@ export class TierService {
   /** Latest relay spend-check failure (populated when fetching with auth). */
   private spendingStatusError: SpendingStatusError | null = null;
 
+  /** Authoritative refresh shared by overlapping quota checks. */
+  private spendingStatusRefresh: Promise<TierModelConfig | null> | null = null;
+
   /**
    * Create a new TierService.
    * @param baseUrl - The base URL for the relay server (e.g., "https://remote.texra.ai")
@@ -153,6 +156,7 @@ export class TierService {
     this.userStatus = null;
     this.spendingStatus = null;
     this.spendingStatusError = null;
+    this.spendingStatusRefresh = null;
   }
 
   /**
@@ -300,6 +304,37 @@ export class TierService {
       // call retries. fetchFromServer has already logged any genuine failure;
       // a missing config or sign-out abort is expected and stays quiet.
       return null;
+    }
+  }
+
+  /**
+   * Bypass the authenticated cache slot and replace the spending snapshot.
+   * Clearing the old snapshot first prevents a failed refresh or lost session
+   * from presenting last month's exhausted quota as current.
+   */
+  async refreshSpendingStatus(
+    authToken?: string,
+  ): Promise<TierModelConfig | null> {
+    if (!authToken) {
+      this.configCache.delete('auth');
+      this.spendingStatusRefresh = null;
+      this.spendingStatus = null;
+      this.spendingStatusError = null;
+      return null;
+    }
+    if (this.spendingStatusRefresh) return this.spendingStatusRefresh;
+
+    this.configCache.delete('auth');
+    this.spendingStatus = null;
+    this.spendingStatusError = null;
+    const refresh = this.getConfig(authToken);
+    this.spendingStatusRefresh = refresh;
+    try {
+      return await refresh;
+    } finally {
+      if (this.spendingStatusRefresh === refresh) {
+        this.spendingStatusRefresh = null;
+      }
     }
   }
 

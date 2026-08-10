@@ -88,6 +88,7 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
     },
     auth: { signIn: noOp, signOut: noOp },
     setUseIncludedModelAccess: noOp,
+    refreshSpendingStatus: async () => null,
     modelSelectionExtras: {
       useIncludedAccess: () => false,
       getUserTier: () => undefined,

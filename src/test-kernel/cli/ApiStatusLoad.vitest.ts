@@ -8,8 +8,18 @@ const mocks = vi.hoisted(() => ({
   readCliModelAccessStatus: vi.fn(),
   resolveCliUsageTier: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
+  getSubscriptionUsage: vi.fn(),
   secrets: {},
 }));
+
+vi.mock(
+  '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService',
+  () => ({
+    SubscriptionUsageService: class {
+      getUsage = mocks.getSubscriptionUsage;
+    },
+  }),
+);
 
 vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
   const actual =
@@ -53,8 +63,12 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ secrets: mocks.secrets }),
 }));
 
-const { loadCliApiStatus, loadCliApiStatusLines, loadCliModelAccessOverview } =
-  await import('@cli/runtime/apiStatus');
+const {
+  loadCliApiStatus,
+  loadCliApiStatusLines,
+  loadCliDetailedAccountStatusLines,
+  loadCliModelAccessOverview,
+} = await import('@cli/runtime/apiStatus');
 const { loadCliAccountStatusLines } =
   await import('@cli/chat/tui/commands/handlers/statusAssembly');
 
@@ -119,6 +133,17 @@ describe('loadCliApiStatusLines', () => {
       glmKeySet: false,
     });
     mocks.lookupApiKeyOrigin.mockReset().mockResolvedValue('none');
+    mocks.getSubscriptionUsage
+      .mockReset()
+      .mockImplementation(async (provider: string) => ({
+        state: 'unavailable',
+        provider,
+        providerName: provider,
+        planName: provider,
+        fetchedAt: 0,
+        windows: [],
+        reason: 'missing_credentials',
+      }));
   });
 
   it.each([
@@ -259,6 +284,72 @@ describe('loadCliApiStatusLines', () => {
     expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(2);
+  });
+
+  it('appends normalized usage to configured routes and force-refreshes on open', async () => {
+    mocks.readCliModelAccessStatus.mockResolvedValue({
+      apiFallback: 'personal',
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'on',
+        glmCode: 'on',
+      },
+      chatGptSignedIn: false,
+      grokSignedIn: false,
+      kimiCodeKeySet: true,
+      glmKeySet: true,
+    });
+    mocks.getSubscriptionUsage.mockImplementation(async (provider: string) => {
+      if (provider === 'glmCodingPlan') {
+        return {
+          state: 'unavailable',
+          provider,
+          providerName: 'GLM',
+          planName: 'GLM Coding Plan',
+          fetchedAt: 1_800_000_000_000,
+          windows: [],
+          reason: 'request_failed',
+        };
+      }
+      return {
+        state: 'available',
+        provider,
+        providerName: 'Kimi Code',
+        planName: 'Kimi Code',
+        fetchedAt: 1_800_000_000_000,
+        windows: [
+          {
+            name: 'five_hour',
+            percentUsed: 0,
+            percentRemaining: 100,
+            resetAt: 1_800_007_200_000,
+          },
+          {
+            name: 'seven_day',
+            percentUsed: 100,
+            percentRemaining: 0,
+            resetAt: 1_800_162_000_000,
+          },
+        ],
+      };
+    });
+
+    const lines = await loadCliDetailedAccountStatusLines({
+      apiMode: 'personal',
+      now: 1_800_000_000_000,
+    });
+
+    expect(lineFor(lines, 'Kimi Code')).toBe(
+      'Kimi Code: preferred · key configured · 5-hour: 0% · resets in 2h · 7-day: 100% · resets in 1d 21h',
+    );
+    expect(lineFor(lines, 'GLM Coding Plan')).toBe(
+      'GLM Coding Plan: preferred · key configured · usage unavailable',
+    );
+    expect(mocks.getSubscriptionUsage.mock.calls).toStrictEqual([
+      ['kimiCode', { forceRefresh: true }],
+      ['glmCodingPlan', { forceRefresh: true }],
+    ]);
   });
 
   it.each([

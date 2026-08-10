@@ -7,6 +7,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
+import { isSpendingQuotaExceeded, type SpendingStatus } from '@shared/schemas';
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
@@ -34,6 +35,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
+  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
@@ -45,6 +47,11 @@ export class ModelsTab extends LitElement {
     const apiAccessSection = this.authenticated
       ? html`<api-access-section
           .mode=${this.apiAccessMode}
+          .includedAccessExhausted=${
+            this.spendingStatus
+              ? isSpendingQuotaExceeded(this.spendingStatus)
+              : false
+          }
         ></api-access-section>`
       : nothing;
 

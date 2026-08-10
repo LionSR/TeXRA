@@ -1,5 +1,11 @@
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { configuredApiKeyProviders } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
+import type {
+  SubscriptionUsageProvider,
+  SubscriptionUsageSnapshot,
+} from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -26,6 +32,15 @@ import {
   resolveCliUsageTier,
   type CliAuthProfile,
 } from './supabaseAuth';
+
+interface SubscriptionUsageReader {
+  getUsage(
+    provider: SubscriptionUsageProvider,
+    options?: { readonly forceRefresh?: boolean },
+  ): Promise<SubscriptionUsageSnapshot>;
+}
+
+const SubscriptionUsage = new SubscriptionUsageService();
 
 export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
   const used = formatPercent(summary.usagePercent, 1);
@@ -229,6 +244,8 @@ function formatModelPreferenceLine(
 /** Render each detailed account/access fact on its owning route. */
 export async function loadCliDetailedAccountStatusLines(options: {
   readonly apiMode: ApiAccessMode;
+  readonly subscriptionUsage?: SubscriptionUsageReader;
+  readonly now?: number;
 }): Promise<string[]> {
   const [access, profile, providers] = await Promise.all([
     readCliModelAccessStatus(options.apiMode),
@@ -239,6 +256,20 @@ export async function loadCliDetailedAccountStatusLines(options: {
     access.apiFallback === 'included'
       ? await loadIncludedUsageLine(profile)
       : undefined;
+  // Detailed /api status is user-invoked, so reopening it is the manual refresh
+  // path. Ordinary chat startup and the status bar never call this service.
+  const usageReader = options.subscriptionUsage ?? SubscriptionUsage;
+  const [chatGptUsage, kimiCodeUsage, glmCodingPlanUsage] = await Promise.all([
+    access.chatGptSignedIn
+      ? usageReader.getUsage('chatgpt', { forceRefresh: true })
+      : undefined,
+    access.kimiCodeKeySet === true
+      ? usageReader.getUsage('kimiCode', { forceRefresh: true })
+      : undefined,
+    access.glmKeySet === true
+      ? usageReader.getUsage('glmCodingPlan', { forceRefresh: true })
+      : undefined,
+  ]);
   const routes = {
     chatGpt: {
       preferred: access.preferences.chatGpt === 'on',
@@ -280,6 +311,14 @@ export async function loadCliDetailedAccountStatusLines(options: {
         : { kind: 'personal' as const },
   };
   const lines: string[] = [];
+  const withUsage = (
+    line: string,
+    snapshot: SubscriptionUsageSnapshot | undefined,
+  ): string => {
+    if (!snapshot) return line;
+    const summary = formatSubscriptionUsageSummary(snapshot, options.now);
+    return summary ? `${line} · ${summary}` : line;
+  };
 
   const chatGptLine = formatModelPreferenceLine(
     'ChatGPT',
@@ -288,7 +327,7 @@ export async function loadCliDetailedAccountStatusLines(options: {
     'sign in required',
     routes.chatGpt.account,
   );
-  if (chatGptLine) lines.push(chatGptLine);
+  if (chatGptLine) lines.push(withUsage(chatGptLine, chatGptUsage));
 
   const grokLine = formatModelPreferenceLine(
     'Grok',
@@ -306,7 +345,7 @@ export async function loadCliDetailedAccountStatusLines(options: {
     'key required',
     routes.kimiCode.credential,
   );
-  if (kimiLine) lines.push(kimiLine);
+  if (kimiLine) lines.push(withUsage(kimiLine, kimiCodeUsage));
 
   const glmLine = formatModelPreferenceLine(
     'GLM Coding Plan',
@@ -315,7 +354,7 @@ export async function loadCliDetailedAccountStatusLines(options: {
     'key required',
     routes.glmCode.credential,
   );
-  if (glmLine) lines.push(glmLine);
+  if (glmLine) lines.push(withUsage(glmLine, glmCodingPlanUsage));
 
   const fallbackLine = `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`;
   if (routes.fallback.kind === 'included') {

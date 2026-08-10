@@ -1,7 +1,14 @@
 /** Subscription-backed model access: ChatGPT, Copilot in VS Code, Kimi Code. */
 
-import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {
+  LitElement,
+  html,
+  nothing,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -12,6 +19,8 @@ import {
   type ChatGptAuthStatus,
   type CopilotRouteInfo,
   type GrokAuthStatus,
+  type SubscriptionUsageProvider,
+  type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
@@ -32,6 +41,7 @@ import {
   CHATGPT_SUBSCRIPTION_SECTION,
   GROK_SUBSCRIPTION_SECTION,
 } from '../components/profile/SubscriptionSection';
+import '../components/profile/SubscriptionUsageRow';
 
 const KIMI_CODE_CONSOLE_URL = 'https://www.kimi.com/code/console';
 const GLM_CODING_PLAN_CONSOLE_URL = 'https://z.ai/subscribe';
@@ -48,6 +58,10 @@ interface CodingPlanSection {
   readonly keyHelp: string;
   readonly toggleLabel: string;
   readonly toggleHelp: string;
+  readonly usageProvider: Extract<
+    SubscriptionUsageProvider,
+    'kimiCode' | 'glmCodingPlan'
+  >;
 }
 
 const CODING_PLAN_SECTIONS: readonly CodingPlanSection[] = [
@@ -62,6 +76,7 @@ const CODING_PLAN_SECTIONS: readonly CodingPlanSection[] = [
     toggleLabel: '3. Enable the Coding Plan',
     toggleHelp:
       'Turn on "GLM Coding Plan" on the GLM row so requests route through the coding endpoint with your plan\u2019s monthly quota.',
+    usageProvider: 'glmCodingPlan',
   },
   {
     sectionId: 'kimi-code-subscription',
@@ -73,6 +88,7 @@ const CODING_PLAN_SECTIONS: readonly CodingPlanSection[] = [
     toggleLabel: '3. Optional: prefer Kimi Code',
     toggleHelp:
       'Enable "Prefer Kimi Code" on the same row so K3 also uses your Kimi Code subscription; the kimi-for-coding models always do.',
+    usageProvider: 'kimiCode',
   },
 ];
 
@@ -104,18 +120,73 @@ export class SubscriptionsTab extends LitElement {
 
   @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
   @property({ attribute: false }) grokAuth: GrokAuthStatus | null = null;
+  @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
+    null;
   @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
+  @state() private now = 0;
+
+  private clock: ReturnType<typeof setInterval> | undefined;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.refreshNow();
+    this.clock = setInterval(() => this.refreshNow(), 60_000);
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
+      forceRefresh: false,
+    });
+  }
+
+  override disconnectedCallback(): void {
+    if (this.clock !== undefined) clearInterval(this.clock);
+    this.clock = undefined;
+    super.disconnectedCallback();
+  }
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('usage')) this.refreshNow();
+  }
+
+  private refreshNow(): void {
+    this.now = Date.now();
+  }
 
   override render(): TemplateResult {
     return html`
       <div class="subscriptions-container tab-content-container">
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">Subscription usage</span>
+              <span class="settings-row-help">
+                Cached briefly and refreshed only when this tab opens or you
+                ask.
+              </span>
+            </div>
+            <div class="settings-row-control">
+              ${renderLabeledActionButton({
+                icon: 'arrows-rotate',
+                text: 'Refresh usage',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: () =>
+                  postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
+                    forceRefresh: true,
+                  }),
+              })}
+            </div>
+          </div>
+        </div>
         <subscription-section
           .provider=${CHATGPT_SUBSCRIPTION_SECTION}
           .auth=${this.chatgptAuth}
+          .usage=${this.usage?.chatgpt ?? null}
+          .now=${this.now}
         ></subscription-section>
         <subscription-section
           .provider=${GROK_SUBSCRIPTION_SECTION}
           .auth=${this.grokAuth}
+          .usage=${this.usage?.grok ?? null}
+          .now=${this.now}
         ></subscription-section>
         ${CODING_PLAN_SECTIONS.map((section) =>
           this.renderCodingPlanSection(section),
@@ -179,6 +250,10 @@ export class SubscriptionsTab extends LitElement {
               <span class="settings-row-help">${section.toggleHelp}</span>
             </div>
           </div>
+          <subscription-usage-row
+            .snapshot=${this.usage?.[section.usageProvider] ?? null}
+            .now=${this.now}
+          ></subscription-usage-row>
         </div>
       </section>
     `;

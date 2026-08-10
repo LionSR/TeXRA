@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   SettingsProfileController,
@@ -8,6 +8,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProviderSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 const MAX_ATTEMPTS_KEY = 'texra.model.retry.maxAttempts';
@@ -54,6 +55,7 @@ function createController(
   options: {
     state?: StateStore;
     config?: Record<string, SettingsProfileConfigValue>;
+    refreshSpendingStatus?: () => Promise<SpendingStatus | null>;
   } = {},
 ): {
   controller: SettingsProfileController;
@@ -99,6 +101,8 @@ function createController(
       setUseIncludedModelAccess: async (enabled) => {
         includedAccessUpdates.push(enabled);
       },
+      refreshSpendingStatus:
+        options.refreshSpendingStatus ?? (async () => null),
       invalidateModelOptionsCache: () => {
         invalidations.count += 1;
       },
@@ -110,21 +114,35 @@ function createController(
 }
 
 describe('SettingsProfileController', () => {
-  it('turns off OpenRouter when switching to included access', async () => {
-    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
-    const { controller, includedAccessUpdates, invalidations } =
-      createController({ state });
+  it.each([
+    ['resolved null', async () => null],
+    [
+      'rejected refresh',
+      async () => Promise.reject(new Error('quota refresh failed')),
+    ],
+  ])(
+    'fails open and mutates included access for a %s quota result',
+    async (_result, refreshSpendingStatus) => {
+      const state = new FakeStateStore({
+        [GlobalStateKey.USE_OPENROUTER]: true,
+      });
+      const refresh = vi.fn(refreshSpendingStatus);
+      const { controller, includedAccessUpdates, invalidations } =
+        createController({ state, refreshSpendingStatus: refresh });
 
-    const update = await controller.setApiAccessMode('included');
+      const update = await controller.setApiAccessMode('included');
 
-    expect(includedAccessUpdates).toEqual([true]);
-    expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
-    expect(invalidations.count).toBe(1);
-    expect(update).toEqual({
-      mode: 'included',
-      openRouterDisabled: true,
-    });
-  });
+      expect(refresh).toHaveBeenCalledOnce();
+      expect(includedAccessUpdates).toEqual([true]);
+      expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
+      expect(invalidations.count).toBe(1);
+      expect(update).toEqual({
+        kind: 'updated',
+        mode: 'included',
+        openRouterDisabled: true,
+      });
+    },
+  );
 
   it('keeps OpenRouter unchanged when switching to personal keys', async () => {
     const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
@@ -137,9 +155,52 @@ describe('SettingsProfileController', () => {
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
     expect(invalidations.count).toBe(1);
     expect(update).toEqual({
+      kind: 'updated',
       mode: 'personal',
       openRouterDisabled: false,
     });
+  });
+
+  it('rejects exhausted included access after refreshing quota', async () => {
+    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
+    const refreshSpendingStatus = vi.fn(async () => ({
+      currentSpend: 100,
+      limit: 100,
+      remaining: 0,
+      percentUsed: 100,
+    }));
+    const { controller, includedAccessUpdates, invalidations } =
+      createController({ state, refreshSpendingStatus });
+
+    await expect(controller.setApiAccessMode('included')).resolves.toEqual({
+      kind: 'rejected',
+      reason: 'quota_exhausted',
+    });
+    expect(refreshSpendingStatus).toHaveBeenCalledOnce();
+    expect(includedAccessUpdates).toEqual([]);
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
+    expect(invalidations.count).toBe(0);
+  });
+
+  it('accepts included access when a fresh quota check has headroom', async () => {
+    const refreshSpendingStatus = vi.fn(async () => ({
+      currentSpend: 0,
+      limit: 100,
+      remaining: 100,
+      percentUsed: 0,
+    }));
+    const { controller, includedAccessUpdates } = createController({
+      refreshSpendingStatus,
+    });
+
+    await expect(
+      controller.setApiAccessMode('included'),
+    ).resolves.toMatchObject({
+      kind: 'updated',
+      mode: 'included',
+    });
+    expect(refreshSpendingStatus).toHaveBeenCalledOnce();
+    expect(includedAccessUpdates).toEqual([true]);
   });
 
   it('updates only whitelisted provider settings', async () => {
