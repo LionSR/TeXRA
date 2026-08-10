@@ -412,6 +412,39 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
     }
   });
 
+  it('keeps host-resolved agent on cached resume when issueCall omits agentName', async () => {
+    const originalScript = `export const meta = {
+  name: 'resume-cached-agent',
+  description: 'cached resume keeps resolved agent',
+}
+return await agent('cache me', { id: 'cached-call' })`;
+    const completed = await runWorkflowScript({
+      script: originalScript,
+      runAgent: async (invocation) => {
+        invocation.reportAgent?.('resolved-writer');
+        return 'original result';
+      },
+    });
+    expect(completed.snapshot.calls[0]?.agent).toBe('resolved-writer');
+
+    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const cached = await runWorkflowScript({
+      script: originalScript,
+      initialSnapshot: completed.snapshot,
+      journal: completed.journal,
+      runAgent: vi.fn(() => Promise.reject(new Error('must replay'))),
+      onSnapshot: (snapshot) => {
+        snapshots.push(snapshot);
+      },
+    });
+
+    // issueCall re-runs before the journal cache hit and typically has no
+    // agentName; it must not wipe the hydrated reportAgent value.
+    expect(snapshots[0]?.calls[0]?.agent).toBe('resolved-writer');
+    expect(cached.snapshot.calls[0]?.status).toBe('cached');
+    expect(cached.snapshot.calls[0]?.agent).toBe('resolved-writer');
+  });
+
   it('re-runs a cached dynamic call with fresh execution timestamps after its identity changes', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
