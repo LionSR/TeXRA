@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
+import { basename } from 'node:path';
 
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  WORKFLOW_CALL_STATUS,
+  WORKFLOW_EXECUTION_LIFECYCLE,
+  type StreamTabId,
+  type WorkflowExecutionSnapshot,
+} from '@shared/schemas';
 import {
   WorkflowScriptFilesSchema,
   type WorkflowScriptFiles,
@@ -14,6 +20,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
+import { WorkflowExecutionState } from './workflowExecutionState';
 import {
   WORKFLOW_SKIPPED_RESULT,
   normalizeWorkflowScriptPhaseTitle,
@@ -60,7 +67,7 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
-const LABEL_EXCERPT_LENGTH = 48;
+const LABEL_EXCERPT_LENGTH = 80;
 const STRING_AGENT_OPTION_FIELDS = [
   'id',
   'label',
@@ -207,6 +214,71 @@ function isRunFatalAbort(reason: unknown): reason is WorkflowRunAbortError {
   );
 }
 
+class CoalescedSnapshotWriter {
+  readonly #write: WorkflowScriptRunOptions['onSnapshot'];
+  readonly #onFailure: (failure: WorkflowRunAbortError) => void;
+  #pending: WorkflowExecutionSnapshot | undefined;
+  #running: Promise<void> | undefined;
+  #failure: WorkflowRunAbortError | undefined;
+  #sealed = false;
+
+  constructor(
+    write: WorkflowScriptRunOptions['onSnapshot'],
+    onFailure: (failure: WorkflowRunAbortError) => void,
+  ) {
+    this.#write = write;
+    this.#onFailure = onFailure;
+  }
+
+  publish(snapshot: WorkflowExecutionSnapshot): void {
+    if (!this.#write || this.#failure !== undefined || this.#sealed) return;
+    this.#pending = snapshot;
+    this.#running ??= this.#drain();
+  }
+
+  async flush(): Promise<void> {
+    while (this.#running) await this.#running;
+  }
+
+  throwIfFailed(): void {
+    if (this.#failure !== undefined) throw this.#failure;
+  }
+
+  seal(): void {
+    if (this.#running || this.#pending) {
+      throw new Error('Cannot seal workflow snapshot writes before flush.');
+    }
+    this.#sealed = true;
+  }
+
+  async #drain(): Promise<void> {
+    try {
+      while (this.#pending) {
+        const snapshot = this.#pending;
+        this.#pending = undefined;
+        await this.#write?.(snapshot);
+      }
+    } catch (cause) {
+      const failure = new WorkflowRunAbortError(
+        `Failed to persist workflow execution snapshot: ${toErrorMessage(cause)}`,
+        { kind: 'checkpoint', cause },
+      );
+      this.#failure = failure;
+      this.#pending = undefined;
+      this.#onFailure(failure);
+    } finally {
+      this.#running = undefined;
+      if (this.#pending && this.#failure === undefined) {
+        this.#running = this.#drain();
+      }
+    }
+  }
+}
+
+function now(): string {
+  return new Date().toISOString();
+}
+
 /**
  * Runs a workflow script: deterministic JS orchestration over host-executed
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
@@ -228,6 +300,7 @@ export async function runWorkflowScript(
     onControl,
   } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  // This is the one total physical attempt bound. Cached replays are free.
   const maxAgentCalls = options.maxAgentCalls ?? DEFAULT_MAX_AGENT_CALLS;
 
   const { meta, body } = parseWorkflowScript(options.script);
@@ -238,6 +311,11 @@ export async function runWorkflowScript(
   const journal = new Map<number, WorkflowJournalEntry>();
   const queue = new PQueue({ concurrency });
   const runAbort = new AbortController();
+  const failRun = (fault: WorkflowRunAbortError): WorkflowRunAbortError => {
+    runAbort.abort(fault);
+    const { reason } = runAbort.signal;
+    return isRunFatalAbort(reason) ? reason : fault;
+  };
   // One record per in-flight call, keyed by call index and linked to runAbort
   // (a run abort cascades to every entry; a per-call abort leaves the others
   // running). skip()/retry() target a single entry; the entry is removed as
@@ -259,8 +337,20 @@ export async function runWorkflowScript(
   const hasTaskPlan = meta.tasks !== undefined;
   const plannedTasks = meta.tasks ?? [];
   const plannedTasksById = new Map(plannedTasks.map((task) => [task.id, task]));
-  const issuedPlannedTaskIds = new Set<string>();
-  let currentPhase: string | undefined;
+  const snapshotWriter = new CoalescedSnapshotWriter(
+    options.onSnapshot,
+    (failure) => {
+      failRun(failure);
+    },
+  );
+  const executionState = new WorkflowExecutionState({
+    phases: plannedPhases,
+    tasks: plannedTasks,
+    initialSnapshot: options.initialSnapshot,
+    publish: (snapshot) => snapshotWriter.publish(snapshot),
+  });
+  await snapshotWriter.flush();
+  snapshotWriter.throwIfFailed();
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
@@ -303,12 +393,6 @@ export async function runWorkflowScript(
   // cleanup, timeout, or parent reason is not a fault, so a fault raised
   // afterwards (only reachable while abandoned calls drain) still reports
   // itself.
-  const failRun = (fault: WorkflowRunAbortError): WorkflowRunAbortError => {
-    runAbort.abort(fault);
-    const { reason } = runAbort.signal;
-    return isRunFatalAbort(reason) ? reason : fault;
-  };
-
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
   ): Promise<void> => {
@@ -387,13 +471,21 @@ export async function runWorkflowScript(
       callOptions.label = plannedTask.label;
       callOptions.phase = plannedTask.phase;
     } else {
-      callOptions.phase ??= currentPhase;
+      callOptions.phase ??= executionState.currentPhase;
     }
 
+    const primaryFile =
+      callOptions.inputFiles?.[0] ?? callOptions.contextFiles?.[0];
+    const role = callOptions.agentName ?? 'Agent';
     const label =
       plannedTask?.label ??
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
+    const snapshotLabel =
+      plannedTask?.label ??
+      callOptions.label ??
+      (primaryFile ? `${basename(primaryFile)}: ${role}` : undefined) ??
+      `${role} ${index + 1}`;
     const hasFileDependencies =
       (callOptions.inputFiles?.length ?? 0) > 0 ||
       (callOptions.contextFiles?.length ?? 0) > 0 ||
@@ -431,24 +523,50 @@ export async function runWorkflowScript(
       ? await readDependencyFingerprint()
       : undefined;
     let key = journalKey(prompt, callOptions, dependencyFingerprint);
-    const progressId = plannedTask?.id ?? `call-${index}`;
-    if (plannedTask) {
-      if (issuedPlannedTaskIds.has(progressId)) {
-        throw failRun(
-          new WorkflowRunAbortError(
-            `Workflow task "${progressId}" may be issued only once per run.`,
-            { kind: 'contract' },
-          ),
-        );
-      }
-      issuedPlannedTaskIds.add(progressId);
-    }
+    const progressId = plannedTask?.id ?? callOptions.id ?? `call-${index}`;
     const eventBase = {
       progressId,
       index,
       label,
       ...phaseContextFor(callOptions.phase),
     };
+    if (
+      callOptions.phase !== undefined &&
+      executionState.currentPhaseIndex === -1
+    ) {
+      try {
+        executionState.enterStage(callOptions.phase);
+      } catch (error) {
+        throw failRun(
+          new WorkflowRunAbortError(toErrorMessage(error), {
+            kind: 'contract',
+            cause: error,
+          }),
+        );
+      }
+    }
+    try {
+      executionState.issueCall({
+        id: progressId,
+        label: snapshotLabel,
+        phase: callOptions.phase,
+        agent: callOptions.agentName,
+        files: {
+          input: (callOptions.inputFiles ?? []).map((file) => basename(file)),
+          context: (callOptions.contextFiles ?? []).map((file) =>
+            basename(file),
+          ),
+          media: (callOptions.mediaFiles ?? []).map((file) => basename(file)),
+        },
+      });
+    } catch (error) {
+      throw failRun(
+        new WorkflowRunAbortError(toErrorMessage(error), {
+          kind: 'contract',
+          cause: error,
+        }),
+      );
+    }
     if (issuedCallKeys.has(key)) {
       throw failRun(
         new WorkflowRunAbortError(
@@ -532,6 +650,14 @@ export async function runWorkflowScript(
         key,
         result: normalizedResult,
       });
+      executionState.updateCall(progressId, {
+        status: WORKFLOW_CALL_STATUS.CACHED,
+        timestamps: {
+          ...executionState.call(progressId).timestamps,
+          updatedAt: now(),
+          completedAt: now(),
+        },
+      });
       emit({ type: 'agent:end', ...eventBase, outcome: 'cached' });
       return payload;
     }
@@ -550,25 +676,22 @@ export async function runWorkflowScript(
       ...(childStreamId !== undefined && { childStreamId }),
       durationMs: Date.now() - startedAt,
     });
+    executionState.updateCall(progressId, {
+      status: WORKFLOW_CALL_STATUS.QUEUED,
+      blockedReason: undefined,
+      timestamps: {
+        ...executionState.call(progressId).timestamps,
+        queuedAt: now(),
+        updatedAt: now(),
+      },
+    });
+    emit({ type: 'agent:queued', ...eventBase });
+
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
     // Every physical model attempt is charged against liveCallCounter; the
     // logical call key and eventual journal entry remain index-scoped.
     for (;;) {
-      liveCallCounter += 1;
-      if (liveCallCounter > maxAgentCalls) {
-        // Abort first so in-flight siblings stop consuming quota. Retried
-        // attempts consume the same cap as first attempts; cached calls never
-        // enter this loop.
-        const fatal = failRun(
-          new WorkflowRunAbortError(
-            `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
-            { kind: 'cap' },
-          ),
-        );
-        emitFailedEnd(fatal, startEmitted ? attemptMetadata() : undefined);
-        throw fatal;
-      }
       const callController = new AbortController();
       const call: InFlightAgentCall = { controller: callController };
       // Link this call to the run: any run-level abort cascades to it, so a
@@ -576,11 +699,6 @@ export async function runWorkflowScript(
       const cascade = () => callController.abort(runAbort.signal.reason);
       const detachCascade = onAbort(runAbort.signal, cascade);
       inFlightCalls.set(index, call);
-      if (!startEmitted) {
-        startEmitted = true;
-        emit({ type: 'agent:start', ...eventBase });
-      }
-
       let result: unknown;
       let attemptError: { readonly error: unknown } | undefined;
       try {
@@ -591,9 +709,30 @@ export async function runWorkflowScript(
           // soft per-call failure while a fault still stops the run.
           runAbort.signal.throwIfAborted();
           callController.signal.throwIfAborted();
-          const launch = () =>
-            runAgent({
+          // Charge physical work only after p-queue admits this attempt. Calls
+          // cancelled while queued never consume the live-attempt budget.
+          liveCallCounter += 1;
+          if (liveCallCounter > maxAgentCalls) {
+            throw failRun(
+              new WorkflowRunAbortError(
+                `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+                { kind: 'cap' },
+              ),
+            );
+          }
+          executionState.beginAttempt(progressId);
+          if (!startEmitted) {
+            startEmitted = true;
+            emit({ type: 'agent:start', ...eventBase });
+          }
+          executionState.updateCall(progressId, {
+            status: WORKFLOW_CALL_STATUS.RUNNING,
+          });
+          const launch = () => {
+            callController.signal.throwIfAborted();
+            return runAgent({
               index,
+              progressId,
               key,
               ...(dependencyFingerprint !== undefined && {
                 dependencyFingerprint,
@@ -603,8 +742,16 @@ export async function runWorkflowScript(
               signal: callController.signal,
               reportModel: (model) => {
                 resolvedModel = model;
+                executionState.updateCall(progressId, { model });
               },
+              reportAgent: (agent) =>
+                executionState.updateCall(progressId, { agent }),
+              reportChildExecution: (executionId) =>
+                executionState.reportChildExecution(progressId, executionId),
+              reportCostUsd: (costUsd) =>
+                executionState.updateCall(progressId, { costUsd }),
               reportChildStream: (streamId) => {
+                executionState.reportChildStream(progressId, streamId);
                 childStreamId = streamId;
                 emit({
                   type: 'agent:stream',
@@ -613,6 +760,7 @@ export async function runWorkflowScript(
                 });
               },
             });
+          };
           // File contents can change while this call waits for a concurrency
           // slot or between interactive attempts. Refresh the identity before
           // every physical launch so the journal and stable child id describe
@@ -634,11 +782,28 @@ export async function runWorkflowScript(
         }
       }
 
+      executionState.settleAttempt(progressId);
+      if (executionState.isSealed) return undefined;
+
       // Control action wins over whatever the (possibly signal-ignoring) runner
       // did: a deliberate skip/retry discards this attempt's outcome.
       const action = call.action;
-      if (action === 'retry') continue;
+      if (action === 'retry') {
+        executionState.updateCall(progressId, {
+          status: WORKFLOW_CALL_STATUS.QUEUED,
+        });
+        emit({ type: 'agent:queued', ...eventBase });
+        continue;
+      }
       if (action === 'skip') {
+        executionState.updateCall(progressId, {
+          status: WORKFLOW_CALL_STATUS.SKIPPED,
+          timestamps: {
+            ...executionState.call(progressId).timestamps,
+            updatedAt: now(),
+            completedAt: now(),
+          },
+        });
         emit({
           type: 'agent:end',
           ...eventBase,
@@ -675,6 +840,17 @@ export async function runWorkflowScript(
         }
         // A failed agent resolves to null and is deliberately NOT journaled, so
         // a resume retries it. Callers also exclude the truthy skip sentinel.
+        executionState.updateCall(progressId, {
+          status: options.signal?.aborted
+            ? WORKFLOW_CALL_STATUS.CANCELLED
+            : WORKFLOW_CALL_STATUS.FAILED,
+          error: toErrorMessage(attemptError.error),
+          timestamps: {
+            ...executionState.call(progressId).timestamps,
+            updatedAt: now(),
+            completedAt: now(),
+          },
+        });
         emitFailedEnd(attemptError.error, attemptMetadata());
         return 'null';
       }
@@ -696,6 +872,14 @@ export async function runWorkflowScript(
         emitFailedEnd(error, attemptMetadata());
         throw error;
       }
+      executionState.updateCall(progressId, {
+        status: WORKFLOW_CALL_STATUS.COMPLETED,
+        timestamps: {
+          ...executionState.call(progressId).timestamps,
+          updatedAt: now(),
+          completedAt: now(),
+        },
+      });
       emit({
         type: 'agent:end',
         ...eventBase,
@@ -738,11 +922,25 @@ export async function runWorkflowScript(
             return undefined;
           },
           phase: (args) => {
-            currentPhase = normalizeWorkflowScriptPhaseTitle(String(args[0]));
-            const { phaseIndex, phaseTotal } = phaseContextFor(currentPhase);
+            const nextPhase = normalizeWorkflowScriptPhaseTitle(
+              String(args[0]),
+            );
+            try {
+              executionState.enterStage(nextPhase);
+            } catch (error) {
+              throw failRun(
+                new WorkflowRunAbortError(toErrorMessage(error), {
+                  kind: 'contract',
+                  cause: error,
+                }),
+              );
+            }
+            const { phaseIndex, phaseTotal } = phaseContextFor(
+              executionState.currentPhase,
+            );
             emit({
               type: 'phase',
-              title: currentPhase,
+              title: executionState.currentPhase!,
               ...(phaseIndex !== undefined && {
                 index: phaseIndex,
                 total: phaseTotal,
@@ -808,6 +1006,30 @@ export async function runWorkflowScript(
     }
   }
 
+  const succeeded =
+    scriptFailure === undefined &&
+    drainFault === undefined &&
+    !isRunFatalAbort(runAbort.signal.reason);
+  let terminalLifecycle: 'completed' | 'failed' | 'cancelled' =
+    WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
+  if (succeeded) {
+    terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.COMPLETED;
+  } else if (options.signal?.aborted) {
+    terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED;
+  }
+  const terminalError =
+    drainFault ??
+    (isRunFatalAbort(runAbort.signal.reason)
+      ? runAbort.signal.reason
+      : scriptFailure?.error);
+  executionState.finish(
+    terminalLifecycle,
+    terminalError === undefined ? undefined : toErrorMessage(terminalError),
+  );
+  await snapshotWriter.flush();
+  snapshotWriter.throwIfFailed();
+  snapshotWriter.seal();
+
   // Guest code may catch an agent() rejection, and an abandoned call can
   // reject while the final drain is running. Checkpoint failure is a run-level
   // invariant, so a fault outranks the script outcome, and the earliest fault
@@ -822,6 +1044,7 @@ export async function runWorkflowScript(
     result,
     journal: [...journal.values()].toSorted((a, b) => a.index - b.index),
     agentCalls: callCounter,
+    snapshot: executionState.snapshot(),
   };
 }
 

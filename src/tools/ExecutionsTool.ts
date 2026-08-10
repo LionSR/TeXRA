@@ -45,6 +45,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamLogEntry,
+  type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
@@ -227,6 +228,138 @@ const OUTPUT_MAX_LINES = 1_000;
 
 /** Marks a projected line that the command wrote to stderr. */
 const OUTPUT_STDERR_PREFIX = 'err: ';
+
+const WORKFLOW_SUMMARY_MAX_ENTRIES = 8;
+const WORKFLOW_SUMMARY_MAX_ATTEMPTS = 2;
+const WORKFLOW_SUMMARY_MAX_FILES_PER_KIND = 3;
+const WORKFLOW_SUMMARY_TEXT_LENGTH = 160;
+const WORKFLOW_LIVE_CALL_STATUSES = new Set([
+  'planned',
+  'stageBlocked',
+  'queued',
+  'starting',
+  'running',
+]);
+
+function compactWorkflowText(value: string | undefined): string | undefined {
+  return value?.slice(0, WORKFLOW_SUMMARY_TEXT_LENGTH);
+}
+
+function workflowStageView(
+  stage: WorkflowExecutionSnapshot['stages'][number],
+): unknown {
+  return {
+    id: compactWorkflowText(stage.id),
+    title: compactWorkflowText(stage.title),
+    order: stage.order,
+    lifecycle: stage.lifecycle,
+    startedAt: stage.startedAt,
+    completedAt: stage.completedAt,
+  };
+}
+
+function workflowAttemptView(
+  attempt: WorkflowExecutionSnapshot['calls'][number]['attempts'][number],
+): unknown {
+  return {
+    number: attempt.number,
+    id: compactWorkflowText(attempt.id),
+    startedAt: attempt.startedAt,
+    completedAt: attempt.completedAt,
+  };
+}
+
+function workflowExecutionView(snapshot: WorkflowExecutionSnapshot): unknown {
+  const byPriority = snapshot.calls.toSorted((left, right) => {
+    const priority = (call: (typeof snapshot.calls)[number]): number => {
+      if (call.stageId === snapshot.currentStageId) return 0;
+      if (WORKFLOW_LIVE_CALL_STATUSES.has(call.status)) return 1;
+      if (call.status === 'failed' || call.status === 'cancelled') return 2;
+      return 3;
+    };
+    return (
+      priority(left) - priority(right) ||
+      right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt)
+    );
+  });
+  const stages = snapshot.stages
+    .toSorted((left, right) => {
+      const priority = (stage: (typeof snapshot.stages)[number]): number => {
+        if (stage.id === snapshot.currentStageId) return 0;
+        if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {
+          return 1;
+        }
+        return 2;
+      };
+      return priority(left) - priority(right) || right.order - left.order;
+    })
+    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
+    .map(workflowStageView);
+  const calls = byPriority
+    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
+    .map((call) => {
+      const compactFiles = (files: readonly string[]) => ({
+        sample: files
+          .slice(0, WORKFLOW_SUMMARY_MAX_FILES_PER_KIND)
+          .map((file) => compactWorkflowText(file)!),
+        ...(files.length > WORKFLOW_SUMMARY_MAX_FILES_PER_KIND && {
+          omitted: files.length - WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
+        }),
+      });
+      return {
+        id: compactWorkflowText(call.id),
+        label: compactWorkflowText(call.label),
+        stageId: compactWorkflowText(call.stageId),
+        stageTitle: compactWorkflowText(call.stageTitle),
+        agent: compactWorkflowText(call.agent),
+        model: compactWorkflowText(call.model),
+        files: {
+          input: compactFiles(call.files.input),
+          context: compactFiles(call.files.context),
+          media: compactFiles(call.files.media),
+        },
+        childExecutionId: compactWorkflowText(call.childExecutionId),
+        childStreamId: compactWorkflowText(call.childStreamId),
+        attempts: call.attempts
+          .slice(-WORKFLOW_SUMMARY_MAX_ATTEMPTS)
+          .map(workflowAttemptView),
+        ...(call.attempts.length > WORKFLOW_SUMMARY_MAX_ATTEMPTS && {
+          omittedAttempts: call.attempts.length - WORKFLOW_SUMMARY_MAX_ATTEMPTS,
+        }),
+        status: call.status,
+        blockedReason: compactWorkflowText(call.blockedReason),
+        error: compactWorkflowText(call.error),
+        costUsd: call.costUsd,
+        timestamps: call.timestamps,
+      };
+    });
+  const currentStage = snapshot.stages.find(
+    (stage) => stage.id === snapshot.currentStageId,
+  );
+  return {
+    aggregate: {
+      lifecycle: snapshot.lifecycle,
+      error: compactWorkflowText(snapshot.error),
+      counts: snapshot.counts,
+      timestamps: snapshot.timestamps,
+      responseBounds: {
+        maxStages: WORKFLOW_SUMMARY_MAX_ENTRIES,
+        maxCalls: WORKFLOW_SUMMARY_MAX_ENTRIES,
+        maxAttemptsPerCall: WORKFLOW_SUMMARY_MAX_ATTEMPTS,
+        maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
+      },
+    },
+    currentStage: currentStage ? workflowStageView(currentStage) : null,
+    stages,
+    calls,
+    ...(snapshot.stages.length > stages.length && {
+      omittedStages: snapshot.stages.length - stages.length,
+    }),
+    ...(snapshot.calls.length > calls.length && {
+      omittedCalls: snapshot.calls.length - calls.length,
+    }),
+  };
+}
 
 /**
  * Line break in captured terminal output. A bare CR counts: progress bars
@@ -615,6 +748,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         todos,
         report,
         {
+          workflow: meta?.workflow,
           suppressReport: shouldSuppressAutoDeliveredSubagentReport(
             options,
             handle,
@@ -672,9 +806,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       children,
       todosResult.todos,
       report,
-      {
-        suppressReport: false,
-      },
+      { workflow: meta?.workflow },
     );
 
     return executed(lines.join('\n'));
@@ -691,8 +823,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     children: ChildRecord[],
     todos: TodoEntry[],
     report: string | null,
-    options: { readonly suppressReport?: boolean } = {},
+    options: {
+      readonly workflow?: WorkflowExecutionSnapshot;
+      readonly suppressReport?: boolean;
+    } = {},
   ): Promise<void> {
+    if (options.workflow) {
+      lines.push(
+        '',
+        'Workflow:',
+        JSON.stringify(workflowExecutionView(options.workflow), null, 2),
+      );
+    }
     if (children.length > 0) {
       lines.push('', `Children (${children.length}):`);
       const formatted = await this.formatChildren(children);

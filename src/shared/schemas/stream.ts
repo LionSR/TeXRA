@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
+import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 
 /**
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
@@ -98,6 +99,8 @@ export const ExecutionMetaSchema = z.object({
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
+  /** Canonical execution state for a detached workflow run. */
+  workflow: WorkflowExecutionSnapshotSchema.optional(),
   /**
    * The transcript stream this execution's data lives under — the ONE
    * execution→stream mapping, written at registration. A row without one has
