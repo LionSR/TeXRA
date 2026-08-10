@@ -63,6 +63,77 @@ describe('PromptBuilder', () => {
     expect(prompts.instructionSuffix).toMatch(/`view`[^`\n]*`\/memories`/);
   });
 
+  it.each([
+    {
+      isAnthropic: true,
+      includedBranch: 'Independent tool calls may be issued together',
+      excludedBranch: 'Always produce valid JSON when calling a tool',
+    },
+    {
+      isAnthropic: false,
+      includedBranch: 'Always produce valid JSON when calling a tool',
+      excludedBranch: 'Independent tool calls may be issued together',
+    },
+  ])(
+    'keeps authored instructions free of em dashes for Anthropic=$isAnthropic',
+    async ({ isAnthropic, includedBranch, excludedBranch }) => {
+      const sentinels = {
+        cwd: 'cwd \u2014 content',
+        bibliography: 'bibliography \u2014 content',
+        skills: 'skills \u2014 content',
+        user: 'user \u2014 content',
+        attachedMemory: 'attached memory \u2014 content',
+      };
+      const prompts = await buildInitialToolUsePrompts(
+        {
+          systemPrompt: 'system {{ USER_CONTENT }}',
+          userPrefix: 'prefix {{ USER_CONTENT }}',
+          userRequest: 'request {{ USER_CONTENT }}',
+        } as AgentPrompt,
+        {
+          IS_ANTHROPIC_MODEL: isAnthropic,
+          CWD: sentinels.cwd,
+          DEFAULT_BIB_PATH: sentinels.bibliography,
+          AVAILABLE_SKILLS: sentinels.skills,
+          USER_CONTENT: sentinels.user,
+          ATTACHED_MEMORIES: sentinels.attachedMemory,
+        },
+        undefined,
+        {
+          resolvedToolNames: ['memory'],
+          hasDelegationTools: true,
+        },
+      );
+      const instructionsWithoutWorkspace = prompts.instructionSuffix.split(
+        '<workspace_info>',
+        1,
+      )[0];
+
+      expect(prompts.systemPrompt).toContain(sentinels.user);
+      expect(prompts.systemPrompt).toContain(sentinels.attachedMemory);
+      expect(prompts.userPrefix).toContain(sentinels.user);
+      expect(prompts.userRequest).toContain(sentinels.user);
+      expect(instructionsWithoutWorkspace).toContain(sentinels.cwd);
+      expect(instructionsWithoutWorkspace).toContain(sentinels.bibliography);
+      expect(instructionsWithoutWorkspace).toContain(sentinels.skills);
+      expect(instructionsWithoutWorkspace).toContain(includedBranch);
+      expect(instructionsWithoutWorkspace).not.toContain(excludedBranch);
+      expect(instructionsWithoutWorkspace).toContain(
+        '<orchestrator_memory_protocol>',
+      );
+
+      const authoredInstructions = [
+        sentinels.cwd,
+        sentinels.bibliography,
+        sentinels.skills,
+      ].reduce(
+        (instructions, sentinel) => instructions.replaceAll(sentinel, ''),
+        instructionsWithoutWorkspace,
+      );
+      expect(authoredInstructions).not.toContain('\u2014');
+    },
+  );
+
   it('keeps pinned-memory consultation unconditional even for self-contained requests', async () => {
     // Regression test for #7957: relevance gating (added in #7855) must not
     // silently drop pinned memories, which are documented as loading every

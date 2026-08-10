@@ -2,7 +2,7 @@
 import * as assert from 'node:assert';
 
 // Third-party imports
-import { describe, it, afterEach, beforeEach, vi } from 'vitest';
+import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   tryUseRunContext: vi.fn(),
@@ -39,7 +39,12 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
+import {
+  rejectOversizedBibAttachments,
+  WorkflowAgentInputSchema,
+  withToolUseSubagentHandoffInstruction,
+  workingDirectoryField,
+} from '@tools/delegation/inputFields';
 import { WorkspaceFS } from '@utils/files';
 
 function stat(size: number): FileStat {
@@ -114,6 +119,38 @@ describe('DelegationTools', () => {
 
     assert.strictEqual(result, null);
     assert.strictEqual(statCalled, false);
+  });
+
+  it('keeps delegation field and handoff copy free of em dashes', () => {
+    const fieldDescriptions = [
+      ...Object.values(WorkflowAgentInputSchema.shape).map(
+        (field) => field.description,
+      ),
+      workingDirectoryField.description,
+    ];
+    const delegatedInstruction = 'User \u2014 instruction.';
+    const parentInstruction = 'Parent \u2014 instruction.';
+    const handoff = withToolUseSubagentHandoffInstruction(
+      delegatedInstruction,
+      parentInstruction,
+    );
+
+    expect(handoff).toContain(
+      `Parent user request (constraint context only):\n${parentInstruction}`,
+    );
+    expect(handoff).toContain(
+      'Constraints in the parent user request are mandatory and override conflicting delegated-task wording.',
+    );
+    expect(handoff).toMatch(
+      /Your final response is delivered verbatim to the parent orchestrator\..*never only a status note such as "done"\.$/,
+    );
+
+    const authoredHandoff = handoff
+      .replace(delegatedInstruction, '')
+      .replace(parentInstruction, '');
+    expect(`${fieldDescriptions.join('\n')}\n${authoredHandoff}`).not.toContain(
+      '\u2014',
+    );
   });
 });
 
