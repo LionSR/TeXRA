@@ -82,6 +82,7 @@ prompts:
 
     The explanatory prose you add around derivations must read as if a careful human technical writer wrote it, not a language model:
     \begin{itemize}
+        \item Write for the paper's reader, who has not seen this conversation, and budget emphasis: flag the one step a reader would stumble on, and let routine steps pass without comment.
         \item Lead with the mathematical content. No throat-clearing openers (``It is important to note that\ldots''), and no ``Furthermore,''/``Moreover,''/``Additionally,'' chains opening consecutive sentences.
         \item No buzzword filler (``elegant'', ``powerful'', ``crucial'', ``key'') as decoration; the mathematics carries its own weight. Prefer plain verbs: ``gives'' over ``yields remarkable'', ``shows'' over ``demonstrates''.
         \item Say each step's justification once, concretely (``by periodicity the boundary terms vanish''), not through empty connectives (``Therefore,'' with no derivation behind it).

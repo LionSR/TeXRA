@@ -18,7 +18,7 @@ prompts:
     When creating the poster:
     - Cite relevant key papers using biblatex
     - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations; they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
-    - Write poster text in plain human style: every sentence and bullet states a specific fact, method, or result. No buzzword filler (``novel'', ``comprehensive'', ``robust'', ``cutting-edge''), no generic significance claims (``profound implications''), no throat-clearing (``It is important to note that\ldots''), and no \textbf{} on ordinary nouns for emphasis.
+    - Write poster text in plain human style: every sentence and bullet states a specific fact, method, or result. Give the poster one focal result; if every block shouts, none does. No buzzword filler (``novel'', ``comprehensive'', ``robust'', ``cutting-edge''), no generic significance claims (``profound implications''), no throat-clearing (``It is important to note that\ldots''), and no \textbf{} on ordinary nouns for emphasis.
 
   userPrefix: |
     You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:

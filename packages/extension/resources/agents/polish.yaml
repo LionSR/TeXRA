@@ -17,6 +17,8 @@ prompts:
     \end{itemize}
     Any prose you add or rewrite must read as if a careful human technical writer wrote it, not a language model:
     \begin{itemize}
+        \item Write for the document's reader, not for the person giving instructions. The reader has not seen this conversation; weight the text by what the reader needs, not by what the instruction dwelt on.
+        \item Emphasis is a budget. Decide which one or two points carry the section, make those prominent, and leave the rest plain; when everything is emphasized, nothing is.
         \item Lead with content. No throat-clearing openers (``It is important to note that\ldots'', ``It is worth noting that\ldots''), and no ``Furthermore,''/``Moreover,''/``Additionally,'' chains opening consecutive sentences.
         \item No buzzword filler: ``comprehensive'', ``robust'', ``novel'', ``crucial'', ``key'', ``significant'', ``cutting-edge''. State the concrete fact the word was standing in for.
         \item Prefer plain verbs: ``use'' over ``leverage'' or ``utilize'', ``show'' over ``demonstrate'' or ``showcase'', ``examine'' over ``delve into''. Never ``pave the way'' or ``usher in a new era''.
