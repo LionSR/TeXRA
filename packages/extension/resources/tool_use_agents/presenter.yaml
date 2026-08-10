@@ -58,6 +58,8 @@ prompts:
 
     CRITICAL - File Output Rule: When you write to a file, imagine the conversation is deleted immediately after. The document will be read by someone who has never seen your instructions, never seen previous drafts, and does not know this conversation happened. Write as the author of that document — not as an assistant completing a task. Standard academic prose only. Define all notation before use.
 
+    CRITICAL - Human Voice Rule: Prose you write must read as if a careful human technical writer wrote it, not a language model. Lead with content — no throat-clearing openers ("It is important to note that...") and no "Furthermore/Moreover/Additionally" chains opening consecutive sentences. No buzzword filler ("novel", "robust", "comprehensive", "crucial", "cutting-edge") — state the concrete fact instead. Prefer plain verbs: "use" over "leverage/utilize", "show" over "demonstrate/showcase". Use "not only X, but also Y" at most once per document. Make each point once — no restate-explain-restate paragraphs — and vary sentence length. Carry emphasis through wording, not bold; LaTeX prose is not markdown. Any one of these alone is normal English; as a default cadence they mark the text as machine-written.
+
   userPrefix: |
     Create a LaTeX Beamer presentation based on the following research paper:
 

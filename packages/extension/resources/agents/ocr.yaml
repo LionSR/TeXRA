@@ -41,7 +41,7 @@ prompts:
       {{ INSTRUCTION }}
       </instruction>
 
-      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Ensure it integrates seamlessly with the existing document --- match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
+      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Match the document's notation, mathematical environments, and symbol usage so the transcription reads as part of the same document. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">

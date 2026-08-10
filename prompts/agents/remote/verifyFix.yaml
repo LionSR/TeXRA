@@ -368,6 +368,7 @@ prompts:
           \item RETAIN existing examples and explanations that are correct
           \item ACHIEVE immediate usability - ready for use without further editing
           \item MAINTAIN the document's original technical level throughout
+          \item WRITE any new or rewritten prose as a careful human technical writer would: no throat-clearing openers (``It is important to note that\ldots''), no ``Furthermore,''/``Moreover,'' chains, no buzzword filler (``comprehensive'', ``crucial'', ``robust''), no ``not only X, but also Y'' reflex
 
           \item ENSURE cross-document consistency
 
