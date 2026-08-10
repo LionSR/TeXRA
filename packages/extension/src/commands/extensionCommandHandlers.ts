@@ -189,7 +189,7 @@ export interface ExtensionCommandActions {
   ): Promise<boolean>;
   indentTeX(): Promise<void>;
   signIn(): Promise<boolean>;
-  signInChatGpt(): Promise<boolean>;
+  signInChatGpt(): Promise<void>;
   signInGrok(): Promise<boolean>;
   signOut(): Promise<void>;
   runSetupAssistant(): Promise<void>;

@@ -158,6 +158,122 @@ describe('TierService', () => {
     expect(service.getSpendingStatus()).toBeNull();
   });
 
+  it('coalesces overlapping authoritative spending refreshes', async () => {
+    const { pending, fetchMock } = stubPendingFetch();
+    const service = new TierService('https://example.test');
+
+    const monthlyRefresh = service.refreshSpendingStatus('token');
+    await Promise.resolve();
+    const includedAccessCheck = service.refreshSpendingStatus('token');
+    await Promise.resolve();
+
+    expect(pending).toHaveLength(1);
+    pending[0].resolve(
+      jsonResponse(tierConfig({ spendingStatus: spendingStatus(300, 0, 100) })),
+    );
+
+    const [monthlyResult, mutationResult] = await Promise.all([
+      monthlyRefresh,
+      includedAccessCheck,
+    ]);
+    expect(monthlyResult).not.toBeNull();
+    expect(mutationResult).toStrictEqual(monthlyResult);
+    expect(service.isQuotaExceeded()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates spending status when an authoritative refresh loses authentication', async () => {
+    const service = new TierService('https://example.test');
+
+    stubFetchResponse(
+      tierConfig({ spendingStatus: spendingStatus(300, 0, 100) }),
+    );
+    await service.getConfig('token');
+    expect(service.isQuotaExceeded()).toBe(true);
+
+    const { pending: refreshes } = stubPendingFetch();
+    const refresh = service.refreshSpendingStatus('token');
+    await Promise.resolve();
+    expect(refreshes).toHaveLength(1);
+
+    await service.refreshSpendingStatus();
+    expect(service.getSpendingStatus()).toBeNull();
+
+    refreshes[0].resolve(
+      jsonResponse(tierConfig({ spendingStatus: spendingStatus(300, 0, 100) })),
+    );
+    await refresh;
+
+    expect(service.getSpendingStatus()).toBeNull();
+  });
+
+  it('starts a new authoritative refresh after no-token invalidation', async () => {
+    const { pending, fetchMock } = stubPendingFetch();
+    const service = new TierService('https://example.test');
+
+    const tokenARefresh = service.refreshSpendingStatus('token-a');
+    await Promise.resolve();
+    expect(pending).toHaveLength(1);
+
+    await service.refreshSpendingStatus();
+    const tokenBRefresh = service.refreshSpendingStatus('token-b');
+    await Promise.resolve();
+
+    expect(pending).toHaveLength(2);
+
+    pending[0].resolve(
+      jsonResponse(tierConfig({ spendingStatus: spendingStatus(300, 0, 100) })),
+    );
+    await tokenARefresh;
+
+    const joinedTokenBRefresh = service.refreshSpendingStatus('token-b');
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    pending[1].resolve(
+      jsonResponse(
+        tierConfig({ spendingStatus: spendingStatus(100, 200, 33) }),
+      ),
+    );
+    const [tokenBResult, joinedTokenBResult] = await Promise.all([
+      tokenBRefresh,
+      joinedTokenBRefresh,
+    ]);
+
+    expect(tokenBResult).not.toBeNull();
+    expect(joinedTokenBResult).toStrictEqual(tokenBResult);
+    expect(service.getSpendingStatus()?.remaining).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('bypasses the cache when refreshing spending status', async () => {
+    let remaining = 0;
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse(
+          tierConfig({
+            spendingStatus: spendingStatus(
+              300 - remaining,
+              remaining,
+              100 - remaining / 3,
+            ),
+          }),
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new TierService('https://example.test');
+
+    await service.getConfig('token');
+    expect(service.getSpendingStatus()?.remaining).toBe(0);
+
+    remaining = 300;
+    await service.refreshSpendingStatus('token');
+
+    expect(service.getSpendingStatus()?.remaining).toBe(300);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('parses and reports an authenticated spend-check failure', async () => {
     stubFetchResponse(
       tierConfig({

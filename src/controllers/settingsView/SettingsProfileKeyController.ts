@@ -9,7 +9,7 @@ export interface SettingsProfileKeyControllerDeps {
   getApiKeySecretName(provider: string): string;
   setSecret(key: string, value: string): Promise<void>;
   deleteSecret(key: string): Promise<void>;
-  refreshAfterKeyChange(): Promise<void>;
+  refreshAfterKeyChange(provider: string): Promise<void>;
 }
 
 /**
@@ -45,7 +45,7 @@ export class SettingsProfileKeyController {
       normalizedApiKey,
     );
     void this.deps.prompt.info(`${displayName} API key has been set`);
-    await this.deps.refreshAfterKeyChange();
+    await this.deps.refreshAfterKeyChange(provider);
   }
 
   async removeProviderKey(provider: string): Promise<void> {
@@ -58,7 +58,7 @@ export class SettingsProfileKeyController {
 
     await this.deps.deleteSecret(this.deps.getApiKeySecretName(provider));
     void this.deps.prompt.info(`${displayName} API key has been removed`);
-    await this.deps.refreshAfterKeyChange();
+    await this.deps.refreshAfterKeyChange(provider);
   }
 
   async openProviderKeyUrl(provider: string): Promise<void> {

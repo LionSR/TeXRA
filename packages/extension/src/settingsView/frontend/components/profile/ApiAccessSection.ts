@@ -34,10 +34,13 @@ export class ApiAccessSection extends LitElement {
   ];
 
   @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
+  @property({ attribute: false }) includedAccessExhausted = false;
 
   private handleModeChange(event: Event): void {
     const target = event.currentTarget as WaRadioGroup | null;
     const mode = target?.value === 'included' ? 'included' : 'personal';
+    if (target) target.value = this.mode;
+    if (mode === 'included' && this.includedAccessExhausted) return;
     if (mode !== this.mode) {
       postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, { mode });
     }
@@ -59,11 +62,23 @@ export class ApiAccessSection extends LitElement {
         >
           ${API_ACCESS_MODE_OPTIONS.map(
             (option) => html`
-              <wa-radio class="api-access-option" value=${option.value}>
+              <wa-radio
+                class="api-access-option"
+                value=${option.value}
+                ?disabled=${
+                  option.value === 'included' && this.includedAccessExhausted
+                }
+              >
                 <span class="option-content">
                   <span class="option-title">${option.label}</span>
                   <span class="option-description">
                     ${option.description}
+                    ${
+                      option.value === 'included' &&
+                      this.includedAccessExhausted
+                        ? ' Monthly included usage is exhausted; it will be available again after the quota resets.'
+                        : nothing
+                    }
                   </span>
                 </span>
               </wa-radio>

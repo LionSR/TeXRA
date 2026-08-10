@@ -109,6 +109,7 @@ import {
   sessionProblem,
   spendingStatus,
   spendingStatusError,
+  subscriptionUsage,
   tier,
   telemetryEnabled,
   toolDashboardItems,
@@ -121,6 +122,8 @@ import {
 import type { HistoryTab } from './tabs/HistoryTab';
 
 registerTeXRAWebAwesomeIcons();
+
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because SettingsApp implements all abstract members below.
@@ -136,12 +139,51 @@ export class SettingsApp extends SettingsAppBase {
   // Tab refs
   @query('history-tab') private historyTab?: HistoryTab;
 
+  private monthlyProfileRefreshTimer?: ReturnType<typeof setTimeout>;
+
   constructor() {
     super();
     // State lives at module scope in `settingsState.ts` and is shared across
     // remounts in the same JS context (tests, hot reload), so every signal
     // starts fresh on construction.
     resetSettingsState();
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.scheduleMonthlyProfileRefresh();
+  }
+
+  override disconnectedCallback(): void {
+    if (this.monthlyProfileRefreshTimer !== undefined) {
+      clearTimeout(this.monthlyProfileRefreshTimer);
+      this.monthlyProfileRefreshTimer = undefined;
+    }
+    super.disconnectedCallback();
+  }
+
+  private scheduleMonthlyProfileRefresh(): void {
+    if (this.monthlyProfileRefreshTimer !== undefined) {
+      clearTimeout(this.monthlyProfileRefreshTimer);
+    }
+    const now = Date.now();
+    const date = new Date(now);
+    const nextMonthUtc = Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + 1,
+      1,
+    );
+    const delay = Math.min(nextMonthUtc - now, MAX_TIMEOUT_MS);
+    this.monthlyProfileRefreshTimer = setTimeout(() => {
+      if (Date.now() >= nextMonthUtc) {
+        const view = this.getAttribute('data-desktop-view');
+        postMessage(
+          SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+          view == null ? {} : { view },
+        );
+      }
+      this.scheduleMonthlyProfileRefresh();
+    }, delay);
   }
 
   // Outbound message handlers (extension host → settings webview), composed
@@ -364,6 +406,7 @@ export class SettingsApp extends SettingsAppBase {
           <subscriptions-tab
             .chatgptAuth=${chatgptAuth.get()}
             .grokAuth=${grokAuth.get()}
+            .usage=${subscriptionUsage.get()}
             .copilotModels=${copilotRouteInfos.get()}
           ></subscriptions-tab>
         `;
@@ -372,6 +415,7 @@ export class SettingsApp extends SettingsAppBase {
           <models-tab
             .authenticated=${authenticated.get()}
             .apiAccessMode=${apiAccessMode.get()}
+            .spendingStatus=${spendingStatus.get()}
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}

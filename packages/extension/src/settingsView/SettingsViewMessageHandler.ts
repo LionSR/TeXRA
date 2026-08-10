@@ -18,6 +18,7 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   buildToolDashboardItems,
   planToolTerminalAction,
@@ -29,7 +30,10 @@ import {
 } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import {
+  getMainWebview,
+  safeExecuteCommand,
+} from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
@@ -63,8 +67,9 @@ import {
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import {
   applyStateSettingUpdate,
@@ -112,6 +117,10 @@ import {
   GROK_SUBSCRIPTION_PROVIDER,
   SubscriptionHandlers,
 } from './handlers/subscriptionHandlers';
+import {
+  sendSubscriptionUsage,
+  type SubscriptionUsageReader,
+} from './handlers/subscriptionUsageHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -135,8 +144,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly settingsHost: SettingsViewHost;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
+  private readonly subscriptionUsage: SubscriptionUsageReader;
+  public readonly signInChatGpt: () => Promise<void>;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(
+    context: vscode.ExtensionContext,
+    subscriptionUsage: SubscriptionUsageReader = new SubscriptionUsageService(),
+  ) {
     super('SettingsView', { trackActiveView: true });
 
     const ctx: SettingsHandlerContext = {
@@ -169,7 +183,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         updateConfig(key, value, { target: 'global', prefix: false }),
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      refreshSpendingStatus: () =>
+        getServerSideKeyService().refreshSpendingStatus(),
     });
+    this.subscriptionUsage = subscriptionUsage;
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),
       externalOpener: new VscodeExternalOpener(),
@@ -181,7 +198,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         SecretManager.getApiKeySecretName(provider as ApiProvider),
       setSecret: (key, value) => SecretManager.set(key, value),
       deleteSecret: (key) => SecretManager.delete(key),
-      refreshAfterKeyChange: () => this.refreshAfterKeyChange(),
+      refreshAfterKeyChange: (provider) =>
+        this.refreshAfterProviderKeyChange(provider),
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -197,8 +215,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.chatgptHandlers = new SubscriptionHandlers(
       CHATGPT_SUBSCRIPTION_PROVIDER,
       ctx,
-      () => this.refreshAfterSubscriptionAuthChange(),
+      () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
+    this.signInChatGpt = this.chatgptHandlers.handleSignIn;
     this.grokHandlers = new SubscriptionHandlers(
       GROK_SUBSCRIPTION_PROVIDER,
       ctx,
@@ -440,7 +459,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.githubHandlers.handleUnsubscribePR(message),
       openPRSubscriptionStream: (message) =>
         this.githubHandlers.handleOpenPRSubscriptionStream(message),
-      signInChatGpt: () => this.chatgptHandlers.handleSignIn(),
+      signInChatGpt: this.signInChatGpt,
       signOutChatGpt: () => this.chatgptHandlers.handleSignOut(),
       setChatGptPreferSubscription: (message) =>
         this.chatgptHandlers.handleSetPreferSubscription(message.enabled),
@@ -448,6 +467,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       signOutGrok: () => this.grokHandlers.handleSignOut(),
       setGrokPreferSubscription: (message) =>
         this.grokHandlers.handleSetPreferSubscription(message.enabled),
+      getSubscriptionUsage: (message) =>
+        this.withActiveWebview((webview) =>
+          sendSubscriptionUsage(
+            webview,
+            this.subscriptionUsage,
+            message.forceRefresh ?? false,
+          ),
+        ),
       updateStateSetting: (message) =>
         this.updateStateSetting(message.key, message.value),
       openToolInstallUrl: (message) => this.openExternalUrl(message.url),
@@ -858,6 +885,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
     const update = await this.profileController.setApiAccessMode(data.mode);
+    if (update.kind === 'rejected') {
+      await this.withActiveWebview((w) => this.sendProfileData(w));
+      void showLoggedInfoMessage(
+        this.channel,
+        'Included access is unavailable because this month’s quota is exhausted.',
+      );
+      return;
+    }
     await this.withActiveWebview((w) =>
       this.sendProfileAndModelSelectionData(w),
     );
@@ -896,24 +931,54 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * data after key changes. Model selection availability depends on provider
    * key state, so keep it paired with the profile refresh.
    */
-  private async refreshAfterKeyChange(): Promise<void> {
+  public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     // Invalidate caches so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     invalidateApiKeyCache();
+    let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
+    if (provider === 'kimiCode') usageProvider = 'kimiCode';
+    if (provider === 'glm') usageProvider = 'glmCodingPlan';
+    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
+    const mainView = await getMainWebview(this.viewName);
+    if (mainView) {
+      const anyKeyExists = await SecretManager.anyApiKeyExists();
+      mainView.webview.postMessage({
+        command: anyKeyExists
+          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+      });
+    }
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendProfileAndModelSelectionData(w)),
+      ...(usageProvider
+        ? [
+            this.withActiveWebview((w) =>
+              sendSubscriptionUsage(w, this.subscriptionUsage),
+            ),
+          ]
+        : []),
     ]);
   }
 
   /** Subscription auth is a setup credential: same host refresh as API-key changes. */
-  private async refreshAfterSubscriptionAuthChange(): Promise<void> {
+  private async refreshAfterSubscriptionAuthChange(
+    usageProvider?: 'chatgpt',
+  ): Promise<void> {
     invalidateModelOptionsCache();
+    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await Promise.all([
       safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),
+      ...(usageProvider
+        ? [
+            this.withActiveWebview((w) =>
+              sendSubscriptionUsage(w, this.subscriptionUsage),
+            ),
+          ]
+        : []),
     ]);
   }
 
@@ -1001,12 +1066,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    const glmRegionChanged = data.key === GlobalStateKey.GLM_USE_CHINA;
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
         this.sendReliabilityAndOrchestrationSettings(w),
         result.affectsModelAvailability
           ? this.sendModelSelectionData(w)
+          : Promise.resolve(),
+        glmRegionChanged
+          ? sendSubscriptionUsage(w, this.subscriptionUsage)
           : Promise.resolve(),
       ]);
     });

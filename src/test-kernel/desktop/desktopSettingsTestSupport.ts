@@ -126,6 +126,7 @@ export function createStubDesktopCredentialSettingsController(
     modelSelectionController: createModelSelectionController(state),
     postMainModelOptionsData: noOp,
     postStartupData: noOp,
+    postSubscriptionUsage: noOp,
     refreshAuthDependentData: noOp,
     signInChatGpt: noOp,
     signInGrok: noOp,
