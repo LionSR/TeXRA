@@ -204,9 +204,6 @@ function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
     : {
         text: label,
         color: 'dim',
-        // Narrow rows keep a recognizable stem of the full name rather than
-        // dropping how the session is paid for altogether.
-        compactText: access === 'included' ? 'included' : 'API keys',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       };
 }

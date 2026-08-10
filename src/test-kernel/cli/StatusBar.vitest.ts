@@ -22,9 +22,6 @@ import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 // The bar renders the access route, not the raw `ApiAccessMode` enum.
 const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
 const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('personal');
-// Narrow rows shrink the access segment to its compact stem instead of
-// dropping how the session is paid for.
-const PERSONAL_API_MODE_COMPACT = 'API keys';
 
 type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
 
@@ -140,8 +137,8 @@ describe('CLI StatusBar display model', () => {
   it('uses clear compact labels for API access mode', () => {
     // The session header and the status bar share one mapper, so neither can
     // print the raw enum value ('included' / 'personal') the way they once did.
-    expect(shortCliModelAccessRoute('included')).toBe('included access');
-    expect(shortCliModelAccessRoute('personal')).toBe('own API keys');
+    expect(shortCliModelAccessRoute('included')).toBe('Included');
+    expect(shortCliModelAccessRoute('personal')).toBe('API keys');
   });
 
   it('keeps an ephemeral transcript warning in the durable status row', () => {
@@ -818,11 +815,11 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '1m 15s',
-      PERSONAL_API_MODE_COMPACT,
+      PERSONAL_API_MODE_LABEL,
       '3 sub',
     ]);
     expect(leftTexts(display).join(' ')).not.toContain(
-      `${PERSONAL_API_MODE_COMPACT}3`,
+      `${PERSONAL_API_MODE_LABEL}3`,
     );
   });
 
@@ -841,7 +838,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '1m 15s',
-      PERSONAL_API_MODE_COMPACT,
+      PERSONAL_API_MODE_LABEL,
     ]);
   });
 
@@ -877,7 +874,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '1m 15s',
-      PERSONAL_API_MODE_COMPACT,
+      PERSONAL_API_MODE_LABEL,
     ]);
   });
 

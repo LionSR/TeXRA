@@ -1,12 +1,13 @@
 /**
  * Canonical user-facing vocabulary for how model calls are paid for.
  *
- * Two concepts, two names, everywhere: model calls covered by your TeXRA plan
- * are "included access", and model calls billed to your own provider accounts
- * are "your own API keys". Settings pickers, quota notices, and model
- * availability messages import these strings instead of paraphrasing the
- * transport ("relay") or the internal enum values ('included' / 'personal'),
- * which stay wire identifiers and never reach the screen.
+ * Two concepts use canonical forms for each context. Model calls covered by
+ * your TeXRA plan are "included access", and model calls billed to your own
+ * provider accounts are "your own API keys". Settings pickers, quota notices,
+ * compact status labels, and model availability messages import these strings
+ * instead of paraphrasing the transport ("relay") or the internal enum values
+ * ('included' / 'personal'), which stay wire identifiers and never reach the
+ * screen.
  *
  * "Researcher Access" is the free program you sign in to, not a name for
  * included access; that copy lives in `onboarding.ts`.
@@ -16,8 +17,10 @@ import type { UsageRoute } from '@shared/schemas';
 
 /** Model calls paid for by your TeXRA plan. */
 export const INCLUDED_ACCESS = {
-  /** Standalone display name, e.g. a section heading or a status chip. */
+  /** Standalone display name, e.g. a section heading or detailed status. */
   label: 'Included access',
+  /** Width-constrained badge or status label. */
+  compactLabel: 'Included',
   /** Same name inside a sentence. */
   inline: 'included access',
   /** Model-access picker option. */
@@ -36,8 +39,10 @@ export const INCLUDED_ACCESS = {
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {
-  /** Standalone display name, e.g. a section heading or a status chip. */
+  /** Standalone display name, e.g. a section heading or detailed status. */
   label: 'Your own API keys',
+  /** Width-constrained badge or status label. */
+  compactLabel: 'API keys',
   /** Same name inside a sentence. */
   inline: 'your own API keys',
   /** Model-access picker option. */
@@ -48,14 +53,13 @@ export const OWN_API_KEYS = {
   },
 } as const;
 
-/** User-facing label and plan status for a {@link UsageRoute}. The label is
- *  the payment surface's display name — "included access", "your own API
- *  keys", or the subscription it runs on — and `subscription` marks routes
- *  covered by a top-up-free subscription plan. Hosts (CLI exit summary,
- *  extension usage panel) share this so payment attribution can't drift
- *  between surfaces. */
+/** User-facing labels and plan status for a {@link UsageRoute}. `label` is
+ *  the detailed payment name, `compactLabel` is its width-constrained badge
+ *  name, and `subscription` marks routes covered by a top-up-free plan. Hosts
+ *  share this contract so payment attribution and compact copy cannot drift. */
 export interface UsageRouteBadge {
   readonly label: string;
+  readonly compactLabel: string;
   readonly subscription: boolean;
 }
 
@@ -66,15 +70,27 @@ export function usageRouteBadge(
 ): UsageRouteBadge | undefined {
   switch (route) {
     case 'chatgpt-subscription':
-      return { label: 'ChatGPT', subscription: true };
+      return { label: 'ChatGPT', compactLabel: 'ChatGPT', subscription: true };
     case 'xai-subscription':
-      return { label: 'Grok', subscription: true };
+      return { label: 'Grok', compactLabel: 'Grok', subscription: true };
     case 'kimi-code-subscription':
-      return { label: 'Kimi Code', subscription: true };
+      return {
+        label: 'Kimi Code',
+        compactLabel: 'Kimi Code',
+        subscription: true,
+      };
     case 'relay':
-      return { label: INCLUDED_ACCESS.inline, subscription: false };
+      return {
+        label: INCLUDED_ACCESS.inline,
+        compactLabel: INCLUDED_ACCESS.compactLabel,
+        subscription: false,
+      };
     case 'api-key':
-      return { label: OWN_API_KEYS.inline, subscription: false };
+      return {
+        label: OWN_API_KEYS.inline,
+        compactLabel: OWN_API_KEYS.compactLabel,
+        subscription: false,
+      };
     default:
       return undefined;
   }
