@@ -45,6 +45,22 @@ export function workflowPhaseCallProgress(
   };
 }
 
+/**
+ * Whole-run failure tally shared by every host, so the terminal and the
+ * progress view can never disagree on whether a workflow had failed calls.
+ * Mirrors `workflowPhaseCallProgress` in taking a caller-selected call list.
+ *
+ * `WorkflowCallProgress` carries no `cancelled` variant: a cancelled attempt
+ * surfaces in the transcript as a `failed` call, so this count already
+ * captures it. Snapshot consumers (`/executions`) read `counts.failed` /
+ * `counts.cancelled` directly and do not need this helper.
+ */
+export function workflowCallFailureTally(
+  calls: readonly WorkflowCallProgress[],
+): { readonly failed: number } {
+  return { failed: calls.filter((call) => call.status === 'failed').length };
+}
+
 /** One workflow phase as its emitter names and orders it. */
 export interface WorkflowPhaseHeading {
   readonly phaseLabel: string;
