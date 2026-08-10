@@ -12,7 +12,7 @@ prompts:
     {{ LATEX_STYLE_RULES }}
     Additional rules for polishing:
     \begin{itemize}
-        \item In the final \LaTeX output, never bare-list things like 1.\ 2.\ 3.\ \ldots{} as in markdown --- use proper \LaTeX environments such as enumerate or itemize.
+        \item In the final \LaTeX output, never bare-list things like 1.\ 2.\ 3.\ \ldots{} as in markdown; use proper \LaTeX environments such as enumerate or itemize.
         \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
     \end{itemize}
     Any prose you add or rewrite must read as if a careful human technical writer wrote it, not a language model:
@@ -22,7 +22,7 @@ prompts:
         \item Prefer plain verbs: ``use'' over ``leverage'' or ``utilize'', ``show'' over ``demonstrate'' or ``showcase'', ``examine'' over ``delve into''. Never ``pave the way'' or ``usher in a new era''.
         \item Use the ``not only X, but also Y'' family (``not merely'', ``not just'', ``not X but rather Y'') at most once per document; split or collapse other instances into direct statements.
         \item Make each point once. No paragraphs that restate their opening sentence at the end, no empty transitions (``To this end,'', ``With this in mind,''), no empty significance claims (``profound implications'', ``paradigm shift'').
-        \item Vary sentence length and structure. Avoid runs of same-shaped sentences, consecutive paragraphs opening with ``This X\ldots'', and em dashes as the default pivot in every sentence.
+        \item Vary sentence length and structure. Avoid runs of same-shaped sentences and consecutive paragraphs opening with ``This X\ldots''. Avoid em dashes; a comma, colon, semicolon, period, or parentheses nearly always serves better.
         \item Carry emphasis through wording, not formatting: no \textbf{} on ordinary nouns in body prose, no \textbf{Term:} bullet lists where flowing prose belongs.
         \item These patterns are tells by density, not by single use: one ``Moreover'' in a paper is normal; one per paragraph is machine cadence.
     \end{itemize}
@@ -57,15 +57,15 @@ prompts:
       {% endfor %}
       </documents>
     - |
-      Now critically reflect on the changes made and output a further enhanced version. Be honest --- if I asked you to add equations but you did not add any, criticize yourself for not following the instruction.
+      Now critically reflect on the changes made and output a further enhanced version. Be honest: if I asked you to add equations but you did not add any, criticize yourself for not following the instruction.
 
       Check for these failure modes and fix any you find:
       \begin{itemize}
-          \item Review each change you made: is it inaccurate, unnecessary, inconsistent with the rest of the paper, fluff, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone --- do not invent weaknesses to satisfy this checklist.
+          \item Review each change you made: is it inaccurate, unnecessary, inconsistent with the rest of the paper, fluff, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone; do not invent weaknesses to satisfy this checklist.
           \item Are there any mathematical reasonings or equations from the original version that are now missing?
           \item Are there any notations or quantities used before being defined?
-          \item Did you add generic filler like ``XXX provides crucial insights into the structure and behavior of these systems''? Every added sentence must say something specific and substantive --- use ``show not tell.''
-          \item Does any prose you added carry LLM tells --- throat-clearing openers, buzzword adjectives, ``not only\ldots{} but also'' constructions, restated closing sentences, runs of same-shaped sentences? Rewrite those in plain human style.
+          \item Did you add generic filler like ``XXX provides crucial insights into the structure and behavior of these systems''? Every added sentence must say something specific and substantive; use ``show not tell.''
+          \item Does any prose you added carry LLM tells (throat-clearing openers, buzzword adjectives, ``not only\ldots{} but also'' constructions, restated closing sentences, runs of same-shaped sentences, em dashes as the default pivot)? Rewrite those in plain human style.
           \item Did you change anything NOT required by the instruction? If so, revert it.
       \end{itemize}
 

@@ -11,5 +11,5 @@
     \item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depending on the next sentence.
     \item When in doubt, follow the best practice that will result in zero warnings when checked by chktex.
     \item \textbf{IMPORTANT}: Use the math commands defined in the auxiliary files command.tex, commands.tex, or preamble.tex if provided. Do not redefine commands that are already defined there.
-    \item \textbf{IMPORTANT}: The output document must be self-contained. Write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the document on its own. Define all notations, abbreviations, and terminology before first use.
+    \item \textbf{IMPORTANT}: The output document must be self-contained. Write as if the reader is a third party who has never read and will never read our conversations; they should be able to understand and follow the document on its own. Define all notations, abbreviations, and terminology before first use.
 \end{itemize}

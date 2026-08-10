@@ -16,7 +16,7 @@ prompts:
 
     CRITICAL RULES:
     - agentCategory MUST be "toolUse" (not "workflow").
-    - ONLY include the tools the user selected — do NOT add extras or remove any.
+    - ONLY include the tools the user selected; do NOT add extras or remove any.
     - userRequest MUST be a single string (not an array), and MUST contain {{ INSTRUCTION }}
       so the user's free-text instruction is passed through at runtime.
     - Infer an appropriate temperature from the description (0.7 is a good default).
@@ -59,7 +59,7 @@ prompts:
 
     IMPORTANT REMINDERS:
     - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
-    - Do NOT include a userPrefix section — tool-use agents don't receive pre-loaded files.
+    - Do NOT include a userPrefix section; tool-use agents don't receive pre-loaded files.
     - Include exactly these tools: {{ SELECTED_TOOLS }}.
     - The systemPrompt should say how the agent uses its specific tools.
 

@@ -302,7 +302,7 @@ prompts:
       Add this command to the preamble if it is not already there:
       \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-      COMMENTING STRATEGY: If there is one document, limit yourself to 15-20 total comments, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. If there are multiple documents, limit yourself to 10-15 comments per document and prioritize cross-document issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first document. Include verification confirmations where derivations are particularly well-done. Balance comments across documents---do not overwhelm one document.
+      COMMENTING STRATEGY: If there is one document, limit yourself to 15-20 total comments, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. If there are multiple documents, limit yourself to 10-15 comments per document and prioritize cross-document issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first document. Include verification confirmations where derivations are particularly well-done. Balance comments across documents; do not overwhelm one document.
 
       CONFIDENCE LEVELS:
       \begin{itemize}
@@ -313,7 +313,7 @@ prompts:
           \item 1: Very uncertain (speculative)
       \end{itemize}
 
-      CONFIDENCE SCORING GUIDANCE: Assess each issue individually based on its actual complexity, not just the type. Simple multi-step calculations that follow standard procedures can have high confidence (4-5), while complex or novel derivations should have lower confidence (1-3). When you successfully verify something step-by-step, confidence depends on the clarity of the steps. Obvious notation issues, undefined terms, or clear typos warrant high confidence (4-5). Cross-document inconsistencies you can directly observe warrant high confidence (4-5). Subtle mathematical errors or questionable approximations warrant lower confidence (2-3). Be honest about your uncertainty---if you're not sure, use lower confidence.
+      CONFIDENCE SCORING GUIDANCE: Assess each issue individually based on its actual complexity, not just the type. Simple multi-step calculations that follow standard procedures can have high confidence (4-5), while complex or novel derivations should have lower confidence (1-3). When you successfully verify something step-by-step, confidence depends on the clarity of the steps. Obvious notation issues, undefined terms, or clear typos warrant high confidence (4-5). Cross-document inconsistencies you can directly observe warrant high confidence (4-5). Subtle mathematical errors or questionable approximations warrant lower confidence (2-3). Be honest about your uncertainty; if you're not sure, use lower confidence.
 
       EXAMPLES of proper comment syntax:
       \begin{itemize}
@@ -329,7 +329,7 @@ prompts:
 
       \end{itemize}
 
-      Remember: quality over quantity---better to identify 5 critical issues than 50 minor ones. Be harsh on what matters, lenient on what doesn't. Errors that cascade---appendix errors that invalidate main results, one paper's errors that invalidate others---are severity 5. Place comments where they are most useful.
+      Remember: quality over quantity: better to identify 5 critical issues than 50 minor ones. Be harsh on what matters, lenient on what doesn't. Errors that cascade (appendix errors that invalidate main results, one paper's errors that invalidate others) are severity 5. Place comments where they are most useful.
 
       Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

@@ -20,21 +20,21 @@ prompts:
     CRITICAL PRINCIPLE: Instruction Priority.
     The instruction has highest priority. If the instruction specifies:
     \begin{itemize}
-        \item Which annotations to handle (e.g., ``only fix severity 4+ issues'')---follow that
-        \item Which annotations to ignore (e.g., ``skip the style suggestions'')---skip them
-        \item Specific suggestions to apply (e.g., ``apply only the entropy calculation fix'')---do only those
+        \item Which annotations to handle (e.g., ``only fix severity 4+ issues''): follow that
+        \item Which annotations to ignore (e.g., ``skip the style suggestions''): skip them
+        \item Specific suggestions to apply (e.g., ``apply only the entropy calculation fix''): do only those
     \end{itemize}
     Review agents like enhance may propose many ideas; apply only what the instruction asks for.
 
     CRITICAL PRINCIPLE: Respect Logical Flow.
-    The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined---even though you have access to the entire document. Every change must respect the cognitive development of the reader.
+    The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined, even though you have access to the entire document. Every change must respect the cognitive development of the reader.
 
     CRITICAL PRINCIPLE: Cross-Document Consistency.
     When fixing issues, ensure consistency across all documents. Notation, definitions, and results must align. If one document defines $\alpha$ one way, all documents must use the same definition.
 
     Implementation Approach (when no instruction filter is given):
     \begin{itemize}
-        \item Severity 0 (Verified): Remove the annotation---no change needed.
+        \item Severity 0 (Verified): Remove the annotation; no change needed.
         \item All other annotations: Understand the issue and implement an appropriate fix.
     \end{itemize}
 
@@ -53,7 +53,7 @@ prompts:
         \item Lead with content. No throat-clearing openers (``It is important to note that\ldots''), and no ``Furthermore,''/``Moreover,''/``Additionally,'' chains opening consecutive sentences.
         \item No buzzword filler (``comprehensive'', ``robust'', ``novel'', ``crucial'', ``key'', ``significant''); state the concrete fact instead. Prefer plain verbs: ``use'' over ``leverage'' or ``utilize'', ``show'' over ``demonstrate'' or ``showcase''.
         \item Avoid the ``not only X, but also Y'' reflex, restate-explain-restate paragraphs, empty transitions (``To this end,''), and empty significance claims (``profound implications'').
-        \item Vary sentence length and structure, and carry emphasis through wording, not \textbf{} formatting.
+        \item Vary sentence length and structure, avoid em dashes, and carry emphasis through wording, not \textbf{} formatting.
     \end{itemize}
 
     Documenting Changes:
@@ -63,7 +63,7 @@ prompts:
         \item If \verb|\todo| or \verb|\comment| is defined: use those
         \item Otherwise: use \verb|% Applied: [description]|
     \end{itemize}
-    This makes the output self-documenting---readers can see what was changed from the original.
+    This makes the output self-documenting; readers can see what was changed from the original.
 
     Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided. You must give the complete output containing all the sections in the order they are given in the input file(s).
 

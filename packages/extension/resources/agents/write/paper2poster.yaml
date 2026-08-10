@@ -17,7 +17,7 @@ prompts:
 
     When creating the poster:
     - Cite relevant key papers using biblatex
-    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
+    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations; they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
     - Write poster text in plain human style: every sentence and bullet states a specific fact, method, or result. No buzzword filler (``novel'', ``comprehensive'', ``robust'', ``cutting-edge''), no generic significance claims (``profound implications''), no throat-clearing (``It is important to note that\ldots''), and no \textbf{} on ordinary nouns for emphasis.
 
   userPrefix: |
@@ -68,7 +68,7 @@ prompts:
       </document>
       </documents>
     - |
-      Review the draft poster against the requirements above --- especially mathematical accuracy, A5 readability, compact biblatex references, use of the template's color scheme, and plain human phrasing (no buzzword filler or generic significance claims). Fix any issues and output the complete revised poster; if none, reproduce it unchanged:
+      Review the draft poster against the requirements above, especially mathematical accuracy, A5 readability, compact biblatex references, use of the template's color scheme, and plain human phrasing (no buzzword filler or generic significance claims). Fix any issues and output the complete revised poster; if none, reproduce it unchanged:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">

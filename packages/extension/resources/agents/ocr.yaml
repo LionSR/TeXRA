@@ -51,7 +51,7 @@ prompts:
     - |
       Critically review the OCR conversion against the images and check the following, fixing any issues found:
       \begin{itemize}
-          \item Likely misreadings --- symbols that are ambiguous in the handwriting, inconsistent with the document's notation, or form unusual expressions; state the correct interpretation for any you fix.
+          \item Likely misreadings: symbols that are ambiguous in the handwriting, inconsistent with the document's notation, or form unusual expressions; state the correct interpretation for any you fix.
           \item Symbols that differ from the document's conventions (e.g., you used $\alpha$ but the document uses $a$ for the same quantity).
           \item Mathematical environments that do not match the document's style.
           \item Subscripts/superscripts correctly ordered and nested.

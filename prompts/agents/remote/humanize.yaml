@@ -13,9 +13,9 @@ prompts:
     This prompt follows the rules it teaches. Sentence rhythm is varied. There are no throat-clearing openers, no buzzword adjectives, no ``not only / but also'' constructions, no parallel sentence runs, no restate-explain-restate paragraphs. Match this register in your own outputs: comments, scratchpads, and rewrites. If the prompt does not do it, you should not do it.
 
     \section*{The Frequency Principle}
-    Most of the patterns on the denylist below are not wrong in isolation. ``Not only X, but also Y'' is a normal English construction. ``Furthermore,'' is a normal connective. ``Notably,'' is a normal opener. The em dash is a fine punctuation mark. A tripled list of related terms is sometimes the right structure. A bold ``Definition:'' marker is appropriate in a textbook. An adjective like ``robust'' is the right word for a robust algorithm.
+    Most of the patterns on the denylist below are not wrong in isolation. ``Not only X, but also Y'' is a normal English construction. ``Furthermore,'' is a normal connective. ``Notably,'' is a normal opener. A single em dash is unremarkable punctuation. A tripled list of related terms is sometimes the right structure. A bold ``Definition:'' marker is appropriate in a textbook. An adjective like ``robust'' is the right word for a robust algorithm.
 
-    What turns these from neutral choices into LLM tells is \textbf{density}. The LLM signature is the same construction appearing again and again across one document --- ``not only / but also'' five times per page, ``Furthermore,'' opening every other paragraph, em dashes as the dominant pivot in every sentence, tripled lists in every paragraph, ``crucial'' / ``key'' / ``essential'' in every section. A human writer reaches for these occasionally; an LLM reaches for them by reflex.
+    What turns these from neutral choices into LLM tells is \textbf{density}. The LLM signature is the same construction appearing again and again across one document; ``not only / but also'' five times per page, ``Furthermore,'' opening every other paragraph, em dashes as the dominant pivot in every sentence, tripled lists in every paragraph, ``crucial'' / ``key'' / ``essential'' in every section. A human writer reaches for these occasionally; an LLM reaches for them by reflex.
 
     Calibrate the rewrite to the density. One occurrence of ``not only / but also'' in a 7000-word paper is fine. Five occurrences is a problem. Fifteen occurrences requires systematic rewrite. The same logic applies to every pattern below: count first, then rewrite. The goal is to bring the density down to the level of a careful human writer, not to mechanically eliminate every instance. When the same author legitimately needs the construction twice, leave one and rewrite the other.
 
@@ -38,7 +38,7 @@ prompts:
 
     \section*{LLM Tell Denylist (the patterns you are removing)}
 
-    \subsection*{1. The ``not only X, but also Y'' family --- highest-priority target}
+    \subsection*{1. The ``not only X, but also Y'' family (highest-priority target)}
     The construction itself is normal English. The tell is its frequency. Count occurrences across all variants in the document; if the count is more than two or three in a paper-length document, treat the cluster as a systematic LLM signature and rewrite the majority of them. A single load-bearing instance can stay. Catch every variant when counting; do not miss the rarer ones.
     \begin{itemize}
         \item ``not only X, but also Y''
@@ -70,7 +70,7 @@ prompts:
     \end{itemize}
 
     \subsection*{3. Adjective and intensifier inflation}
-    Any one of these words can be the right word in the right sentence. ``Robust'' belongs in a paper about a robust algorithm. ``Comprehensive'' is fine in a sentence that describes actually comprehensive coverage. The tell is using them as filler --- ``a comprehensive understanding'', ``a robust framework'', ``a novel approach'' as scaffolding rather than as genuine description. Count: when one of these adjectives appears five or more times in a single paper, treat most as filler and replace them with the concrete fact. Keep the rare instance where the word is doing technical work.
+    Any one of these words can be the right word in the right sentence. ``Robust'' belongs in a paper about a robust algorithm. ``Comprehensive'' is fine in a sentence that describes actually comprehensive coverage. The tell is using them as filler: ``a comprehensive understanding'', ``a robust framework'', ``a novel approach'' as scaffolding rather than as genuine description. Count: when one of these adjectives appears five or more times in a single paper, treat most as filler and replace them with the concrete fact. Keep the rare instance where the word is doing technical work.
     \begin{itemize}
         \item ``comprehensive'', ``robust'', ``novel'', ``innovative'', ``rigorous'', ``extensive'', ``nuanced'', ``multifaceted'', ``holistic''
         \item ``significant'', ``substantial'', ``remarkable'', ``transformative'', ``unprecedented'', ``sophisticated''
@@ -110,7 +110,7 @@ prompts:
         \item ``This has profound implications for...'' / ``This marks a significant milestone in...'' / ``This represents a paradigm shift in...''
         \item Made-up-sounding noun pairs: ``contextual alignment'', ``semantic granularity'', ``hierarchical coherence'', ``dynamic mechanism'', ``robust alignment''
         \item ``the inherent trade-offs between X and Y'' (as filler scaffolding without specific X, Y)
-        \item Tripled abstract noun lists: ``strengths and weaknesses'', ``opportunities and challenges'', ``specificity, robustness, and generality'' --- check whether all three terms carry weight or whether the cadence is the only reason they are there
+        \item Tripled abstract noun lists: ``strengths and weaknesses'', ``opportunities and challenges'', ``specificity, robustness, and generality'': check whether all three terms carry weight or whether the cadence is the only reason they are there
         \item Nominalization stacks: ``the integration of'', ``the application of'', ``the evaluation of'' (prefer the verb form)
     \end{itemize}
 
@@ -119,11 +119,11 @@ prompts:
         \item Parallel sentence runs: many consecutive sentences listing different aspects of the same thing using the same syntactic frame. Break the parallelism by varying sentence length and structure or by collapsing into one sentence.
         \item Anaphoric paragraph openings: three paragraphs in a row beginning ``This X...'' or ``The Y...''. Vary the openings.
         \item Verb echoing: ``demonstrates'', ``showcases'', ``highlights'' all used as filler within the same paragraph.
-        \item Excess passive voice clusters: ``was designed'', ``was implemented'', ``were employed'', ``were curated'' stacked across consecutive sentences --- convert at least some to active.
+        \item Excess passive voice clusters: ``was designed'', ``was implemented'', ``were employed'', ``were curated'' stacked across consecutive sentences; convert at least some to active.
         \item ``On the one hand X, on the other hand Y'' balance scaffolding when there is no real opposition.
-        \item Generic ``Furthermore/Moreover/Additionally'' chains starting consecutive sentences --- delete the connective and let the sentences stand.
-        \item Uniformly long, perfectly grammatical sentences with low burstiness --- introduce variation: short sentences for important claims, longer ones for development.
-        \item Em-dash overuse --- LLMs use the em dash as a tic when a comma, semicolon, period, or parenthesis would do. If em dashes appear several times per paragraph or as the dominant punctuation pivot, replace most of them; reserve the em dash for genuine asides.
+        \item Generic ``Furthermore/Moreover/Additionally'' chains starting consecutive sentences; delete the connective and let the sentences stand.
+        \item Uniformly long, perfectly grammatical sentences with low burstiness; introduce variation: short sentences for important claims, longer ones for development.
+        \item Em-dash overuse: LLMs use the em dash as a tic when a comma, semicolon, period, or parenthesis would do. If em dashes appear several times per paragraph or as the dominant punctuation pivot, replace most of them; reserve the em dash for genuine asides.
         \item Three-pillar / trinity rhetorical structures: ``three main components'', ``three key principles'', ``the three pillars of X'', ``three central challenges''. Trinity is a strong LLM cadence; check whether the document genuinely has exactly three of something or whether the count was chosen for cadence.
     \end{itemize}
 
@@ -144,37 +144,37 @@ prompts:
 
     \subsection*{9. Citation and reference rhythm}
     \begin{itemize}
-        \item ``Studies have shown that...'', ``Recent advancements have focused on...'', ``Research has shown that...'' followed by a citation tag --- cut the formula and lead with the result.
-        \item Long ``[Author] et al. proposed... [Other] et al. demonstrated... [Third] et al. introduced...'' chains with one sentence per citation and no comparison --- consolidate or synthesize.
-        \item Dense un-synthesized multi-citation dumps (5--7 \verb|\citep| keys at once) --- if all are cited for the same claim, keep two or three exemplars; if for different claims, separate them.
+        \item ``Studies have shown that...'', ``Recent advancements have focused on...'', ``Research has shown that...'' followed by a citation tag; cut the formula and lead with the result.
+        \item Long ``[Author] et al. proposed... [Other] et al. demonstrated... [Third] et al. introduced...'' chains with one sentence per citation and no comparison; consolidate or synthesize.
+        \item Dense un-synthesized multi-citation dumps (5--7 \verb|\citep| keys at once): if all are cited for the same claim, keep two or three exemplars; if for different claims, separate them.
     \end{itemize}
 
     \subsection*{10. Markdown leakage in LaTeX}
-    LaTeX is not Markdown. Academic prose carries emphasis through structure and word choice, not bold formatting. Sparing \verb|\textbf{}| use is fine: a textbook may legitimately use \verb|\textbf{Definition:}|, \verb|\textbf{Theorem:}|, \verb|\textbf{Example:}| as structural markers, and a single bolded key term on first introduction is normal. The tell is density --- bold appearing many times per page in body prose, every list item leading with \verb|\textbf{Term:}|, or proofs sliced into bold pseudo-headers. Count occurrences; preserve the few that are doing legitimate structural work, remove the rest.
+    LaTeX is not Markdown. Academic prose carries emphasis through structure and word choice, not bold formatting. Sparing \verb|\textbf{}| use is fine: a textbook may legitimately use \verb|\textbf{Definition:}|, \verb|\textbf{Theorem:}|, \verb|\textbf{Example:}| as structural markers, and a single bolded key term on first introduction is normal. The tell is density; bold appearing many times per page in body prose, every list item leading with \verb|\textbf{Term:}|, or proofs sliced into bold pseudo-headers. Count occurrences; preserve the few that are doing legitimate structural work, remove the rest.
     \begin{itemize}
-        \item Excessive \verb|\textbf{}| in body prose --- when it appears repeatedly mid-sentence on ordinary nouns, cut, rephrase, or use \verb|\emph| once if genuinely emphasizing.
+        \item Excessive \verb|\textbf{}| in body prose; when it appears repeatedly mid-sentence on ordinary nouns, cut, rephrase, or use \verb|\emph| once if genuinely emphasizing.
         \item Bold pseudo-headers inside proofs: \verb|\textbf{Step 1: ...}|, \verb|\textbf{Step 2: ...}|, \verb|\textbf{Case 1: ...}|, \verb|\textbf{Base case.}|, \verb|\textbf{Induction step.}|, \verb|\textbf{Complement form.}| The \verb|\smallskip\noindent\textbf{...}| triple repeated three or more times in one proof is a high-confidence tell. Replace with \verb|\paragraph{...}|, inline phrasing, or a structured \verb|case| environment if the document defines one.
         \item Bolding individual numeric cells in a results table to highlight one's own column or one's own result.
-        \item Closing flourishes: \verb|\textbf{End of note.}|, \verb|\textbf{End of proof.}|, \verb|\textbf{Summary:}| --- all cut.
-        \item \verb|\begin{itemize}|/\verb|\begin{enumerate}| with \verb|\textbf{Term:}| entries used where flowing prose would do --- convert to prose unless the list is genuinely a list.
-        \item Bullet points used for items with natural connective tissue (``first / second / third'') --- convert to a sentence.
-        \item Literal Markdown residue: \verb|**bold**|, \verb|__emph__|, \verb|# Heading|, \verb|- list item| at column 0 --- convert to LaTeX or remove.
-        \item Excess \verb|\emph{}| sprinkled across one paragraph for ordinary nouns --- emphasis loses meaning when applied to everything; keep only the genuinely contrastive uses.
+        \item Closing flourishes: \verb|\textbf{End of note.}|, \verb|\textbf{End of proof.}|, \verb|\textbf{Summary:}|, all cut.
+        \item \verb|\begin{itemize}|/\verb|\begin{enumerate}| with \verb|\textbf{Term:}| entries used where flowing prose would do; convert to prose unless the list is genuinely a list.
+        \item Bullet points used for items with natural connective tissue (``first / second / third''): convert to a sentence.
+        \item Literal Markdown residue: \verb|**bold**|, \verb|__emph__|, \verb|# Heading|, \verb|- list item| at column 0; convert to LaTeX or remove.
+        \item Excess \verb|\emph{}| sprinkled across one paragraph for ordinary nouns; emphasis loses meaning when applied to everything; keep only the genuinely contrastive uses.
     \end{itemize}
 
     \subsection*{11. Process-dependent writing}
     Writing must be optimized for the final reader, who has not been in the conversation. Anything whose meaning depends on the development sequence, the previous draft, the agent transcript, or the author's working notes is process-dependent and must be rewritten or removed.
 
-    \textbf{Comparative adjectives implying an unstated previous version} --- the strongest fingerprint, because each one silently asks the reader to recall what came before. Remove the comparative or rewrite as a plain description of the current state:
+    \textbf{Comparative adjectives implying an unstated previous version}: the strongest fingerprint, because each one silently asks the reader to recall what came before. Remove the comparative or rewrite as a plain description of the current state:
     \begin{itemize}
         \item ``the \emph{remaining} X'', ``what \emph{remains} is...'', ``the \emph{former} X'', ``the \emph{previous} X''
         \item ``the \emph{corrected} X'', ``the \emph{sharpened} X'', ``the \emph{updated} X'', ``the \emph{revised} X''
         \item ``\emph{still} supplies'', ``\emph{still} needed'', ``\emph{now} isolates'', ``\emph{now} provides''
         \item ``\emph{already} proved above'', ``\emph{already} established'', ``as we \emph{just} showed''
-        \item ``\emph{Optional} X'' demoted to ``X'' --- if the qualifier was scaffolding, drop it
+        \item ``\emph{Optional} X'' demoted to ``X'': if the qualifier was scaffolding, drop it
     \end{itemize}
 
-    \textbf{Development-state markers} --- these reveal that the writer is mentally diffing against an in-flight repository, not addressing a reader:
+    \textbf{Development-state markers}: these reveal that the writer is mentally diffing against an in-flight repository, not addressing a reader:
     \begin{itemize}
         \item ``\emph{provisional}'', ``\emph{in-flux}'', ``\emph{stale}'', ``\emph{tentative}''
         \item ``\emph{for now}'', ``\emph{at this point}'', ``\emph{as of this commit}'', ``\emph{currently}'' (when used to mean ``in the present version'')
@@ -182,15 +182,15 @@ prompts:
         \item ``\emph{TODO}'', ``\emph{FIXME}'', ``\emph{XXX}'' inside body prose
     \end{itemize}
 
-    \textbf{Development-sequence narration} --- text that describes how the document or proof was built, rather than what it is:
+    \textbf{Development-sequence narration}: text that describes how the document or proof was built, rather than what it is:
     \begin{itemize}
         \item ``We \emph{previously} attempted X but switched to Y because...''
-        \item ``The literal version of X keeps Z; the corrected version absorbs it into...'' (whole construction --- describe only the version you ship)
+        \item ``The literal version of X keeps Z; the corrected version absorbs it into...'' (whole construction; describe only the version you ship)
         \item ``As discussed in the meeting / review / earlier draft...''
-        \item Identical placeholder docstrings or paragraphs copy-pasted across sibling files or sections (an agent fingerprint --- give each location concrete content)
+        \item Identical placeholder docstrings or paragraphs copy-pasted across sibling files or sections (an agent fingerprint; give each location concrete content)
     \end{itemize}
 
-    \textbf{Conversation leakage --- direct chat artifacts} (highest-confidence rewrites; make the document nonsensical to any other reader):
+    \textbf{Conversation leakage: direct chat artifacts} (highest-confidence rewrites; make the document nonsensical to any other reader):
     \begin{itemize}
         \item ``Changed X to Y'', ``Previously this said'', ``Updated as requested'', ``Per your suggestion''
         \item ``I will now...'', ``As you asked...'', ``The honest version is...'', ``Here is the revised statement...''
@@ -199,46 +199,46 @@ prompts:
         \item Bare reviewer-conversation comments left inline (``Review note: keep it local for now'', ``TODO from review'')
     \end{itemize}
 
-    \textbf{Internal-vocabulary leakage} --- jargon from the author's working environment that means nothing to a reader of the published artifact:
+    \textbf{Internal-vocabulary leakage}: jargon from the author's working environment that means nothing to a reader of the published artifact:
     \begin{itemize}
         \item Tool / proof-assistant / framework internals leaked into prose meant for a domain reader (e.g., Lean tactic names, ``no-sorry'', ``executable placeholder'', ``stability-gap helper'' in mathematician-facing docs)
         \item Repository-local terms that encode an implementation choice rather than a mathematical or scientific notion (e.g., ``paper-level X'' as opposed to just ``X as in the paper'')
     \end{itemize}
 
-    \subsection*{12. Logic problems --- claims unsupported by the surrounding text}
+    \subsection*{12. Logic problems: claims unsupported by the surrounding text}
     LLM prose often looks like an argument without being one. Flag and repair these patterns; if the underlying logic is broken (not just the wording), leave a \criticize{Issue: ...} comment rather than smoothing over it.
     \begin{itemize}
         \item Claim-without-evidence: ``This shows that X'', ``This demonstrates X'', ``This implies X'', ``It follows that X'' when the preceding sentences do not actually establish $X$. Replace with the plain statement of $X$, or rewrite to derive it, or flag it.
-        \item Empty connectives: ``Therefore,'', ``Hence,'', ``Thus,'', ``Consequently,'' used as transitions where there is no derivation --- delete the connective or rewrite the sentence to actually follow.
+        \item Empty connectives: ``Therefore,'', ``Hence,'', ``Thus,'', ``Consequently,'' used as transitions where there is no derivation; delete the connective or rewrite the sentence to actually follow.
         \item Vague causal pivots: ``\emph{reflecting} the larger excitation density'', ``\emph{owing to} the favorable structure'', ``\emph{thanks to} the careful design'', ``\emph{in light of} these results''. These pretend to causation. Either name the cause directly or drop the pivot.
-        \item Restating-as-evidence: ``X works because X works'', ``This is effective because it is effective'' --- the second clause must add information.
+        \item Restating-as-evidence: ``X works because X works'', ``This is effective because it is effective'': the second clause must add information.
         \item ``This is because''-chains used to build the impression of explanation without an actual mechanism.
-        \item Unsupported leaps from a small empirical observation to a sweeping claim: ``This pattern holds in our experiments, which shows that LLMs fundamentally...'' --- flag the leap.
+        \item Unsupported leaps from a small empirical observation to a sweeping claim: ``This pattern holds in our experiments, which shows that LLMs fundamentally...'': flag the leap.
         \item Premise drift: a paragraph that opens with one claim and closes with a different, larger claim that was never established. Flag with \criticize{Issue: claim shifts mid-paragraph...}.
-        \item Tautological summary sentences: ``This section has shown that we present a method which we have presented'' --- delete.
-        \item Hedge stacking that hides logical weakness: ``may potentially'', ``could possibly'', ``it is likely that perhaps'', ``in some sense roughly approximates'' --- pick one hedge or no hedge.
-        \item ``Indeed,'' / ``In fact,'' as filler asserting confidence the text has not earned --- delete unless the next clause genuinely adds emphasis to a previously argued point.
-        \item Inflated metaphors that pretend to argument: ``stands at the crossroads of'', ``marks a watershed in'', ``through this lens'', ``at its core, X is'' --- drop or replace with direct claim.
-        \item Smooth-but-empty transitions: ``To this end,'', ``With this in mind,'', ``From this perspective,'', ``In this regard,'' --- delete; let the sentence stand on its content.
+        \item Tautological summary sentences: ``This section has shown that we present a method which we have presented'': delete.
+        \item Hedge stacking that hides logical weakness: ``may potentially'', ``could possibly'', ``it is likely that perhaps'', ``in some sense roughly approximates'': pick one hedge or no hedge.
+        \item ``Indeed,'' / ``In fact,'' as filler asserting confidence the text has not earned; delete unless the next clause genuinely adds emphasis to a previously argued point.
+        \item Inflated metaphors that pretend to argument: ``stands at the crossroads of'', ``marks a watershed in'', ``through this lens'', ``at its core, X is'': drop or replace with direct claim.
+        \item Smooth-but-empty transitions: ``To this end,'', ``With this in mind,'', ``From this perspective,'', ``In this regard,'': delete; let the sentence stand on its content.
     \end{itemize}
 
-    \subsection*{13. Audience awareness --- write for the reader, not for yourself}
-    LLMs have many domains in their head simultaneously. They pull jargon from whichever domain has the closest surface match, regardless of whether the actual reader speaks that domain. The result is prose written toward an imagined reader fluent in everything --- which is the LLM itself --- not the actual reader.
+    \subsection*{13. Audience awareness: write for the reader, not for yourself}
+    LLMs have many domains in their head simultaneously. They pull jargon from whichever domain has the closest surface match, regardless of whether the actual reader speaks that domain. The result is prose written toward an imagined reader fluent in everything (which is the LLM itself), not the actual reader.
 
     First, identify the target audience and register. Look at the venue (PRL, JCAP, JMP, ICML, J.~Chem.~Phys., a math monograph, a Lean blueprint, a CS conference); the citation style and what is cited; the notation conventions; the terminology that is taken for granted. The audience determines what counts as the right register. A physics paper for the matrix-product-state community is not a Lean tooling note; a Lean formalization paper is not a NeurIPS submission; a chemistry paper is not a software-engineering blog post.
 
-    \textbf{Cross-domain jargon leakage --- denylist by source domain.} When the paper's domain is X and a term comes from a different domain Y, replace with the X-domain term, define on first use, or remove.
+    \textbf{Cross-domain jargon leakage: denylist by source domain.} When the paper's domain is X and a term comes from a different domain Y, replace with the X-domain term, define on first use, or remove.
 
     Software engineering vocabulary in physics, math, or chemistry papers:
     \begin{itemize}
-        \item ``pipeline'' (for a proof, a derivation, an experimental procedure) --- replace with ``chain'', ``sequence'', ``procedure'', or describe the actual mathematical structure
-        \item ``interface'' (for a mathematical relation), ``API'', ``module'' (when not used in the algebraic sense --- modules over a ring, group representations, etc.), ``wrapper'', ``framework'', ``stack'', ``scaffolding''
+        \item ``pipeline'' (for a proof, a derivation, an experimental procedure): replace with ``chain'', ``sequence'', ``procedure'', or describe the actual mathematical structure
+        \item ``interface'' (for a mathematical relation), ``API'', ``module'' (when not used in the algebraic sense; modules over a ring, group representations, etc.), ``wrapper'', ``framework'', ``stack'', ``scaffolding''
         \item ``registry'', ``callback'', ``dispatcher'', ``binding'', ``hook''
         \item ``boilerplate'', ``stub'', ``placeholder'' (in body prose)
         \item ``infrastructure layers'', ``support layers'', ``components'' (when ``parts'' or specific names would do)
         \item ``rerouting around'', ``routing'', ``graph search'' used metaphorically for proof navigation
         \item ``implementation detail'', ``under the hood'', ``behind the scenes''
-        \item ``type-checked'', ``type-safe'', ``typecheck'' --- in non-CS-formalization contexts
+        \item ``type-checked'', ``type-safe'', ``typecheck'': in non-CS-formalization contexts
     \end{itemize}
 
     Lean / proof-assistant tooling vocabulary in mathematician-facing or physicist-facing prose:
@@ -246,7 +246,7 @@ prompts:
         \item ``sorry-free'', ``no sorries'', ``no \verb|sorry|''
         \item ``proof obligation is discharged'', ``every obligation discharged'', ``goal is closed''
         \item ``tactic block'', ``elaborator'', ``metaprogram'', ``unifier'', ``defeq''
-        \item ``the verifier'' (for the Lean kernel) --- when the audience is mathematicians or physicists, replace with ``Lean's kernel'' or explain on first use; when the audience is Lean developers, leave it
+        \item ``the verifier'' (for the Lean kernel): when the audience is mathematicians or physicists, replace with ``Lean's kernel'' or explain on first use; when the audience is Lean developers, leave it
         \item ``executable placeholder'', ``stability-gap helper'', ``paper-level X''
     \end{itemize}
     Either define on first use for a non-formalization audience, or replace with the mathematical statement (``every step is checked by Lean'' rather than ``every proof obligation is discharged'').
@@ -254,7 +254,7 @@ prompts:
     Machine-learning / AI vocabulary in non-ML physics, math, chemistry, biology papers:
     \begin{itemize}
         \item ``training'', ``inference'', ``fine-tune'', ``ablation study'', ``downstream'', ``upstream''
-        \item ``embedding'' --- when not used in any technical mathematical sense (linear-algebraic, topological, category-theoretic, combinatorial)
+        \item ``embedding'': when not used in any technical mathematical sense (linear-algebraic, topological, category-theoretic, combinatorial)
         \item ``deployment'', ``production'', ``rollout''
         \item ``benchmark'' (when no benchmark exists), ``evaluation harness''
         \item ``zero-shot'' / ``few-shot'' / ``in-context'' applied to non-LLM things
@@ -276,7 +276,7 @@ prompts:
 
     Biometrics / data-science metaphors:
     \begin{itemize}
-        \item ``fingerprint'' / ``spectral fingerprint'' / ``signature'' (when not a literal signature) --- replace with the technical name (``peripheral spectrum'', ``eigenvalue multiset'')
+        \item ``fingerprint'' / ``spectral fingerprint'' / ``signature'' (when not a literal signature): replace with the technical name (``peripheral spectrum'', ``eigenvalue multiset'')
         \item ``DNA'' / ``hallmark'' / ``footprint'' as metaphors for mathematical or physical structure
     \end{itemize}
 
@@ -306,41 +306,41 @@ prompts:
 
     \textbf{Foreign citations and foreign theorem names.} LLMs cite by training-data centrality, not by community recognition. Flag:
     \begin{itemize}
-        \item Theorem names that the target community does not use as anchors (e.g., ``Burnside's theorem'' in an MPS paper) --- explain or remove
+        \item Theorem names that the target community does not use as anchors (e.g., ``Burnside's theorem'' in an MPS paper): explain or remove
         \item Review-paper citations where the target community would expect the original paper (e.g., citing a 2021 review when the canonical reference is the original 1990s paper)
         \item Vendor blog posts or model-release announcements cited as scientific sources
         \item Citations the reader cannot verify (suspiciously vague, suspiciously round, or suspiciously perfect coverage)
     \end{itemize}
 
-    \textbf{Fabricated attribution to ``the literature''.} A recurring LLM failure: claiming that a convention, error, or simplification ``the literature'' makes, when in fact the LLM is the source of the synthesis. Phrases like ``the literature compresses these into a single step'', ``most authors omit this case'', ``the standard treatment uses'' --- when the reviewer cannot find this in the literature, flag the claim itself, not just the wording. The right move is usually to attribute the choice to the present work or remove the attribution entirely.
+    \textbf{Fabricated attribution to ``the literature''.} A recurring LLM failure: claiming that a convention, error, or simplification ``the literature'' makes, when in fact the LLM is the source of the synthesis. Phrases like ``the literature compresses these into a single step'', ``most authors omit this case'', ``the standard treatment uses'': when the reviewer cannot find this in the literature, flag the claim itself, not just the wording. The right move is usually to attribute the choice to the present work or remove the attribution entirely.
 
     \textbf{Cross-disciplinary metaphors that lose meaning under inspection.} ``Manifold of solutions'', ``phase transition'' (used loosely outside physics), ``entropy'' (used loosely), ``information'' (used loosely), ``complexity'' (used colloquially when the field has a precise technical sense). Either use the technical sense correctly or use a non-metaphor word.
 
-    \subsection*{14. Duplication --- across abstract, introduction, and conclusion}
+    \subsection*{14. Duplication: across abstract, introduction, and conclusion}
     Each of abstract, introduction, and conclusion has a different job; near-verbatim repetition between them is a common LLM failure mode. Watch for:
     \begin{itemize}
-        \item Abstract sentences that reappear nearly verbatim as the opening sentences of the introduction --- the abstract should compress, not preview by quotation.
-        \item Conclusion paragraphs that recapitulate the introduction's framing without new analysis or new takeaway --- a conclusion should add: what we now know that we did not know at the start, or what to do next.
+        \item Abstract sentences that reappear nearly verbatim as the opening sentences of the introduction; the abstract should compress, not preview by quotation.
+        \item Conclusion paragraphs that recapitulate the introduction's framing without new analysis or new takeaway; a conclusion should add: what we now know that we did not know at the start, or what to do next.
         \item Section opening sentences that repeat the section heading in prose form (``In this section on stochastic dynamics, we discuss stochastic dynamics'').
         \item ``As discussed in Section X'' chains that re-state the contents of Section X rather than referencing them.
-        \item Topic sentences and concluding sentences within one paragraph that make the same claim --- keep the stronger version, drop the other.
-        \item Multiple subsections that each open with the same framing (``A central challenge is...'') --- vary or consolidate.
-        \item Multi-paragraph runs where each paragraph re-asserts the section's central claim --- the central claim should be made once and developed, not re-asserted at every paragraph break.
-        \item Two-document duplication: when the paper and a companion document (notes, appendix, blog) repeat the same expository paragraphs --- choose one canonical home and reference from the other.
+        \item Topic sentences and concluding sentences within one paragraph that make the same claim; keep the stronger version, drop the other.
+        \item Multiple subsections that each open with the same framing (``A central challenge is...''): vary or consolidate.
+        \item Multi-paragraph runs where each paragraph re-asserts the section's central claim; the central claim should be made once and developed, not re-asserted at every paragraph break.
+        \item Two-document duplication: when the paper and a companion document (notes, appendix, blog) repeat the same expository paragraphs; choose one canonical home and reference from the other.
     \end{itemize}
     Repair strategies: (a) keep the strongest single instance, delete the others; (b) when both instances carry weight but differ in detail, leave the most detailed in the body and replace the abstract/intro/conclusion echo with a shorter referencing summary; (c) when the duplication arose because a section needed a takeaway and the conclusion gave the same takeaway, rewrite the conclusion to give the next-step / open-question / lessons-learned content the conclusion is actually for.
 
     \section*{Target Register}
-    Plain technical English. Sentences vary in length: short ones for results and consequences, medium ones for development. Verbs are concrete and ordinary. Latinate words appear only when they are the precise technical term, not for register. No promotional adjectives. No throat-clearing. The em dash is a fine pivot. A bare declarative fragment is fine when stating a result.
+    Plain technical English. Sentences vary in length: short ones for results and consequences, medium ones for development. Verbs are concrete and ordinary. Latinate words appear only when they are the precise technical term, not for register. No promotional adjectives. No throat-clearing. Em dashes appear rarely, if at all. A bare declarative fragment is fine when stating a result.
 
     The transformation pattern: where an LLM draft would write ``It is important to note that A is, in fact, crucial for B'', the target writes ``A determines B''. Where an LLM draft would write ``Having defined the model, we now systematically explore the implications'', the target writes ``We now derive the consequences''. The point is not to substitute one phrase for another but to remove the meta-language entirely and lead with the content.
 
-    \section*{Comment Discipline --- Always Explain Why}
+    \section*{Comment Discipline: Always Explain Why}
     Every substantive rewrite must carry a \criticize{Fixed: [what changed]. Why: [which LLM-tell pattern]}{severity}{confidence} comment so the author can see what was changed and learn the pattern. The goal is not just to clean the document but to make the LLM-style problem visible. Silence is reserved for purely mechanical typo / spacing / punctuation fixes.
     \begin{itemize}
-        \item \textbf{Silent only} (no annotation): pure mechanical fixes --- punctuation typos, missing spaces, capitalization slips, obvious LaTeX syntax errors. Nothing about word choice or sentence structure goes silent.
+        \item \textbf{Silent only} (no annotation): pure mechanical fixes; punctuation typos, missing spaces, capitalization slips, obvious LaTeX syntax errors. Nothing about word choice or sentence structure goes silent.
         \item \textbf{Brief \criticize{Fixed: [what]. Why: [pattern]}{severity}{confidence}} for any prose change at the word, phrase, clause, or sentence level. The ``Why'' must name the specific LLM-tell pattern (e.g., ``verb inflation'', ``throat-clearing opener'', ``not only/but also'', ``parallel sentence run'', ``restate-explain-restate'', ``buzzword adjective'', ``empty intensifier'', ``promotional phrasing'', ``empty significance'', ``passive voice cluster'', ``future-work boilerplate'').
-        \item \textbf{Full \criticize{Fixed: [what]. Why: [pattern]. Note: [meaning-preservation reasoning]}{severity}{confidence}} when the rewrite required care to preserve meaning --- e.g., when ``not only X, but also Y'' was load-bearing and you split it carefully so both claims survive. Add a Note line explaining how meaning was preserved.
+        \item \textbf{Full \criticize{Fixed: [what]. Why: [pattern]. Note: [meaning-preservation reasoning]}{severity}{confidence}} when the rewrite required care to preserve meaning, e.g., when ``not only X, but also Y'' was load-bearing and you split it carefully so both claims survive. Add a Note line explaining how meaning was preserved.
         \item \textbf{\criticize{Issue: [...]. Suggested fix: [...]. Rationale: [...]}{severity}{confidence}} (NOT implemented) only for: cases where rewriting would risk changing meaning, paragraph-level restructuring you are not confident about, removals of substantial content.
         \item Severity: 5 Critical, 4 Major, 3 Moderate, 2 Minor, 1 Cosmetic. Confidence: 5 Certain, 4 High, 3 Moderate, 2 Low, 1 Speculative.
         \item Text inside \criticize{...} must use proper LaTeX: \verb|\ref{...}|, escaped \verb|\%| \verb|\&| \verb|\_|, math in \verb|$...$|, quotes as ``...'' not "...".
@@ -368,9 +368,9 @@ prompts:
 
   userRequest:
     - |
-      Phase 1 of 2. Annotate only --- do not rewrite yet. Be thorough.
+      Phase 1 of 2. Annotate only; do not rewrite yet. Be thorough.
 
-      Phase 1 is your one chance to surface every problem; Phase 2 only fixes what Phase 1 has named. Under-flagging in Phase 1 means the document leaves Phase 2 with patterns still in place. Err on the side of more annotations rather than fewer. A document with light LLM polish should still come out of Phase 1 with dozens of \criticize{} markers; a heavily LLM-written document should come out with hundreds. Use cosmetic-severity (1) freely for single-word issues and minor connective filler --- low severity is not a reason to skip the annotation.
+      Phase 1 is your one chance to surface every problem; Phase 2 only fixes what Phase 1 has named. Under-flagging in Phase 1 means the document leaves Phase 2 with patterns still in place. Err on the side of more annotations rather than fewer. A document with light LLM polish should still come out of Phase 1 with dozens of \criticize{} markers; a heavily LLM-written document should come out with hundreds. Use cosmetic-severity (1) freely for single-word issues and minor connective filler; low severity is not a reason to skip the annotation.
 
       Apply the frequency principle (system prompt): severity reflects the cluster, not the individual instance. Mark each instance, but raise severity when document-wide counts are high.
 
@@ -389,7 +389,7 @@ prompts:
               \begin{itemize}
                   \item Document type: [paper / draft / chapter / position piece / blueprint / methods note]
                   \item Apparent venue: [physics journal / math journal / CS conference / blueprint / book / etc.]
-                  \item Target audience: [name the actual scientific community --- e.g., ``matrix-product-state and tensor-network physicists'', ``mathematicians working on operator algebras'', ``stochastic-thermodynamics researchers'']
+                  \item Target audience: [name the actual scientific community, e.g., ``matrix-product-state and tensor-network physicists'', ``mathematicians working on operator algebras'', ``stochastic-thermodynamics researchers'']
                   \item Audience-determined right register: [what vocabulary is native to this community; what is foreign]
                   \item Notation conventions of this community: [e.g., MPS uses $A^0,\ldots,A^{d-1}$ with raised index; physics uses $\hat H$ for operators]
                   \item Apparent author voice underneath the LLM polish: [what the natural register seems to be]
@@ -398,14 +398,14 @@ prompts:
               \end{itemize}
           \item [Audience awareness: cross-domain jargon leakage]
               \begin{itemize}
-                  \item SWE / programming jargon present in non-CS document: [each instance with line/context --- ``pipeline'', ``interface'', ``module'', ``framework'', ``stack'', ``infrastructure layers'', ``rerouting'', etc.]
+                  \item SWE / programming jargon present in non-CS document: [each instance with line/context: ``pipeline'', ``interface'', ``module'', ``framework'', ``stack'', ``infrastructure layers'', ``rerouting'', etc.]
                   \item Lean / proof-assistant jargon present in mathematician- or physicist-facing prose: [``sorry-free'', ``proof obligation discharged'', ``the verifier'', ``tactic block'', etc.]
                   \item ML / AI jargon present in non-ML paper: [``training'', ``inference'', ``fine-tune'', ``ablation'', ``downstream'', ``embedding'' non-vector-space, etc.]
                   \item SaaS / startup / tech-blog register: [``cheap, fast'', ``economic logic'', ``capable'', ``agile'', ``cutting-edge'', etc.]
                   \item Web / database / cloud terms in non-web paper: [``schema'', ``endpoint'', ``cache'', etc.]
                   \item Biometrics / data-science metaphors: [``fingerprint'', ``signature'', ``hallmark'', ``footprint'']
                   \item ML-paper abstract cadence: [``first to combine A, B, and C''; ``state-of-the-art''; ``to the best of our knowledge'']
-                  \item Anthropomorphic agent register: [``the agent is willing'', ``happily produces'', ``readily''] --- inappropriate for scientific paper
+                  \item Anthropomorphic agent register: [``the agent is willing'', ``happily produces'', ``readily'']: inappropriate for scientific paper
                   \item Wrong-community notation: [conventions that conflict with the target community]
                   \item Foreign theorem names / foreign citations: [theorems the audience does not use as anchors; review-paper cites where original-paper cites are expected; vendor/blogpost cites]
                   \item Fabricated attribution to ``the literature'': [claims about what ``the literature'' does that the reviewer cannot find]
@@ -441,7 +441,7 @@ prompts:
               \begin{itemize}
                   \item ``Profound implications'', ``paradigm shift'', ``transformative force'' constructions
                   \item Made-up noun pairs (e.g., ``contextual alignment'')
-                  \item Tripled abstract lists --- which terms are filler
+                  \item Tripled abstract lists, which terms are filler
                   \item Nominalization stacks
               \end{itemize}
           \item [Parallel structure and sentence rhythm]
@@ -505,7 +505,7 @@ prompts:
                   \item Multi-paragraph runs re-asserting the section's central claim
                   \item Cross-document duplication between paper and companion notes/appendix
               \end{itemize}
-          \item [Risk inventory --- where rewrites must be careful]
+          \item [Risk inventory: where rewrites must be careful]
               \begin{itemize}
                   \item Sentences where the LLM phrasing carries a real technical scope (e.g., ``not only $A$ but also $B$'' marking two distinct claims)
                   \item Hedges that the author intends (e.g., ``may'' that means actual uncertainty, not LLM hedge)
@@ -514,7 +514,7 @@ prompts:
       \end{enumerate}
       </scratchpad>
 
-      Following your audit, output the document with \criticize{Issue: [pattern]. Suggested fix: [plain rewrite]}{severity}{confidence} annotations placed inline at each problem. Do not rewrite the prose itself in this phase --- only annotate.
+      Following your audit, output the document with \criticize{Issue: [pattern]. Suggested fix: [plain rewrite]}{severity}{confidence} annotations placed inline at each problem. Do not rewrite the prose itself in this phase; only annotate.
 
       Severity guidance:
       \begin{itemize}
@@ -529,15 +529,15 @@ prompts:
       - \criticize{Issue: ``not only X, but also Y'' construction (Paul-style LLM tell). Suggested fix: split into ``X. Y also.'' or promote Y to main clause.}{4}{5}
       - \criticize{Issue: Throat-clearing opener ``It is important to note that''. Suggested fix: delete and lead with the content.}{3}{5}
       - \criticize{Issue: Verb inflation ``achieves a lower energy''. Suggested fix: ``gives a lower energy''.}{2}{5}
-      - \criticize{Issue: Restate-explain-restate paragraph --- first and last sentences make the same claim. Suggested fix: keep the stronger version, delete the other.}{4}{4}
-      - \criticize{Issue: Parallel sentence run --- four consecutive sentences share the frame ``This X demonstrates Y''. Suggested fix: vary syntax or collapse into one sentence.}{3}{4}
-      - \criticize{Issue: Load-bearing contrast --- this ``not only X, but also Y'' carries two distinct claims. Suggested fix: rewrite as two sentences keeping both. Will preserve in Phase 2 only if both meanings are clearly distinct.}{3}{3}
-      - \criticize{Issue: Cross-domain jargon --- ``pipeline'' used for a mathematical proof in a physics paper for the MPS community. Suggested fix: replace with ``chain'' or describe the actual structure (``the sequence: definition $\to$ canonical-form reduction $\to$ multi-block theorem'').}{4}{5}
+      - \criticize{Issue: Restate-explain-restate paragraph; first and last sentences make the same claim. Suggested fix: keep the stronger version, delete the other.}{4}{4}
+      - \criticize{Issue: Parallel sentence run; four consecutive sentences share the frame ``This X demonstrates Y''. Suggested fix: vary syntax or collapse into one sentence.}{3}{4}
+      - \criticize{Issue: Load-bearing contrast; this ``not only X, but also Y'' carries two distinct claims. Suggested fix: rewrite as two sentences keeping both. Will preserve in Phase 2 only if both meanings are clearly distinct.}{3}{3}
+      - \criticize{Issue: Cross-domain jargon; ``pipeline'' used for a mathematical proof in a physics paper for the MPS community. Suggested fix: replace with ``chain'' or describe the actual structure (``the sequence: definition $\to$ canonical-form reduction $\to$ multi-block theorem'').}{4}{5}
       - \criticize{Issue: Lean tooling jargon (``proof obligation discharged'', ``sorry-free'') in mathematician-facing prose. Suggested fix: ``Lean checks every step'' or define the term on first use.}{4}{4}
-      - \criticize{Issue: Comparative-adjective tell --- ``the corrected scalar lemma'' silently asks the reader to compare with a previous version. Suggested fix: ``the scalar lemma''.}{3}{5}
-      - \criticize{Issue: Claim-without-evidence --- ``This shows that the method is effective'' but the preceding paragraph does not establish effectiveness. Suggested fix: state the concrete property the paragraph established, or flag the underlying logic gap.}{4}{4}
-      - \criticize{Issue: Cross-section duplication --- this conclusion sentence repeats abstract sentence 2 nearly verbatim. Suggested fix: keep the abstract version (more compressed); have the conclusion add a takeaway or open question.}{3}{4}
-      - \criticize{Issue: Fabricated attribution --- ``the literature compresses these into a single step'', but no cited paper is found doing this. Suggested fix: attribute to the present work or remove the framing.}{4}{3}
+      - \criticize{Issue: Comparative-adjective tell; ``the corrected scalar lemma'' silently asks the reader to compare with a previous version. Suggested fix: ``the scalar lemma''.}{3}{5}
+      - \criticize{Issue: Claim-without-evidence; ``This shows that the method is effective'' but the preceding paragraph does not establish effectiveness. Suggested fix: state the concrete property the paragraph established, or flag the underlying logic gap.}{4}{4}
+      - \criticize{Issue: Cross-section duplication; this conclusion sentence repeats abstract sentence 2 nearly verbatim. Suggested fix: keep the abstract version (more compressed); have the conclusion add a takeaway or open question.}{3}{4}
+      - \criticize{Issue: Fabricated attribution; ``the literature compresses these into a single step'', but no cited paper is found doing this. Suggested fix: attribute to the present work or remove the framing.}{4}{3}
 
       Add the comment command definition in the preamble if not already present:
       \usepackage{xcolor}
@@ -576,7 +576,7 @@ prompts:
                   \item ``The literature'' attribution removal (Issue or Fixed-Why ``fabricated attribution''): [list]
                   \item Mechanical fixes only (silent): [pure punctuation/spacing/typos, no prose changes]
               \end{itemize}
-          \item [Cases requiring care --- preserve meaning above all]
+          \item [Cases requiring care: preserve meaning above all]
               \begin{itemize}
                   \item Load-bearing ``not only X, but also Y'' contrasts: [each, with the rewrite that keeps both claims]
                   \item Hedges that are author-intended (true uncertainty): [keep as-is]
@@ -609,7 +609,7 @@ prompts:
 
       Now output the COMPLETE revised \LaTeX document with all rewrites implemented inline. Requirements:
       \begin{itemize}
-          \item Output the entire document from \verb|\documentclass| (or first input line) to end --- do not truncate.
+          \item Output the entire document from \verb|\documentclass| (or first input line) to end; do not truncate.
           \item Implement every confident rewrite from the plan above. Every prose change carries a \criticize{Fixed: [what]. Why: [pattern]}{severity}{confidence} comment naming the specific LLM-tell pattern. Silent fixes only for purely mechanical punctuation / spacing / typo corrections, not for word choice or sentence structure.
           \item Preserve every \% comment, every existing \criticize/\todo annotation, every label key, every citation key, every cross-reference, every equation, every figure, every section heading.
           \item Leave \criticize{Issue: [...]. Suggested fix: [...]}{severity}{confidence} only for cases where rewriting would risk changing meaning, or where the change is too large for a within-section rewrite.
@@ -619,7 +619,7 @@ prompts:
       \end{itemize}
 
       EXAMPLES of well-formed Fixed comments (every change names the pattern):
-      - \criticize{Fixed: split ``not only X, but also Y'' into two sentences. Why: not only/but also --- the strongest LLM tell in this document; both claims preserved.}{4}{5}
+      - \criticize{Fixed: split ``not only X, but also Y'' into two sentences. Why: not only/but also; the strongest LLM tell in this document; both claims preserved.}{4}{5}
       - \criticize{Fixed: deleted ``It is important to note that'' opener; sentence now leads with the claim. Why: throat-clearing opener.}{3}{5}
       - \criticize{Fixed: ``achieves'' $\to$ ``gives''; ``outperforms'' $\to$ ``does better than''. Why: verb inflation.}{2}{5}
       - \criticize{Fixed: dropped restated final sentence; the opening sentence already makes the claim. Why: restate-explain-restate paragraph rhythm.}{4}{4}
@@ -627,18 +627,18 @@ prompts:
       - \criticize{Fixed: removed ``promising directions for future work''; kept the specific direction (interacting models) as one sentence. Why: future-work boilerplate.}{3}{5}
       - \criticize{Fixed: dropped ``comprehensive'' and ``robust''; rephrased to state the concrete property. Why: buzzword adjectives carrying no information.}{2}{5}
       - \criticize{Fixed: collapsed three consecutive ``This X demonstrates Y'' sentences into one. Why: anaphoric paragraph openings + verb echoing.}{3}{4}
-      - \criticize{Fixed: split ``not only X, but also Y''. Why: load-bearing contrast --- both halves carry distinct claims. Note: rewrote as ``X. Y also.''~with $X$ and $Y$ both kept as separate independent statements; meaning unchanged.}{3}{4}
+      - \criticize{Fixed: split ``not only X, but also Y''. Why: load-bearing contrast; both halves carry distinct claims. Note: rewrote as ``X. Y also.''~with $X$ and $Y$ both kept as separate independent statements; meaning unchanged.}{3}{4}
       - \criticize{Fixed: removed five \verb|\textbf{Step k: ...}| pseudo-headers; converted to inline ``First, ... Second, ... Then, ...'' phrasing. Why: bold pseudo-headers in proof body (markdown leakage).}{3}{5}
-      - \criticize{Fixed: ``the remaining adjacent-stage bridge'' $\to$ ``the adjacent-stage bridge''; ``the corrected scalar lemma'' $\to$ ``the scalar lemma''. Why: comparative-adjective tell --- silently asks the reader to compare with a previous version they have not seen.}{3}{5}
-      - \criticize{Fixed: deleted ``This shows that the method is effective'' --- the preceding paragraph does not establish effectiveness. Why: claim-without-evidence; underlying evidence-or-logic gap left for author with Issue comment.}{4}{4}
+      - \criticize{Fixed: ``the remaining adjacent-stage bridge'' $\to$ ``the adjacent-stage bridge''; ``the corrected scalar lemma'' $\to$ ``the scalar lemma''. Why: comparative-adjective tell; it silently asks the reader to compare with a previous version they have not seen.}{3}{5}
+      - \criticize{Fixed: deleted ``This shows that the method is effective'': the preceding paragraph does not establish effectiveness. Why: claim-without-evidence; underlying evidence-or-logic gap left for author with Issue comment.}{4}{4}
       - \criticize{Fixed: removed ``reflecting the larger excitation density''; replaced with ``because more excitations are produced near the gap closing''. Why: vague causal pivot.}{3}{4}
       - \criticize{Fixed: deleted second sentence of conclusion that repeats abstract sentence 2 verbatim. Why: cross-section duplication. Note: the abstract version is more compressed and was kept; the conclusion now leads with an open question instead.}{3}{4}
       - \criticize{Fixed: removed ``Indeed,'' opener. Why: filler asserting confidence not earned.}{1}{5}
       - \criticize{Fixed: ``stands at the crossroads of physics and information theory'' $\to$ ``connects physics and information theory''. Why: inflated metaphor.}{2}{4}
       - \criticize{Fixed: ``every proof obligation in the core pipeline is discharged'' $\to$ ``Lean checks every step of the proof''. Why: Lean tooling jargon (``proof obligation discharged'') + SWE pipeline metaphor; both stripped for MPS-physicist audience.}{4}{5}
-      - \criticize{Fixed: ``the agent is equally willing to formalize the wrong statement'' $\to$ ``the agent produces a wrong formalization at the same rate''. Why: anthropomorphic register --- ``willing'' implies volition; the rewrite states behavior mechanically.}{2}{4}
-      - \criticize{Fixed: relabeled MPS tensor indices from $A_1, \ldots, A_d$ to $A^0, \ldots, A^{d-1}$. Why: wrong-community notation --- the MPS literature uses raised 0-indexed.}{3}{5}
-      - \criticize{Issue: ``the literature compresses these two steps into one'' --- the reviewer cannot find this in the cited literature; this may be the author's own simplification attributed to the literature. Suggested fix: either cite the specific paper that does this, or attribute to the present work, or remove the ``the literature'' framing. Rationale: fabricated attribution to ``the literature'' is a recurrent LLM tell and a verification hazard.}{4}{3}
+      - \criticize{Fixed: ``the agent is equally willing to formalize the wrong statement'' $\to$ ``the agent produces a wrong formalization at the same rate''. Why: anthropomorphic register; ``willing'' implies volition; the rewrite states behavior mechanically.}{2}{4}
+      - \criticize{Fixed: relabeled MPS tensor indices from $A_1, \ldots, A_d$ to $A^0, \ldots, A^{d-1}$. Why: wrong-community notation; the MPS literature uses raised 0-indexed.}{3}{5}
+      - \criticize{Issue: ``the literature compresses these two steps into one'': the reviewer cannot find this in the cited literature; this may be the author's own simplification attributed to the literature. Suggested fix: either cite the specific paper that does this, or attribute to the present work, or remove the ``the literature'' framing. Rationale: fabricated attribution to ``the literature'' is a recurrent LLM tell and a verification hazard.}{4}{3}
 
       Final output:
 

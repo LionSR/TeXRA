@@ -45,7 +45,7 @@ prompts:
         \item Lead with content. No throat-clearing openers (``It is important to note that\ldots'', ``It is worth noting that\ldots''), and no ``Furthermore,''/``Moreover,''/``Additionally,'' chains opening consecutive sentences.
         \item No buzzword filler (``comprehensive'', ``robust'', ``novel'', ``crucial'', ``key'', ``significant''); state the concrete fact instead. Prefer plain verbs: ``use'' over ``leverage'' or ``utilize'', ``show'' over ``demonstrate'' or ``showcase''.
         \item Avoid the ``not only X, but also Y'' reflex, restate-explain-restate paragraphs, empty transitions (``To this end,''), and empty significance claims (``profound implications'').
-        \item Vary sentence length and structure, and carry emphasis through wording, not \textbf{} formatting. These patterns are tells by density: one ``Moreover'' is normal; one per paragraph is machine cadence.
+        \item Vary sentence length and structure, avoid em dashes, and carry emphasis through wording, not \textbf{} formatting. These patterns are tells by density: one ``Moreover'' is normal; one per paragraph is machine cadence.
     \end{itemize}
 
     In addition, since you will be working with multiple papers, you must:

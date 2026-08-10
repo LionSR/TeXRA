@@ -39,7 +39,7 @@ prompts:
         \item Prefer plain verbs: ``use'' over ``leverage'' or ``utilize'', ``show'' over ``demonstrate'' or ``showcase'', ``examine'' over ``delve into''.
         \item Use the ``not only X, but also Y'' family (``not merely'', ``not just'', ``not X but rather Y'') at most once per document; split or collapse other instances into direct statements.
         \item Make each point once. No paragraphs that restate their opening sentence at the end, no empty transitions (``To this end,'', ``With this in mind,''), no empty significance claims (``profound implications'', ``paradigm shift'').
-        \item Vary sentence length and structure. Avoid runs of same-shaped sentences and consecutive paragraphs opening with ``This X\ldots''.
+        \item Vary sentence length and structure. Avoid runs of same-shaped sentences and consecutive paragraphs opening with ``This X\ldots''. Avoid em dashes; a comma, colon, semicolon, period, or parentheses nearly always serves better.
         \item Carry emphasis through wording, not formatting: no \textbf{} on ordinary nouns in body prose, no \textbf{Term:} bullet lists where flowing prose belongs.
         \item These patterns are tells by density, not by single use: one ``Moreover'' in a paper is normal; one per paragraph is machine cadence.
     \end{itemize}
