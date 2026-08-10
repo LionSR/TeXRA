@@ -21,17 +21,20 @@ import { terminalCapabilities } from './state/terminalCapabilities';
 // can't inject terminal escape sequences into the title.
 // eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
 const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
+const RUNNING_TITLE_FRAMES = ['-', '/', '\\'] as const;
+const RUNNING_TITLE_INTERVAL_MS = 500;
 
 /** Project-aware terminal title, optionally annotated with live TUI state. */
 export function terminalTitleText(
   cwd: string,
   state: SessionTitleState = 'idle',
+  activityDetail?: string,
 ): string {
   const project = sanitizePathSegment(basename(cwd), {
     invalidCharPattern: TITLE_INVALID_CHARS,
     replacement: '',
   });
-  return formatSessionTitle(project, state);
+  return formatSessionTitle(project, state, activityDetail);
 }
 
 /** Write the title only when terminal capability discovery admitted OSC. */
@@ -66,18 +69,48 @@ export function installTerminalTitleUpdates(cwd: string) {
   let disposed = false;
   let suspended = false;
   let lastTitle: string | undefined;
-  const synchronize = (): void => {
-    if (suspended) return;
-    const title = terminalTitleText(cwd, currentTerminalTitleState());
+  let runningFrame = 0;
+  let runningTimer: ReturnType<typeof setInterval> | undefined;
+  const stopRunningAnimation = (): void => {
+    if (runningTimer === undefined) return;
+    clearInterval(runningTimer);
+    runningTimer = undefined;
+  };
+  const updateTitle = (title: string): void => {
     if (title === lastTitle) return;
     lastTitle = title;
     writeTerminalTitle(title);
   };
+  const runningTitle = (): string =>
+    terminalTitleText(cwd, 'running', RUNNING_TITLE_FRAMES[runningFrame]);
+  const startRunningAnimation = (): void => {
+    if (runningTimer !== undefined) return;
+    if (!terminalCapabilities.get().oscColorReports) return;
+    runningFrame = 0;
+    updateTitle(runningTitle());
+    runningTimer = setInterval(() => {
+      if (!terminalCapabilities.get().oscColorReports) {
+        stopRunningAnimation();
+        return;
+      }
+      runningFrame = (runningFrame + 1) % RUNNING_TITLE_FRAMES.length;
+      updateTitle(runningTitle());
+    }, RUNNING_TITLE_INTERVAL_MS);
+    runningTimer.unref?.();
+  };
+  const synchronize = (): void => {
+    if (suspended) return;
+    const state = currentTerminalTitleState();
+    if (state === 'running') {
+      startRunningAnimation();
+      return;
+    }
+    stopRunningAnimation();
+    updateTitle(terminalTitleText(cwd, state));
+  };
   const restoreIdleTitle = (): void => {
-    const idleTitle = terminalTitleText(cwd);
-    if (lastTitle === idleTitle) return;
-    lastTitle = idleTitle;
-    writeTerminalTitle(idleTitle);
+    stopRunningAnimation();
+    updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
     [approvalQueueStatus, rootRunPending, rootRunStreamId, streams],

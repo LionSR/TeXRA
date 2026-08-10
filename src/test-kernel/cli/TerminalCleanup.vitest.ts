@@ -40,6 +40,7 @@ const NO_TERMINAL_CAPABILITIES = {
 afterEach(() => {
   clearApprovals();
   resetCliState();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not
   // a vi.spyOn() wrapping a real implementation — restoreAllMocks() has no
@@ -114,7 +115,7 @@ describe('installTerminalTitleUpdates', () => {
 
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — Running — coauthor');
+    expectLastTitle('TeXRA — Running - — coauthor');
     updates.dispose();
   });
 
@@ -125,7 +126,7 @@ describe('installTerminalTitleUpdates', () => {
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
-    expectLastTitle('TeXRA — Running — coauthor');
+    expectLastTitle('TeXRA — Running - — coauthor');
     updates.dispose();
   });
 
@@ -143,7 +144,7 @@ describe('installTerminalTitleUpdates', () => {
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Running — coauthor');
+    expectLastTitle('TeXRA — Running - — coauthor');
 
     queueTitleApproval('title-transition');
     await flushTitleUpdate();
@@ -151,7 +152,7 @@ describe('installTerminalTitleUpdates', () => {
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Running — coauthor');
+    expectLastTitle('TeXRA — Running - — coauthor');
 
     setStreamStatusInCliState({
       streamId: 'transition-child',
@@ -160,6 +161,62 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
     expectLastTitle('TeXRA — coauthor');
     updates.dispose();
+  });
+
+  it('animates running titles and stops the timer outside the running state', async () => {
+    vi.useFakeTimers();
+    enableOscTitles();
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    setStreamStatusInCliState({
+      streamId: 'animated-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+
+    expectLastTitle('TeXRA — Running - — coauthor');
+    vi.advanceTimersByTime(500);
+    expectLastTitle('TeXRA — Running / — coauthor');
+    vi.advanceTimersByTime(500);
+    expectLastTitle('TeXRA — Running \\ — coauthor');
+
+    queueTitleApproval('animated-root');
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — Approval needed — coauthor');
+    const writesWhileApprovalNeeded = vi.mocked(writeSync).mock.calls.length;
+    vi.advanceTimersByTime(1_500);
+    expect(writeSync).toHaveBeenCalledTimes(writesWhileApprovalNeeded);
+
+    clearApprovals();
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — Running - — coauthor');
+    updates.suspend();
+    expectLastTitle('TeXRA — coauthor');
+    const writesWhileSuspended = vi.mocked(writeSync).mock.calls.length;
+    vi.advanceTimersByTime(1_500);
+    expect(writeSync).toHaveBeenCalledTimes(writesWhileSuspended);
+
+    updates.resume();
+    expectLastTitle('TeXRA — Running - — coauthor');
+    setStreamStatusInCliState({
+      streamId: 'animated-root',
+      status: STREAM_PHASE.WAITING,
+    });
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — coauthor');
+    const writesWhileIdle = vi.mocked(writeSync).mock.calls.length;
+    vi.advanceTimersByTime(1_500);
+    expect(writeSync).toHaveBeenCalledTimes(writesWhileIdle);
+
+    setStreamStatusInCliState({
+      streamId: 'animated-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — Running - — coauthor');
+    updates.dispose();
+    const writesAfterDispose = vi.mocked(writeSync).mock.calls.length;
+    vi.advanceTimersByTime(1_500);
+    expect(writeSync).toHaveBeenCalledTimes(writesAfterDispose);
   });
 
   it('deduplicates unchanged title projections and resets an active title on teardown', async () => {
