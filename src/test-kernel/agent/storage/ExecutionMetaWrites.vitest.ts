@@ -30,6 +30,34 @@ describe('execution metadata updates', () => {
     expect(meta?.outcome).toBe(RUN_OUTCOME.COMPLETED);
   });
 
+  it('updates and finalizes core metadata despite malformed workflow observability', async () => {
+    const id = 'bbb003' as ExecutionId;
+    const store = getExecutionStore(id);
+    await store.write('meta', {
+      timestamp: new Date(0).toISOString(),
+      identity: { kind: 'process', tool: 'bash' },
+      description: 'Original description',
+      workflow: { lifecycle: 'active' },
+    });
+
+    await writeSessionDescription(id, 'Updated description');
+    await expect(
+      finalizeExecution({
+        executionId: id,
+        outcome: RUN_OUTCOME.COMPLETED,
+        flowRecord: 'preserve',
+      }),
+    ).resolves.toMatchObject({ status: 'durable' });
+
+    const meta = await store.readMeta();
+    expect(meta).toMatchObject({
+      identity: { kind: 'process', tool: 'bash' },
+      description: 'Updated description',
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+    expect(meta?.workflow).toBeUndefined();
+  });
+
   it('accepts a later update after one fails on absent metadata', async () => {
     const id = 'bbb002' as ExecutionId;
     // Nothing to read-modify-write yet: this update fails inside the lock and

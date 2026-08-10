@@ -50,6 +50,9 @@ const WorkflowExecutionStageSchema = z.strictObject({
 const WorkflowExecutionAttemptSchema = z.strictObject({
   number: z.int().positive(),
   id: ExecutionIdSchema.optional(),
+  childStreamId: StreamTabIdSchema.optional(),
+  model: z.string().optional(),
+  costUsd: z.number().nonnegative().optional(),
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
 });
@@ -90,20 +93,14 @@ const WorkflowExecutionCountsSchema = z.strictObject({
   skipped: z.int().nonnegative(),
   cached: z.int().nonnegative(),
 });
-const LIVE_CALL_STATUSES = new Set<WorkflowExecutionCallStatus>([
-  WORKFLOW_CALL_STATUS.PLANNED,
-  WORKFLOW_CALL_STATUS.STAGE_BLOCKED,
-  WORKFLOW_CALL_STATUS.QUEUED,
-  WORKFLOW_CALL_STATUS.STARTING,
-  WORKFLOW_CALL_STATUS.RUNNING,
-]);
-const TERMINAL_CALL_STATUSES = new Set<WorkflowExecutionCallStatus>([
-  WORKFLOW_CALL_STATUS.COMPLETED,
-  WORKFLOW_CALL_STATUS.FAILED,
-  WORKFLOW_CALL_STATUS.CANCELLED,
-  WORKFLOW_CALL_STATUS.SKIPPED,
-  WORKFLOW_CALL_STATUS.CACHED,
-]);
+export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowExecutionCallStatus> =
+  new Set([
+    WORKFLOW_CALL_STATUS.COMPLETED,
+    WORKFLOW_CALL_STATUS.FAILED,
+    WORKFLOW_CALL_STATUS.CANCELLED,
+    WORKFLOW_CALL_STATUS.SKIPPED,
+    WORKFLOW_CALL_STATUS.CACHED,
+  ]);
 const TERMINAL_LIFECYCLES = new Set<WorkflowExecutionLifecycle>([
   WORKFLOW_EXECUTION_LIFECYCLE.COMPLETED,
   WORKFLOW_EXECUTION_LIFECYCLE.FAILED,
@@ -221,7 +218,7 @@ export const WorkflowExecutionSnapshotSchema = z
           });
       }
       if (
-        TERMINAL_CALL_STATUSES.has(call.status) &&
+        TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status) &&
         call.timestamps.completedAt === undefined
       )
         context.addIssue({
@@ -230,7 +227,7 @@ export const WorkflowExecutionSnapshotSchema = z
           message: 'A terminal workflow call requires completedAt.',
         });
       if (
-        TERMINAL_CALL_STATUSES.has(call.status) &&
+        TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status) &&
         call.attempts.some((attempt) => attempt.completedAt === undefined)
       )
         context.addIssue({
@@ -270,7 +267,11 @@ export const WorkflowExecutionSnapshotSchema = z
           path: ['timestamps', 'completedAt'],
           message: 'A terminal workflow snapshot requires completedAt.',
         });
-      if (snapshot.calls.some((call) => LIVE_CALL_STATUSES.has(call.status)))
+      if (
+        snapshot.calls.some(
+          (call) => !TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status),
+        )
+      )
         context.addIssue({
           code: 'custom',
           path: ['calls'],

@@ -22,7 +22,9 @@ import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
+  ExecutionMetaCoreSchema,
   ExecutionMetaSchema,
+  WorkflowExecutionSnapshotSchema,
   type ExecutionId,
   type ExecutionMeta,
 } from '@shared/schemas';
@@ -240,8 +242,45 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return null;
   }
 
+  private async readValidatedMeta(
+    malformed: 'return-null' | 'throw' = 'return-null',
+  ): Promise<ExecutionMeta | null> {
+    const raw = await this.read(KEYS.META);
+    if (raw === undefined) return null;
+
+    const core = ExecutionMetaCoreSchema.safeParse(raw);
+    if (!core.success) {
+      logger.warn(
+        CHANNEL,
+        `Failed to parse execution ${this.executionId} meta.json: ${toErrorMessage(
+          core.error,
+        )}`,
+        { data: core.error },
+      );
+      if (malformed === 'throw') throw core.error;
+      return null;
+    }
+
+    const workflow = WorkflowExecutionSnapshotSchema.optional().safeParse(
+      (raw as { workflow?: unknown }).workflow,
+    );
+    if (!workflow.success) {
+      logger.warn(
+        CHANNEL,
+        `Failed to parse execution ${this.executionId} meta.json workflow: ${toErrorMessage(
+          workflow.error,
+        )}`,
+        { data: workflow.error },
+      );
+      return core.data;
+    }
+    return workflow.data === undefined
+      ? core.data
+      : { ...core.data, workflow: workflow.data };
+  }
+
   async readMeta(): Promise<ExecutionMeta | null> {
-    return this.readValidated(KEYS.META, ExecutionMetaSchema);
+    return this.readValidatedMeta();
   }
 
   async readRunRecord(): Promise<RunRecord | null> {
@@ -249,7 +288,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readMetaStrict(): Promise<ExecutionMeta | null> {
-    return this.readValidated(KEYS.META, ExecutionMetaSchema, 'throw');
+    return this.readValidatedMeta('throw');
   }
 
   /**

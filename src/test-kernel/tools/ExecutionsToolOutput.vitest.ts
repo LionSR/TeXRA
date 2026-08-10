@@ -449,10 +449,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             stageId: longStageId,
             stageTitle: longTitle,
             agent: 'writer',
-            model: 'model-a',
             files: { input: longFiles, context: [], media: [] },
             childExecutionId: 'abcdef123456',
-            childStreamId: 'writer#abcdef123456',
             attempts: [
               {
                 number: 1,
@@ -463,12 +461,18 @@ describe('ExecutionsTool /executions/{id}/output', () => {
               {
                 number: 2,
                 id: '222222222222',
+                childStreamId: 'writer#222222222222',
+                model: 'historical-model',
+                costUsd: 0.2,
                 startedAt: timestamp,
                 completedAt: timestamp,
               },
               {
                 number: 3,
                 id: 'abcdef123456',
+                childStreamId: 'writer#abcdef123456',
+                model: 'replacement-model',
+                costUsd: 0.3,
                 startedAt: timestamp,
                 completedAt: timestamp,
               },
@@ -512,6 +516,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(output.includes('"stageBlocked": 0'));
     assert.ok(output.includes('"childExecutionId": "abcdef123456"'));
     assert.ok(output.includes('"number": 3'));
+    assert.ok(output.includes('"childStreamId": "writer#222222222222"'));
+    assert.ok(output.includes('"model": "historical-model"'));
+    assert.ok(output.includes('"costUsd": 0.2'));
     assert.ok(!output.includes('"number": 1'));
     assert.ok(!output.includes('private full instruction'));
     assert.ok(!output.includes('stage-tail'));
@@ -521,6 +528,103 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(!output.includes('file-tail'));
     assert.ok(output.length < 20_000);
     assert.ok((await getExecutionStore(executionId).readMeta())?.workflow);
+  });
+
+  it('keeps an earlier-stage live call ahead of current-stage terminal calls when bounded', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      { name: 'ranked', instruction: 'Workflow script ranked' },
+      'ranked',
+      {
+        streamId: `workflow-script#${executionId}` as StreamTabId,
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'ranked',
+        },
+      },
+    );
+    const timestamp = new Date().toISOString();
+    const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
+      id: `current-terminal-${index}`,
+      label: `Current terminal ${index}`,
+      stageId: 'stage-2',
+      stageTitle: 'Current stage',
+      files: { input: [], context: [], media: [] },
+      attempts: [],
+      status: 'completed' as const,
+      timestamps: {
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        completedAt: timestamp,
+      },
+    }));
+    await captureOwnedExecutionLease(executionId)(() =>
+      writeWorkflowExecutionSnapshot(executionId, {
+        lifecycle: 'active',
+        currentStageId: 'stage-2',
+        stages: [
+          {
+            id: 'stage-1',
+            title: 'Earlier stage',
+            order: 0,
+            lifecycle: 'completed',
+            startedAt: timestamp,
+            completedAt: timestamp,
+          },
+          {
+            id: 'stage-2',
+            title: 'Current stage',
+            order: 1,
+            lifecycle: 'active',
+            startedAt: timestamp,
+          },
+        ],
+        calls: [
+          ...terminalCalls,
+          {
+            id: 'earlier-live',
+            label: 'Earlier live',
+            stageId: 'stage-1',
+            stageTitle: 'Earlier stage',
+            files: { input: [], context: [], media: [] },
+            attempts: [{ number: 1, startedAt: timestamp }],
+            status: 'running',
+            timestamps: {
+              createdAt: timestamp,
+              queuedAt: timestamp,
+              startedAt: timestamp,
+              updatedAt: timestamp,
+            },
+          },
+        ],
+        counts: {
+          total: 9,
+          waiting: 0,
+          planned: 0,
+          stageBlocked: 0,
+          queued: 0,
+          starting: 0,
+          running: 1,
+          completed: 8,
+          failed: 0,
+          cancelled: 0,
+          skipped: 0,
+          cached: 0,
+        },
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
+      }),
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${executionId}`,
+    });
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"id": "earlier-live"'));
+    assert.ok(output.includes('"omittedCalls": 1'));
+    assert.ok(!output.includes('"id": "current-terminal-7"'));
   });
 
   it('errors on an unknown execution id', async () => {
