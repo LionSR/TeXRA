@@ -32,7 +32,7 @@ import {
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
-import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
+import { focusedChildFollowUpRoute } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
   activeSubagentsFor,
   projectChildRoster,
@@ -86,6 +86,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   MESSAGE_TYPES,
   STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   type ActiveChildInfo,
   type ExecutionId,
@@ -302,6 +303,16 @@ function localSyntheticEntry(
     syntheticAfterSeq,
     syntheticAfterSettlementSeqNo,
   } as const;
+}
+
+/** Mark a stream as a native tool-use agent that can accept child follow-ups. */
+function markToolUseAgent(streamId: StreamTabId): void {
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    identity: { kind: 'agent', agent: 'critic' },
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    category: AgentCategory.ToolUse,
+  }));
 }
 
 /** Mark a stream slice as workflow-category. */
@@ -1313,6 +1324,7 @@ describe('CLI TUI row allocation', () => {
   it('selects the focused child stream as a follow-up target', () => {
     setStatus(root, STREAM_PHASE.WAITING);
     setStatus(child1, STREAM_PHASE.WAITING);
+    markToolUseAgent(child1);
     setParentStream(child1, root);
 
     activeStreamId.set(root);
@@ -1331,6 +1343,7 @@ describe('CLI TUI row allocation', () => {
       childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
     ]);
     setStatus(child1, STREAM_PHASE.RUNNING);
+    markToolUseAgent(child1);
     setParentStream(child1, root);
 
     activeStreamId.set(child1);
@@ -1349,6 +1362,7 @@ describe('CLI TUI row allocation', () => {
       childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
     ]);
     setStatus(child1, STREAM_PHASE.CANCELLED);
+    markToolUseAgent(child1);
     setParentStream(child1, root);
 
     activeStreamId.set(child1);
@@ -1358,42 +1372,159 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('explains disabled input when a focused child stream cannot accept follow-ups', () => {
+  const childCapabilityStatuses = [
+    STREAM_PHASE.RUNNING,
+    STREAM_PHASE.WAITING,
+    STREAM_PHASE.COMPLETED,
+    STREAM_PHASE.CANCELLED,
+    STREAM_PHASE.FAILED,
+  ] as const;
+  const terminalChildStatuses = [
+    STREAM_PHASE.COMPLETED,
+    STREAM_PHASE.CANCELLED,
+    STREAM_PHASE.FAILED,
+  ] as const;
+
+  it.each([
+    {
+      name: 'tool-use agent running',
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: AgentCategory.ToolUse,
+      status: STREAM_PHASE.RUNNING,
+      expected: 'accept',
+    },
+    {
+      name: 'tool-use agent waiting',
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: AgentCategory.ToolUse,
+      status: STREAM_PHASE.WAITING,
+      expected: 'accept',
+    },
+    ...childCapabilityStatuses.map((status) => ({
+      name: `structured single-cycle call ${status}`,
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.ToolUse,
+      status,
+      expected: 'reject',
+    })),
+    ...childCapabilityStatuses.map((status) => ({
+      name: `workflow agent ${status}`,
+      identity: { kind: 'agent' as const, agent: 'review-workflow' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.Workflow,
+      status,
+      expected: 'reject',
+    })),
+    ...childCapabilityStatuses.map((status) => ({
+      name: `multi-agent workflow ${status}`,
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'review-workflow',
+      },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.Workflow,
+      status,
+      expected: 'reject',
+    })),
+    ...childCapabilityStatuses.map((status) => ({
+      name: `background bash process ${status}`,
+      identity: { kind: 'process' as const, tool: 'bash' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      category: AgentCategory.ToolUse,
+      status,
+      expected: 'reject',
+    })),
+    ...childCapabilityStatuses.map((status) => ({
+      name: `terminal-backed agent ${status}`,
+      identity: {
+        kind: 'agent' as const,
+        agent: 'codex',
+        tool: 'codex',
+      },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+      category: AgentCategory.ToolUse,
+      status,
+      expected: 'reject',
+    })),
+    ...terminalChildStatuses.map((status) => ({
+      name: `tool-use agent ${status}`,
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: AgentCategory.ToolUse,
+      status,
+      expected: 'reject',
+    })),
+  ])('gates the focused child composer for $name', (fixture) => {
+    setStatus(child1, fixture.status);
+    patchStream(child1, (slice) => ({
+      ...slice,
+      identity: fixture.identity,
+      userFollowUpSupport: fixture.userFollowUpSupport,
+      category: fixture.category,
+    }));
     setParentStream(child1, root);
 
     expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: root,
-        parentStream: parentStream.get(),
-        status: STREAM_PHASE.COMPLETED,
-      }),
-    ).toBeUndefined();
-
-    expect(
-      focusedChildInputDisabledMessage({
+      focusedChildFollowUpRoute({
         activeStreamId: child1,
         parentStream: parentStream.get(),
-        status: undefined,
+        streams: streams.get(),
       }),
-    ).toBeUndefined();
+    ).toEqual({ kind: fixture.expected, streamId: child1 });
+  });
 
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        status: STREAM_PHASE.RUNNING,
-      }),
-    ).toBeUndefined();
+  it.each([
+    {
+      name: 'identity',
+      identity: undefined,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'runtime support',
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: undefined,
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'category',
+      identity: { kind: 'agent' as const, agent: 'critic' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      category: undefined,
+    },
+  ])('fails closed when child $name metadata is missing', (fixture) => {
+    setStatus(child1, STREAM_PHASE.RUNNING);
+    patchStream(child1, (slice) => ({
+      ...slice,
+      identity: fixture.identity,
+      userFollowUpSupport: fixture.userFollowUpSupport,
+      category: fixture.category,
+    }));
+    setParentStream(child1, root);
 
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        status: STREAM_PHASE.COMPLETED,
-      }),
-    ).toBe(
-      'This background task is no longer accepting follow-ups; press Tab to select a session.',
-    );
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
+    activeStreamId.set(child1);
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+      kind: 'reject',
+      streamId: child1,
+    });
+  });
+
+  it('fails closed when focused child status is missing while leaving root routing unchanged', () => {
+    mintSlice(child1);
+    markToolUseAgent(child1);
+    setParentStream(child1, root);
+
+    activeStreamId.set(child1);
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+      kind: 'reject',
+      streamId: child1,
+    });
+    activeStreamId.set(root);
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
   });
 
   it('mirrors running child status events into focused child routing', () => {
@@ -1403,6 +1534,7 @@ describe('CLI TUI row allocation', () => {
         childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
       ]);
       setStatus(child1, STREAM_PHASE.CANCELLED);
+      markToolUseAgent(child1);
       setParentStream(child1, root);
 
       transitionStatus(child1, STREAM_PHASE.RUNNING, 'restart-repair');
@@ -1424,6 +1556,7 @@ describe('CLI TUI row allocation', () => {
         childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
       ]);
       setStatus(child1, STREAM_PHASE.RUNNING);
+      markToolUseAgent(child1);
       setParentStream(child1, root);
 
       transitionStatus(child1, STREAM_PHASE.CANCELLED, 'restart-repair');
@@ -2792,6 +2925,52 @@ describe('CLI transcript state', () => {
 });
 
 describe('sessionSignalsAdapter run facts', () => {
+  it('clears follow-up routing when current run metadata omits capability', () => {
+    withRunFacts((hub) => {
+      const executionId = 'e9911-adapter' as ExecutionId;
+      setStatus(child1, STREAM_PHASE.WAITING);
+      setParentStream(child1, root);
+      emitRunConfig(hub, child1, executionId);
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'run.start',
+          streamId: child1,
+          executionId,
+          identity: { kind: 'agent', agent: 'search' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        },
+      });
+
+      expect(streams.get().get(child1)?.userFollowUpSupport).toBe(
+        USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      );
+      focusStream(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'accept',
+        streamId: child1,
+      });
+
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'run.start',
+          streamId: child1,
+          executionId,
+          identity: { kind: 'agent', agent: 'search' },
+        },
+      });
+
+      expect(streams.get().get(child1)?.userFollowUpSupport).toBeUndefined();
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'reject',
+        streamId: child1,
+      });
+    });
+  });
+
   it('keeps a session-scoped fact subscription live after state reset', () => {
     withRunFacts((hub) => {
       const nextRoot = 'root-after-clear' as StreamTabId;

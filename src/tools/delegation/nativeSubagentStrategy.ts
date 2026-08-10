@@ -50,6 +50,7 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -241,6 +242,11 @@ export function createNativeSubagentStrategy(
         return executeAgent(params.config, params.executionId, {
           ...executeOptions,
           allowWaitingResult: true,
+          userFollowUpSupport:
+            params.executionMode !== 'single-cycle' &&
+            params.config.agentCategory === AgentCategory.ToolUse
+              ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+              : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           ...(params.executionMode === 'single-cycle'
             ? { stopAfterCycle: true }
             : {}),

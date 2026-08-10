@@ -36,14 +36,16 @@ describe('ProgressWorkflowActionsController', () => {
   it('builds diff requests from workflow run config and output state', async () => {
     const output = createOutputFile();
     const config = createWorkflowConfig({ outputFiles: ['declared.tex'] });
-    const { controller, diffs } = createProgressWorkflowActionsHarness({
-      runConfigs: new Map([['stream-a', config]]),
-      executionIds: new Map([['stream-a', 'exec-123']]),
-      outputs: new Map([['stream-a', { 1: [output] }]]),
-    });
+    const { controller, diffs, metadataReads } =
+      createProgressWorkflowActionsHarness({
+        runConfigs: new Map([['stream-a', config]]),
+        executionIds: new Map([['stream-a', 'exec-123']]),
+        outputs: new Map([['stream-a', { 1: [output] }]]),
+      });
 
     await controller.diffStream('stream-a');
 
+    assert.deepEqual(metadataReads, ['stream-a']);
     assert.deepEqual(diffs, [
       {
         agent: 'correct',
@@ -75,18 +77,18 @@ describe('ProgressWorkflowActionsController', () => {
       inputFiles: ['extra-input.tex', 'second-input.tex'],
       outputFiles: ['declared.tex', '/workspace/generated.tex'],
     });
-    const { controller, fileOperations } = createProgressWorkflowActionsHarness(
-      {
+    const { controller, fileOperations, metadataReads } =
+      createProgressWorkflowActionsHarness({
         runConfigs: new Map([['stream-a', config]]),
         executionIds: new Map([['stream-a', 'exec-123']]),
         knownWorkspaceOutputs: new Map([
           ['stream-a', new Set(['/workspace/generated.tex', 'extra.tex'])],
         ]),
-      },
-    );
+      });
 
     await controller.runFileOperation('stream-a', 'pack');
 
+    assert.deepEqual(metadataReads, ['stream-a']);
     assert.deepEqual(fileOperations, [
       {
         operation: 'pack',

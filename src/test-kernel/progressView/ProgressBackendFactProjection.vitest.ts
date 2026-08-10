@@ -489,30 +489,24 @@ describe('ProgressBackend', () => {
     );
     expect(second.backend.state.streamStatus.get(firstStream)).toBeUndefined();
 
-    expect(first.backend.state.snapshots.getExecutionId(firstStream)).toBe(
-      firstExecution,
-    );
     expect(
-      first.backend.state.snapshots.getExecutionId(secondStream),
-    ).toBeUndefined();
-    expect(second.backend.state.snapshots.getExecutionId(secondStream)).toBe(
-      secondExecution,
-    );
+      first.backend.state.snapshots.getRunMetadata(firstStream),
+    ).toMatchObject({
+      description: 'first window run',
+      executionId: firstExecution,
+    });
     expect(
-      second.backend.state.snapshots.getExecutionId(firstStream),
-    ).toBeUndefined();
-    expect(first.backend.state.snapshots.getDescription(firstStream)).toBe(
-      'first window run',
-    );
+      first.backend.state.snapshots.getRunMetadata(secondStream),
+    ).toMatchObject({ description: undefined, executionId: undefined });
     expect(
-      first.backend.state.snapshots.getDescription(secondStream),
-    ).toBeUndefined();
-    expect(second.backend.state.snapshots.getDescription(secondStream)).toBe(
-      'second window run',
-    );
+      second.backend.state.snapshots.getRunMetadata(secondStream),
+    ).toMatchObject({
+      description: 'second window run',
+      executionId: secondExecution,
+    });
     expect(
-      second.backend.state.snapshots.getDescription(firstStream),
-    ).toBeUndefined();
+      second.backend.state.snapshots.getRunMetadata(firstStream),
+    ).toMatchObject({ description: undefined, executionId: undefined });
 
     expect(first.backend.state.streamLogs.get(firstStream)?.size).toBe(1);
     expect(first.backend.state.streamLogs.get(secondStream)).toBeUndefined();

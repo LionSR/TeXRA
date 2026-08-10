@@ -10,7 +10,11 @@ import {
 } from '@agent/storage/executionLease';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import { RUN_OUTCOME } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
+} from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
@@ -98,10 +102,17 @@ export async function runAgent(
     ? await applyHelperModelPreference(request.config)
     : request.config;
 
+  const userFollowUpSupport =
+    config.agentCategory === AgentCategory.ToolUse &&
+    executeAgentOptions.stopAfterCycle !== true
+      ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+      : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+
   if (shouldRegister) {
     await registerExecution(executionId, config, config.agent, {
       streamId: getStreamTabId(config.agent, { executionId }),
       identity: { kind: 'agent', agent: config.agent },
+      userFollowUpSupport,
     });
   } else {
     const lease = await acquireResumedExecutionLease(
@@ -131,6 +142,7 @@ export async function runAgent(
         }
         const result = await executeAgent(config, executionId, {
           ...executeAgentOptions,
+          userFollowUpSupport,
           onRun: async (handle) => {
             lifecycleStarted = true;
             await callerOnRun?.(handle);

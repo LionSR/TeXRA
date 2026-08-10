@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - controllers
 import {
@@ -51,9 +51,8 @@ function createDeps(
   return {
     state: {
       getActiveStream: () => '',
-      getExecutionId: () => undefined,
+      getRunMetadata: () => ({}),
       getOutputFiles: () => ({}),
-      getAgentModel: () => undefined,
     },
     host,
     sendFollowUp: async () => {},
@@ -104,11 +103,14 @@ describe('ProgressWorkflowFileActionsController', () => {
         throw failure;
       },
     });
-    deps.state.getExecutionId = () => 'run-1';
+    const getRunMetadata = vi.fn(() => ({ executionId: 'run-1' }));
+    deps.state.getRunMetadata = getRunMetadata;
     const controller = new ProgressWorkflowFileActionsController(deps);
 
     await controller.openTaskStorage('toolUse');
 
+    expect(getRunMetadata).toHaveBeenCalledOnce();
+    expect(getRunMetadata).toHaveBeenCalledWith('toolUse');
     expect(deps.host.errors).toEqual([
       'Failed to open task storage folder: cannot reveal folder',
     ]);

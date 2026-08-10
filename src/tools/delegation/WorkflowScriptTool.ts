@@ -20,7 +20,12 @@ import {
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import type { AgentEntry } from '@agent/index/agentRegistry';
-import { AgentCategory, RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -388,6 +393,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         {
           streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
           identity: { kind: 'multiAgentWorkflow', workflowName: meta.name },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           parentExecutionId: runScope.executionId,
           description: childStreamDescription(meta.description),
         },
@@ -442,6 +448,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           {
             streamPrefix: STREAM_PREFIX,
             run: { kind: 'multiAgentWorkflow', workflowName: meta.name },
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             description: meta.description,
             config: runConfig,
           },

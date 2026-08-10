@@ -6,6 +6,7 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { unique } from '@utils/core';
 
 export interface WorkflowDiffRequest {
@@ -32,8 +33,7 @@ export interface WorkflowFileOperationRequest {
 }
 
 interface ProgressWorkflowActionsState {
-  getRunConfig(stream: StreamTabId): AgentConfig | undefined;
-  getExecutionId(stream: StreamTabId): string | undefined;
+  getRunMetadata(stream: StreamTabId): RunMetadata;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
@@ -51,7 +51,7 @@ export class ProgressWorkflowActionsController {
   constructor(private readonly deps: ProgressWorkflowActionsControllerDeps) {}
 
   async diffStream(stream: StreamTabId): Promise<void> {
-    await this.withWorkflowConfig(stream, async (config) => {
+    await this.withWorkflowConfig(stream, async (config, executionId) => {
       // Round keys are non-negative integers by construction (enforced by
       // the shared RoundKeySchema at every write into the snapshot store's
       // accumulator — see `@shared/schemas/roundIndexed.ts`), so this record
@@ -70,7 +70,7 @@ export class ProgressWorkflowActionsController {
         outputFiles: config.outputFiles,
         outputFilesActive: config.outputFiles.length > 0,
         streamId: stream,
-        runId: this.deps.state.getExecutionId(stream),
+        runId: executionId,
         outputsByRound,
       });
     });
@@ -80,9 +80,8 @@ export class ProgressWorkflowActionsController {
     stream: StreamTabId,
     operation: WorkflowFileOperation,
   ): Promise<void> {
-    await this.withWorkflowConfig(stream, async (config) => {
+    await this.withWorkflowConfig(stream, async (config, executionId) => {
       const outputFiles = this.resolveOutputFiles(stream, config);
-      const executionId = this.deps.state.getExecutionId(stream);
 
       await this.deps.runFileOperation(operation, {
         streamId: stream,
@@ -98,12 +97,12 @@ export class ProgressWorkflowActionsController {
 
   private async withWorkflowConfig(
     stream: StreamTabId,
-    action: (config: AgentConfig) => Promise<void>,
+    action: (config: AgentConfig, executionId?: string) => Promise<void>,
   ): Promise<void> {
-    const config = this.deps.state.getRunConfig(stream);
+    const { config, executionId } = this.deps.state.getRunMetadata(stream);
     if (!config || config.agentCategory !== AgentCategory.Workflow) return;
 
-    await action(config);
+    await action(config, executionId);
   }
 
   private resolveOutputFiles(

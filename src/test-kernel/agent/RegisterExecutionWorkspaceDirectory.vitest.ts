@@ -5,6 +5,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -86,6 +87,7 @@ describe('execution lifecycle', () => {
     await registerExecution(executionId, baseConfig, 'chat', {
       streamId: 'chat@deepseekT#abc123' as StreamTabId,
       identity: { kind: 'agent', agent: 'chat' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
 
     expect(mocks.writeRunRecord).toHaveBeenCalledWith({
@@ -98,6 +100,7 @@ describe('execution lifecycle', () => {
       streamId: 'chat@deepseekT#abc123',
       parentExecutionId: undefined,
       identity: { kind: 'agent', agent: 'chat' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
     await finalizeExecution({
       executionId,
@@ -131,6 +134,7 @@ describe('execution lifecycle', () => {
       registerExecution(executionId, baseConfig, 'chat', {
         streamId: 'chat@deepseekT#abc124' as StreamTabId,
         identity: { kind: 'agent', agent: 'chat' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       }),
     ).rejects.toThrow(error);
 

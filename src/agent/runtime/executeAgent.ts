@@ -16,6 +16,7 @@ import {
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
   clearTerminalExecutionState,
+  getPersistedUserFollowUpSupport,
   hasPersistedParent,
 } from '@agent/storage/executionLifecycle';
 import {
@@ -30,6 +31,7 @@ import {
   type StreamTabId,
   type ExecutionId,
   type SubagentProgressUpdate,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   roundOutputsToCompileFailureSummaries,
@@ -218,6 +220,7 @@ function buildLifecycleOptions(
     isSubagent,
     parentStreamId: options.parentStreamId,
     workflowPhase: options.workflowPhase,
+    userFollowUpSupport: options.userFollowUpSupport,
     onError: options.onRunError,
     onRun: options.onRun,
   };
@@ -322,6 +325,8 @@ export interface SubagentRunOptions {
    * `RunFlowLifecycleOptions.workflowPhase`.
    */
   workflowPhase?: string;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  userFollowUpSupport?: UserFollowUpSupport;
 }
 
 /** Options for executeAgent. */
@@ -527,13 +532,17 @@ export async function resumeToolUseFromResumeData(
     // transfers its resources. Storage failures must propagate without leaving
     // an activated resume stream outside lifecycle cleanup.
     let isSubagent: boolean;
+    let userFollowUpSupport: UserFollowUpSupport;
     let ctx: AgentLaunchContext;
     try {
       // This execution is running again, so the terminal facts its previous
       // run left behind stop describing it here, before any turn of the
       // resumed run can write a result envelope for readers to project onto.
       await clearTerminalExecutionState(resume.executionId);
-      isSubagent = await hasPersistedParent(resume.executionId);
+      [isSubagent, userFollowUpSupport] = await Promise.all([
+        hasPersistedParent(resume.executionId),
+        getPersistedUserFollowUpSupport(resume.executionId),
+      ]);
       ctx = await buildAgentLaunchContext({
         config: resume.agentConfig,
         executionId: resume.executionId,
@@ -594,7 +603,10 @@ export async function resumeToolUseFromResumeData(
                     options.onCancellationAtFlowAttachment,
                 },
               ),
-            buildLifecycleOptions(options, isSubagent),
+            buildLifecycleOptions(
+              { ...options, userFollowUpSupport },
+              isSubagent,
+            ),
           );
         },
       );

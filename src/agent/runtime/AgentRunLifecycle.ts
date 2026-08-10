@@ -26,10 +26,12 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
   toRetryErrorInfo,
   type RetryErrorInfo,
   type RunOutcome,
   type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   isTerminalOutcomePhase,
@@ -66,6 +68,8 @@ export interface RunFlowLifecycleOptions {
    * has already emitted `child.activity`.
    */
   workflowPhase?: string;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  userFollowUpSupport?: UserFollowUpSupport;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
@@ -417,6 +421,8 @@ export async function runFlowWithLifecycle(
   const { streamId, executionId, session } = ctx.runScope;
   const agentIdentifier = ctx.config.agent;
   const parentStreamId = options?.parentStreamId ?? streamId;
+  const userFollowUpSupport =
+    options?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   const handle = new AgentExecutionHandle(
     {
       streamId,
@@ -622,6 +628,7 @@ export async function runFlowWithLifecycle(
       streamId,
       executionId,
       identity: handle.identity,
+      userFollowUpSupport,
     });
     ctx.logger.emit({
       type: 'run.config',

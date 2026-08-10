@@ -28,6 +28,7 @@ import {
   persistExternalInquiryAction,
 } from '@tools/inquiry/ExternalInquiryTool';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
+import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
 import type { ProgressApiKeyRetryController } from './ProgressApiKeyRetryController';
@@ -342,9 +343,10 @@ export interface ProgressViewSecondTierActions {
   };
   /** Session handle (for manual compaction). */
   readonly session: SessionHandle;
-  /** Look up a stream's run config from persisted snapshots. */
+  /** Look up one coherent run record for operations that need several facts. */
+  readonly getRunMetadata: (stream: StreamTabId) => RunMetadata;
+  /** Single-field lookup used only by follow-up polishing. */
   readonly getRunConfig: (stream: StreamTabId) => AgentConfig | undefined;
-  readonly getRunIdentity: (stream: StreamTabId) => RunIdentity | undefined;
   /**
    * Restore the run config of a completed run into the main view (the extension
    * routes through `texra.restoreState`; the desktop calls
@@ -480,11 +482,11 @@ export function createProgressViewSecondTierHandlers(
 
     // ── State restore ──
     [CMD.RESTORE_STATE]: async (data) => {
-      if (!isNativeAgentRun(deps.getRunIdentity(data.stream))) {
+      const { config, identity } = deps.getRunMetadata(data.stream);
+      if (!isNativeAgentRun(identity)) {
         await reportNonNativeRunRefusal(deps.host.showInfo, 'restored');
         return;
       }
-      const config = deps.getRunConfig(data.stream);
       if (!config) return;
       await deps.restoreRunConfig(config);
     },

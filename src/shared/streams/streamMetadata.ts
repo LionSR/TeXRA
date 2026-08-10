@@ -28,6 +28,7 @@ export function buildStreamMetadata(
     category: inputs.category,
     status: inputs.status ?? DEFAULT_STREAM_METADATA_STATUS,
     substate: inputs.substate,
+    userFollowUpSupport: inputs.userFollowUpSupport,
     lastTimestamp: inputs.lastTimestamp,
     conversationProgress: inputs.conversationProgress ?? {
       ...DEFAULT_CONVERSATION_PROGRESS,
