@@ -29,11 +29,6 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
-  getRunContextWorkingDirectory,
-} from '@agent/runtime/RunContext';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type {
@@ -44,7 +39,6 @@ import type {
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
-import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -57,10 +51,9 @@ import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { type ChildStream } from './delegation/childStream';
 import { CodexThreads } from './agentCliSessionStores';
 import {
+  dispatchAgentCliTool,
   launchAgentCliSession,
-  resumeOrLaunchAgentCliSession,
   startAgentCliLoop,
-  withAgentCliApproval,
 } from './agentCliShared';
 import {
   formatChildRunDelivery,
@@ -490,34 +483,27 @@ export class CodexTool extends defineTool({
       input.sandbox_mode = config.getCodexSandboxMode();
     }
 
-    return withAgentCliApproval(
-      'codex',
-      `[codex ${input.sandbox_mode}] ${input.prompt}`,
-      (runContext) => {
-        return resumeOrLaunchAgentCliSession(CodexThreads, {
-          id: input.thread_id ?? undefined,
-          prompt: input.prompt,
-          callerStreamId: getRunContextStreamId(runContext),
-          labels: {
-            notActiveLabel: 'Codex thread',
-            idParamName: 'thread_id',
-            summaryLabel: 'Codex',
-            queuedLabel: 'Codex thread',
-          },
-          launch: (releaseClaim) => {
-            // A missing in-memory entry denotes a disk-based SDK fallback.
-            const { streamId } = requireRunStream('codex', runContext);
-            return launchCodexSession(
-              input,
-              streamId,
-              getRunContextExecutionId(runContext),
-              getRunContextWorkingDirectory(runContext),
-              releaseClaim,
-            );
-          },
-        });
+    return dispatchAgentCliTool({
+      agentName: 'codex',
+      approvalLabel: `[codex ${input.sandbox_mode}] ${input.prompt}`,
+      store: CodexThreads,
+      resumeId: input.thread_id ?? undefined,
+      prompt: input.prompt,
+      labels: {
+        notActiveLabel: 'Codex thread',
+        idParamName: 'thread_id',
+        summaryLabel: 'Codex',
+        queuedLabel: 'Codex thread',
       },
-    );
+      launch: (context) =>
+        launchCodexSession(
+          input,
+          context.parentStreamId,
+          context.parentExecutionId,
+          context.parentWorkingDirectory,
+          context.releaseFallbackClaim,
+        ),
+    });
   }
 }
 
