@@ -55,7 +55,7 @@ prompts:
           \item Are there any mathematical reasonings or equations from the original version that are now missing?
           \item Are there any notations or quantities used before being defined?
           \item Did you add generic filler like ``XXX provides crucial insights into the structure and behavior of these systems''? Every added sentence must say something specific and substantive; use ``show not tell.''
-          \item Does any prose you added carry LLM tells (throat-clearing openers, buzzword adjectives, ``not only\ldots{} but also'' constructions, restated closing sentences, runs of same-shaped sentences, em dashes as the default pivot)? Rewrite those in plain human style.
+          \item Does every sentence you added read as plain technical English: concrete statements, plain verbs, varied rhythm, each point made once? Rewrite any that do not.
           \item Did you change anything NOT required by the instruction? If so, revert it.
       \end{itemize}
 
