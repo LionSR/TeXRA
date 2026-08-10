@@ -184,7 +184,7 @@ function withScriptReference(
  * Execute a durable, deterministic workflow script from an agent whose tool
  * list names it. Gated by the "Multi-Agent Workflow" dashboard switch (id
  * `workflow-script` in {@link @tools/externalToolDefs}), which
- * `resolveAgentTools()` enforces regardless of any agent's configured tools —
+ * `resolveAgentTools()` enforces regardless of any agent's configured tools -
  * new installs start with the switch off.
  */
 export class WorkflowScriptTool extends defineTool({
@@ -203,7 +203,7 @@ Script rules:
 - Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
 - Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Structured (tool-use) agent() calls do not accept file options.
 - Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase. Its logical identity is the explicit id when present, otherwise its call ordinal. Logical ids must be unique. Canonical labels prefer an explicit label, then a meaningful file and agent, then agent role and ordinal.
-- Awaiting: agent() and parallel() return Promises — await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
+- Awaiting: agent() and parallel() return Promises: await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
 - Failures: a failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
@@ -452,7 +452,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const runResult = runWithOwnership(async () => {
       // Attempt-scoped setup is inside the lease-protected try: it runs after
       // the deterministic run lease is held, so a throw here must release the
-      // lease — otherwise it survives to its heartbeat timeout and a prompt
+      // lease - otherwise it survives to its heartbeat timeout and a prompt
       // relaunch is refused.
       let runChildStreamId: StreamTabId;
       let runCompletion: Promise<void>;
