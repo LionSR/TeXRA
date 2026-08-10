@@ -24,6 +24,8 @@ import {
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
+import { writeSkill } from '@test/support/skillFixtures';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
   createFakePlatform,
   FakeConfigProvider,
@@ -96,6 +98,7 @@ describe('getToolFlags', () => {
 
 describe('buildUserVars runtime skill diagnostics', () => {
   const missingSource = '/missing/runtime-skill-source';
+  const tempRoots: string[] = [];
 
   beforeEach(() => {
     fakeConfig.set('texra.skills.enabled', true);
@@ -112,6 +115,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
   afterEach(async () => {
     setRuntimeSkillSources([]);
     await fakeConfig.update('texra.skills.enabled', undefined);
+    await cleanupTempDirs(tempRoots);
   });
 
   it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {
@@ -135,6 +139,42 @@ describe('buildUserVars runtime skill diagnostics', () => {
       type: 'skills.snapshot',
       skills: [],
     });
+  });
+
+  it('emits the raw accepted catalog without changing prompt membership', async () => {
+    const root = await makeTempDir('texra-user-vars-skills-', tempRoots);
+    const rawDescription =
+      'Use \u001b[31mcare\u001b[0m with clients/acme/private key.';
+    await writeSkill(
+      root,
+      'client-review',
+      { name: 'client-review', description: rawDescription },
+      'Apply the skill.',
+    );
+    setRuntimeSkillSources([{ scope: 'project', path: root }]);
+    const emit = vi.fn();
+
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      spiedTrace({ emit }),
+      { workspacePath: '/workspace' },
+    );
+
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      type: 'skills.snapshot',
+      skills: [
+        {
+          name: 'client-review',
+          description: rawDescription,
+          source: 'project',
+        },
+      ],
+    });
+    expect(vars.AVAILABLE_SKILLS).toContain('- client-review:');
   });
 
   it('does not publish a parent catalog for workflow runs', async () => {

@@ -20,12 +20,15 @@ const ANSI_ESCAPE_SEQUENCE =
   // eslint-disable-next-line no-control-regex -- untrusted summaries may contain terminal escapes
   /\u001b\][\s\S]*?(?:\u0007|\u001b\\|\u009c)|[\u001b\u009b][[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
 const ORDINARY_URL_VALUE = /\b(?!file:)[a-z][a-z0-9+.-]*:\/\/[^\s<>{}]+/gi;
-const FILESYSTEM_SHAPED_VALUE =
-  /(?:^|[^A-Za-z0-9_./\\-])(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|~(?:[A-Za-z0-9._-]+)?[\\/]|\.\.?[\\/]|\/)/i;
+const ORDINARY_SLASH_PROSE = /\binput\/output\b/gi;
 
 function containsFilesystemShapedValue(description: string): boolean {
-  const withoutOrdinaryUrls = description.replaceAll(ORDINARY_URL_VALUE, '');
-  return FILESYSTEM_SHAPED_VALUE.test(withoutOrdinaryUrls);
+  if (description.includes('\\')) return true;
+
+  const pathCandidates = description
+    .replaceAll(ORDINARY_URL_VALUE, '')
+    .replaceAll(ORDINARY_SLASH_PROSE, '');
+  return pathCandidates.includes('/');
 }
 
 /** Normalize untrusted frontmatter before it crosses the persistence boundary. */
@@ -52,11 +55,14 @@ export const ActiveSkillSummarySchema = z.strictObject({
 
 export type ActiveSkillSummary = z.infer<typeof ActiveSkillSummarySchema>;
 
-/** Canonical payload used by the live event and its persisted transcript row. */
+/** Accepted runtime metadata before the transcript boundary sanitizes it. */
+export type RawAcceptedSkill = Readonly<
+  z.input<typeof ActiveSkillSummarySchema>
+>;
+
+/** Canonical payload persisted in the transcript and projected by hosts. */
 export const ActiveSkillsSnapshotSchema = z.strictObject({
   skills: z
     .array(ActiveSkillSummarySchema)
     .max(ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS),
 });
-
-export type ActiveSkillsSnapshot = z.infer<typeof ActiveSkillsSnapshotSchema>;

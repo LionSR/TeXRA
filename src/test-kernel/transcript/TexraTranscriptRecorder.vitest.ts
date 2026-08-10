@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -11,6 +11,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
@@ -587,6 +592,13 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
 });
 
 describe('attachTranscriptRecorder active skills', () => {
+  const tempDirs: string[] = [];
+  setupPlatform(() => createTempDirPlatform('texra-recorder-', tempDirs));
+
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
+  });
+
   it('persists only sanitized summaries and lets the latest empty snapshot clear state', () => {
     const { trace, rows } = attachRecorder();
 
@@ -620,6 +632,48 @@ describe('attachTranscriptRecorder active skills', () => {
     expect(JSON.stringify(records[0]?.data)).not.toContain('baseDir');
     expect(JSON.stringify(records[0]?.data)).not.toContain('instructions');
     expect(records.at(-1)?.data).toStrictEqual({ skills: [] });
+  });
+
+  it('redacts summaries before truncating the disk projection', async () => {
+    const trace = new TraceEmitter();
+    const streamId = 'stream:skill-redaction' as StreamTabId;
+    const store = await StreamLogStore.open();
+    store.ensureStream(streamId);
+    const writer = store.acquireWriter(streamId, streamId);
+    const recorder = attachTranscriptRecorder(trace, writer);
+    const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
+    const providerKey = 'sk-proj-redaction-example-1234567890abcdef';
+
+    trace.emit({
+      type: 'skills.snapshot',
+      skills: [
+        {
+          name: 'credential-check',
+          description: `${descriptionPrefix}${providerKey}`,
+          source: 'project',
+        },
+      ],
+    });
+    recorder.unsubscribe();
+    writer.close();
+    await store.flush();
+
+    const reopened = await StreamLogStore.openReadOnly();
+    await reopened.ensureLoaded(streamId);
+    const persisted = reopened
+      .get(streamId)
+      ?.getRange(0)
+      .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;
+    expect(persisted).toStrictEqual({
+      skills: [
+        {
+          name: 'credential-check',
+          description: `${descriptionPrefix}[redacted]`,
+          source: 'project',
+        },
+      ],
+    });
+    expect(JSON.stringify(persisted)).not.toContain('sk-proj-red');
   });
 
   it('records fallback summaries for ANSI-only and controls-only descriptions', () => {

@@ -13,7 +13,7 @@ import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
 import type {
   ActiveChildInfo,
-  ActiveSkillsSnapshot,
+  RawAcceptedSkill,
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
@@ -143,9 +143,10 @@ interface WorkflowCallEvent extends StageStamp {
   readonly call: WorkflowCallProgress;
 }
 
-/** Exact safe skill catalog accepted for this run's initial prompt. */
-interface ActiveSkillsEvent extends StageStamp, ActiveSkillsSnapshot {
+/** Exact raw skill catalog accepted for this run's initial prompt. */
+interface ActiveSkillsEvent extends StageStamp {
   readonly type: 'skills.snapshot';
+  readonly skills: readonly RawAcceptedSkill[];
 }
 
 /** Token-usage report. */

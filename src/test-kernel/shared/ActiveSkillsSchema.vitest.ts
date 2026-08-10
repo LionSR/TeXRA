@@ -54,6 +54,24 @@ describe('active skill safe summaries', () => {
       'parent relative',
       '..\\Jane Doe\\Top Secret Draft\\final-private-notes.tex',
     ],
+    ['POSIX neutral names', 'clients/acme'],
+    ['POSIX extensionless two-component', 'private/key'],
+    ['POSIX hyphenated names', 'client-name/private-key'],
+    ['POSIX whitespace path', 'Client Name/private key'],
+    ['Windows neutral names', 'clients\\acme'],
+    ['Windows extensionless two-component', 'private\\key'],
+    ['Windows hyphenated names', 'client-name\\private-key'],
+    ['Windows whitespace path', 'Client Name\\private key'],
+    ['POSIX relative', 'secrets/client-name/key.pem'],
+    ['POSIX relative with spaces', 'secrets/Client Name/private key.pem'],
+    ['POSIX dotted directory', 'config.d/key.pem'],
+    ['POSIX hidden filename', 'secrets/.env'],
+    ['POSIX extensionless filename', 'secrets/credentials'],
+    ['Windows relative', 'secrets\\client-name\\key.pem'],
+    ['Windows relative with spaces', 'secrets\\Client Name\\private key.pem'],
+    ['Windows dotted directory', 'config.d\\key.pem'],
+    ['Windows hidden filename', 'secrets\\.env'],
+    ['Windows extensionless filename', 'secrets\\credentials'],
     [
       'file URI',
       'file:///Users/Jane Doe/Top Secret Draft/final-private-notes.tex',
@@ -80,20 +98,18 @@ describe('active skill safe summaries', () => {
     }
   });
 
-  it('fails closed when otherwise useful prose contains a path', () => {
-    expect(
-      parseDescription(
-        'Review the proof using /Users/Jane Doe/Top Secret Draft/final-private-notes.tex before publication.',
-      ),
-    ).toBe(DESCRIPTION_FALLBACK);
-    expect(
-      parseDescription(
-        'Compare against C:\\Users\\Jane Doe\\Top Secret Draft\\final-private-notes.tex before publication.',
-      ),
-    ).toBe(DESCRIPTION_FALLBACK);
+  it.each([
+    'Review the proof using /Users/Jane Doe/Top Secret Draft/final-private-notes.tex before publication.',
+    'Compare against C:\\Users\\Jane Doe\\Top Secret Draft\\final-private-notes.tex before publication.',
+    'Review clients/acme before publication.',
+    'Review clients\\acme before publication.',
+    'Load Client Name/private key before publication.',
+    'Load Client Name\\private key before publication.',
+  ])('fails closed when otherwise useful prose contains a path: %s', (text) => {
+    expect(parseDescription(text)).toBe(DESCRIPTION_FALLBACK);
   });
 
-  it('preserves ordinary URL schemes while stripping controls', () => {
+  it('preserves ordinary prose and URL schemes while stripping controls', () => {
     expect(
       parseDescription(
         'Read \u001b[31mhttps://example.com/docs/file.html\u001b[0m and custom+https://example.org/reference.',
@@ -101,6 +117,39 @@ describe('active skill safe summaries', () => {
     ).toBe(
       'Read https://example.com/docs/file.html and custom+https://example.org/reference.',
     );
+    expect(parseDescription('Compare input/output formatting choices.')).toBe(
+      'Compare input/output formatting choices.',
+    );
+    expect(parseDescription('Compare inputs/outputs formatting choices.')).toBe(
+      DESCRIPTION_FALLBACK,
+    );
+    expect(parseDescription('Compare input\\output formatting choices.')).toBe(
+      DESCRIPTION_FALLBACK,
+    );
+    expect(
+      parseDescription(
+        'Read https://example.com/config.d/key.pem, https://example.org/secrets/.env, and custom+https://example.net/secrets/credentials.',
+      ),
+    ).toBe(
+      'Read https://example.com/config.d/key.pem, https://example.org/secrets/.env, and custom+https://example.net/secrets/credentials.',
+    );
+    expect(
+      parseDescription(
+        'Search https://example.com/find?q=proof%20audit&sort=name#result:top, then continue.',
+      ),
+    ).toBe(
+      'Search https://example.com/find?q=proof%20audit&sort=name#result:top, then continue.',
+    );
+    expect(parseDescription('Visit https://example.com for details.')).toBe(
+      'Visit https://example.com for details.',
+    );
+  });
+
+  it.each([
+    'Read https://example.com\\C:\\Users\\Jane\\secret.tex before continuing.',
+    'Read https://example.com/docs?source=C:\\Users\\Jane\\secret.tex.',
+  ])('rejects a URL followed by or containing a Windows path: %s', (text) => {
+    expect(parseDescription(text)).toBe(DESCRIPTION_FALLBACK);
   });
 
   it('uses the same fallback when sanitization removes all content', () => {

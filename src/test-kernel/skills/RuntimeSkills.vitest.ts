@@ -94,7 +94,7 @@ describe('runtime skills', () => {
     expect(result.issues).toEqual([]);
   });
 
-  it('sanitizes the accepted summary before prompt-boundary emission', async () => {
+  it('preserves raw descriptions in the accepted runtime projection', async () => {
     const root = await createTempRoot();
     await writeSkill(
       root,
@@ -113,13 +113,14 @@ describe('runtime skills', () => {
     expect(result.skills).toStrictEqual([
       {
         name: 'safe-summary',
-        description: 'Details available on activation.',
+        description:
+          'Use \u001b[31mcare\u001b[0m with C:\\Users\\Jane Doe\\secret.tex and ./private/key.pem.',
         source: 'project',
       },
     ]);
   });
 
-  it('keeps ANSI-only and controls-only skills with safe fallback summaries', async () => {
+  it('keeps ANSI-only and controls-only skills in the raw accepted projection', async () => {
     const root = await createTempRoot();
     const descriptions = [
       ['ansi-only', '"\\u001b[31m\\u001b[0m"'],
@@ -140,12 +141,12 @@ describe('runtime skills', () => {
     expect(result.skills).toStrictEqual([
       {
         name: 'ansi-only',
-        description: 'Details available on activation.',
+        description: '\u001b[31m\u001b[0m',
         source: 'project',
       },
       {
         name: 'controls-only',
-        description: 'Details available on activation.',
+        description: '\u0001\u0002\u007f\u009b',
         source: 'project',
       },
     ]);
