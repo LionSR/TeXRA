@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowCallLine,
+  workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 
@@ -59,6 +60,27 @@ describe('workflow call copy', () => {
 
   it('counts an empty phase as no work rather than complete', () => {
     expect(workflowPhaseCallProgress([])).toEqual({ done: 0, total: 0 });
+  });
+
+  it('tallys no failures for a clean or empty run', () => {
+    expect(workflowCallFailureTally([])).toEqual({ failed: 0 });
+    expect(
+      workflowCallFailureTally([
+        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
+        { id: 'b', label: 'B', status: 'running' },
+      ]),
+    ).toEqual({ failed: 0 });
+  });
+
+  it('tallys only failed calls across a mixed run', () => {
+    expect(
+      workflowCallFailureTally([
+        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
+        { id: 'b', label: 'B', status: 'failed', error: 'boom' },
+        { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
+        { id: 'd', label: 'D', status: 'failed', error: 'also boom' },
+      ]),
+    ).toEqual({ failed: 2 });
   });
 
   it('counts every terminal status as done, not just completions', () => {
