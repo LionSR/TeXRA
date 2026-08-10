@@ -28,12 +28,13 @@ const RUNNING_TITLE_INTERVAL_MS = 500;
 export function terminalTitleText(
   cwd: string,
   state: SessionTitleState = 'idle',
+  activityDetail?: string,
 ): string {
   const project = sanitizePathSegment(basename(cwd), {
     invalidCharPattern: TITLE_INVALID_CHARS,
     replacement: '',
   });
-  return formatSessionTitle(project, state);
+  return formatSessionTitle(project, state, activityDetail);
 }
 
 /** Write the title only when terminal capability discovery admitted OSC. */
@@ -81,10 +82,7 @@ export function installTerminalTitleUpdates(cwd: string) {
     writeTerminalTitle(title);
   };
   const runningTitle = (): string =>
-    terminalTitleText(cwd, 'running').replace(
-      'Running',
-      `Running ${RUNNING_TITLE_FRAMES[runningFrame]}`,
-    );
+    terminalTitleText(cwd, 'running', RUNNING_TITLE_FRAMES[runningFrame]);
   const startRunningAnimation = (): void => {
     if (runningTimer !== undefined) return;
     if (!terminalCapabilities.get().oscColorReports) return;
