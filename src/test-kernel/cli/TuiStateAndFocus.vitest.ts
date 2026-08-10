@@ -3160,8 +3160,8 @@ describe('sessionSignalsAdapter run facts', () => {
     }
   });
 
-  it('reads typed updateTodos facts from the canonical snapshot store', async () => {
-    await withRunFactsAsync(async (hub) => {
+  it('applies typed updateTodos run facts without host emission', () => {
+    withRunFacts((hub) => {
       const todos: TodoItem[] = [
         {
           content: 'State the compactness lemma',
@@ -3170,8 +3170,6 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       ];
 
-      patchStream(root, (slice) => ({ ...slice }));
-      activeStreamId.set(root);
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3182,20 +3180,17 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      await waitFor(() => streams.get().get(root)?.todos.length === 1);
       expect(streams.get().get(root)?.todos).toEqual(todos);
     });
   });
 
-  it('reads typed updatePlan facts from the canonical snapshot store', async () => {
-    await withRunFactsAsync(async (hub) => {
+  it('applies typed updatePlan run facts without host emission', () => {
+    withRunFacts((hub) => {
       const plan: Plan = {
         objective:
           'Prove the local estimate and record the stopping criterion.',
       };
 
-      patchStream(root, (slice) => ({ ...slice }));
-      activeStreamId.set(root);
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3206,15 +3201,12 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      await waitFor(
-        () => streams.get().get(root)?.plan?.objective === plan.objective,
-      );
       expect(streams.get().get(root)?.plan).toEqual(plan);
     });
   });
 
-  it('keeps a captured work-plan reader synchronized after focus moves', async () => {
-    await withRunFactsAsync(async (hub) => {
+  it('keeps a captured work-plan reader synchronized after focus moves', () => {
+    withRunFacts((hub) => {
       const nextPlan: Plan = { objective: 'Updated reader objective.' };
       const nextTodos: TodoItem[] = [
         {
@@ -3247,11 +3239,6 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      await waitFor(
-        () =>
-          streams.get().get(root)?.plan?.objective === nextPlan.objective &&
-          streams.get().get(root)?.todos.length === 1,
-      );
       expect(streams.get().get(root)).toMatchObject({
         plan: nextPlan,
         todos: nextTodos,

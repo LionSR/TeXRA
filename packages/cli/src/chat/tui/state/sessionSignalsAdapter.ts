@@ -20,10 +20,12 @@ import {
   type ConversationProgress,
   type GoalStatus,
   type InquiryThreadUpdatedEvent,
+  type Plan,
   type StreamPhase,
   type StreamStage,
   type StreamSubstate,
   type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import {
   activeStreamId,
@@ -268,36 +270,22 @@ class TuiSessionRenderer implements SessionRendererPort {
     }));
   }
 
-  /**
-   * Project the store-accumulated work plan into the TUI slice.
-   * The snapshot store folds the fact before this callback runs (it
-   * subscribes first at SessionHandle construction), so live updates read
-   * the accumulator synchronously — same pattern as onCompileFailuresChanged.
-   * Disk preload belongs only to focus/`/plan` hydration, not every delta.
-   */
-  private syncWorkPlan(streamId: StreamTabId): void {
-    if (isCliStreamRetired(streamId) || isChildStreamRemoved(streamId)) {
-      return;
-    }
-    const { todos, plan } = this.snapshots.getWorkPlan(streamId);
+  // Live todos/plan use the event payload (same as LitSessionRenderer). The
+  // snapshot store may still be queueing the write until a stream is seeded,
+  // so getWorkPlan is not a reliable synchronous read here. Disk preload stays
+  // on the focus/`/plan` hydration path only.
+  onTodosChanged(streamId: StreamTabId, todos: TodoItem[]): void {
+    if (this.isStaleDispatch(streamId)) return;
     patchStream(streamId, (slice) =>
-      isDeepStrictEqual(
-        { todos: slice.todos, plan: slice.plan },
-        { todos, plan },
-      )
-        ? slice
-        : { ...slice, todos, plan },
+      isDeepStrictEqual(slice.todos, todos) ? slice : { ...slice, todos },
     );
   }
 
-  onTodosChanged(streamId: StreamTabId): void {
+  onPlanChanged(streamId: StreamTabId, plan: Plan | null): void {
     if (this.isStaleDispatch(streamId)) return;
-    this.syncWorkPlan(streamId);
-  }
-
-  onPlanChanged(streamId: StreamTabId): void {
-    if (this.isStaleDispatch(streamId)) return;
-    this.syncWorkPlan(streamId);
+    patchStream(streamId, (slice) =>
+      isDeepStrictEqual(slice.plan, plan) ? slice : { ...slice, plan },
+    );
   }
 
   onQueuedFollowUpsChanged(streamId: StreamTabId): void {
