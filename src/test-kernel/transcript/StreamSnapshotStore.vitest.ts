@@ -820,6 +820,39 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('returns work-plan updates immediately for streams outside a partial preload without erasing disk plans', async () => {
+    const priorPlan: Plan = { objective: 'Prior durable objective.' };
+    await writeStreamFile(OTHER_STREAM, 'workPlan.json', {
+      schemaVersion: 1,
+      todos: [TODO],
+      plan: priorPlan,
+      planSummary: 'Prior durable objective.',
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    const liveTodo: TodoItem = {
+      content: 'Live todo',
+      status: 'in_progress',
+      activeForm: 'Working the live todo',
+    };
+    snapshotFacts(store).setPlan(OTHER_STREAM, PLAN);
+    snapshotFacts(store).setTodos(OTHER_STREAM, [liveTodo]);
+    // Eager overlay so hydrate/preload cannot clobber live TUI plan state.
+    expect(store.getWorkPlan(OTHER_STREAM)).toMatchObject({
+      plan: PLAN,
+      todos: [liveTodo],
+    });
+    await store.flush();
+
+    const raw = await readStreamFile(OTHER_STREAM, 'workPlan.json');
+    expect(raw).toMatchObject({
+      plan: PLAN,
+      todos: [liveTodo],
+    });
+  });
+
   it('makes task state readable immediately while preserving later seeded sidecars', async () => {
     await writeStreamFile(STREAM, 'usageStats.json', {
       [RUN]: usage(100, 20, 0.5),
