@@ -8,9 +8,12 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
+  beginWorkPlanReaderRequest,
   closeInfoPane,
   type ConversationEntry,
+  finishWorkPlanReaderRequest,
   focusStream,
+  foregroundReader,
   infoPane,
   openInfoPane,
   rootRunPending,
@@ -350,10 +353,7 @@ function toolEntry(
   } as const;
 }
 
-/** Run `body` with a TUI run-fact subscription attached to a fresh hub. The
- *  snapshot store attaches to the hub first — mirroring production, where the
- *  session attaches its store at construction — so the TUI projection reads
- *  accumulated artifact/usage state the store has already folded in. */
+/** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
 function withRunFacts(
   body: (hub: SessionEventHub, session: SessionHandle) => void,
 ): void {
@@ -476,6 +476,15 @@ describe('cliState stream, focus, and child-edge fields', () => {
     expect(activeStreamId.get()).toBeUndefined();
     focusStream(child1, { onlyIfUnset: true });
     expect(activeStreamId.get()).toBeUndefined();
+  });
+
+  it('closes a foreground reader when its captured stream is removed', () => {
+    mintSlice(child1);
+    finishWorkPlanReaderRequest(beginWorkPlanReaderRequest(child1));
+
+    removeStream(child1);
+
+    expect(foregroundReader.get()).toBeUndefined();
   });
 
   it('refuses focus for a stream retired by a session reset', () => {
@@ -1041,7 +1050,7 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('shows todo and plan chrome only while a stream is active', () => {
+  it('keeps unfinished todo and plan chrome across stream phases', () => {
     const openTodo = {
       content: 'Check the live proof',
       activeForm: 'Checking the live proof',
@@ -1051,7 +1060,6 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        status: STREAM_PHASE.RUNNING,
         todos: [openTodo],
       }),
     ).toBe(true);
@@ -1059,7 +1067,6 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: true,
-        status: STREAM_PHASE.RUNNING,
         todos: [],
       }),
     ).toBe(true);
@@ -1067,23 +1074,20 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        status: STREAM_PHASE.WAITING,
         todos: [openTodo],
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        status: STREAM_PHASE.COMPLETED,
         todos: [openTodo],
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: true,
         hasPlan: false,
-        status: STREAM_PHASE.RUNNING,
         todos: [openTodo],
       }),
     ).toBe(false);
@@ -1091,7 +1095,6 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        status: STREAM_PHASE.RUNNING,
         todos: [],
       }),
     ).toBe(false);
@@ -1099,7 +1102,6 @@ describe('CLI TUI row allocation', () => {
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: true,
-        status: STREAM_PHASE.RUNNING,
         todos: [
           {
             content: 'Finish the old goal',
@@ -1108,7 +1110,7 @@ describe('CLI TUI row allocation', () => {
           },
         ],
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('only reports a chat run interruptible after stream resolution', () => {
@@ -3190,6 +3192,51 @@ describe('sessionSignalsAdapter run facts', () => {
       });
 
       expect(streams.get().get(root)?.plan).toEqual(plan);
+    });
+  });
+
+  it('keeps a captured work-plan reader synchronized after focus moves', () => {
+    withRunFacts((hub) => {
+      const nextPlan: Plan = { objective: 'Updated reader objective.' };
+      const nextTodos: TodoItem[] = [
+        {
+          content: 'Refresh the captured reader',
+          status: TODO_STATUS.IN_PROGRESS,
+          activeForm: 'Refreshing the captured reader',
+        },
+      ];
+
+      patchStream(root, (slice) => ({ ...slice }));
+      patchStream(child1, (slice) => ({ ...slice }));
+      finishWorkPlanReaderRequest(beginWorkPlanReaderRequest(root));
+      activeStreamId.set(child1);
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updatePlan',
+          streamId: root,
+          plan: nextPlan,
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateTodos',
+          streamId: root,
+          todos: nextTodos,
+        },
+      });
+
+      expect(streams.get().get(root)).toMatchObject({
+        plan: nextPlan,
+        todos: nextTodos,
+      });
+      expect(foregroundReader.get()).toEqual({
+        kind: 'workPlan',
+        streamId: root,
+      });
     });
   });
 
