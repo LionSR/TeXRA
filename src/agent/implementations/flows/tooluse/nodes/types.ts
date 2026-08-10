@@ -122,7 +122,7 @@ export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
 };
 
-export type SharedStateMigrationResult =
+type SharedStateMigrationResult =
   | { success: true; data: ToolUseRunShared; migrated: boolean }
   | { success: false; error: z.ZodError };
 

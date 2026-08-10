@@ -21,9 +21,19 @@ import type {
   ClaudeAgentEffort,
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
+  CodexApprovalPolicy,
+  CodexReasoningEffort,
+  CodexSandboxMode,
 } from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { CLAUDE_AGENT_DEFAULT_MODEL } from '@shared/schemas/agentCliSettings';
+import {
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+} from '@shared/schemas/agentCliSettings';
 import { readSelectValue } from '@shared/utils/selectTemplates';
 
 // Local imports - catalog-driven settings rows
@@ -91,14 +101,19 @@ export class AIAgentsTab extends LitElement {
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
-  @property({ type: String }) codexSandboxMode = 'workspace-write';
-  @property({ type: String }) codexReasoningEffort = 'high';
-  @property({ type: String }) codexApprovalPolicy = 'never';
+  @property({ type: String }) codexSandboxMode: CodexSandboxMode =
+    CODEX_SANDBOX_MODE_DEFAULT;
+  @property({ type: String }) codexReasoningEffort: CodexReasoningEffort =
+    CODEX_REASONING_EFFORT_DEFAULT;
+  @property({ type: String }) codexApprovalPolicy: CodexApprovalPolicy =
+    CODEX_APPROVAL_POLICY_DEFAULT;
   @property({ type: String }) claudeAgentModel: ClaudeAgentModel =
     CLAUDE_AGENT_DEFAULT_MODEL;
   @property({ type: String })
-  claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
-  @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
+  claudeAgentPermissionMode: ClaudeAgentPermissionMode =
+    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE;
+  @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort =
+    CLAUDE_AGENT_DEFAULT_EFFORT;
 
   /**
    * One catalog-backed select row: the allowed values and their labels come

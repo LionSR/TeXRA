@@ -94,7 +94,7 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
   }),
 ]);
 
-export type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
+type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
 
 export class PlanTool extends defineTool({
   name: 'plan',

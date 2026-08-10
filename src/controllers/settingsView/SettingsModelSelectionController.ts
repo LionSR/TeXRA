@@ -186,8 +186,9 @@ export class SettingsModelSelectionController {
     // uses. Passing an explicit list keeps the picker's view authoritative and
     // avoids re-deriving availability at render time. Copilot routes are not
     // candidates: they are transports for the canonical base models (#9635).
-    const configs = new Map<string, ModelConfig>(staticModelConfigEntries());
-    const candidates = staticModelConfigEntries()
+    const configEntries = staticModelConfigEntries();
+    const configs = new Map<string, ModelConfig>(configEntries);
+    const candidates = configEntries
       .filter(
         ([, config]) =>
           config.provider !== ModelProvider.COPILOT &&

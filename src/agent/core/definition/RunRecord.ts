@@ -18,8 +18,6 @@ const NonAgentRunRecordSchema = z.strictObject({
   model: z.string().optional(),
 });
 
-type NonAgentRunRecord = z.infer<typeof NonAgentRunRecordSchema>;
-
 /**
  * The one persisted shape of `executions/{id}/config.json`: a real
  * `AgentConfig` for agent runs, the honest minimal record for everything
@@ -34,7 +32,7 @@ export const RunRecordSchema = z.union([
   AgentConfigSchema,
 ]);
 
-export type RunRecord = AgentConfig | NonAgentRunRecord;
+export type RunRecord = z.infer<typeof RunRecordSchema>;
 
 export function isAgentRunRecord(record: RunRecord): record is AgentConfig {
   return 'agentCategory' in record;

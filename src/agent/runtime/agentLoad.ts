@@ -26,12 +26,9 @@ import { resolveAgentSettingTools } from './agentSettingTools';
 
 const CHANNEL = 'agentLoad';
 
-interface ValidAgentDefinition {
+export interface AgentYamlValidationResult {
   name: string;
   settings: AgentSettingInput;
-}
-
-export interface AgentYamlValidationResult extends ValidAgentDefinition {
   prompts: AgentPromptInput;
 }
 

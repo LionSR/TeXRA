@@ -17,11 +17,6 @@ export type ChildRunDeliveryResult =
 export type ChildRunReportResult =
   { kind: 'persisted' } | { kind: 'failed'; err: unknown };
 
-export type ChildRunResultMetaResult =
-  | { kind: 'persisted' }
-  | { kind: 'skipped' }
-  | { kind: 'failed'; err: unknown };
-
 export async function persistChildRunReport(
   executionId: ExecutionId,
   message: string,
@@ -36,9 +31,8 @@ export async function persistChildRunReport(
 
 export async function persistChildRunResultMeta(
   executionId: ExecutionId,
-  resultMeta: ResultMeta | undefined,
-): Promise<ChildRunResultMetaResult> {
-  if (!resultMeta) return { kind: 'skipped' };
+  resultMeta: ResultMeta,
+): Promise<ChildRunReportResult> {
   try {
     await getExecutionStore(executionId).writeResultMeta(resultMeta);
     return { kind: 'persisted' };

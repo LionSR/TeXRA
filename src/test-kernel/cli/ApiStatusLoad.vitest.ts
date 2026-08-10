@@ -69,8 +69,6 @@ const {
   loadCliDetailedAccountStatusLines,
   loadCliModelAccessOverview,
 } = await import('@cli/runtime/apiStatus');
-const { loadCliAccountStatusLines } =
-  await import('@cli/chat/tui/commands/handlers/statusAssembly');
 
 function lineFor(lines: readonly string[], route: string): string {
   const matches = lines.filter((line) => line.startsWith(`${route}:`));
@@ -105,7 +103,7 @@ function useIncludedAccessStatus(): void {
 function accountStatusLines(
   apiMode: 'personal' | 'included',
 ): Promise<string[]> {
-  return loadCliAccountStatusLines({ apiMode, includeApiDetails: true });
+  return loadCliDetailedAccountStatusLines({ apiMode });
 }
 
 describe('loadCliApiStatusLines', () => {

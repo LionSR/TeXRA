@@ -76,23 +76,6 @@ function createUsageRecordingCallback(
   };
 }
 
-function wrapOnFollowUpConsumed(
-  ctx: AgentLaunchContext,
-  onFollowUpConsumed?: () => void,
-): () => void {
-  return () => {
-    const { streamId: runStreamId, session: runSession } = ctx.runScope;
-    runSession.events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateQueuedFollowUps',
-        payload: { streamId: runStreamId },
-      },
-    });
-    onFollowUpConsumed?.();
-  };
-}
-
 /**
  * The wiring the two tool-use entry points genuinely do not share. Everything
  * outside this union is assembled once in {@link launchToolUseRun}, so a field
@@ -156,10 +139,16 @@ async function launchToolUseRun(
         }
         shared.onProgress?.(update);
       },
-      onFollowUpConsumed: wrapOnFollowUpConsumed(
-        ctx,
-        shared.onFollowUpConsumed,
-      ),
+      onFollowUpConsumed: () => {
+        ctx.runScope.session.events.emit({
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId: ctx.runScope.streamId },
+          },
+        });
+        shared.onFollowUpConsumed?.();
+      },
       onFlowRecordDisposition: (disposition) =>
         lifecycle.setFlowRecordDisposition(disposition),
       onModelChanged: (model) => {

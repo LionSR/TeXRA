@@ -74,20 +74,6 @@ function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   return result.data.cost;
 }
 
-/**
- * Sum completed logical-call cost. Failed and cancelled attempts are not
- * journaled. Every entry is validated.
- */
-export function sumCompletedWorkflowJournalCost(
-  journal: readonly WorkflowJournalEntry[],
-): number {
-  let total = 0;
-  for (const entry of journal) {
-    total += workflowJournalEntryCost(entry);
-  }
-  return total;
-}
-
 type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
 
 function workflowAttemptIdentity(invocation: WorkflowAttemptIdentity): string {

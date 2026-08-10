@@ -32,9 +32,7 @@ const ExtractBibliographyInputSchema = z.strictObject({
     .nullish(),
 });
 
-export type ExtractBibliographyInput = z.infer<
-  typeof ExtractBibliographyInputSchema
->;
+type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 

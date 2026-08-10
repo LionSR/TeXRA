@@ -11,8 +11,10 @@ type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
 };
 
 /**
- * Base class for streaming aggregators that support reasoning models.
- * Used by DeepSeek, Kimi, and other OpenAI-compatible reasoning models.
+ * Streaming aggregator for OpenAI-compatible reasoning models (DeepSeek,
+ * Kimi, GLM, MiniMax). Despite the historical "Base" name it has no
+ * subclasses; `ModelHandlerOpenAI.executeStreamingChat` instantiates it
+ * directly when the reasoning aggregator is enabled.
  */
 export class BaseReasoningStreamAggregator extends ChannelStreamAggregator {
   private lastChunkWithChoices: ChatCompletionChunk | undefined;

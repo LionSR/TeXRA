@@ -174,18 +174,18 @@ interface RoundOverlay<T> {
   patch: Map<number, T[] | null>;
 }
 
-/**
- * The overlay patch each accumulator records while its stream is unseeded,
- * keyed by accumulator. One map keyed by field name lets
- * {@link StreamSnapshotStore.mutateWithOverlay} take the field name instead of
- * a getter/setter pair per call site.
- */
 /** Partial work-plan fields recorded while a stream is unseeded. */
 interface WorkPlanOverlay {
   todos?: readonly TodoItem[];
   plan?: Plan | null;
 }
 
+/**
+ * The overlay patch each accumulator records while its stream is unseeded,
+ * keyed by accumulator. One map keyed by field name lets
+ * {@link StreamSnapshotStore.mutateWithOverlay} take the field name instead of
+ * a getter/setter pair per call site.
+ */
 interface OverlayPatches {
   outputFiles: OutputFilesPatch;
   missingOutputs: RoundOverlay<string>;

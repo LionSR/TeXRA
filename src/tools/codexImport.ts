@@ -136,27 +136,3 @@ export const findCodexBinaryPath = createCachedBinaryResolver(() => {
     pathCommand: 'codex',
   };
 });
-
-/**
- * Locate Codex inside an Electron packaged app's unpacked resources directory.
- *
- * `resourcesPath` should be Electron's `process.resourcesPath`; the expected
- * binary location is:
- *
- *   resources/app.asar.unpacked/node_modules/@openai/<platform-package>/...
- */
-export async function findCodexBinaryInElectronResources(
-  resourcesPath: string,
-): Promise<string | undefined> {
-  const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
-  if (!info) return undefined;
-
-  const platformPkgDir = path.join(
-    resourcesPath,
-    'app.asar.unpacked',
-    'node_modules',
-    ...info.pkg.split('/'),
-  );
-
-  return codexBinaryInPlatformPackage(platformPkgDir, info);
-}

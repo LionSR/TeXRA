@@ -19,14 +19,9 @@ export interface FileDialogOptions {
   filters: { [name: string]: string[] };
   /** Current file path relative to workspace (used to compute defaultUri) */
   currentFile?: string;
-  /** Optional defaultUri to use directly */
-  defaultUri?: vscode.Uri | null;
 }
 
 function computeDefaultUri(options: FileDialogOptions): vscode.Uri | null {
-  if (options.defaultUri !== undefined) {
-    return options.defaultUri;
-  }
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return null;

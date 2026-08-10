@@ -12,6 +12,7 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
+import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -71,9 +72,9 @@ function compactRowPriority(row: CompactTodosPlanRow): number {
       );
     case 'planSummary':
       return PLAN_SUMMARY_PRIORITY;
+    default:
+      return assertNever(row, 'Unknown compact todos/plan row kind');
   }
-  const exhaustive: never = row;
-  return exhaustive;
 }
 
 export function compactTodosPlanRows({

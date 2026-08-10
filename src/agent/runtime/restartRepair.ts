@@ -21,10 +21,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  projectRunOutcome,
-  STREAM_TRANSITION_CAUSE,
-} from '@shared/streams/streamStatus';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 interface RestartRepairLogger {
   debug(message: string): void;

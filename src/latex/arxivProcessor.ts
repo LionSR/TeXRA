@@ -118,7 +118,7 @@ class ArxivSourceProcessor {
     return '';
   }
 
-  public isValidId(id: string): boolean {
+  private isValidId(id: string): boolean {
     return arxivIdentifiers.extract(id).includes(id);
   }
 
@@ -129,7 +129,7 @@ class ArxivSourceProcessor {
    * - URLs: https://arxiv.org/abs/2404.12175, https://arxiv.org/pdf/2404.12175.pdf
    * @returns The normalized arXiv ID, or null if extraction fails
    */
-  public normalizeInput(input: string): string | null {
+  private normalizeInput(input: string): string | null {
     if (!input) {
       return null;
     }

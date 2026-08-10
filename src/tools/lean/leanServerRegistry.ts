@@ -35,14 +35,10 @@ export interface LeanServerInfo {
 
 const servers = new Map<string, LeanServerInfo>();
 
-function snapshot(): readonly LeanServerInfo[] {
+export function listLeanServers(): readonly LeanServerInfo[] {
   return [...servers.values()].sort((a, b) =>
     a.workspaceRoot.localeCompare(b.workspaceRoot),
   );
-}
-
-export function listLeanServers(): readonly LeanServerInfo[] {
-  return snapshot();
 }
 
 export function isLeanServerActive(info: LeanServerInfo): boolean {
@@ -118,7 +114,7 @@ function statusTail(info: LeanServerInfo, now: number): string {
 }
 
 export function summarizeLeanServers(
-  list: readonly LeanServerInfo[] = snapshot(),
+  list: readonly LeanServerInfo[] = listLeanServers(),
   now: number = Date.now(),
 ): string {
   if (list.length === 0) return 'No Lean servers registered.';

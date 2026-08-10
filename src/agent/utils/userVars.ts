@@ -11,6 +11,7 @@ import {
   resolveDelegationScopeAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
+import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { shouldSaveModelIO } from '@agent/utils/debugMessageSaver';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
@@ -547,16 +548,12 @@ export function getToolFlags(
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
-    const { userRequest } = agentPrompt;
-    let requestCount = 0;
-    if (Array.isArray(userRequest)) {
-      requestCount = userRequest.length;
-    } else if (userRequest) {
-      requestCount = 1;
-    }
     const configuredRounds =
       'rounds' in agentSetting ? agentSetting.rounds : undefined;
-    flags.ROUNDS = Math.max(configuredRounds ?? 2, requestCount);
+    flags.ROUNDS = Math.max(
+      configuredRounds ?? 2,
+      userRequestTemplateCount(agentPrompt.userRequest),
+    );
   }
 
   return flags;

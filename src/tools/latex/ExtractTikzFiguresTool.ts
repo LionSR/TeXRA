@@ -26,7 +26,7 @@ const ExtractTikzInputSchema = z.strictObject({
     .nullish(),
 });
 
-export type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
+type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
 
 const DEFAULT_TIKZ_MAX_FILES = 12;
 
