@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { redactSecrets } from '@logger/redaction';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { SkillNameSchema } from './skillName';
@@ -31,9 +32,16 @@ function containsFilesystemShapedValue(description: string): boolean {
   return pathCandidates.includes('/');
 }
 
-/** Normalize untrusted frontmatter before it crosses the persistence boundary. */
+/**
+ * Normalize untrusted frontmatter before it crosses the persistence boundary.
+ * Owns secret redaction, path/ANSI sanitization, and length truncation in one
+ * place so transcript recorders parse raw skills without a parallel scrub.
+ */
 function sanitizeActiveSkillDescription(description: string): string {
-  const withoutAnsi = description.replaceAll(ANSI_ESCAPE_SEQUENCE, '');
+  // Redact before path/ANSI scrub and truncation so long secret tokens are
+  // replaced, not sliced mid-token into a still-sensitive prefix.
+  const redacted = redactSecrets(description);
+  const withoutAnsi = redacted.replaceAll(ANSI_ESCAPE_SEQUENCE, '');
   // eslint-disable-next-line no-control-regex -- persisted UI text excludes C0/C1 controls
   const withoutControls = withoutAnsi.replaceAll(/[\x00-\x1f\x7f-\x9f]/g, ' ');
   const normalized = collapseWhitespace(withoutControls).trim();
