@@ -21,18 +21,18 @@ import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
 Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
-Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, todos, file access, or a tool, do not use it; report any resulting conflict instead.
+Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, todos, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
 If you say you will perform an action, immediately call the corresponding tool.
-{% if IS_ANTHROPIC_MODEL %}Independent tool calls may be issued together in one response; sequence only calls that depend on an earlier result.
+{% if IS_ANTHROPIC_MODEL %}Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
 {% else %}When using a tool, follow the JSON schema exactly and include all required properties.
 Always produce valid JSON when calling a tool.
 Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.
-{% endif %}Do only what the task requires — do not refactor, restructure, or "improve" material beyond it. When the user describes a problem without asking for a change, deliver your assessment before editing files.
-When an approved plan or autonomous objective is active, work toward it end to end: keep going and verify against real evidence rather than pausing to confirm each step or to summarize progress, and stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
-In replies, lead with the outcome; keep responses short by being selective about what to include, not by compressing the writing.
+{% endif %}Do only what the task requires. Do not refactor, restructure, or "improve" material beyond it. When the user describes a problem without asking for a change, deliver your assessment before editing files.
+When an approved plan or autonomous objective is active, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
+In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 {% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
@@ -46,14 +46,14 @@ The following imported skills are available. If one is relevant, inspect its SKI
 
 /** Base memory instructions for all agents with memory enabled. */
 const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
-Pinned memories are always loaded (unless the user forbids memory use): at session start, \`view\` the \`/memories\` directory to find entries marked [pinned] — if the listing is truncated, continue it until you have seen every [pinned] entry — then \`view\` each pinned file so its content actually applies, regardless of how self-contained the request looks. Pinned entries are the core reusable insights (techniques, strategies, pitfalls) accumulated across sessions; the directory listing alone does not load their content. Beyond that, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context; for a self-contained request, do not read unpinned memory files or write memory merely because the tool is available (the directory listing itself is fine — needed to find pinned entries).
+Pinned memories are always loaded unless the user forbids memory use. At session start, \`view\` the \`/memories\` directory to find entries marked [pinned]. If the listing is truncated, continue until you have seen every [pinned] entry. Then \`view\` each pinned file so its content applies, regardless of how self-contained the request looks. Pinned entries are the core reusable insights (techniques, strategies, pitfalls) accumulated across sessions. The directory listing alone does not load their content. Beyond pinned entries, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context. For a self-contained request, do not read unpinned memory files or write memory merely because the tool is available. Listing the directory is still appropriate because it is needed to find pinned entries.
 
-Your memory persists across conversations. When memory is in play, record durable progress, decisions, and user preferences (writing style, conventions, formatting, workflow) — keep the folder current and organized, updating, renaming, or deleting files rather than duplicating them, and do not store what the workspace files already state. When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them. \`pin\` only long-term reusable insights, never task-specific progress notes; \`unpin\` entries that no longer earn their place.
+Your memory persists across conversations. When memory is in play, record durable progress, decisions, and user preferences (writing style, conventions, formatting, workflow). Keep the folder current and organized by updating, renaming, or deleting files rather than duplicating them. Do not store what the workspace files already state. When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them. Use \`pin\` only for long-term reusable insights, never task-specific progress notes. Use \`unpin\` for entries that no longer earn their place.
 </memory_tool_instructions>`;
 
 /** Memory instructions for orchestrators that launch subagents. */
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
-The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations—not as a substitute for subagent result delivery (subagents report back automatically via follow-up messages). Good uses: project conventions, user preferences, research bibliographies that build up over time.
+The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations. Do not use it as a substitute for subagent result delivery because subagents report back automatically via follow-up messages. Good uses include project conventions, user preferences, and research bibliographies that build up over time.
 
 For continuation or delegation-heavy work, consult relevant memories instead of rediscovering context. Record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies.
 </orchestrator_memory_protocol>`;

@@ -55,12 +55,12 @@ export const WorkflowAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
+      'Model short name from the Available models line. Omit unless the user explicitly requested a model. Defaults to the current model when available.',
     ),
   instruction: z
     .string()
     .describe(
-      'What the agent should do, in plain prose: state the document subject, the changes wanted, and any constraints (terminology, scope, sections to prioritize). If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
+      'State what the agent should do in plain prose. Include the document subject, the changes wanted, and any constraints (terminology, scope, sections to prioritize). If you attach context or media files, name each one and explain its role. For example: "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The subagent has no other signal for why each file was attached.',
     ),
   inputFiles: z
     .array(z.string())
@@ -94,7 +94,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
     .array(z.string())
     .prefault([])
     .describe(
-      'Output file paths. Must be a subset of input files—never create new files or change format. Leave empty for default suffix-based outputs.',
+      'Output file paths. Must be a subset of input files. Never create new files or change format. Leave empty for default suffix-based outputs.',
     ),
   memories: memoriesField,
 });
@@ -104,8 +104,8 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Allow agents to work in git worktrees' on the Multi-Agent settings tab).";
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
-  'The delegated instruction above is your full task contract, including any tool, network, file, approval, output-format, or scope constraints it states; if a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
-  'Your final response is delivered verbatim to the parent orchestrator — end with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
+  'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
+  'Your final response is delivered verbatim to the parent orchestrator. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
 ].join(' ');
 export function withToolUseSubagentHandoffInstruction(
   instruction: string,
@@ -120,7 +120,7 @@ export function withToolUseSubagentHandoffInstruction(
         ? 'The delegated task above is copied verbatim from the parent user request.'
         : `Parent user request (constraint context only):\n${trimmedParent}`;
     parts.push(
-      `${contextBlock}\n\nConstraints in the parent user request are mandatory and override conflicting delegated-task wording; do not repeat orchestration actions assigned to the parent.`,
+      `${contextBlock}\n\nConstraints in the parent user request are mandatory and override conflicting delegated-task wording. Do not repeat orchestration actions assigned to the parent.`,
     );
   }
   parts.push(TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION);
