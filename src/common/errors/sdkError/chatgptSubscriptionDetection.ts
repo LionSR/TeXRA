@@ -56,8 +56,10 @@ export function parseChatGptSubscriptionLimit(
  * truncated once the duration reaches a day, matching the "day granularity
  * drops minutes" rule of the original hand-rolled formatter (pretty-ms would
  * otherwise back-fill a zero hour component with minutes, e.g. "1d 58m").
+ * Shared with {@link describeGlmCodingPlanLimit}, which formats its reset
+ * hint identically.
  */
-function formatResetDuration(totalSeconds: number): string {
+export function formatResetDuration(totalSeconds: number): string {
   const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
   if (wholeMinutes === 0) return 'less than a minute';
   const flooredMinutes =

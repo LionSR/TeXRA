@@ -46,7 +46,7 @@ export interface ExecutionSummaryOptions {
  */
 export function shouldSuppressAutoDeliveredSubagentReport(
   options: ExecutionSummaryOptions,
-  handle: unknown,
+  handle: ExecutionHandle,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
   return (

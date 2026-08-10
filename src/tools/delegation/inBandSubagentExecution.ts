@@ -537,7 +537,6 @@ async function executeInBand(
           flowResult,
           {
             startedAt,
-            workingDirectory,
             parentExecutionId: options.parentExecutionId,
           },
         );

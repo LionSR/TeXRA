@@ -64,15 +64,6 @@ function rethrowWithContext(error: unknown, context: string): never {
   throw new ToolError(`${context}: ${toErrorMessage(error)}`, { cause: error });
 }
 
-/** Maps API type versions to their corresponding tool names */
-const API_TYPE_TO_NAME = {
-  text_editor_20250429: 'str_replace_based_edit_tool',
-  text_editor_20250124: 'str_replace_editor',
-  text_editor_20241022: 'str_replace_editor',
-} as const;
-
-type TextEditorApiType = keyof typeof API_TYPE_TO_NAME;
-
 /**
  * Undo snapshots keyed by execution, then by file path. Owns the two-level
  * get-or-create/prune bookkeeping in one place instead of spreading it across
@@ -193,9 +184,6 @@ export class TextEditorTool extends defineTool({
   description: 'Edit files using search and replace or insertion operations',
   schema: TextEditorInputSchema,
 }) {
-  // Tool API type
-  private apiType: TextEditorApiType;
-
   // Undo snapshots owned by the execution that created them.
   private readonly fileHistory = new ExecutionFileHistory();
 
@@ -210,12 +198,6 @@ export class TextEditorTool extends defineTool({
    * lifetime of a long-running execution.
    */
   private static readonly MAX_HISTORY_PER_FILE = 50;
-
-  constructor(apiType: TextEditorApiType = 'text_editor_20250124') {
-    const name = API_TYPE_TO_NAME[apiType];
-    super({ name });
-    this.apiType = apiType;
-  }
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
     const { command, path: inputPath } = input;
@@ -264,12 +246,6 @@ export class TextEditorTool extends defineTool({
           input.new_str,
         );
       case 'undo_edit':
-        // Claude 4 models don't support undo_edit command
-        if (this.apiType === 'text_editor_20250429') {
-          throw new ToolError(
-            `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
-          );
-        }
         logger.info(CHANNEL, `undo_edit: ${displayPath}`);
         return this.undoEdit(filePath, displayPath);
       default:

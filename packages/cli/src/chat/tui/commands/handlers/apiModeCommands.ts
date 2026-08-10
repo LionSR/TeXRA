@@ -1,4 +1,5 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { refreshSubscriptionPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
 import {
@@ -30,7 +31,6 @@ import {
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import { loadCliAccountStatusLines } from './statusAssembly';
 
 const MODEL_ACCESS_USAGE =
   'Usage: /api chatgpt | grok | kimi-code | glm-code | included | personal | status';
@@ -150,9 +150,8 @@ export function applyCliModelAccessInput(
     const normalized = routeInput.trim().toLowerCase();
 
     if (!normalized || normalized === 'status') {
-      const lines = await loadCliAccountStatusLines({
+      const lines = await loadCliDetailedAccountStatusLines({
         apiMode: sessionMeta.get().apiMode,
-        includeApiDetails: true,
       });
       output.appendOutcome(lines.join('\n'));
       return;
@@ -174,9 +173,8 @@ export function applyCliModelAccessInput(
 }
 
 export async function showCliAuthStatus(): Promise<void> {
-  const lines = await loadCliAccountStatusLines({
+  const lines = await loadCliDetailedAccountStatusLines({
     apiMode: sessionMeta.get().apiMode,
-    includeApiDetails: true,
   });
   transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
 }

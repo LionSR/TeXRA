@@ -1,8 +1,6 @@
-// Unified-diff renderer for edit-approval modals + tool cards.
-//
-// Phase 2 produces line-by-line `diff` hunks coloured with ink Text
-// (green added / red removed / dim context). `cli-highlight`-based syntax
-// highlighting is wired in alongside markdown rendering in Phase 3.
+// Unified-diff renderer for edit-approval modals + tool cards: `diff` hunks
+// render line by line as full-width added/removed bands with dim context rows
+// (see DIFF_LINE_STYLE for the color rationale).
 
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';

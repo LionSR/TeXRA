@@ -33,7 +33,7 @@ const AskUserQuestionInputSchema = z.strictObject({
     .describe('Optional short context explaining why the answer is needed.'),
 });
 
-export type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
+type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 
 export class AskUserQuestionTool extends defineTool({
   name: 'ask_user_question',

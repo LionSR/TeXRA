@@ -141,7 +141,43 @@ export class ProbeEnvironmentTool extends defineTool({
       },
     };
 
-    const headline = buildHeadline(summary);
+    const parts: string[] = [
+      `OS: ${summary.os.platform}`,
+      `package manager: ${summary.packageManager ?? 'none detected'}`,
+      summary.missingCore.length === 0
+        ? 'all core LaTeX tools installed'
+        : `missing: ${summary.missingCore.join(', ')}`,
+      summary.latexWorkshop.supported
+        ? `LaTeX Workshop: ${summary.latexWorkshop.installed ? 'installed' : 'not installed'}`
+        : 'LaTeX Workshop: not applicable',
+    ];
+    const creds: string[] = [];
+    const origins = new Set(
+      summary.credentials.apiKeys.map((key) => key.origin),
+    );
+    if (origins.has('secret')) creds.push('provider API key saved');
+    if (origins.has('env')) creds.push('provider API key in environment');
+    if (origins.has('unknown')) {
+      creds.push('provider API key status unavailable');
+    }
+    if (summary.credentials.usableCredentialStatus === 'unknown') {
+      creds.push('overall credential status unavailable');
+    }
+    if (summary.credentials.chatGptSubscription.enabled) {
+      creds.push('ChatGPT subscription enabled');
+    }
+    if (summary.credentials.researcherAccess.authenticated)
+      creds.push('signed in');
+    if (
+      summary.credentials.hasAnyUsableCredential &&
+      !summary.credentials.anyApiKeySet &&
+      !summary.credentials.researcherAccess.authenticated &&
+      !summary.credentials.chatGptSubscription.enabled
+    ) {
+      creds.push('usable credential');
+    }
+    parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
+    const headline = parts.join('; ');
 
     return executed(
       headline +
@@ -151,53 +187,4 @@ export class ProbeEnvironmentTool extends defineTool({
       headline,
     );
   }
-}
-
-function buildHeadline(summary: {
-  os: { platform: string };
-  packageManager: string | null;
-  missingCore: string[];
-  latexWorkshop: { supported: boolean; installed: boolean };
-  credentials: {
-    anyApiKeySet: boolean;
-    hasAnyUsableCredential: boolean;
-    apiKeys: Array<{ origin: 'secret' | 'env' | 'none' | 'unknown' }>;
-    researcherAccess: { authenticated: boolean };
-    chatGptSubscription: { enabled: boolean };
-    usableCredentialStatus: 'known' | 'unknown';
-  };
-}): string {
-  const parts: string[] = [
-    `OS: ${summary.os.platform}`,
-    `package manager: ${summary.packageManager ?? 'none detected'}`,
-    summary.missingCore.length === 0
-      ? 'all core LaTeX tools installed'
-      : `missing: ${summary.missingCore.join(', ')}`,
-    summary.latexWorkshop.supported
-      ? `LaTeX Workshop: ${summary.latexWorkshop.installed ? 'installed' : 'not installed'}`
-      : 'LaTeX Workshop: not applicable',
-  ];
-  const creds: string[] = [];
-  const origins = new Set(summary.credentials.apiKeys.map((key) => key.origin));
-  if (origins.has('secret')) creds.push('provider API key saved');
-  if (origins.has('env')) creds.push('provider API key in environment');
-  if (origins.has('unknown')) creds.push('provider API key status unavailable');
-  if (summary.credentials.usableCredentialStatus === 'unknown') {
-    creds.push('overall credential status unavailable');
-  }
-  if (summary.credentials.chatGptSubscription.enabled) {
-    creds.push('ChatGPT subscription enabled');
-  }
-  if (summary.credentials.researcherAccess.authenticated)
-    creds.push('signed in');
-  if (
-    summary.credentials.hasAnyUsableCredential &&
-    !summary.credentials.anyApiKeySet &&
-    !summary.credentials.researcherAccess.authenticated &&
-    !summary.credentials.chatGptSubscription.enabled
-  ) {
-    creds.push('usable credential');
-  }
-  parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
-  return parts.join('; ');
 }

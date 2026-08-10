@@ -14,6 +14,7 @@ import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -710,10 +711,7 @@ export class SessionStores {
   }> {
     const failed = new Set<StreamTabId>();
     const failures: unknown[] = [];
-    const staged = new Map<
-      StreamTabId,
-      Awaited<ReturnType<StreamSnapshotStore['stageDeleteStream']>>
-    >();
+    const staged = new Map<StreamTabId, StagedStreamSnapshotDeletion>();
     await Promise.all(
       streams.map(async (stream) => {
         try {

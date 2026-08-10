@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
  * flow back to `executeCommand` callers — are registered with their
  * semantics fully intact.
  */
-export interface CommandEntry {
+interface CommandEntry {
   id: string;
   handler: (...args: any[]) => any;
 }

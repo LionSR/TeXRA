@@ -48,7 +48,7 @@ export abstract class OpenAICompatibleModelHandler<
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
    */
-  protected async createOpenAIClient(
+  async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<OpenAI> {
     const credential = await this.resolveClientCredential(selection);
@@ -71,13 +71,6 @@ export abstract class OpenAICompatibleModelHandler<
       credential.route,
       credential.apiKey,
     );
-  }
-
-  /** Returns OpenAI client with configured API key. */
-  async getClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    return this.createOpenAIClient(selection);
   }
 
   override getRetryEndpoint(client: OpenAI): string {

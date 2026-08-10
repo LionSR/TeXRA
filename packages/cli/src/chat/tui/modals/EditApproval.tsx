@@ -77,10 +77,6 @@ export function editApprovalDiffRowsBudget({
   });
 }
 
-export function formatEditApprovalHunkCount(count: number): string {
-  return formatResultCount(count, 'hunk');
-}
-
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
@@ -189,7 +185,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     >
       <Text dimColor>
         +{stats.added} / −{stats.removed} ·{' '}
-        {formatEditApprovalHunkCount(stats.hunks)} · source:{' '}
+        {formatResultCount(stats.hunks, 'hunk')} · source:{' '}
         {props.request.sourceTool}
       </Text>
       <Box marginY={compactDiffLayout ? 0 : 1} flexDirection="column">

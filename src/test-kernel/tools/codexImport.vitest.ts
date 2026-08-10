@@ -10,7 +10,7 @@ import { describe, it, afterEach } from 'vitest';
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { findCodexBinaryInElectronResources } from '@tools/codexImport';
+import { findCodexBinaryPath } from '@tools/codexImport';
 
 const PLATFORM_PACKAGES: Record<
   string,
@@ -48,7 +48,7 @@ const PLATFORM_PACKAGES: Record<
   },
 };
 
-describe('findCodexBinaryInElectronResources', () => {
+describe('findCodexBinaryPath', () => {
   let tempDir: string | undefined;
 
   // pathExists() probes the real filesystem through platform().fs.
@@ -83,6 +83,24 @@ describe('findCodexBinaryInElectronResources', () => {
     fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
     fs.writeFileSync(binaryPath, '');
 
-    assert.equal(await findCodexBinaryInElectronResources(tempDir), binaryPath);
+    // Impersonate a packaged Electron app: the resolver's highest-priority
+    // probe reads process.versions.electron, process.defaultApp, and
+    // process.resourcesPath.
+    const electronProcess = process as NodeJS.Process & {
+      defaultApp?: boolean;
+      resourcesPath?: string;
+    };
+    Object.defineProperty(process.versions, 'electron', {
+      value: '30.0.0',
+      configurable: true,
+      enumerable: true,
+    });
+    electronProcess.resourcesPath = tempDir;
+    try {
+      assert.equal(await findCodexBinaryPath(), binaryPath);
+    } finally {
+      Reflect.deleteProperty(process.versions, 'electron');
+      Reflect.deleteProperty(electronProcess, 'resourcesPath');
+    }
   });
 });

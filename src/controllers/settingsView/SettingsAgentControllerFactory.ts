@@ -49,7 +49,6 @@ export interface SettingsAgentControllers {
   readonly catalog: SettingsAgentCatalogController;
   readonly directory: SettingsAgentDirectoryController;
   readonly visibility: SettingsAgentVisibilityController;
-  readonly state: SettingsAgentCatalogState;
   readonly fileController: SettingsAgentFileController;
   readonly remotePromptController: SettingsRemoteAgentPromptController;
 }
@@ -139,7 +138,6 @@ export function createSettingsAgentControllers(
     catalog,
     directory,
     visibility,
-    state,
     fileController,
     remotePromptController,
   };

@@ -78,7 +78,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public readonly backend: ProgressBackend;
   public readonly toolEditApprovals: ToolEditApprovalController;
   public readonly state: ProgressBackend['state'];
-  public readonly webviewBridge: ProgressBackend['webviewBridge'];
   public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
 
   protected readonly contentProvider: BundledViewContentProvider;
@@ -152,7 +151,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     });
     this.state = this.backend.state;
     this.webviewUpdater = this.backend.webviewUpdater;
-    this.webviewBridge = this.backend.webviewBridge;
 
     this.contentProvider = new BundledViewContentProvider(
       context,

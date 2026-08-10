@@ -28,7 +28,7 @@ function isCommandMessage(
 /**
  * Configuration options for BaseViewMessageHandler.
  */
-export interface MessageHandlerOptions {
+interface MessageHandlerOptions {
   /**
    * When true, the handler automatically tracks the active webview reference
    * and provides getActiveView() for handlers that need webview access outside
@@ -164,24 +164,13 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Fallback for messages not handled by schema-driven dispatch: validates
-   * the envelope and warns. Subclasses route real traffic through
-   * {@link dispatchInbound}; MainView calls this for unmatched commands.
-   * When trackActiveView is enabled, updates the active view reference.
+   * Entry point for inbound webview messages. Subclasses route through
+   * {@link dispatchInbound} with their typed dispatcher and registry.
    */
-  public async handleMessage(message: unknown, webviewView: T): Promise<void> {
-    this.setActiveView(webviewView);
-
-    if (!isCommandMessage(message)) {
-      this.logger.warn(
-        this.channel,
-        `Received message without command. Message: ${JSON.stringify(message)}`,
-      );
-      return;
-    }
-
-    this.logger.warn(this.channel, `Unknown command: ${message.command}`);
-  }
+  public abstract handleMessage(
+    message: unknown,
+    webviewView: T,
+  ): Promise<void>;
 
   /**
    * Helper method for common theme handling

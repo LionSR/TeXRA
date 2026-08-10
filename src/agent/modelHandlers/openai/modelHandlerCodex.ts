@@ -288,7 +288,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
       : super.getBaseUrl();
   }
 
-  protected override async createOpenAIClient(
+  override async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<OpenAI> {
     const subscriptionCapabilities =
@@ -303,7 +303,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
           ? 'Building a personal OpenAI API-key client.'
           : 'ChatGPT subscription preference is off: using the OpenAI API key.',
       );
-      return super.createOpenAIClient(selection);
+      return super.getClient(selection);
     }
 
     const apiKey = await this.resolveAccessToken();

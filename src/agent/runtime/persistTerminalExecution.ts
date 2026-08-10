@@ -10,7 +10,6 @@ import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
-import { projectRunOutcome } from '@shared/streams/streamStatus';
 
 export interface PersistTerminalExecutionParams {
   readonly executionId: ExecutionId;

@@ -36,7 +36,7 @@ const TodoWriteInputSchema = z.strictObject({
     .describe('The updated todo list with all current tasks'),
 });
 
-export type TodoWriteInput = z.infer<typeof TodoWriteInputSchema>;
+type TodoWriteInput = z.infer<typeof TodoWriteInputSchema>;
 
 /** Tool for managing task lists during agent sessions. */
 export class TodoWriteTool extends defineTool({

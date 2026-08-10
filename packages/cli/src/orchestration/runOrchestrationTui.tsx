@@ -499,21 +499,10 @@ export function OrchestrationApp(
   );
 }
 
-export interface RunOrchestrationTuiOptions {
-  /** Available models for the second step; an empty list means registry
-   *  unavailable/unknown, while a non-empty all-unavailable list disables
-   *  model-dependent launch rows unless runtime defaults can still resolve a
-   *  hidden configured model. */
-  readonly models: readonly CliModelAccess[];
-  readonly resumeItems?: readonly CliOrchestrationItem[];
-  readonly agentItems?: readonly CliOrchestrationItem[];
-  readonly teamItems?: readonly CliOrchestrationItem[];
-  readonly accountItems?: readonly CliOrchestrationItem[];
-  readonly apiMode: ApiAccessMode;
-  readonly modelAccess?: CliModelAccessStatus;
-  readonly version: string;
-  readonly statusLines?: readonly string[];
-  readonly allowDefaultModelLaunch?: boolean;
+export interface RunOrchestrationTuiOptions extends Omit<
+  OrchestrationAppProps,
+  'items' | 'onResolve'
+> {
   readonly colorEnabled?: boolean;
 }
 
@@ -521,27 +510,15 @@ export async function runOrchestrationTui(
   items: readonly CliOrchestrationItem[],
   options: RunOrchestrationTuiOptions,
 ): Promise<CliOrchestrationAction> {
+  const { colorEnabled, ...appProps } = options;
   const chosen = await renderCliPrompt<CliOrchestrationAction>(
     (resolve) => (
-      <OrchestrationApp
-        items={items}
-        resumeItems={options.resumeItems}
-        agentItems={options.agentItems}
-        teamItems={options.teamItems}
-        accountItems={options.accountItems}
-        models={options.models}
-        apiMode={options.apiMode}
-        modelAccess={options.modelAccess}
-        version={options.version}
-        statusLines={options.statusLines}
-        allowDefaultModelLaunch={options.allowDefaultModelLaunch}
-        onResolve={resolve}
-      />
+      <OrchestrationApp {...appProps} items={items} onResolve={resolve} />
     ),
     {
       stdout: process.stdout,
       stderr: process.stderr,
-      colorEnabled: options.colorEnabled,
+      colorEnabled,
     },
   );
   return chosen ?? { kind: 'exit' };

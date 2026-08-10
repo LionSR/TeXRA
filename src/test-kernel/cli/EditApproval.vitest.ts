@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPACT_EDIT_APPROVAL_MAX_ROWS,
   editApprovalDiffRowsBudget,
-  formatEditApprovalHunkCount,
 } from '@cli/chat/tui/modals/EditApproval';
 import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 type BudgetInput = Parameters<typeof editApprovalDiffRowsBudget>[0];
 
@@ -93,7 +93,8 @@ describe('CLI edit approval layout', () => {
   });
 
   it('pluralizes the hunk count in the summary line', () => {
-    expect(formatEditApprovalHunkCount(1)).toBe('1 hunk');
-    expect(formatEditApprovalHunkCount(2)).toBe('2 hunks');
+    // The summary line renders formatResultCount(stats.hunks, 'hunk').
+    expect(formatResultCount(1, 'hunk')).toBe('1 hunk');
+    expect(formatResultCount(2, 'hunk')).toBe('2 hunks');
   });
 });

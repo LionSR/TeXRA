@@ -6,9 +6,6 @@ import type {
 const STALE_AFTER_MS = 2 * 60_000;
 
 function formatWindowDuration(seconds: number): string | undefined {
-  if (seconds === 18_000) return '5-hour';
-  if (seconds === 604_800) return '7-day';
-  if (seconds === 2_592_000) return '30-day';
   if (seconds % 86_400 === 0) return `${seconds / 86_400}-day`;
   if (seconds % 3600 === 0) return `${seconds / 3600}-hour`;
   return undefined;

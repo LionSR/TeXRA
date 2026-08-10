@@ -38,8 +38,8 @@ export interface PdfOverlayController {
 interface PdfOverlayElements {
   readonly dialog: WaDialog;
   readonly frame: HTMLIFrameElement;
-  readonly titleEl?: HTMLElement;
-  readonly subtitleEl?: HTMLElement;
+  readonly titleEl: HTMLElement;
+  readonly subtitleEl: HTMLElement;
 }
 
 export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
@@ -117,8 +117,8 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
       return;
     }
     const { dialog, frame, titleEl, subtitleEl } = ensure();
-    if (titleEl) titleEl.textContent = payload.title;
-    if (subtitleEl) subtitleEl.textContent = payload.pdfPath;
+    titleEl.textContent = payload.title;
+    subtitleEl.textContent = payload.pdfPath;
     frame.src = pdfPathToFileUrl(payload.pdfPath);
     wantOpen = true;
     dialog.open = true;

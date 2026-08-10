@@ -54,6 +54,13 @@ export function createDesktopPromptOverlay(
     content: form,
   });
   const dialog = shell.dialog;
+  // The prompt text lives in the field's own label, not the shell subtitle. As
+  // a subtitle it named nothing — wa-input puts its control inside a shadow
+  // root, so only WebAwesome's `label` produces a real <label for>. Kept in one
+  // place rather than two so the text is not read out twice. Hide the empty
+  // subtitle so its always-on top margin does not leave a gap between the
+  // title and the input.
+  shell.subtitleEl.hidden = true;
   let current: DesktopShowPromptMessage | undefined;
 
   function sendSettlement(
@@ -91,17 +98,7 @@ export function createDesktopPromptOverlay(
   function open(message: DesktopShowPromptMessage): void {
     if (current) sendSettlement(current, null);
     current = message;
-    if (shell.titleEl) shell.titleEl.textContent = message.title;
-    // The prompt text moves from the sibling subtitle into the field's own
-    // label. As a subtitle it named nothing — wa-input puts its control inside
-    // a shadow root, so only WebAwesome's `label` produces a real <label for>.
-    // Kept in one place rather than two so the text is not read out twice.
-    // Hide the empty subtitle so its always-on top margin does not leave a gap
-    // between the title and the input.
-    if (shell.subtitleEl) {
-      shell.subtitleEl.textContent = '';
-      shell.subtitleEl.hidden = true;
-    }
+    shell.titleEl.textContent = message.title;
     input.type = message.password ? 'password' : 'text';
     input.label = message.prompt;
     input.value = '';

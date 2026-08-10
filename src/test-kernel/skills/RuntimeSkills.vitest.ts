@@ -43,10 +43,6 @@ describe('runtime skills', () => {
         body: 'Read ${TEXRA_SKILL_DIR}/references/checklist.md first & compare <proof>.',
         baseDir: '/tmp/proof-audit',
         path: '/tmp/proof-audit/SKILL.md',
-        frontmatter: {
-          name: 'proof-audit',
-          description: 'Review mathematical proof steps.',
-        },
       },
       source: {
         scope: 'project',

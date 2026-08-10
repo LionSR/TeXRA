@@ -190,7 +190,6 @@ export function createNativeSubagentStrategy(
         result,
         {
           startedAt: params.startedAt,
-          workingDirectory: params.workingDirectory,
           parentExecutionId: params.parentExecutionId,
         },
       );

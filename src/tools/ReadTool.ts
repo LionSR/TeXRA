@@ -63,7 +63,7 @@ const ReadInputSchema = z.strictObject({
   ),
 });
 
-export type ReadInput = z.infer<typeof ReadInputSchema>;
+type ReadInput = z.infer<typeof ReadInputSchema>;
 
 type AttachmentKind = 'pdf' | 'image' | 'document';
 

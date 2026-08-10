@@ -12,7 +12,6 @@ import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createWorkflowAttemptCostTracker,
-  sumCompletedWorkflowJournalCost,
   WorkflowJournalCostError,
 } from '@tools/delegation/workflowScriptRun';
 
@@ -56,6 +55,17 @@ function toolUseResult(cost: number): unknown {
     files: [],
     cost,
   };
+}
+
+/**
+ * Settle a journal's completed cost through the public tracker surface: one
+ * zero-cost attempt per entry makes `total` charge each entry's validated
+ * final-result cost (`max(0, journalCost)`), i.e. the sum of journal costs.
+ */
+function settleJournalCost(journal: readonly WorkflowJournalEntry[]): number {
+  const tracker = createWorkflowAttemptCostTracker();
+  for (const journalEntry of journal) tracker.record(journalEntry, 0);
+  return tracker.total(journal);
 }
 
 beforeEach(() => clearStoreCache());
@@ -195,25 +205,25 @@ describe('workflow-script completed journal cost', () => {
       entry(1, workflowResult(1.5)),
     ];
 
-    expect(sumCompletedWorkflowJournalCost(journal)).toBe(1.75);
-    expect(sumCompletedWorkflowJournalCost(journal.toReversed())).toBe(1.75);
+    expect(settleJournalCost(journal)).toBe(1.75);
+    expect(settleJournalCost(journal.toReversed())).toBe(1.75);
   });
 
   it('uses the final-result default when an older entry omits cost', () => {
     const result = workflowResult(0) as Record<string, unknown>;
     delete result.cost;
 
-    expect(sumCompletedWorkflowJournalCost([entry(0, result)])).toBe(0);
+    expect(settleJournalCost([entry(0, result)])).toBe(0);
   });
 
   it.each([
     ['wrong result shape', entry(3, { cost: 1 })],
     ['negative cost', entry(7, workflowResult(-1))],
   ])('rejects %s with the journal index', (_label, invalidEntry) => {
-    expect(() => sumCompletedWorkflowJournalCost([invalidEntry])).toThrow(
+    expect(() => settleJournalCost([invalidEntry])).toThrow(
       WorkflowJournalCostError,
     );
-    expect(() => sumCompletedWorkflowJournalCost([invalidEntry])).toThrow(
+    expect(() => settleJournalCost([invalidEntry])).toThrow(
       new RegExp(`entry ${invalidEntry.index}`),
     );
   });
@@ -240,8 +250,8 @@ return await agent('second')`;
     });
 
     expect(runner).not.toHaveBeenCalled();
-    expect(sumCompletedWorkflowJournalCost(first.journal)).toBe(1);
-    expect(sumCompletedWorkflowJournalCost(replayed.journal)).toBe(1);
+    expect(settleJournalCost(first.journal)).toBe(1);
+    expect(settleJournalCost(replayed.journal)).toBe(1);
   });
 
   it('can settle completed entries retained after a script failure', async () => {
@@ -260,8 +270,6 @@ throw new Error('later failure')`;
     ).rejects.toThrow('later failure');
 
     const checkpoint = await readWorkflowScriptCheckpoint(store, 'failure');
-    expect(sumCompletedWorkflowJournalCost(checkpoint?.journal ?? [])).toBe(
-      0.75,
-    );
+    expect(settleJournalCost(checkpoint?.journal ?? [])).toBe(0.75);
   });
 });

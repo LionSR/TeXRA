@@ -18,6 +18,7 @@ import {
   TokenUsageStatsBaseSchema,
   UsageRouteSchema,
   isEmptyUsage,
+  resolveLegacyUsageRoute,
   type TokenUsageStats,
 } from './usage';
 
@@ -87,13 +88,9 @@ export const TokenUsageStatsParsingBaseSchema = z
     // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
     // TypeScript cannot recover the required keys through `Object.fromEntries`.
   })
-  .transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats => {
-    const stats = usage as TokenUsageStats;
-    const usageRoute =
-      stats.usageRoute ??
-      (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
-    return usageRoute == null ? stats : { ...stats, usageRoute };
-  }) as z.ZodType<TokenUsageStats>;
+  .transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
+    resolveLegacyUsageRoute(usage as TokenUsageStats, viaChatGptSubscription),
+  ) as z.ZodType<TokenUsageStats>;
 
 export interface ParsedUsageData {
   /** Successfully parsed, non-empty per-run usage. */

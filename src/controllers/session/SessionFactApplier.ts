@@ -25,7 +25,6 @@ import {
   type StreamSubstate,
   type StreamTabId,
   type UpdateConversationProgressPayload,
-  type UpdateQueuedFollowUpsPayload,
   type UpdateStreamDescriptionPayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
@@ -188,13 +187,15 @@ export class SessionFactApplier {
               { reset: true },
             );
           case 'updateQueuedFollowUps':
-            return this.handleUpdateQueuedFollowUps(fact.payload);
+            return this.renderer.onQueuedFollowUpsChanged(
+              fact.payload.streamId,
+            );
           case 'followUpSent':
             // Refresh from the follow-ups store (same as updateQueuedFollowUps):
             // the send itself is not a payload, but the queue may have changed.
-            return this.handleUpdateQueuedFollowUps({
-              streamId: fact.payload.streamId,
-            });
+            return this.renderer.onQueuedFollowUpsChanged(
+              fact.payload.streamId,
+            );
           case 'setActiveStream':
             return this.handleSetActiveStream(fact.payload);
           case 'updateStreamDescription':
@@ -259,12 +260,6 @@ export class SessionFactApplier {
     // Latest gauge value is the event payload. The snapshot store may
     // accumulate per-key; hosts read cumulative totals from the store.
     this.renderer.onRunUsageChanged(streamId, storageKey, usage);
-  }
-
-  private handleUpdateQueuedFollowUps({
-    streamId,
-  }: UpdateQueuedFollowUpsPayload): void {
-    this.renderer.onQueuedFollowUpsChanged(streamId);
   }
 
   private async handleSetActiveStream(

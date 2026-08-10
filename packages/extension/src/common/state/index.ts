@@ -14,8 +14,4 @@ export {
 //     from '@platform/platform'
 // Only extension-host wiring (packages/extension/src/) may use these exports.
 export { workspaceSM, globalSM, initializeStateManagers } from './stateManager';
-export {
-  setPendingState,
-  consumePendingState,
-  type PendingStateData,
-} from './pendingStateManager';
+export { setPendingState, consumePendingState } from './pendingStateManager';

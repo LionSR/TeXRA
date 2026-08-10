@@ -20,9 +20,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 
+import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;
@@ -262,6 +262,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   }
 
   private emitBindingsChanged(): void {
-    emitGitHubSubscriptionChanged(this.opts.bindingsChangedEvent, undefined);
+    appSignals.emit(this.opts.bindingsChangedEvent, undefined);
   }
 }

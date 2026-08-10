@@ -108,8 +108,7 @@ type ExtensionRegistryCatalogEntry = Extract<
   { extensionRegistry: true }
 >;
 
-export type ExtensionRegistryCatalogCommandId =
-  ExtensionRegistryCatalogEntry['id'];
+type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
 
 /**
  * Internal and compatibility ids intentionally absent from the shared

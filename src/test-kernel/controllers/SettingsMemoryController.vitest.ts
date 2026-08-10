@@ -160,12 +160,9 @@ describe('SettingsMemoryController', () => {
     assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
   });
 
-  it.each([
-    { method: 'pinMemory', pinned: true },
-    { method: 'unpinMemory', pinned: false },
-  ] as const)(
-    '$method sets the pinned flag and returns refreshed data',
-    async ({ method, pinned }) => {
+  it.each([{ pinned: true }, { pinned: false }] as const)(
+    'setMemoryPinned(pinned: $pinned) sets the pinned flag and returns refreshed data',
+    async ({ pinned }) => {
       mocks.setMemoryPinned.mockResolvedValue({
         status: 'changed',
         pinnedCount: 1,
@@ -173,7 +170,7 @@ describe('SettingsMemoryController', () => {
       mocks.loadMemoryItems.mockResolvedValue([]);
       const { controller } = createController();
 
-      const message = await controller[method]('item.md');
+      const message = await controller.setMemoryPinned('item.md', pinned);
 
       assert.deepEqual(mocks.setMemoryPinned.mock.calls[0], [
         'mem/item.md',
@@ -188,7 +185,7 @@ describe('SettingsMemoryController', () => {
     mocks.loadMemoryItems.mockResolvedValue([]);
     const { controller, hosts } = createController();
 
-    const message = await controller.pinMemory('item.md');
+    const message = await controller.setMemoryPinned('item.md', true);
 
     assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
     assert.equal(hosts.prompt.messages.length, 0);
@@ -198,7 +195,7 @@ describe('SettingsMemoryController', () => {
     mocks.setMemoryPinned.mockResolvedValue({ status: 'cap-reached' });
     const { controller, hosts } = createController();
 
-    assert.equal(await controller.pinMemory('item.md'), null);
+    assert.equal(await controller.setMemoryPinned('item.md', true), null);
     assert.equal(hosts.prompt.messages.at(-1)?.kind, 'warning');
   });
 });

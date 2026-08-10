@@ -309,7 +309,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         limit,
       );
 
-      const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to 2 levels deep):`;
+      const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to ${DIRECTORY_LISTING_DEPTH} levels deep):`;
       return executed(
         `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
         `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,

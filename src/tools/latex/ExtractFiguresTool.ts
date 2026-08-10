@@ -21,7 +21,7 @@ const ExtractFiguresInputSchema = z.strictObject({
   texPath: texPathField('Path to the primary LaTeX file to inspect.'),
 });
 
-export type ExtractFiguresInput = z.infer<typeof ExtractFiguresInputSchema>;
+type ExtractFiguresInput = z.infer<typeof ExtractFiguresInputSchema>;
 
 const DEFAULT_MAX_FILES = 20;
 

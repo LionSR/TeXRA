@@ -135,9 +135,14 @@ export class BundledAgentDirectorySync {
   > {
     try {
       const raw = await this.options.storage.read(SYNC_MARKER_FILE);
-      return AgentDirectorySyncMarkerSchema.optional()
-        .catch(undefined)
-        .parse(JSON.parse(raw));
+      const parsed = AgentDirectorySyncMarkerSchema.safeParse(JSON.parse(raw));
+      if (!parsed.success) {
+        this.options.logger.warn(
+          `Ignoring malformed bundled agent sync marker: ${z.prettifyError(parsed.error)}`,
+        );
+        return undefined;
+      }
+      return parsed.data;
     } catch (error) {
       if (isFileNotFoundError(error)) return undefined;
       this.options.logger.warn(

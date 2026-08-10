@@ -36,14 +36,12 @@ const LOG_CHANNEL = 'lean.direct';
  * Commands absent here (restart_server, stop_server, install_elan, …) are
  * handled by their own dedicated branches.
  */
-const LAKE_PROJECT_ARGS: Partial<
-  Record<LeanProjectCommand, readonly string[]>
-> = {
+const LAKE_PROJECT_ARGS = {
   build: ['build'],
   clean: ['clean'],
   fetch_cache: ['exe', 'cache', 'get'],
   fetch_file_cache: ['exe', 'cache', 'get'],
-};
+} satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
 
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
@@ -242,13 +240,13 @@ export function createDirectLspLeanAdapter(
         case 'build':
         case 'clean':
         case 'fetch_cache':
-        case 'fetch_file_cache': {
-          const lakeArgs = LAKE_PROJECT_ARGS[command];
-          if (lakeArgs) {
-            await runForAllSessions(sessions, lakeCommand, lakeArgs);
-          }
+        case 'fetch_file_cache':
+          await runForAllSessions(
+            sessions,
+            lakeCommand,
+            LAKE_PROJECT_ARGS[command],
+          );
           return;
-        }
         case 'install_elan':
         case 'install_deps':
         case 'update_elan':

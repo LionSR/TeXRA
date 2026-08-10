@@ -73,8 +73,11 @@ import {
   refreshModelListStateIfNeeded,
 } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import {
+  NO_TOOL_AVAILABILITY_HOST,
+  SHUTDOWN_PHASE,
+  type LifecycleHost,
+} from '@platform/interfaces';
 import { initPlatform, platform } from '@platform/platform';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
