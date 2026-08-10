@@ -415,11 +415,7 @@ export async function runChat(
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
-  // There is no standard terminal reduced-motion variable; TeXRA explicitly
-  // honors TEXRA_REDUCED_MOTION=1 rather than conflating motion with NO_COLOR.
-  const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd, {
-    motion: process.env.TEXRA_REDUCED_MOTION === '1' ? 'reduced' : 'allowed',
-  });
+  const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposers.push(terminalTitleUpdates.dispose);
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamArtifacts(runtimeSession.snapshots));
