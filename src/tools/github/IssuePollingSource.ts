@@ -34,6 +34,10 @@ import {
   PollingSourceBase,
 } from './PollingSourceBase';
 import {
+  MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
+import {
   GhIssueCommentArraySchema,
   GhIssueSchema,
   type GhIssue,
@@ -76,8 +80,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   constructor() {
     super({
       name: 'IssuePollingSource',
-      pollIntervalMs: 30_000,
-      maxConcurrent: 10,
+      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
       ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
   }
@@ -139,7 +143,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         // signal a subscriber wants. So we keep polling on close: emit the
         // close event but stay subscribed so a later reopen surfaces too.
         // Slot release is via explicit unsubscribe or the 24 h unreachable
-        // failsafe. Bound by `maxConcurrent` (10).
+        // failsafe. Bound by `maxConcurrent`.
         if (state.initialized && state.state !== newState) {
           if (state.state === 'open' && newState === 'closed') {
             this.emit(

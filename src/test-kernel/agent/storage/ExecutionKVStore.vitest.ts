@@ -10,7 +10,6 @@ import {
 
 import {
   clearStoreCache,
-  EXECUTION_META_SCHEMA_VERSION,
   getExecutionStore,
   isReservedKvKeyName,
   type ResultMeta,
@@ -18,6 +17,7 @@ import {
 import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import * as logger from '@logger/logUtils';
 import {
+  EXECUTION_META_SCHEMA_VERSION,
   RUN_OUTCOME,
   type ExecutionId,
   type RunOutcome,

@@ -5,7 +5,6 @@ import {
   type AgentEntry,
   type ResolvedAgent,
 } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   applyInitialCliAgentSelection,
   chatToolUseAgentUsageError,
@@ -15,6 +14,7 @@ import {
   restorePendingSkillActivations,
   takePendingSkillActivations,
 } from '@cli/chat/tui/runChatTui';
+import { AgentCategory } from '@shared/schemas';
 
 vi.mock('@agent/index', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/index')>();
@@ -42,7 +42,7 @@ function registryAgent(category: AgentCategory): AgentEntry {
 
 function registryResolution(category: AgentCategory): ResolvedAgent {
   const entry = registryAgent(category);
-  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+  return { entry };
 }
 
 beforeEach(() => {

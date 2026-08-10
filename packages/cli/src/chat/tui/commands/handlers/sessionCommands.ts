@@ -17,7 +17,6 @@ import {
   openInfoPane,
   sessionMeta,
   setTransientNotice,
-  streamAccessTarget,
   streams,
   workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
@@ -92,25 +91,15 @@ export async function showCliSessionStatus(
   const meta = sessionMeta.get();
   const activeStreamId = activeStreamIdSignal.get();
   const slice = activeStreamId ? streams.get().get(activeStreamId) : undefined;
-  const accessTarget = streamAccessTarget(slice, {
-    model: meta.model || context.initialModel,
-    category: meta.category,
-  });
-  const hasCategory = accessTarget.category !== undefined;
-  const subscriptionActive =
-    hasCategory &&
-    (await isCodexSubscriptionActive(
-      accessTarget.model,
-      accessTarget.category,
-    ));
-  const grokSubscriptionActive =
-    hasCategory && (await isXaiSubscriptionActive(accessTarget.model));
-  const kimiCodeActive =
-    hasCategory && (await isKimiCodeSubscriptionActive(accessTarget.model));
+  // Use root-session access facts only before any stream exists.
+  const model = slice?.model ?? (meta.model || context.initialModel);
+  const subscriptionActive = await isCodexSubscriptionActive(model);
+  const grokSubscriptionActive = await isXaiSubscriptionActive(model);
+  const kimiCodeActive = await isKimiCodeSubscriptionActive(model);
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent || context.initialAgent,
-      model: accessTarget.model,
+      model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
         apiMode: meta.apiMode,

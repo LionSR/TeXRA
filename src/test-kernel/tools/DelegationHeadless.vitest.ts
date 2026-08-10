@@ -10,7 +10,6 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
@@ -19,6 +18,7 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -59,6 +59,20 @@ vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
 }));
 
+// The launch sites register through `registerOwnedExecution`, which calls
+// `registerExecution` module-internally; route the spy through it the same way.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+  return {
+    ...actual,
+    registerOwnedExecution: async (...args: unknown[]) => {
+      await mocks.registerExecution(...args);
+      return (operation: () => unknown) => operation();
+    },
+  };
+});
+
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   captureOwnedExecutionLease:
@@ -77,6 +91,33 @@ vi.mock('@agent/runtime/executionOwnership', () => ({
       mocks.releaseOwnedExecutionLease(executionId),
   ),
 }));
+
+// `persistChildRun*` moved to `@agent/storage/childRunPersistence`, which
+// imports the store module-internally rather than through the mocked
+// `@agent/storage` index; route it through the store spy the way the deleted
+// delegation-side module did.
+vi.mock('@agent/storage/childRunPersistence', () => {
+  const persist = async (
+    write: () => Promise<unknown>,
+  ): Promise<{ kind: 'persisted' } | { kind: 'failed'; err: unknown }> => {
+    try {
+      await write();
+      return { kind: 'persisted' };
+    } catch (err) {
+      return { kind: 'failed', err };
+    }
+  };
+  return {
+    persistChildRunReport: (executionId: ExecutionId, message: string) =>
+      persist(() => mocks.getExecutionStore(executionId).writeReport(message)),
+    persistChildRunResultMeta: (executionId: ExecutionId, resultMeta: unknown) =>
+      persist(() =>
+        mocks.getExecutionStore(executionId).writeResultMeta(resultMeta),
+      ),
+    persistChildRunTurnState: (executionId: ExecutionId, state: unknown) =>
+      persist(() => mocks.getExecutionStore(executionId).writeTurnState(state)),
+  };
+});
 
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: mocks.computeModelOptionsData,

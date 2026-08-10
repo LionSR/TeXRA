@@ -48,11 +48,8 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 export async function selectAvailableDelegationModel(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
-  readonly agentCategory: AgentCategory;
 }): Promise<string> {
-  const modelOptions = await computeModelOptionsData(undefined, undefined, {
-    agentCategory: input.agentCategory,
-  });
+  const modelOptions = await computeModelOptionsData();
   return selectDelegationModelFromAvailableNames({
     ...input,
     availableModels: availableModelNamesFromOptions(modelOptions),
@@ -221,7 +218,6 @@ export async function proposeAndExecute(
       modelOverride = await selectAvailableDelegationModel({
         requestedModel: result.model,
         parentModel: proposal.model,
-        agentCategory: proposal.agentCategory,
       });
     } catch (err) {
       return errorResult(

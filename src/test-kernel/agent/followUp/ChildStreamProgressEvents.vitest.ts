@@ -6,12 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import {
   clearStreamStatusForTest,

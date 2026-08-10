@@ -184,9 +184,11 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       ),
     };
   });
-  mocks.doMock('@utils/files', async () => {
+  mocks.doMock('@utils/files/workspaceFS', async () => {
     const actual =
-      await vi.importActual<typeof import('@utils/files')>('@utils/files');
+      await vi.importActual<typeof import('@utils/files/workspaceFS')>(
+        '@utils/files/workspaceFS',
+      );
     return {
       ...actual,
       WorkspaceFS: {

@@ -49,10 +49,13 @@ vi.mock('@agent/runtime/executionOwnership', () => ({
   releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
 }));
 
-vi.mock('@tools/delegation/childRunDelivery', () => ({
+vi.mock('@agent/storage/childRunPersistence', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
   persistChildRunTurnState: mocks.persistChildRunTurnState,
+}));
+
+vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
@@ -70,13 +73,13 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
   type StreamPhase,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';

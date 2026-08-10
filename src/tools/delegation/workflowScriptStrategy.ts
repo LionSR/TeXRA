@@ -42,7 +42,9 @@ import {
 // Local file imports
 import {
   createWorkflowAttemptCostTracker,
+  EMPTY_WORKFLOW_SCRIPT_RUN_FACTS,
   runPersistedWorkflowScriptWithProgress,
+  type WorkflowScriptRunFacts,
 } from './workflowScriptRun';
 import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
 import { createWorkflowDeliverySummaryCollector } from './workflowScriptDeliverySummary';
@@ -166,6 +168,11 @@ export function createWorkflowScriptStrategy(
       // runner's child-active hook. The identity bridge that lets an
       // execution-id-keyed host action reach the engine's index-keyed control.
       const liveCallIndexByChild = new Map<ExecutionId, number>();
+      // The run fold's fact-snapshot accessor, handed out synchronously when
+      // the run starts; the delivery summary derives its counts from it after
+      // the run settles instead of re-folding the event stream.
+      let snapshotRunFacts: () => WorkflowScriptRunFacts = () =>
+        EMPTY_WORKFLOW_SCRIPT_RUN_FACTS;
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
@@ -199,7 +206,9 @@ export function createWorkflowScriptStrategy(
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           getCallCostUsd: (index) => attemptCost.costForCall(index),
           onActivity: runLog.add,
-          onEvent: summary.onEvent,
+          onRunFacts: (snapshot) => {
+            snapshotRunFacts = snapshot;
+          },
           ...(params.onSnapshot && { onSnapshot: params.onSnapshot }),
           onControl: (control) => {
             // Translate an execution-id-keyed host request into an
@@ -240,6 +249,7 @@ export function createWorkflowScriptStrategy(
                 }
               : undefined,
             costUsd,
+            snapshotRunFacts(),
           );
         } catch {
           // Cost settlement is best-effort on the failure path.
@@ -256,7 +266,7 @@ export function createWorkflowScriptStrategy(
       // completed-call fallback; baseline history contributes zero.
       const costUsd = attemptCost.total(run.journal);
       ports.recordCost(costUsd);
-      summary.settle(run, costUsd);
+      summary.settle(run, costUsd, snapshotRunFacts());
       return run;
     },
 

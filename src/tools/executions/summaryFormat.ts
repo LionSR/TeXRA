@@ -6,7 +6,7 @@
  * listExecutions only fetch and delegate to these builders.
  */
 
-import type { ChildRecord, ExecutionMeta, TodoEntry } from '@agent/storage';
+import type { ChildRecord, TodoEntry } from '@agent/storage';
 import {
   getRunContextStreamId,
   tryUseRunContext,
@@ -20,7 +20,7 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 import {
   formatStatusInfo,

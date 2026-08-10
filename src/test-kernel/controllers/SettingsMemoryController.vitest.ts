@@ -26,7 +26,7 @@ vi.mock('@tools/memory/memoryFileSystem', () => ({
   setMemoryPinned: mocks.setMemoryPinned,
 }));
 
-vi.mock('@utils/files', () => ({
+vi.mock('@utils/files/storageFS', () => ({
   StorageFS: {
     delete: mocks.storageDelete,
   },

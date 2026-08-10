@@ -2,7 +2,7 @@ import type { ExecutionId, RunStorageFileLocation } from '@shared/schemas';
 import {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
-} from '@utils/files/taskRunStorage';
+} from '@utils/files/runStorageFs';
 
 import { getExecutionStore } from './ExecutionKVStore';
 

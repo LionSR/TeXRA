@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeKimiCodeSubscriptionLimit,
-  formatProviderHttpError,
   parseKimiCodeSubscriptionLimit,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/kimiCodeSubscriptionDetection';
+import {
+  formatProviderHttpError,
+} from '@common/errors/sdkError/providerErrorFormat';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
 const USAGE_LIMIT_MESSAGE =

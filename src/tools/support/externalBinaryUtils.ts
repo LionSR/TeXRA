@@ -20,7 +20,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 

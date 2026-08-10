@@ -10,7 +10,7 @@ import * as path from 'node:path';
 
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 /** Strips everything after an unescaped % on each line. */

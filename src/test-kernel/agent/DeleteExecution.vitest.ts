@@ -7,9 +7,11 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn(),
 }));
 
-vi.mock('@utils/files', async () => {
+vi.mock('@utils/files/storageFS', async () => {
   const actual =
-    await vi.importActual<typeof import('@utils/files')>('@utils/files');
+    await vi.importActual<typeof import('@utils/files/storageFS')>(
+      '@utils/files/storageFS',
+    );
   return {
     ...actual,
     StorageFS: { ...actual.StorageFS, exists: mocks.exists },

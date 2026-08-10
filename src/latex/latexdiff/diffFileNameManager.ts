@@ -5,7 +5,8 @@ import {
   extractLastRoundMatch,
   extractLastRoundModelMatch,
 } from '@agent/utils/mergeFileUtils';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';
 
 type GeneratedLatexdiffArtifactKind =

@@ -30,7 +30,6 @@ vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
 import { noopTrace } from '@agent/trace';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { useRunContext } from '@agent/runtime/RunContext';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -39,7 +38,11 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
-import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  AgentCategory,
+} from '@shared/schemas';
 
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -172,7 +175,9 @@ describe('AgentLaunchContext', () => {
       dispose: vi.fn(() => order.push('handler')),
     };
 
-    mocks.resolve.mockReturnValueOnce({ definitionPath: '/agents/chat.yaml' });
+    mocks.resolve.mockReturnValueOnce({
+      entry: { path: '/agents/chat.yaml' },
+    });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -200,7 +205,7 @@ describe('AgentLaunchContext', () => {
       expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
         delegationAgentScope,
       });
-      expect(mocks.createHandler.mock.calls.at(-1)?.at(3)).toBe(
+      expect(mocks.createHandler.mock.calls.at(-1)?.at(2)).toBe(
         responseTextProcessing,
       );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);

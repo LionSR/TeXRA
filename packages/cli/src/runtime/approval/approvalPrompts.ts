@@ -1,7 +1,9 @@
 import PQueue from 'p-queue';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
+import {
+  isRelayMonthlyLimitMessage,
+} from '@common/errors/sdkError/relayDetection';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -110,6 +112,47 @@ export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
     (details.isRelayError === true ||
       isRelayMonthlyLimitMessage(payload.errorMessage))
   );
+}
+
+/**
+ * The decision the retry modal's "use your own API key" action settles with.
+ * Structurally the CLI's TUI `ApprovalDecision` (approvalQueue.ts) narrowed to
+ * this action; declared here so the runtime approval layer does not import the
+ * TUI state module. Not exported: consumers use the structural type through
+ * {@link cliRetryApiSwitchDecision}'s return.
+ */
+interface CliRetryApiSwitchDecision {
+  readonly accepted: true;
+  readonly apiMode: 'personal';
+  readonly disableChatGptSubscription?: boolean;
+  readonly disableGlmCodingPlan?: boolean;
+  readonly disableKimiCode?: boolean;
+}
+
+/**
+ * Map an exhausted credential to the subscription/plan toggle the retry
+ * disables. Every switch flips API mode to personal keys; a subscription or
+ * coding-plan retry additionally turns off the preference that routed onto
+ * the exhausted credential. Classify-and-decide share this one owner so the
+ * modal cannot drift from the classifiers above.
+ */
+export function cliRetryApiSwitchDecision(
+  payload: RetryPermission,
+): CliRetryApiSwitchDecision {
+  if (isCliChatGptSubscriptionRetry(payload)) {
+    return {
+      accepted: true,
+      disableChatGptSubscription: true,
+      apiMode: 'personal',
+    };
+  }
+  if (payload.errorDetails?.exhaustionReason === 'glm-coding-plan') {
+    return { accepted: true, disableGlmCodingPlan: true, apiMode: 'personal' };
+  }
+  if (isCliCodingPlanRetry(payload)) {
+    return { accepted: true, disableKimiCode: true, apiMode: 'personal' };
+  }
+  return { accepted: true, apiMode: 'personal' };
 }
 
 export function appendCliApiSwitchHint(

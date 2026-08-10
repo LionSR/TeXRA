@@ -12,11 +12,11 @@ import {
 } from '@agent/modelHandlers/vscodelm/modelHandlerVscodeLm';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
+import { detectPartialText } from '@common/errors/sdkError/errorMetadata';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
-  detectPartialText,
-  isUserAbort,
   normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
 import {
   invalidateRuntimeModelRegistry,
   refreshRuntimeModelRegistry,

@@ -5,7 +5,6 @@ import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   AgentSetting,
   AgentPrompt,
-  AgentCategory,
 } from '@agent/core/definition/AgentDataclass';
 import {
   resolveDelegationScopeAgents,
@@ -15,6 +14,7 @@ import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { shouldSaveModelIO } from '@agent/utils/debugMessageSaver';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
   AGENT_SKILLS_CONFIG_KEY,
@@ -25,12 +25,13 @@ import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import {
   getListOfFiles,
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import {

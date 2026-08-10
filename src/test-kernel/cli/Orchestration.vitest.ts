@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   orchestrationBlockRowCost,
   orchestrationFooterHints,
@@ -37,6 +36,7 @@ import {
 } from '@cli/runtime/multiAgentPresets';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 
 function historyEntry(
   id: string,

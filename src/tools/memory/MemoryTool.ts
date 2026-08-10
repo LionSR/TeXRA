@@ -19,7 +19,7 @@ import {
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 

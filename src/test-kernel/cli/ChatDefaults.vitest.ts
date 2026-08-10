@@ -7,7 +7,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -16,6 +15,7 @@ import {
 import { BUILTIN_DEFAULT_CHAT_AGENT } from '@cli/runtime/defaultAgents';
 import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */

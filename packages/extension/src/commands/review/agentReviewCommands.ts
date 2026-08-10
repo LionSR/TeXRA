@@ -31,7 +31,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AgentReview';

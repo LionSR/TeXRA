@@ -11,7 +11,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'SampleProjectCommands';
 

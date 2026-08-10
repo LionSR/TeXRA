@@ -16,11 +16,12 @@ import {
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-import { attachProviderError } from '@common/errors/sdkErrorUtils';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-import { AbsoluteFS, getComparablePath, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { getComparablePath, pathToLocation } from '@utils/files/fileLocation';
 
 interface MediaLogRecorder extends AgentTrace {
   debugMessages: string[];

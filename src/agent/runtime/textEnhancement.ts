@@ -1,4 +1,4 @@
-import { getSdkErrorMessage } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 

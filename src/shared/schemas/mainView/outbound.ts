@@ -28,13 +28,10 @@ const FileListSchema = z.array(z.string());
 
 const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
-  optionsData: z.array(ModelOptionDataSchema).optional(),
-  optionsDataByCategory: z
-    .object({
-      [AgentCategory.Workflow]: z.array(ModelOptionDataSchema).optional(),
-      [AgentCategory.ToolUse]: z.array(ModelOptionDataSchema).optional(),
-    })
-    .optional(),
+  optionsDataByCategory: z.object({
+    [AgentCategory.Workflow]: z.array(ModelOptionDataSchema),
+    [AgentCategory.ToolUse]: z.array(ModelOptionDataSchema),
+  }),
 });
 
 const SetAgentOptionsMessageSchema = z.object({

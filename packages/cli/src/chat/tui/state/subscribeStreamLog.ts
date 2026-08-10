@@ -262,18 +262,6 @@ function toolUseEqual(
   );
 }
 
-// `normalizeToolUseData` is dominated by a Zod parse + YAML stringify
-// of `entry.data`. `StreamLog.update` spreads its patch into a fresh
-// `data` object every tick, so reference equality is a reliable signal
-// that nothing has actually changed. Keep the last-seen `data` ref off
-// to the side in a WeakMap rather than on `ConversationEntry` itself —
-// stashing it on the entry would mean either (a) the slice-level
-// `entriesEqual` check ignores `toolUseSource` and the cache refresh
-// never persists, or (b) we trigger a slice update on every tick just
-// to write the new reference. The WeakMap dodges both: the entry stays
-// immutable, and the cache is GC'd when the entry is replaced.
-const toolUseSourceCache = new WeakMap<ConversationEntry, unknown>();
-
 function entriesEqual(
   prev: ConversationEntry,
   next: ConversationEntry,
@@ -369,22 +357,6 @@ function renderLogEntryText(
 }
 
 /**
- * Once an entry settles, or (for the given kind) always finalizes, it stays
- * finalized: a re-sync tick can never roll an already-promoted entry back.
- */
-function computeFinalized(
-  entry: StreamLogEntry,
-  prev: ConversationEntry | undefined,
-  alwaysFinalized = false,
-): boolean {
-  return (
-    entry.settlementSeqNo !== undefined ||
-    alwaysFinalized ||
-    (prev?.finalized ?? false)
-  );
-}
-
-/**
  * Fields every {@link ConversationEntry} shares, regardless of role: the
  * source identity plus the two spreads (`messageType`, `settlementSeqNo`)
  * that must stay absent — not merely `undefined` — when the source entry
@@ -415,7 +387,44 @@ function dedupeEntry(
   return prev && entriesEqual(prev, next) ? prev : next;
 }
 
-function renderLogEntry(
+/**
+ * One log entry's cached render. `StreamLog` is append-only and replaces
+ * the entry object on any mutation (tool-output patches, text appends, the
+ * in-place GROUP_START → GROUP_END upsert), so an unchanged entry reference
+ * guarantees an unchanged render.
+ */
+interface CachedLogRender {
+  /** The log-entry object `rendered` was computed from. */
+  readonly source: StreamLogEntry;
+  /**
+   * The render with only source-owned finalization applied
+   * (`settlementSeqNo`, or the always-finalized kinds). Promotion inherited
+   * from the slice's copy is applied at assembly time, never baked in here,
+   * so a cached render stays valid even after the slice drops and
+   * re-projects the row (compact workflow dashboard ↔ full transcript).
+   */
+  readonly rendered: ConversationEntry | null;
+  /** `rendered` with inherited promotion applied — computed at most once. */
+  promoted?: ConversationEntry;
+}
+
+interface StreamRenderState {
+  readonly renders: Map<string, CachedLogRender>;
+  /**
+   * The `renderLogEntryFresh` parameter the cache was built under. A stream
+   * whose category flips the lifecycle-to-taskGroups projection rebuilds
+   * from scratch rather than serving renders computed for the other mode.
+   */
+  readonly projectLifecycleToTaskGroups: boolean;
+}
+
+/**
+ * Renders a log entry from scratch. `prev` is consulted only for phase
+ * count inheritance (a GROUP_END row carries no index/total of its own);
+ * finalization here is source-owned only — the slice's promotion is
+ * re-inherited by {@link renderLogEntry} at assembly time.
+ */
+function renderLogEntryFresh(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
   projectLifecycleToTaskGroups: boolean,
@@ -428,17 +437,10 @@ function renderLogEntry(
       finalized: true,
       images,
     };
-    return dedupeEntry(prev, next);
+    return next;
   }
 
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
-    // Cache hit: same `data` reference as last sync, no re-normalize.
-    // Promotion to `<Static>` is decided later by `finalizeSettledPrefix`
-    // over the ordered slice, so a cache hit just returns `prev` as-is.
-    if (prev?.role === 'tool' && toolUseSourceCache.get(prev) === entry.data) {
-      return prev;
-    }
-
     const toolUse = normalizeToolUseData(entry.data);
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
@@ -446,23 +448,12 @@ function renderLogEntry(
     // Never finalize here. `finalizeSettledPrefix` promotes a tool row only
     // once it completes AND every entry before it has promoted, so a
     // fast tool can't jump ahead of still-streaming assistant text in
-    // `<Static>` (which is append-only). Inherit the prior flag so a sync
-    // tick can't roll an already-promoted entry back to false.
+    // `<Static>` (which is append-only).
     const next: ConversationEntry = {
       ...baseLogEntryFields(entry, 'tool', ''),
-      finalized: computeFinalized(entry, prev),
+      finalized: entry.settlementSeqNo !== undefined,
       toolUse,
     };
-    if (prev && entriesEqual(prev, next)) {
-      // Same content under a fresh `data` reference: refresh the cache
-      // key on `prev` so the identity fast path hits on the next tick.
-      // Returning `prev` keeps the slice unchanged (no re-render
-      // cascade) — the cache lives outside the entry contract so this
-      // refresh doesn't need a slice update to persist.
-      toolUseSourceCache.set(prev, entry.data);
-      return prev;
-    }
-    toolUseSourceCache.set(next, entry.data);
     return next;
   }
 
@@ -476,10 +467,10 @@ function renderLogEntry(
         'workflowTask',
         formatWorkflowCallLine(call),
       ),
-      finalized: computeFinalized(entry, prev),
+      finalized: entry.settlementSeqNo !== undefined,
       task: call,
     };
-    return dedupeEntry(prev, next);
+    return next;
   }
 
   // A phase header is immutable at GROUP_START and therefore printable
@@ -502,7 +493,7 @@ function renderLogEntry(
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
     };
-    return dedupeEntry(prev, next);
+    return next;
   }
 
   // Workflow run/round/session lifecycle rows are projected into `taskGroups`,
@@ -534,10 +525,10 @@ function renderLogEntry(
     renderedText = redactSecrets(safeTerminalText(renderedText));
   }
   // Assistant text is promoted by `finalizeSettledPrefix` once the model
-  // moves on to a later entry; inherit the prior flag here so a re-sync
-  // can't de-finalize an already-promoted block. User/error rows can't
-  // change after they appear, so they finalize immediately.
-  const finalized = computeFinalized(entry, prev, role !== 'assistant');
+  // moves on to a later entry. User/error rows can't change after they
+  // appear, so they finalize immediately.
+  const finalized =
+    entry.settlementSeqNo !== undefined || role !== 'assistant';
   const next: ConversationEntry = {
     ...baseLogEntryFields(entry, role, renderedText),
     ...(assistantTranscript !== undefined &&
@@ -547,7 +538,41 @@ function renderLogEntry(
     finalized,
   };
   if (!isRenderableTranscriptEntry(next)) return null;
-  return dedupeEntry(prev, next);
+  return next;
+}
+
+/**
+ * Renders one log entry against the slice's previous entries, re-rendering
+ * only when the entry object has changed since the last sync (see
+ * {@link STREAM_RENDER_STATES}). Once an entry settles — or, for its kind,
+ * always finalizes — it stays finalized: an entry the slice already
+ * promoted to `<Static>` re-inherits the flag here, so a re-sync tick can
+ * never roll an already-promoted entry back.
+ */
+function renderLogEntry(
+  state: StreamRenderState,
+  entry: StreamLogEntry,
+  prev: ConversationEntry | undefined,
+): ConversationEntry | null {
+  let cached = state.renders.get(entry.id);
+  if (cached === undefined || cached.source !== entry) {
+    cached = {
+      source: entry,
+      rendered: renderLogEntryFresh(
+        entry,
+        prev,
+        state.projectLifecycleToTaskGroups,
+      ),
+    };
+    state.renders.set(entry.id, cached);
+  }
+  const { rendered } = cached;
+  if (rendered === null || prev === undefined) return rendered;
+  const candidate =
+    prev.finalized && !rendered.finalized
+      ? (cached.promoted ??= { ...rendered, finalized: true })
+      : rendered;
+  return dedupeEntry(prev, candidate);
 }
 
 // An entry is "settled" once its content can no longer change, so it is
@@ -612,14 +637,7 @@ export function finalizeSettledPrefix(
       continue;
     }
     if (!result) result = [...entries];
-    const promoted: ConversationEntry = { ...entry, finalized: true };
-    // Carry the WeakMap cache key onto the clone so the tool fast-path in
-    // `renderLogEntry` keeps hitting after promotion.
-    if (entry.role === 'tool') {
-      const cached = toolUseSourceCache.get(entry);
-      if (cached !== undefined) toolUseSourceCache.set(promoted, cached);
-    }
-    result[index] = promoted;
+    result[index] = { ...entry, finalized: true };
   }
   // No promotions: hand back the input as-is. The caller's `changed` check
   // is element-wise, so the same reference is safe and skips a per-tick copy.
@@ -690,9 +708,20 @@ const COMPACTION_PROJECTIONS = new Map<
   StreamTabId,
   CompactionProjectionState
 >();
+
+/**
+ * Per-stream render caches for the transcript projection, keyed beside the
+ * other incremental projections. Same proven in-file pattern as
+ * {@link TASK_GROUP_PROJECTIONS}: walk the log each tick, skip every entry
+ * whose object reference is unchanged, re-render exactly the appended or
+ * in-place-updated rows — never a full re-render per tick.
+ */
+const STREAM_RENDER_STATES = new Map<StreamTabId, StreamRenderState>();
+
 registerCliStateResetHook(() => {
   TASK_GROUP_PROJECTIONS.clear();
   COMPACTION_PROJECTIONS.clear();
+  STREAM_RENDER_STATES.clear();
 });
 
 function projectTaskGroupsIncrementally(
@@ -837,6 +866,7 @@ export function syncStreamLog(
   if (isChildStreamRemoved(streamId)) {
     TASK_GROUP_PROJECTIONS.delete(streamId);
     COMPACTION_PROJECTIONS.delete(streamId);
+    STREAM_RENDER_STATES.delete(streamId);
     return;
   }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
@@ -895,6 +925,19 @@ export function syncStreamLog(
     const compactingActive = compactionProjection.blocks.some(
       (block) => block.status === 'running',
     );
+    const projectLifecycleToTaskGroups =
+      slice.category === AgentCategory.Workflow;
+    let renderState = STREAM_RENDER_STATES.get(streamId);
+    if (
+      renderState === undefined ||
+      renderState.projectLifecycleToTaskGroups !== projectLifecycleToTaskGroups
+    ) {
+      renderState = {
+        renders: new Map(),
+        projectLifecycleToTaskGroups,
+      };
+      STREAM_RENDER_STATES.set(streamId, renderState);
+    }
     const logCandidates: TranscriptCandidate[] = [];
     const workflowLatestLineCandidates: TranscriptCandidate[] = [];
     for (const block of compactionProjection.blocks) {
@@ -937,9 +980,9 @@ export function syncStreamLog(
         continue;
       }
       const rendered = renderLogEntry(
+        renderState,
         entry,
         existing.get(entry.id),
-        slice.category === AgentCategory.Workflow,
       );
       if (!rendered) continue;
       if (workflowOperationalOnly) {

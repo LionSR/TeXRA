@@ -90,10 +90,7 @@ export class SubscriptionUsageRow extends LitElement {
     const snapshot = this.snapshot;
     if (!snapshot) return nothing;
     if (snapshot.state === 'unavailable') {
-      if (
-        snapshot.reason === 'missing_credentials' ||
-        snapshot.reason === 'unsupported'
-      ) {
+      if (snapshot.reason === 'missing_credentials') {
         return nothing;
       }
       return html`

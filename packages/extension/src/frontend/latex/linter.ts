@@ -8,7 +8,7 @@ import { ensureFileOpen } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 
 // Local imports
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'LinterUtils';
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;

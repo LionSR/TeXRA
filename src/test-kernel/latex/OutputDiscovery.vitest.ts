@@ -28,8 +28,8 @@ vi.mock('@agent/storage', async (importActual) => ({
   getExecutionStore: mocks.getExecutionStore,
 }));
 
-vi.mock('@utils/files', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/files')>()),
+vi.mock('@utils/files/runStorageFs', async (importActual) => ({
+  ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
   findRunDir: mocks.findRunDir,
 }));
 

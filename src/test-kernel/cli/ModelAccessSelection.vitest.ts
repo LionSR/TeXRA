@@ -25,9 +25,8 @@ const mocks = vi.hoisted(() => ({
   setPreferXaiSubscription: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   setCliApiMode: vi.fn(),
-  shouldUseChatGptDeviceCode: vi.fn(),
+  shouldUseSubscriptionDeviceCode: vi.fn(),
   signInCliChatGpt: vi.fn(),
-  shouldUseGrokDeviceCode: vi.fn(),
   signInCliGrok: vi.fn(),
   updateGlobalState: vi.fn(),
   apiKeyExists: vi.fn(),
@@ -139,14 +138,21 @@ vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
 });
 
 vi.mock('@cli/runtime/chatgptLogin', () => ({
-  shouldUseChatGptDeviceCode: mocks.shouldUseChatGptDeviceCode,
   signInCliChatGpt: mocks.signInCliChatGpt,
 }));
 
 vi.mock('@cli/runtime/grokLogin', () => ({
-  shouldUseGrokDeviceCode: mocks.shouldUseGrokDeviceCode,
   signInCliGrok: mocks.signInCliGrok,
 }));
+
+vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/subscriptionLogin')>();
+  return {
+    ...actual,
+    shouldUseSubscriptionDeviceCode: mocks.shouldUseSubscriptionDeviceCode,
+  };
+});
 
 const context = createTestCliContext({ apiMode: 'personal' });
 
@@ -196,8 +202,7 @@ beforeEach(() => {
     mode,
     openRouterDisabled: false,
   }));
-  mocks.shouldUseChatGptDeviceCode.mockReturnValue(false);
-  mocks.shouldUseGrokDeviceCode.mockReturnValue(false);
+  mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
   mocks.apiKeyExists.mockResolvedValue(false);
   mocks.lookupApiKeyOrigin.mockResolvedValue('none');
   mocks.getPreferKimiCode.mockReturnValue(false);
@@ -458,7 +463,10 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      'texra.kimiCode.prefer',
+      true,
+    );
     expect(mocks.updateGlobalState).toHaveBeenCalledWith(
       'texra.useOpenRouter',
       false,
@@ -715,7 +723,10 @@ describe('CLI model access routes', () => {
       subscriptionPreference('kimi-code', 'off'),
       { writeProgress: vi.fn() },
     );
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      'texra.kimiCode.prefer',
+      false,
+    );
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
@@ -783,7 +794,10 @@ describe('CLI model access routes', () => {
     await updateCliModelAccess(context, selection.value);
 
     expect(mocks.apiKeyExists).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      'texra.kimiCode.prefer',
+      false,
+    );
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
 });

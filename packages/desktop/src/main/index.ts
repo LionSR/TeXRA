@@ -53,6 +53,10 @@ import {
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
+import {
+  readGitEnvironmentSummary,
+  readRecentCommits,
+} from '@utils/git/repositoryOverview';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
@@ -67,7 +71,10 @@ import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
+import {
+  DESKTOP_WORKSPACE_COMMANDS,
+  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+} from '../shared/desktopWorkspaceMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -89,7 +96,6 @@ import {
   type DesktopSettingsUiHost,
 } from './desktopSettingsIpc.js';
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
-import { createDesktopGitHost } from './desktopGitHost.js';
 import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import {
@@ -134,6 +140,13 @@ import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const desktopMainDir = findDesktopMainDir(moduleDirname);
+
+/**
+ * Maximum number of commits the renderer displays in the launcher banner.
+ * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
+ * desktop has no per-user override.
+ */
+const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 // Both the relaunch payload and the "a relaunch is under way" fact. It stays
@@ -944,13 +957,29 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
-  // Spawns `git log` under the active workspace to populate the launcher
-  // banner's recent-commits picker. The host is stateless and re-probes per
-  // request, so workspace switches don't need cache invalidation.
-  const gitHost = createDesktopGitHost({
-    getWorkspacePath: () => options.workspacePath,
-    onError: reportAsyncError,
-  });
+  // Git reads re-probe the active workspace per request, so workspace
+  // switches don't need cache invalidation. Both lambdas map a missing
+  // workspace to the host's empty-result convention.
+  const getRecentCommits = async () => {
+    const workspacePath = options.workspacePath;
+    if (!workspacePath) {
+      return { commits: [] as string[], isGitRepo: false };
+    }
+    return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
+      onError: reportAsyncError,
+    });
+  };
+  const getEnvironmentSummary = async () => {
+    const workspacePath = options.workspacePath;
+    if (!workspacePath) {
+      return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
+    }
+    return (
+      (await readGitEnvironmentSummary(workspacePath, {
+        onError: reportAsyncError,
+      })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY
+    );
+  };
   const shellActions = createDesktopShellActions(
     { postToRenderer },
     {
@@ -960,7 +989,7 @@ function createWindow(options: {
       openPath: previewHost.openPath,
       openWorkspaceFolder,
       signIn,
-      getRecentCommits: () => gitHost.getRecentCommits(),
+      getRecentCommits,
       showInfoMessage,
       onAsyncError: reportAsyncError,
     },
@@ -1015,7 +1044,7 @@ function createWindow(options: {
           height: Math.round(bounds.height * zoom),
         };
       },
-      getEnvironmentSummary: () => gitHost.getEnvironmentSummary(),
+      getEnvironmentSummary,
       onAsyncError: reportAsyncError,
     },
   );

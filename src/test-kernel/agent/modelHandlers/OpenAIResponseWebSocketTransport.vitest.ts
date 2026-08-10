@@ -8,8 +8,8 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 // Local imports
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
 import type { ResponseStreamProcessor } from '@agent/modelHandlers/openai/ResponseStreamProcessor';
-import { normalizeProviderError } from '@common/errors';
-import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
+import { detectSdkErrorMetadata } from '@common/errors/sdkError/errorMetadata';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { spiedTrace } from '@test/support/spiedTrace';
 
 // Third-party type imports

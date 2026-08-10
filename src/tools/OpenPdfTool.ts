@@ -14,11 +14,9 @@ import {
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import {
-  AbsoluteFS,
-  pathToLocation,
-  runStorageLocationFromAbsolutePath,
-} from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
+import { runStorageLocationFromAbsolutePath } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports

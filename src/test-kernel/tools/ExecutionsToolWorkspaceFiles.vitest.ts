@@ -31,7 +31,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const tempDirs: string[] = [];
 

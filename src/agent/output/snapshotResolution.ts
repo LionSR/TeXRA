@@ -9,11 +9,9 @@
  */
 
 import type { ExecutionId, FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files';
-import {
-  createRunStorageLocation,
-  getOriginalSnapshotPath,
-} from '@utils/files/taskRunStorage';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
+import { getOriginalSnapshotPath } from '@utils/files/runStorageFs';
 
 /** Map each workspace base file to its snapshot location when one exists.
  *  Non-workspace files and missing snapshots pass through unchanged. */

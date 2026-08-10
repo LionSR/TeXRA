@@ -8,8 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   getExecutionStore,
   SessionStores,
-  type DeleteExecutionOptions,
 } from '@agent/storage';
+import type { DeleteExecutionOptions } from '@agent/storage/executionListing';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as logUtils from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

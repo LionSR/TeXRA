@@ -9,7 +9,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { getFilesRecursively } from './listing';
 

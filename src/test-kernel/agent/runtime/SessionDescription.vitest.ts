@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   cleanSessionDescription,
   generateSessionDescription,
@@ -10,6 +9,7 @@ import {
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 const mocks = vi.hoisted(() => ({

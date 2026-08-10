@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   describeGlmCodingPlanLimit,
   describeGlmCodingPlanRateLimit,
-  formatProviderHttpError,
   isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/glmCodingPlanDetection';
+import {
+  formatProviderHttpError,
+} from '@common/errors/sdkError/providerErrorFormat';
 
 const WEEKLY_LIMIT_BODY = {
   error: {

@@ -55,6 +55,7 @@ import {
   type RegexReplacementCategory,
   LATEX_CONFIG_DEFAULTS,
   LATEX_FIELD_TO_KEY,
+  LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latex';
 
@@ -89,11 +90,7 @@ import type WaTextarea from '@awesome.me/webawesome/dist/components/textarea/tex
 
 const LATEX_CONFIG_FIELD_TO_KEY = {
   ...LATEX_FIELD_TO_KEY,
-  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
-  enabledReplacements: 'texra.latex.enabledReplacements',
-  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
-  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
-  customReplacements: 'texra.latex.customReplacements',
+  ...LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
 } as const satisfies Record<keyof LatexConfigValues, string>;
 
 /** Path keys in LatexSettingsStatus for tool paths. */
@@ -1052,7 +1049,7 @@ export class LaTeXTab extends LitElement {
   }
 }
 
-type LatexConfigField = keyof LatexConfigValues;
+type LatexConfigField = keyof typeof LATEX_CONFIG_FIELD_TO_KEY;
 type LatexConfigValueFor<F extends LatexConfigField> = NonNullable<
   LatexConfigValues[F]
 >;

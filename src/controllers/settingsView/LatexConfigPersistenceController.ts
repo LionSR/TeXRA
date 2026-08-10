@@ -5,6 +5,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 // Local imports - shared constants
 import {
   LATEX_FIELD_TO_KEY,
+  LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
   type LatexConfigField,
 } from '@shared/constants/latex';
 
@@ -14,14 +15,6 @@ import {
   type LatexConfigValues,
   type UpdateLatexConfigValuesMessage,
 } from '@shared/schemas/settingsViewMessages';
-
-const REPLACEMENT_CONFIG_FIELDS = {
-  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
-  enabledReplacements: 'texra.latex.enabledReplacements',
-  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
-  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
-  customReplacements: 'texra.latex.customReplacements',
-} as const satisfies Partial<Record<keyof LatexConfigValues, string>>;
 
 interface CoreConfigReader {
   get(key: string): unknown;
@@ -34,7 +27,7 @@ export class LatexConfigPersistenceController {
     readStoredValue: (key: WorkspaceStateKey) => unknown,
     coreConfig?: CoreConfigReader,
   ): LatexConfigValues {
-    const values: Partial<Record<LatexConfigField, unknown>> = {};
+    const values: Partial<Record<keyof LatexConfigValues, unknown>> = {};
 
     for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
       LatexConfigField,
@@ -48,15 +41,14 @@ export class LatexConfigPersistenceController {
     }
 
     if (coreConfig) {
-      for (const [field, key] of Object.entries(REPLACEMENT_CONFIG_FIELDS) as [
-        keyof typeof REPLACEMENT_CONFIG_FIELDS,
-        string,
-      ][]) {
+      for (const [field, key] of Object.entries(
+        LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
+      ) as [keyof typeof LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY, string][]) {
         if (!coreConfig.isExplicitlySet(key)) continue;
         const parsed = LatexConfigValuesSchema.shape[field].safeParse(
           coreConfig.get(key),
         );
-        if (parsed.success) values[field as LatexConfigField] = parsed.data;
+        if (parsed.success) values[field] = parsed.data;
       }
     }
 

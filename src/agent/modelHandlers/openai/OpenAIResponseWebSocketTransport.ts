@@ -15,9 +15,11 @@ import type { AgentTrace } from '@agent/trace';
 import {
   attachPartialText,
   attachSdkErrorMetadata,
+} from '@common/errors/sdkError/errorMetadata';
+import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
 
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { getStreamEventResponseId } from './responseStreamEvents';

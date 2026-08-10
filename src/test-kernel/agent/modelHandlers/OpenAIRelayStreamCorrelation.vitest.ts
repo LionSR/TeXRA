@@ -6,10 +6,10 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
-  isUserAbort,
   normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 class TestModelHandlerOpenAI extends ModelHandlerOpenAI {

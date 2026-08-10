@@ -14,10 +14,9 @@ import {
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import {
   NO_BYPASS,
-  streamAccessTarget,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
-import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 // The bar renders the access route, not the raw `ApiAccessMode` enum.
 const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
@@ -117,23 +116,6 @@ function heavyUsage(usageRoute: UsageRoute): TokenUsage {
 }
 
 describe('CLI StatusBar display model', () => {
-  it('keeps a stream model and category paired for access resolution', () => {
-    const session = {
-      model: 'deepseekT',
-      category: AgentCategory.ToolUse,
-    };
-    expect(
-      streamAccessTarget({ model: 'gpt55', category: 'workflow' }, session),
-    ).toEqual({ model: 'gpt55', category: 'workflow' });
-    expect(
-      streamAccessTarget({ model: undefined, category: 'workflow' }, session),
-    ).toEqual({ model: 'deepseekT', category: 'workflow' });
-    expect(streamAccessTarget(undefined, session)).toEqual(session);
-    expect(
-      streamAccessTarget({ model: undefined, category: undefined }, session),
-    ).toEqual({ model: 'deepseekT', category: undefined });
-  });
-
   it('uses clear compact labels for API access mode', () => {
     // The session header and the status bar share one mapper, so neither can
     // print the raw enum value ('included' / 'personal') the way they once did.

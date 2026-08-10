@@ -21,10 +21,7 @@ import {
   getRoundOutput,
   type RoundSummary,
 } from '@agent/output/roundSummary';
-import {
-  formatCompileFailureRoundContext,
-  shouldUseCompileFailureRepairContext,
-} from '@agent/output/compileFailureRoundContext';
+import { formatCompileFailureRoundContext } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { tryOperation } from '@agent/output/outputOperations';
 import {
@@ -34,7 +31,7 @@ import {
   type CompileResult,
   type FileLocation,
 } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -322,10 +319,7 @@ export class OutputNode<C = unknown> extends Node<
     shared.roundOutputs = roundsToPersisted(outputState);
     if (execRes.compileResult) {
       shared.lastCompileResult = execRes.compileResult;
-      const compileFailureContext = shouldUseCompileFailureRepairContext(
-        execRes.compileResult,
-        workflowOutputPolicy.shouldRejectOnCompileFailure(),
-      )
+      const compileFailureContext = workflowOutputPolicy.shouldRejectOnCompileFailure()
         ? formatCompileFailureRoundContext(execRes.compileResult)
         : undefined;
       if (compileFailureContext) {

@@ -34,7 +34,8 @@ import {
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Local file imports

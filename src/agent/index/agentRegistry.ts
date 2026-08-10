@@ -1,10 +1,10 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
 import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import type { AgentOptionData } from '@shared/schemas';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
@@ -18,7 +18,10 @@ import {
   agentKey,
   agentKeyOf,
   agentName,
+  AgentCategory,
 } from '@shared/schemas/agent';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { byName } from '@utils/core';
 import { scanDirectory } from './agentYamlScanner';
 import {
   clearInlineAgentDefinitions,
@@ -27,11 +30,6 @@ import {
   inlineAgentEntries,
 } from './inlineAgents';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
-import {
-  entriesToOptionData,
-  sortAgentEntries,
-  type AgentOptionsDataPayload,
-} from './agentOptionsBuilder';
 import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
@@ -275,12 +273,11 @@ export function updateAgentMeta(
 }
 
 /**
- * Resolve an agent to a {@link ResolvedAgent} (entry + flattened metadata).
+ * Resolve an agent to a {@link ResolvedAgent} (entry + carried inline definition).
  *
- * Thin wrapper around {@link getAgent} for callers that want the canonical
- * "resolution" shape (definition path + resolved name) without dereferencing
- * the entry themselves. Returns `undefined` when the identifier doesn't
- * match any cached agent.
+ * Thin wrapper around {@link getAgent} that also carries the inline
+ * definition the resolver selected. Returns `undefined` when the identifier
+ * doesn't match any cached agent.
  *
  * Category-blind: a bare name resolves by source priority, so this is for
  * display/diagnostic/inheritance lookups, NOT launch. Launch must use
@@ -292,11 +289,7 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
 }
 
 function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
-  const resolved: ResolvedAgent = {
-    entry,
-    definitionPath: entry.path,
-    resolvedName: entry.name,
-  };
+  const resolved: ResolvedAgent = { entry };
   // Carry the inline definition in the resolution so the load path doesn't
   // re-lookup mutable global state — a re-registration between resolution
   // and load could otherwise pair a stale entry with a replaced definition.
@@ -552,6 +545,45 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 // =============================================================================
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
+
+export interface AgentOptionsDataPayload {
+  workflow: AgentOptionData[];
+  toolUse: AgentOptionData[];
+}
+
+export function entriesToOptionData(
+  entries: readonly AgentEntry[],
+): AgentOptionData[] {
+  return entries.map((entry) => ({
+    value: agentKeyOf(entry),
+    label: entry.name,
+    isToolUse: entry.category === AgentCategory.ToolUse,
+    isOrchestrator: hasDelegationTool(entry.tools),
+    isRemote: entry.source === 'remote',
+    isCustom: entry.source === 'custom',
+    isInline: entry.source === 'inline',
+  }));
+}
+
+/** Sort entries: preferred agents first (in priority order), then alphabetically. */
+function sortAgentEntries(
+  entries: AgentEntry[],
+  preferredNames: readonly string[],
+): AgentEntry[] {
+  const preferredSet = new Map(
+    preferredNames
+      .map((name, i) => [entries.find((e) => e.name === name), i] as const)
+      .filter(([entry]) => entry != null),
+  );
+  return entries.toSorted((a, b) => {
+    const aIdx = preferredSet.get(a);
+    const bIdx = preferredSet.get(b);
+    if (aIdx != null && bIdx != null) return aIdx - bIdx;
+    if (aIdx != null) return -1;
+    if (bIdx != null) return 1;
+    return byName(a, b);
+  });
+}
 
 /**
  * Compute typed agent options data for Lit-native rendering.

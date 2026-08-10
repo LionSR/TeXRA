@@ -11,7 +11,6 @@ import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
-import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -35,7 +34,8 @@ import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@shared/constants/workflowOutput';
-import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import { TeXCountNode } from './nodes/TeXCountNode';
@@ -204,12 +204,11 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     shared = validated.data;
-    shared.modelHandlerCompatibilityKey ??=
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        config.model,
-        shared.conversation,
-        logger,
-      ) ?? compatibilityKey;
+    // A keyless legacy record gets the active handler's key stamped here.
+    // Model-based inference for such records lives at the resume-retrieval
+    // boundary (SessionResumeRetrieval), which ran before launch on sanctioned
+    // resumes and already routed handler creation through its verdict.
+    shared.modelHandlerCompatibilityKey ??= compatibilityKey;
     // Always sync totalRounds from the current agent config so that changes
     // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
     shared.totalRounds = totalRounds;

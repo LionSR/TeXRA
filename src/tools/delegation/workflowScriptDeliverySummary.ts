@@ -1,7 +1,6 @@
 // Local imports - agent runtime
 import type {
   WorkflowJournalEntry,
-  WorkflowScriptEvent,
   WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
@@ -10,17 +9,18 @@ import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 
-type WorkflowTaskOutcome = Extract<
-  WorkflowScriptEvent,
-  { type: 'agent:end' }
->['outcome'];
+// Local file imports
+import {
+  EMPTY_WORKFLOW_SCRIPT_RUN_FACTS,
+  type WorkflowScriptRunFacts,
+} from './workflowScriptRun';
 
 export interface WorkflowDeliverySummaryCollector {
   readonly start: () => void;
-  readonly onEvent: (event: WorkflowScriptEvent) => void;
   readonly settle: (
     run: Pick<WorkflowScriptRunResult, 'meta' | 'journal'> | undefined,
     costUsd: number,
+    facts: WorkflowScriptRunFacts,
   ) => void;
   readonly formatLine: (
     outcome: 'completed' | 'failed',
@@ -30,6 +30,8 @@ export interface WorkflowDeliverySummaryCollector {
 
 /**
  * Collect presentation facts without changing the model-facing run report.
+ * Per-call outcomes are not re-folded here: they derive from the run fold in
+ * `workflowScriptRun`, the single state machine over the run's event stream.
  *
  * `taskDone` counts the tasks that produced a result (completed or cached),
  * which is deliberately narrower than the phase header's `done/total`
@@ -41,8 +43,6 @@ export function createWorkflowDeliverySummaryCollector(
   name: string,
   scriptPath: string,
 ): WorkflowDeliverySummaryCollector {
-  const phases = new Set<string>();
-  const tasks = new Map<string, WorkflowTaskOutcome | 'planned' | 'running'>();
   const files = new Map<
     string,
     WorkflowScriptDeliverySummary['files'][number]
@@ -51,6 +51,7 @@ export function createWorkflowDeliverySummaryCollector(
   let declaredPhaseCount = 0;
   let declaredTaskCount = 0;
   let settledCostUsd = 0;
+  let facts: WorkflowScriptRunFacts = EMPTY_WORKFLOW_SCRIPT_RUN_FACTS;
 
   const collectJournalFiles = (journal: readonly WorkflowJournalEntry[]) => {
     for (const entry of journal) {
@@ -76,42 +77,23 @@ export function createWorkflowDeliverySummaryCollector(
     start: () => {
       startedAt = Date.now();
     },
-    onEvent: (event) => {
-      switch (event.type) {
-        case 'plan':
-          declaredTaskCount = event.tasks.length;
-          for (const task of event.tasks) tasks.set(task.id, 'planned');
-          break;
-        case 'phase':
-          phases.add(event.title);
-          break;
-        case 'agent:start':
-          tasks.set(event.progressId, 'running');
-          break;
-        case 'agent:end':
-          tasks.set(event.progressId, event.outcome);
-          break;
-        case 'agent:stream':
-        case 'log':
-          break;
-      }
-    },
-    settle: (run, costUsd) => {
+    settle: (run, costUsd, runFacts) => {
       settledCostUsd = costUsd;
+      facts = runFacts;
       if (!run) return;
-      declaredPhaseCount = run.meta.phases?.length ?? phases.size;
-      declaredTaskCount = run.meta.tasks?.length ?? tasks.size;
+      declaredPhaseCount = run.meta.phases?.length ?? facts.announcedPhaseCount;
+      declaredTaskCount = run.meta.tasks?.length ?? facts.declaredTaskCount;
       collectJournalFiles(run.journal);
     },
     formatLine: (outcome, errorCause) => {
       const summary: WorkflowScriptDeliverySummary = {
         name,
         outcome,
-        phaseCount: Math.max(declaredPhaseCount, phases.size),
-        taskDone: [...tasks.values()].filter(
+        phaseCount: Math.max(declaredPhaseCount, facts.announcedPhaseCount),
+        taskDone: [...facts.callOutcomes.values()].filter(
           (status) => status === 'completed' || status === 'cached',
         ).length,
-        taskTotal: Math.max(declaredTaskCount, tasks.size),
+        taskTotal: Math.max(declaredTaskCount, facts.callOutcomes.size),
         costUsd: settledCostUsd,
         durationMs: Date.now() - startedAt,
         files: [...files.values()],

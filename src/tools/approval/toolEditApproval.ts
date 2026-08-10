@@ -21,7 +21,7 @@ import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import {
   applyPatchToText,

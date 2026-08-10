@@ -12,7 +12,7 @@ import {
   loadMemoryPreview,
   setMemoryPinned,
 } from '@tools/memory/memoryFileSystem';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 export interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;

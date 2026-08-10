@@ -1,4 +1,3 @@
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { refreshSubscriptionPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
@@ -52,7 +51,6 @@ async function reconcileRootModelAfterApiModeChange(
       apiMode,
       CHAT_API_MODE_MODEL_RECOVERY,
     ),
-    agentCategory: AgentCategory.ToolUse,
   });
   await setCliHelperModel(selection.model);
   if (selection.model === currentModel) return undefined;

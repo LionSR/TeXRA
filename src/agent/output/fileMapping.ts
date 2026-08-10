@@ -7,7 +7,7 @@ import type { FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getComparablePath } from '@utils/files/taskRunStorage';
+import { getComparablePath } from '@utils/files/fileLocation';
 
 /**
  * Create a mapping between two file lists based on name similarity.

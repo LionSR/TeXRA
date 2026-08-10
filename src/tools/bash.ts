@@ -17,6 +17,7 @@ import {
   getCurrentToolContexts,
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
+import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import type { RunTerminalPersistence } from '@agent/runtime/AgentRunLifecycle';
 import type { ExecutionInterruptHandler } from '@agent/runtime/ExecutionHandle';
 import {
@@ -27,7 +28,6 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import { BASH_CHILD_STREAM_PREFIX } from '@agent/runtime/streamTab';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { tryPlatform } from '@platform/platform';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
@@ -38,10 +38,10 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type StreamTabId,
   type ExecutionId,
+  AgentCategory,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
-import { deliverChildRunFollowUp } from '@tools/delegation/childRunDelivery';
 import {
   formatBashDelivery,
   formatBashError,

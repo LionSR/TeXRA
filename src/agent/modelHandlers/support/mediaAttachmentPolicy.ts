@@ -15,7 +15,9 @@
 // trivial to audit or change in one spot.
 import { logSdkError } from '@agent/trace';
 import type { AgentTrace } from '@agent/trace';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+} from '@common/errors/sdkError/providerErrorFormat';
 
 /**
  * Context a media/tool-attachment failure occurred in:

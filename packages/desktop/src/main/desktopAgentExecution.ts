@@ -99,7 +99,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getGLMCodingPlan,
@@ -945,9 +945,7 @@ export class DesktopProgressBridge {
       loadFollowUpOptions: async () => {
         const [agentOptions, modelOptionsData] = await Promise.all([
           computeAgentOptionsData(),
-          computeModelOptionsData(undefined, undefined, {
-            agentCategory: AgentCategory.ToolUse,
-          }),
+          computeModelOptionsData(),
         ]);
         return {
           toolUseAgentsData: agentOptions.toolUse,

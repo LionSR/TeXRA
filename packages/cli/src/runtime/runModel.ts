@@ -1,5 +1,4 @@
 import type { RunModelCandidate } from '@model/runModelDecision';
-import { AgentCategory } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -58,8 +57,6 @@ export async function selectCliRunModel(
       cliRunModelCandidates(context, modelOverride, role),
       {
         apiMode,
-        agentCategory:
-          role === 'chat' ? AgentCategory.ToolUse : AgentCategory.Workflow,
       },
     );
     if (resolution.notice && context.quietLogs !== true) {

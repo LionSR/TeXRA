@@ -25,7 +25,7 @@ import {
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
 import { deriveExecutionId } from '@utils/core/idHash';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
@@ -50,6 +50,20 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   return { ...actual, registerExecution: mocks.registerExecution };
+});
+
+// The launch sites register through `registerOwnedExecution`, which calls
+// `registerExecution` module-internally; route the spy through it the same way.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+  return {
+    ...actual,
+    registerOwnedExecution: async (...args: unknown[]) => {
+      await mocks.registerExecution(...args);
+      return (operation: () => unknown) => operation();
+    },
+  };
 });
 
 vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
@@ -771,7 +785,6 @@ return null`;
 
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
-      agentCategory: 'workflow',
     });
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionIdFor('tool-test'),

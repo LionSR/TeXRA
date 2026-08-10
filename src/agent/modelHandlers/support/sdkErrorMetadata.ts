@@ -1,10 +1,10 @@
 // Local imports - common errors
+import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
+import { attachSdkErrorMetadata } from '@common/errors/sdkError/errorMetadata';
 import {
-  attachSdkErrorMetadata,
-  detectStatusCode,
   sdkErrorKindFromStatusCode,
   type SdkErrorKind,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/sdkErrorKinds';
 
 type ErrorConstructor = abstract new (...args: any[]) => Error;
 

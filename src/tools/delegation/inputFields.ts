@@ -11,7 +11,8 @@ import { formatBytes } from '@shared/utils/string';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import {
   extractErrorMessage,

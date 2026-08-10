@@ -18,12 +18,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
   buildFixInstruction,
   buildReviewInstruction,
   createReviewIssue,
+  normalizeReviewFilePath,
   type ReviewIssue,
   type ReviewIssueReport,
   type ReviewSeverity,
@@ -37,8 +37,12 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import * as logger from '@logger/logUtils';
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { WorkspaceFS } from '@utils/files';
+import {
+  RUN_OUTCOME,
+  type RunOutcome,
+  AgentCategory,
+} from '@shared/schemas';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -273,7 +277,15 @@ class AgentReviewServiceImpl {
     this.baseDescription = baseDescription;
     this.issues = [];
     this.updateDiagnostics();
-    this.reviewRuns.collect(run, { repoRoot, baseDescription, changedFiles });
+    // Normalize the change-set paths once here: the collection is validated
+    // against per reported issue, and `isPathInChangeSet` carries the list
+    // as-is. The raw list still feeds the instruction below, so the prompt
+    // shows paths exactly as git printed them.
+    this.reviewRuns.collect(run, {
+      repoRoot,
+      baseDescription,
+      changedFiles: changedFiles.map(normalizeReviewFilePath),
+    });
     this.emitter.fire();
 
     let outcome: RunOutcome;

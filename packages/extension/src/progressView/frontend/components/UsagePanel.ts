@@ -10,7 +10,11 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas, styles, and constants
-import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
+import type {
+  ContextStateData,
+  TokenUsageStats,
+  UsageRoute,
+} from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 import { usageRouteBadge } from '@shared/copy/modelAccess';
@@ -23,7 +27,6 @@ import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants';
-import type { ContextStateData } from '../store';
 
 /** One token counter in the usage strip: icon, count, and its tooltip. */
 type TokenStat = {

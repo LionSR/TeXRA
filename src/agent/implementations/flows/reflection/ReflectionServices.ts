@@ -6,7 +6,7 @@ import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
 import type { AgentFileLocation, FileLocation } from '@shared/schemas';
-import type { TaskRunFileService } from '@utils/files';
+import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export interface WorkflowOutputPolicy {
   readonly shouldAutoOpenPdfOrLog: () => boolean;

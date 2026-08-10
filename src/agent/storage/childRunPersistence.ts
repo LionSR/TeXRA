@@ -1,18 +1,8 @@
-/** Shared persistence and parent-continuation delivery for child runs. */
-import {
-  type ChildTurnState,
-  getExecutionStore,
-  type ResultMeta,
-} from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+/** Persistence for child-run terminal artifacts (report, result manifest, turn attribution). */
+import type { ExecutionId } from '@shared/schemas';
 
-export type ChildRunDeliveryResult =
-  | { kind: 'delivered' }
-  | { kind: 'no_session'; streamStatus: string | undefined }
-  | { kind: 'dropped' };
+import { type ChildTurnState, getExecutionStore } from './ExecutionKVStore';
+import type { ResultMeta } from './resultMeta';
 
 export type ChildRunReportResult =
   { kind: 'persisted' } | { kind: 'failed'; err: unknown };
@@ -57,22 +47,4 @@ export async function persistChildRunTurnState(
   } catch (err) {
     return { kind: 'failed', err };
   }
-}
-
-export async function deliverChildRunFollowUp(params: {
-  readonly targetStreamId: StreamTabId;
-  readonly followUp: FollowUpQueueInput;
-  readonly session: SessionHandle;
-  readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
-}): Promise<ChildRunDeliveryResult> {
-  const result = await submitFollowUp(params.targetStreamId, params.followUp, {
-    session: params.session,
-    mode: params.mode ?? 'child_delivery',
-  });
-  if (result.status === 'no_session') {
-    return { kind: 'no_session', streamStatus: result.streamStatus };
-  }
-  return result.status === 'dropped'
-    ? { kind: 'dropped' }
-    : { kind: 'delivered' };
 }

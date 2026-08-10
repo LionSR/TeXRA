@@ -63,7 +63,7 @@ vi.mock('@agent/storage', () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
 }));
 
-vi.mock('@utils/files/taskRunStorage', () => ({
+vi.mock('@utils/files/runStorageFs', () => ({
   runStorageLocationFromAnyAbsolutePath:
     mocks.runStorageLocationFromAnyAbsolutePath,
 }));
@@ -76,8 +76,10 @@ vi.mock('@tools/delegation/inputFields', () => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
-vi.mock('@utils/files', () => ({
+vi.mock('@utils/files/workspaceFS', () => ({
   WorkspaceFS: { readBytes: mocks.workspaceReadBytes },
+}));
+vi.mock('@utils/files/absoluteFS', () => ({
   AbsoluteFS: { readBytes: mocks.absoluteReadBytes },
 }));
 
@@ -332,7 +334,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     ]);
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
-      agentCategory: 'workflow',
     });
     expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -413,12 +414,10 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(1, {
       requestedModel: 'economy-model',
       parentModel: 'parent-model',
-      agentCategory: 'workflow',
     });
     expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(2, {
       requestedModel: 'strong-model',
       parentModel: 'parent-model',
-      agentCategory: 'toolUse',
     });
   });
 
@@ -903,7 +902,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
-      agentCategory: 'toolUse',
     });
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({

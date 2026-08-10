@@ -6,7 +6,7 @@
  * EXTERNAL_TOOL_DEFS) can live outside the command layer.
  */
 
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { executeCommand } from '@utils/system/execUtils';
 
 export async function isGitRepository(rootPath?: string): Promise<boolean> {

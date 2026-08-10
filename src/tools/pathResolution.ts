@@ -9,7 +9,7 @@ import {
 import { ToolError } from '@shared/schemas/toolResult';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { normalizeFilePath } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   findExternalRoot,
   type MatchedExternalRoot,

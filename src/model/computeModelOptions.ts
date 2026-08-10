@@ -13,7 +13,6 @@ import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { coalesceAsync } from '@utils/core';
@@ -28,8 +27,8 @@ import {
   type ApiProvider,
 } from './apiProviders';
 import {
-  resolveCodexSubscriptionCapabilitiesForAgentCategory,
-  resolveXaiSubscriptionCapabilitiesForAgentCategory,
+  resolveCodexSubscriptionCapabilities,
+  resolveXaiSubscriptionCapabilities,
 } from './providerCapabilities';
 import {
   isKimiCodeExclusiveModel,
@@ -85,11 +84,6 @@ export interface ModelOptionsAccess {
   readonly secrets: PlatformSecrets;
   readonly useOpenRouter: boolean;
   readonly serverSideKeyService: ModelOptionsServerAccess;
-  readonly agentCategory?: AgentCategory;
-}
-
-export interface ModelOptionsComputationOptions {
-  readonly agentCategory?: AgentCategory;
 }
 
 /**
@@ -330,7 +324,6 @@ interface ModelAvailabilityContext {
   preferKimiCode: boolean;
   /** Whether a Kimi Code console API key is stored. */
   kimiCodeKeySet: boolean;
-  agentCategory?: AgentCategory;
   serverSideKeyService: ModelOptionsServerAccess;
 }
 
@@ -416,12 +409,10 @@ async function resolveModelAvailability(
   // the host is not signed in, continue through the normal API-key/relay paths
   // so the switch cannot disable models that are otherwise runnable.
   if (ctx.codexSignedIn) {
-    const subscriptionCapabilities =
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        config,
-        ctx.useOpenRouter,
-        ctx.agentCategory,
-      );
+    const subscriptionCapabilities = resolveCodexSubscriptionCapabilities(
+      config,
+      ctx.useOpenRouter,
+    );
     if (subscriptionCapabilities) {
       return {
         ...availabilityStatus('subscription-access'),
@@ -434,11 +425,10 @@ async function resolveModelAvailability(
   // subscription-access kind, but label it Grok so pickers/status rows do not
   // say "ChatGPT subscription" for an xAI model.
   if (ctx.xaiSignedIn) {
-    const subscriptionCapabilities =
-      resolveXaiSubscriptionCapabilitiesForAgentCategory(
-        config,
-        ctx.useOpenRouter,
-      );
+    const subscriptionCapabilities = resolveXaiSubscriptionCapabilities(
+      config,
+      ctx.useOpenRouter,
+    );
     if (subscriptionCapabilities) {
       return {
         ...availabilityStatus('subscription-access'),
@@ -530,7 +520,6 @@ async function buildAvailabilityContext(
     xaiSignedIn,
     preferKimiCode: getPreferKimiCode(),
     kimiCodeKeySet,
-    agentCategory: access.agentCategory,
     serverSideKeyService,
   };
 }
@@ -543,25 +532,14 @@ function getVisibleModels(state: Pick<StateStore, 'get'>): readonly string[] {
   );
 }
 
-function buildDefaultModelOptionsAccess(
-  options: ModelOptionsComputationOptions = {},
-): ModelOptionsAccess {
+function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
   const host = platform();
   return {
     visibleModels: getVisibleModels(host.globalState),
     secrets: host.secrets,
     useOpenRouter: getUseOpenRouter(),
     serverSideKeyService: includedModelAccess(),
-    agentCategory: options.agentCategory,
   };
-}
-
-function applyModelOptionsComputationOptions(
-  access: ModelOptionsAccess,
-  options: ModelOptionsComputationOptions,
-): ModelOptionsAccess {
-  if (options.agentCategory === undefined) return access;
-  return { ...access, agentCategory: options.agentCategory };
 }
 
 /**
@@ -584,17 +562,12 @@ export function buildVisibleBasicModelOptionsData(
 export async function getModelUnavailableReason(
   model: string,
   access?: ModelOptionsAccess,
-  options: ModelOptionsComputationOptions = {},
 ): Promise<string | null> {
   await discoveredCopilotRoutes();
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) return `Model "${model}" is not recognized.`;
 
-  // buildDefaultModelOptionsAccess already folds in options.agentCategory, so
-  // only the caller-supplied access path needs the option override reapplied.
-  const effectiveAccess = access
-    ? applyModelOptionsComputationOptions(access, options)
-    : buildDefaultModelOptionsAccess(options);
+  const effectiveAccess = access ?? buildDefaultModelOptionsAccess();
   const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
   const config = effectiveKimiCodeConfig(rawConfig, ctx);
   const availability = await resolveModelAvailability(model, config, ctx);
@@ -705,17 +678,12 @@ export function invalidateModelOptionsCache(): void {
 export async function computeModelOptionsData(
   models?: readonly string[],
   access?: ModelOptionsAccess,
-  options: ModelOptionsComputationOptions = {},
 ): Promise<ModelOptionData[]> {
   if (access) {
-    return computeModelOptionsDataUncached(
-      models,
-      applyModelOptionsComputationOptions(access, options),
-      false,
-    );
+    return computeModelOptionsDataUncached(models, access, false);
   }
 
-  const cacheKey = getModelOptionsCacheKey(models, options);
+  const cacheKey = getModelOptionsCacheKey(models);
   return coalesceAsync<string, ModelOptionData[]>(
     resolvedModelOptions,
     pendingModelOptions,
@@ -723,7 +691,7 @@ export async function computeModelOptionsData(
     () =>
       computeModelOptionsDataUncached(
         models,
-        buildDefaultModelOptionsAccess(options),
+        buildDefaultModelOptionsAccess(),
         true,
       ),
   );
@@ -731,15 +699,10 @@ export async function computeModelOptionsData(
 
 function getModelOptionsCacheKey(
   models: readonly string[] | undefined,
-  options: ModelOptionsComputationOptions,
 ): string {
-  const listKey =
-    models == null
-      ? VISIBLE_MODELS_CACHE_KEY
-      : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
-  return options.agentCategory === undefined
-    ? listKey
-    : `${listKey}:category:${options.agentCategory}`;
+  return models == null
+    ? VISIBLE_MODELS_CACHE_KEY
+    : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
 }
 
 async function computeModelOptionsDataUncached(
@@ -772,11 +735,8 @@ function visibleModelsForAccess(
     if (
       !config.retired &&
       !config.deprecated &&
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        config,
-        context.useOpenRouter,
-        context.agentCategory,
-      ) !== null
+      resolveCodexSubscriptionCapabilities(config, context.useOpenRouter) !==
+        null
     ) {
       models.add(model);
     }

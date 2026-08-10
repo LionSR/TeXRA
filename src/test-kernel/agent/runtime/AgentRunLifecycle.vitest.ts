@@ -19,7 +19,6 @@ import {
   type AgentRunHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
@@ -44,7 +43,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { agentKey } from '@shared/schemas/agent';
+import {
+  agentKey,
+  AgentCategory,
+} from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   executionLeasePath,
@@ -57,7 +59,7 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { withTranscriptWriter } from '@test/support/storeTestDrivers';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 // Local file imports
 import {

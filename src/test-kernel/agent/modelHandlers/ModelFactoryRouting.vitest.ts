@@ -208,7 +208,6 @@ describe('Copilot route preference on a canonical base model', () => {
     const directHandler = await createModelHandler(
       config,
       undefined,
-      undefined,
       'direct',
     );
     const concurrentHandler = await createModelHandler(config);

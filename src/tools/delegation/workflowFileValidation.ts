@@ -1,4 +1,4 @@
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export interface WorkflowFileGroup {

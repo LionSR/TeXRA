@@ -12,7 +12,6 @@ import { ModelProvider } from 'llm-zoo';
 import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -22,6 +21,7 @@ import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpen
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { FileLocation } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function createAgentSetting() {

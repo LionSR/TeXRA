@@ -422,7 +422,6 @@ function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
   str_replace_editor: 'text_editor_20250429',
-  str_replace_based_edit_tool: 'text_editor_20250429',
   web_search: 'web_search_20260209',
   web_fetch: 'web_fetch_20260209',
   memory_anthropic: 'memory_20250818',

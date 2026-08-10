@@ -11,7 +11,6 @@ import {
   type ModelOptionData,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { unique } from '@utils/core';
 import { getGLMCodingPlan } from '@utils/config/providerConfig';
@@ -58,7 +57,6 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
 export interface CliModelAccessListOptions {
   readonly apiMode?: ApiAccessMode;
   readonly models?: readonly string[];
-  readonly agentCategory?: AgentCategory;
 }
 
 export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
@@ -68,18 +66,11 @@ export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
 
 export interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
-  'apiMode' | 'agentCategory' | 'accessList'
+  'apiMode' | 'accessList'
 > {
   /** Decision reason that owns unavailable-model fallback behavior. */
   readonly fallbackReason?: RunModelDecisionReason;
   readonly noAvailableModelsMessage?: string;
-}
-
-function computeCliModelOptionsData(
-  models: readonly string[] | undefined,
-  agentCategory: AgentCategory | undefined,
-): Promise<ModelOptionData[]> {
-  return computeModelOptionsData(models, undefined, { agentCategory });
 }
 
 export interface CliModelListOptions {
@@ -362,10 +353,7 @@ function toCliModelAccess(
 export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
-  const models = await computeCliModelOptionsData(
-    options.models,
-    options.agentCategory,
-  );
+  const models = await computeModelOptionsData(options.models);
   return models.map((model) => toCliModelAccess(model, options.apiMode));
 }
 
@@ -502,7 +490,6 @@ async function loadCliModelAccessList(
     options.accessList ??
     getCliModelAccessList({
       apiMode: options.apiMode,
-      agentCategory: options.agentCategory,
     })
   );
 }
@@ -520,7 +507,7 @@ export async function loadCliModelAccessEntry(
   if (hiddenModelId == null) return undefined;
 
   const hiddenModelOption = (
-    await computeCliModelOptionsData([hiddenModelId], options.agentCategory)
+    await computeModelOptionsData([hiddenModelId])
   )[0];
   if (!hiddenModelOption) {
     throw new Error(
@@ -599,7 +586,6 @@ export async function selectCliRunnableModel(
     requestedModels.map((model) =>
       loadCliModelAccessEntry(model, {
         apiMode: options.apiMode,
-        agentCategory: options.agentCategory,
         accessList: models,
       }),
     ),

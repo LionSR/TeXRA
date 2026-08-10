@@ -15,7 +15,7 @@ import {
   createHelperModelKit,
   runHelperModelCompletion,
 } from '@agent/runtime/helperModel';
-import { getSdkErrorMessage } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';

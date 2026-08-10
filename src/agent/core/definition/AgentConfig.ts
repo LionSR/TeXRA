@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { NullableFileFieldsSchema } from '@shared/schemas/fileFields';
-import { AgentSourceSchema } from '@shared/schemas/agent';
+import {
+  AgentSourceSchema,
+  AgentCategory,
+} from '@shared/schemas/agent';
 import { AgentDelegationScopeSchema } from '@shared/schemas/agentRoster';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
-import { AgentCategory } from './AgentDataclass';
 
 /** Agent assumed when a config omits `agent`, and sorted first in the workflow dropdown. */
 export const DEFAULT_WORKFLOW_AGENT = 'correct';

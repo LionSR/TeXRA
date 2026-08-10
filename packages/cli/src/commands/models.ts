@@ -1,6 +1,5 @@
 import { defineCommand } from 'citty';
 
-import { AgentCategory } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
@@ -48,7 +47,6 @@ async function loadModelAccessList(
       const apiMode = effectiveCliApiMode(context);
       const models = await getCliModelAccessList({
         apiMode,
-        agentCategory: AgentCategory.ToolUse,
         models:
           options.includeUnavailable === true ? knownCliModelIds() : undefined,
       });
@@ -100,7 +98,6 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     entry = await suppressCliFetchStackLogs(() =>
       loadCliModelAccessEntry(id, {
         apiMode: result.apiMode,
-        agentCategory: AgentCategory.ToolUse,
         accessList: result.models,
       }),
     );

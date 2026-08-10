@@ -13,7 +13,6 @@ import {
   registerExecution,
   writeWorkflowExecutionSnapshot,
 } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -25,6 +24,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { setupPlatform } from '@test/support/setupPlatform';

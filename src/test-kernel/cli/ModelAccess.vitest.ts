@@ -18,7 +18,6 @@ import {
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
 
 const getGLMCodingPlanMock = vi.hoisted(() => vi.fn());
 
@@ -158,9 +157,7 @@ const GLM52_MISSING_KEY_ENTRY = model('glm52', {
 });
 
 function expectModelOptionsRequested(models: string[]): void {
-  expect(computeModelOptionsDataMock).toHaveBeenCalledWith(models, undefined, {
-    agentCategory: undefined,
-  });
+  expect(computeModelOptionsDataMock).toHaveBeenCalledWith(models);
 }
 
 describe('CLI model access resolution', () => {
@@ -1127,26 +1124,6 @@ describe('CLI model access resolution', () => {
     ]);
   });
 
-  it('threads the CLI agent category into model availability', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('gpt55', {
-        availability: 'subscription-access',
-        availabilityLabel: 'ChatGPT subscription',
-      }),
-    ]);
-
-    await getCliModelAccessList({
-      apiMode: 'personal',
-      agentCategory: AgentCategory.ToolUse,
-    });
-
-    expect(computeModelOptionsDataMock).toHaveBeenCalledWith(
-      undefined,
-      undefined,
-      { agentCategory: AgentCategory.ToolUse },
-    );
-  });
-
   it('loads explicit model ids for diagnostic lists', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
@@ -1224,8 +1201,6 @@ describe('CLI model access resolution', () => {
     expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(
       2,
       ['hiddenFixtureModel'],
-      undefined,
-      { agentCategory: undefined },
     );
   });
 

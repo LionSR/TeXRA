@@ -8,11 +8,11 @@
  * orchestrator delegation) leaves the flag off and keeps the chosen model.
  */
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
+import { AgentCategory } from '@shared/schemas';
 import { getHelperModelName } from './helperModelName';
 
 /**
@@ -41,9 +41,7 @@ export async function applyHelperModelPreference(
     return config;
   }
 
-  const unavailable = await getModelUnavailableReason(helperModel, undefined, {
-    agentCategory: config.agentCategory,
-  });
+  const unavailable = await getModelUnavailableReason(helperModel);
   if (unavailable) return config;
 
   return { ...config, model: helperModel };

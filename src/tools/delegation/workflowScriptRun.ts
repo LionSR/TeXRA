@@ -30,8 +30,37 @@ type WorkflowScriptRunWithProgressOptions = Omit<
    * to the invoking model, which otherwise cannot see any of it.
    */
   readonly onActivity?: (line: string) => void;
-  /** Observe the engine events from which this projection is derived. */
-  readonly onEvent?: (event: WorkflowScriptEvent) => void;
+  /**
+   * Receives the run fold's fact-snapshot accessor synchronously, before the
+   * engine starts, so a caller settling after a throw still reads the final
+   * fold. The snapshot is meaningful once the run has settled.
+   */
+  readonly onRunFacts?: (snapshot: () => WorkflowScriptRunFacts) => void;
+};
+
+/**
+ * Terminal per-call facts folded from one run's event stream.
+ * `runPersistedWorkflowScriptWithProgress` is the single state machine over
+ * `WorkflowScriptEvent`; the run log and the delivery summary derive from
+ * this fold rather than re-folding the events themselves.
+ */
+export interface WorkflowScriptRunFacts {
+  /** Outcome per call id, in first-emission order. */
+  readonly callOutcomes: ReadonlyMap<
+    WorkflowScriptProgressId,
+    WorkflowCallProgress['status']
+  >;
+  /** Distinct phase titles the run announced with phase events. */
+  readonly announcedPhaseCount: number;
+  /** Task count the plan event declared; 0 when the run never planned. */
+  readonly declaredTaskCount: number;
+}
+
+/** The fold's state before any run event reaches it. */
+export const EMPTY_WORKFLOW_SCRIPT_RUN_FACTS: WorkflowScriptRunFacts = {
+  callOutcomes: new Map(),
+  announcedPhaseCount: 0,
+  declaredTaskCount: 0,
 };
 
 interface PhaseStage {
@@ -149,12 +178,17 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   };
 }
 
-/** Run a durable workflow script and project its progress onto the parent trace. */
+/**
+ * Run a durable workflow script and project its progress onto the parent
+ * trace. This is the single fold over the run's `WorkflowScriptEvent` stream:
+ * the trace cards, the `onActivity` run-log lines, and the `onRunFacts`
+ * terminal per-call facts all derive from the one projection state below.
+ */
 export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { getCallCostUsd, onActivity, onEvent, ...runOptions } = options;
+  const { getCallCostUsd, onActivity, onRunFacts, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const phaseStageIds = new Map<string, string>();
@@ -168,9 +202,19 @@ export async function runPersistedWorkflowScriptWithProgress(
     WorkflowScriptProgressId,
     ProjectedWorkflowCall
   >();
+  const announcedPhaseTitles = new Set<string>();
+  let declaredTaskCount = 0;
   let currentPhase: string | undefined;
   let closed = false;
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
+
+  onRunFacts?.(() => ({
+    callOutcomes: new Map(
+      [...projectedCalls].map(([id, call]) => [id, call.status]),
+    ),
+    announcedPhaseCount: announcedPhaseTitles.size,
+    declaredTaskCount,
+  }));
 
   /**
    * Stable stage id for a phase title, minted before the stage opens. A
@@ -297,15 +341,16 @@ export async function runPersistedWorkflowScriptWithProgress(
 
   const project = (event: WorkflowScriptEvent): void => {
     if (closed) return;
-    onEvent?.(event);
     switch (event.type) {
       case 'plan':
+        declaredTaskCount = event.tasks.length;
         for (const task of event.tasks) {
           emitCall({ ...task, status: 'planned' });
         }
         break;
       case 'phase':
         currentPhase = event.title;
+        announcedPhaseTitles.add(event.title);
         phaseFor(event.title, event.index, event.total);
         onActivity?.(`Phase: ${event.title}`);
         break;

@@ -47,8 +47,7 @@ vi.mock('@agent/trace', () => ({
 vi.mock('@agent/index/agentRegistry', () => ({
   loadAgents: mocks.loadAgents,
   resolveAgent: () => ({
-    entry: { category: mocks.agentCategory, source: 'custom' },
-    resolvedName: 'assistant',
+    entry: { category: mocks.agentCategory, source: 'custom', name: 'assistant' },
   }),
 }));
 
@@ -314,7 +313,11 @@ describe('agent package Node configuration', () => {
     expect(listener).toHaveBeenCalledOnce();
 
     await config.update('goal.enabled', undefined, 'global');
-    expect(config.get('texra.goal.enabled', false)).toBe(false);
+    // With no explicit value, resolution matches every host: the core-schema
+    // default (goal.enabled defaults to true) wins over the caller fallback.
+    expect(config.get('texra.goal.enabled', false)).toBe(true);
+    // A key outside the core schema still falls back to the caller default.
+    expect(config.get('custom.nonCoreKey', false)).toBe(false);
     expect(config.isExplicitlySet('texra.goal.enabled')).toBe(false);
     expect(listener).toHaveBeenCalledTimes(2);
   });

@@ -1,20 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
-import { BackgroundRunLifecycle } from '@agent/modelHandlers/openai/BackgroundRunLifecycle';
+import { createOpenAIBackgroundRunLifecycle } from '@agent/modelHandlers/openai/openAIBackgroundRunLifecycle';
+import type { BackgroundRunLifecycle } from '@agent/modelHandlers/support/BackgroundRunLifecycle';
 import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
 import { spiedTrace } from '@test/support/spiedTrace';
 
 import type OpenAI from 'openai';
-import type { Response } from 'openai/resources/responses/responses';
+import type {
+  Response,
+  ResponseRetrieveParamsNonStreaming,
+} from 'openai/resources/responses/responses';
 
 function createLifecycle(
   logger: AgentTrace = spiedTrace(),
-): BackgroundRunLifecycle {
-  return new BackgroundRunLifecycle({
+): BackgroundRunLifecycle<OpenAI, Response, ResponseRetrieveParamsNonStreaming> {
+  return createOpenAIBackgroundRunLifecycle({
     logger: () => logger,
     provider: 'openai',
   });

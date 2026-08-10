@@ -17,7 +17,6 @@ import {
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   hasEndTag,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
@@ -57,12 +56,16 @@ import {
 import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
 import type { ServerToolExtractionResult } from '@agent/types/ServerToolTypes';
 import {
-  getSdkErrorMessage,
-  isContextWindowError,
-  isUserAbort,
   attachContextWindowError,
   attachMissingApiKeyError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorMetadata';
+import {
+  isContextWindowError,
+  isUserAbort,
+} from '@common/errors/sdkError/errorPatterns';
+import {
+  getSdkErrorMessage,
+} from '@common/errors/sdkError/providerErrorFormat';
 import {
   allowsModelRelay,
   resolveDirectModelApiKeyProvider,
@@ -77,7 +80,10 @@ import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  AgentCategory,
+} from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -85,7 +91,7 @@ import type {
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import {
   getProviderStreaming,

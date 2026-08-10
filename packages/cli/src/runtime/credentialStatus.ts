@@ -10,7 +10,6 @@ import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform } from '@platform/platform';
-import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -56,7 +55,7 @@ export async function hasCliCredentialForApiMode(
 ): Promise<boolean> {
   const hasChatGptSubscription = await probeCredential(
     'ChatGPT subscription',
-    () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL, AgentCategory.ToolUse),
+    () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
   );
   if (hasChatGptSubscription) return true;
 

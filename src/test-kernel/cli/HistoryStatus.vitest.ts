@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  EXECUTION_META_SCHEMA_VERSION,
   registerExecution,
   getExecutionStore,
 } from '@agent/storage';
@@ -10,7 +9,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
@@ -19,9 +17,11 @@ import {
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import {
+  EXECUTION_META_SCHEMA_VERSION,
   EXECUTION_STATUS,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { resolveHistoryRunStatus } from '@shared/schemas/historyViewMessages';
 import { setupPlatform } from '@test/support/setupPlatform';

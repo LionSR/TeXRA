@@ -12,7 +12,7 @@ import {
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
 } from '@shared/constants/workflowOutput';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 
 import { CHANNEL, DEFAULT_MAX_ROUNDS } from './constants';

@@ -29,7 +29,7 @@ import {
   unregisterLeanServer,
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

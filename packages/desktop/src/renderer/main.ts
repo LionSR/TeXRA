@@ -404,78 +404,87 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 //
 // The renderer is sandboxed, so file I/O runs in the main process. These
 // helpers turn the fire-and-forget message pairs into promises the editor pane
-// can await, keyed by path so concurrent reads don't cross-resolve.
+// can await, correlated by request id so concurrent requests — even for the
+// same path — can't cross-resolve.
 
-interface PendingFileRequest {
-  resolve(contents: string): void;
-  reject(error: Error): void;
-}
+type PendingFileRequest =
+  | {
+      readonly kind: 'read';
+      resolve(contents: string): void;
+      reject(error: Error): void;
+    }
+  | {
+      readonly kind: 'write';
+      resolve(): void;
+      reject(error: Error): void;
+    }
+  | {
+      readonly kind: 'list';
+      readonly directory: string;
+      readonly promise: Promise<readonly EditorFileEntry[]>;
+      resolve(files: readonly EditorFileEntry[]): void;
+      reject(error: Error): void;
+    };
 
-interface PendingFileListRequest {
-  readonly promise: Promise<readonly EditorFileEntry[]>;
-  resolve(files: readonly EditorFileEntry[]): void;
-  reject(error: Error): void;
-}
+const pendingFileRequests = new Map<string, PendingFileRequest>();
 
-const pendingFileReads = new Map<string, PendingFileRequest[]>();
-const pendingFileWrites = new Map<string, PendingFileRequest[]>();
-const pendingFileLists = new Map<string, PendingFileListRequest>();
-
-function settlePending(
-  map: Map<string, PendingFileRequest[]>,
-  path: string,
-  settle: (request: PendingFileRequest) => void,
-): void {
-  const waiting = map.get(path);
-  if (!waiting) return;
-  map.delete(path);
-  for (const request of waiting) settle(request);
+function takePendingFileRequest(
+  requestId: string,
+): PendingFileRequest | undefined {
+  const pending = pendingFileRequests.get(requestId);
+  pendingFileRequests.delete(requestId);
+  return pending;
 }
 
 function requestFiles(directory: string): Promise<readonly EditorFileEntry[]> {
-  const pending = pendingFileLists.get(directory);
-  if (pending) return pending.promise;
+  // A second list for a directory already in flight shares the promise rather
+  // than posting a redundant LIST_FILES.
+  for (const request of pendingFileRequests.values()) {
+    if (request.kind === 'list' && request.directory === directory) {
+      return request.promise;
+    }
+  }
 
+  const requestId = crypto.randomUUID();
   let resolveList!: (files: readonly EditorFileEntry[]) => void;
   let rejectList!: (error: Error) => void;
   const promise = new Promise<readonly EditorFileEntry[]>((resolve, reject) => {
     resolveList = resolve;
     rejectList = reject;
   });
-  pendingFileLists.set(directory, {
+  pendingFileRequests.set(requestId, {
+    kind: 'list',
+    directory,
     promise,
     resolve: resolveList,
     reject: rejectList,
   });
-  postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES, { directory });
+  postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES, { requestId, directory });
   return promise;
 }
 
 function requestFileRead(path: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const waiting = pendingFileReads.get(path) ?? [];
-    waiting.push({ resolve, reject });
-    pendingFileReads.set(path, waiting);
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.READ_FILE, { path });
+    const requestId = crypto.randomUUID();
+    pendingFileRequests.set(requestId, { kind: 'read', resolve, reject });
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.READ_FILE, { requestId, path });
   });
 }
 
 function requestFileWrite(path: string, contents: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const waiting = pendingFileWrites.get(path) ?? [];
-    waiting.push({ resolve: () => resolve(), reject });
-    pendingFileWrites.set(path, waiting);
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE, { path, contents });
+    const requestId = crypto.randomUUID();
+    pendingFileRequests.set(requestId, {
+      kind: 'write',
+      resolve: () => resolve(),
+      reject,
+    });
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE, {
+      requestId,
+      path,
+      contents,
+    });
   });
-}
-
-/** Pops the pending list request for a directory, if one is in flight. */
-function takePendingFileList(
-  directory: string,
-): PendingFileListRequest | undefined {
-  const pending = pendingFileLists.get(directory);
-  pendingFileLists.delete(directory);
-  return pending;
 }
 
 /**
@@ -1510,31 +1519,28 @@ const MESSAGE_ROUTES: ReadonlyArray<(data: unknown) => boolean> = [
     promptOverlay.open(message),
   ),
   messageRoute(DesktopFilesListedMessageSchema, (message) => {
-    takePendingFileList(message.directory)?.resolve(message.files);
+    const pending = takePendingFileRequest(message.requestId);
+    if (pending?.kind === 'list') pending.resolve(message.files);
   }),
   messageRoute(DesktopFilesListErrorMessageSchema, (message) => {
-    takePendingFileList(message.directory)?.reject(new Error(message.message));
+    const pending = takePendingFileRequest(message.requestId);
+    if (pending?.kind === 'list') pending.reject(new Error(message.message));
   }),
   messageRoute(DesktopFileReadMessageSchema, (message) => {
-    settlePending(pendingFileReads, message.path, (request) =>
-      request.resolve(message.contents),
-    );
+    const pending = takePendingFileRequest(message.requestId);
+    if (pending?.kind === 'read') pending.resolve(message.contents);
   }),
   messageRoute(DesktopFileWrittenMessageSchema, (message) => {
-    settlePending(pendingFileWrites, message.path, (request) =>
-      request.resolve(''),
-    );
+    const pending = takePendingFileRequest(message.requestId);
+    if (pending?.kind === 'write') pending.resolve();
   }),
   messageRoute(DesktopFileErrorMessageSchema, (message) => {
-    const error = new Error(message.message);
-    // Reject both queues for this path: only one will be populated, and leaving
-    // the other pending would hang the editor.
-    settlePending(pendingFileReads, message.path, (request) =>
-      request.reject(error),
-    );
-    settlePending(pendingFileWrites, message.path, (request) =>
-      request.reject(error),
-    );
+    // One request, one rejection: the requestId names the single pending read
+    // or write, so there is no read/write queue pair to sweep.
+    const pending = takePendingFileRequest(message.requestId);
+    if (pending?.kind === 'read' || pending?.kind === 'write') {
+      pending.reject(new Error(message.message));
+    }
   }),
   messageRoute(DesktopTerminalDataMessageSchema, (message) =>
     terminalPane.write(message.sessionId, message.data),

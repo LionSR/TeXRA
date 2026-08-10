@@ -1,12 +1,19 @@
 import { defineCommand, showUsage } from 'citty';
 
 import { getVisibleAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { canLaunchTeam } from '@common/teams/TeamPlan';
+import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
+import {
+  canLaunchTeam,
+  teamTexraHostedMissingNames,
+} from '@common/teams/TeamPlan';
+import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { byCategory } from '@shared/schemas';
+import {
+  byCategory,
+  AgentCategory,
+} from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
@@ -36,7 +43,6 @@ import {
   loadCliMultiAgentPresetPlanSet,
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
-import { preflightCliTeamAvailability } from '../runtime/teamAvailabilityPreflight';
 import {
   buildCliAccountItems,
   buildCliAgentItems,
@@ -50,7 +56,7 @@ import {
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
-import { loadCliApiStatusLines } from '../runtime/apiStatus';
+import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 import {
@@ -59,14 +65,18 @@ import {
   updateCliModelAccess,
 } from '../runtime/modelAccessSelection';
 import {
-  chatGptSignOutPreferenceMessage,
+  chatGptSignOutOutcomeMessage,
   signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
 import {
-  grokSignOutPreferenceMessage,
+  grokSignOutOutcomeMessage,
   signOutCliGrok,
 } from '../runtime/grokLogin';
-import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
+import {
+  getCliAuthProfile,
+  signOutCliSupabase,
+  supabaseSignOutOutcomeMessage,
+} from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -96,7 +106,6 @@ async function canLaunchWithDefaultModel(
       fallbackReason: defaults.modelSource,
       apiMode,
       accessList: models,
-      agentCategory: AgentCategory.ToolUse,
     });
     return true;
   } catch {
@@ -197,7 +206,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       presetPlans: presetPlanSet.plans,
       history,
       toolUseAgents,
-      includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+      includeMultiAgentLoginHint: !presetPlanSet.remoteCatalogRefreshAttempted,
       modelAccess: launcherModelAccess,
       account: accountStatus,
       presetLaunchBlockReason,
@@ -208,9 +217,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
     const [models, statusLines] = await Promise.all([
       getCliModelAccessList({
         apiMode,
-        agentCategory: AgentCategory.ToolUse,
       }).catch((): readonly CliModelAccess[] => []),
-      loadCliApiStatusLines({ apiMode }),
+      loadCliApiStatus({ apiMode }),
     ]);
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
       launchContext,
@@ -224,7 +232,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       resumeItems: buildCliResumeItems(history),
       agentItems: buildCliAgentItems(toolUseAgents),
       teamItems: buildCliTeamItems(presetPlanSet.plans, {
-        includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+        includeLoginHint: !presetPlanSet.remoteCatalogRefreshAttempted,
         remoteAgentCatalogAvailable:
           await SupabaseClient.canAccessRemoteAgentCatalog(),
         launchBlockReason: presetLaunchBlockReason,
@@ -258,9 +266,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
               { reloadRemoteAgents: false },
             )
           ).plan;
-        const preflight = await preflightCliTeamAvailability({
-          plan: initialPlan,
-          remoteCatalogRefreshAttempted: presetPlanSet.remoteAgentLoadAttempted,
+        const preflight = await preflightTeamAvailability({
+          initial: initialPlan,
+          unresolvedNames: teamTexraHostedMissingNames,
+          texraHostedNames: teamHostedNamesForPreflight(initialPlan.preset, [
+            ...initialPlan.missingAgents.workflow,
+            ...initialPlan.missingAgents.toolUse,
+          ]),
+          remoteCatalogRefreshAttempted: presetPlanSet.remoteCatalogRefreshAttempted,
           canAccessRemoteCatalog: () =>
             SupabaseClient.canAccessRemoteAgentCatalog(),
           choose: async (names) => {
@@ -347,14 +360,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
           if (action.provider === 'chatgpt' || action.provider === 'grok') {
             if (action.operation === 'sign-out') {
               if (action.provider === 'chatgpt') {
-                const update = await signOutCliChatGpt();
                 writeTextStdout(
-                  `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
+                  chatGptSignOutOutcomeMessage(await signOutCliChatGpt()),
                 );
               } else {
-                const update = await signOutCliGrok();
                 writeTextStdout(
-                  `Signed out of Grok.\n${grokSignOutPreferenceMessage(update)}`,
+                  grokSignOutOutcomeMessage(await signOutCliGrok()),
                 );
               }
             } else {
@@ -372,7 +383,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
             }
           } else if (action.operation === 'sign-out') {
             await signOutCliSupabase();
-            writeTextStdout('Signed out of TeXRA.');
+            writeTextStdout(
+              supabaseSignOutOutcomeMessage('Signed out of TeXRA.'),
+            );
           } else {
             await runLoginCommand(launchContext, loginInitFromArgs({}));
           }

@@ -13,7 +13,6 @@ import {
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type AgentExecutionListingEntry,
-  type ExecutionMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
@@ -23,6 +22,7 @@ import {
   ExecutionIdSchema,
   RunOutcomeSchema,
   type ExecutionId,
+  type ExecutionMeta,
 } from '@shared/schemas';
 import {
   resolveHistoryRunStatus,

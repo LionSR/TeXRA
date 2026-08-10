@@ -1,23 +1,22 @@
 import { computeAgentOptionsData } from '@agent/index';
+import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { AgentCategory } from '@shared/schemas/agent';
 
 import { loadMainViewTeamOptions } from './teamOptionsLoader';
 
-export async function loadMainViewModelOptions(models?: readonly string[]) {
-  const [workflow, toolUse] = await Promise.all([
-    computeModelOptionsData(models, undefined, {
-      agentCategory: AgentCategory.Workflow,
-    }),
-    computeModelOptionsData(models, undefined, {
-      agentCategory: AgentCategory.ToolUse,
-    }),
-  ]);
+export type MainViewModelOptionsByCategory =
+  MainViewStartupOptions['modelOptionsByCategory'];
 
-  return { workflow, toolUse };
+export async function loadMainViewModelOptions(
+  models?: readonly string[],
+): Promise<MainViewModelOptionsByCategory> {
+  // Model options no longer vary by agent category; both pickers read the
+  // same list.
+  const options = await computeModelOptionsData(models);
+  return { workflow: options, toolUse: options };
 }
 
-export async function loadOptions() {
+export async function loadOptions(): Promise<MainViewStartupOptions> {
   const [modelOptionsByCategory, agentOptions, teamOptions] = await Promise.all(
     [
       loadMainViewModelOptions(),
@@ -28,7 +27,6 @@ export async function loadOptions() {
 
   return {
     agentOptions,
-    modelOptions: modelOptionsByCategory.workflow,
     modelOptionsByCategory,
     teamOptions,
   };

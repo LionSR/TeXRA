@@ -9,7 +9,7 @@ import {
 } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,

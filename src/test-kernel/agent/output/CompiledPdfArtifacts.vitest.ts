@@ -10,7 +10,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createExternalLocation, createRunStorageLocation } from '@utils/files';
+import {
+  createExternalLocation,
+  createRunStorageLocation,
+} from '@utils/files/fileLocation';
 
 async function writePdf(filePath: string, contents: string): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });

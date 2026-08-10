@@ -1,7 +1,10 @@
 import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  AgentCategory,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

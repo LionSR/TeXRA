@@ -18,15 +18,15 @@ import {
   type ResolvedAgent,
 } from '@agent/index';
 import { isAgentRegistryReady } from '@agent/index/agentRegistry';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,
 } from '@agent/runtime/agentLoad';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 vi.mock('@agent/index', async () => {
   const actual =
@@ -92,7 +92,7 @@ describe('loadAgentSettingAndPrompts', () => {
 
   function putYaml(resolution: ResolvedAgent, lines: string[]): void {
     fileContents.set(
-      path.normalize(resolution.definitionPath),
+      path.normalize(resolution.entry.path),
       lines.join('\n'),
     );
   }
@@ -104,8 +104,6 @@ describe('loadAgentSettingAndPrompts', () => {
     const definitionPath = path.join('/', 'tmp', 'agents', `${name}.yaml`);
     return {
       entry: { source: 'custom', name, path: definitionPath, category },
-      definitionPath,
-      resolvedName: name,
     };
   }
 
@@ -155,7 +153,7 @@ describe('loadAgentSettingAndPrompts', () => {
     const resolution = customResolution('broken', AgentCategory.Workflow);
 
     fileContents.set(
-      path.normalize(resolution.definitionPath),
+      path.normalize(resolution.entry.path),
       'name: "unterminated\n',
     );
 
@@ -164,7 +162,7 @@ describe('loadAgentSettingAndPrompts', () => {
       (error: unknown) =>
         error instanceof Error &&
         error.message.startsWith(
-          `Failed to parse YAML at ${resolution.definitionPath}:`,
+          `Failed to parse YAML at ${resolution.entry.path}:`,
         ),
     );
   });
@@ -266,7 +264,7 @@ describe('inline agent definitions', () => {
       'scratchpad',
     );
     assert.ok(resolution, 'launch resolution should find the inline agent');
-    assert.strictEqual(resolution.definitionPath, '');
+    assert.strictEqual(resolution.entry.path, '');
 
     const read = vi.spyOn(AbsoluteFS, 'read');
     try {
@@ -469,8 +467,6 @@ describe('inline agent definitions', () => {
             path: '',
             category: AgentCategory.ToolUse,
           },
-          definitionPath: '',
-          resolvedName: 'ghost',
         }),
       (error: unknown) =>
         error instanceof Error &&

@@ -20,9 +20,12 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { deriveExecutionId } from '@utils/core/idHash';
-import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
+import {
+  runStorageLocationFromAnyAbsolutePath,
+} from '@utils/files/runStorageFs';
 
 // Local file imports
 import {
@@ -124,14 +127,12 @@ export async function fingerprintWorkflowAgentDependencies(
 async function workflowScriptModelSelection(
   invocation: WorkflowAgentInvocation,
   parent: LaunchRunContext,
-  agentCategory: AgentCategory,
 ): Promise<string> {
   const requestedModel = invocation.options.model;
   try {
     return await selectAvailableDelegationModel({
       ...(requestedModel !== undefined && { requestedModel }),
       parentModel: parent.model,
-      agentCategory,
     });
   } catch (error) {
     // A declared model is workflow configuration, so its rejection must not
@@ -254,7 +255,6 @@ export function createWorkflowScriptAgentRunner(
             const model = await workflowScriptModelSelection(
               invocation,
               parent,
-              AgentCategory.ToolUse,
             );
             agentName = agent.name;
             configPayload = {
@@ -285,7 +285,6 @@ export function createWorkflowScriptAgentRunner(
             const model = await workflowScriptModelSelection(
               invocation,
               parent,
-              AgentCategory.Workflow,
             );
             const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
               resolveInvocationFileList(

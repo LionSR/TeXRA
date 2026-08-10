@@ -105,9 +105,11 @@ async function loadFileActions(options: {
       runDiff = runDiff;
     },
   }));
-  mocks.doMock('@utils/files', async () => {
+  mocks.doMock('@utils/files/fileLocation', async () => {
     const actual =
-      await vi.importActual<typeof import('@utils/files')>('@utils/files');
+      await vi.importActual<typeof import('@utils/files/fileLocation')>(
+        '@utils/files/fileLocation',
+      );
     return {
       ...actual,
       createExternalLocation: (absolutePath: string) => ({

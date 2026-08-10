@@ -9,7 +9,7 @@ import {
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
 import { normalizeFilePath } from '@utils/core';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,

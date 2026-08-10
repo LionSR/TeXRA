@@ -3,7 +3,6 @@ import {
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -13,7 +12,11 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  AgentCategory,
+} from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

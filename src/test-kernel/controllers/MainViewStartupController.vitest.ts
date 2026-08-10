@@ -13,7 +13,6 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 const STARTUP_OPTIONS: MainViewStartupOptions = {
-  modelOptions: [{ value: 'gemini', label: 'Gemini' }],
   modelOptionsByCategory: {
     workflow: [{ value: 'gemini', label: 'Gemini' }],
     toolUse: [{ value: 'gpt', label: 'GPT' }],
@@ -41,7 +40,7 @@ function createController(
   return new MainViewStartupController({
     getConfig: (_key, defaultValue) => defaultValue,
     loadOptions: async () => ({
-      modelOptions: [],
+      modelOptionsByCategory: { workflow: [], toolUse: [] },
       agentOptions: {},
       teamOptions: [],
     }),
@@ -73,7 +72,6 @@ describe('MainViewStartupController', () => {
     assert.deepEqual(await controller.getOptionsAndLoginMessages(), [
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: STARTUP_OPTIONS.modelOptions,
         optionsDataByCategory: STARTUP_OPTIONS.modelOptionsByCategory,
       },
       {

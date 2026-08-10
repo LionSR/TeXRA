@@ -97,7 +97,6 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
       defaultValue: 23119,
       globalValue: undefined,
       workspaceValue: undefined,
-      effectiveValue: 23119,
     });
     await expect(access(projectConfig)).rejects.toThrow();
     await expect(access(globalConfig)).rejects.toThrow();
@@ -174,12 +173,10 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
 
     first.push('mutated');
     inspection?.defaultValue?.push('mutated-default');
-    inspection?.effectiveValue?.push('mutated-effective');
 
     expect(config.get<string[]>(key)).not.toContain('mutated');
     expect(config.get<string[]>(key)).not.toContain('mutated-default');
-    expect(config.get<string[]>(key)).not.toContain('mutated-effective');
-    expect(inspection?.defaultValue).not.toBe(inspection?.effectiveValue);
+    expect(inspection?.defaultValue).not.toBe(first);
   });
 
   it('rebinds reads and writes when the workspace folder changes', async () => {

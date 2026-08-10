@@ -29,15 +29,19 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import {
   attachContextWindowError,
-  buildErrorLogData,
-  getSdkErrorMessage,
+} from '@common/errors/sdkError/errorMetadata';
+import {
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
-  handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
+import {
+  buildErrorLogData,
+  getSdkErrorMessage,
+} from '@common/errors/sdkError/providerErrorFormat';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
 import type {
   OpenAIResponseProviderCapabilities,
@@ -92,7 +96,7 @@ import {
 } from '../contextManagementConstants';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
-import { BackgroundRunLifecycle } from './BackgroundRunLifecycle';
+import { createOpenAIBackgroundRunLifecycle } from './openAIBackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
 import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
@@ -108,6 +112,7 @@ import {
   uploadToolAttachments,
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
+import type { BackgroundRunLifecycle } from '../support/BackgroundRunLifecycle';
 
 // Third-party imports
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
@@ -444,7 +449,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   /** Pending background-response id + poll/resume choreography. See
    *  {@link BackgroundRunLifecycle} for the narrow interface this handler
    *  uses instead of mutating background-response fields directly. */
-  private readonly backgroundLifecycle = new BackgroundRunLifecycle({
+  private readonly backgroundLifecycle: BackgroundRunLifecycle<
+    OpenAI,
+    Response,
+    ResponseRetrieveParamsNonStreaming
+  > = createOpenAIBackgroundRunLifecycle({
     logger: () => this.logger,
     provider: this.config.provider,
   });

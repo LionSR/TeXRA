@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/settingsView/ChatExportController';
@@ -19,6 +18,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -27,7 +27,7 @@ import {
   snapshotFacts,
 } from '@test/support/storeTestDrivers';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +

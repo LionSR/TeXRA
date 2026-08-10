@@ -18,7 +18,6 @@ import { APIUserAbortError, OpenAIError } from 'openai';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -32,17 +31,22 @@ import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller'
 import {
   attachContextWindowError,
   hasContextWindowErrorMarker,
+} from '@common/errors/sdkError/errorMetadata';
+import {
   isContextWindowError,
-  isProviderErrorAutoRetryable,
   isUserAbort,
+} from '@common/errors/sdkError/errorPatterns';
+import {
+  isProviderErrorAutoRetryable,
   normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 import type {
   ResponseInputItem,
   ResponseUsage,

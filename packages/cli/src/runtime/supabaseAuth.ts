@@ -238,6 +238,17 @@ export function relayTokenStillActiveNotice(
 }
 
 /**
+ * TeXRA sign-out outcome text: the caller's signed-out line plus the
+ * relay-token caveat when TEXRA_RELAY_TOKEN keeps included access alive.
+ * Every sign-out surface routes through here so none can report a bare clean
+ * exit while relay access is still active.
+ */
+export function supabaseSignOutOutcomeMessage(signedOutLine: string): string {
+  const relayNotice = relayTokenStillActiveNotice();
+  return relayNotice ? `${signedOutLine}\n${relayNotice}` : signedOutLine;
+}
+
+/**
  * Fresh access token for the stored CLI session, bypassing any configured
  * TEXRA_RELAY_TOKEN. Token management (texra setup-token) must authenticate
  * with a real user session — a CI token cannot mint or revoke tokens.

@@ -5,14 +5,16 @@ import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { RunScope } from '@agent/runtime/RunScope';
-import { normalizeProviderError } from '@common/errors';
+import {
+  hasContextWindowErrorMarker,
+  hasMissingApiKeyErrorMarker,
+} from '@common/errors/sdkError/errorMetadata';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   isProviderErrorAutoRetryable,
   isUnauthorizedProviderError,
-  isUserAbort,
-  hasContextWindowErrorMarker,
-  hasMissingApiKeyErrorMarker,
-} from '@common/errors/sdkErrorUtils';
+  normalizeProviderError,
+} from '@common/errors/sdkError/providerErrorFormat';
 import { includedModelAccess } from '@model/includedModelAccess';
 import {
   STREAM_PHASE,
