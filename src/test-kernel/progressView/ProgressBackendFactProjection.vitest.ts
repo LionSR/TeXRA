@@ -39,6 +39,7 @@ import {
 } from '@test/support/storeTestDrivers';
 import {
   createIsolatedRecordingBackend,
+  createPersistentRecordingBackend,
   createRecordingBackend,
   emitActiveStream,
   emitRunConfig,
@@ -944,6 +945,65 @@ describe('ProgressBackend', () => {
 
     expect(releaseSpy).not.toHaveBeenCalled();
     expect(backend.state.streamLogs.get(stream)).toBeDefined();
+  });
+
+  it('preserves logHead on status updates that evict unfocused streams', async () => {
+    const { backend, messages } = await createPersistentRecordingBackend();
+    const focused = 'focused-stream' as StreamTabId;
+    const background = 'background-stream' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(focused);
+      backend.state.switchActiveStream(focused);
+      backend.state.streamLogs.ensureStream(background);
+      backend.state.updateStreamMetadata(background, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(background, AgentCategory.ToolUse);
+      appendTranscriptEntry(backend.state.streamLogs, background, {
+        id: 'seed-1',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'seed',
+      });
+      appendTranscriptEntry(backend.state.streamLogs, background, {
+        id: 'seed-2',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 200,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'seed-2',
+      });
+      // Durability must drain first; dirty streams only queue pendingRelease.
+      await backend.state.flush();
+      const expectedHead = backend.state.streamLogs.get(background)?.head;
+      expect(expectedHead).toBeGreaterThan(0);
+
+      messages.length = 0;
+      await backend.applyStreamStatus(
+        background,
+        STREAM_PHASE.WAITING,
+        STREAM_PHASE.RUNNING,
+      );
+
+      expect(backend.state.streamLogs.get(background)).toBeUndefined();
+      const statusMessage = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS &&
+          message.stream === background,
+      );
+      expect(statusMessage).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+        stream: background,
+        status: STREAM_PHASE.WAITING,
+        logHead: expectedHead,
+        lastTimestamp: 200,
+      });
+    } finally {
+      await backend.state.clearAll();
+    }
   });
 
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
