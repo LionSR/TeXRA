@@ -320,8 +320,8 @@ describe('CLI model access routes', () => {
       ['chatgpt', 'subscription'],
       ['grok', 'subscription'],
       ['kimi-code', 'subscription'],
-      ['included', 'included access'],
-      ['personal', 'own API keys'],
+      ['included', 'Included'],
+      ['personal', 'API keys'],
     ];
 
     for (const [route, text] of detailed) {
