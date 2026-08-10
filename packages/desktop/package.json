@@ -24,8 +24,8 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.221",
-    "@openai/codex-sdk": "^0.146.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.224",
+    "@openai/codex-sdk": "^0.147.0",
     "@playwright/test": "^1.62.1",
     "@types/semver": "^7.8.0",
     "@typescript/native": "npm:typescript@^7.0.2",
@@ -42,7 +42,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
     "@sentry/electron": "^7.16.0",
     "fix-path": "^5.0.0",
-    "lucide-static": "^1.28.0",
+    "lucide-static": "^1.30.0",
     "node-pty": "^1.1.0",
     "semver": "^7.8.5"
   }
