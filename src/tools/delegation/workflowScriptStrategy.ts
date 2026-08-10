@@ -28,7 +28,7 @@ import type {
   WorkflowControlRegistry,
   WorkflowRunControl,
 } from '@agent/runtime/workflowControlRegistry';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, WorkflowExecutionSnapshot } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
@@ -113,6 +113,10 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
+  /** Snapshot read from the detached run metadata that receives subsequent writes. */
+  readonly initialSnapshot?: WorkflowExecutionSnapshot;
+  /** Persist the canonical snapshot on the detached run metadata. */
+  readonly onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => Promise<void>;
   /** Persist-only when a headless caller awaits and returns the report itself. */
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
@@ -181,6 +185,9 @@ export function createWorkflowScriptStrategy(
         run = await runPersistedWorkflowScriptWithProgress(params.logger, {
           store: params.store,
           checkpointId: params.checkpointId,
+          ...(params.initialSnapshot !== undefined && {
+            initialSnapshot: params.initialSnapshot,
+          }),
           script: params.script,
           ...(params.args != null && { args: params.args }),
           ...(params.files !== undefined && {
@@ -193,6 +200,7 @@ export function createWorkflowScriptStrategy(
           getCallCostUsd: (index) => attemptCost.costForCall(index),
           onActivity: runLog.add,
           onEvent: summary.onEvent,
+          ...(params.onSnapshot && { onSnapshot: params.onSnapshot }),
           onControl: (control) => {
             // Translate an execution-id-keyed host request into an
             // index-keyed engine action; unknown/settled children no-op,

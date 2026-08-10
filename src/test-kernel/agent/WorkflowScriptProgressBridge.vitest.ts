@@ -354,66 +354,20 @@ return await agent('Run refused', { id: 'refused' })`,
     ).toBeUndefined();
   });
 
-  it.each([
-    [
-      'sequential',
-      `await agent('First prompt', {
-  id: 'shared-journal-id',
-  label: 'First task',
-  phase: 'Review',
-})
-return await agent('Second prompt', {
-  id: 'shared-journal-id',
-  label: 'Second task',
-  phase: 'Write',
-})`,
-    ],
-    [
-      'parallel',
-      `return await parallel([
-  () => agent('First prompt', {
-    id: 'shared-journal-id',
-    label: 'First task',
-    phase: 'Review',
-  }),
-  () => agent('Second prompt', {
-    id: 'shared-journal-id',
-    label: 'Second task',
-    phase: 'Write',
-  }),
-])`,
-    ],
-  ] as const)(
-    'keeps %s calls with one journal id as separate progress records',
-    async (mode, body) => {
-      const { trace, events } = recordingTrace();
-      await runScript(
+  it('rejects duplicate dynamic logical call ids', async () => {
+    const { trace } = recordingTrace();
+    await expect(
+      runScript(
         trace,
-        `reused-journal-id-${mode}`,
+        'duplicate-logical-id',
         `${meta}
-${body}`,
-      );
-
-      const firstRunning = workflowCallEvent(events, 'First task', 'running');
-      const firstCompleted = workflowCallEvent(
-        events,
-        'First task',
-        'completed',
-      );
-      const secondRunning = workflowCallEvent(events, 'Second task', 'running');
-      const secondCompleted = workflowCallEvent(
-        events,
-        'Second task',
-        'completed',
-      );
-
-      expect(firstRunning?.call.id).toBe('call-0');
-      expect(firstCompleted?.logId).toBe(firstRunning?.logId);
-      expect(secondRunning?.call.id).toBe('call-1');
-      expect(secondCompleted?.logId).toBe(secondRunning?.logId);
-      expect(firstRunning?.logId).not.toBe(secondRunning?.logId);
-    },
-  );
+return await parallel([
+  () => agent('First prompt', { id: 'shared-journal-id' }),
+  () => agent('Second prompt', { id: 'shared-journal-id' }),
+])`,
+      ),
+    ).rejects.toThrow(/call id "shared-journal-id" may be issued only once/i);
+  });
 
   it('projects a cached completion without synthesizing a start event', async () => {
     const script = `${meta}
@@ -702,10 +656,11 @@ return await agent('Unsuccessful')`,
       trace,
       'parallel-phases',
       `${meta}
-return await parallel([
-  () => agent('slow', { phase: 'First' }),
-  () => agent('fast', { phase: 'Second' }),
-])`,
+phase('First')
+const slow = agent('slow')
+phase('Second')
+const fast = agent('fast')
+return await Promise.all([slow, fast])`,
       { runAgent },
     );
 

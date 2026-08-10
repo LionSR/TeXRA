@@ -2,7 +2,11 @@
 import { z } from 'zod';
 
 // Local imports
-import { getExecutionStore, registerExecution } from '@agent/storage';
+import {
+  getExecutionStore,
+  registerExecution,
+  writeWorkflowExecutionSnapshot,
+} from '@agent/storage';
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
@@ -25,6 +29,7 @@ import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type StreamTabId,
+  type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -179,7 +184,7 @@ function withScriptReference(
  * Execute a durable, deterministic workflow script from an agent whose tool
  * list names it. Gated by the "Multi-Agent Workflow" dashboard switch (id
  * `workflow-script` in {@link @tools/externalToolDefs}), which
- * `resolveAgentTools()` enforces regardless of any agent's configured tools —
+ * `resolveAgentTools()` enforces regardless of any agent's configured tools -
  * new installs start with the switch off.
  */
 export class WorkflowScriptTool extends defineTool({
@@ -197,7 +202,7 @@ Script rules:
 - Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, phase, log, parallel, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
 - Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
 - Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Structured (tool-use) agent() calls do not accept file options.
-- Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase.
+- Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase. Its logical identity is the explicit id when present, otherwise its call ordinal. Logical ids must be unique. Canonical labels prefer an explicit label, then a meaningful file and agent, then agent role and ordinal.
 - Awaiting: agent() and parallel() return Promises: await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
 - Failures: a failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
 
@@ -375,6 +380,25 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       AgentConfigSchema.parse(runConfigPayload),
     );
 
+    // Capture any prior workflow snapshot *before* registerExecution overwrites
+    // meta.json. Deterministic meta.name reuses the same execution id, so a
+    // post-register read always sees a fresh meta with no workflow field and
+    // hydration would drop interrupted attempts, costs, and child identities.
+    // Strict read preserves absent-vs-malformed: corrupt present snapshots stop
+    // recovery rather than being treated as a clean first launch.
+    const runStore = getExecutionStore(runExecutionId);
+    let initialSnapshot: WorkflowExecutionSnapshot | undefined;
+    try {
+      initialSnapshot = (await runStore.readMetaStrict())?.workflow;
+    } catch (error) {
+      throw workflowScriptToolError(
+        new ToolError(
+          `Failed to launch workflow script '${meta.name}': prior workflow execution snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
+        ),
+        scriptPath,
+      );
+    }
+
     try {
       // The durable record states only what the container run has: the
       // workflow's name and the real model its agent steps will use. The
@@ -428,9 +452,8 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const runResult = runWithOwnership(async () => {
       // Attempt-scoped setup is inside the lease-protected try: it runs after
       // the deterministic run lease is held, so a throw here must release the
-      // lease — otherwise it survives to its heartbeat timeout and a prompt
+      // lease - otherwise it survives to its heartbeat timeout and a prompt
       // relaunch is refused.
-      const runStore = getExecutionStore(runExecutionId);
       let runChildStreamId: StreamTabId;
       let runCompletion: Promise<void>;
       try {
@@ -481,6 +504,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             files,
             name: meta.name,
             workflowControls: runScope.session.workflowControls,
+            initialSnapshot,
+            onSnapshot: (snapshot) =>
+              writeWorkflowExecutionSnapshot(runExecutionId, snapshot),
             ...(parent.stopAfterCycle && {
               deliveryMode: 'persistOnly' as const,
             }),

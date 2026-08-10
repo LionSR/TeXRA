@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 import {
   WorkflowCallIdentitySchema,
+  type ExecutionId,
   type WorkflowCallIdentity,
+  type WorkflowExecutionSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
@@ -88,11 +90,11 @@ export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
 interface WorkflowAgentCallBaseOptions {
   /**
-   * Journal disambiguator when otherwise-identical calls occur more than
-   * once. This does not identify the call's run-local progress record.
+   * Stable logical call id and journal disambiguator. Dynamic calls use it as
+   * their persisted progress id; when omitted they fall back to call order.
    */
   id?: string;
-  /** Display label for progress UIs; defaults to a prompt excerpt. */
+  /** Display label for progress UIs. */
   label?: string;
   /** Progress group; defaults to the `phase()` active at call time. */
   phase?: string;
@@ -140,6 +142,8 @@ export type WorkflowAgentCallOptions =
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number; also the journal key position. */
   index: number;
+  /** Stable logical call identity within the workflow execution snapshot. */
+  progressId: WorkflowScriptProgressId;
   /** Stable hash of the prompt and normalized execution-affecting options. */
   key: string;
   /** Opaque host fingerprint already incorporated into `key`, when present. */
@@ -158,6 +162,12 @@ export interface WorkflowAgentInvocation {
    * for progress UIs. Never journaled — it does not affect resume identity.
    */
   reportModel?: (model: string) => void;
+  /** Reports the resolved agent selected by the host. */
+  reportAgent?: (agent: string) => void;
+  /** Reports the physical child execution selected for this attempt. */
+  reportChildExecution?: (executionId: ExecutionId) => void;
+  /** Reports cost available on the child result. */
+  reportCostUsd?: (costUsd: number) => void;
   /**
    * Reports the live child stream once the host has resolved its agent, model,
    * and execution identity. Progress renderers use it as the task card's
@@ -220,6 +230,9 @@ export type WorkflowScriptEvent =
       total?: number;
     }
   | { type: 'log'; message: string }
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:queued';
+    })
   | (WorkflowScriptAgentEventBase & {
       type: 'agent:start';
     })
@@ -308,12 +321,16 @@ export interface WorkflowScriptRunOptions {
   concurrency?: number;
   /** Journal from a prior run; per-index key matches return cached results. */
   journal?: WorkflowJournalEntry[];
+  /** Recovery snapshot from the prior attempt, re-published after reconciliation. */
+  initialSnapshot?: WorkflowExecutionSnapshot;
   /**
    * Durable checkpoint hook for a successfully validated live call. The
    * engine awaits it before the result becomes visible to the script, so a
    * host restart cannot expose work whose journal entry was never persisted.
    */
   onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
+  /** Receives each canonical snapshot after the transition has been applied. */
+  onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => void | Promise<void>;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script
@@ -334,4 +351,6 @@ export interface WorkflowScriptRunResult {
   journal: WorkflowJournalEntry[];
   /** Total agent() calls issued (cached and live). */
   agentCalls: number;
+  /** Final canonical execution snapshot. */
+  snapshot: WorkflowExecutionSnapshot;
 }
