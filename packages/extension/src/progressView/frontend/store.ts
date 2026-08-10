@@ -10,6 +10,10 @@ import {
   type InquiryThreadUpdatedEvent,
   type ExternalInquiryThreadId,
 } from '@shared/schemas';
+import {
+  createCompactionActivityProjection,
+  type CompactionActivityProjection,
+} from '@shared/streams/compactionActivityProjection';
 import type { Draft } from 'mutative';
 
 // Re-export schema types for components (single source of truth)
@@ -40,6 +44,8 @@ export interface StreamLogs {
   logIndex: Map<string, number>;
   /** O(1) lookup: task group ID → array index. Maintained by log handlers. */
   taskGroupIndex: Map<string, number>;
+  /** Correlated context-compaction lifecycle projected into stable log rows. */
+  compactionProjection: CompactionActivityProjection;
   /**
    * Existing log-message indices updated by the most recent backend delta.
    * Pure append batches leave this empty so renderers can skip whole-log scans.
@@ -56,6 +62,7 @@ function createEmptyStreamLogs(): StreamLogs {
     logs: [],
     logIndex: new Map(),
     taskGroupIndex: new Map(),
+    compactionProjection: createCompactionActivityProjection(),
     updatedMessageIndices: [],
     updatedMessageBaseGeneration: 0,
     generation: 0,

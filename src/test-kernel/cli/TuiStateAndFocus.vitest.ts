@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { logCompactionActivity } from '@agent/trace';
+import { startCompactionActivity } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -2521,35 +2521,146 @@ describe('CLI transcript state', () => {
     });
   });
 
-  it('tracks context compaction activity without adding transcript rows', () => {
+  it('updates one semantic context-compaction transcript entry in place', () => {
     const logger = runTrace(root);
+    const activity = startCompactionActivity(logger);
 
-    logCompactionActivity(logger, 'started');
     syncStreamLog(root);
 
     let slice = streams.get().get(root);
     expect(slice?.compactingActive).toBe(true);
-    expect(slice?.entries).toEqual([]);
+    expect(slice?.entries).toHaveLength(1);
+    expect(slice?.entries[0]).toMatchObject({
+      id: `compaction:${activity.operationId}`,
+      role: 'activity',
+      text: 'Compacting context…',
+      finalized: false,
+      activity: { status: 'running' },
+    });
 
-    logCompactionActivity(logger, 'finished');
+    activity.finish('completed');
     syncStreamLog(root);
 
     slice = streams.get().get(root);
     expect(slice?.compactingActive).toBe(false);
-    expect(slice?.entries).toEqual([]);
+    expect(slice?.entries).toHaveLength(1);
+    expect(slice?.entries[0]).toMatchObject({
+      id: `compaction:${activity.operationId}`,
+      role: 'activity',
+      text: 'Context compacted',
+      finalized: true,
+      activity: { status: 'completed' },
+    });
   });
 
-  it('clears an unmatched compaction start when later live activity arrives', () => {
+  it('moves compaction to Static while its response text keeps streaming', () => {
+    const logger = runTrace(root);
+    const activity = startCompactionActivity(logger);
+    const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('Visible answer');
+
+    syncStreamLog(root);
+
+    let entries = streamEntries(root);
+    expect(entries).toMatchObject([
+      {
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: false,
+        activity: { status: 'running' },
+      },
+      { role: 'assistant', text: 'Visible answer', finalized: false },
+    ]);
+
+    activity.finish('completed');
+    syncStreamLog(root);
+
+    entries = streamEntries(root);
+    expect(entries).toMatchObject([
+      {
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: true,
+        activity: { status: 'completed' },
+      },
+      { role: 'assistant', text: 'Visible answer', finalized: false },
+    ]);
+    const split = splitTranscriptEntries(entries, STREAM_PHASE.RUNNING);
+    expect(split.finalized.map((entry) => entry.id)).toEqual([
+      `compaction:${activity.operationId}`,
+    ]);
+    expect(split.pending.map((entry) => entry.role)).toEqual(['assistant']);
+
+    output.finalize();
+  });
+
+  it('keeps an interrupted compaction replaceable until its provider outcome arrives', () => {
     const logger = runTrace(root);
 
-    logCompactionActivity(logger, 'started');
+    const activity = startCompactionActivity(logger);
     syncStreamLog(root);
     expect(streams.get().get(root)?.compactingActive).toBe(true);
 
     logUserMessage(logger, 'A later turn started.');
     syncStreamLog(root);
 
-    expect(streams.get().get(root)?.compactingActive).toBe(false);
+    let slice = streams.get().get(root);
+    expect(slice?.compactingActive).toBe(false);
+    expect(slice?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: false,
+        activity: expect.objectContaining({ status: 'interrupted' }),
+      }),
+    );
+
+    activity.finish('completed');
+    syncStreamLog(root);
+
+    slice = streams.get().get(root);
+    expect(slice?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: true,
+        activity: expect.objectContaining({ status: 'completed' }),
+      }),
+    );
+  });
+
+  it('finalizes unmatched compaction when the transcript settles', () => {
+    const logger = runTrace(root);
+    const activity = startCompactionActivity(logger);
+    syncStreamLog(root);
+
+    setStatus(root, STREAM_PHASE.WAITING);
+    syncStreamLog(root);
+
+    expect(streams.get().get(root)?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        finalized: true,
+        activity: expect.objectContaining({
+          status: 'interrupted',
+          finalized: true,
+        }),
+      }),
+    );
+
+    activity.finish('completed');
+    syncStreamLog(root);
+
+    expect(streams.get().get(root)?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        finalized: true,
+        activity: expect.objectContaining({
+          status: 'interrupted',
+          finalized: true,
+        }),
+      }),
+    );
   });
 
   it('does not project empty assistant responses into transcript rows', () => {

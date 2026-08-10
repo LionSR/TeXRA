@@ -257,9 +257,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map((segment) => segment.text)).toContain(
-      '3 running sessions',
-    );
+    expect(display.left.map((segment) => segment.text)).toContain('3 active');
     expect(display.bindings).toContain('Tab sessions');
   });
 
@@ -559,7 +557,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('scroll');
     expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-C stop root');
-    expect(leftTexts(display)).toContain('1 subagent');
+    expect(leftTexts(display)).toContain('1 agent');
   });
 
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
@@ -596,7 +594,7 @@ describe('CLI StatusBar display model', () => {
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
-      '2 subagents',
+      '2 agents',
       '3 approvals',
     ]);
     expect(display.bindings).not.toContain('Alt-s subagents');

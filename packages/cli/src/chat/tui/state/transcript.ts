@@ -1,12 +1,8 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
-  STREAM_PHASE,
   isTerminalWorkflowCallProgress,
-  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-
 import {
   activeStreamId,
   focusStream,
@@ -21,18 +17,6 @@ import { parentStream } from './childExecutions';
 import { activeStreamParentOrSelfId } from './streamViews';
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
-
-/**
- * Stream phases at which deferred-finalization entries (assistant text and
- * tool rows) are promoted into `<Static>` scrollback. WAITING ends the current
- * turn without ending the run; terminal outcomes end both. In either case the
- * current entries are safe to finalize.
- */
-export function isFinalTranscriptStatus(
-  status: StreamPhase | undefined,
-): boolean {
-  return status === STREAM_PHASE.WAITING || isTerminalOutcomePhase(status);
-}
 
 let localEntrySeq = 0;
 

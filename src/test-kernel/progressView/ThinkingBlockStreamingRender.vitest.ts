@@ -65,21 +65,32 @@ describe('progress view live activity rendering', () => {
     ).not.toBeNull();
   });
 
-  it('does not render ephemeral context-compaction activity', () => {
+  it('renders projected context compaction as a non-collapsible activity', async () => {
     const container = renderEntry(
       logMessage({
-        id: 'compaction-1',
-        text: 'Compacting conversation context',
+        id: 'compaction:operation-1',
+        text: '',
         messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
         data: {
-          activity: 'context_compaction',
-          state: 'started',
+          operationId: 'operation-1',
+          status: 'running',
+          finalized: false,
+          startPosition: 4,
+          startedAt: 10,
         },
       }),
     );
+    const activity = container.querySelector('compaction-activity');
+    expect(activity).not.toBeNull();
+    document.body.append(container);
+    await (activity as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
-    expect(container.textContent).toBe('');
-    expect(container.childElementCount).toBe(0);
+    expect(activity?.shadowRoot?.textContent).toContain('Compacting context…');
+    expect(activity?.shadowRoot?.querySelector('wa-details')).toBeNull();
+    expect(
+      activity?.shadowRoot?.querySelector('[role="status"]'),
+    ).not.toBeNull();
   });
 
   it('preserves newlines in raw text while streaming', () => {

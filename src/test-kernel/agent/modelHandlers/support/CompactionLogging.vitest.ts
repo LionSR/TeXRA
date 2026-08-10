@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { logCompactionActivity } from '@agent/trace';
+import { startCompactionActivity } from '@agent/trace';
 import { logCompactionEvent } from '@agent/modelHandlers/support/compactionLogging';
 import { spiedTrace } from '@test/support/spiedTrace';
 
@@ -65,35 +65,45 @@ describe('logCompactionEvent', () => {
   });
 });
 
-describe('logCompactionActivity', () => {
-  it('emits typed start and finish progress markers', () => {
+describe('startCompactionActivity', () => {
+  it('correlates start and terminal markers and terminalizes once', () => {
     const trace = spiedTrace();
     const info = vi.mocked(trace.info);
 
-    logCompactionActivity(trace, 'started');
-    logCompactionActivity(trace, 'finished');
+    const activity = startCompactionActivity(trace);
+    activity.finish('completed');
+    activity.finish('failed');
 
-    expect(info.mock.calls).toEqual([
-      [
-        'Compacting conversation context',
-        {
-          messageType: 'contextCompactionActivity',
-          data: {
-            activity: 'context_compaction',
-            state: 'started',
-          },
-        },
-      ],
-      [
-        'Conversation context compaction finished',
-        {
-          messageType: 'contextCompactionActivity',
-          data: {
-            activity: 'context_compaction',
-            state: 'finished',
-          },
-        },
-      ],
+    expect(info).toHaveBeenCalledTimes(2);
+    expect(info.mock.calls.map(([text]) => text)).toEqual([
+      'Compacting conversation context',
+      'Conversation context compaction completed',
+    ]);
+    expect(info.mock.calls.map(([, options]) => options?.data)).toEqual([
+      {
+        activity: 'context_compaction',
+        operationId: activity.operationId,
+        state: 'started',
+      },
+      {
+        activity: 'context_compaction',
+        operationId: activity.operationId,
+        state: 'completed',
+      },
     ]);
   });
+
+  it.each(['failed', 'cancelled', 'skipped'] as const)(
+    'emits the %s terminal outcome',
+    (outcome) => {
+      const trace = spiedTrace();
+      const activity = startCompactionActivity(trace);
+      activity.finish(outcome);
+
+      expect(vi.mocked(trace.info).mock.calls.at(-1)?.[1]?.data).toMatchObject({
+        operationId: activity.operationId,
+        state: outcome,
+      });
+    },
+  );
 });

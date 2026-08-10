@@ -165,6 +165,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   onStreamStatusChanged(
     streamId: StreamTabId,
     status: StreamPhase,
+    _logHead: number,
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
