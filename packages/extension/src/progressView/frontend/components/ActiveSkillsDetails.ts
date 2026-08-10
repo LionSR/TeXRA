@@ -1,64 +1,63 @@
-import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
+/**
+ * ActiveSkillsDetails — collapsible panel listing skills active for a run.
+ * Extends CollapsiblePanel so stream switches reset open state via collapseKey.
+ */
+
+// Third-party imports
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+// Local imports - shared styles
+import { designTokens, commonViewStyles } from '@shared/styles';
 import type { ActiveSkillSummary } from '@shared/schemas';
 
+// Local imports - progress view constants
+import { ELEMENT_IDS } from '../constants';
+
+// Local imports - base class
+import { CollapsiblePanel } from './CollapsiblePanel';
+
 @customElement('active-skills-details')
-export class ActiveSkillsDetails extends LitElement {
-  static override styles = css`
-    :host,
-    details,
-    ul,
-    li {
-      min-width: 0;
-    }
+export class ActiveSkillsDetails extends CollapsiblePanel {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    css`
+      :host {
+        display: block;
+        min-width: 0;
+      }
 
-    :host {
-      display: contents;
-    }
+      .skills-list {
+        display: grid;
+        gap: var(--wa-space-2xs);
+        margin: 0;
+        padding-inline-start: var(--wa-space-l);
+        min-width: 0;
+      }
 
-    details {
-      box-sizing: border-box;
-      max-width: 100%;
-      overflow: hidden;
-      margin: 0 0 var(--wa-space-xs);
-      padding: var(--wa-space-2xs) var(--wa-space-xs);
-      border: 1px solid var(--wa-color-neutral-border-quiet);
-      border-radius: var(--wa-border-radius-m);
-      color: var(--wa-color-text-normal);
-      font-size: var(--wa-font-size-s);
-    }
+      .skills-list li {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
 
-    summary {
-      cursor: pointer;
-      font-weight: var(--font-weight-semibold, 600);
-    }
-
-    ul {
-      display: grid;
-      gap: var(--wa-space-2xs);
-      margin: var(--wa-space-xs) 0 0;
-      padding-inline-start: var(--wa-space-l);
-    }
-
-    li {
-      overflow-wrap: anywhere;
-    }
-
-    .source {
-      color: var(--wa-color-text-quiet);
-    }
-  `;
+      .source {
+        color: var(--wa-color-text-quiet);
+      }
+    `,
+  ];
 
   @property({ attribute: false })
   skills: readonly ActiveSkillSummary[] = [];
 
   override render(): TemplateResult | typeof nothing {
     if (this.skills.length === 0) return nothing;
-    return html`
-      <details>
-        <summary>Skills (${this.skills.length})</summary>
-        <ul>
+
+    return this.renderCollapsibleDetails({
+      id: ELEMENT_IDS.ACTIVE_SKILLS_CONTAINER,
+      summary: `Skills (${this.skills.length})`,
+      body: html`
+        <ul id=${ELEMENT_IDS.ACTIVE_SKILLS_LIST} class="skills-list">
           ${this.skills.map(
             (skill) => html`
               <li>
@@ -69,8 +68,8 @@ export class ActiveSkillsDetails extends LitElement {
             `,
           )}
         </ul>
-      </details>
-    `;
+      `,
+    });
   }
 }
 

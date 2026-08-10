@@ -17,32 +17,51 @@ function createElement(): ActiveSkillsDetailsElement {
   ) as ActiveSkillsDetailsElement;
 }
 
+function sampleSkill() {
+  return ActiveSkillSummarySchema.parse({
+    name: 'proof-audit',
+    description: 'Review proofs.',
+    source: 'project',
+  });
+}
+
 describe('active-skills-details', () => {
   useLitComponentTestDom(async () => {
     await import('@progressView/frontend/components/ActiveSkillsDetails');
   });
 
-  it('hides empty catalogs and renders a native collapsed details block', async () => {
+  it('hides empty catalogs and renders a collapsed wa-details panel', async () => {
     const element = createElement();
     document.body.append(element);
     await element.updateComplete;
-    expect(element.shadowRoot?.querySelector('details')).toBeNull();
+    expect(element.shadowRoot?.querySelector('wa-details')).toBeNull();
 
-    element.skills = [
-      ActiveSkillSummarySchema.parse({
-        name: 'proof-audit',
-        description: 'Review proofs.',
-        source: 'project',
-      }),
-    ];
+    element.skills = [sampleSkill()];
     await element.updateComplete;
 
-    const details = element.shadowRoot?.querySelector('details');
+    const details = element.shadowRoot?.querySelector('wa-details');
     expect(details).toBeInstanceOf(HTMLElement);
     expect(details?.hasAttribute('open')).toBe(false);
-    expect(details?.querySelector('summary')?.textContent).toContain(
-      'Skills (1)',
-    );
+    expect(details?.getAttribute('summary')).toContain('Skills (1)');
+  });
+
+  it('closes an open panel when collapseKey changes', async () => {
+    const element = createElement();
+    element.skills = [sampleSkill()];
+    element.collapseKey = 'stream-a';
+    document.body.append(element);
+    await element.updateComplete;
+
+    const details = element.shadowRoot?.querySelector('wa-details');
+    expect(details).toBeInstanceOf(HTMLElement);
+
+    details?.dispatchEvent(new Event('wa-show'));
+    await element.updateComplete;
+    expect(details?.hasAttribute('open')).toBe(true);
+
+    element.collapseKey = 'stream-b';
+    await element.updateComplete;
+    expect(details?.hasAttribute('open')).toBe(false);
   });
 
   it('wraps a maximum-length unbroken description within narrow containers', async () => {
