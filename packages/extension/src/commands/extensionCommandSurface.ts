@@ -54,7 +54,6 @@ import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/wa
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { signInWithGrokSubscription } from '@frontend/auth/xaiSubscriptionSignIn';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -68,13 +67,15 @@ import {
 } from './extensionCommandHandlers';
 
 const RESET_CHANNEL = 'mainViewCommands';
-const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
 const GROK_SIGN_IN_CHANNEL = 'GrokSubscription';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
   settingsViewProvider: SettingsViewProvider,
 ): ExtensionCommandActions {
+  const refreshAfterProviderKeyChange = (provider: string) =>
+    settingsViewProvider.refreshAfterProviderKeyChange(provider);
+
   return {
     showSettings(tabIndex, agentSubTab) {
       return settingsViewProvider.showSettingsView(tabIndex, agentSubTab);
@@ -105,16 +106,7 @@ export function createExtensionCommandActions(
     acceptEdited: latexHandleAcceptEdited,
     indentTeX: handleIndentTeX,
     signIn: authSignIn,
-    async signInChatGpt() {
-      const signedIn = await signInWithChatGptSubscription(
-        CHATGPT_SIGN_IN_CHANNEL,
-      );
-      await Promise.all([
-        vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-        vscode.commands.executeCommand('texra.refreshAllOptions'),
-      ]);
-      return signedIn;
-    },
+    signInChatGpt: settingsViewProvider.signInChatGpt,
     async signInGrok() {
       const signedIn = await signInWithGrokSubscription(GROK_SIGN_IN_CHANNEL);
       await Promise.all([
@@ -140,7 +132,7 @@ export function createExtensionCommandActions(
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
     cloneOverleafProject: gitCloneOverleafProject,
-    removeApiKey: apiRemoveApiKey,
+    removeApiKey: () => apiRemoveApiKey(refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     async toggleView() {
       const target =
@@ -150,7 +142,8 @@ export function createExtensionCommandActions(
       await vscode.commands.executeCommand(target);
     },
     showProgressView: progressShowProgressView,
-    setApiKey: apiSetApiKey,
+    setApiKey: (provider) =>
+      apiSetApiKey(refreshAfterProviderKeyChange, provider),
     createAgentWithAI: (category) =>
       agentHandleCreateAgentWithAI(context, category),
     execute: agentRunExecuteCommand,

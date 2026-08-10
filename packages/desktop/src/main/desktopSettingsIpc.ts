@@ -398,6 +398,10 @@ export function createDesktopSettingsIpc(
     openPRSubscriptionStream: (message) => revealStream(message.streamId),
     ...options.credentialSettingsController.chatGptHandlers,
     ...options.credentialSettingsController.grokHandlers,
+    getSubscriptionUsage: (message) =>
+      options.credentialSettingsController.postSubscriptionUsage(
+        message.forceRefresh ?? false,
+      ),
     updateStateSetting: (message) =>
       updateStateSetting(message.key, message.value),
     ...options.toolingSettingsController.toolHandlers,

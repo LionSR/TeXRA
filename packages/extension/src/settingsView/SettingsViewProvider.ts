@@ -25,6 +25,7 @@ export class SettingsViewProvider
   public static readonly viewType = 'texra.settingsView';
   protected contentProvider: BundledViewContentProvider;
   protected messageHandler: SettingsViewMessageHandler;
+  public readonly signInChatGpt: () => Promise<void>;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -38,6 +39,7 @@ export class SettingsViewProvider
       },
     );
     this.messageHandler = new SettingsViewMessageHandler(context);
+    this.signInChatGpt = this.messageHandler.signInChatGpt;
 
     // Listen for auth state changes to refresh all data
     onTexraAuthSessionsChanged(context, () => {
@@ -55,6 +57,11 @@ export class SettingsViewProvider
 
   protected override getViewPath(): string {
     return 'settingsView';
+  }
+
+  /** Refresh every credential-dependent surface after any API-key mutation. */
+  public refreshAfterProviderKeyChange(provider: string): Promise<void> {
+    return this.messageHandler.refreshAfterProviderKeyChange(provider);
   }
 
   /**

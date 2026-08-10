@@ -36,6 +36,7 @@ import {
   UpdateProfileMessageSchema,
 } from '../profileViewMessages';
 import { StreamTabIdSchema } from '../identifiers';
+import { SubscriptionUsageSnapshotsSchema } from '../subscriptionUsage';
 import {
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
@@ -476,6 +477,10 @@ export type UpdateGrokAuthStatusMessage = z.infer<
   typeof UpdateGrokAuthStatusMessageSchema
 >;
 
+const UpdateSubscriptionUsageMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),
+  snapshots: SubscriptionUsageSnapshotsSchema,
+});
 const PRSubscriptionOwnerSchema = z.object({
   streamId: StreamTabIdSchema,
   label: z.string(),
@@ -645,6 +650,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateGitHubTokenStatusMessageSchema,
   UpdateChatGptAuthStatusMessageSchema,
   UpdateGrokAuthStatusMessageSchema,
+  UpdateSubscriptionUsageMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   UpdateLatexConfigValuesMessageSchema,

@@ -1,6 +1,8 @@
+import { createChannelTrace } from '@agent/trace';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
+import { isSpendingQuotaExceeded, type SpendingStatus } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   ApiAccessMode,
@@ -28,6 +30,8 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
+
+const logger = createChannelTrace('SettingsProfileController');
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;
@@ -65,10 +69,13 @@ export type ProviderSettingUpdateResult =
   | { kind: 'updated'; affectsModelAvailability: boolean }
   | { kind: 'rejected'; key: string };
 
-export interface ApiAccessModeUpdate {
-  readonly mode: ApiAccessMode;
-  readonly openRouterDisabled: boolean;
-}
+export type ApiAccessModeUpdate =
+  | {
+      readonly kind: 'updated';
+      readonly mode: ApiAccessMode;
+      readonly openRouterDisabled: boolean;
+    }
+  | { readonly kind: 'rejected'; readonly reason: 'quota_exhausted' };
 
 export interface SettingsProfileControllerDeps {
   readonly globalState: StateStore;
@@ -87,6 +94,7 @@ export interface SettingsProfileControllerDeps {
   getConfig<T>(key: string, defaultValue: T): T;
   updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
+  refreshSpendingStatus(): Promise<SpendingStatus | null>;
   invalidateModelOptionsCache(): void;
 }
 
@@ -172,6 +180,21 @@ export class SettingsProfileController {
 
   async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {
     const includedAccess = mode === 'included';
+    let spendingStatus: SpendingStatus | null = null;
+    if (includedAccess) {
+      try {
+        spendingStatus = await this.deps.refreshSpendingStatus();
+      } catch (error) {
+        // The relay remains authoritative, so an unknown local result must not
+        // block the mutation. Preserve the refresh failure in the trace only.
+        logger.warn('Included Access quota refresh failed; proceeding', {
+          data: { error },
+        });
+      }
+    }
+    if (spendingStatus !== null && isSpendingQuotaExceeded(spendingStatus)) {
+      return { kind: 'rejected', reason: 'quota_exhausted' };
+    }
     await this.deps.setUseIncludedModelAccess(includedAccess);
 
     let openRouterDisabled = false;
@@ -185,7 +208,7 @@ export class SettingsProfileController {
     }
 
     this.deps.invalidateModelOptionsCache();
-    return { mode, openRouterDisabled };
+    return { kind: 'updated', mode, openRouterDisabled };
   }
 
   async setProviderSetting(input: {

@@ -257,6 +257,10 @@ const SignOutGrokMessageSchema = commandOnly(CMD.SIGN_OUT_GROK);
 const SetGrokPreferSubscriptionMessageSchema = enabledFlag(
   CMD.SET_GROK_PREFER_SUBSCRIPTION,
 );
+const GetSubscriptionUsageMessageSchema = z.object({
+  command: z.literal(CMD.GET_SUBSCRIPTION_USAGE),
+  forceRefresh: z.boolean().optional(),
+});
 const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
 
 const UnsubscribePRMessageSchema = z.object({
@@ -401,6 +405,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignInGrokMessageSchema,
     SignOutGrokMessageSchema,
     SetGrokPreferSubscriptionMessageSchema,
+    GetSubscriptionUsageMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,

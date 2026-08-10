@@ -40,12 +40,17 @@ const allowedRoute: CopilotRouteInfo = {
   preferred: false,
 };
 
-function renderSubscriptionsTab(
+async function renderSubscriptionsTab(
   copilotModels: CopilotRouteInfo[],
 ): Promise<SubscriptionsTabElement> {
-  return mountComponent<SubscriptionsTabElement>('subscriptions-tab', {
-    copilotModels,
-  });
+  const tab = await mountComponent<SubscriptionsTabElement>(
+    'subscriptions-tab',
+    {
+      copilotModels,
+    },
+  );
+  mocks.postMessage.mockClear();
+  return tab;
 }
 
 function copilotSection(
