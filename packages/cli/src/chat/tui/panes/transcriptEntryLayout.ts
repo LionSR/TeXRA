@@ -13,7 +13,9 @@ import {
   ERROR_ENTRY_PREFIX,
   SKIP_CIRCLE,
   STATUS_DIAMOND,
+  STATUS_DOT,
   TICK,
+  WARNING,
   TODO_ACTIVE,
   TODO_DONE,
   TODO_PENDING,
@@ -21,6 +23,7 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { WorkflowCallProgress } from '@shared/schemas';
+import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
@@ -49,6 +52,13 @@ interface RoleGeometry {
 }
 
 const ROLE_GEOMETRY = {
+  activity: {
+    firstPrefix: '',
+    continuationPrefix: '  ',
+    inset: 0,
+    marginBottomRows: 0,
+    marginTopRows: 0,
+  },
   assistant: {
     firstPrefix: '',
     continuationPrefix: '',
@@ -104,13 +114,19 @@ const ROLE_GEOMETRY = {
   },
 } as const satisfies Record<TranscriptEntryRole, RoleGeometry>;
 
-/**
- * Marker glyph + color per workflow-call status. Steady glyphs only — an
- * animated `running` marker would need a per-component timer, which repaints
- * the whole live region for no added information (see CHILD_STATUS_MARKER).
- * Exhaustive on purpose: a seventh status must break this build rather than
- * render an undefined marker.
- */
+/** Marker glyph + color per compaction status. */
+export const COMPACTION_ACTIVITY_STATUS_STYLE = {
+  running: { marker: STATUS_DOT, color: COLOR_HINT },
+  completed: { marker: TICK, color: COLOR_SUCCESS },
+  failed: { marker: CROSS, color: COLOR_ERROR },
+  cancelled: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
+  skipped: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
+  interrupted: { marker: WARNING, color: COLOR_ERROR },
+} as const satisfies Record<
+  CompactionActivityStatus,
+  { readonly marker: string; readonly color: string | undefined }
+>;
+
 export const WORKFLOW_TASK_STATUS_STYLE = {
   planned: { marker: TODO_PENDING, color: undefined },
   running: { marker: TODO_ACTIVE, color: COLOR_HINT },
@@ -219,6 +235,13 @@ function entryLines(
   executionLabels: ExecutionLabels | undefined,
 ): readonly string[] {
   switch (entry.role) {
+    case 'activity':
+      return wrapWithPrefix(
+        entry.text,
+        columns,
+        `${COMPACTION_ACTIVITY_STATUS_STYLE[entry.activity.status].marker} `,
+        ROLE_GEOMETRY.activity.continuationPrefix,
+      );
     case 'assistant': {
       const renderLiveTail =
         mode === 'live' || (mode === 'bounded' && !entry.finalized);

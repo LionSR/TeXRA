@@ -102,6 +102,7 @@ const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
   status: StreamPhaseSchema,
   substate: StreamSubstateSchema.optional(),
   lastTimestamp: z.number().optional(),
+  logHead: z.int().nonnegative(),
 });
 
 const LogDeltaMessageSchema = z.object({

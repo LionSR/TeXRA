@@ -17,7 +17,6 @@ import { redactSecrets } from '@logger/redaction';
 import {
   ActiveSkillsSnapshotSchema,
   AgentCategory,
-  CompactionActivityDataSchema,
   ErrorLogDataSchema,
   FileListEntrySchema,
   GroupLogPayloadSchema,
@@ -37,7 +36,17 @@ import {
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import {
+  applyCompactionActivityEntries,
+  COMPACTION_ACTIVITY_LABEL,
+  createCompactionActivityProjection,
+  settleCompactionActivities,
+  type CompactionActivityProjection,
+} from '@shared/streams/compactionActivityProjection';
+import {
+  isActivePhase,
+  isTranscriptSettlementPhase,
+} from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -63,7 +72,6 @@ import {
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
-import { isFinalTranscriptStatus } from './transcript';
 
 const MAX_ERROR_DETAIL_LENGTH = 240;
 
@@ -221,19 +229,6 @@ function latestLogActivityIsThinking(
     entry.messageType === MESSAGE_TYPES.THINKING &&
     logEntryStreamIsRunning(entry)
   );
-}
-
-function latestCompactionActivityIsRunning(
-  entries: readonly StreamLogEntry[],
-): boolean {
-  for (const entry of entries.toReversed()) {
-    if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
-      const activity = CompactionActivityDataSchema.safeParse(entry.data);
-      if (activity.success) return activity.data.state === 'started';
-    }
-    if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
-  }
-  return false;
 }
 
 /** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
@@ -567,6 +562,8 @@ function isSettledEntry(
   entries: readonly ConversationEntry[],
 ): boolean {
   switch (entry.role) {
+    case 'activity':
+      return entry.activity.finalized;
     case 'user':
     case 'error':
     case 'phase':
@@ -606,7 +603,8 @@ export function finalizeSettledPrefix(
     const settled = isSettledEntry(entry, index, entries);
     if (
       sealed ||
-      (entry.role === 'workflowTask' && !settled) ||
+      ((entry.role === 'activity' || entry.role === 'workflowTask') &&
+        !settled) ||
       (!streamFinal && !settled)
     ) {
       sealed = true;
@@ -680,7 +678,21 @@ interface TaskGroupProjectionState {
 }
 
 const TASK_GROUP_PROJECTIONS = new Map<StreamTabId, TaskGroupProjectionState>();
-registerCliStateResetHook(() => TASK_GROUP_PROJECTIONS.clear());
+
+interface CompactionProjectionState {
+  readonly projection: CompactionActivityProjection;
+  appliedHead: number;
+  terminal: boolean;
+}
+
+const COMPACTION_PROJECTIONS = new Map<
+  StreamTabId,
+  CompactionProjectionState
+>();
+registerCliStateResetHook(() => {
+  TASK_GROUP_PROJECTIONS.clear();
+  COMPACTION_PROJECTIONS.clear();
+});
 
 function projectTaskGroupsIncrementally(
   streamId: StreamTabId,
@@ -708,6 +720,35 @@ function projectTaskGroupsIncrementally(
   // snapshot by reference, replacing the former per-tick deep-equality walk.
   if (changed) state.snapshot = [...state.working];
   return state.snapshot;
+}
+
+function projectCompactionIncrementally(
+  streamId: StreamTabId,
+  entries: readonly StreamLogEntry[],
+  streamTerminal: boolean,
+): CompactionActivityProjection {
+  let state = COMPACTION_PROJECTIONS.get(streamId);
+  if (!state || state.appliedHead > entries.length) {
+    state = {
+      projection: createCompactionActivityProjection(),
+      appliedHead: 0,
+      terminal: false,
+    };
+    COMPACTION_PROJECTIONS.set(streamId, state);
+  }
+
+  applyCompactionActivityEntries(
+    state.projection,
+    entries.slice(state.appliedHead),
+  );
+  state.appliedHead = entries.length;
+  if (streamTerminal && !state.terminal) {
+    settleCompactionActivities(state.projection, {
+      throughSeqNo: entries.length,
+    });
+  }
+  state.terminal = streamTerminal;
+  return state.projection;
 }
 
 function trySyncStreamLog(streamId: StreamTabId): void {
@@ -794,6 +835,7 @@ export function syncStreamLog(
 ): void {
   if (isChildStreamRemoved(streamId)) {
     TASK_GROUP_PROJECTIONS.delete(streamId);
+    COMPACTION_PROJECTIONS.delete(streamId);
     return;
   }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
@@ -816,7 +858,6 @@ export function syncStreamLog(
     : undefined;
   const taskGroups = projectTaskGroupsIncrementally(streamId, allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
-  const compactingActive = latestCompactionActivityIsRunning(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(
     streams.get().get(streamId),
   );
@@ -844,9 +885,34 @@ export function syncStreamLog(
         (!workflowOperationalOnly ||
           WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
     );
-    const streamFinal = isFinalTranscriptStatus(lifecycle.status);
+    const streamFinal = isTranscriptSettlementPhase(lifecycle.status);
+    const compactionProjection = projectCompactionIncrementally(
+      streamId,
+      allEntries,
+      streamFinal,
+    );
+    const compactingActive = compactionProjection.blocks.some(
+      (block) => block.status === 'running',
+    );
     const logCandidates: TranscriptCandidate[] = [];
     const workflowLatestLineCandidates: TranscriptCandidate[] = [];
+    for (const block of compactionProjection.blocks) {
+      const id = `compaction:${block.operationId}`;
+      const next: ConversationEntry = {
+        id,
+        sourceSeqNo: block.startPosition,
+        role: 'activity',
+        text: COMPACTION_ACTIVITY_LABEL[block.status],
+        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+        finalized: block.finalized,
+        activity: block,
+      };
+      logCandidates.push({
+        rendered: dedupeEntry(existing.get(id), next),
+        sortSeq: block.startPosition,
+        tieBreak: 0,
+      });
+    }
     for (const entry of allEntries) {
       const messageType = entry.messageType ?? '';
       const transcriptCandidate = transcriptMessageTypes.has(messageType);

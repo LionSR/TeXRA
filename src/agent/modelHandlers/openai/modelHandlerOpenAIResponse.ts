@@ -6,7 +6,7 @@ import OpenAI, { OpenAIError } from 'openai';
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports
-import { logCompactionActivity, logProgressStatus } from '@agent/trace';
+import { logProgressStatus, startCompactionActivity } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -33,6 +33,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
+  isUserAbort,
   handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -818,7 +819,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // We're sending the full message history in `input`, so passing
     // previous_response_id would cause double-counting and exceed context window.
 
-    logCompactionActivity(this.logger, 'started');
+    const activity = startCompactionActivity(this.logger);
     try {
       const compactedResponse: CompactedResponse = await client
         .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
@@ -828,6 +829,12 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       // compact endpoint returns ResponseInputItem[] suitable for re-submission.
       const compactedMessages =
         compactedResponse.output as unknown as ResponseInputItem[];
+      if (compactedMessages.length === 0) {
+        this.logger.warn('Compaction returned no reusable context, skipping');
+        this.compactionResult = undefined;
+        activity.finish('skipped');
+        return messages;
+      }
 
       // CRITICAL: Clear the chain anchor now that compaction has replaced the
       // server-side history. Must happen BEFORE estimateTokenCount — otherwise the
@@ -882,9 +889,13 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         sourceFingerprint: this.messagesTailFingerprint(messages),
       };
 
+      activity.finish('completed');
       return compactedMessages;
     } catch (err) {
+      const userAborted = isUserAbort(err);
+      activity.finish(userAborted ? 'cancelled' : 'failed');
       signal?.throwIfAborted();
+      if (userAborted) throw err;
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
         {
@@ -893,8 +904,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       );
       this.compactionResult = undefined;
       return messages;
-    } finally {
-      logCompactionActivity(this.logger, 'finished');
     }
   }
 

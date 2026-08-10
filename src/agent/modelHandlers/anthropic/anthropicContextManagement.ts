@@ -5,8 +5,8 @@ import { computeUtilizationPercent } from '../support/contextUtilization';
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
+  BetaContentBlock,
   BetaContentBlockParam,
-  BetaCompactionBlock,
   BetaCompactionIterationUsage,
   BetaContextManagementConfig,
   BetaMessage,
@@ -151,12 +151,65 @@ export function setupContextManagement(
   return forceCompaction;
 }
 
-/**
- * Log context management events from the Anthropic response.
- * Compaction events are surfaced via `content` blocks and usage iterations.
- */
+export type AnthropicCompactionOutcome =
+  | {
+      readonly state: 'completed';
+      readonly summary: string;
+      readonly summaryLength: number;
+      readonly content: BetaContentBlock[];
+      readonly iteration?: BetaCompactionIterationUsage;
+    }
+  | { readonly state: 'skipped' };
+
+/** Resolve the last usable compaction block and its matching usage iteration. */
+export function resolveAnthropicCompactionOutcome(
+  response: BetaMessage,
+): AnthropicCompactionOutcome | undefined {
+  let compactionOrdinal = -1;
+  let boundary:
+    | {
+        readonly summary: string;
+        readonly summaryLength: number;
+        readonly contentIndex: number;
+        readonly iterationIndex: number;
+      }
+    | undefined;
+
+  for (const [contentIndex, block] of response.content.entries()) {
+    if (block.type !== 'compaction') continue;
+    compactionOrdinal++;
+    const content = block.content;
+    if (content?.trim()) {
+      boundary = {
+        summary: content.trim(),
+        summaryLength: content.length,
+        contentIndex,
+        iterationIndex: compactionOrdinal,
+      };
+    }
+  }
+
+  if (!boundary) {
+    return compactionOrdinal >= 0 ? { state: 'skipped' } : undefined;
+  }
+
+  const compactionIterations = (response.usage as BetaUsage).iterations?.filter(
+    (iteration): iteration is BetaCompactionIterationUsage =>
+      iteration.type === 'compaction',
+  );
+  return {
+    state: 'completed',
+    summary: boundary.summary,
+    summaryLength: boundary.summaryLength,
+    content: response.content.slice(boundary.contentIndex),
+    iteration: compactionIterations?.[boundary.iterationIndex],
+  };
+}
+
+/** Log a completed context-management outcome from an Anthropic response. */
 export function logContextManagementFromResponse(
   response: BetaMessage,
+  outcome: Extract<AnthropicCompactionOutcome, { state: 'completed' }>,
   contextWindow: number,
   logger: AgentTrace,
 ): void {
@@ -164,27 +217,12 @@ export function logContextManagementFromResponse(
     response.usage.input_tokens +
     (response.usage.cache_read_input_tokens ?? 0) +
     (response.usage.cache_creation_input_tokens ?? 0);
-
-  const compactionBlock = response.content.find(
-    (block): block is BetaCompactionBlock => block.type === 'compaction',
-  );
-  if (!compactionBlock) {
-    return;
-  }
-
-  const compactionIteration = (response.usage as BetaUsage).iterations?.find(
-    (iteration): iteration is BetaCompactionIterationUsage =>
-      iteration.type === 'compaction',
-  );
-  const tokensBefore = compactionIteration
-    ? compactionIteration.input_tokens +
-      compactionIteration.cache_read_input_tokens +
-      compactionIteration.cache_creation_input_tokens
+  const tokensBefore = outcome.iteration
+    ? outcome.iteration.input_tokens +
+      outcome.iteration.cache_read_input_tokens +
+      outcome.iteration.cache_creation_input_tokens
     : totalInputTokens;
-  const details = compactionBlock.content
-    ? `Anthropic native compaction (${compactionBlock.content.length.toLocaleString()} chars)`
-    : 'Anthropic native compaction (empty summary)';
-  const summary = compactionBlock.content?.trim() || undefined;
+  const details = `Anthropic native compaction (${outcome.summaryLength.toLocaleString()} chars)`;
 
   logContextManagementEvent(
     logger,
@@ -200,7 +238,7 @@ export function logContextManagementFromResponse(
         contextWindow,
       ),
       details,
-      summary,
+      summary: outcome.summary,
     },
   );
 }

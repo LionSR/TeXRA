@@ -10,7 +10,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports
-import { logCompactionActivity } from '@agent/trace';
+import { startCompactionActivity } from '@agent/trace';
 import {
   type AgentSetting,
   hasEndTag,
@@ -44,6 +44,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type {
+  CompactionActivityOutcome,
   FileLocation,
   MediaAttachmentKind,
   StreamDiagnostics,
@@ -92,8 +93,10 @@ import {
   ensureBeta,
   hasLongCacheControlMarker,
   setupContextManagement,
+  resolveAnthropicCompactionOutcome,
   logContextManagementFromResponse,
   enforceCacheControlLimit,
+  type AnthropicCompactionOutcome,
 } from './anthropicContextManagement';
 import {
   extractDocumentBlocks,
@@ -179,11 +182,6 @@ const isBetaTextBlock = (
   block: BetaContentBlock,
 ): block is Extract<BetaContentBlock, { type: 'text' }> =>
   block.type === 'text';
-
-const hasSuccessfulBetaCompactionBlock = (message: BetaMessage): boolean =>
-  message.content.some(
-    (block) => block.type === 'compaction' && block.content !== null,
-  );
 
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
@@ -596,6 +594,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       },
     );
 
+    let compactionOutcome: CompactionActivityOutcome = 'skipped';
     try {
       streamHandler.attachToStream(stream);
       // A clean close before message_stop rejects finalMessage() natively
@@ -603,10 +602,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // and #getFinalMessage throws when none was recorded), so no separate
       // truncation check is needed here.
       const response = await stream.finalMessage();
+      compactionOutcome =
+        resolveAnthropicCompactionOutcome(response)?.state ?? 'skipped';
 
       this.processThinkingBlock(response);
       return response;
     } catch (streamError) {
+      compactionOutcome = isUserAbort(streamError) ? 'cancelled' : 'failed';
       return handleStreamingFailure(streamError, {
         // Anthropic finalizes unconditionally below, including on success.
         partialTail: () =>
@@ -620,7 +622,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ),
       });
     } finally {
-      streamHandler.finalize();
+      streamHandler.finalize(compactionOutcome);
       signal?.removeEventListener('abort', abortStream);
     }
   }
@@ -841,31 +843,43 @@ export class ModelHandlerAnthropic extends ModelHandler<
       compactionTrigger !== undefined &&
       inputTokensForCompaction >= compactionTrigger;
 
-    if (nonStreamingCompactionExpected) {
-      logCompactionActivity(this.logger, 'started');
-    }
+    const compactionActivity = nonStreamingCompactionExpected
+      ? startCompactionActivity(this.logger)
+      : undefined;
 
     let response: BetaMessage;
+    let compactionOutcome: AnthropicCompactionOutcome | undefined;
     try {
       response = useStreaming
         ? await this.executeStreamingResponse(client, options, signal)
         : await client.beta.messages.create(options, { signal });
-    } finally {
-      if (nonStreamingCompactionExpected) {
-        logCompactionActivity(this.logger, 'finished');
+      compactionOutcome = resolveAnthropicCompactionOutcome(response);
+      if (!useStreaming) {
+        if (compactionOutcome) {
+          const activity =
+            compactionActivity ?? startCompactionActivity(this.logger);
+          activity.finish(compactionOutcome.state);
+        } else {
+          compactionActivity?.finish('skipped');
+        }
       }
+    } catch (error) {
+      compactionActivity?.finish(isUserAbort(error) ? 'cancelled' : 'failed');
+      throw error;
     }
 
     if (compactionConsumed && pendingCompactionRequestId !== undefined) {
       this.clearCompactionRequest(pendingCompactionRequestId);
     }
 
-    // Log server-side compaction events when present in response content.
-    logContextManagementFromResponse(
-      response,
-      effectiveContextWindow,
-      this.logger,
-    );
+    if (compactionOutcome?.state === 'completed') {
+      logContextManagementFromResponse(
+        response,
+        compactionOutcome,
+        effectiveContextWindow,
+        this.logger,
+      );
+    }
 
     return { response };
   }
@@ -1155,11 +1169,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     responseObject: BetaMessage,
     text: string,
   ): MessageParam {
-    if (!hasSuccessfulBetaCompactionBlock(responseObject)) {
+    const outcome = resolveAnthropicCompactionOutcome(responseObject);
+    if (outcome?.state !== 'completed') {
       return this.createAssistantMessage(text);
     }
 
-    const content = this.extractAssistantContent(responseObject);
+    const content = this.extractAssistantContent({
+      ...responseObject,
+      content: outcome.content,
+    });
     return content.length > 0
       ? { role: 'assistant', content: content as ContentBlockParam[] }
       : this.createAssistantMessage(text);
@@ -1172,7 +1190,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     workspaceState: AgentWorkspaceState,
     responseObject?: BetaMessage,
   ): void {
-    if (responseObject && hasSuccessfulBetaCompactionBlock(responseObject)) {
+    if (
+      responseObject &&
+      resolveAnthropicCompactionOutcome(responseObject)?.state === 'completed'
+    ) {
       messages.length = 0;
       messages.push(
         this.createAssistantMessageFromResponse(responseObject, newResponse),

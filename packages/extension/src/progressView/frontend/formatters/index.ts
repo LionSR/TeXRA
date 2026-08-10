@@ -17,6 +17,7 @@ import {
   type FormatResult,
 } from './baseLogFormatter';
 import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
+import { formatCompactionActivityTemplate } from './logFormatters/compactionActivityFormatter';
 import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
 import {
   formatFileListTemplate,
@@ -55,7 +56,6 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
   'modelResponse',
   'contextState',
   'contextManagement',
-  'contextCompactionActivity',
 ]);
 
 /** Create an error fallback template when formatting fails. */
@@ -128,7 +128,10 @@ const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
 
   // Special cases
   contextState: () => null, // Displayed in footer
-  contextCompactionActivity: () => null, // Filtered during live ingestion
+  contextCompactionActivity: wrapWithErrorHandling(
+    formatCompactionActivityTemplate,
+    'context compaction activity',
+  ),
   userMessage: wrapWithErrorHandling(formatUserMessageTemplate, 'user message'),
   progressStatus: wrapWithErrorHandling(
     formatProgressStatusTemplate,

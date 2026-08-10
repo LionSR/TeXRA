@@ -13,6 +13,7 @@ import { Markdown } from '../render/Markdown';
 import { fillRows } from '../render/terminalText';
 import { ToolUseRow } from './ToolUseRow';
 import {
+  COMPACTION_ACTIVITY_STATUS_STYLE,
   LIVE_TAIL_ROWS,
   WORKFLOW_TASK_STATUS_STYLE,
   boundedTranscriptEntryLayout,
@@ -74,6 +75,8 @@ function PlainEntryRows({
   let rowColor: string | undefined;
   if (entry.role === 'error') {
     rowColor = COLOR_ERROR;
+  } else if (entry.role === 'activity' && colorEnabled !== false) {
+    rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.activity.status].color;
   } else if (entry.role === 'workflowTask' && colorEnabled !== false) {
     rowColor = WORKFLOW_TASK_STATUS_STYLE[entry.task.status].color;
   }

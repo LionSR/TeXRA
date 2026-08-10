@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { logHandlers } from '@progressView/frontend/slices/logSlice';
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
@@ -18,15 +19,19 @@ import {
 import {
   AgentCategory,
   createStreamState,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
+  type StreamLogEntry,
   type StreamStage,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { projectCompactionActivities } from '@shared/streams/compactionActivityProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
 
 /** Seed the shared appState singleton and return a live reader over it. */
@@ -82,6 +87,55 @@ function seedStream(
     );
   }
   return seedState(state);
+}
+
+function compactionStartEntry(): StreamLogEntry {
+  return {
+    seqNo: 1,
+    id: 'compaction-start',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: 'info',
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+    data: {
+      activity: 'context_compaction',
+      operationId: 'operation-1',
+      state: 'started',
+    },
+  };
+}
+
+function startCompaction(streamId: StreamTabId): void {
+  dispatch(logHandlers, {
+    command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+    streamId,
+    entries: [compactionStartEntry()],
+    updates: [],
+    textDeltas: [],
+  });
+}
+
+function compactionOutcomeEntry(): StreamLogEntry {
+  return {
+    seqNo: 2,
+    id: 'compaction-outcome',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: 'info',
+    timestamp: 200,
+    messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+    data: {
+      activity: 'context_compaction',
+      operationId: 'operation-1',
+      state: 'completed',
+    },
+  };
+}
+
+function compactionStatus(
+  state: ProgressState,
+  streamId: StreamTabId,
+): unknown {
+  return state.streamLogs.get(streamId)?.logs[0]?.data;
 }
 
 /** A metadata patch as the webview receives it, after the postMessage JSON round-trip. */
@@ -206,6 +260,95 @@ describe('stream meta frontend state', () => {
     expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
   });
 
+  it('settles abandoned compaction when restart metadata hydrates to waiting', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
+    startCompaction(streamId);
+
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      streamInfo: {
+        name: streamId,
+        label: streamId,
+        agentCategory: AgentCategory.Workflow,
+        creationTimestamp: 1,
+      },
+      streamState: {
+        category: AgentCategory.Workflow,
+        status: STREAM_PHASE.WAITING,
+        lastTimestamp: 250,
+        conversationProgress: { toolCallCount: 0 },
+        subagents: [],
+      },
+    });
+
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [],
+      updates: [],
+      textDeltas: [],
+    });
+
+    expect(compactionStatus(getState(), streamId)).toMatchObject({
+      status: 'interrupted',
+      finalized: true,
+      finishedAt: 250,
+    });
+  });
+
+  it('settles abandoned compaction on a direct waiting status update', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
+    startCompaction(streamId);
+
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.WAITING,
+      logHead: 1,
+      lastTimestamp: 300,
+    });
+
+    expect(compactionStatus(getState(), streamId)).toMatchObject({
+      status: 'interrupted',
+      finalized: true,
+      finishedAt: 300,
+    });
+  });
+
+  it('applies a queued provider outcome through the terminal status watermark', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
+    startCompaction(streamId);
+    const outcome = compactionOutcomeEntry();
+
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.WAITING,
+      logHead: outcome.seqNo,
+      lastTimestamp: 300,
+    });
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [outcome],
+      updates: [],
+      textDeltas: [],
+    });
+
+    const replayed = projectCompactionActivities(
+      [compactionStartEntry(), outcome],
+      { streamTerminal: true, settledThroughSeqNo: outcome.seqNo },
+    );
+    expect(compactionStatus(getState(), streamId)).toEqual(replayed.blocks[0]);
+    expect(compactionStatus(getState(), streamId)).toMatchObject({
+      status: 'completed',
+      finalized: true,
+    });
+  });
+
   it('updates and clears stream substate with status changes', () => {
     const streamId = 'stream-a' as StreamTabId;
     const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
@@ -214,6 +357,7 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.RUNNING,
+      logHead: 0,
       substate: STREAM_SUBSTATE.STARTING,
     });
 
@@ -225,6 +369,7 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.COMPLETED,
+      logHead: 0,
     });
 
     expect(getState().streamStates.get(streamId)?.status).toBe(

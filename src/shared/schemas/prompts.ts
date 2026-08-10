@@ -52,7 +52,7 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
-export const WorkflowScriptProposalDetailsSchema = z.strictObject({
+const WorkflowScriptProposalDetailsSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().min(1),
   scriptPath: z.string().min(1),
@@ -70,9 +70,6 @@ export const WorkflowScriptProposalDetailsSchema = z.strictObject({
     }),
   ),
 });
-export type WorkflowScriptProposalDetails = z.infer<
-  typeof WorkflowScriptProposalDetailsSchema
->;
 
 /** Workflow agent proposal - includes file fields for document processing */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend(
