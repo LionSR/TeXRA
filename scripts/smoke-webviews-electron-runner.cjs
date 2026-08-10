@@ -595,6 +595,143 @@ async function assertToolEditApprovalLayout(window, view) {
   );
 }
 
+async function assertCompactStreamStatusLayout(window, view) {
+  return window.webContents.executeJavaScript(
+    `
+      (async () => {
+        function findDeep(selector, root = document) {
+          const direct = root.querySelector?.(selector);
+          if (direct) return direct;
+          for (const element of root.querySelectorAll?.('*') ?? []) {
+            const found = element.shadowRoot ? findDeep(selector, element.shadowRoot) : null;
+            if (found) return found;
+          }
+          return null;
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const tabs = findDeep('stream-tabs');
+        const row = tabs?.shadowRoot?.querySelector('stream-tab');
+        if (row?.updateComplete) await row.updateComplete;
+        const select = row?.shadowRoot?.querySelector('#stream-tab-select-button');
+        const glyph = row?.shadowRoot?.querySelector('.tab-status-icon');
+        const title = row?.shadowRoot?.querySelector('.tab-title');
+        const status = row?.shadowRoot?.querySelector('.tab-status');
+        const tooltipAnchor = row?.shadowRoot?.querySelector(
+          '#stream-tab-select-tooltip-anchor',
+        );
+        const identityTooltip = row?.shadowRoot?.querySelector(
+          'wa-tooltip[for="stream-tab-select-tooltip-anchor"]',
+        );
+        const childHint = row?.shadowRoot?.querySelector('.compact-subagent-hint');
+        const deleteButton = row?.shadowRoot?.querySelector('.tab-delete');
+        if (glyph?.updateComplete) await glyph.updateComplete;
+        if (identityTooltip?.updateComplete) await identityTooltip.updateComplete;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const missing = [
+          ['stream-tabs', tabs],
+          ['stream-tab', row],
+          ['select target', select],
+          ['lifecycle glyph', glyph],
+          ['title', title],
+          ['status wrapper', status],
+          ['tooltip anchor', tooltipAnchor],
+          ['identity tooltip', identityTooltip],
+          ['delete target', deleteButton],
+        ]
+          .filter(([, element]) => !element)
+          .map(([label]) => label);
+        if (missing.length > 0) {
+          throw new Error(
+            \`${view.name} missing compact status elements: \${missing.join(', ')}\`,
+          );
+        }
+
+        const viewportWidth = document.documentElement.clientWidth;
+        const railRect = tabs.getBoundingClientRect();
+        const selectRect = select.getBoundingClientRect();
+        const glyphRect = glyph.getBoundingClientRect();
+        const deleteRect = deleteButton.getBoundingClientRect();
+        const statusStyle = getComputedStyle(status);
+        const titleStyle = getComputedStyle(title);
+        const epsilon = 0.5;
+
+        if (viewportWidth >= 500 || !tabs.compact) {
+          throw new Error(
+            \`${view.name} did not activate narrow compact rows: viewport=\${viewportWidth}px compact=\${tabs.compact}\`,
+          );
+        }
+        if (railRect.width < 48) {
+          throw new Error(
+            \`${view.name} compact rail fell below its 48px minimum: \${railRect.width.toFixed(2)}px\`,
+          );
+        }
+        if (glyphRect.width <= 0.5 || glyphRect.height <= 0.5) {
+          throw new Error(
+            \`${view.name} lifecycle glyph collapsed: \${glyphRect.width.toFixed(2)}x\${glyphRect.height.toFixed(2)}\`,
+          );
+        }
+        if (
+          glyphRect.left < selectRect.left - epsilon ||
+          glyphRect.right > selectRect.right + epsilon ||
+          glyphRect.top < selectRect.top - epsilon ||
+          glyphRect.bottom > selectRect.bottom + epsilon
+        ) {
+          throw new Error(
+            \`${view.name} lifecycle glyph escaped select target: glyph=[\${glyphRect.left.toFixed(2)}, \${glyphRect.top.toFixed(2)}, \${glyphRect.right.toFixed(2)}, \${glyphRect.bottom.toFixed(2)}] select=[\${selectRect.left.toFixed(2)}, \${selectRect.top.toFixed(2)}, \${selectRect.right.toFixed(2)}, \${selectRect.bottom.toFixed(2)}]\`,
+          );
+        }
+        if (deleteRect.width < 24 || deleteRect.height < 24) {
+          throw new Error(
+            \`${view.name} compact delete target shrank: \${deleteRect.width.toFixed(2)}x\${deleteRect.height.toFixed(2)}\`,
+          );
+        }
+        if (titleStyle.display !== 'none') {
+          throw new Error(\`${view.name} compact title still consumes layout width.\`);
+        }
+        if (statusStyle.maxWidth !== 'none' || statusStyle.overflow !== 'visible') {
+          throw new Error(
+            \`${view.name} compact status remains capped or clipped: max-width=\${statusStyle.maxWidth} overflow=\${statusStyle.overflow}\`,
+          );
+        }
+        if (childHint !== null) {
+          throw new Error(\`${view.name} compact child hint still displaces lifecycle status.\`);
+        }
+        const selectLabel = select.getAttribute('aria-label');
+        if (!selectLabel?.includes('1 background task')) {
+          throw new Error(\`${view.name} compact child count is missing from the accessible name.\`);
+        }
+        if (select.hasAttribute('aria-labelledby')) {
+          throw new Error(\`${view.name} compact tooltip overrides the select target's accessible name.\`);
+        }
+        if (
+          !identityTooltip.id ||
+          !tooltipAnchor.getAttribute('aria-labelledby')?.split(' ').includes(identityTooltip.id)
+        ) {
+          throw new Error(\`${view.name} compact tooltip is not initialized on its wrapper anchor.\`);
+        }
+        if (!identityTooltip.textContent?.includes('A long compact execution title')) {
+          throw new Error(\`${view.name} compact identity tooltip does not expose the session title.\`);
+        }
+
+        return {
+          deleteHeight: deleteRect.height,
+          deleteWidth: deleteRect.width,
+          glyphHeight: glyphRect.height,
+          glyphWidth: glyphRect.width,
+          railWidth: railRect.width,
+          selectHeight: selectRect.height,
+          selectWidth: selectRect.width,
+          viewportWidth,
+        };
+      })();
+    `,
+    true,
+  );
+}
+
 async function assertViewSpecificLayout(window, view) {
   const assertions = Array.isArray(view.assertions) ? view.assertions : [];
   for (const assertion of assertions) {
@@ -617,6 +754,15 @@ async function assertViewSpecificLayout(window, view) {
         );
         break;
       }
+      case 'compactStreamStatusLayout': {
+        const result = await assertCompactStreamStatusLayout(window, view);
+        console.log(
+          `Verified ${view.name} compact narrow-row layout: ${JSON.stringify(
+            result,
+          )}`,
+        );
+        break;
+      }
       default:
         throw new Error(`Unknown webview smoke assertion: ${assertion}`);
     }
@@ -627,6 +773,7 @@ async function smokeView(window, view, outputDir, errors) {
   errors.length = 0;
   const viewport = view.viewport ?? DEFAULT_VIEWPORT;
   window.setBounds({ width: viewport.width, height: viewport.height });
+  window.webContents.setZoomFactor(1);
   await window.loadFile(view.htmlPath);
   let result;
   try {
