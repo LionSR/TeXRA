@@ -19,11 +19,9 @@ import { ReportReviewIssueTool } from './ReportReviewIssueTool';
 import { EditFileTool } from './EditTool';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
-import {
-  ExtractBibliographyTool,
-  ExtractLatexFiguresTool,
-  ExtractTikzFiguresTool,
-} from './latex';
+import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
+import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
+import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';

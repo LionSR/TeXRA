@@ -7,7 +7,7 @@ import { describe, it, afterEach, vi } from 'vitest';
 // Local imports
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { ExtractTikzFiguresTool } from '@tools/latex';
+import { ExtractTikzFiguresTool } from '@tools/latex/ExtractTikzFiguresTool';
 import { pathToLocation } from '@utils/files';
 
 function installPlatform(files: Record<string, string>) {
