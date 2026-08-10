@@ -2,7 +2,6 @@ import type { AgentEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   MESSAGE_TYPES,
-  RUN_OUTCOME,
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
   type RunOutcome,
@@ -28,20 +27,11 @@ export interface WorkflowPlainOutputOptions {
   readonly beforeWrite?: () => void;
 }
 
+/** `RunOutcome` is a subset of the canonical workflow status vocabulary, so the
+ *  shared label table is the whole mapping — a new outcome that the table does
+ *  not name fails to compile here. */
 function completionLine(outcome: RunOutcome, agentName: string): string {
-  const label = (() => {
-    switch (outcome) {
-      case RUN_OUTCOME.COMPLETED:
-        return WORKFLOW_TASK_STATUS_LABEL.completed;
-      case RUN_OUTCOME.CANCELLED:
-        return WORKFLOW_TASK_STATUS_LABEL.cancelled;
-      case RUN_OUTCOME.FAILED:
-        return WORKFLOW_TASK_STATUS_LABEL.failed;
-      default:
-        return assertNever(outcome, 'Unhandled workflow run outcome');
-    }
-  })();
-  return `${label}: ${agentName}`;
+  return `${WORKFLOW_TASK_STATUS_LABEL[outcome]}: ${agentName}`;
 }
 
 interface WorkflowStreamProjection {
@@ -69,9 +59,9 @@ function createWorkflowStreamProjection(
     write(line);
   };
   const openPhase = (
-    stageId: string,
     phase: Extract<AgentEvent, { type: 'stage.start' }>,
   ): void => {
+    const stageId = phase.id;
     if (openedPhases.has(stageId)) return;
     openedPhases.add(stageId);
     write(
@@ -104,7 +94,7 @@ function createWorkflowStreamProjection(
     event: (event) => {
       switch (event.type) {
         case 'stage.start':
-          if (event.kind === 'phase') openPhase(event.id, event);
+          if (event.kind === 'phase') openPhase(event);
           break;
         case 'workflow.call':
           if (

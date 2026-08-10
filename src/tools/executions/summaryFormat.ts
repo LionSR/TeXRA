@@ -130,11 +130,6 @@ export function buildCompletedSummaryLines(
   return lines;
 }
 
-/** Options controlling the shared summary tail (children/todos/report). */
-export interface SummaryTailOptions {
-  readonly suppressReport?: boolean;
-}
-
 /**
  * Build the todo/report/available-paths lines shared by both showSummary
  * branches. Appended after the (I/O-fetched) children lines, so this only
@@ -146,7 +141,7 @@ export function buildSummaryTailLines(
   hasChildren: boolean,
   todos: TodoEntry[],
   report: string | null,
-  options: SummaryTailOptions = {},
+  options: { readonly suppressReport?: boolean } = {},
 ): string[] {
   const lines: string[] = [];
 
