@@ -277,13 +277,14 @@ behavior converges = user-visible in edge cases; small).
 
 **Corroboration: 9 areas (08, 11, 13, 15, 16, 20, 23, 26, 29).**
 
-Dated (register centrally, schedule one November deletion PR):
+Dated (maintainer ruling 2026-08-10: can retire now — do not wait for the original
+November dates; original retire dates retained only as provenance):
 
-- `modelHandlerCompatibilityInference.ts` COPILOT_MODEL_PREFIX arm — retire 2026-11-03 (#9635) (area-15)
-- `streamTab.ts` `isBackgroundShellStream` — retire 2026-11-04 (#9705) (area-15)
-- `agentPresets.ts` `AgentModePresetLegacySchema` + `mainView/state.ts` `liftLegacyMainViewFlatFields` — retire 2026-11-04 (#9705) (area-23)
-- `compileCheck.ts` three legacy compile-log filename spellings — retire 2026-11-09 (area-16)
-- `vscodeMainViewPersistedState.ts` `copilot:<baseModel>` preprocess — retire 2026-11-03; file then collapses to a re-export (area-29)
+- `modelHandlerCompatibilityInference.ts` COPILOT_MODEL_PREFIX arm — was 2026-11-03 (#9635) (area-15)
+- `streamTab.ts` `isBackgroundShellStream` — was 2026-11-04 (#9705) (area-15)
+- `agentPresets.ts` `AgentModePresetLegacySchema` + `mainView/state.ts` `liftLegacyMainViewFlatFields` — was 2026-11-04 (#9705) (area-23)
+- `compileCheck.ts` three legacy compile-log filename spellings — was 2026-11-09 (area-16)
+- `vscodeMainViewPersistedState.ts` `copilot:<baseModel>` preprocess — was 2026-11-03; file then collapses to a re-export (area-29)
 
 Undated (need a #9590-style ruling to get a date, or a documented-permanent verdict):
 
@@ -294,11 +295,11 @@ Undated (need a #9590-style ruling to get a date, or a documented-permanent verd
 - runReflectionFlow `.tex` output-file resume fallback (area-20)
 - pack/clean legacy beside-source workspace sweep + `mergeRunDirAndWorkspaceResult` (area-26)
 
-**Strategy**: one human-owned ledger issue collecting all of the above with dates;
-per-arm maintainer rulings for the undated set (the memory note "intermediate migration
+**Strategy**: one human-owned ledger issue collecting all of the above; immediate
+deletion PR for the five dated arms + their tests (no November wait); per-arm
+maintainer rulings for the undated set (the memory note "intermediate migration
 data is disposable — delete early, loud" is the governing precedent, but each arm's
-blast radius differs); one scheduled November PR deleting the five dated arms + their
-tests. **Classification: needs-own-PR / human-owned issue.** Explicitly NOT
+blast radius differs). **Classification: needs-own-PR / human-owned issue.** Explicitly NOT
 fleet-editable — every arm touches persisted data.
 
 ---
@@ -499,7 +500,7 @@ Ranked by (corroboration, expected element reduction, risk-adjusted):
 | #   | Candidate                                               | Corrob.      | Class                                          | Proposed scope                                                                                                                                                                                                                                                                                                                                                     |
 | --- | ------------------------------------------------------- | ------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | **Test-kernel sweep + test-only-surface deletion** (A1) | 11           | fleet (test round)                             | The already-planned test-kernel round (~190k LOC), with a standing rider: each worker retargets tests at prod entry points, then deletes the paired prod surface + lowers `store-public-surface-baseline.json`/knip in the same assignment. Seed each worker with this report's per-area list. Central typecheck gate + fix wave (vitest green ≠ typecheck green). |
-| 2   | **Retirement-ledger consolidation** (F1)                | 9            | human-owned issue + 1 Nov PR                   | File one ledger issue enumerating 5 dated + 6 undated arms; per-arm maintainer rulings for undated (useCustomRefresh explicitly flagged #8091-class); schedule one November deletion PR for the dated five. Unlocks the PersistedFlow `nodes[]` O(n²) write fix.                                                                                                   |
+| 2   | **Retirement-ledger consolidation** (F1)                | 9            | human-owned issue + immediate deletion PR      | File one ledger issue enumerating 5 dated + 6 undated arms; per-arm maintainer rulings for undated (useCustomRefresh explicitly flagged #8091-class); delete the dated five now (maintainer ruling 2026-08-10 — no November wait). Unlocks the PersistedFlow `nodes[]` O(n²) write fix.                                                                              |
 | 3   | **Silent-degradation / latent-bug queue** (J)           | 12           | issues → reviewed PRs                          | File ~10 issues; the replacement-rules escape bug (J1) gets its own characterization-tested PR immediately — it corrupts user text today. J4 (missing `.catch`) is a one-liner.                                                                                                                                                                                    |
 | 4   | **Dead `agentCategory` carrier chain** (B1)             | 1 (14 files) | needs-own-PR                                   | One convergence PR: params, renames, 3 interface fields, cache-key suffix, ~14 call sites. Largest single element-count deletion available. tsc-driven, low risk despite breadth.                                                                                                                                                                                  |
 | 5   | **CLI subscription-provider policy** (E2)               | 5            | split                                          | Stage 1 fleet-editable now (device-code pass-throughs, exclusivity single-owner, sign-out hoist); Stage 2 own PR (retry decision mapping + cross-host audit); Stage 3 defer (descriptor tableization until GLM churn settles).                                                                                                                                     |
