@@ -82,6 +82,7 @@ export class SubscriptionSection extends LitElement {
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshot | null =
     null;
+  @property({ attribute: false }) now = 0;
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     const enabled = (event.target as WaSwitch).checked;
@@ -152,6 +153,7 @@ export class SubscriptionSection extends LitElement {
           </div>
           <subscription-usage-row
             .snapshot=${this.usage}
+            .now=${this.now}
           ></subscription-usage-row>
         </div>
       </section>

@@ -406,7 +406,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     ]);
   });
 
-  it('invalidates and replaces GLM usage after the region changes', async () => {
+  it('replaces GLM usage after the region changes', async () => {
     const fixture = await createFixture();
 
     await assertSupported(
@@ -418,9 +418,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     });
 
     expect(fixture.globalState.get(GlobalStateKey.GLM_USE_CHINA)).toBe(false);
-    expect(
-      fixture.subscriptionUsage.invalidate,
-    ).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
+    expect(fixture.subscriptionUsage.invalidate).not.toHaveBeenCalled();
     expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(4);
     expect(fixture.posted).toContainEqual(
       expect.objectContaining({

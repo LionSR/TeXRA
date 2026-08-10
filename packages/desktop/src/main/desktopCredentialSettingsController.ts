@@ -420,7 +420,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
     await this.postProfileData();
     if (key === GlobalStateKey.GLM_USE_CHINA) {
-      this.subscriptionUsage.invalidate('glmCodingPlan');
       await this.postSubscriptionUsage();
     }
     if (!result.affectsModelAvailability) return;

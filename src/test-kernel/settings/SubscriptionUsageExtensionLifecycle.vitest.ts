@@ -85,7 +85,7 @@ describe('extension subscription usage credential lifecycle', () => {
     expect(usage.getUsage).not.toHaveBeenCalled();
   });
 
-  it('invalidates and replaces GLM usage after the region changes', async () => {
+  it('replaces GLM usage after the region changes', async () => {
     const { handler, posted, usage } = createHarness();
 
     await handler.handleSetProviderSetting({
@@ -93,7 +93,7 @@ describe('extension subscription usage credential lifecycle', () => {
       value: false,
     });
 
-    expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
+    expect(usage.invalidate).not.toHaveBeenCalled();
     expect(usage.getUsage).toHaveBeenCalledTimes(4);
     expect(posted).toContainEqual(
       expect.objectContaining({

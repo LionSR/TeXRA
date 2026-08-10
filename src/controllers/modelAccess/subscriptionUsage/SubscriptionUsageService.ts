@@ -58,6 +58,12 @@ interface CacheEntry {
   readonly expiresAt: number;
 }
 
+interface ResolvedRequest {
+  readonly id: number;
+  readonly key: string;
+  readonly useGlmChina: boolean | undefined;
+}
+
 const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
   async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
     const session = await codexCoordinator().getFreshSession();
@@ -83,12 +89,17 @@ export class SubscriptionUsageService {
   private readonly now: () => number;
   private readonly cacheTtlMs: number;
   private readonly requestTimeoutMs: number;
-  private readonly cache = new Map<SubscriptionUsageProvider, CacheEntry>();
+  private readonly cache = new Map<string, CacheEntry>();
   private readonly pending = new Map<
-    SubscriptionUsageProvider,
+    string,
     Promise<SubscriptionUsageSnapshot>
   >();
   private readonly generations = new Map<SubscriptionUsageProvider, number>();
+  private readonly latestRequests = new Map<
+    SubscriptionUsageProvider,
+    ResolvedRequest
+  >();
+  private nextRequestId = 0;
 
   constructor(init: SubscriptionUsageServiceInit = {}) {
     this.http = init.http ?? fetch;
@@ -104,8 +115,14 @@ export class SubscriptionUsageService {
       ? [provider]
       : (Object.keys(PROVIDER_NAMES) as SubscriptionUsageProvider[]);
     for (const target of providers) {
-      this.cache.delete(target);
-      this.pending.delete(target);
+      const keyPrefix = `${target}:`;
+      for (const key of this.cache.keys()) {
+        if (key.startsWith(keyPrefix)) this.cache.delete(key);
+      }
+      for (const key of this.pending.keys()) {
+        if (key.startsWith(keyPrefix)) this.pending.delete(key);
+      }
+      this.latestRequests.delete(target);
       this.generations.set(target, (this.generations.get(target) ?? 0) + 1);
     }
   }
@@ -114,32 +131,73 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
   ): Promise<SubscriptionUsageSnapshot> {
-    if (!options.forceRefresh) {
-      const cached = this.cache.get(provider);
+    const requestId = ++this.nextRequestId;
+    let useGlmChina: boolean | undefined;
+    try {
+      if (provider === 'glmCodingPlan') {
+        useGlmChina = (await this.credentials.useGlmChina?.()) ?? true;
+      }
+    } catch {
+      return this.unavailable(provider, 'request_failed');
+    }
+
+    const resolved: ResolvedRequest = {
+      id: requestId,
+      key: `${provider}:${useGlmChina ?? 'default'}`,
+      useGlmChina,
+    };
+    const latest = this.latestRequests.get(provider);
+    if (!latest || latest.id < requestId) {
+      this.latestRequests.set(provider, resolved);
+    } else if (latest.key !== resolved.key) {
+      return this.getUsageForRequest(provider, latest, false);
+    }
+    return this.getUsageForRequest(
+      provider,
+      resolved,
+      options.forceRefresh ?? false,
+    );
+  }
+
+  private async getUsageForRequest(
+    provider: SubscriptionUsageProvider,
+    resolved: ResolvedRequest,
+    forceRefresh: boolean,
+  ): Promise<SubscriptionUsageSnapshot> {
+    if (!forceRefresh) {
+      const cached = this.cache.get(resolved.key);
       if (cached && cached.expiresAt > this.now()) return cached.snapshot;
     }
 
-    const inFlight = this.pending.get(provider);
+    const inFlight = this.pending.get(resolved.key);
     if (inFlight) return inFlight;
 
     const generation = this.generations.get(provider) ?? 0;
-    const request = this.fetchUsage(provider).then((snapshot) => {
-      if ((this.generations.get(provider) ?? 0) !== generation) {
-        return this.getUsage(provider, { forceRefresh: true });
-      }
-      if (this.pending.get(provider) === request) {
-        this.cache.set(provider, {
-          snapshot,
-          expiresAt: this.now() + this.cacheTtlMs,
-        });
-      }
-      return snapshot;
-    });
-    this.pending.set(provider, request);
+    const request = this.fetchUsage(provider, resolved.useGlmChina).then(
+      (snapshot) => {
+        if ((this.generations.get(provider) ?? 0) !== generation) {
+          return this.getUsage(provider, { forceRefresh: true });
+        }
+        const latest = this.latestRequests.get(provider);
+        if (latest && latest.key !== resolved.key) {
+          return this.getUsageForRequest(provider, latest, false);
+        }
+        if (this.pending.get(resolved.key) === request) {
+          this.cache.set(resolved.key, {
+            snapshot,
+            expiresAt: this.now() + this.cacheTtlMs,
+          });
+        }
+        return snapshot;
+      },
+    );
+    this.pending.set(resolved.key, request);
     try {
       return await request;
     } finally {
-      if (this.pending.get(provider) === request) this.pending.delete(provider);
+      if (this.pending.get(resolved.key) === request) {
+        this.pending.delete(resolved.key);
+      }
     }
   }
 
@@ -177,11 +235,12 @@ export class SubscriptionUsageService {
 
   private async fetchUsage(
     provider: SubscriptionUsageProvider,
+    useGlmChina: boolean | undefined,
   ): Promise<SubscriptionUsageSnapshot> {
     if (provider === 'grok') return this.unavailable(provider, 'unsupported');
 
     try {
-      const parsed = await this.fetchProviderUsage(provider);
+      const parsed = await this.fetchProviderUsage(provider, useGlmChina);
       if (parsed === null) {
         return this.unavailable(provider, 'missing_credentials');
       }
@@ -210,6 +269,7 @@ export class SubscriptionUsageService {
 
   private async fetchProviderUsage(
     provider: Exclude<SubscriptionUsageProvider, 'grok'>,
+    useGlmChina: boolean | undefined,
   ): Promise<ParsedSubscriptionUsage | null> {
     if (provider === 'chatgpt') {
       const credential = await this.credentials.loadChatGpt();
@@ -231,12 +291,11 @@ export class SubscriptionUsageService {
     }
     const apiKey = await this.credentials.loadApiKey('glm');
     if (!apiKey) return null;
-    const useChina = (await this.credentials.useGlmChina?.()) ?? true;
     return fetchGlmCodingPlanUsage(
       this.http,
       apiKey,
       AbortSignal.timeout(this.requestTimeoutMs),
-      useChina
+      (useGlmChina ?? true)
         ? GLM_CODING_PLAN_USAGE_URL
         : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
     );

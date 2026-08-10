@@ -60,6 +60,7 @@ const snapshots: SubscriptionUsageSnapshots = {
 
 type SubscriptionsTabElement = HTMLElement & {
   usage: SubscriptionUsageSnapshots | null;
+  now: number;
   updateComplete: Promise<boolean>;
 };
 
@@ -68,6 +69,16 @@ type SubscriptionUsageRowElement = HTMLElement & {
   now: number;
   updateComplete: Promise<boolean>;
 };
+
+function getKimiUsageRow(
+  tab: SubscriptionsTabElement,
+): SubscriptionUsageRowElement | null {
+  return (
+    tab.shadowRoot?.querySelector<SubscriptionUsageRowElement>(
+      '#kimi-code-subscription subscription-usage-row',
+    ) ?? null
+  );
+}
 
 describe('subscription usage rendering', () => {
   useLitComponentTestDom(
@@ -97,13 +108,11 @@ describe('subscription usage rendering', () => {
       { forceRefresh: true },
     );
 
-    const kimiRow = tab.shadowRoot?.querySelector<HTMLElement>(
-      '#kimi-code-subscription subscription-usage-row',
-    ) as
-      (HTMLElement & { now: number; updateComplete: Promise<boolean> }) | null;
+    tab.now = NOW;
+    await tab.updateComplete;
+    const kimiRow = getKimiUsageRow(tab);
     expect(kimiRow).not.toBeNull();
     if (!kimiRow) return;
-    kimiRow.now = NOW;
     await kimiRow.updateComplete;
     const details = kimiRow.shadowRoot?.querySelector('wa-details');
     expect(details?.closest('.settings-row-text')).not.toBeNull();
@@ -128,40 +137,72 @@ describe('subscription usage rendering', () => {
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
   });
 
-  it('advances its clock while connected and stops it after disconnect', async () => {
+  it('advances one tab clock while connected and stops it after disconnect', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
-    const row = await mountComponent<SubscriptionUsageRowElement>(
-      'subscription-usage-row',
-      { snapshot: snapshots.kimiCode },
+    const tab = await mountComponent<SubscriptionsTabElement>(
+      'subscriptions-tab',
+      { usage: snapshots },
     );
-    expect(row.now).toBe(NOW);
-    expect(row.shadowRoot?.textContent).toContain('updated just now');
+    expect(tab.now).toBe(NOW);
+    expect(vi.getTimerCount()).toBe(1);
 
     vi.advanceTimersByTime(3 * 60_000);
-    await row.updateComplete;
-    expect(row.now).toBe(NOW + 3 * 60_000);
-    expect(row.shadowRoot?.textContent).toContain('stale · updated 3m ago');
+    await tab.updateComplete;
+    expect(tab.now).toBe(NOW + 3 * 60_000);
+    const kimiRow = getKimiUsageRow(tab);
+    await kimiRow?.updateComplete;
+    expect(kimiRow?.now).toBe(tab.now);
+    expect(kimiRow?.shadowRoot?.textContent).toContain(
+      'stale · updated 3m ago',
+    );
 
-    row.remove();
-    const disconnectedNow = row.now;
+    tab.remove();
+    const disconnectedNow = tab.now;
     vi.advanceTimersByTime(2 * 60_000);
-    expect(row.now).toBe(disconnectedNow);
+    expect(tab.now).toBe(disconnectedNow);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('refreshes its clock when a fresh snapshot arrives', async () => {
+  it('restarts one fresh clock when the same tab reconnects', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
-    const row = await mountComponent<SubscriptionUsageRowElement>(
-      'subscription-usage-row',
-      { snapshot: snapshots.kimiCode },
+    const tab = await mountComponent<SubscriptionsTabElement>(
+      'subscriptions-tab',
+      { usage: snapshots },
     );
-    row.now = NOW - 10 * 60_000;
-    vi.setSystemTime(NOW + 30_000);
-    row.snapshot = { ...snapshots.kimiCode, fetchedAt: NOW + 30_000 };
-    await row.updateComplete;
 
-    expect(row.now).toBe(NOW + 30_000);
-    expect(row.shadowRoot?.textContent).toContain('updated just now');
+    tab.remove();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.setSystemTime(NOW + 5 * 60_000);
+    document.body.append(tab);
+    await tab.updateComplete;
+
+    expect(tab.now).toBe(NOW + 5 * 60_000);
+    expect(vi.getTimerCount()).toBe(1);
+
+    tab.remove();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('refreshes the tab clock when fresh usage arrives', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const tab = await mountComponent<SubscriptionsTabElement>(
+      'subscriptions-tab',
+      { usage: snapshots },
+    );
+    tab.now = NOW - 10 * 60_000;
+    vi.setSystemTime(NOW + 30_000);
+    tab.usage = {
+      ...snapshots,
+      kimiCode: { ...snapshots.kimiCode, fetchedAt: NOW + 30_000 },
+    };
+    await tab.updateComplete;
+    const kimiRow = getKimiUsageRow(tab);
+    await kimiRow?.updateComplete;
+
+    expect(tab.now).toBe(NOW + 30_000);
+    expect(kimiRow?.shadowRoot?.textContent).toContain('updated just now');
   });
 });

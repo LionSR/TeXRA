@@ -1,11 +1,4 @@
-import {
-  LitElement,
-  css,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -91,29 +84,7 @@ export class SubscriptionUsageRow extends LitElement {
 
   @property({ attribute: false }) snapshot: SubscriptionUsageSnapshot | null =
     null;
-  @property({ attribute: false }) now = Date.now();
-
-  private clock: ReturnType<typeof setInterval> | undefined;
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this.refreshNow();
-    this.clock = setInterval(() => this.refreshNow(), 60_000);
-  }
-
-  override disconnectedCallback(): void {
-    if (this.clock !== undefined) clearInterval(this.clock);
-    this.clock = undefined;
-    super.disconnectedCallback();
-  }
-
-  protected override willUpdate(changedProperties: PropertyValues<this>): void {
-    if (changedProperties.has('snapshot')) this.refreshNow();
-  }
-
-  private refreshNow(): void {
-    this.now = Date.now();
-  }
+  @property({ attribute: false }) now = 0;
 
   override render(): TemplateResult | typeof nothing {
     const snapshot = this.snapshot;

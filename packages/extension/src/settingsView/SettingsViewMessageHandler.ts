@@ -1052,7 +1052,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
 
     const glmRegionChanged = data.key === GlobalStateKey.GLM_USE_CHINA;
-    if (glmRegionChanged) this.subscriptionUsage.invalidate('glmCodingPlan');
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
