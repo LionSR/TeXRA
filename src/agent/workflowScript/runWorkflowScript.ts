@@ -901,6 +901,7 @@ export async function runWorkflowScript(
         'agent() result',
         attemptMetadata(),
       );
+      let callSettled = false;
       try {
         const committed = await journalCommitFence.commit(async () => {
           await persistJournalEntry({
@@ -911,6 +912,7 @@ export async function runWorkflowScript(
           executionState.settleCall(progressId, {
             status: WORKFLOW_CALL_STATUS.COMPLETED,
           });
+          callSettled = true;
           emit({
             type: 'agent:end',
             ...eventBase,
@@ -921,8 +923,11 @@ export async function runWorkflowScript(
         if (!committed) return undefined;
       } catch (error) {
         // `persistJournalEntry` is the only step inside the fence that can
-        // fail before the call terminalizes, so the call is still live here.
-        failCall(error, attemptMetadata());
+        // fail before the call terminalizes. Once the call settled COMPLETED
+        // (journaled), a late `emit` throw must not rewrite it to failed —
+        // the journal and snapshot already agree, so the error propagates
+        // without resettling the call.
+        if (!callSettled) failCall(error, attemptMetadata());
         throw error;
       }
       return payload;

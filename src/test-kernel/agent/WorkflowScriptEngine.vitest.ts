@@ -2087,6 +2087,28 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(run.result).toBe('recovered-result');
   });
 
+  it('keeps a journaled completed call completed when the completed emit throws', async () => {
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('go')`,
+      runAgent: async () => 'done',
+      onSnapshot: (snapshot) => {
+        snapshots.push(snapshot);
+      },
+      onEvent: (event) => {
+        // The call is already journaled and settled COMPLETED when this
+        // event fires; a throwing host handler must not rewrite it.
+        if (event.type === 'agent:end' && event.outcome === 'completed') {
+          throw new Error('host event handler exploded');
+        }
+      },
+    });
+
+    await expect(runPromise).rejects.toThrow('host event handler exploded');
+    const terminal = snapshots.at(-1);
+    expect(terminal?.calls[0]).toMatchObject({ status: 'completed' });
+  });
+
   it('charges every retry attempt against the live-call cap', async () => {
     let control!: WorkflowScriptControl;
     const events: WorkflowScriptEvent[] = [];
