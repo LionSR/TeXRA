@@ -23,7 +23,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import type { AgentEntry } from '@agent/index/agentRegistry';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -286,7 +285,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       );
     }
 
-    // Every setup phase below fails with the same annotation: prefix the
+    // Every phase below fails with the same annotation: prefix the
     // underlying error with the saved script reference so the model edits the
     // file and retries with scriptPath instead of rewriting the source.
     const runPhase = async <T>(phase: () => T | Promise<T>): Promise<T> => {
@@ -352,7 +351,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // detached run can still roll its cost into the parent after this call
     // returns. Undefined totals are skipped (a malformed-journal failure never
     // records a spurious cost).
-    const recordSubagentCost = callContext?.hooks?.recordSubagentCost;
+    const recordSubagentCost = callContext.hooks?.recordSubagentCost;
     const recordCost = (totalCostUsd: number | undefined): void => {
       if (totalCostUsd !== undefined) recordSubagentCost?.(totalCostUsd);
     };
@@ -611,10 +610,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         scriptPath,
       );
     });
-    try {
-      return await runResult;
-    } catch (error) {
-      throw workflowScriptToolError(error, scriptPath);
-    }
+    return await runPhase(() => runResult);
   }
 }

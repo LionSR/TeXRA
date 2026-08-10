@@ -6,7 +6,6 @@ import {
   type WorkflowAgentInvocation,
   type WorkflowJournalEntry,
   type WorkflowScriptEvent,
-  type WorkflowScriptProgressId,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
@@ -18,21 +17,17 @@ import {
 import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import { assertNever, generateShortId } from '@utils/core';
 
-type WorkflowScriptRunWithProgressOptions = Omit<
-  PersistedWorkflowScriptRunOptions,
-  'onEvent'
-> & {
-  /** Accumulated live spend for one logical call, for progress lines. */
-  readonly getCallCostUsd?: (index: number) => number | undefined;
-  /**
-   * Receives every progress line also written to the trace (phases, script
-   * log() output, per-call outcomes) so the caller can hand the run log back
-   * to the invoking model, which otherwise cannot see any of it.
-   */
-  readonly onActivity?: (line: string) => void;
-  /** Observe the engine events from which this projection is derived. */
-  readonly onEvent?: (event: WorkflowScriptEvent) => void;
-};
+type WorkflowScriptRunWithProgressOptions =
+  PersistedWorkflowScriptRunOptions & {
+    /** Accumulated live spend for one logical call, for progress lines. */
+    readonly getCallCostUsd?: (index: number) => number | undefined;
+    /**
+     * Receives every progress line also written to the trace (phases, script
+     * log() output, per-call outcomes) so the caller can hand the run log back
+     * to the invoking model, which otherwise cannot see any of it.
+     */
+    readonly onActivity?: (line: string) => void;
+  };
 
 interface PhaseStage {
   readonly handle: StageHandle;
@@ -44,14 +39,6 @@ interface ProjectedWorkflowCall {
   readonly definition: Pick<WorkflowCallProgress, 'id' | 'label' | 'phase'>;
   status: WorkflowCallProgress['status'];
   childStreamId?: WorkflowCallProgress['childStreamId'];
-}
-
-/** Stable trace identity for one workflow call within its run stream. */
-function workflowCallLogId(
-  projectionId: string,
-  id: WorkflowScriptProgressId,
-): string {
-  return `workflow-task-${projectionId}-${id}`;
 }
 
 export class WorkflowJournalCostError extends Error {
@@ -80,7 +67,7 @@ function workflowAttemptIdentity(invocation: WorkflowAttemptIdentity): string {
   return `${invocation.index}:${invocation.key}`;
 }
 
-export interface WorkflowAttemptCostTracker {
+interface WorkflowAttemptCostTracker {
   /** Record one physical child attempt and return this tool invocation's live total. */
   record(invocation: WorkflowAttemptIdentity, costUsd: number): number;
   /**
@@ -149,7 +136,11 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   };
 }
 
-/** Run a durable workflow script and project its progress onto the parent trace. */
+/**
+ * Run a durable workflow script and project its progress onto the parent trace.
+ * The engine's `onEvent` slot stays available to the caller: this projection
+ * tees every event to it before deriving trace rows from the same event.
+ */
 export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
@@ -162,10 +153,10 @@ export async function runPersistedWorkflowScriptWithProgress(
   // Keep one card identity through this projection's state transitions without
   // colliding with the same logical call in an earlier attempt.
   const projectionId = generateShortId();
-  const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
-  const callIndexes = new Map<WorkflowScriptProgressId, number>();
+  const callPhases = new Map<WorkflowCallProgress['id'], string | undefined>();
+  const callIndexes = new Map<WorkflowCallProgress['id'], number>();
   const projectedCalls = new Map<
-    WorkflowScriptProgressId,
+    WorkflowCallProgress['id'],
     ProjectedWorkflowCall
   >();
   let currentPhase: string | undefined;
@@ -220,10 +211,6 @@ export async function runPersistedWorkflowScriptWithProgress(
   ): string | undefined =>
     phase ? phaseFor(phase, index, total).handle.id : parentStageId;
 
-  const info = (message: string, stageId: string | undefined): void => {
-    trace.info(message, { stageId });
-    onActivity?.(message);
-  };
   const recordTerminalActivity = (
     call: Extract<
       WorkflowCallProgress,
@@ -245,7 +232,8 @@ export async function runPersistedWorkflowScriptWithProgress(
     let projected = projectedCalls.get(call.id);
     if (!projected) {
       projected = {
-        logId: workflowCallLogId(projectionId, call.id),
+        // Stable trace identity for this call within its run stream.
+        logId: `workflow-task-${projectionId}-${call.id}`,
         definition: {
           id: call.id,
           label: call.label,
@@ -268,18 +256,12 @@ export async function runPersistedWorkflowScriptWithProgress(
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };
-  const recordedCallPhase = (
-    call: Pick<WorkflowCallProgress, 'id' | 'phase'>,
-  ): string | undefined => {
-    const projected = projectedCalls.get(call.id);
-    return projected ? projected.definition.phase : call.phase;
-  };
   /**
    * A recorded undefined means the live call started outside any phase; only
    * cached end-only events may use the phase active at replay time.
    */
   const liveCallPhase = (event: {
-    readonly progressId: WorkflowScriptProgressId;
+    readonly progressId: WorkflowCallProgress['id'];
     readonly phase?: string;
   }): string | undefined =>
     callPhases.has(event.progressId)
@@ -310,7 +292,8 @@ export async function runPersistedWorkflowScriptWithProgress(
         onActivity?.(`Phase: ${event.title}`);
         break;
       case 'log':
-        info(event.message, openPhaseStage(currentPhase));
+        trace.info(event.message, { stageId: openPhaseStage(currentPhase) });
+        onActivity?.(event.message);
         break;
       case 'agent:queued':
         break;
@@ -377,19 +360,24 @@ export async function runPersistedWorkflowScriptWithProgress(
         };
         let call: WorkflowCallProgress;
         switch (event.outcome) {
-          case 'failed':
+          case 'failed': {
             call = {
               ...identity,
               status: 'failed',
               error: event.error,
               ...metadata,
             };
+            // The phase recorded on the card's first emission owns which group
+            // the failure marks; fall back to this event's own phase only for a
+            // call that was never emitted.
+            const projected = projectedCalls.get(call.id);
             markPhaseFailed(
-              recordedCallPhase(call),
+              projected ? projected.definition.phase : call.phase,
               event.phaseIndex,
               event.phaseTotal,
             );
             break;
+          }
           case 'skipped':
             call = {
               ...identity,

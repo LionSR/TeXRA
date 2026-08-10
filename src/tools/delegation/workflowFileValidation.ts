@@ -1,7 +1,7 @@
 import { WorkspaceFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-export interface WorkflowFileGroup {
+interface WorkflowFileGroup {
   readonly label: string;
   readonly files: readonly string[];
 }

@@ -15,7 +15,7 @@ type WorkflowTaskOutcome = Extract<
   { type: 'agent:end' }
 >['outcome'];
 
-export interface WorkflowDeliverySummaryCollector {
+interface WorkflowDeliverySummaryCollector {
   readonly start: () => void;
   readonly onEvent: (event: WorkflowScriptEvent) => void;
   readonly settle: (

@@ -155,7 +155,7 @@ async function workflowScriptModelSelection(
  * the grandchild execution ids and run-storage lineage stay consistent when a
  * timed-out run is resumed under the same `meta.name`.
  */
-export interface WorkflowRunIdentity {
+interface WorkflowRunIdentity {
   readonly executionId: ExecutionId;
   readonly streamId: StreamTabId;
 }
