@@ -181,6 +181,13 @@ export interface WorkflowAttemptFacts {
   readonly childStreamId?: StreamTabId;
   /** Cost available on the child result. */
   readonly costUsd?: number;
+  /**
+   * Marks facts re-attached from a durably recovered result rather than
+   * resolved for a live attempt. Recovered ids carry navigation metadata
+   * only — the engine must not register them as skip/retry targets, since
+   * the result they name is already authoritative.
+   */
+  readonly recovered?: true;
 }
 
 /**
@@ -276,10 +283,10 @@ export type WorkflowScriptEvent =
     });
 
 /**
- * Guest-visible result of a call cancelled via `control.skip(index)`: a
- * first-class sentinel distinct from a failed call's `null`, so a script (or
- * host) can tell "deliberately skipped" apart from "runner failed". Skipped
- * calls are never journaled, so a later resume re-runs them.
+ * Guest-visible result of a call cancelled via `control(childExecutionId,
+ * 'skip')`: a first-class sentinel distinct from a failed call's `null`, so a
+ * script (or host) can tell "deliberately skipped" apart from "runner failed".
+ * Skipped calls are never journaled, so a later resume re-runs them.
  */
 export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
 

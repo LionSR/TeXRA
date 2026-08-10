@@ -158,8 +158,7 @@ describe('CLI child list interaction', () => {
 
   it('skips and retries the focused subagent grandchild by execution id', async () => {
     const { ink, React } = await loadInk();
-    const onSkipExecution = vi.fn();
-    const onRetryExecution = vi.fn();
+    const onWorkflowControl = vi.fn();
 
     const { instance, stdin } = renderChildList(
       ink,
@@ -168,8 +167,7 @@ describe('CLI child list interaction', () => {
         keyboardActive: true,
         maxRows: 5,
         onCancel: vi.fn(),
-        onSkipExecution,
-        onRetryExecution,
+        onWorkflowControl,
         onSelectionChange: vi.fn(),
         selectedValue: childStreamListValue(child),
         selectedChildStreamId: child,
@@ -180,12 +178,14 @@ describe('CLI child list interaction', () => {
     try {
       await waitForInput(stdin);
       stdin.write('s');
-      await waitFor(() => onSkipExecution.mock.calls.length === 1);
+      await waitFor(() => onWorkflowControl.mock.calls.length === 1);
       stdin.write('r');
-      await waitFor(() => onRetryExecution.mock.calls.length === 1);
+      await waitFor(() => onWorkflowControl.mock.calls.length === 2);
 
-      expect(onSkipExecution).toHaveBeenCalledWith('child-exec');
-      expect(onRetryExecution).toHaveBeenCalledWith('child-exec');
+      expect(onWorkflowControl.mock.calls).toEqual([
+        ['child-exec', 'skip'],
+        ['child-exec', 'retry'],
+      ]);
     } finally {
       instance.unmount();
     }
@@ -401,7 +401,7 @@ describe('CLI child list interaction', () => {
   it('keeps detail and controls inert when workflow tasks reuse a child id', async () => {
     const { ink, React } = await loadInk();
     const onFocusStream = vi.fn();
-    const onSkipExecution = vi.fn();
+    const onWorkflowControl = vi.fn();
     const rootSlice = workflowRootSlice([
       ...['first', 'second'].map((id) => ({
         id: `task-${id}`,
@@ -457,7 +457,7 @@ describe('CLI child list interaction', () => {
           maxRows: 6,
           onCancel: vi.fn(),
           onFocusStream,
-          onSkipExecution,
+          onWorkflowControl,
           sessions: [],
           selectedChildStreamId,
           ...props,
@@ -468,7 +468,7 @@ describe('CLI child list interaction', () => {
         for (const input of ['\r', 's']) stdin.write(input);
         await sleep(30);
         expect(onFocusStream).not.toHaveBeenCalled();
-        expect(onSkipExecution).not.toHaveBeenCalled();
+        expect(onWorkflowControl).not.toHaveBeenCalled();
       } finally {
         instance.unmount();
       }

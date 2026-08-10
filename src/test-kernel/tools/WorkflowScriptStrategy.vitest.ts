@@ -298,6 +298,12 @@ throw new Error('script failed after replay')`;
     );
     expect(errText).toContain('with scriptPath:');
     expect(errText).toContain('"outcome":"failed"');
+    // The failure line's tallies come from the engine's terminal snapshot —
+    // the run replayed one cached call and declared no phases — not from a
+    // re-parse of the checkpoint's script.
+    expect(errText).toContain('"phaseCount":0');
+    expect(errText).toContain('"taskDone":1');
+    expect(errText).toContain('"taskTotal":1');
   });
 
   it('retains live spend when the completed journal result is malformed', async () => {
@@ -400,7 +406,9 @@ function controllableRunAgent(config: {
 }
 
 describe('createWorkflowScriptStrategy interactive controls', () => {
-  const grandchildExecutionId = 'grandchild-exec-0' as ExecutionId;
+  // Real execution ids: the production host always persists snapshots, so the
+  // engine's snapshot schema validates every id these fakes report.
+  const grandchildExecutionId = 'ccccc0000001' as ExecutionId;
 
   it('skips an in-flight grandchild by execution id via the session registry', async () => {
     const fake = controllableRunAgent({
@@ -416,7 +424,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     const launch = strategy.launch(fakePorts(), new AbortController());
     await fake.attemptStarted(1);
     // An unknown execution id no-ops (the call stays in flight)...
-    workflowControls.control('not-a-grandchild' as ExecutionId, 'skip');
+    workflowControls.control('ddddd0000009' as ExecutionId, 'skip');
     // ...while the right one translates execId → index → engine skip.
     workflowControls.control(grandchildExecutionId, 'skip');
 
@@ -469,7 +477,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     // attempt-specific id (not the logical id) — the id the roster exposes.
     // The control bridge must follow that id, not the stale logical one.
     const logicalExecutionId = grandchildExecutionId;
-    const attemptExecutionId = 'grandchild-exec-0#1' as ExecutionId;
+    const attemptExecutionId = 'ccccc0000002' as ExecutionId;
     const fake = controllableRunAgent({
       attemptExecutionIds: [logicalExecutionId, attemptExecutionId],
     });

@@ -70,7 +70,6 @@ export class WorkflowExecutionState {
           timestamps: { createdAt: timestamp, updatedAt: timestamp },
         };
       }),
-      counts: emptyCounts(),
       timestamps: { createdAt, updatedAt: createdAt },
     };
     this.#snapshot = hydrate(fresh, options.initialSnapshot, createdAt);
@@ -437,11 +436,6 @@ export class WorkflowExecutionState {
   }
 
   #emit(): void {
-    const counts = emptyCounts();
-    for (const call of this.#snapshot.calls) counts[call.status] += 1;
-    counts.total = this.#snapshot.calls.length;
-    counts.waiting = counts.planned + counts.stageBlocked;
-    this.#snapshot.counts = counts;
     this.#snapshot.timestamps.updatedAt = now();
     this.#publish(structuredClone(this.#snapshot));
   }
@@ -453,23 +447,6 @@ function now(): string {
 
 function stageIdFor(index: number): string {
   return `stage-${index + 1}`;
-}
-
-function emptyCounts(): WorkflowExecutionSnapshot['counts'] {
-  return {
-    total: 0,
-    waiting: 0,
-    planned: 0,
-    stageBlocked: 0,
-    queued: 0,
-    starting: 0,
-    running: 0,
-    completed: 0,
-    failed: 0,
-    cancelled: 0,
-    skipped: 0,
-    cached: 0,
-  };
 }
 
 function totalAttemptCost(

@@ -17,6 +17,7 @@ import {
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import {
   WorkflowExecutionSnapshotSchema,
+  deriveWorkflowCounts,
   type ExecutionId,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
@@ -77,7 +78,7 @@ describe('workflow-script persistence', () => {
     });
 
     expect(restarted.result).toEqual(['result:first', 'result:second']);
-    expect(restarted.snapshot.counts.cached).toBe(2);
+    expect(deriveWorkflowCounts(restarted.snapshot.calls).cached).toBe(2);
     await expect(
       readWorkflowScriptCheckpoint(getExecutionStore(executionId), 'call-1'),
     ).resolves.toMatchObject({
@@ -177,8 +178,6 @@ return [first, second]`;
       call.timestamps.completedAt = undefined;
       call.attempts[0]!.completedAt = undefined;
     }
-    interrupted.counts.completed = 0;
-    interrupted.counts.running = 2;
 
     await store.writeMeta({
       timestamp: new Date(0).toISOString(),

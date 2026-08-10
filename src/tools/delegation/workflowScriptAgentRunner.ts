@@ -373,15 +373,23 @@ export function createWorkflowScriptAgentRunner(
       if (recovered) {
         // Durable recovery never fires onActiveExecutionId; re-attach the
         // known child id (and stream when available) so /executions/{id}
-        // can navigate to the child that supplied the result.
-        invocation.report?.({ childExecutionId: completed.executionId });
+        // can navigate to the child that supplied the result. The recovered
+        // marker keeps these ids out of the engine's skip/retry map — the
+        // recovered result is authoritative and must stay uncontrollable.
+        invocation.report?.({
+          childExecutionId: completed.executionId,
+          recovered: true,
+        });
         if (invocation.report !== undefined) {
           try {
             const recoveredStreamId = (
               await getExecutionStore(completed.executionId).readMeta()
             )?.streamId;
             if (recoveredStreamId !== undefined) {
-              invocation.report({ childStreamId: recoveredStreamId });
+              invocation.report({
+                childStreamId: recoveredStreamId,
+                recovered: true,
+              });
             }
           } catch {
             // A recovered result is authoritative. Navigation metadata is

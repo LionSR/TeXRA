@@ -52,8 +52,8 @@ export function workflowPhaseCallProgress(
  *
  * `WorkflowCallProgress` carries no `cancelled` variant: a cancelled attempt
  * surfaces in the transcript as a `failed` call, so this count already
- * captures it. Snapshot consumers (`/executions`) read `counts.failed` /
- * `counts.cancelled` directly and do not need this helper.
+ * captures it. Snapshot consumers (`/executions`) derive their own per-status
+ * tallies with `deriveWorkflowCounts` and do not need this helper.
  */
 export function workflowCallFailureTally(
   calls: readonly WorkflowCallProgress[],

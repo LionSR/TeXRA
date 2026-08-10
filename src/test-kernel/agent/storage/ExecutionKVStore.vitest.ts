@@ -57,20 +57,6 @@ function validWorkflowSnapshot(): WorkflowExecutionSnapshot {
     lifecycle: 'completed',
     stages: [],
     calls: [],
-    counts: {
-      total: 0,
-      waiting: 0,
-      planned: 0,
-      stageBlocked: 0,
-      queued: 0,
-      starting: 0,
-      running: 0,
-      completed: 0,
-      failed: 0,
-      cancelled: 0,
-      skipped: 0,
-      cached: 0,
-    },
     timestamps: {
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -307,6 +293,40 @@ describe('ExecutionKVStore meta read shims', () => {
         workflow: malformed,
       }),
     ).rejects.toThrow();
+  });
+
+  it('tolerates and strips the retired stored counts on a persisted snapshot', async () => {
+    const id = 'legacy-counts-meta' as ExecutionId;
+    const store = getExecutionStore(id);
+    const workflow = validWorkflowSnapshot();
+    // A meta.json written while `counts` was a stored field. Resume reads it
+    // strictly, so without the transitional arm this row would fail closed.
+    await store.write('meta', {
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      timestamp: '2026-07-04T00:00:00.000Z',
+      workflow: {
+        ...workflow,
+        counts: {
+          total: 0,
+          waiting: 0,
+          planned: 0,
+          stageBlocked: 0,
+          queued: 0,
+          starting: 0,
+          running: 0,
+          completed: 0,
+          failed: 0,
+          cancelled: 0,
+          skipped: 0,
+          cached: 0,
+        },
+      },
+    });
+
+    // Hydrates, and the retired copy does not survive the read boundary.
+    await expect(store.readMetaStrict()).resolves.toMatchObject({ workflow });
+    const hydrated = await store.readMetaStrict();
+    expect(hydrated?.workflow).not.toHaveProperty('counts');
   });
 
   it('warns when execution meta is malformed instead of silently dropping it', async () => {

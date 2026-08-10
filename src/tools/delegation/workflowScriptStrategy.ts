@@ -12,10 +12,7 @@
  */
 
 // Local imports
-import {
-  parseWorkflowScript,
-  readWorkflowScriptCheckpoint,
-} from '@agent/workflowScript';
+import { readWorkflowScriptCheckpoint } from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
@@ -160,6 +157,10 @@ export function createWorkflowScriptStrategy(
       });
 
       let unregisterControls: (() => void) | undefined;
+      // The engine flushes its terminal snapshot before it rethrows, so the
+      // last one published is the run's own final account of what ran — the
+      // only source the failure path has for phase and task tallies.
+      let lastSnapshot: WorkflowExecutionSnapshot | undefined;
       let run: WorkflowScriptRunResult;
       try {
         run = await runPersistedWorkflowScriptWithProgress(params.logger, {
@@ -179,8 +180,10 @@ export function createWorkflowScriptStrategy(
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           getCallCostUsd: (index) => attemptCost.costForCall(index),
           onActivity: runLog.add,
-          onEvent: summary.onEvent,
-          ...(params.onSnapshot && { onSnapshot: params.onSnapshot }),
+          onSnapshot: async (snapshot) => {
+            lastSnapshot = snapshot;
+            await params.onSnapshot?.(snapshot);
+          },
           // The engine's control is already keyed by the grandchild execution
           // id a host targets, so the run registers it as-is.
           onControl: (control) => {
@@ -202,16 +205,17 @@ export function createWorkflowScriptStrategy(
           const costUsd = attemptCost.total(checkpoint?.journal ?? []);
           ports.recordCost(costUsd);
           summary.settle(
-            checkpoint
-              ? {
-                  meta: parseWorkflowScript(checkpoint.script).meta,
-                  journal: checkpoint.journal,
-                }
-              : undefined,
+            { journal: checkpoint?.journal ?? [], snapshot: lastSnapshot },
             costUsd,
           );
-        } catch {
-          // Cost settlement is best-effort on the failure path.
+        } catch (settlementError) {
+          // The run error is what the caller must see, so settlement cannot
+          // rethrow — but dropping it silently loses this invocation's spend
+          // from the parent's accounting. Say so.
+          params.logger.warn(
+            `Workflow script '${params.name}' failed and its cost could not be settled from the checkpoint; this run's spend is unbilled: ${toErrorMessage(settlementError)}`,
+            { data: settlementError },
+          );
         }
         throw runError;
       } finally {

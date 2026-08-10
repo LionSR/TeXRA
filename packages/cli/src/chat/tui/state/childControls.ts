@@ -21,6 +21,16 @@ export interface ChildListTarget {
   readonly streamId: StreamTabId | undefined;
 }
 
+/**
+ * What the child list can ask of a focused, in-flight workflow-script
+ * grandchild `agent()` call. One action-carrying request rather than one
+ * callback per verb, so a new control is a new member here instead of another
+ * prop threaded through three components. Mirrors the engine's
+ * `WorkflowControlAction`, spelled host-locally so the CLI adds no `@agent/*`
+ * deep import for a two-word vocabulary.
+ */
+export type WorkflowControlRequest = 'skip' | 'retry';
+
 export function childElapsed(
   child: Pick<ActiveChildInfo, 'elapsed' | 'startedAt' | 'status'>,
   nowMs = Date.now(),

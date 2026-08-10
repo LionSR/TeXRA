@@ -94,6 +94,10 @@ type WorkflowScriptAttemptMetadata = Pick<
   'durationMs' | 'model' | 'childStreamId'
 >;
 
+/** The two snapshot statuses an `agent:end` failure can terminalize a call with. */
+type WorkflowFailedCallStatus =
+  typeof WORKFLOW_CALL_STATUS.FAILED | typeof WORKFLOW_CALL_STATUS.CANCELLED;
+
 /**
  * Control-plane state for one in-flight `agent()` attempt: the controller
  * `skip()`/`retry()` aborts, and the action that abort requested. One record so
@@ -616,23 +620,35 @@ export async function runWorkflowScript(
       key = refreshedKey;
     };
 
-    const emitFailedEnd = (
+    /**
+     * Terminalize one call as failed on both channels at once. `finish()`
+     * reclassifies only the calls that never settled — a still-PLANNED call
+     * becomes skipped/not-reached, a live one takes the generic unfinished
+     * note — so settling here is what stops the snapshot from contradicting
+     * the `agent:end` failure the event stream just reported, and what keeps
+     * the real error on the call.
+     */
+    const failCall = (
       error: unknown,
       metadata: Partial<WorkflowScriptAttemptMetadata> = {},
+      status: WorkflowFailedCallStatus = WORKFLOW_CALL_STATUS.FAILED,
     ): void => {
+      const message = toErrorMessage(error);
+      executionState.settleCall(progressId, { status, error: message });
       emit({
         type: 'agent:end',
         ...eventBase,
         outcome: 'failed',
-        error: toErrorMessage(error),
+        error: message,
         ...metadata,
       });
     };
 
     // Serialize (and round-trip deserialize) a result value for the journal,
-    // emitting the matching `agent:end` failure event if it isn't
-    // bridge-safe. Shared by the cached-replay and live-call paths below,
-    // which differ only in the source value.
+    // failing the call on both channels if it isn't bridge-safe. Shared by the
+    // cached-replay and live-call paths below, which differ only in the source
+    // value — a cached replay's call is still PLANNED here, which is exactly
+    // the case `failCall` keeps `finish()` from reclassifying as not-reached.
     const journalValue = (
       value: unknown,
       valueLabel: string,
@@ -654,7 +670,7 @@ export async function runWorkflowScript(
                 cause: error,
               }),
         );
-        emitFailedEnd(fault, metadata);
+        failCall(fault, metadata);
         throw fault;
       }
     };
@@ -748,10 +764,16 @@ export async function runWorkflowScript(
               prompt,
               options: callOptions,
               signal: callController.signal,
-              report: ({ agent, ...attemptFacts }) => {
-                if (attemptFacts.childExecutionId !== undefined) {
+              report: ({ agent, recovered, ...attemptFacts }) => {
+                if (
+                  attemptFacts.childExecutionId !== undefined &&
+                  recovered !== true
+                ) {
                   // The identity a host targets skip/retry by, stamped where
-                  // the call index is already in scope.
+                  // the call index is already in scope. Recovered ids stay
+                  // out: their result is already authoritative, so a stale
+                  // skip/retry must not be able to discard or re-run it
+                  // during the recovery path's async metadata reads.
                   callIndexByChildExecution.set(
                     attemptFacts.childExecutionId,
                     index,
@@ -801,7 +823,8 @@ export async function runWorkflowScript(
           inFlightCalls.delete(index);
         }
         // This attempt's child ids are dead the moment it settles: a retry
-        // launches under a fresh id, and a stale one must no-op.
+        // launches under a fresh id, and a stale one must no-op. Deleting
+        // during for...of is spec-safe for Map iterators.
         for (const [childExecutionId, callIndex] of callIndexByChildExecution) {
           if (callIndex === index) {
             callIndexByChildExecution.delete(childExecutionId);
@@ -856,18 +879,18 @@ export async function runWorkflowScript(
                   cause: attemptError.error,
                 }),
           );
-          emitFailedEnd(fatal, attemptMetadata());
+          failCall(fatal, attemptMetadata());
           throw fatal;
         }
         // A failed agent resolves to null and is deliberately NOT journaled, so
         // a resume retries it. Callers also exclude the truthy skip sentinel.
-        executionState.settleCall(progressId, {
-          status: options.signal?.aborted
+        failCall(
+          attemptError.error,
+          attemptMetadata(),
+          options.signal?.aborted
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED,
-          error: toErrorMessage(attemptError.error),
-        });
-        emitFailedEnd(attemptError.error, attemptMetadata());
+        );
         return 'null';
       }
 
@@ -897,7 +920,9 @@ export async function runWorkflowScript(
         });
         if (!committed) return undefined;
       } catch (error) {
-        emitFailedEnd(error, attemptMetadata());
+        // `persistJournalEntry` is the only step inside the fence that can
+        // fail before the call terminalizes, so the call is still live here.
+        failCall(error, attemptMetadata());
         throw error;
       }
       return payload;

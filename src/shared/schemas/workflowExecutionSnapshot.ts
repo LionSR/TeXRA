@@ -79,20 +79,31 @@ const WorkflowExecutionCallSchema = z.strictObject({
 });
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
-const WorkflowExecutionCountsSchema = z.strictObject({
-  total: z.int().nonnegative(),
-  waiting: z.int().nonnegative(),
-  planned: z.int().nonnegative(),
-  stageBlocked: z.int().nonnegative(),
-  queued: z.int().nonnegative(),
-  starting: z.int().nonnegative(),
-  running: z.int().nonnegative(),
-  completed: z.int().nonnegative(),
-  failed: z.int().nonnegative(),
-  cancelled: z.int().nonnegative(),
-  skipped: z.int().nonnegative(),
-  cached: z.int().nonnegative(),
-});
+type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
+  readonly total: number;
+  readonly waiting: number;
+};
+
+/**
+ * The one owner of "how many calls are in each state". Derived from the calls
+ * themselves at the read boundary rather than stored beside them, so a tally
+ * can never disagree with the array it summarizes. `waiting` is the composite
+ * every consumer asks for: planned plus stage-blocked.
+ */
+export function deriveWorkflowCounts(
+  calls: readonly Pick<WorkflowExecutionCall, 'status'>[],
+): WorkflowExecutionCounts {
+  const byStatus = Object.fromEntries(
+    Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
+  ) as Record<WorkflowExecutionCallStatus, number>;
+  for (const call of calls) byStatus[call.status] += 1;
+  return {
+    total: calls.length,
+    waiting: byStatus.planned + byStatus.stageBlocked,
+    ...byStatus,
+  };
+}
+
 export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowExecutionCallStatus> =
   new Set([
     WORKFLOW_CALL_STATUS.COMPLETED,
@@ -108,20 +119,38 @@ const TERMINAL_LIFECYCLES = new Set<WorkflowExecutionLifecycle>([
   WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED,
 ]);
 
+const WorkflowExecutionSnapshotShapeSchema = z.strictObject({
+  lifecycle: WorkflowExecutionLifecycleSchema,
+  currentStageId: z.string().min(1).optional(),
+  stages: z.array(WorkflowExecutionStageSchema),
+  calls: z.array(WorkflowExecutionCallSchema),
+  error: z.string().optional(),
+  timestamps: z.strictObject({
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    completedAt: z.iso.datetime().optional(),
+  }),
+});
+
+/**
+ * Transitional legacy member: snapshots persisted while `counts` was a stored
+ * field (introduced and retired within 0.40.x, never in a released binary)
+ * carry that copy in `meta.json`. Strip it on the way in so a same-era
+ * execution still hydrates instead of failing `readMetaStrict` closed and
+ * blocking resume. Every write normalizes through this schema, so the key is
+ * gone the first time such a meta is rewritten — delete this member (and the
+ * union) after 0.41.
+ */
+const LegacyCountsWorkflowExecutionSnapshotSchema =
+  WorkflowExecutionSnapshotShapeSchema.extend({
+    counts: z.unknown(),
+  }).transform(({ counts: _storedCounts, ...snapshot }) => snapshot);
+
 export const WorkflowExecutionSnapshotSchema = z
-  .strictObject({
-    lifecycle: WorkflowExecutionLifecycleSchema,
-    currentStageId: z.string().min(1).optional(),
-    stages: z.array(WorkflowExecutionStageSchema),
-    calls: z.array(WorkflowExecutionCallSchema),
-    counts: WorkflowExecutionCountsSchema,
-    error: z.string().optional(),
-    timestamps: z.strictObject({
-      createdAt: z.iso.datetime(),
-      updatedAt: z.iso.datetime(),
-      completedAt: z.iso.datetime().optional(),
-    }),
-  })
+  .union([
+    WorkflowExecutionSnapshotShapeSchema,
+    LegacyCountsWorkflowExecutionSnapshotSchema,
+  ])
   .superRefine((snapshot, context) => {
     const stageIds = new Set<string>();
     const stageOrders = new Set<number>();
@@ -171,9 +200,6 @@ export const WorkflowExecutionSnapshotSchema = z
     }
 
     const callIds = new Set<string>();
-    const actualCounts = Object.fromEntries(
-      Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
-    ) as Record<WorkflowExecutionCallStatus, number>;
     for (const [index, call] of snapshot.calls.entries()) {
       if (callIds.has(call.id))
         context.addIssue({
@@ -182,7 +208,6 @@ export const WorkflowExecutionSnapshotSchema = z
           message: `Duplicate workflow call id "${call.id}".`,
         });
       callIds.add(call.id);
-      actualCounts[call.status] += 1;
       if (call.stageId !== undefined) {
         const stage = snapshot.stages.find(
           (candidate) => candidate.id === call.stageId,
@@ -236,30 +261,6 @@ export const WorkflowExecutionSnapshotSchema = z
           message: 'A terminal workflow call cannot have an open attempt.',
         });
     }
-    for (const status of Object.values(WORKFLOW_CALL_STATUS)) {
-      if (snapshot.counts[status] !== actualCounts[status])
-        context.addIssue({
-          code: 'custom',
-          path: ['counts', status],
-          message: `Workflow ${status} count must equal direct calls.`,
-        });
-    }
-    if (snapshot.counts.total !== snapshot.calls.length)
-      context.addIssue({
-        code: 'custom',
-        path: ['counts', 'total'],
-        message: 'Workflow total count must equal direct calls.',
-      });
-    if (
-      snapshot.counts.waiting !==
-      actualCounts.planned + actualCounts.stageBlocked
-    )
-      context.addIssue({
-        code: 'custom',
-        path: ['counts', 'waiting'],
-        message:
-          'Workflow waiting count must equal planned plus stage-blocked calls.',
-      });
     if (TERMINAL_LIFECYCLES.has(snapshot.lifecycle)) {
       if (snapshot.timestamps.completedAt === undefined)
         context.addIssue({

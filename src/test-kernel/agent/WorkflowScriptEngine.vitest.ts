@@ -12,7 +12,7 @@ import {
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
-import type { ExecutionId } from '@shared/schemas';
+import { deriveWorkflowCounts, type ExecutionId } from '@shared/schemas';
 import { delay } from '@utils/core';
 
 const META = `export const meta = {
@@ -2053,6 +2053,40 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(run.result).toBe('attempt-2');
   });
 
+  it('never registers a recovered child id as a skip/retry target', async () => {
+    let control!: WorkflowScriptControl;
+    let releaseCall!: () => void;
+    const recoveredId = childExecutionIdFor(0, 1);
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve, reject) => {
+        rejectOnAbort(invocation, reject);
+        // A durable-recovery runner re-attaches the known child id for
+        // navigation, then keeps resolving asynchronously (readMeta gap).
+        invocation.report?.({
+          childExecutionId: recoveredId,
+          recovered: true,
+        });
+        releaseCall = () => resolve('recovered-result');
+      });
+
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('go')`,
+      runAgent: runner,
+      onControl: (handle) => {
+        control = handle;
+      },
+    });
+
+    await vi.waitFor(() => expect(releaseCall).toBeDefined());
+    // The skip lands inside the recovery window; a recovered result is
+    // authoritative, so the request must no-op instead of discarding it.
+    control(recoveredId, 'skip');
+    releaseCall();
+
+    const run = await runPromise;
+    expect(run.result).toBe('recovered-result');
+  });
+
   it('charges every retry attempt against the live-call cap', async () => {
     let control!: WorkflowScriptControl;
     const events: WorkflowScriptEvent[] = [];
@@ -2166,7 +2200,6 @@ return 'done'`,
     expect(result.snapshot).toMatchObject({
       lifecycle: 'completed',
       currentStageId: undefined,
-      counts: { completed: 1, skipped: 1 },
       calls: [
         {
           id: 'draft',
@@ -2180,7 +2213,11 @@ return 'done'`,
         { id: 'review', status: 'skipped' },
       ],
     });
-    expect(result.snapshot.counts.total).toBe(result.snapshot.calls.length);
+    expect(deriveWorkflowCounts(result.snapshot.calls)).toMatchObject({
+      total: result.snapshot.calls.length,
+      completed: 1,
+      skipped: 1,
+    });
   });
 
   it('uses safe canonical labels for dynamic calls', async () => {

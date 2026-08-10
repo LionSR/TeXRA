@@ -20,17 +20,25 @@ import {
 } from '@shared/copy/workflowCall';
 import { assertNever, generateShortId } from '@utils/core';
 
-type WorkflowScriptRunWithProgressOptions =
-  PersistedWorkflowScriptRunOptions & {
-    /** Accumulated live spend for one logical call, for progress lines. */
-    readonly getCallCostUsd?: (index: number) => number | undefined;
-    /**
-     * Receives every progress line also written to the trace (phases, script
-     * log() output, per-call outcomes) so the caller can hand the run log back
-     * to the invoking model, which otherwise cannot see any of it.
-     */
-    readonly onActivity?: (line: string) => void;
-  };
+/**
+ * `onEvent` is omitted deliberately: this projection owns the engine's event
+ * slot outright, so a caller cannot pass a handler that would be silently
+ * discarded. Callers that need the run's own account of what happened read the
+ * canonical execution snapshot instead.
+ */
+type WorkflowScriptRunWithProgressOptions = Omit<
+  PersistedWorkflowScriptRunOptions,
+  'onEvent'
+> & {
+  /** Accumulated live spend for one logical call, for progress lines. */
+  readonly getCallCostUsd?: (index: number) => number | undefined;
+  /**
+   * Receives every progress line also written to the trace (phases, script
+   * log() output, per-call outcomes) so the caller can hand the run log back
+   * to the invoking model, which otherwise cannot see any of it.
+   */
+  readonly onActivity?: (line: string) => void;
+};
 
 interface PhaseStage {
   readonly handle: StageHandle;
@@ -141,14 +149,12 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
 
 /**
  * Run a durable workflow script and project its progress onto the parent trace.
- * The engine's `onEvent` slot stays available to the caller: this projection
- * tees every event to it before deriving trace rows from the same event.
  */
 export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { getCallCostUsd, onActivity, onEvent, ...runOptions } = options;
+  const { getCallCostUsd, onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const phaseStageIds = new Map<string, string>();
@@ -282,7 +288,6 @@ export async function runPersistedWorkflowScriptWithProgress(
 
   const project = (event: WorkflowScriptEvent): void => {
     if (closed) return;
-    onEvent?.(event);
     switch (event.type) {
       case 'plan':
         for (const task of event.tasks) {

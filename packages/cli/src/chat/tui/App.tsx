@@ -63,6 +63,7 @@ import {
 import {
   numericFocusTargetForActiveStream,
   resolveChildListTarget,
+  type WorkflowControlRequest,
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -125,10 +126,11 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
-  /** Skip a focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onSkipExecution: (executionId: string) => void;
-  /** Retry a focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onRetryExecution: (executionId: string) => void;
+  /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onWorkflowControl: (
+    executionId: string,
+    action: WorkflowControlRequest,
+  ) => void;
   /** Whether Ctrl-C may stop the current root run. */
   readonly canInterruptActiveRun: () => boolean;
   /** Whether bare Escape may stop the identified focused stream. */
@@ -801,8 +803,7 @@ export function App(props: AppProps): React.JSX.Element {
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillExecution={props.onKillExecution}
-        onSkipExecution={props.onSkipExecution}
-        onRetryExecution={props.onRetryExecution}
+        onWorkflowControl={props.onWorkflowControl}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

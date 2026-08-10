@@ -42,7 +42,10 @@ import {
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { ChildListTarget } from '../state/childControls';
+import type {
+  ChildListTarget,
+  WorkflowControlRequest,
+} from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -87,8 +90,10 @@ interface ConversationRegionProps {
   readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
-  readonly onSkipExecution: (executionId: string) => void;
-  readonly onRetryExecution: (executionId: string) => void;
+  readonly onWorkflowControl: (
+    executionId: string,
+    action: WorkflowControlRequest,
+  ) => void;
 }
 
 export function ConversationRegion({
@@ -99,8 +104,7 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillExecution,
-  onSkipExecution,
-  onRetryExecution,
+  onWorkflowControl,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -267,8 +271,7 @@ export function ConversationRegion({
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
-              onSkipExecution={onSkipExecution}
-              onRetryExecution={onRetryExecution}
+              onWorkflowControl={onWorkflowControl}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}

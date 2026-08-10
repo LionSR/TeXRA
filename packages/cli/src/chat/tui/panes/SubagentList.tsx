@@ -43,7 +43,10 @@ import { formatCliStatusLabel } from '../sessionStatus';
 import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 
 // Local imports - TUI state and controls
-import { childElapsed } from '../state/childControls';
+import {
+  childElapsed,
+  type WorkflowControlRequest,
+} from '../state/childControls';
 import {
   childListStreamId,
   childStreamListValue,
@@ -480,16 +483,23 @@ function WorkflowDashboard({
   );
 }
 
+/** The workflow control each key press requests, so the handler holds no ladder. */
+const WORKFLOW_CONTROL_KEYS = {
+  s: 'skip',
+  r: 'retry',
+} as const satisfies Record<string, WorkflowControlRequest>;
+
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
   readonly onFocusStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution?: (executionId: string) => void;
-  /** Skip the focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onSkipExecution?: (executionId: string) => void;
-  /** Retry the focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onRetryExecution?: (executionId: string) => void;
+  /** Skip or retry the focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onWorkflowControl?: (
+    executionId: string,
+    action: WorkflowControlRequest,
+  ) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
    *  root bucket already folded onto the root stream id by the caller). */
@@ -577,8 +587,8 @@ export function SubagentList(
       const executionId = props.activeSubagentExecutionIds?.get(streamId);
       if (!executionId) return;
       if (pressed === 'k') props.onKillExecution?.(executionId);
-      else if (pressed === 's') props.onSkipExecution?.(executionId);
-      else props.onRetryExecution?.(executionId);
+      else
+        props.onWorkflowControl?.(executionId, WORKFLOW_CONTROL_KEYS[pressed]);
     },
     { isActive: props.keyboardActive ?? false },
   );

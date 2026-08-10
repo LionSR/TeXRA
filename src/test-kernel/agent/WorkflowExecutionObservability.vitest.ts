@@ -8,6 +8,7 @@ import {
 } from '@agent/workflowScript';
 import {
   WorkflowExecutionSnapshotSchema,
+  deriveWorkflowCounts,
   type ExecutionId,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
@@ -179,7 +180,7 @@ return await parallel([
     });
     release();
     const result = await run;
-    expect(result.snapshot.counts.completed).toBe(2);
+    expect(deriveWorkflowCounts(result.snapshot.calls).completed).toBe(2);
     expect(
       result.snapshot.calls.every((call) => call.attempts.length === 1),
     ).toBe(true);
@@ -275,7 +276,10 @@ return [failed, passed]`,
     });
     expect(failed.result).toEqual([null, 'passed']);
     expect(failed.snapshot.lifecycle).toBe('completed');
-    expect(failed.snapshot.counts).toMatchObject({ failed: 1, completed: 1 });
+    expect(deriveWorkflowCounts(failed.snapshot.calls)).toMatchObject({
+      failed: 1,
+      completed: 1,
+    });
 
     const cached = await runWorkflowScript({
       script: `export const meta = {
@@ -450,29 +454,76 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
       },
     });
     await vi.waitFor(() =>
-      expect(snapshots.some((snapshot) => snapshot.counts.running === 1)).toBe(
-        true,
-      ),
+      expect(
+        snapshots.some(
+          (snapshot) => deriveWorkflowCounts(snapshot.calls).running === 1,
+        ),
+      ).toBe(true),
     );
     controller.abort(new DOMException('cancelled', 'AbortError'));
     await expect(run).rejects.toMatchObject({ name: 'AbortError' });
 
     const terminal = finalSnapshot(snapshots);
     expect(terminal.lifecycle).toBe('cancelled');
-    expect(terminal.counts.cancelled).toBe(1);
+    const terminalCounts = deriveWorkflowCounts(terminal.calls);
+    expect(terminalCounts.cancelled).toBe(1);
     expect(
-      terminal.counts.running +
-        terminal.counts.starting +
-        terminal.counts.queued,
+      terminalCounts.running + terminalCounts.starting + terminalCounts.queued,
     ).toBe(0);
     expect(
-      terminal.counts.completed +
-        terminal.counts.failed +
-        terminal.counts.cancelled +
-        terminal.counts.skipped +
-        terminal.counts.cached,
+      terminalCounts.completed +
+        terminalCounts.failed +
+        terminalCounts.cancelled +
+        terminalCounts.skipped +
+        terminalCounts.cached,
     ).toBe(terminal.calls.length);
   });
+  it('settles the snapshot as failed wherever it emits a failed agent:end', async () => {
+    const cachedScript = `export const meta = {
+  name: 'cached-replay-failure',
+  description: 'cached replay serialization failure',
+}
+return await agent('cached call', { id: 'task' })`;
+    // Take the journal identity from a real run so the replay actually hits
+    // the cached branch, then corrupt only the stored value.
+    const priorRun = await runWorkflowScript({
+      script: cachedScript,
+      runAgent: async () => 'first result',
+    });
+    const prior = priorRun.journal[0]!;
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const endOutcomes: string[] = [];
+    await expect(
+      runWorkflowScript({
+        script: cachedScript,
+        journal: [{ ...prior, result: circular }],
+        runAgent: async () => 'must not re-execute',
+        onEvent: (event) => {
+          if (event.type === 'agent:end') endOutcomes.push(event.outcome);
+        },
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
+      }),
+    ).rejects.toThrow(/JSON-serializable/);
+
+    // The event stream said failed; the terminal snapshot must not reclassify
+    // the same call as skipped/not-reached, and it keeps the real cause.
+    expect(endOutcomes).toEqual(['failed']);
+    const terminal = finalSnapshot(snapshots);
+    expect(terminal.lifecycle).toBe('failed');
+    expect(terminal.calls).toMatchObject([
+      { id: 'task', status: 'failed', error: expect.stringMatching(/JSON/) },
+    ]);
+    expect(deriveWorkflowCounts(terminal.calls)).toMatchObject({
+      failed: 1,
+      skipped: 0,
+    });
+  });
+
   it('stops after a first snapshot write failure and preserves its cause', async () => {
     const failure = new Error('initial snapshot disk full');
     const runner = vi.fn(async () => 'unused');
@@ -598,7 +649,7 @@ return await agent('work')`,
       },
       onSnapshot: async (snapshot) => {
         writes += 1;
-        if (snapshot.counts.running > 0) {
+        if (deriveWorkflowCounts(snapshot.calls).running > 0) {
           throw new Error('snapshot disk full');
         }
       },

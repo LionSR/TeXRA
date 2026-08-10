@@ -791,16 +791,10 @@ export async function runChat(
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
-      onSkipExecution={(executionId) => {
+      onWorkflowControl={(executionId, action) => {
         runtimeSession.workflowControls.control(
           executionId as ExecutionId,
-          'skip',
-        );
-      }}
-      onRetryExecution={(executionId) => {
-        runtimeSession.workflowControls.control(
-          executionId as ExecutionId,
-          'retry',
+          action,
         );
       }}
       history={inputHistory}
