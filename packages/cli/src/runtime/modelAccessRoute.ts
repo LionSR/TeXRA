@@ -186,10 +186,9 @@ export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
       // form and /status name the subscription itself.
       return 'subscription';
     case 'included':
-      return INCLUDED_ACCESS.inline;
+      return INCLUDED_ACCESS.compactLabel;
     case 'personal':
-      // Trimmed from OWN_API_KEYS.inline to hold the bar's width budget.
-      return 'own API keys';
+      return OWN_API_KEYS.compactLabel;
     default:
       return route satisfies never;
   }
