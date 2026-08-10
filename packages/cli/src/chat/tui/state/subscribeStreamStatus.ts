@@ -3,6 +3,7 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   isTerminalOutcomePhase,
+  isTranscriptSettlementPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
 
@@ -12,7 +13,6 @@ import {
   focusStream,
   setStreamStatusInCliState,
 } from './cliState';
-import { isFinalTranscriptStatus } from './transcript';
 import { projectStreamTranscript } from './transcriptProjection';
 
 export function subscribeStreamStatus(): () => void {
@@ -29,7 +29,7 @@ export function subscribeStreamStatus(): () => void {
     });
     if (recognized) {
       projectStreamTranscript(change.streamId, {
-        finalize: isFinalTranscriptStatus(change.phase),
+        finalize: isTranscriptSettlementPhase(change.phase),
       });
     }
 

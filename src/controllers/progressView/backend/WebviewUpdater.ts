@@ -210,6 +210,7 @@ export class WebviewUpdater {
   updateStreamStatus(
     stream: StreamTabId,
     status: StreamPhase,
+    logHead: number,
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
@@ -217,6 +218,7 @@ export class WebviewUpdater {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
+      logHead,
       lastTimestamp,
       ...(substate ? { substate } : {}),
     });

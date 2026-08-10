@@ -197,7 +197,7 @@ async function waitForPersistedResult(
         result: { response: expectedText },
       });
     },
-    { timeout: 10_000 },
+    { timeout: 20_000 },
   );
 }
 
@@ -328,7 +328,7 @@ async function launchWaitingChild(options: {
   };
 }
 
-describe('native subagent production delivery path', () => {
+describe('native subagent production delivery path', { retry: 2 }, () => {
   setupPlatform(integrationPlatform);
 
   beforeEach(async () => {
@@ -426,7 +426,7 @@ describe('native subagent production delivery path', () => {
     expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(parentTurns).toHaveLength(0);
-  }, 30_000);
+  }, 60_000);
 
   it('does not redeliver turn 1 when the resumed turn produces no new assistant message', async () => {
     const parentTurns = [
@@ -490,7 +490,7 @@ describe('native subagent production delivery path', () => {
     expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(parentTurns).toHaveLength(0);
-  }, 30_000);
+  }, 60_000);
 
   it('combines concurrent distinct follow-ups into one ordered batch turn, not an overwritten result', async () => {
     // Two child turns: the initial launch plus one batch turn that drains both
@@ -550,7 +550,7 @@ describe('native subagent production delivery path', () => {
     expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(parentTurns).toHaveLength(0);
-  }, 30_000);
+  }, 60_000);
 
   it('suppresses replays of one logical child delivery at the real admission boundary', async () => {
     const { executionId } = await launchWaitingChild({

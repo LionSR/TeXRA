@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module';
 
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -257,7 +257,6 @@ describe('runChat signal ownership wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
-
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');
     });
@@ -380,6 +379,9 @@ describe('runChat signal ownership wiring', () => {
         quietLogs: true,
       });
       expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+      expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
+        INTERACTIVE_CONTEXT.cwd,
+      );
       expect(mocks.handOffCliShutdownSignalHandlers).toHaveBeenCalledTimes(1);
       expect(mocks.callOrder).toEqual([
         'initInteractiveCliPlatform',
@@ -499,6 +501,9 @@ describe('runChat signal ownership wiring', () => {
         expect(submit.current).toBeTypeOf('function');
         expect(mocks.onSkillSelect).toBeTypeOf('function');
       });
+      expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
+        INTERACTIVE_CONTEXT.cwd,
+      );
       mocks.onSkillSelect?.({ name: 'proof-audit', activationPrompt });
       submit.current?.('', mediaFiles);
 

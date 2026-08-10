@@ -61,6 +61,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
@@ -86,6 +87,26 @@ function entry(
   finalized: boolean,
 ): ConversationEntry {
   return { id, role, text, finalized };
+}
+
+function compactionEntry(
+  status: 'running' | 'interrupted' | 'completed',
+  finalized = status === 'completed',
+): ConversationEntry {
+  return {
+    id: 'compaction:operation-1',
+    role: 'activity',
+    text: COMPACTION_ACTIVITY_LABEL[status],
+    finalized,
+    activity: {
+      operationId: 'operation-1',
+      status,
+      finalized,
+      startPosition: 1,
+      startedAt: 100,
+      ...(status !== 'running' ? { finishedAt: 200 } : {}),
+    },
+  };
 }
 
 function toolEntry(
@@ -153,6 +174,61 @@ describe('CLI conversation transcript', () => {
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
     expect(waitingBeforeFinalize.pending).toEqual([]);
+  });
+
+  it('keeps running compaction live and promotes its terminal update once', () => {
+    const running = compactionEntry('running');
+    expect(
+      splitTranscriptEntries([running], STREAM_PHASE.RUNNING).pending,
+    ).toEqual([running]);
+    expect(staticItemIds([running])).toEqual(['session-header']);
+
+    const completed = compactionEntry('completed');
+    expect(
+      splitTranscriptEntries([completed], STREAM_PHASE.RUNNING).finalized,
+    ).toEqual([completed]);
+    expect(staticItemIds([completed])).toEqual([
+      'session-header',
+      'compaction:operation-1',
+    ]);
+    expect(
+      staticItemIds([completed], {
+        currentItems: staticItems([completed]),
+      }),
+    ).toEqual(['session-header', 'compaction:operation-1']);
+  });
+
+  it('holds later rows out of Static until interrupted compaction is final', () => {
+    const interrupted = compactionEntry('interrupted');
+    const laterUser = entry('u1', 'user', 'Continue', true);
+    const liveItems = staticItems([interrupted, laterUser]);
+
+    expect(liveItems.map((item) => item.id)).toEqual(['session-header']);
+    expect(
+      splitTranscriptEntries([interrupted, laterUser], STREAM_PHASE.RUNNING)
+        .pending,
+    ).toEqual([interrupted, laterUser]);
+
+    const finalItems = staticItems([compactionEntry('completed'), laterUser], {
+      currentItems: liveItems,
+    });
+    expect(finalItems.map((item) => item.id)).toEqual([
+      'session-header',
+      'compaction:operation-1',
+      'u1',
+    ]);
+  });
+
+  it('wraps compaction activity within a narrow viewport', () => {
+    const layout = transcriptEntryLayout(compactionEntry('completed'), {
+      width: 8,
+    });
+
+    expect(layout.role).toBe('activity');
+    expect(layout.lines.length).toBeGreaterThan(1);
+    expect(layout.lines.every((line) => textDisplayWidth(line) <= 8)).toBe(
+      true,
+    );
   });
 
   it('freezes assistant entries before they enter static scrollback', () => {
