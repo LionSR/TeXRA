@@ -352,8 +352,46 @@ export const requestPanelSharedStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
+  /* Prose feedback — same sizing contract as FollowUpInput's composer
+     (#9773): rest at two lines, grow with content, keep a vertical drag
+     handle. The shared formControlStyles skin is for mono editors (6rem
+     floor, 1px block padding, grid-centered), which left empty white
+     bands above/below a short rejection note. Mirror the follow-up
+     textarea rules so the two prose boxes stay in lockstep. */
   :is(${FEEDBACK_INPUTS}) {
+    display: block;
+    min-width: 0;
     width: 100%;
+    box-sizing: border-box;
+    line-height: var(--line-height-relaxed);
+    height: auto;
+    --textarea-min-height: calc(2lh + var(--wa-space-xs) + var(--wa-space-3xs));
+    --textarea-max-height: clamp(var(--textarea-min-height), 24vh, 10rem);
+  }
+
+  /* base is deprecated for textarea-wrapper (same node); style both so a
+     WA rename cannot reintroduce the centered empty bands. */
+  :is(${FEEDBACK_INPUTS})::part(textarea-wrapper),
+  :is(${FEEDBACK_INPUTS})::part(base) {
+    align-items: start;
+    min-height: var(--textarea-min-height);
+  }
+
+  :is(${FEEDBACK_INPUTS})::part(textarea) {
+    field-sizing: content;
+    width: 100%;
+    height: auto;
+    min-height: var(--textarea-min-height);
+    max-height: var(--textarea-max-height);
+    padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--wa-font-family-body);
+    font-size: var(--font-size);
+    line-height: var(--line-height-relaxed);
   }
 
   /* Carousel navigation for multiple external inquiries (rendered directly by
