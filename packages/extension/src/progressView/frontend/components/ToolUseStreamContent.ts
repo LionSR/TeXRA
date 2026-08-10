@@ -63,6 +63,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
         <div class="conversation-column conversation-prelude">
           <active-skills-details
             .skills=${currentState.activeSkills}
+            .collapseKey=${streamInfo.name}
           ></active-skills-details>
 
           <todo-list
