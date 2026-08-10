@@ -374,20 +374,24 @@ export function createWorkflowScriptAgentRunner(
           };
         },
       });
-      if (
-        activeExecutionId === undefined &&
-        invocation.reportChildStream !== undefined
-      ) {
-        try {
-          const recoveredStreamId = (
-            await getExecutionStore(completed.executionId).readMeta()
-          )?.streamId;
-          if (recoveredStreamId !== undefined) {
-            invocation.reportChildStream(recoveredStreamId);
+      const recovered = activeExecutionId === undefined;
+      if (recovered) {
+        // Durable recovery never fires onActiveExecutionId; re-attach the
+        // known child id (and stream when available) so /executions/{id}
+        // can navigate to the child that supplied the result.
+        invocation.reportChildExecution?.(completed.executionId);
+        if (invocation.reportChildStream !== undefined) {
+          try {
+            const recoveredStreamId = (
+              await getExecutionStore(completed.executionId).readMeta()
+            )?.streamId;
+            if (recoveredStreamId !== undefined) {
+              invocation.reportChildStream(recoveredStreamId);
+            }
+          } catch {
+            // A recovered result is authoritative. Navigation metadata is
+            // optional and must not invalidate the completed computation.
           }
-        } catch {
-          // A recovered result is authoritative. Navigation metadata is
-          // optional and must not invalidate the completed computation.
         }
       }
       const { result } = completed;
@@ -401,7 +405,13 @@ export function createWorkflowScriptAgentRunner(
           'Workflow subagent completed without producing any output files.',
         );
       }
-      invocation.reportCostUsd?.(result.cost);
+      // Live physical attempts always charge. Recovered durable results must
+      // not charge the synthetic resume attempt — the interrupted snapshot may
+      // already hold the same cost on a closed prior attempt, and double-counting
+      // would inflate totalAttemptCost on /executions/{id}.
+      if (!recovered) {
+        invocation.reportCostUsd?.(result.cost);
+      }
       return result;
     } catch (error) {
       if (error instanceof SubagentDurabilityError) {

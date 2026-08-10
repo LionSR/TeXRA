@@ -530,6 +530,114 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok((await getExecutionStore(executionId).readMeta())?.workflow);
   });
 
+  it('keeps a failed call ahead of newer completed current-stage calls when bounded', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      { name: 'failed-rank', instruction: 'Workflow script failed-rank' },
+      'failed-rank',
+      {
+        streamId: `workflow-script#${executionId}` as StreamTabId,
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'failed-rank',
+        },
+      },
+    );
+    const base = Date.parse('2026-04-01T00:00:00.000Z');
+    const completedCalls = Array.from({ length: 8 }, (_, index) => {
+      const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
+      return {
+        id: `completed-${index}`,
+        label: `Completed ${index}`,
+        stageId: 'stage-2',
+        stageTitle: 'Current stage',
+        files: { input: [], context: [], media: [] },
+        attempts: [],
+        status: 'completed' as const,
+        timestamps: {
+          createdAt: updatedAt,
+          updatedAt,
+          completedAt: updatedAt,
+        },
+      };
+    });
+    const failedAt = new Date(base).toISOString();
+    await captureOwnedExecutionLease(executionId)(() =>
+      writeWorkflowExecutionSnapshot(executionId, {
+        lifecycle: 'active',
+        currentStageId: 'stage-2',
+        stages: [
+          {
+            id: 'stage-1',
+            title: 'Earlier stage',
+            order: 0,
+            lifecycle: 'failed',
+            startedAt: failedAt,
+            completedAt: failedAt,
+          },
+          {
+            id: 'stage-2',
+            title: 'Current stage',
+            order: 1,
+            lifecycle: 'active',
+            startedAt: failedAt,
+          },
+        ],
+        calls: [
+          {
+            id: 'older-failed',
+            label: 'Older failed',
+            stageId: 'stage-1',
+            stageTitle: 'Earlier stage',
+            files: { input: [], context: [], media: [] },
+            attempts: [
+              {
+                number: 1,
+                startedAt: failedAt,
+                completedAt: failedAt,
+              },
+            ],
+            status: 'failed',
+            error: 'expected failure',
+            timestamps: {
+              createdAt: failedAt,
+              startedAt: failedAt,
+              updatedAt: failedAt,
+              completedAt: failedAt,
+            },
+          },
+          ...completedCalls,
+        ],
+        counts: {
+          total: 9,
+          waiting: 0,
+          planned: 0,
+          stageBlocked: 0,
+          queued: 0,
+          starting: 0,
+          running: 0,
+          completed: 8,
+          failed: 1,
+          cancelled: 0,
+          skipped: 0,
+          cached: 0,
+        },
+        timestamps: { createdAt: failedAt, updatedAt: failedAt },
+      }),
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${executionId}`,
+    });
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"id": "older-failed"'));
+    assert.ok(output.includes('"omittedCalls": 1'));
+    assert.ok(!output.includes('"id": "completed-0"'));
+  });
+
   it('keeps an earlier-stage live call ahead of current-stage terminal calls when bounded', async () => {
     const executionId = generateExecutionId();
     await registerExecution(

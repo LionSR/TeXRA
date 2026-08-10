@@ -223,6 +223,13 @@ return await agent('retry secret', { label: 'Retry task' })`,
       { number: 1, id: 'aaaaaaaaaaaa' },
       { number: 2, id: 'bbbbbbbbbbbb' },
     ]);
+    // Logical call start must survive re-queue so duration covers every attempt.
+    const firstAttemptStarted =
+      retried.snapshot.calls[0]?.attempts[0]?.startedAt;
+    expect(firstAttemptStarted).toEqual(expect.any(String));
+    expect(retried.snapshot.calls[0]?.timestamps.startedAt).toBe(
+      firstAttemptStarted,
+    );
 
     let skipControl!: WorkflowScriptControl;
     let skipStarted = false;

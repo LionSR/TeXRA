@@ -44,6 +44,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TERMINAL_WORKFLOW_CALL_STATUSES,
+  WORKFLOW_CALL_STATUS,
   type ExecutionId,
   type StreamLogEntry,
   type WorkflowExecutionSnapshot,
@@ -266,11 +267,25 @@ function workflowAttemptView(
   };
 }
 
+function workflowCallFailurePriority(status: string): number {
+  // Within terminal calls, elevate failed/cancelled so the bounded projection
+  // keeps the outcomes that matter for debugging (matches stage ranking).
+  if (
+    status === WORKFLOW_CALL_STATUS.FAILED ||
+    status === WORKFLOW_CALL_STATUS.CANCELLED
+  ) {
+    return 0;
+  }
+  return 1;
+}
+
 function workflowExecutionView(snapshot: WorkflowExecutionSnapshot): unknown {
   const byPriority = snapshot.calls.toSorted(
     (left, right) =>
       Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(left.status)) -
         Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(right.status)) ||
+      workflowCallFailurePriority(left.status) -
+        workflowCallFailurePriority(right.status) ||
       Number(left.stageId !== snapshot.currentStageId) -
         Number(right.stageId !== snapshot.currentStageId) ||
       right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
