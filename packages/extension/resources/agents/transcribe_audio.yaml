@@ -19,7 +19,7 @@ prompts:
         \item Translate any spoken mathematical equations into standard LaTeX format (e.g., inline math with \( ... \) or display math with \[ ... \]).
         \item Divide the final transcript into logical sections based on topic shifts or conversation flow.
         \item Pay attention to punctuation and grammar for readability.
-        \item Handle overlapping speech or unclear audio segments gracefully, indicating uncertainty where necessary (e.g., [unintelligible]).
+        \item Mark overlapping speech or unclear audio honestly (e.g., [unintelligible]) rather than guessing.
         \item \textbf{Do not use any markdown formatting (like bold or italics) in the final transcript output.}
     \end{itemize}
 

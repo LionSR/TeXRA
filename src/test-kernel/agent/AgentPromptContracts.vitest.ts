@@ -115,16 +115,18 @@ const INTENTIONAL_NON_PROMPT_DASH_LITERALS: Readonly<
 
 function listFiles(directory: string, suffix: string): string[] {
   const absoluteDirectory = resolve(REPO_ROOT, directory);
-  return (readdirSync(absoluteDirectory, { recursive: true }) as string[])
-    .filter((entry) => entry.endsWith(suffix))
-    // Normalize to repo-style forward slashes so inventory sets, Windows
-    // path.relative() output, and endsWith('/…') checks stay aligned.
-    .map((entry) =>
-      relative(REPO_ROOT, resolve(absoluteDirectory, entry)).replaceAll(
-        '\\',
-        '/',
-      ),
-    );
+  return (
+    (readdirSync(absoluteDirectory, { recursive: true }) as string[])
+      .filter((entry) => entry.endsWith(suffix))
+      // Normalize to repo-style forward slashes so inventory sets, Windows
+      // path.relative() output, and endsWith('/…') checks stay aligned.
+      .map((entry) =>
+        relative(REPO_ROOT, resolve(absoluteDirectory, entry)).replaceAll(
+          '\\',
+          '/',
+        ),
+      )
+  );
 }
 
 const PROMPT_RESOURCE_FILES = PROMPT_RESOURCE_DIRS.flatMap((directory) =>
@@ -189,7 +191,11 @@ function authoredYamlCopy(relativePath: string): string {
 }
 
 function authoredSkillCopy(relativePath: string): string {
-  const source = readFileSync(resolve(REPO_ROOT, relativePath), 'utf8');
+  // Normalize CRLF so Windows checkouts (core.autocrlf) still match frontmatter.
+  const source = readFileSync(
+    resolve(REPO_ROOT, relativePath),
+    'utf8',
+  ).replaceAll('\r\n', '\n');
   if (relativePath.endsWith('.yaml')) {
     return collectStrings(yaml.parse(source, { strict: true })).join('\n');
   }

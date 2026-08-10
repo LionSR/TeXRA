@@ -19,9 +19,8 @@ prompts:
     - End with a conclusion slide summarizing the main findings and potential future work
     - Include appropriate equations, figures, and tables from the paper
     - Use condensed bullet points; every bullet states a specific fact, result, or step. Each slide makes one point, and the deck has one or two peaks rather than uniform emphasis
-    - Maintain a professional and scientifically rigorous tone throughout the presentation
     - Use appropriate notation and terminology consistently
-    - Prioritize visual representations and key takeaways over verbose descriptions
+    - Prioritize visual representations and concrete takeaways over verbose descriptions
     - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
     - Output a complete, self-contained LaTeX file that can be compiled directly
     - The document must be self-contained: write as if the reader is a third party who has never read and will never read our conversations, so they should be able to understand and follow the presentation on its own. Define all notations, abbreviations, and terminology before first use.
@@ -54,7 +53,7 @@ prompts:
       </document>
       </documents>
     - |
-      Review the draft deck for accuracy of the paper's claims, slide organization, and equation formatting. Fix any issues you find and output the complete revised deck. If nothing needs fixing, reproduce it unchanged. Use the following format:
+      Review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain, concrete phrasing. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">
