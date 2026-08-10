@@ -55,7 +55,7 @@ export function buildBytesAttachment({
       path,
       mimeType,
       description:
-        (description ? `${description} — ` : '') +
+        (description ? `${description}: ` : '') +
         `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
     };
   }

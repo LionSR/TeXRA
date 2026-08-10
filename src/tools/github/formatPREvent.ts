@@ -270,7 +270,7 @@ export function formatMergeConflictDetected(
 ): string {
   return wrap(
     `Merge conflict detected on ${prRef(slug, prNumber)}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
-      `The PR head no longer cleanly merges into its base — rebase or merge the base back in to resolve.`,
+      `The PR head no longer cleanly merges into its base: rebase or merge the base back in to resolve.`,
   );
 }
 

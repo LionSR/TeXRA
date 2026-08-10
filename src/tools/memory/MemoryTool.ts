@@ -165,7 +165,7 @@ export class MemoryTool extends defineTool({
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
 \`view\` with no path defaults to the /memories root listing; \`rename\` uses old_path/new_path instead of path; all other commands require path.
-Directory listings are paginated — use offset/limit to page through results (default: offset 0, limit 100).
+Directory listings are paginated: use offset/limit to page through results (default: offset 0, limit 100).
 
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,

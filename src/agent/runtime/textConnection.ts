@@ -26,12 +26,12 @@ function buildPrompt(str1: string, str2: string): string {
     `A: ${str1}${str2}\n` +
     `B: ${str1} ${str2}\n` +
     `C: ${str1}\n${str2}\n` +
-    `Which is more english and latex grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason.`
+    `Which string is grammatically correct in English and LaTeX? Output only 'A', 'B', or 'C'.`
   );
 }
 
 const SYSTEM_PROMPT =
-  'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.';
+  'Choose the grammatically correct string for its LaTeX document context.';
 
 function getMajorityChoice(choices: string[]): ConnectionResult {
   const counts = new Map<string, number>();

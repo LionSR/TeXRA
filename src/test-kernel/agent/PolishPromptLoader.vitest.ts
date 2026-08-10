@@ -28,7 +28,7 @@ describe('polish prompt loader', () => {
 
     const prompt = await renderPolishPrompt('', 'Fix teh typo.');
 
-    expect(prompt).toContain('Please review the following instruction text');
+    expect(prompt).toContain('Correct any spelling errors');
     expect(prompt).toContain('Fix teh typo.');
   });
 

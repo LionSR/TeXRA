@@ -2030,7 +2030,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       responseRetrieveParamsFor(params),
       () => {
         this.logger.debug(
-          'WebSocket response ended with pending status — polling for completion',
+          'WebSocket response ended with pending status: polling for completion',
           {
             data: { responseId: response.id, status: response.status },
           },
@@ -2108,7 +2108,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
           throw streamError;
         }
         this.logger.debug(
-          "OpenAI stream emitted an event outside the SDK's typed union — falling back to polling",
+          "OpenAI stream emitted an event outside the SDK's typed union: falling back to polling",
           {
             data: {
               responseId,
@@ -2304,7 +2304,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       // compaction, and the overflow source blocks a second overflow recovery.
       logProgressStatus(
         this.logger,
-        'Context window exceeded — compacting conversation and retrying.',
+        'Context window exceeded: compacting conversation and retrying.',
       );
       this.chainState.invalidateChain();
       // invalidateChain(), not resetChainForNewSession() — the latter zeroes

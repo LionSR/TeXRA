@@ -7,7 +7,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a meticulous mathematical physicist reviewing research papers (which may include main text, appendices, supplementary materials). Your review has three phases: expansion for discovery, critique with independent verification, and fixing with documentation.
+    Review and correct the papers in three phases: expand derivations to expose issues, critique and independently verify them, then apply and document fixes.
 
     When working with mathematical content in LaTeX, you must:
     \begin{itemize}
@@ -25,7 +25,8 @@ prompts:
         \item Keep LaTeX code simple and clean.
     \end{itemize}
 
-    Cross-document consistency. When multiple documents are provided, check consistency between documents - conflicting results are unacceptable. Track cross-document dependencies (results used between papers, shared definitions, appendix connections to main text) and propagation of errors. Maintain consistent mathematical notation across all documents. Ensure clarity and logical flow within and between documents.
+    CRITICAL PRINCIPLE: Cross-Document Consistency.
+    When multiple documents are provided, check consistency between documents - conflicting results are unacceptable. Track cross-document dependencies (results used between papers, shared definitions, appendix connections to main text) and propagation of errors. Maintain consistent mathematical notation across all documents. Ensure clarity and logical flow within and between documents.
 
     Requirements for your review process:
     \begin{itemize}
@@ -42,7 +43,7 @@ prompts:
     \end{itemize}
 
   userPrefix: |
-    I am going to give you the LaTeX code of a document (or collection of documents) that requires review and correction. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read the document(s) including appendices carefully before proceeding. If any document appears to be notes or an early draft, focus on mathematical correctness and helping develop ideas rather than criticizing missing polish.
+    The following LaTeX documents require review and correction. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document, including appendices, before proceeding. If any document appears to be notes or an early draft, focus on mathematical correctness and helping develop ideas rather than criticizing missing polish.
 
     Here is the LaTeX document with input files:
 
@@ -51,7 +52,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read the entire collection, including appendices, before starting the three-phase analysis.
+    Read through the entire document (and any additional documents) including appendices and prepare for a thorough three-phase analysis.
 
   userRequest:
     - |
@@ -143,7 +144,7 @@ prompts:
     - |
       PHASE 2 - CRITIQUE AND INDEPENDENT VERIFICATION: Add critical comments and perform independent verification of high-impact calculations.
 
-      Remember the instruction: {{ INSTRUCTION }}
+      Instruction: {{ INSTRUCTION }}
       Focus critique primarily on instruction-related issues while noting other critical problems.
 
       Identify high-impact algebraic issues requiring independent verification:
@@ -255,7 +256,7 @@ prompts:
       - For cross-paper: \critique{VERIFIED: Results consistent between Paper 1 \cref{eq:main} and Paper 2 \cref{thm:derived}.}
       - For cross-paper: \critique{VERIFIED: Entropy production positive in all examples across papers.}
 
-      Remember: Text inside \critique{...} must use proper LaTeX syntax.
+      Text inside \critique{...} must use proper LaTeX syntax.
 
       <documents>
       {% for output in INPUT_FILES %}
@@ -268,7 +269,7 @@ prompts:
     - |
       PHASE 3 - FIX AND DOCUMENT: Provide the corrected version with \criticize{} annotations.
 
-      Remember instruction: {{ INSTRUCTION }}
+      Instruction: {{ INSTRUCTION }}
       Prioritize instruction-related fixes while addressing all critical issues.
 
       GUIDELINES FOR FINAL OUTPUT:
@@ -346,7 +347,7 @@ prompts:
       Add this command to the preamble (in addition to \critique):
       \newcommand{\criticize}[1]{\ifmmode\textcolor{blue}{\text{[FIX: #1]}}\else\textcolor{blue}{[FIX: #1]}\fi}
 
-      Remember the graduated approach:
+      Use this graduated approach:
       \begin{itemize}
           \item Minor fixes: Just fix them silently (typos, signs, simple factors)
           \item Moderate fixes: Use brief \criticize{Fixed: [concise description]}

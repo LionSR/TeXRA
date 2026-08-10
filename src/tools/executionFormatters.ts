@@ -121,7 +121,7 @@ export function formatListingLine(entry: ExecutionListingEntry): string {
   const parentSuffix = entry.parentExecutionId
     ? `  parent=${entry.parentExecutionId}`
     : '';
-  const descSuffix = entry.description ? `  — ${entry.description}` : '';
+  const descSuffix = entry.description ? `: ${entry.description}` : '';
   return `${entry.id}  ${ts}  ${agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 }
 

@@ -26,9 +26,9 @@ The canonical ledger location, sharing rules, row format, abstraction ladder, an
 ## Quality Bar
 
 - Judge automation by its call sites: three or more real uses, each shorter and clearer than before.
-- Automation must compress _and_ clarify — a macro that hides the mathematical argument is a regression even when it shortens the file.
+- Automation must compress _and_ clarify. A macro that hides the mathematical argument is a regression even when it shortens the file.
 - Keep the global `simp` set safe: prefer named simp sets or `simp only` lemma lists over broad `@[simp]` attributes that slow builds or break distant proofs.
 - Never change what theorems state; extraction refactors proofs, not statements.
-- Keep the ledger short and current — a stale or bloated ledger is ignored, and an ignored ledger ends the improvement loop.
+- Keep the ledger short and current. A stale or bloated ledger is ignored, and an ignored ledger ends the improvement loop.
 
 For the ledger format, the full abstraction ladder with Lean idioms, and the extraction checklist, use [references/tactic-ledger.md](references/tactic-ledger.md).

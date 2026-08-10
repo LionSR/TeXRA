@@ -534,14 +534,14 @@ export function getToolFlags(
     // document the async execution-ID/thread mechanics; this only adds
     // when-to-choose guidance.
     CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
-      ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
+      ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
         'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
       : '',
     CLAUDE_CODE_GUIDANCE: agentSetting.tools.some(
       (t) => t.name === 'claude_code',
     )
-      ? 'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent — it runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. ' +
-        'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists; prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.'
+      ? 'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. ' +
+        'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.'
       : '',
   };
 
