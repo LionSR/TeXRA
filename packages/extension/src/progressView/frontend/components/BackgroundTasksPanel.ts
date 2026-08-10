@@ -35,13 +35,15 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   STREAM_PHASE,
-  WORKFLOW_TASK_STATUS_LABEL,
   runIdentityDisplayName,
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
+import {
+  formatPhaseStageLabel,
+  formatStreamStatusLabel,
+} from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
@@ -530,14 +532,43 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
 }
 
 /**
- * Status badge for a background-task row. A retained subagent can briefly
- * keep its last in-flight phase while the terminal status catches up; show
- * that phase rather than falsely reporting success. Processes have no child
- * status source, so their retained rows use the terminal fallback below.
+ * Badge fill for a stream lifecycle phase. Matches the stream-tab rail/icon
+ * palette: green while active, brand/blue while idle, red on failure, and
+ * neutral for user stops (and unknown finished rows that must not claim
+ * success).
+ */
+function streamStatusBadgeVariant(
+  status: string | undefined,
+): 'neutral' | 'brand' | 'success' | 'danger' {
+  switch (status) {
+    case STREAM_PHASE.RUNNING:
+      return 'success';
+    case STREAM_PHASE.WAITING:
+      return 'brand';
+    case STREAM_PHASE.FAILED:
+      return 'danger';
+    case STREAM_PHASE.COMPLETED:
+      return 'success';
+    case STREAM_PHASE.CANCELLED:
+    default:
+      return 'neutral';
+  }
+}
+
+/**
+ * Status badge for a background-task row. Wording and color come from the
+ * same stream-lifecycle vocabulary as stream tabs / the progress header
+ * (`formatStreamStatusLabel` · `progressHeader`), so "Running / Idle /
+ * Completed / Stopped / Error" never diverge between the two surfaces.
+ *
+ * A retained subagent can briefly keep its last in-flight phase while the
+ * terminal status catches up; show that phase rather than falsely reporting
+ * success. Processes have no child status source, so their retained rows use
+ * the terminal fallback below.
  */
 function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;
-  readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
+  readonly variant: 'neutral' | 'brand' | 'success' | 'danger';
 } {
   // Membership is decided by `finishedAt` presence alone (see the schema
   // doc); the lagging display `status` may only soften HOW a retained
@@ -547,38 +578,33 @@ function taskStatusBadge(child: ActiveChildInfo): {
     (child.status === STREAM_PHASE.RUNNING ||
       child.status === STREAM_PHASE.WAITING);
   if (child.finishedAt === undefined || subagentStatusStillInFlight) {
-    return child.status === STREAM_PHASE.WAITING
-      ? {
-          text: WORKFLOW_TASK_STATUS_LABEL.waiting,
-          variant: 'neutral',
-        }
-      : {
-          text: WORKFLOW_TASK_STATUS_LABEL.running,
-          variant: 'warning',
-        };
+    const status =
+      child.status === STREAM_PHASE.WAITING
+        ? STREAM_PHASE.WAITING
+        : STREAM_PHASE.RUNNING;
+    return {
+      text: formatStreamStatusLabel(status, { style: 'progressHeader' }),
+      variant: streamStatusBadgeVariant(status),
+    };
   }
   switch (child.status) {
     case STREAM_PHASE.FAILED:
-      return {
-        text: WORKFLOW_TASK_STATUS_LABEL.failed,
-        variant: 'danger',
-      };
     case STREAM_PHASE.CANCELLED:
-      return {
-        text: WORKFLOW_TASK_STATUS_LABEL.cancelled,
-        variant: 'neutral',
-      };
     case STREAM_PHASE.COMPLETED:
       return {
-        text: WORKFLOW_TASK_STATUS_LABEL.completed,
-        variant: 'success',
+        text: formatStreamStatusLabel(child.status, {
+          style: 'progressHeader',
+        }),
+        variant: streamStatusBadgeVariant(child.status),
       };
     default:
       // Left the roster without a terminal status ever arriving. It did
       // finish, but claiming success would render a failed command green;
-      // say only what is known.
+      // say only what is known — use the completed word with a neutral fill.
       return {
-        text: WORKFLOW_TASK_STATUS_LABEL.completed,
+        text: formatStreamStatusLabel(STREAM_PHASE.COMPLETED, {
+          style: 'progressHeader',
+        }),
         variant: 'neutral',
       };
   }

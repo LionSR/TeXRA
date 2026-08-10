@@ -128,7 +128,8 @@ describe('background-tasks-panel', () => {
     const badges = [...shadow.querySelectorAll('wa-badge.task-status')].map(
       (node) => node.textContent,
     );
-    expect(badges).toEqual(['Running', 'Finished']);
+    // Same progressHeader vocabulary as stream tabs (Completed, not Finished).
+    expect(badges).toEqual(['Running', 'Completed']);
     expect(shadow.textContent).not.toContain('completed</em>');
     expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
 
@@ -187,7 +188,50 @@ describe('background-tasks-panel', () => {
 
     const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
     expect(badge?.textContent).toBe('Running');
-    expect(badge?.getAttribute('variant')).toBe('warning');
+    // Running uses the stream-tab success green, not the workflow warning yellow.
+    expect(badge?.getAttribute('variant')).toBe('success');
+
+    element.remove();
+  });
+
+  it('uses the same lifecycle wording as stream tabs for terminal rows', async () => {
+    const element = await mountPanel([
+      subagentRow({
+        executionId: 'done',
+        status: 'completed',
+        finishedAt: 1_000,
+      }),
+      subagentRow({
+        executionId: 'stopped',
+        agentName: 'stopped-agent',
+        status: 'cancelled',
+        finishedAt: 1_000,
+      }),
+      subagentRow({
+        executionId: 'failed',
+        agentName: 'failed-agent',
+        status: 'failed',
+        finishedAt: 1_000,
+      }),
+      subagentRow({
+        executionId: 'idle',
+        agentName: 'idle-agent',
+        status: 'waiting',
+      }),
+    ]);
+
+    const badges = [
+      ...(element.shadowRoot?.querySelectorAll('wa-badge.task-status') ?? []),
+    ].map((node) => ({
+      text: node.textContent,
+      variant: node.getAttribute('variant'),
+    }));
+    expect(badges).toEqual([
+      { text: 'Completed', variant: 'success' },
+      { text: 'Stopped', variant: 'neutral' },
+      { text: 'Error', variant: 'danger' },
+      { text: 'Idle', variant: 'brand' },
+    ]);
 
     element.remove();
   });
