@@ -89,6 +89,7 @@ function createHostHarness(
     agentProposal: {
       getPendingProposal: () => undefined,
       restoreRunConfig: async () => false,
+      openFile: vi.fn(),
       settleProposal: (proposalId, result) => {
         settledProposals.push({ proposalId, result });
       },

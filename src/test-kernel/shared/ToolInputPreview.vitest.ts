@@ -31,6 +31,21 @@ describe('deriveToolInputPreview', () => {
       expected: 'view /executions/abc',
     },
     {
+      label: 'uses workflow metadata instead of raw JavaScript',
+      tool: 'delegate_multi_agents',
+      input: {
+        script:
+          "export const meta = { name: 'Review team', description: 'Review' };",
+      },
+      expected: 'Review team',
+    },
+    {
+      label: 'uses the saved workflow path for durable retries',
+      tool: 'delegate_multi_agents',
+      input: { scriptPath: '.texra/workflow-scripts/review.mjs' },
+      expected: '.texra/workflow-scripts/review.mjs',
+    },
+    {
       label: 'normalizes a provider-namespaced name before the lookup',
       tool: 'claude:Bash',
       input: { command: 'npm test' },

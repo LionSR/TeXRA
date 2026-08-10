@@ -75,7 +75,7 @@ describe('stream-tab lifecycle distinction', () => {
     () => import('@progressView/frontend/components/StreamTabs'),
   );
 
-  it('shows every canonical lifecycle state with text and distinct glyphs', async () => {
+  it('shows canonical lifecycle glyphs without redundant visible labels', async () => {
     const streams = [
       stream('running'),
       stream('waiting'),
@@ -93,12 +93,18 @@ describe('stream-tab lifecycle distinction', () => {
       STREAM_STATUS.READY,
     ]);
     const rows = [...(tabs.shadowRoot?.querySelectorAll('stream-tab') ?? [])];
+    const labels = [
+      'Running',
+      'Idle',
+      'Completed',
+      'Error',
+      'Stopped',
+      'Ready',
+    ];
 
     expect(
-      rows.map((row) =>
-        row.shadowRoot?.querySelector('.tab-status-label')?.textContent?.trim(),
-      ),
-    ).toEqual(['Running', 'Idle', 'Completed', 'Error', 'Stopped', 'Ready']);
+      rows.map((row) => row.shadowRoot?.querySelector('.tab-status-label')),
+    ).toEqual([null, null, null, null, null, null]);
     expect(
       rows.map(
         (row) =>
@@ -126,18 +132,24 @@ describe('stream-tab lifecycle distinction', () => {
     expect(containers[4]?.classList.contains('status-cancelled')).toBe(true);
     expect(containers[5]?.classList.contains('status-ready')).toBe(true);
 
-    for (const row of rows) {
+    rows.forEach((row, index) => {
+      const label = labels[index];
       expect(
         row.shadowRoot
           ?.querySelector('#stream-tab-select-button')
           ?.getAttribute('aria-label'),
-      ).toContain('Status:');
+      ).toContain(`Status: ${label}`);
       expect(
         row.shadowRoot
-          ?.querySelector('.tab-status')
-          ?.getAttribute('aria-hidden'),
-      ).toBe('true');
-    }
+          ?.querySelector('#stream-tab-status')
+          ?.getAttribute('aria-label'),
+      ).toBe(label);
+      expect(
+        row.shadowRoot
+          ?.querySelector('wa-tooltip[for="stream-tab-status"]')
+          ?.textContent?.trim(),
+      ).toBe(label);
+    });
   });
 
   it('keeps an unknown lifecycle value visible as its defensive fallback', async () => {
@@ -208,10 +220,15 @@ describe('stream-tab lifecycle distinction', () => {
     const rows = [...(tabs.shadowRoot?.querySelectorAll('stream-tab') ?? [])];
 
     expect(
+      rows.map((row) => row.shadowRoot?.querySelector('.tab-status-label')),
+    ).toEqual([null, null, null]);
+    expect(
       rows.map((row) =>
-        row.shadowRoot?.querySelector('.tab-status-label')?.textContent?.trim(),
+        row.shadowRoot
+          ?.querySelector('wa-tooltip[for="stream-tab-status"]')
+          ?.textContent?.trim(),
       ),
-    ).toEqual(['Initializing', 'Resuming', 'Approval']);
+    ).toEqual(['Initializing', 'Resuming', 'Approval required']);
     expect(
       rows.map(
         (row) =>
@@ -257,7 +274,7 @@ describe('stream-tab lifecycle distinction', () => {
     expect(compactStyles).toContain('max-width: none');
   });
 
-  it('keeps selection primary without removing the visible lifecycle label', async () => {
+  it('keeps selection primary while retaining the accessible lifecycle label', async () => {
     const tabs = await mountTabs(
       [stream('selected-running'), stream('selected-stopped')],
       [STREAM_PHASE.RUNNING, STREAM_PHASE.CANCELLED],
@@ -268,8 +285,9 @@ describe('stream-tab lifecycle distinction', () => {
 
     expect(selected?.classList.contains('is-active')).toBe(true);
     expect(selected?.classList.contains('status-running')).toBe(true);
+    expect(selected?.querySelector('.tab-status-label')).toBeNull();
     expect(
-      selected?.querySelector('.tab-status-label')?.textContent?.trim(),
+      selected?.querySelector('#stream-tab-status')?.getAttribute('aria-label'),
     ).toBe('Running');
     expect(
       rows[1]?.shadowRoot
@@ -284,7 +302,7 @@ describe('stream-tab lifecycle distinction', () => {
     expect(styleText(tabs)).not.toContain('stream-tab.is-finished');
   });
 
-  it('preserves long-title truncation, status text, semantic tokens, and forced-color overrides', async () => {
+  it('preserves long-title truncation, status indicators, semantic tokens, and forced-color overrides', async () => {
     const tabs = await mountTabs(
       [
         stream(
@@ -330,8 +348,11 @@ describe('stream-tab lifecycle distinction', () => {
     expect(styles).toContain('color: HighlightText');
     expect(styles).toContain('.tab-container.is-active *');
     expect(styles).not.toContain('outline: none');
+    expect(row?.shadowRoot?.querySelector('.tab-status-label')).toBeNull();
     expect(
-      row?.shadowRoot?.querySelector('.tab-status-label')?.textContent?.trim(),
+      row?.shadowRoot
+        ?.querySelector('#stream-tab-status')
+        ?.getAttribute('aria-label'),
     ).toBe('Completed');
   });
 });

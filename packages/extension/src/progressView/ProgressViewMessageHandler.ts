@@ -458,6 +458,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             ])) === true
           );
         },
+        openFile: async (file) => {
+          await this.runViewCommand('texra.openFile', [file]);
+        },
         settleProposal: (proposalId, result) => {
           const resolved = this.interactions.submitProposalDecision(
             proposalId,

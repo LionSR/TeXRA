@@ -57,6 +57,65 @@ export const proposalRequestPanelStyles: CSSResult = css`
     max-width: 8rem;
   }
 
+  .workflow-proposal__workflow-summary {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    min-width: 0;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+  }
+
+  .workflow-proposal__workflow-summary wa-icon {
+    flex: 0 0 auto;
+  }
+
+  .workflow-proposal__workflow-name,
+  .workflow-proposal__workflow-phase {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .workflow-proposal__workflow-name {
+    min-width: 4rem;
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .workflow-proposal__workflow-progress {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary);
+  }
+
+  .workflow-proposal__workflow-phase {
+    min-width: 0;
+    color: var(--color-text-secondary);
+  }
+
+  .workflow-proposal__cost-warning {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    margin-block-start: ${sp.small};
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  .workflow-proposal__workflow-details {
+    margin-block-start: ${sp.small};
+  }
+
+  .workflow-proposal__task-list {
+    margin-block: ${sp.small};
+    padding-inline-start: var(--wa-space-l);
+  }
+
+  @container (max-width: 420px) {
+    .workflow-proposal__workflow-phase {
+      display: none;
+    }
+  }
+
   .workflow-proposal__instruction {
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);

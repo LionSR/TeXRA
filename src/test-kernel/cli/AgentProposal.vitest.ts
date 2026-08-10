@@ -11,6 +11,7 @@ import {
   agentProposalCategoryLabel,
   type AgentProposalPermission,
 } from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
@@ -65,6 +66,37 @@ describe('CLI agent proposal approval layout', () => {
     });
     expect(visible).toHaveLength(budget);
     expect(visible.at(-1)?.kind).toBe('overflow');
+  });
+
+  it('budgets a compact multi-agent workflow summary and saved script path', () => {
+    const payload = {
+      proposalId: 'proposal-1',
+      streamId: 'stream-1',
+      agent: 'reviewer',
+      agentCategory: AgentCategory.Workflow,
+      instruction: 'Review in parallel',
+      model: 'sonnet',
+      memories: [],
+      inputFiles: [],
+      contextFiles: [],
+      mediaFiles: [],
+      outputFiles: [],
+      toolConfig: DEFAULT_TOOL_CONFIG,
+      workflowScript: {
+        name: 'review-team',
+        description: 'Review in parallel',
+        scriptPath: '.texra/workflow-scripts/review-team.mjs',
+        phases: [{ title: 'Review' }, { title: 'Merge' }],
+        tasks: [
+          { id: 'review', label: 'Review draft', phase: 'Review' },
+          { id: 'merge', label: 'Merge findings', phase: 'Merge' },
+        ],
+      },
+    } as AgentProposalPermission;
+
+    expect(
+      agentProposalMetadataRows({ fileGroups: [], payload, width: 76 }),
+    ).toBe(5);
   });
 
   it('includes the pulse prefix when a dynamic proposal title reaches the width boundary', () => {

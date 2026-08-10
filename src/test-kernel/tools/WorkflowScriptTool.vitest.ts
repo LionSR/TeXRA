@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   requireWorkflowOrToolUseAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
+  requestDelegationProposal: vi.fn(),
   createWorkflowScriptStrategy: vi.fn(),
   childLoggerError: vi.fn(),
   lastStrategyParams: undefined as { initialSnapshot?: unknown } | undefined,
@@ -88,12 +89,14 @@ vi.mock('@tools/delegation/childStream', () => ({
 
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
+  proposalApprovals: () => ({ isBypassed: () => false }),
 }));
 
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/delegation/proposalFlow')>()),
   requireWorkflowOrToolUseAgent: mocks.requireWorkflowOrToolUseAgent,
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
+  requestDelegationProposal: mocks.requestDelegationProposal,
 }));
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
@@ -224,6 +227,10 @@ beforeEach(async () => {
   await WorkspaceFS.write('figure.pdf', 'pdf');
   mocks.registerExecution.mockResolvedValue(undefined);
   mocks.selectAvailableDelegationModel.mockResolvedValue('parent-model');
+  mocks.requestDelegationProposal.mockResolvedValue({
+    result: { action: 'approve' },
+    autoApproved: false,
+  });
   mocks.startChildRunLoop.mockReturnValue({
     completion: Promise.resolve(),
   });
@@ -264,6 +271,118 @@ describe('WorkflowScriptTool', () => {
     expect(getDefaultToolRegistry().has('delegate_multi_agents')).toBe(true);
     expect(DELEGATION_TOOLS.has('delegate_multi_agents')).toBe(true);
     expect(DELEGATION_TOOL_CATEGORY.delegate_multi_agents).toBeUndefined();
+  });
+
+  it('does not register or execute the workflow before approval', async () => {
+    let approve!: () => void;
+    mocks.requestDelegationProposal.mockReturnValueOnce(
+      new Promise((resolve) => {
+        approve = () =>
+          resolve({ result: { action: 'approve' }, autoApproved: false });
+      }),
+    );
+
+    const pending = callTool();
+    await vi.waitFor(() =>
+      expect(mocks.requestDelegationProposal).toHaveBeenCalledOnce(),
+    );
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+
+    approve();
+    await pending;
+    expect(mocks.registerExecution).toHaveBeenCalledOnce();
+    expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
+  });
+
+  it('pins the workflow child edit grant when proposal bypass approved it', async () => {
+    mocks.requestDelegationProposal.mockResolvedValueOnce({
+      result: { action: 'approve' },
+      autoApproved: true,
+    });
+
+    await callTool();
+
+    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+      `workflow-script#${runExecutionIdFor('tool-test')}`,
+      streamId,
+      'auto-approved',
+      expect.objectContaining({ id: 'workflow-script-test' }),
+    );
+  });
+
+  it('keeps explicit workflow approval on inherited per-kind policy', async () => {
+    await callTool();
+
+    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+      `workflow-script#${runExecutionIdFor('tool-test')}`,
+      streamId,
+      'inherit',
+      expect.objectContaining({ id: 'workflow-script-test' }),
+    );
+  });
+
+  it.each([
+    {
+      decision: { action: 'reject', feedback: 'Use fewer agents.' } as const,
+      status: 'error',
+    },
+    { decision: { action: 'setup' } as const, status: 'executed' },
+  ])(
+    'does not execute after $decision.action',
+    async ({ decision, status }) => {
+      mocks.requestDelegationProposal.mockResolvedValueOnce({
+        result: decision,
+        autoApproved: false,
+      });
+
+      const result = await callTool();
+
+      expect(result.status).toBe(status);
+      expect(mocks.registerExecution).not.toHaveBeenCalled();
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      if (decision.action === 'reject') {
+        expect(result).toMatchObject({
+          error: expect.stringContaining('Use fewer agents.'),
+        });
+      }
+    },
+  );
+
+  it('includes workflow identity, agent, phases, tasks, and script path in the approval payload', async () => {
+    const plannedScript = `export const meta = {
+  name: 'review-team',
+  description: 'Review the draft in parallel',
+  phases: ['Review', 'Synthesize'],
+  tasks: [
+    { id: 'review', label: 'Review draft', phase: 'Review' },
+    { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
+  ],
+}
+return null`;
+
+    await callTool({ script: plannedScript, agent: 'correct' });
+
+    expect(mocks.requestDelegationProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'correct',
+        model: 'parent-model',
+        instruction: 'Review the draft in parallel',
+        workflowScript: expect.objectContaining({
+          name: 'review-team',
+          description: 'Review the draft in parallel',
+          scriptPath: expect.stringMatching(
+            /^\.texra\/workflow-scripts\/draft-tool-call(?:-\d+)?\.mjs$/,
+          ),
+          phases: [{ title: 'Review' }, { title: 'Synthesize' }],
+          tasks: [
+            { id: 'review', label: 'Review draft', phase: 'Review' },
+            { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
+          ],
+        }),
+      }),
+      streamId,
+    );
   });
 
   it('owns a detached run completion rejection without delivering a second error', async () => {

@@ -62,7 +62,7 @@ import type { StreamState } from '../store';
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-/** Shape cue paired with the visible status label on every canonical state. */
+/** Shape cue for every canonical lifecycle state. */
 const STATUS_ICONS: Record<StreamStatusDisplayKey, TeXRAIconName> = {
   [STREAM_SUBSTATE.STARTING]: 'spinner',
   [STREAM_SUBSTATE.RESUMING]: 'spinner',
@@ -171,9 +171,6 @@ class StreamTab extends LitElement {
     const statusGlyph = this.hasPendingApproval
       ? 'triangle-exclamation'
       : displayKey && STATUS_ICONS[displayKey];
-    const visibleStatusLabel = this.hasPendingApproval
-      ? 'Approval'
-      : lifecycleStatusLabel;
     const accessibleStatusLabel = this.hasPendingApproval
       ? 'Approval required'
       : lifecycleStatusLabel;
@@ -262,13 +259,19 @@ class StreamTab extends LitElement {
                     : nothing
                 }${streamTitle}</span
               >
-              <span class="tab-status" aria-hidden="true">
+              <span
+                id="stream-tab-status"
+                class="tab-status"
+                role="img"
+                aria-label=${accessibleStatusLabel}
+              >
                 ${
                   statusGlyph
                     ? waIcon(statusGlyph, { className: 'tab-status-icon' })
-                    : nothing
+                    : html`<span class="tab-status-label"
+                        >${lifecycleStatusLabel}</span
+                      >`
                 }
-                <span class="tab-status-label">${visibleStatusLabel}</span>
               </span>
             </div>
             ${
@@ -318,6 +321,13 @@ class StreamTab extends LitElement {
                   `
             }
           </button>
+          ${
+            statusGlyph
+              ? html`<wa-tooltip for="stream-tab-status"
+                  >${accessibleStatusLabel}</wa-tooltip
+                >`
+              : nothing
+          }
         </div>
         ${
           this.compact

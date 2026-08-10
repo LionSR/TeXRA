@@ -8,6 +8,7 @@ import {
 } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
+  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
@@ -49,6 +50,20 @@ export function agentProposalMetadataRows({
   readonly payload: AgentProposalPermission;
   readonly width: number;
 }): number {
+  if (
+    payload.agentCategory === AgentCategory.Workflow &&
+    payload.workflowScript
+  ) {
+    const workflow = payload.workflowScript;
+    return (
+      3 +
+      wrappedRows(
+        `${workflow.name} · ${workflow.tasks.length} tasks · ${workflow.phases.length} phases`,
+        width,
+      ) +
+      wrappedRows(`Script: ${workflow.scriptPath}`, width)
+    );
+  }
   return (
     1 +
     wrappedRows(
@@ -88,7 +103,13 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
   const fileGroups = getProposalFileGroups(props.payload);
-  const title = `Spawn ${props.payload.agent}?`;
+  const workflowScript =
+    props.payload.agentCategory === AgentCategory.Workflow
+      ? props.payload.workflowScript
+      : undefined;
+  const title = workflowScript
+    ? `Approve multi-agent workflow ${workflowScript.name}?`
+    : `Spawn ${props.payload.agent}?`;
   const instructionWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
@@ -118,31 +139,52 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">
-        <Text>
-          <Text bold>Model: </Text>
-          {props.payload.model}
-          {' · '}
-          <Text bold>Category: </Text>
-          {agentProposalCategoryLabel(props.payload.agentCategory)}
-        </Text>
-        {props.payload.workingDirectory ? (
-          <Text>
-            <Text bold>Directory: </Text>
-            {props.payload.workingDirectory}
-          </Text>
-        ) : null}
-        {fileGroups.length > 0 ? (
-          <Box marginTop={1} flexDirection="column">
-            {fileGroups.map((group) => (
-              <FileGroup
-                key={group.label}
-                label={group.label}
-                files={group.files}
-              />
-            ))}
-          </Box>
-        ) : null}
-        <Text dimColor>{DELEGATION_APPROVAL_COPY.cliExplanation}</Text>
+        {workflowScript ? (
+          <>
+            <Text>
+              <Text bold>{workflowScript.name}</Text>
+              {' · '}
+              {workflowScript.tasks.length} tasks ·{' '}
+              {workflowScript.phases.length} phases
+            </Text>
+            <Text>
+              <Text bold>Default: </Text>
+              {props.payload.agent} ({props.payload.model})
+            </Text>
+            <Text color="yellow">
+              May run tasks concurrently and incur high model cost.
+            </Text>
+            <Text dimColor>Script: {workflowScript.scriptPath}</Text>
+          </>
+        ) : (
+          <>
+            <Text>
+              <Text bold>Model: </Text>
+              {props.payload.model}
+              {' · '}
+              <Text bold>Category: </Text>
+              {agentProposalCategoryLabel(props.payload.agentCategory)}
+            </Text>
+            {props.payload.workingDirectory ? (
+              <Text>
+                <Text bold>Directory: </Text>
+                {props.payload.workingDirectory}
+              </Text>
+            ) : null}
+            {fileGroups.length > 0 ? (
+              <Box marginTop={1} flexDirection="column">
+                {fileGroups.map((group) => (
+                  <FileGroup
+                    key={group.label}
+                    label={group.label}
+                    files={group.files}
+                  />
+                ))}
+              </Box>
+            ) : null}
+            <Text dimColor>{DELEGATION_APPROVAL_COPY.cliExplanation}</Text>
+          </>
+        )}
       </Box>
       <ScrollableModalText
         hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}
