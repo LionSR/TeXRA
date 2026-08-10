@@ -7,6 +7,11 @@
  */
 import { z } from 'zod';
 
+import {
+  SubscriptionOAuthError,
+  type SubscriptionOAuthErrorKind,
+} from '../oauth/subscriptionOAuthError';
+
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
 export const CodexTokenResponseSchema = z.object({
   access_token: z.string().min(1),
@@ -69,38 +74,18 @@ export const CodexDeviceTokenSchema = z.object({
 });
 export type CodexDeviceToken = z.infer<typeof CodexDeviceTokenSchema>;
 
-/**
- * Errors from the Codex auth flow.
- *
- * - `fatal`     — the refresh/grant was rejected (400/401/403): the session is
- *                 dead and the user must sign in again.
- * - `expired`   — there is no usable session / it expired and cannot refresh.
- * - `transient` — a 5xx / network blip: keep the session, retry later.
- * - `config`    — misconfiguration (e.g. account id missing from the JWT).
- * - `pending`   — device-code authorization not completed yet.
- */
-export type CodexAuthErrorKind =
-  'fatal' | 'expired' | 'transient' | 'config' | 'pending';
+/** Error kinds match the shared subscription OAuth vocabulary. */
+export type CodexAuthErrorKind = SubscriptionOAuthErrorKind;
 
-export class CodexAuthError extends Error {
-  readonly kind: CodexAuthErrorKind;
-  readonly status?: number;
-
+export class CodexAuthError extends SubscriptionOAuthError {
   constructor(
     message: string,
     kind: CodexAuthErrorKind,
     status?: number,
     options?: ErrorOptions,
   ) {
-    super(message, options);
+    super(message, kind, status, options);
     this.name = 'CodexAuthError';
-    this.kind = kind;
-    this.status = status;
-  }
-
-  /** Whether the user must re-authenticate (vs. retry). */
-  get needsReauth(): boolean {
-    return this.kind === 'fatal' || this.kind === 'expired';
   }
 }
 
