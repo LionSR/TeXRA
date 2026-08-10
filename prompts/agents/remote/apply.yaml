@@ -45,14 +45,7 @@ prompts:
         \item Cross-document inconsistencies: resolve to a single consistent version.
     \end{itemize}
 
-    When a fix requires writing or rewriting prose, it must read as if a careful human technical writer wrote it, not a language model:
-    \begin{itemize}
-        \item Write for the document's reader, who has not seen this conversation, and budget emphasis: one or two prominent points per section, the rest plain.
-        \item Lead with content. No throat-clearing openers (``It is important to note that\ldots''), and no ``Furthermore,''/``Moreover,''/``Additionally,'' chains opening consecutive sentences.
-        \item No buzzword filler (``comprehensive'', ``robust'', ``novel'', ``crucial'', ``key'', ``significant''); state the concrete fact instead. Prefer plain verbs: ``use'' over ``leverage'' or ``utilize'', ``show'' over ``demonstrate'' or ``showcase''.
-        \item Avoid the ``not only X, but also Y'' reflex, restate-explain-restate paragraphs, empty transitions (``To this end,''), and empty significance claims (``profound implications'').
-        \item Vary sentence length and structure, avoid em dashes, and carry emphasis through wording, not \textbf{} formatting.
-    \end{itemize}
+    When a fix requires writing or rewriting prose, write plain technical English for the document's reader: concrete statements, plain verbs, each point made once, varied sentence length, and emphasis carried by wording and spent on the one or two points that matter.
 
     Documenting Changes:
     After applying fixes, add a self-contained comment describing what was changed. Use the existing comment style in the document:

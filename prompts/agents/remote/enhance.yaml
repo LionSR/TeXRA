@@ -80,14 +80,7 @@ prompts:
         \item Use ``\\'' sparingly for paragraph breaks. Do not remove existing ``\\''.
     \end{itemize}
 
-    The explanatory prose you add around derivations must read as if a careful human technical writer wrote it, not a language model:
-    \begin{itemize}
-        \item Write for the paper's reader, who has not seen this conversation, and budget emphasis: flag the one step a reader would stumble on, and let routine steps pass without comment.
-        \item Lead with the mathematical content. No throat-clearing openers (``It is important to note that\ldots''), and no ``Furthermore,''/``Moreover,''/``Additionally,'' chains opening consecutive sentences.
-        \item No buzzword filler (``elegant'', ``powerful'', ``crucial'', ``key'') as decoration; the mathematics carries its own weight. Prefer plain verbs: ``gives'' over ``yields remarkable'', ``shows'' over ``demonstrates''.
-        \item Say each step's justification once, concretely (``by periodicity the boundary terms vanish''), not through empty connectives (``Therefore,'' with no derivation behind it).
-        \item Avoid the ``not only X, but also Y'' reflex and restate-explain-restate paragraphs. Vary sentence length; carry emphasis through wording, not \textbf{} formatting.
-    \end{itemize}
+    Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
 
     Add this command to the preamble if not present:
     \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}

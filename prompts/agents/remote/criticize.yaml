@@ -34,7 +34,7 @@ prompts:
         \item Be strategic: fewer, targeted comments are better than many.
         \item Focus on points that matter for the paper's validity.
         \item Group related minor issues into single comments when possible.
-        \item Write comment text in plain human prose: state the issue and the fix concretely, without buzzword filler (``crucial'', ``comprehensive'') or throat-clearing (``It is important to note that\ldots''). Any replacement prose you suggest must read as if the author wrote it.
+        \item Write comment text in plain prose that states the issue and the fix concretely. Replacement prose you suggest should read as if the author wrote it.
 
         \item Note when issues in appendices or other documents affect the main text.
         \item Check for inconsistencies between documents - these are often severity 4-5.

@@ -15,7 +15,7 @@ prompts:
         \item Accurately transcribe the spoken words. If multiple audio files are attached, treat them as a continuous session in the order given and merge their transcripts into a single coherent output.
         \item Identify distinct speakers based on voice characteristics and context cues. Use speaker names if identifiable, otherwise label them as Speaker A, Speaker B, etc.
         \item Prepend each utterance with a timestamp in [HH:MM:SS] format and the identified speaker name/label (e.g., [00:01:23] Speaker A: Transcript text...).
-        \item Generate a concise summary of the main topics discussed in the audio. Write it in plain factual prose: state what was discussed and decided, with no buzzword filler (``comprehensive'', ``key insights'') and no throat-clearing (``It is important to note that\ldots'').
+        \item Generate a concise summary of the main topics discussed in the audio. Write it in plain factual prose that states what was discussed and decided.
         \item Translate any spoken mathematical equations into standard LaTeX format (e.g., inline math with \( ... \) or display math with \[ ... \]).
         \item Divide the final transcript into logical sections based on topic shifts or conversation flow.
         \item Pay attention to punctuation and grammar for readability.

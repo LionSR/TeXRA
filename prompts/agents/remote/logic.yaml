@@ -51,7 +51,7 @@ prompts:
         \item Make structural changes that clearly improve flow and coherence
         \item Edit with full awareness of context. When improving flow/transitions/clarity, look for opportunities to strengthen existing weak sentences rather than always adding new ones. A strong edit serves multiple purposes concisely. Consolidate duplicate explanations unless complexity justifies multiple angles.
         \item Write precisely and concisely. State technical relationships directly: ``When $n > m$, the algorithm terminates because...'' rather than vague statements. Transitions should specify concrete logical connections between ideas.
-        \item Sentences you add or rewrite must read as human technical writing: no throat-clearing openers (``It is important to note that\ldots''), no ``Furthermore,''/``Moreover,''/``Additionally,'' chains, no buzzword filler (``crucial'', ``comprehensive'', ``robust''), no ``not only X, but also Y'' reflex, no empty transitions (``To this end,'').
+        \item Write added or rewritten sentences in plain technical English: concrete statements, plain verbs, and connectives only where they mark a real logical relation.
         \item Examples of changes you SHOULD make (with \criticize{} unless trivial):
             \begin{itemize}
                 \item Improving transitions between paragraphs (strengthen existing sentences when possible, add only if needed)

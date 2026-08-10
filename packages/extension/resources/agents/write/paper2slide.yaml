@@ -19,7 +19,6 @@ prompts:
     - End with a conclusion slide summarizing the main findings and potential future work
     - Include appropriate equations, figures, and tables from the paper
     - Use condensed bullet points; every bullet states a specific fact, result, or step. Each slide makes one point, and the deck has one or two peaks rather than uniform emphasis
-    - Write slide text in plain human style: no buzzword filler (``novel'', ``comprehensive'', ``robust'', ``cutting-edge''), no generic significance claims (``profound implications''), no throat-clearing (``It is important to note that\ldots'')
     - Use appropriate notation and terminology consistently
     - Prioritize visual representations and concrete takeaways over verbose descriptions
     - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
@@ -54,7 +53,7 @@ prompts:
       </document>
       </documents>
     - |
-      Critically review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain human phrasing (no buzzword filler or generic significance claims). Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
+      Critically review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain, concrete phrasing. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">
