@@ -55,13 +55,4 @@ export const streamTabsContainerStyles = css`
     max-width: 100%;
     overflow: hidden;
   }
-
-  .child-streams stream-tab {
-    opacity: 1;
-    transition: opacity var(--transition-fast);
-  }
-
-  .child-streams stream-tab.is-finished {
-    opacity: var(--opacity-subtle, 0.5);
-  }
 `;
