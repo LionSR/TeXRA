@@ -37,7 +37,9 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   requireWorkflowOrToolUseAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
+  createWorkflowScriptStrategy: vi.fn(),
   childLoggerError: vi.fn(),
+  lastStrategyParams: undefined as { initialSnapshot?: unknown } | undefined,
 }));
 
 // Spread the real storage module so `getExecutionStore` stays authentic;
@@ -47,6 +49,23 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   return { ...actual, registerExecution: mocks.registerExecution };
+});
+
+vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@tools/delegation/workflowScriptStrategy')
+    >();
+  return {
+    ...actual,
+    createWorkflowScriptStrategy: (params: { initialSnapshot?: unknown }) => {
+      mocks.lastStrategyParams = params;
+      mocks.createWorkflowScriptStrategy(params);
+      return actual.createWorkflowScriptStrategy(
+        params as Parameters<typeof actual.createWorkflowScriptStrategy>[0],
+      );
+    },
+  };
 });
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
@@ -198,6 +217,7 @@ async function callToolInput(
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.lastStrategyParams = undefined;
   await WorkspaceFS.ensureDir('.');
   await WorkspaceFS.write('paper.tex', '\\documentclass{article}');
   await WorkspaceFS.write('references.bib', '@book{example}');
@@ -755,6 +775,92 @@ describe('WorkflowScriptTool', () => {
 
     expect(first).toBe(runExecutionIdFor('tool-test'));
     expect(second).toBe(first);
+  });
+
+  it('captures prior workflow snapshot before registerExecution overwrites meta', async () => {
+    const runId = runExecutionIdFor('tool-test');
+    const store = getExecutionStore(runId);
+    const priorWorkflow = {
+      lifecycle: 'active' as const,
+      stages: [],
+      calls: [
+        {
+          id: 'interrupted',
+          label: 'Interrupted call',
+          files: { input: [], context: [], media: [] },
+          attempts: [
+            {
+              number: 1,
+              id: 'bbbbbb222222',
+              startedAt: '2026-08-01T00:00:00.000Z',
+            },
+          ],
+          status: 'running' as const,
+          costUsd: 1.25,
+          childExecutionId: 'bbbbbb222222',
+          timestamps: {
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:01.000Z',
+            startedAt: '2026-08-01T00:00:00.000Z',
+          },
+        },
+      ],
+      counts: {
+        total: 1,
+        waiting: 0,
+        planned: 0,
+        stageBlocked: 0,
+        queued: 0,
+        starting: 0,
+        running: 1,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        skipped: 0,
+        cached: 0,
+      },
+      timestamps: {
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:01.000Z',
+      },
+    };
+    await store.writeMeta({
+      timestamp: '2026-08-01T00:00:00.000Z',
+      workflow: priorWorkflow,
+    });
+
+    const callOrder: string[] = [];
+    const readStrict = vi
+      .spyOn(store, 'readMetaStrict')
+      .mockImplementation(async () => {
+        callOrder.push('readMetaStrict');
+        return {
+          schemaVersion: 1,
+          timestamp: '2026-08-01T00:00:00.000Z',
+          workflow: priorWorkflow,
+        };
+      });
+    mocks.registerExecution.mockImplementation(async () => {
+      callOrder.push('registerExecution');
+      // Simulate production: registration replaces meta without workflow.
+      await store.writeMeta({
+        timestamp: '2026-08-10T00:00:00.000Z',
+        streamId: `workflow-script#${runId}`,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      });
+    });
+
+    const result = await callTool();
+
+    expect(result.status).toBe('executed');
+    expect(callOrder).toEqual(['readMetaStrict', 'registerExecution']);
+    // Strategy must receive the pre-register snapshot, not a post-wipe read.
+    expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(priorWorkflow);
+    // Post-register meta no longer has workflow — a post-register read would
+    // have lost hydration state.
+    await expect(store.readMeta()).resolves.not.toHaveProperty('workflow');
+    readStrict.mockRestore();
   });
 
   it('reports already-running when the deterministic id is still leased', async () => {

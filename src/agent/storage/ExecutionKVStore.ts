@@ -272,6 +272,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
         )}`,
         { data: workflow.error },
       );
+      // Ordinary reads keep core metadata so listing/finalization survive a
+      // bad workflow projection. Strict recovery must fail closed so a present
+      // but corrupt snapshot is never treated as "no prior state."
+      if (malformed === 'throw') throw workflow.error;
       return core.data;
     }
     return workflow.data === undefined

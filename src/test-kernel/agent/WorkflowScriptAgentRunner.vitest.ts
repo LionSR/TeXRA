@@ -673,9 +673,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     const runner = defaultRunner();
 
-    await expect(
-      runner({ ...invocation(), reportCostUsd }),
-    ).rejects.toThrow(/ended with failed outcome/);
+    await expect(runner({ ...invocation(), reportCostUsd })).rejects.toThrow(
+      /ended with failed outcome/,
+    );
     expect(reportCostUsd).toHaveBeenCalledWith(0.42);
   });
 
