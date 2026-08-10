@@ -151,26 +151,6 @@ export function allocateSidePanelRows({
   return { subagentRows, todosPlanRows: available - subagentRows };
 }
 
-/**
- * Reserve one live conversation row before skills and other bottom panels
- * divide the remaining transcript budget.
- */
-export function allocateConversationAuxiliaryRows({
-  desiredSkillsRows,
-  transcriptRows,
-}: {
-  readonly desiredSkillsRows: number;
-  readonly transcriptRows: number;
-}): { readonly skillsRows: number; readonly otherPanelRows: number } {
-  const available = Math.max(0, transcriptRows);
-  const auxiliaryRows = Math.max(0, available - 1);
-  const skillsRows = Math.min(Math.max(0, desiredSkillsRows), auxiliaryRows);
-  return {
-    skillsRows,
-    otherPanelRows: auxiliaryRows - skillsRows,
-  };
-}
-
 export function allocateConversationBottomPanelRows({
   maxRows,
   sessionCount,
@@ -264,6 +244,41 @@ export function allocateConversationBottomPanelRows({
     bottomPanelRows: finalBottomPanelRows,
     sessionPanelRows: finalSessionPanelRows,
     todosPlanRows,
+  };
+}
+
+export function allocateConversationPanelRows({
+  maxRows,
+  sessionCount,
+  childListFocused,
+  minimumSessionPanelRows = 2,
+  todosPlanContentRows,
+  transcriptRows,
+}: {
+  readonly maxRows: number;
+  readonly sessionCount: number;
+  readonly childListFocused: boolean;
+  readonly minimumSessionPanelRows?: number;
+  readonly todosPlanContentRows: number;
+  readonly transcriptRows: number;
+}): {
+  readonly bottomPanelRows: number;
+  readonly conversationRows: number;
+  readonly sessionPanelRows: number;
+  readonly todosPlanRows: number;
+} {
+  const availableTranscriptRows = Math.max(0, transcriptRows);
+  const bottomPanels = allocateConversationBottomPanelRows({
+    maxRows,
+    sessionCount,
+    childListFocused,
+    minimumSessionPanelRows,
+    todosPlanContentRows,
+    transcriptRows: Math.max(0, availableTranscriptRows - 1),
+  });
+  return {
+    ...bottomPanels,
+    conversationRows: availableTranscriptRows - bottomPanels.bottomPanelRows,
   };
 }
 
