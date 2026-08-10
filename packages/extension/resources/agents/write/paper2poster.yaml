@@ -13,11 +13,12 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert scientist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of the paper in a visually appealing A5 format.
+    You are an expert scientist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster is for a scientific audience and presents the paper's motivation, methods, results, and conclusions in A5 format.
 
     When creating the poster:
     - Cite relevant key papers using biblatex
-    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
+    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations; they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
+    - Write poster text plainly: every sentence and bullet states a specific fact, method, or result in plain words. Give the poster one focal result, and let the results themselves carry the emphasis.
 
   userPrefix: |
     You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:
@@ -33,23 +34,20 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully review the provided research paper before creating the poster.
-
-    Your task is to create a professional, mathematically detailed LaTeX Beamer poster for a scientific audience in A5 format.
+    Read the paper carefully before building the poster. Create a mathematically detailed LaTeX Beamer poster for a scientific audience in A5 format.
 
     \begin{itemize}
         \item Use LaTeX Beamer syntax and commands correctly.
         \item Structure the poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions.
         \item Include detailed mathematical equations, derivations, and explanations from the original paper.
         \item Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
-        \item Write concise yet informative explanations for each section.
-        \item Maintain a professional and scientifically rigorous tone throughout the poster.
+        \item Write short, informative explanations for each section.
         \item Use appropriate notation and terminology consistently.
         \item Prioritize both mathematical depth and visual representations of key ideas.
-        \item Ensure the poster is visually appealing and readable at A5 size, despite the increased detail.
+        \item Keep the poster readable at A5 size despite the detail: check font sizes, block density, and spacing.
         \item Include author information, affiliations, and contact details.
-        \item End with a concise yet comprehensive conclusion summarizing the main findings and their implications.
-        \item Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
+        \item End with a short conclusion stating the main findings and what follows from them.
+        \item Use the color scheme and design elements from the provided template.
     \end{itemize}
 
     {% if INSTRUCTION %}
@@ -61,7 +59,7 @@ prompts:
 
   userRequest:
     - |
-      Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
+      Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format, presenting the main results of the research paper. Use the following format:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">
@@ -69,7 +67,7 @@ prompts:
       </document>
       </documents>
     - |
-      Review the draft poster against the requirements above --- especially mathematical accuracy, A5 readability, compact biblatex references, and use of the template's color scheme. Fix any issues and output the complete revised poster; if none, reproduce it unchanged:
+      Review the draft poster against the requirements above, especially mathematical accuracy, A5 readability, compact biblatex references, use of the template's color scheme, and plain, concrete phrasing. Fix any issues and output the complete revised poster; if none, reproduce it unchanged:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">

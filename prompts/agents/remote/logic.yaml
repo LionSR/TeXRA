@@ -44,14 +44,14 @@ prompts:
             \end{itemize}
     \end{itemize}
 
-    CRITICAL PRINCIPLE: Cross-Document Coherence.
-    When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
+    Cross-document coherence. When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
 
     When making improvements in the second phase, you must:
     \begin{itemize}
         \item Make structural changes that clearly improve flow and coherence
         \item Edit with full awareness of context. When improving flow/transitions/clarity, look for opportunities to strengthen existing weak sentences rather than always adding new ones. A strong edit serves multiple purposes concisely. Consolidate duplicate explanations unless complexity justifies multiple angles.
         \item Write precisely and concisely. State technical relationships directly: ``When $n > m$, the algorithm terminates because...'' rather than vague statements. Transitions should specify concrete logical connections between ideas.
+        \item Write added or rewritten sentences in plain technical English: concrete statements, plain verbs, and connectives only where they mark a real logical relation.
         \item Examples of changes you SHOULD make (with \criticize{} unless trivial):
             \begin{itemize}
                 \item Improving transitions between paragraphs (strengthen existing sentences when possible, add only if needed)
@@ -90,7 +90,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read through the entire document (and any additional documents) to understand the overall argument flow and structure before proceeding.
+    Read the entire collection before proceeding.
 
   userRequest:
     - |
@@ -102,7 +102,7 @@ prompts:
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
-      In the scratchpad below, perform a deep structural analysis. Map out the logical flow and identify issues:
+      In the scratchpad below, map out the logical flow and identify issues:
       <scratchpad>
       \begin{enumerate}
           \item [Overall Structure and Narrative Arc]

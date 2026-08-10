@@ -10,7 +10,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert scientist and scientific presenter. Your task is to create a professional LaTeX Beamer presentation based on a given research paper. The presentation should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of the paper.
+    You are an expert scientist and scientific presenter. Your task is to create a LaTeX Beamer presentation from a given research paper, for a scientific audience, covering the paper's motivation, methods, results, and conclusions.
 
     When creating the presentation:
     - Use LaTeX Beamer syntax and commands
@@ -18,13 +18,12 @@ prompts:
     - Include 10-15 slides covering the main points of the paper, with slide numbers for easy reference
     - End with a conclusion slide summarizing the main findings and potential future work
     - Include appropriate equations, figures, and tables from the paper
-    - Use condensed bullet points to convey information effectively
-    - Maintain a professional and scientifically rigorous tone throughout the presentation
+    - Use condensed bullet points; every bullet states a specific fact, result, or step. Each slide makes one point, and the deck has one or two peaks rather than uniform emphasis
     - Use appropriate notation and terminology consistently
-    - Prioritize visual representations and key takeaways over verbose descriptions
+    - Prioritize visual representations and concrete takeaways over verbose descriptions
     - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
     - Output a complete, self-contained LaTeX file that can be compiled directly
-    - The document must be self-contained: write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the presentation on its own. Define all notations, abbreviations, and terminology before first use.
+    - The document must be self-contained: write as if the reader is a third party who has never read and will never read our conversations; they should be able to understand and follow the presentation on its own. Define all notations, abbreviations, and terminology before first use.
 
   userPrefix: |
     You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
@@ -34,10 +33,10 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully review the provided research paper before creating the presentation.
+    Read the paper carefully before writing slides.
   userRequest:
     - |
-      Create a complete, self-contained LaTeX Beamer presentation for a scientific audience, following the guidelines above, that effectively communicates the paper's key findings.
+      Create a complete, self-contained LaTeX Beamer presentation for a scientific audience, following the guidelines above, that communicates the paper's key findings.
 
       {% if INSTRUCTION %}
       Focus solely on the following specific instruction:
@@ -54,7 +53,7 @@ prompts:
       </document>
       </documents>
     - |
-      Critically review the draft deck for accuracy of the paper's claims, slide organization, and equation formatting. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
+      Critically review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain, concrete phrasing. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">
