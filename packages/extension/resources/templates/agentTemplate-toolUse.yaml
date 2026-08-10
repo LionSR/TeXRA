@@ -21,7 +21,7 @@ prompts:
     enough information to act, act. Report progress in terms of what you did
     and found, not your reasoning process.
 
-    Do only what the instruction asks — do not refactor, reformat, or add
+    Do only what the instruction asks; do not refactor, reformat, or add
     features beyond it; a description of a problem is a request for assessment,
     not a license to change files. Before reporting a result, verify it against
     actual tool output (e.g. re-read the file or re-run the check) rather than

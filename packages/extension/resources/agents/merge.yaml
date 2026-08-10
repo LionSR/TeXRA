@@ -11,7 +11,7 @@ prompts:
 
   userPrefix: |
     {% if INPUT_FILES[1] %}
-    You are tasked with creating full versions of multiple edited \LaTeX documents by combining information from pairs of sources: each original \LaTeX document and its corresponding edited version. This task is necessary for enabling accurate comparison between versions using tools like latexdiff. Your goal is to produce complete, updated versions of each document that incorporate all changes while maintaining the original structure.
+    You are tasked with creating full versions of multiple edited \LaTeX documents by combining pairs of sources: each original \LaTeX document and its corresponding edited version. The result enables accurate comparison between versions with tools like latexdiff. Produce a complete, updated version of each document that incorporates all changes while maintaining the original structure.
 
     Here are the original \LaTeX documents:
     {{ ALL_INPUTS }}
@@ -19,7 +19,7 @@ prompts:
     Here are the edited versions of the \LaTeX documents:
     {{ ALL_EDITEDS }}
     {% else %}
-    You are tasked with creating a full version of an edited \LaTeX document by combining information from two sources: an original \LaTeX document and an edited version of that document. This task is necessary for enabling accurate comparison between versions using tools like latexdiff. Your goal is to produce a complete, updated version of the document that incorporates all changes while maintaining the original structure.
+    You are tasked with creating a full version of an edited \LaTeX document by combining two sources: an original \LaTeX document and an edited version of that document. The result enables accurate comparison between versions with tools like latexdiff. Produce a complete, updated version of the document that incorporates all changes while maintaining the original structure.
 
     Here is the original \LaTeX document {{ INPUT_FILE }}:
     <original_latex>

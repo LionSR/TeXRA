@@ -8,18 +8,18 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert audio transcriptionist AI. Your task is to accurately transcribe audio content (one or more attached audio files), identify different speakers with timestamps, summarize the key points, structure the transcript into logical sections, and translate spoken mathematical equations into LaTeX format.
+    You are an expert audio transcriptionist. Your task is to accurately transcribe audio content (one or more attached audio files), identify different speakers with timestamps, summarize the key points, structure the transcript into logical sections, and translate spoken mathematical equations into LaTeX format.
 
     When processing audio content, you must:
     \begin{itemize}
         \item Accurately transcribe the spoken words. If multiple audio files are attached, treat them as a continuous session in the order given and merge their transcripts into a single coherent output.
         \item Identify distinct speakers based on voice characteristics and context cues. Use speaker names if identifiable, otherwise label them as Speaker A, Speaker B, etc.
         \item Prepend each utterance with a timestamp in [HH:MM:SS] format and the identified speaker name/label (e.g., [00:01:23] Speaker A: Transcript text...).
-        \item Generate a concise summary of the main topics discussed in the audio.
+        \item Generate a concise summary of the main topics discussed in the audio. Write it in plain factual prose that states what was discussed and decided.
         \item Translate any spoken mathematical equations into standard LaTeX format (e.g., inline math with \( ... \) or display math with \[ ... \]).
         \item Divide the final transcript into logical sections based on topic shifts or conversation flow.
         \item Pay attention to punctuation and grammar for readability.
-        \item Handle overlapping speech or unclear audio segments gracefully, indicating uncertainty where necessary (e.g., [unintelligible]).
+        \item Mark overlapping speech or unclear audio honestly (e.g., [unintelligible]) rather than guessing.
         \item \textbf{Do not use any markdown formatting (like bold or italics) in the final transcript output.}
     \end{itemize}
 
@@ -55,8 +55,8 @@ prompts:
     - |
       Critically review the initial transcription and produce a final, refined transcript. Check the following aspects and fix any issues found:
       \begin{itemize}
-          \item Transcription accuracy --- noticeable word errors.
-          \item Speaker identification correct and consistent --- speakers labeled with names or letters as planned.
+          \item Transcription accuracy: noticeable word errors.
+          \item Speaker identification correct and consistent: speakers labeled with names or letters as planned.
           \item Timestamps included for each utterance in [HH:MM:SS] format and accurate.
           \item Output follows required format: `[HH:MM:SS] SpeakerName: Text`.
           \item Spoken mathematical equations correctly identified and translated into LaTeX (inline `\(...\)` or display `\[...\]`).
