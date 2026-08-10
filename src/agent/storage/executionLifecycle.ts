@@ -12,12 +12,14 @@ import { flowKey } from '@agent/node/persistedFlow';
 import * as logger from '@logger/logUtils';
 import {
   RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type ExecutionMeta,
   type RegisteredExecutionMeta,
   type RunIdentity,
   type RunOutcome,
   type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import { KeyedMutex } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
@@ -43,6 +45,14 @@ export async function hasPersistedParent(
 ): Promise<boolean> {
   const meta = await getExecutionStore(executionId).readMeta();
   return meta?.parentExecutionId !== undefined;
+}
+
+/** Read persisted follow-up capability, failing closed for absent metadata. */
+export async function getPersistedUserFollowUpSupport(
+  executionId: ExecutionId,
+): Promise<UserFollowUpSupport> {
+  const meta = await getExecutionStore(executionId).readMeta();
+  return meta?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +91,8 @@ export async function registerExecution(
     readonly streamId: StreamTabId;
     /** The run's identity, declared by the launch site — the durable authority. */
     readonly identity: RunIdentity;
+    /** Runtime behavior declared by the launch source, not UI visibility. */
+    readonly userFollowUpSupport?: UserFollowUpSupport;
     readonly parentExecutionId?: ExecutionId;
     /**
      * Display description persisted on `ExecutionMeta.description` — the one
@@ -92,7 +104,13 @@ export async function registerExecution(
     readonly description?: string;
   },
 ): Promise<void> {
-  const { streamId, identity, parentExecutionId, description } = options;
+  const {
+    streamId,
+    identity,
+    userFollowUpSupport,
+    parentExecutionId,
+    description,
+  } = options;
   await acquireFreshExecutionLease(executionId);
   const runWithOwnership = captureOwnedExecutionLease(executionId);
   await runWithOwnership(async () => {
@@ -104,6 +122,8 @@ export async function registerExecution(
         timestamp,
         streamId,
         identity,
+        userFollowUpSupport:
+          userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentExecutionId,
         ...(description ? { description } : {}),
       };

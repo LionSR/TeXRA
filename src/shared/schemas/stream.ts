@@ -68,6 +68,16 @@ export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
 export const EXECUTION_META_SCHEMA_VERSION = 1;
 
+/** Runtime support declared by the launch source, independent of UI policy. */
+export const USER_FOLLOW_UP_SUPPORT = {
+  UNSUPPORTED: 'unsupported',
+  NATIVE_INTERACTIVE: 'nativeInteractive',
+  TERMINAL_BACKED: 'terminalBacked',
+} as const;
+
+export const UserFollowUpSupportSchema = z.enum(USER_FOLLOW_UP_SUPPORT);
+export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
+
 /** Execution metadata stored alongside config at launch time. */
 export const ExecutionMetaSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
@@ -84,6 +94,8 @@ export const ExecutionMetaSchema = z.object({
    * `incomplete`.
    */
   identity: RunIdentitySchema.optional(),
+  /** Runtime behavior declared by the execution source, not UI visibility. */
+  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
   /**
@@ -105,6 +117,7 @@ export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
  */
 export type RegisteredExecutionMeta = ExecutionMeta & {
   identity: NonNullable<ExecutionMeta['identity']>;
+  userFollowUpSupport: NonNullable<ExecutionMeta['userFollowUpSupport']>;
 };
 
 export const STREAM_PHASE = {
@@ -244,6 +257,8 @@ export const StreamTabInfoSchema = z.object({
   name: z.string(),
   label: z.string(),
   identity: RunIdentitySchema.optional(),
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   /** The agent's execution mode (agent runs only) — display/routing data
    * beside the identity, sourced from the run's config. */
   agentCategory: AgentCategorySchema.optional(),

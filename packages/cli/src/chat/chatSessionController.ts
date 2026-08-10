@@ -497,9 +497,9 @@ export function createChatSessionController(
       // A rehydrated stream never re-emits `run.start`, so its identity is
       // seeded from the durable store (ExecutionMeta by FK) on this cold
       // read — mirroring `tryResumeStream()`'s seeding.
-      const restoredIdentity = snapshotStore.getRunIdentity(
+      const restoredIdentity = snapshotStore.getRunMetadata(
         resolution.streamId,
-      );
+      ).identity;
       patchStream(resolution.streamId, (slice) => {
         const runUsages = Object.values(restored.runUsage);
         return {
@@ -606,13 +606,14 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       try {
         await snapshotStore.preload([streamId]);
+        const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
-          snapshotStore.getExecutionId(streamId) ??
+          runMetadata.executionId ??
           (await snapshotStore.readPersistedExecutionId(streamId));
         if (!executionId) return false;
 
         const config =
-          snapshotStore.getRunConfig(streamId) ??
+          runMetadata.config ??
           (await getExecutionStore(executionId).readConfig());
         if (!config) return false;
         if (session.stopRequested) return false;
@@ -640,9 +641,10 @@ export function createChatSessionController(
         // and the resumed run would stay invisible. A rehydrated stream never
         // re-emits `run.start`, so its identity is seeded from the durable
         // store (ExecutionMeta by FK) on this cold read.
-        const identity = snapshotStore.getRunIdentity(streamId);
         patchStream(streamId, (slice) =>
-          identity && !slice.identity ? { ...slice, identity } : slice,
+          runMetadata.identity && !slice.identity
+            ? { ...slice, identity: runMetadata.identity }
+            : slice,
         );
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;

@@ -25,6 +25,7 @@ import {
   type TaskGroup,
   type TodoItem,
   type TokenUsageStats,
+  type UserFollowUpSupport,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
@@ -159,6 +160,8 @@ export interface StreamSlice {
   /** What owns this stream, verbatim from `run.start` (or the durable store
    *  on cold read). Never re-derived from names, ids, or transcript roles. */
   readonly identity?: RunIdentity | undefined;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  readonly userFollowUpSupport?: UserFollowUpSupport | undefined;
   /** Canonical agent name captured from this stream's `run.config`. */
   readonly agent?: string | undefined;
   /** Model identity captured from setTaskState for this specific stream. */

@@ -14,7 +14,6 @@ import {
   SessionState,
   type ActiveStreamId,
 } from '@controllers/session/SessionState';
-import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   sumUsageStats,
@@ -110,11 +109,12 @@ class TuiSessionRenderer implements SessionRendererPort {
     if (this.isStaleDispatch(streamId)) return;
     if (isChildStreamRemoved(streamId)) return;
     const metadata = this.state.getStreamMetadata(streamId);
-    const config = this.state.snapshots.getRunConfig(streamId);
+    const config = this.state.snapshots.getRunMetadata(streamId).config;
     // Parent-only metadata refreshes must not mint a StreamSlice: an edge
     // alone is not focusable until attachment (`setActiveStream`) creates one.
     const hasDisplayFields =
       metadata.identity != null ||
+      metadata.userFollowUpSupport != null ||
       metadata.agentCategory != null ||
       metadata.description != null ||
       config != null;
@@ -128,17 +128,16 @@ class TuiSessionRenderer implements SessionRendererPort {
       }
       return;
     }
-    // Same display projection Lit uses for tab chips (identity, category,
-    // model, description); files still come from the run-config snapshot.
-    const tab = buildStreamTabInfo({ streamId, metadata });
     const identityAgent =
-      tab.identity?.kind === 'agent' ? tab.identity.agent : undefined;
+      metadata.identity?.kind === 'agent' ? metadata.identity.agent : undefined;
     patchStream(streamId, (slice) => ({
       ...slice,
-      identity: tab.identity ?? slice.identity,
+      identity: metadata.identity ?? slice.identity,
+      userFollowUpSupport: metadata.userFollowUpSupport,
       agent: config?.agent ?? identityAgent ?? slice.agent,
-      model: tab.model ?? config?.model ?? slice.model,
-      category: tab.agentCategory ?? config?.agentCategory ?? slice.category,
+      model: config?.model ?? slice.model,
+      category:
+        metadata.agentCategory ?? config?.agentCategory ?? slice.category,
       ...(config
         ? {
             files: {
@@ -149,8 +148,8 @@ class TuiSessionRenderer implements SessionRendererPort {
             },
           }
         : {}),
-      ...(tab.description !== undefined
-        ? { description: tab.description }
+      ...(metadata.description !== undefined
+        ? { description: metadata.description }
         : {}),
     }));
   }

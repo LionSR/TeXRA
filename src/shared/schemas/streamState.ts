@@ -10,6 +10,7 @@ import {
   StreamLifecycleStatusSchema,
   StreamPhaseSchema,
   StreamSubstateSchema,
+  UserFollowUpSupportSchema,
 } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
@@ -125,6 +126,8 @@ export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   substate: StreamSubstateSchema.optional(),
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   lastTimestamp: z.number().optional(),
   conversationProgress: ConversationProgressSchema.prefault(
     DEFAULT_CONVERSATION_PROGRESS,

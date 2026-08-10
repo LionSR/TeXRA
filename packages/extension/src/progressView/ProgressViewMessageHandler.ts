@@ -91,17 +91,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    */
   private readonly handlerRegistry: ProgressViewInboundHandlerRegistry;
 
-  // Snapshot accessors reused across the controller-wiring methods below;
-  // each controller only needs a subset of these.
-  private readonly getRunConfig = (stream: StreamTabId) =>
-    this.provider.state.snapshots.getRunConfig(stream);
-  private readonly getRunIdentity = (stream: StreamTabId) =>
-    this.provider.state.snapshots.getRunIdentity(stream);
-  private readonly getExecutionId = (stream: StreamTabId) =>
-    this.provider.state.snapshots.getExecutionId(stream);
-  private readonly getOutputFiles = (stream: StreamTabId) =>
-    this.provider.state.snapshots.getOutputFiles(stream);
-
   /** The one info-notification adapter the controller ports are wired to. */
   private readonly showInfo = async (message: string): Promise<void> => {
     await this.host.info(message);
@@ -192,14 +181,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
 
     const secondTierActions: ProgressViewSecondTierActions = {
-      getRunIdentity: this.getRunIdentity,
+      getRunMetadata: (stream) =>
+        this.provider.state.snapshots.getRunMetadata(stream),
       workflowActions: this.workflowActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
       host: { showInfo: this.showInfo },
       session: defaultSession(),
-      getRunConfig: this.getRunConfig,
+      getRunConfig: (stream) =>
+        this.provider.state.snapshots.getRunMetadata(stream).config,
       restoreRunConfig: async (config) => {
         await this.runViewCommand('texra.restoreState', [config]);
       },
@@ -385,9 +376,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return new ProgressViewHost({
       run: {
         state: {
-          getRunConfig: this.getRunConfig,
-          getRunIdentity: this.getRunIdentity,
-          getExecutionId: this.getExecutionId,
+          getRunMetadata: (stream) =>
+            this.provider.state.snapshots.getRunMetadata(stream),
         },
         // Workflow actions intentionally wait for the run to finish.
         runExecutionRequest: (request) => this.executeValidated(request),
@@ -395,14 +385,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       workflowFileActions: {
         state: {
           getActiveStream: () => this.provider.state.activeStream,
-          getExecutionId: this.getExecutionId,
-          getOutputFiles: this.getOutputFiles,
-          getAgentModel: (stream) => {
-            const config = this.getRunConfig(stream);
-            return config
-              ? { agent: config.agent, model: config.model }
-              : undefined;
-          },
+          getRunMetadata: (stream) =>
+            this.provider.state.snapshots.getRunMetadata(stream),
+          getOutputFiles: (stream) =>
+            this.provider.state.snapshots.getOutputFiles(stream),
         },
         host: {
           compareFiles: async (baseFile, editedFile) => {
@@ -568,9 +554,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
       state: {
-        getRunConfig: this.getRunConfig,
-        getExecutionId: this.getExecutionId,
-        getOutputFiles: this.getOutputFiles,
+        getRunMetadata: (stream) =>
+          this.provider.state.snapshots.getRunMetadata(stream),
+        getOutputFiles: (stream) =>
+          this.provider.state.snapshots.getOutputFiles(stream),
         getKnownWorkspaceOutputPaths: (stream) =>
           this.provider.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
@@ -637,11 +624,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return modelOptions;
       },
       state: {
-        getRunConfig: this.getRunConfig,
-        getOutputFiles: this.getOutputFiles,
+        getRunMetadata: (stream) =>
+          this.provider.state.snapshots.getRunMetadata(stream),
+        getOutputFiles: (stream) =>
+          this.provider.state.snapshots.getOutputFiles(stream),
         getCompileFailures: (stream) =>
           this.provider.state.snapshots.getCompileFailures(stream),
-        getExecutionId: this.getExecutionId,
       },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
@@ -762,7 +750,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }
     }
 
-    const config = this.getRunConfig(data.stream);
+    const { config } = this.provider.state.snapshots.getRunMetadata(
+      data.stream,
+    );
     if (!config) {
       await this.host.info(
         `The settings for this run are no longer available. ${chooseAnotherModel}`,

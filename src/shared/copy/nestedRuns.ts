@@ -73,8 +73,6 @@ export const SESSION_LIST = {
   openHelp: 'selects sessions',
   /** Input-bar placeholder while the list owns keys. */
   choosing: 'Choosing a session; press Esc to return to the prompt.',
-  /** Recovery hint when the focused session no longer accepts follow-ups. */
-  selectHint: 'press Tab to select a session',
 } as const;
 
 /**
@@ -89,6 +87,5 @@ export const FOREGROUND_OWNERSHIP = {
 
 /** Follow-up rejection copy when the focused nested run has already finished. */
 export const FOCUSED_BACKGROUND_TASK = {
-  noLongerAccepting: `This ${BACKGROUND_TASK_INLINE} is no longer accepting follow-ups; ${SESSION_LIST.selectHint}.`,
   selectedNoLongerAccepting: `The selected ${BACKGROUND_TASK_INLINE} is no longer accepting follow-ups.`,
 } as const;

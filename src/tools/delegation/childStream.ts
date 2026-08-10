@@ -14,7 +14,12 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
-import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
+import type {
+  ExecutionId,
+  RunIdentity,
+  StreamTabId,
+  UserFollowUpSupport,
+} from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
@@ -26,6 +31,8 @@ interface CreateChildStreamOptions {
   streamPrefix: string;
   /** What owns this stream — the launch site declares the truth once. */
   run: RunIdentity;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  userFollowUpSupport?: UserFollowUpSupport;
   description: string;
   config: AgentConfig;
   /** Writer atomically reserved by createRehydratedChildStream. */
@@ -127,6 +134,7 @@ export function createChildStream(
       streamId: childStreamId,
       executionId,
       identity: options.run,
+      userFollowUpSupport: options.userFollowUpSupport,
     });
     runTrace.trace.emit({
       type: 'run.config',

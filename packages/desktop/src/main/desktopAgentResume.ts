@@ -67,8 +67,8 @@ async function resolveDesktopResumeState(
   streamId: StreamTabId,
   context: DesktopResumeContext,
 ): Promise<DesktopResumeState | undefined> {
-  let runState = context.session.snapshots.getRunConfig(streamId);
-  let executionId = context.session.snapshots.getExecutionId(streamId);
+  let runMetadata = context.session.snapshots.getRunMetadata(streamId);
+  let { config: runState, executionId } = runMetadata;
   if (!runState || !executionId) {
     try {
       await context.session.snapshots.preload([streamId]);
@@ -79,8 +79,9 @@ async function resolveDesktopResumeState(
       );
       return undefined;
     }
-    runState = context.session.snapshots.getRunConfig(streamId);
-    executionId ??= context.session.snapshots.getExecutionId(streamId);
+    runMetadata = context.session.snapshots.getRunMetadata(streamId);
+    runState = runMetadata.config;
+    executionId ??= runMetadata.executionId;
     if (!runState || !context.session.transcripts.has(streamId)) {
       return undefined;
     }

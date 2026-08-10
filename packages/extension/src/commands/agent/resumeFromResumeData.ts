@@ -49,8 +49,8 @@ export function tryResumeFromResumeData(
           logger.warn(`No ProgressViewProvider found for stream: ${id}`);
           return undefined;
         }
-        const executionId = progressState.snapshots.getExecutionId(id);
-        const runConfig = progressState.snapshots.getRunConfig(id);
+        const { config: runConfig, executionId } =
+          progressState.snapshots.getRunMetadata(id);
         if (!executionId) {
           logger.warn(`No execution ID found for stream: ${id}`);
           return undefined;

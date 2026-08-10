@@ -51,6 +51,7 @@ import {
   type StreamTabMeta,
   type TodoItem,
   type TokenUsageStats,
+  type UserFollowUpSupport,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { mapToRecord, throwAggregated } from '@utils/core';
@@ -128,7 +129,20 @@ type UsageUpdateResult =
 interface HydratedRunState {
   config?: AgentConfig;
   identity?: RunIdentity;
+  userFollowUpSupport?: UserFollowUpSupport;
   description?: string;
+}
+
+/**
+ * The five execution-scoped facts owned by one run record and replaced or
+ * hydrated together when a stream changes execution.
+ */
+export interface RunMetadata {
+  readonly executionId?: ExecutionId;
+  readonly identity?: RunIdentity;
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly config?: AgentConfig;
+  readonly description?: string;
 }
 
 /**
@@ -254,6 +268,7 @@ interface StreamRecord {
    */
   runExecutionId: ExecutionId | undefined;
   runIdentity: RunIdentity | undefined;
+  userFollowUpSupport: UserFollowUpSupport | undefined;
   runConfig: AgentConfig | undefined;
   /**
    * Display description projected from the authority,
@@ -309,6 +324,7 @@ export class StreamSnapshotStore {
     meta: undefined,
     runExecutionId: undefined,
     runIdentity: undefined,
+    userFollowUpSupport: undefined,
     runConfig: undefined,
     description: undefined,
     seeded: false,
@@ -425,7 +441,12 @@ export class StreamSnapshotStore {
 
         switch (event.type) {
           case 'run.start':
-            this.setRunStart(event.streamId, event.executionId, event.identity);
+            this.setRunStart(
+              event.streamId,
+              event.executionId,
+              event.identity,
+              event.userFollowUpSupport,
+            );
             return;
           case 'run.config':
             this.setRunConfig(event.streamId, event.config, event.executionId);
@@ -1113,6 +1134,7 @@ export class StreamSnapshotStore {
       // Identity stays absent (renders pending) until `run.start` or a seed
       // reads the durable `ExecutionMeta.identity` — never synthesized here.
       record.runIdentity = undefined;
+      record.userFollowUpSupport = undefined;
       record.description = undefined;
     }
     record.runConfig = config;
@@ -1129,6 +1151,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     executionId: ExecutionId,
     identity: RunIdentity,
+    userFollowUpSupport: UserFollowUpSupport | undefined,
   ): void {
     const record = this.getOrCreateRecord(stream);
     // The config of the run this stream just left is not this run's config;
@@ -1142,6 +1165,7 @@ export class StreamSnapshotStore {
     }
     record.runExecutionId = executionId;
     record.runIdentity = identity;
+    record.userFollowUpSupport = userFollowUpSupport;
     this.queueMetaPatch(stream, { executionId });
   }
 
@@ -1163,16 +1187,20 @@ export class StreamSnapshotStore {
     record.description = description;
   }
 
-  getRunIdentity(stream: StreamTabId): RunIdentity | undefined {
-    return this.records.get(stream)?.runIdentity;
-  }
-
-  getRunConfig(stream: StreamTabId): AgentConfig | undefined {
-    return this.records.get(stream)?.runConfig;
-  }
-
-  getExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    return this.records.get(stream)?.runExecutionId;
+  /**
+   * Canonical immutable run record projected from live facts or hydrated from
+   * the execution record named by the stream sidecar. All five fields share
+   * that execution owner and replacement lifecycle.
+   */
+  getRunMetadata(stream: StreamTabId): RunMetadata {
+    const record = this.records.get(stream);
+    return Object.freeze({
+      executionId: record?.runExecutionId,
+      identity: record?.runIdentity,
+      userFollowUpSupport: record?.userFollowUpSupport,
+      config: record?.runConfig,
+      description: record?.description,
+    });
   }
 
   /** Streams with persisted sidecars under `streamData/`. */
@@ -1224,15 +1252,6 @@ export class StreamSnapshotStore {
     }
     await this.preload(children);
     return children.filter((child) => this.getParentStreamId(child) === parent);
-  }
-
-  /**
-   * The stream's display description, projected from the one authority,
-   * `ExecutionMeta.description` (#9590 A4) — live event or load-time
-   * hydration. The legacy sidecar mirror is retired.
-   */
-  getDescription(stream: StreamTabId): string | undefined {
-    return this.records.get(stream)?.description;
   }
 
   /** Read-only view of stream→executionId for waiting-stream detection. */
@@ -1596,6 +1615,7 @@ export class StreamSnapshotStore {
   ): Promise<HydratedRunState> {
     const executionId = meta.executionId;
     let identity: RunIdentity | undefined;
+    let userFollowUpSupport: UserFollowUpSupport | undefined;
     let description: string | undefined;
 
     if (executionId) {
@@ -1611,6 +1631,7 @@ export class StreamSnapshotStore {
         // #9590 Stage 7: hydrate without an identity, loudly — never
         // reconstruct one from stream-id prefixes or config.
         identity = execMeta?.identity;
+        userFollowUpSupport = execMeta?.userFollowUpSupport;
         if (execMeta && !identity && !this.preIdentityWarned.has(stream)) {
           this.preIdentityWarned.add(stream);
           logger.warn(
@@ -1627,10 +1648,12 @@ export class StreamSnapshotStore {
           { data: { stream, executionId, error } },
         );
       }
-      if (config) return { config, identity, description };
+      if (config) {
+        return { config, identity, userFollowUpSupport, description };
+      }
     }
 
-    return { identity, description };
+    return { identity, userFollowUpSupport, description };
   }
 
   /** Seed the in-memory accumulators for one stream. */
@@ -1680,6 +1703,7 @@ export class StreamSnapshotStore {
     if (!meta || previousExecutionId !== executionId) {
       record.runExecutionId = undefined;
       record.runIdentity = undefined;
+      record.userFollowUpSupport = undefined;
       record.runConfig = undefined;
       // The display description belongs to the execution it was projected
       // from (#9590 Stage 6); when identity changes hands, drop it with the
@@ -1697,6 +1721,7 @@ export class StreamSnapshotStore {
       if (liveExecutionId === undefined || liveExecutionId === executionId) {
         record.runExecutionId ??= executionId;
         record.runIdentity ??= hydrated.identity;
+        record.userFollowUpSupport ??= hydrated.userFollowUpSupport;
         // The authority's description rides the same execution-meta read as
         // identity — free on every seed. A live `updateStreamDescription`
         // that landed during the await owns the field by presence.

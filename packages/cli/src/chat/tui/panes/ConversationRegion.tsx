@@ -69,6 +69,7 @@ interface ConversationRegionSnapshot {
 interface ConversationRegionProps {
   readonly colorEnabled?: boolean;
   readonly columns: number;
+  readonly inputBarVisible: boolean;
   readonly onStaticTranscriptChange?: () => void;
   readonly renderForegroundSurface: (availableRows: number) => ReactNode;
   readonly renderFooterChrome: () => ReactNode;
@@ -85,6 +86,7 @@ interface ConversationRegionProps {
 export function ConversationRegion({
   colorEnabled,
   columns,
+  inputBarVisible,
   onCancelChildList,
   onChildSelectionChange,
   onFocusSession,
@@ -98,7 +100,6 @@ export function ConversationRegion({
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
-  const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({
     activeStreamId: snapshot.activeStreamId,
     parentStream: snapshot.parentStream,

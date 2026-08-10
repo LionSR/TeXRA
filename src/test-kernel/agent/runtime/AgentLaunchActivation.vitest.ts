@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   completeOwnedExecutionLease: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
+  getPersistedUserFollowUpSupport: vi.fn(),
   hasPersistedParent: vi.fn(),
   load: vi.fn(),
   releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@transcript', async (importActual) => ({
 vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
 vi.mock('@agent/storage/executionLifecycle', () => ({
   clearTerminalExecutionState: mocks.clearTerminalExecutionState,
+  getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 vi.mock('@agent/storage/executionLease', () => ({
@@ -56,10 +58,11 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import type {
-  ExecutionId,
-  SetActiveStreamPayload,
-  StreamTabId,
+import {
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type SetActiveStreamPayload,
+  type StreamTabId,
 } from '@shared/schemas';
 
 // Test support imports
@@ -136,6 +139,9 @@ describe('native agent launch activation', () => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
     mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
+      USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    );
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );

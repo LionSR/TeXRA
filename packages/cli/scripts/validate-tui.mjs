@@ -60,7 +60,6 @@ const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
   // Keep in sync with FOCUSED_BACKGROUND_TASK in src/shared/copy/nestedRuns.ts.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
-const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START}.`;
 const STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE =
   // Keep in sync with FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting.
   'The selected background task is no longer accepting follow-ups.';
@@ -190,6 +189,46 @@ const SCENARIOS = [
       'Proofread (1/1)',
       'correct running',
       '2 subagents',
+    ],
+  },
+  {
+    name: 'workflow-running-composer-hidden',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_WORKFLOW_RUNNING: '1',
+    },
+    bootExpect: "Workflow script 'live-workflow-validation'",
+    keys: ['must not reach workflow', '\r'],
+    expect: [
+      "Workflow script 'live-workflow-validation'",
+      'Proofread (1/1) · 0/2 done',
+      'Esc back',
+    ],
+    unexpect: [
+      'must not reach workflow',
+      'Harness received: must not reach workflow',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
+    ],
+  },
+  {
+    name: 'process-child-composer-hidden',
+    frame: 'viewport',
+    rows: 24,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_PROCESS_CHILD: '1',
+    },
+    bootExpect: 'Esc back',
+    keys: ['must not reach bash', '\r'],
+    expect: ['1 running session', 'Esc back'],
+    unexpect: [
+      'must not reach bash',
+      'Harness received: must not reach bash',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
     ],
   },
   {
@@ -3085,13 +3124,14 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k'],
     expect: [
+      'Harness kill requested for harness-child-strategy.',
       '›   ● strategy stopped',
       'Enter focus',
-      'v full output',
       'Tab input',
       'Esc input',
     ],
     unexpect: [
+      'v full output',
       'k kill',
       'Harness kill requested for harness-child-strategy.\n\nHarness kill requested for harness-child-strategy.',
     ],
@@ -3106,13 +3146,8 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
-    expect: [
-      '◆ stopped',
-      'root active',
-      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
-      'Ctrl-C stop root',
-    ],
-    expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
+    expect: ['◆ stopped', 'root active', 'Ctrl-C stop root', 'Esc back'],
+    unexpect: [STOPPED_SUBAGENT_INPUT_MESSAGE_START],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
@@ -3152,11 +3187,12 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    expect: ['◆ stopped', 'root active', STOPPED_SUBAGENT_INPUT_MESSAGE_START],
-    expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
+    expect: ['◆ stopped', 'root active', 'Esc back'],
     unexpect: [
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
       'Harness received: can you still receive this?',
+      'can you still receive this?',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
@@ -3256,7 +3292,33 @@ const SCENARIOS = [
     unexpect: ['Harness interrupt requested.'],
   },
   {
-    name: 'escape-stops-focused-child-only',
+    name: 'escape-returns-focused-child-to-parent-list',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'Tab sessions',
+    keys: ['\t', DOWN, DOWN, DOWN, '\r', { input: ESC, delayMs: 700 }, '\t'],
+    frame: 'viewport',
+    expect: [
+      '› ✓ ● main running',
+      'strategy running',
+      'leanSolver idle',
+      'reviewer running',
+      '3 subagents',
+      'Choosing a session',
+      'Ctrl-C stop',
+    ],
+    unexpect: [
+      'Harness interrupt requested.',
+      'Harness focused interrupt requested',
+      'main stopped',
+      'strategy stopped',
+    ],
+  },
+  {
+    name: 'escape-returns-focused-child-to-parent-input',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -3270,38 +3332,17 @@ const SCENARIOS = [
       DOWN,
       '\r',
       { input: ESC, delayMs: 700 },
-      DOWN,
-      UP,
+      'root draft after child back',
     ],
     frame: 'viewport',
-    expect: [
-      'strategy stopped',
-      'leanSolver idle',
-      'reviewer running',
-      '3 subagents',
+    expect: ['root draft after child back', '3 subagents', 'Ctrl-C stop'],
+    unexpect: [
       'Choosing a session',
-    ],
-    unexpect: ['Harness interrupt requested.', '› ✓ ● main stopped'],
-  },
-  {
-    name: 'escape-captures-focused-child',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-      HARNESS_RETARGET_FOCUSED_ESCAPE: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', { input: ESC, delayMs: 700 }, '\t'],
-    frame: 'viewport',
-    expect: [
+      'Harness interrupt requested.',
+      'Harness focused interrupt requested',
+      'main stopped',
       'strategy stopped',
-      '› ✓ ● reviewer running',
-      'leanSolver idle',
-      'Tab input',
-      'Ctrl-C stop root',
     ],
-    unexpect: ['Harness interrupt requested.', '› ✓ ● main stopped'],
   },
   {
     name: 'escape-modal-owned',
