@@ -3,9 +3,11 @@
 
 import { Box, Text } from 'ink';
 
+import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
+  workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
@@ -129,14 +131,30 @@ function renderConversationPaneEntry({
 }
 
 /**
+ * One colored fragment of the workflow status band. Neutral progress is
+ * `muted` (the band's prior dim styling); a failure tally is `warning` so a
+ * degraded run does not read as a clean one. Separators are added by the
+ * renderer, never stored here, so the data stays a clean logical list.
+ */
+interface WorkflowStatusSegment {
+  readonly text: string;
+  readonly tone: 'muted' | 'warning';
+}
+
+/**
  * One-line workflow status band. Phase progress leads so it survives
  * `truncate-end` on a narrow terminal. The running `done/total` lives here
  * rather than on the `◆` divider because that divider prints once into
  * scrollback and can never be rewritten.
+ *
+ * A whole-run failure tally is appended in a warning tone the moment any call
+ * fails. The engine deliberately keeps the run going after a failed subagent
+ * (it resolves to `null`), so the lifecycle stays `completed` — but the status
+ * band must not let that read as a clean run.
  */
 export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
-): string | undefined {
+): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
   const phase = slice.entries.findLast((entry) => entry.role === 'phase');
   const { done, total } = workflowPhaseCallProgress(
@@ -148,11 +166,28 @@ export function workflowRunStatusSummary(
         )
       : [],
   );
-  const segments = [
-    ...(phase ? [formatWorkflowPhaseHeading(phase)] : []),
-    ...(total > 0 ? [`${done}/${total} done`] : []),
-  ];
-  return segments.length > 0 ? segments.join(' · ') : undefined;
+  const segments: WorkflowStatusSegment[] = [];
+  if (phase) {
+    segments.push({ text: formatWorkflowPhaseHeading(phase), tone: 'muted' });
+  }
+  if (total > 0) {
+    segments.push({ text: `${done}/${total} done`, tone: 'muted' });
+  }
+  // Surface failures only once the band has a phase/progress anchor, so a
+  // stray phase-less failed call does not invent a band on its own. The tally
+  // is whole-run, so a failure persists after the run advances past its phase
+  // (unlike the current-phase done/total).
+  if (segments.length > 0) {
+    const { failed } = workflowCallFailureTally(
+      slice.entries.flatMap((entry) =>
+        entry.role === 'workflowTask' ? [entry.task] : [],
+      ),
+    );
+    if (failed > 0) {
+      segments.push({ text: `${failed} failed`, tone: 'warning' });
+    }
+  }
+  return segments.length > 0 ? segments : undefined;
 }
 
 export function ConversationPane(
@@ -217,10 +252,18 @@ export function ConversationPane(
   // stealing rows reserved for the footer chrome.
   return (
     <Box flexDirection="column" height={visibleRows} overflowY="hidden">
-      {metadataRows > 0 ? (
+      {workflowMetadata !== undefined && metadataRows > 0 ? (
         <Box height={1} width={metadataWidth} overflowY="hidden">
-          <Text dimColor wrap="truncate-end">
-            {workflowMetadata}
+          <Text wrap="truncate-end">
+            {workflowMetadata.map((segment, index) => (
+              <Text
+                key={index}
+                dimColor={segment.tone === 'muted'}
+                color={segment.tone === 'warning' ? COLOR_WARNING : undefined}
+              >
+                {index > 0 ? ` · ${segment.text}` : segment.text}
+              </Text>
+            ))}
           </Text>
         </Box>
       ) : null}
