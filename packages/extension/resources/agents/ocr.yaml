@@ -18,8 +18,8 @@ prompts:
         \item Maintain consistent symbol usage (e.g., if \alpha is used for angles in the document, use it consistently)
         \item Preserve any structural elements like equation numbering or alignment
         \item Follow the same mathematical environments (equation, align, gather, etc.) as used in the document
-        \item Validate that all symbols are properly defined before use
-        \item Handle subscripts, superscripts, fractions, and special symbols appropriately
+        \item Check that every symbol is defined before use
+        \item Transcribe subscripts, superscripts, fractions, and special symbols correctly
     \end{itemize}
 
   userPrefix: |

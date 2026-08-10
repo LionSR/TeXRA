@@ -83,7 +83,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read through the entire document (and any additional documents) to understand the notation system before proceeding.
+    Read the entire collection before proceeding.
 
   userRequest:
     - |
@@ -95,7 +95,7 @@ prompts:
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
-      In the scratchpad below, perform a deep notation analysis. Track symbols systematically and identify issues:
+      In the scratchpad below, track symbols across the document(s) and identify issues:
       <scratchpad>
       \begin{enumerate}
           \item [Notation Inventory and Primary Conventions]

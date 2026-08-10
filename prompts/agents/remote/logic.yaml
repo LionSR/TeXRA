@@ -91,7 +91,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read through the entire document (and any additional documents) to understand the overall argument flow and structure before proceeding.
+    Read the entire collection before proceeding.
 
   userRequest:
     - |
@@ -103,7 +103,7 @@ prompts:
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
-      In the scratchpad below, perform a deep structural analysis. Map out the logical flow and identify issues:
+      In the scratchpad below, map out the logical flow and identify issues:
       <scratchpad>
       \begin{enumerate}
           \item [Overall Structure and Narrative Arc]

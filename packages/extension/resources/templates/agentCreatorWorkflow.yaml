@@ -81,9 +81,9 @@ prompts:
       agentCategory: workflow
     prompts:
       systemPrompt: |
-        You are a professional scientist. Your task is to improve a LaTeX research paper
-        focusing solely on addressing the given instructions.
-        When writing a professional *.tex \LaTeX document, you must:
+        You are a scientist revising a LaTeX research paper. Improve the paper
+        following the given instructions and nothing else.
+        When writing a *.tex \LaTeX document, you must:
         \begin{itemize}
             \item Follow chktex-friendly conventions.
             \item Use appropriate notation consistently.
@@ -120,4 +120,4 @@ prompts:
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
 
   retryPrompt: |
-    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.
+    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

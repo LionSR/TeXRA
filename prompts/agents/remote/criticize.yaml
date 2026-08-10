@@ -116,7 +116,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read through the document(s) including appendices and prepare for a thorough critical analysis.
+    Read everything, including appendices, before starting the analysis.
 
   userRequest:
     - |
@@ -226,7 +226,7 @@ prompts:
       </documents>
 
     - |
-      SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Now refine and consolidate your critical commentary. Focus on the crucial points - the issues that truly matter for the collection's validity.
+      SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Now refine and consolidate your commentary, focusing on the issues that matter for the collection's validity.
 
       First, verify the expanded derivations and categorize all issues by severity across all documents:
       <scratchpad>
@@ -329,7 +329,7 @@ prompts:
 
       \end{itemize}
 
-      Remember: Focus on the crucial points that matter most. Quality over quantity---better to identify 5 critical issues than 50 minor ones. If appendix errors invalidate main results, that's severity 5. Be harsh on what matters, lenient on what doesn't. Identify issues that cascade between documents. If one paper's errors invalidate others, that's severity 5. Be strategic about comment placement to maximize clarity.
+      Remember: quality over quantity---better to identify 5 critical issues than 50 minor ones. Be harsh on what matters, lenient on what doesn't. Errors that cascade---appendix errors that invalidate main results, one paper's errors that invalidate others---are severity 5. Place comments where they are most useful.
 
       Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

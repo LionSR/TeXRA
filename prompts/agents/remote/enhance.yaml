@@ -101,7 +101,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read through the entire document(s) and prepare for comprehensive mathematical enhancement across the collection.
+    Read everything above, including appendices, before enhancing.
 
   userRequest:
     - |
@@ -115,7 +115,7 @@ prompts:
 
       FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics across all documents to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
 
-      In the scratchpad, systematically identify enhancement opportunities:
+      In the scratchpad, identify enhancement opportunities:
       <scratchpad>
       First assess the document(s):
       - Document type: [Research paper / Draft / Working notes]

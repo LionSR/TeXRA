@@ -21,7 +21,7 @@ prompts:
         \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
     \end{itemize}
 
-    When writing a professional scientific document, you must:
+    When writing a scientific document, you must:
     \begin{itemize}
         \item Follow best practices to ensure zero warnings when checked by chktex.
         \item Use consistent and appropriate mathematical notation and terminology throughout all papers.
@@ -35,7 +35,7 @@ prompts:
         \item When referring to equations, always use \cref{...} instead of numbers.
         \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
 
-        \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
+        \item Maintain the structure and formatting of each individual paper while making improvements.
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
 
     \end{itemize}
@@ -66,7 +66,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully read through the document(s) and ensure you fully understand all the mathematical content and scientific context.
+    Read the document(s) until you understand the mathematical content and scientific context.
 
   userRequest:
     - |
@@ -78,7 +78,7 @@ prompts:
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
-      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
+      FIRST PHASE: Focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly and every calculation in full detail.
 
       In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly across all papers. Consider:
       - What are the fundamental principles and definitions we start from
@@ -181,7 +181,7 @@ prompts:
       </derive-to-revise>
       </scratchpad>
 
-      Then, following your plan in the scratchpad, please output revised version(s) of the LaTeX document(s) that transform the fully derived mathematical drafts into polished scientific papers with an appropriate level of detail. Focus on addressing the original instruction while maintaining scientific clarity and proper motivation. Remember, the goal is not to show every mathematical step unless specifically required by the instruction, but to present the mathematics in a way that best serves the scientific content.
+      Then, following your plan in the scratchpad, output revised version(s) of the LaTeX document(s) that turn the fully derived drafts into polished scientific papers at the appropriate level of detail, addressing the original instruction with clear motivation throughout.
 
       Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

@@ -34,9 +34,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully review the provided research paper before creating the poster.
-
-    Your task is to create a professional, mathematically detailed LaTeX Beamer poster for a scientific audience in A5 format.
+    Read the paper carefully before building the poster. Create a mathematically detailed LaTeX Beamer poster for a scientific audience in A5 format.
 
     \begin{itemize}
         \item Use LaTeX Beamer syntax and commands correctly.

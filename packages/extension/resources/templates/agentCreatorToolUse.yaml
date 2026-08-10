@@ -52,7 +52,7 @@ prompts:
     prompts:
       systemPrompt: |
         <Role and task description. Explain what the agent does and give specific
-         guidance on how to use the selected tools effectively for this task.
+         guidance on how to use the selected tools for this task.
          Remind the agent to use tools to read files, search, etc.>
       userRequest: |
         {{ INSTRUCTION }}
@@ -61,7 +61,7 @@ prompts:
     - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
     - Do NOT include a userPrefix section — tool-use agents don't receive pre-loaded files.
     - Include exactly these tools: {{ SELECTED_TOOLS }}.
-    - The systemPrompt should guide the agent on how to use its specific tools effectively.
+    - The systemPrompt should say how the agent uses its specific tools.
 
   retryPrompt: |
-    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.
+    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

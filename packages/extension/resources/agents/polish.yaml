@@ -6,9 +6,9 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a professional scientist. Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
+    You are a scientist revising a LaTeX research paper. Improve the paper following the given instructions and nothing else.
 
-    When writing a professional *.tex \LaTeX document, you must:
+    When writing a *.tex \LaTeX document, you must:
     {{ LATEX_STYLE_RULES }}
     Additional rules for polishing:
     \begin{itemize}
@@ -37,8 +37,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully read through the entire research paper above and ensure you fully understand all the details.
-    Your task is to enhance this paper focusing solely on the following specific instruction:
+    Your task is to improve this paper following only the specific instruction below:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>

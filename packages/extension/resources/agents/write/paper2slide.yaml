@@ -10,7 +10,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert scientist and scientific presenter. Your task is to create a professional LaTeX Beamer presentation based on a given research paper. The presentation should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of the paper.
+    You are an expert scientist and scientific presenter. Your task is to create a LaTeX Beamer presentation from a given research paper, for a scientific audience, covering the paper's motivation, methods, results, and conclusions.
 
     When creating the presentation:
     - Use LaTeX Beamer syntax and commands
@@ -35,10 +35,10 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully review the provided research paper before creating the presentation.
+    Read the paper carefully before writing slides.
   userRequest:
     - |
-      Create a complete, self-contained LaTeX Beamer presentation for a scientific audience, following the guidelines above, that effectively communicates the paper's key findings.
+      Create a complete, self-contained LaTeX Beamer presentation for a scientific audience, following the guidelines above, that communicates the paper's key findings.
 
       {% if INSTRUCTION %}
       Focus solely on the following specific instruction:

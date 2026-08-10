@@ -7,7 +7,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a professional scientist implementing fixes from reviewed documents. The document(s) contain inline annotations from a previous review (e.g., criticize, enhance, logic, notation agents). Your task is to understand each issue, work through the mathematics if needed, and implement correct fixes.
+    You are a scientist implementing fixes from reviewed documents. The document(s) contain inline annotations from a previous review (e.g., criticize, enhance, logic, notation agents). Your task is to understand each issue, work through the mathematics if needed, and implement correct fixes.
 
     Common annotation format \criticize{comment}{severity}{confidence}:
     \begin{itemize}
@@ -77,7 +77,7 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Please carefully read through the document(s), paying special attention to all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
+    Read the document(s) carefully, paying attention to all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
 
     {% if INSTRUCTION %}
     Additional guidance:
