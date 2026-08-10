@@ -2,12 +2,16 @@ import {
   TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
-  type ExecutionId,
-  type StreamTabId,
   type WorkflowCallIdentity,
   type WorkflowExecutionCall,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
+import {
+  WORKFLOW_CALL_NOT_REACHED_NOTE,
+  WORKFLOW_CALL_UNFINISHED_NOTE,
+} from '@shared/copy/workflowCall';
+
+import type { WorkflowAttemptFacts } from './types';
 
 interface WorkflowCallDefinition {
   readonly id: string;
@@ -175,7 +179,7 @@ export class WorkflowExecutionState {
     }
     const timestamp = now();
     // Only assign agent when the call definition supplies one. Engine issue
-    // often omits agentName; reportAgent later fills the host-resolved name.
+    // often omits agentName; a later report fills the host-resolved name.
     // Re-issuing on resume must not wipe a hydrated agent with undefined —
     // the journal-cache path only patches status/timestamps and would leave
     // /executions without the resolved agent after a cached replay.
@@ -278,42 +282,32 @@ export class WorkflowExecutionState {
     this.#emit();
   }
 
-  reportChildExecution(id: string, executionId: ExecutionId): void {
-    if (this.#sealed) return;
-    const call = this.#call(id);
-    call.childExecutionId = executionId;
-    const attempt = call.attempts.at(-1);
-    if (attempt) attempt.id = executionId;
-    call.timestamps.updatedAt = now();
-    this.#emit();
-  }
-
-  reportChildStream(id: string, streamId: StreamTabId): void {
-    if (this.#sealed) return;
-    const call = this.#call(id);
-    call.childStreamId = streamId;
-    const attempt = call.attempts.at(-1);
-    if (attempt) attempt.childStreamId = streamId;
-    call.timestamps.updatedAt = now();
-    this.#emit();
-  }
-
-  reportModel(id: string, model: string): void {
-    if (this.#sealed) return;
-    const call = this.#call(id);
-    call.model = model;
-    const attempt = call.attempts.at(-1);
-    if (attempt) attempt.model = model;
-    call.timestamps.updatedAt = now();
-    this.#emit();
-  }
-
-  reportCostUsd(id: string, costUsd: number): void {
+  /**
+   * Stamp host-resolved facts onto the call and its latest attempt. Each fact
+   * is independent — an omitted one leaves the current value in place — and the
+   * whole patch lands in one transition, so no observer sees a half-applied
+   * report.
+   */
+  reportAttempt(id: string, facts: Omit<WorkflowAttemptFacts, 'agent'>): void {
     if (this.#sealed) return;
     const call = this.#call(id);
     const attempt = call.attempts.at(-1);
-    if (attempt) attempt.costUsd = costUsd;
-    call.costUsd = totalAttemptCost(call.attempts);
+    if (facts.childExecutionId !== undefined) {
+      call.childExecutionId = facts.childExecutionId;
+      if (attempt) attempt.id = facts.childExecutionId;
+    }
+    if (facts.childStreamId !== undefined) {
+      call.childStreamId = facts.childStreamId;
+      if (attempt) attempt.childStreamId = facts.childStreamId;
+    }
+    if (facts.model !== undefined) {
+      call.model = facts.model;
+      if (attempt) attempt.model = facts.model;
+    }
+    if (facts.costUsd !== undefined) {
+      if (attempt) attempt.costUsd = facts.costUsd;
+      call.costUsd = totalAttemptCost(call.attempts);
+    }
     call.timestamps.updatedAt = now();
     this.#emit();
   }
@@ -353,7 +347,7 @@ export class WorkflowExecutionState {
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
-        call.blockedReason = 'Workflow ended before this call was reached';
+        call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
       } else if (
@@ -365,7 +359,7 @@ export class WorkflowExecutionState {
           lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
-        call.error ??= 'Workflow ended before this call completed';
+        call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
       }

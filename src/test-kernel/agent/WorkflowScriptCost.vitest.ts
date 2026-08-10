@@ -79,7 +79,10 @@ describe('workflow attempt cost', () => {
 return await agent('retry cost')`,
       runAgent: async (invocation) => {
         attempt += 1;
-        invocation.reportCostUsd?.(attempt === 1 ? 0.2 : 0.3);
+        invocation.report?.({
+          costUsd: attempt === 1 ? 0.2 : 0.3,
+          childExecutionId: `retry-cost-${attempt}` as ExecutionId,
+        });
         if (attempt === 1) {
           await new Promise<void>((_resolve, reject) =>
             invocation.signal.addEventListener(
@@ -97,7 +100,7 @@ return await agent('retry cost')`,
     });
 
     await vi.waitFor(() => expect(attempt).toBe(1));
-    control.retry(0);
+    control('retry-cost-1' as ExecutionId, 'retry');
     await vi.waitFor(() => expect(attempt).toBe(2));
     const result = await run;
 

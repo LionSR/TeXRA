@@ -88,6 +88,17 @@ export function formatWorkflowPhaseHeading(
 }
 
 /**
+ * What a run that ended first says about a call, written once here because two
+ * channels report it: the execution snapshot the engine terminalizes and the
+ * trace cards the run's progress projection settles. Two spellings of one
+ * sentence is drift, not two facts.
+ */
+export const WORKFLOW_CALL_NOT_REACHED_NOTE =
+  'The workflow ended before this call was reached.';
+export const WORKFLOW_CALL_UNFINISHED_NOTE =
+  'The workflow ended before this call completed.';
+
+/**
  * The one explanatory-clause rule for a workflow call, shared by every host: a
  * failure reports its error, and a call the run never reached says so. A user
  * skip is self-explanatory and gets no clause.
@@ -97,10 +108,7 @@ export function workflowCallDetail(
 ): { readonly kind: 'error' | 'note'; readonly text: string } | undefined {
   if (call.status === 'failed') return { kind: 'error', text: call.error };
   if (call.status === 'skipped' && call.reason === 'not-reached') {
-    return {
-      kind: 'note',
-      text: 'The workflow ended before this call was reached.',
-    };
+    return { kind: 'note', text: WORKFLOW_CALL_NOT_REACHED_NOTE };
   }
   return undefined;
 }

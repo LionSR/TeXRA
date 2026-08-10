@@ -178,6 +178,25 @@ interface InBandRunOptions {
   prepare: () => Promise<unknown>;
 }
 
+/** The merged attempt-facts channel the runner reports every fact through. */
+type AttemptFacts = Parameters<
+  NonNullable<WorkflowAgentInvocation['report']>
+>[0];
+
+function reportSpy(): ReturnType<typeof vi.fn<(facts: AttemptFacts) => void>> {
+  return vi.fn<(facts: AttemptFacts) => void>();
+}
+
+/** Every value one fact carried, in report order — a per-field view of the merged channel. */
+function reported<Field extends keyof AttemptFacts>(
+  report: ReturnType<typeof reportSpy>,
+  field: Field,
+): NonNullable<AttemptFacts[Field]>[] {
+  return report.mock.calls.flatMap(([facts]) =>
+    facts[field] === undefined ? [] : [facts[field]],
+  );
+}
+
 // Stable in-band execution that runs the child's prepare step and records the
 // options it produced, as the real executor does.
 function inBandRunReturning(finalResult: AgentFinalResult) {
@@ -297,17 +316,14 @@ describe('createWorkflowScriptAgentRunner', () => {
       mediaFiles: ['figure.pdf'],
       label: 'Draft paper',
     });
-    call.reportModel = vi.fn();
-    call.reportAgent = vi.fn();
-    call.reportChildExecution = vi.fn();
-    call.reportCostUsd = vi.fn();
-    call.reportChildStream = vi.fn();
+    const report = reportSpy();
+    call.report = report;
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
         options.onActiveExecutionId?.(options.executionId);
         const prepared = await options.prepare();
         mocks.preparedOptions.push(prepared);
-        expect(call.reportChildStream).not.toHaveBeenCalled();
+        expect(reported(report, 'childStreamId')).toEqual([]);
         prepared.onStreamResolved?.(
           `correct@child-model#${options.executionId}` as StreamTabId,
         );
@@ -367,15 +383,18 @@ describe('createWorkflowScriptAgentRunner', () => {
         }),
       }),
     );
-    expect(call.reportModel).toHaveBeenCalledWith('child-model');
-    expect(call.reportAgent).toHaveBeenCalledWith('correct');
-    expect(call.reportChildExecution).toHaveBeenCalledWith(
+    // Model and agent resolve together, so they ride one report.
+    expect(report).toHaveBeenCalledWith({
+      model: 'child-model',
+      agent: 'correct',
+    });
+    expect(reported(report, 'childExecutionId')).toEqual([
       expect.stringMatching(/^[a-f0-9]{24}$/),
-    );
-    expect(call.reportCostUsd).toHaveBeenCalledWith(result.cost);
-    expect(call.reportChildStream).toHaveBeenCalledWith(
+    ]);
+    expect(reported(report, 'costUsd')).toEqual([result.cost]);
+    expect(reported(report, 'childStreamId')).toEqual([
       expect.stringMatching(/^correct@child-model#[a-f0-9]{24}$/),
-    );
+    ]);
   });
 
   it('treats missing workspace files as run-fatal configuration', async () => {
@@ -634,7 +653,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('reports live child cost with its workflow invocation identity', async () => {
     const onCost = vi.fn();
-    const reportCostUsd = vi.fn();
+    const report = reportSpy();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
         options.onActiveExecutionId?.(options.executionId);
@@ -644,19 +663,18 @@ describe('createWorkflowScriptAgentRunner', () => {
       },
     );
     const runner = defaultRunner({ onCost });
-    const call = { ...invocation(), reportCostUsd };
+    const call = { ...invocation(), report };
 
     await runner(call);
 
     expect(onCost).toHaveBeenCalledWith(call, 0.25);
-    // Progressive onCost stamps the live snapshot attempt (not only success).
-    expect(reportCostUsd).toHaveBeenCalledWith(0.25);
-    // Terminal result cost is also stamped (same value here).
-    expect(reportCostUsd).toHaveBeenCalledWith(result.cost);
+    // Progressive onCost stamps the live snapshot attempt (not only success),
+    // and the terminal result cost is stamped after it (same value here).
+    expect(reported(report, 'costUsd')).toEqual([0.25, result.cost]);
   });
 
   it('stamps terminal cost on failed outcomes before throwing', async () => {
-    const reportCostUsd = vi.fn();
+    const report = reportSpy();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
         options.onActiveExecutionId?.(options.executionId);
@@ -673,17 +691,15 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     const runner = defaultRunner();
 
-    await expect(runner({ ...invocation(), reportCostUsd })).rejects.toThrow(
+    await expect(runner({ ...invocation(), report })).rejects.toThrow(
       /ended with failed outcome/,
     );
-    expect(reportCostUsd).toHaveBeenCalledWith(0.42);
+    expect(reported(report, 'costUsd')).toEqual([0.42]);
   });
 
   it('does not report recovered stable child cost as live execution', async () => {
     const onCost = vi.fn();
-    const reportChildStream = vi.fn();
-    const reportChildExecution = vi.fn();
-    const reportCostUsd = vi.fn();
+    const report = reportSpy();
     const recoveredStreamId = 'correct@child-model#bbbbbb222222' as StreamTabId;
     mocks.readExecutionMeta.mockResolvedValueOnce({
       streamId: recoveredStreamId,
@@ -694,24 +710,18 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
     const runner = defaultRunner({ onCost });
 
-    await runner({
-      ...invocation(),
-      index: 3,
-      reportChildStream,
-      reportChildExecution,
-      reportCostUsd,
-    });
+    await runner({ ...invocation(), index: 3, report });
 
     expect(onCost).not.toHaveBeenCalled();
     // Recovered durable children never fire onActiveExecutionId — re-attach the
     // known child id, but do not charge the synthetic resume attempt.
-    expect(reportChildExecution).toHaveBeenCalledWith('bbbbbb222222');
-    expect(reportChildStream).toHaveBeenCalledWith(recoveredStreamId);
-    expect(reportCostUsd).not.toHaveBeenCalled();
+    expect(reported(report, 'childExecutionId')).toEqual(['bbbbbb222222']);
+    expect(reported(report, 'childStreamId')).toEqual([recoveredStreamId]);
+    expect(reported(report, 'costUsd')).toEqual([]);
   });
 
   it('keeps a recovered result when navigation metadata cannot be read', async () => {
-    const reportChildStream = vi.fn();
+    const report = reportSpy();
     mocks.readExecutionMeta.mockRejectedValueOnce(
       new Error('metadata unavailable'),
     );
@@ -721,10 +731,10 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
     const runner = defaultRunner();
 
-    await expect(
-      runner({ ...invocation(), index: 3, reportChildStream }),
-    ).resolves.toBe(result);
-    expect(reportChildStream).not.toHaveBeenCalled();
+    await expect(runner({ ...invocation(), index: 3, report })).resolves.toBe(
+      result,
+    );
+    expect(reported(report, 'childStreamId')).toEqual([]);
   });
 
   it('aborts the run when a file-editing agent gets no input files', async () => {
@@ -840,11 +850,11 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
   });
 
-  it('reports the active-attempt execution id to onChildActive, not the logical id', async () => {
+  it('reports the active-attempt execution id, not the logical id', async () => {
     // After a durable retry advances the attempt sequence, the live run uses an
     // attempt-specific execution id — the id its child stream / roster expose.
-    // The runner must bridge THAT id (bracketed active→settle), not the logical
-    // id it hands stable execution, so a host's skip/retry finds the row.
+    // The runner must report THAT id, not the logical id it hands stable
+    // execution, so a host's skip/retry finds the row.
     const attemptExecutionId = 'cccccc333333' as ExecutionId;
     let logicalExecutionId: string | undefined;
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
@@ -853,30 +863,14 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.preparedOptions.push(await options.prepare());
       return { executionId: attemptExecutionId, result };
     });
-    const onChildActive = vi.fn();
-    const runner = defaultRunner({ onChildActive });
+    const report = reportSpy();
+    const runner = defaultRunner();
 
-    await expect(runner(invocation())).resolves.toBe(result);
+    await expect(runner({ ...invocation(), report })).resolves.toBe(result);
 
     expect(logicalExecutionId).toMatch(/^[a-f0-9]{24}$/);
     expect(logicalExecutionId).not.toBe(attemptExecutionId);
-    expect(onChildActive).toHaveBeenNthCalledWith(
-      1,
-      attemptExecutionId,
-      expect.objectContaining({ index: 0 }),
-      true,
-    );
-    expect(onChildActive).toHaveBeenNthCalledWith(
-      2,
-      attemptExecutionId,
-      expect.objectContaining({ index: 0 }),
-      false,
-    );
-    expect(onChildActive).not.toHaveBeenCalledWith(
-      logicalExecutionId,
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(reported(report, 'childExecutionId')).toEqual([attemptExecutionId]);
   });
 
   it('routes an agent({ schema }) call to a tool-use agent with an output schema', async () => {
@@ -940,17 +934,19 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
-  it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {
-    // A recovered attempt never fires onActiveExecutionId, so the settle guard
-    // must not emit a phantom active/inactive pair for a call that never ran.
+  it('reports a recovered attempt only through its recovered child id', async () => {
+    // A recovered attempt never fires onActiveExecutionId, so the only child id
+    // it reports is the durable one that supplied the result — no phantom live
+    // attempt is announced for a call that never ran.
     mocks.executeStableSubagentInBand.mockImplementation(async () => ({
       executionId: 'bbbbbb222222',
       result,
     }));
-    const onChildActive = vi.fn();
-    const runner = defaultRunner({ onChildActive });
+    const report = reportSpy();
+    const runner = defaultRunner();
 
-    await expect(runner(invocation())).resolves.toBe(result);
-    expect(onChildActive).not.toHaveBeenCalled();
+    await expect(runner({ ...invocation(), report })).resolves.toBe(result);
+    expect(reported(report, 'childExecutionId')).toEqual(['bbbbbb222222']);
+    expect(reported(report, 'costUsd')).toEqual([]);
   });
 });

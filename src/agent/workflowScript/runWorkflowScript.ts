@@ -7,6 +7,7 @@ import pTimeout from 'p-timeout';
 import {
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
+  type ExecutionId,
   type StreamTabId,
   type WorkflowCallIdentity,
   type WorkflowExecutionSnapshot,
@@ -26,6 +27,7 @@ import {
   WORKFLOW_SKIPPED_RESULT,
   normalizeWorkflowScriptPhaseTitle,
   type WorkflowAgentCallOptions,
+  type WorkflowControlAction,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
   type WorkflowScriptEvent,
@@ -99,7 +101,7 @@ type WorkflowScriptAttemptMetadata = Pick<
  */
 interface InFlightAgentCall {
   readonly controller: AbortController;
-  action?: 'skip' | 'retry';
+  action?: WorkflowControlAction;
 }
 
 /**
@@ -348,6 +350,12 @@ export async function runWorkflowScript(
   // from the record it still holds. Control state is control-plane only —
   // never journaled, so resume identity is untouched.
   const inFlightCalls = new Map<number, InFlightAgentCall>();
+  // Live child execution id → the call index that attempt belongs to. The
+  // runner reports the id it actually launched (attempt-specific after a
+  // durable retry), so a host targets exactly the child it can see; entries die
+  // with the attempt that stamped them, so a stale id can never reach the fresh
+  // attempt a retry starts.
+  const callIndexByChildExecution = new Map<ExecutionId, number>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -395,18 +403,17 @@ export async function runWorkflowScript(
     };
   };
 
-  const requestControl = (index: number, action: 'skip' | 'retry'): void => {
+  const control: WorkflowScriptControl = (childExecutionId, action) => {
+    const index = callIndexByChildExecution.get(childExecutionId);
+    // No-op when the id belongs to no live attempt of this run, or when the
+    // call it named is no longer in flight (already settled).
+    if (index === undefined) return;
     const call = inFlightCalls.get(index);
-    // No-op when the call is not in flight (never started, or already settled).
     if (!call) return;
     call.action = action;
     call.controller.abort(
       new Error(`Workflow agent() call ${index} ${action}.`),
     );
-  };
-  const control: WorkflowScriptControl = {
-    skip: (index) => requestControl(index, 'skip'),
-    retry: (index) => requestControl(index, 'retry'),
   };
   onControl?.(control);
   if (hasTaskPlan) {
@@ -672,7 +679,7 @@ export async function runWorkflowScript(
     // and the reported model are progress-only, never journaled, so they can't
     // affect resume identity or determinism. Declared once outside the attempt
     // loop: durationMs spans the whole call (across any retry), and the latest
-    // attempt's reportModel wins.
+    // attempt's reported model wins.
     const startedAt = Date.now();
     let resolvedModel: string | undefined;
     let childStreamId: StreamTabId | undefined;
@@ -682,8 +689,9 @@ export async function runWorkflowScript(
       ...(childStreamId !== undefined && { childStreamId }),
       durationMs: Date.now() - startedAt,
     });
+    // The execution snapshot solely owns the queued fact (QUEUED status); no
+    // event duplicates it.
     executionState.queueCall(progressId);
-    emit({ type: 'agent:queued', ...eventBase });
 
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
@@ -740,24 +748,36 @@ export async function runWorkflowScript(
               prompt,
               options: callOptions,
               signal: callController.signal,
-              reportModel: (model) => {
-                resolvedModel = model;
-                executionState.reportModel(progressId, model);
-              },
-              reportAgent: (agent) =>
-                executionState.updateCall(progressId, { agent }),
-              reportChildExecution: (executionId) =>
-                executionState.reportChildExecution(progressId, executionId),
-              reportCostUsd: (costUsd) =>
-                executionState.reportCostUsd(progressId, costUsd),
-              reportChildStream: (streamId) => {
-                executionState.reportChildStream(progressId, streamId);
-                childStreamId = streamId;
-                emit({
-                  type: 'agent:stream',
-                  ...eventBase,
-                  childStreamId: streamId,
-                });
+              report: ({ agent, ...attemptFacts }) => {
+                if (attemptFacts.childExecutionId !== undefined) {
+                  // The identity a host targets skip/retry by, stamped where
+                  // the call index is already in scope.
+                  callIndexByChildExecution.set(
+                    attemptFacts.childExecutionId,
+                    index,
+                  );
+                }
+                if (attemptFacts.model !== undefined) {
+                  resolvedModel = attemptFacts.model;
+                }
+                if (attemptFacts.childStreamId !== undefined) {
+                  childStreamId = attemptFacts.childStreamId;
+                }
+                if (
+                  Object.values(attemptFacts).some((fact) => fact !== undefined)
+                ) {
+                  executionState.reportAttempt(progressId, attemptFacts);
+                }
+                if (agent !== undefined) {
+                  executionState.updateCall(progressId, { agent });
+                }
+                if (attemptFacts.childStreamId !== undefined) {
+                  emit({
+                    type: 'agent:stream',
+                    ...eventBase,
+                    childStreamId: attemptFacts.childStreamId,
+                  });
+                }
               },
             });
           };
@@ -780,6 +800,13 @@ export async function runWorkflowScript(
         if (inFlightCalls.get(index) === call) {
           inFlightCalls.delete(index);
         }
+        // This attempt's child ids are dead the moment it settles: a retry
+        // launches under a fresh id, and a stale one must no-op.
+        for (const [childExecutionId, callIndex] of callIndexByChildExecution) {
+          if (callIndex === index) {
+            callIndexByChildExecution.delete(childExecutionId);
+          }
+        }
       }
 
       // The terminal drain may have timed out while this runner ignored its
@@ -792,7 +819,6 @@ export async function runWorkflowScript(
       const action = call.action;
       if (action === 'retry') {
         executionState.queueCall(progressId);
-        emit({ type: 'agent:queued', ...eventBase });
         continue;
       }
       if (action === 'skip') {

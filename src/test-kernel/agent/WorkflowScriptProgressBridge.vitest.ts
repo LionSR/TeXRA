@@ -508,10 +508,10 @@ return await agent('Second')`;
 return await agent('Draft')`,
       {
         runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.reportModel?.('deepseekT');
-          invocation.reportChildStream?.(
-            'draft@deepseekT#abcdef' as StreamTabId,
-          );
+          invocation.report?.({ model: 'deepseekT' });
+          invocation.report?.({
+            childStreamId: 'draft@deepseekT#abcdef' as StreamTabId,
+          });
           return 'done';
         },
         getCallCostUsd: () => 0.02,
@@ -579,7 +579,10 @@ return await agent('Draft')`;
 return await agent('Late skip')`,
       {
         runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.reportModel?.('kimiK2');
+          invocation.report?.({
+            model: 'kimiK2',
+            childExecutionId: 'lateskipskip' as ExecutionId,
+          });
           markStarted?.();
           return await new Promise<never>((_resolve, reject) => {
             invocation.signal.addEventListener(
@@ -598,7 +601,7 @@ return await agent('Late skip')`,
     );
 
     await started;
-    control.skip(0);
+    control('lateskipskip' as ExecutionId, 'skip');
     await run;
 
     expect(
@@ -709,7 +712,7 @@ return await pending`,
 return await agent('Abort', { phase: 'Execution' })`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.reportModel?.('abort-model');
+            invocation.report?.({ model: 'abort-model' });
             throw new WorkflowRunAbortError('fatal runner error');
           },
           getCallCostUsd: () => 0.06,
@@ -760,9 +763,9 @@ agent('Orphaned', { phase: 'Execution' })
 return 'guest success'`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.reportChildStream?.(
-              'orphaned@model#abcdef' as StreamTabId,
-            );
+            invocation.report?.({
+              childStreamId: 'orphaned@model#abcdef' as StreamTabId,
+            });
             markStarted?.();
             return await new Promise<never>(() => undefined);
           },

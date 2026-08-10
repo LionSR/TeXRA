@@ -151,23 +151,36 @@ export interface WorkflowAgentInvocation {
    */
   signal: AbortSignal;
   /**
-   * Optional host-side side channel: the runner reports the child model it
-   * resolved so the engine can attach it to the matching `agent:end` event
-   * for progress UIs. Never journaled — it does not affect resume identity.
+   * Optional host-side side channel: the runner reports whatever it has
+   * resolved for the live attempt, in whatever combination it learns them.
+   * Never journaled — none of it affects resume identity.
    */
-  reportModel?: (model: string) => void;
-  /** Reports the resolved agent selected by the host. */
-  reportAgent?: (agent: string) => void;
-  /** Reports the physical child execution selected for this attempt. */
-  reportChildExecution?: (executionId: ExecutionId) => void;
-  /** Reports cost available on the child result. */
-  reportCostUsd?: (costUsd: number) => void;
+  report?: (facts: WorkflowAttemptFacts) => void;
+}
+
+/**
+ * Progress-only facts a host runner resolves for one live attempt. Every field
+ * is independent: a runner reports the ones it has learned, and an omitted
+ * field leaves the engine's current value in place.
+ */
+export interface WorkflowAttemptFacts {
   /**
-   * Reports the live child stream once the host has resolved its agent, model,
-   * and execution identity. Progress renderers use it as the task card's
-   * navigation target; it never affects journal identity.
+   * The child model the runner resolved, so the engine can attach it to the
+   * matching `agent:end` event for progress UIs.
    */
-  reportChildStream?: (streamId: StreamTabId) => void;
+  readonly model?: string;
+  /** The resolved agent the host selected. */
+  readonly agent?: string;
+  /** The physical child execution selected for this attempt. */
+  readonly childExecutionId?: ExecutionId;
+  /**
+   * The live child stream, once the host has resolved its agent, model, and
+   * execution identity. Progress renderers use it as the task card's
+   * navigation target.
+   */
+  readonly childStreamId?: StreamTabId;
+  /** Cost available on the child result. */
+  readonly costUsd?: number;
 }
 
 /**
@@ -225,9 +238,6 @@ export type WorkflowScriptEvent =
     }
   | { type: 'log'; message: string }
   | (WorkflowScriptAgentEventBase & {
-      type: 'agent:queued';
-    })
-  | (WorkflowScriptAgentEventBase & {
       type: 'agent:start';
     })
   | (WorkflowScriptAgentEventBase & {
@@ -274,24 +284,26 @@ export type WorkflowScriptEvent =
 export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
 
 /**
- * Per-call control handle for an in-flight run, handed to the host once via
- * {@link WorkflowScriptRunOptions.onControl}. Control actions are control-plane
- * only: they never touch the journal, checkpoint, or per-call resume identity.
+ * What an interactive control request does to the attempt it targets: `skip`
+ * resolves the call to {@link WORKFLOW_SKIPPED_RESULT} without journaling it,
+ * `retry` discards the attempt and re-runs the call as a fresh one whose result
+ * the call resolves with.
  */
-export interface WorkflowScriptControl {
-  /**
-   * Cancel a single in-flight `agent()` call as a deliberate skip. The call
-   * resolves to {@link WORKFLOW_SKIPPED_RESULT} and is not journaled. No-op if
-   * the call at `index` is not currently in flight.
-   */
-  skip(index: number): void;
-  /**
-   * Cancel and re-run a single in-flight `agent()` call as a fresh attempt;
-   * the call resolves with the new attempt's result. No-op if the call at
-   * `index` is not currently in flight.
-   */
-  retry(index: number): void;
-}
+export type WorkflowControlAction = 'skip' | 'retry';
+
+/**
+ * Per-call control handle for an in-flight run, handed to the host once via
+ * {@link WorkflowScriptRunOptions.onControl}. It is keyed by the execution id
+ * of the child the attempt actually runs under — the same identity the host
+ * uses for focus and kill, reported by the runner through
+ * {@link WorkflowAttemptFacts.childExecutionId} — and no-ops when that child is
+ * not currently in flight. Control actions are control-plane only: they never
+ * touch the journal, checkpoint, or per-call resume identity.
+ */
+export type WorkflowScriptControl = (
+  childExecutionId: ExecutionId,
+  action: WorkflowControlAction,
+) => void;
 
 export interface WorkflowScriptRunOptions {
   /** Full script source, starting with `export const meta = {...}`. */

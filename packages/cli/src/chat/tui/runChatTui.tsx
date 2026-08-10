@@ -792,10 +792,16 @@ export async function runChat(
         });
       }}
       onSkipExecution={(executionId) => {
-        runtimeSession.workflowControls.skip(executionId as ExecutionId);
+        runtimeSession.workflowControls.control(
+          executionId as ExecutionId,
+          'skip',
+        );
       }}
       onRetryExecution={(executionId) => {
-        runtimeSession.workflowControls.retry(executionId as ExecutionId);
+        runtimeSession.workflowControls.control(
+          executionId as ExecutionId,
+          'retry',
+        );
       }}
       history={inputHistory}
     />,

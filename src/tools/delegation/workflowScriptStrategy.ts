@@ -24,10 +24,7 @@ import type {
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import type {
-  WorkflowControlRegistry,
-  WorkflowRunControl,
-} from '@agent/runtime/workflowControlRegistry';
+import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import type { ExecutionId, WorkflowExecutionSnapshot } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -122,18 +119,12 @@ export interface WorkflowScriptStrategyParams {
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
-   * run, plus the child-active hook that maps a live grandchild's execution id
-   * to its engine call index.
+   * run.
    */
   readonly createRunAgent: (hooks: {
     readonly onCost: (
       invocation: WorkflowAgentInvocation,
       totalCostUsd: number | undefined,
-    ) => void;
-    readonly onChildActive: (
-      grandchildExecutionId: ExecutionId,
-      invocation: WorkflowAgentInvocation,
-      active: boolean,
     ) => void;
   }) => WorkflowAgentRunner;
 }
@@ -162,20 +153,9 @@ export function createWorkflowScriptStrategy(
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
       const attemptCost = createWorkflowAttemptCostTracker();
-      // Live grandchild execution id → engine call index, maintained by the
-      // runner's child-active hook. The identity bridge that lets an
-      // execution-id-keyed host action reach the engine's index-keyed control.
-      const liveCallIndexByChild = new Map<ExecutionId, number>();
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
-        },
-        onChildActive: (grandchildExecutionId, invocation, active) => {
-          if (active) {
-            liveCallIndexByChild.set(grandchildExecutionId, invocation.index);
-          } else {
-            liveCallIndexByChild.delete(grandchildExecutionId);
-          }
         },
       });
 
@@ -201,23 +181,12 @@ export function createWorkflowScriptStrategy(
           onActivity: runLog.add,
           onEvent: summary.onEvent,
           ...(params.onSnapshot && { onSnapshot: params.onSnapshot }),
+          // The engine's control is already keyed by the grandchild execution
+          // id a host targets, so the run registers it as-is.
           onControl: (control) => {
-            // Translate an execution-id-keyed host request into an
-            // index-keyed engine action; unknown/settled children no-op,
-            // matching the engine's own not-in-flight semantics.
-            const runControl: WorkflowRunControl = {
-              skip: (grandchildId) => {
-                const index = liveCallIndexByChild.get(grandchildId);
-                if (index !== undefined) control.skip(index);
-              },
-              retry: (grandchildId) => {
-                const index = liveCallIndexByChild.get(grandchildId);
-                if (index !== undefined) control.retry(index);
-              },
-            };
             unregisterControls = params.workflowControls.register(
               params.executionId,
-              runControl,
+              control,
             );
           },
         });

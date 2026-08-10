@@ -91,7 +91,7 @@ return null`,
 phase('Work')
 return await agent('work', { id: 'work-call' })`,
       runAgent: async (invocation) => {
-        invocation.reportChildExecution?.('aaaaaaaaaaaa');
+        invocation.report?.({ childExecutionId: 'aaaaaaaaaaaa' });
         return 'done';
       },
       onSnapshot: (snapshot) => {
@@ -197,9 +197,9 @@ return await parallel([
 return await agent('retry secret', { label: 'Retry task' })`,
       runAgent: async (invocation) => {
         attempts += 1;
-        invocation.reportChildExecution?.(
-          attempts === 1 ? 'aaaaaaaaaaaa' : 'bbbbbbbbbbbb',
-        );
+        invocation.report?.({
+          childExecutionId: attempts === 1 ? 'aaaaaaaaaaaa' : 'bbbbbbbbbbbb',
+        });
         await new Promise<void>((resolve, reject) => {
           releases.push(resolve);
           invocation.signal.addEventListener(
@@ -215,7 +215,7 @@ return await agent('retry secret', { label: 'Retry task' })`,
       },
     });
     await vi.waitFor(() => expect(attempts).toBe(1));
-    control.retry(0);
+    control('aaaaaaaaaaaa' as ExecutionId, 'retry');
     await vi.waitFor(() => expect(attempts).toBe(2));
     releases.at(-1)?.();
     const retried = await retryRun;
@@ -241,6 +241,9 @@ return await agent('retry secret', { label: 'Retry task' })`,
 return await agent('skip secret', { label: 'Skip task' })`,
       runAgent: async (invocation) => {
         skipStarted = true;
+        invocation.report?.({
+          childExecutionId: 'cccccccccccc' as ExecutionId,
+        });
         return new Promise((_resolve, reject) =>
           invocation.signal.addEventListener('abort', () =>
             reject(new Error('stopped')),
@@ -252,7 +255,7 @@ return await agent('skip secret', { label: 'Skip task' })`,
       },
     });
     await vi.waitFor(() => expect(skipStarted).toBe(true));
-    skipControl.skip(0);
+    skipControl('cccccccccccc' as ExecutionId, 'skip');
     const skipped = await skipRun;
     expect(skipped.result).toBe(WORKFLOW_SKIPPED_RESULT);
     expect(skipped.snapshot.calls[0]?.status).toBe('skipped');

@@ -14,7 +14,10 @@ import {
   type RunOutcome,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
+import {
+  formatWorkflowCallLine,
+  WORKFLOW_CALL_UNFINISHED_NOTE,
+} from '@shared/copy/workflowCall';
 import { assertNever, generateShortId } from '@utils/core';
 
 type WorkflowScriptRunWithProgressOptions =
@@ -295,8 +298,6 @@ export async function runPersistedWorkflowScriptWithProgress(
         trace.info(event.message, { stageId: openPhaseStage(currentPhase) });
         onActivity?.(event.message);
         break;
-      case 'agent:queued':
-        break;
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
         callPhases.set(event.progressId, phaseTitle);
@@ -426,7 +427,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         recordTerminalActivity(skippedCall);
       } else if (status === 'running') {
         markPhaseFailed(call.phase);
-        const error = 'The workflow ended before this call completed.';
+        const error = WORKFLOW_CALL_UNFINISHED_NOTE;
         const callIndex = callIndexes.get(call.id);
         const totalCostUsd =
           callIndex === undefined ? undefined : getCallCostUsd?.(callIndex);
