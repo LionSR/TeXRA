@@ -25,7 +25,7 @@ const WORKTREE_ENABLED_LINE =
   'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.';
 
 const WORKTREE_DISABLED_LINE =
-  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` — it will be rejected at schema validation. Ask the user to turn on `texra.git.worktreeSupport` ("Allow agents to work in git worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
+  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because it will be rejected at schema validation. Ask the user to turn on `texra.git.worktreeSupport` ("Allow agents to work in git worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
 
 /**
  * Replace the "Git worktree support:" line of a delegation tool's description

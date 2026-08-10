@@ -119,7 +119,7 @@ export class OpenAIResponseWebSocketTransport {
         return this.wsConnection;
       }
       // Connection expired or closed — reconnect
-      this.logger.debug('WebSocket connection stale — reconnecting', {
+      this.logger.debug('WebSocket connection stale: reconnecting', {
         data: { ageSeconds: Math.round(age / 1000), socketReady },
       });
       this.closeWebSocket();
@@ -180,7 +180,7 @@ export class OpenAIResponseWebSocketTransport {
       if (this.wsConnection !== ws || this.activeRequestSocket === ws) {
         return;
       }
-      this.logger.debug('WebSocket connection error — invalidating', {
+      this.logger.debug('WebSocket connection error: invalidating', {
         data: { message: error.message },
       });
       this.closeWebSocket();

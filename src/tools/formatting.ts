@@ -181,5 +181,5 @@ export function paginateToolListing<T>(
 /** Format a "N more — use offset: X" hint, or empty string if no more pages. */
 export function formatPaginationHint(end: number, total: number): string {
   if (end >= total) return '';
-  return `\n(${total - end} more — use offset: ${end} to see next page)`;
+  return `\n(${total - end} more; use offset: ${end} to see next page)`;
 }

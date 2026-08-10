@@ -201,9 +201,9 @@ const AI_GENERATION_ATTEMPTS = 2;
 
 const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
   toolUse:
-    'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
+    'What should this agent do? List required capabilities, such as searching papers, editing files, or browsing the web.',
   workflow:
-    'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
+    'What should this agent do? State whether it rewrites existing documents or creates new ones.',
 };
 
 const PASSTHROUGH = buildUserVarPassthrough();

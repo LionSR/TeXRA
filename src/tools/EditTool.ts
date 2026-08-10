@@ -65,7 +65,7 @@ export class EditFileTool extends defineTool({
       notFoundError: () =>
         `old_str not found in ${displayPath}.\n` +
         `To fix:\n` +
-        `- Re-read the file — content may have changed since last read\n` +
+        `- Re-read the file: content may have changed since last read\n` +
         `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
       multipleMatchesError: ({ count }) =>
         `old_str matches ${count} locations in ${displayPath}.\n` +

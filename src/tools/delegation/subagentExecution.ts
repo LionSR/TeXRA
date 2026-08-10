@@ -231,7 +231,7 @@ export async function executeSubagent(
         `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
         `Execution ID: ${executionId}`,
         ...metaLines,
-        `The result arrives automatically — continue other work meanwhile. To check progress: executions tool with path=/executions/${executionId}; use action=wait only when you cannot proceed without it.`,
+        `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${executionId}; use action=wait only when you cannot proceed without it.`,
         ...(isToolUse
           ? [
               `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,

@@ -86,7 +86,7 @@ export function isGenerationRequest(url: string): boolean {
 /** Default top-level `instructions` for the Codex backend when the request
  *  carries none — it returns `400 {"detail":"Instructions are required"}`
  *  otherwise. */
-export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
+export const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
 
 /** Shape of one `input` array entry that {@link rewriteCodexRequestBody}
  *  reads. Named once here instead of an inline cast per field read. */
@@ -301,7 +301,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
       this.logger.debug(
         selection === 'personal'
           ? 'Building a personal OpenAI API-key client.'
-          : 'ChatGPT subscription preference is off — using the OpenAI API key.',
+          : 'ChatGPT subscription preference is off: using the OpenAI API key.',
       );
       return super.createOpenAIClient(selection);
     }

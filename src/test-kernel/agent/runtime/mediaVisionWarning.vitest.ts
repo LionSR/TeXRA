@@ -46,10 +46,10 @@ describe('media vision warnings', () => {
 
   it('formats startup and follow-up warnings consistently', () => {
     expect(formatMediaNeedsVisionWarning(1, 'attached', 'deepseek-chat')).toBe(
-      'Model "deepseek-chat" has no vision support — 1 attached media file is not sent to the model. Switch to a vision-capable model to use it.',
+      'Model "deepseek-chat" has no vision support: 1 attached media file is not sent to the model. Switch to a vision-capable model to use it.',
     );
     expect(formatMediaNeedsVisionWarning(2, 'pasted')).toBe(
-      'Model has no vision support — 2 pasted media files are not sent to the model. Switch to a vision-capable model to use them.',
+      'Model has no vision support: 2 pasted media files are not sent to the model. Switch to a vision-capable model to use them.',
     );
   });
 });

@@ -8,17 +8,17 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a LaTeX expert specializing in OCR (Optical Character Recognition) for mathematical content. Your task is to analyze handwritten mathematical content from one or more images and convert it into LaTeX code that maintains consistency with the existing document's notation and style.
+    Convert handwritten mathematical content from one or more images into LaTeX. Match the existing document's notation and style.
 
     When processing handwritten content, you must:
     \begin{itemize}
-        \item Carefully analyze the mathematical symbols, expressions, and equations across all attached images. If multiple images are attached, treat them as related pages or panels and produce a single coherent LaTeX output that reflects all of them in order.
+        \item Analyze the mathematical symbols, expressions, and equations across all attached images. If multiple images are attached, treat them as related pages or panels and produce a single coherent LaTeX output that reflects all of them in order.
         \item Extract both text and mathematical content accurately
         \item Ensure the generated LaTeX matches the notation conventions used in the existing document
         \item Maintain consistent symbol usage (e.g., if \alpha is used for angles in the document, use it consistently)
         \item Preserve any structural elements like equation numbering or alignment
         \item Follow the same mathematical environments (equation, align, gather, etc.) as used in the document
-        \item Check that every symbol is defined before use
+        \item Validate that all symbols are properly defined before use
         \item Transcribe subscripts, superscripts, fractions, and special symbols correctly
     \end{itemize}
 
@@ -41,7 +41,7 @@ prompts:
       {{ INSTRUCTION }}
       </instruction>
 
-      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Match the document's notation, mathematical environments, and symbol usage so the transcription reads as part of the same document. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
+      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">
@@ -49,9 +49,9 @@ prompts:
       </document>
       </documents>
     - |
-      Critically review the OCR conversion against the images and check the following, fixing any issues found:
+      Review the OCR conversion against the images and check the following, fixing any issues found:
       \begin{itemize}
-          \item Likely misreadings: symbols that are ambiguous in the handwriting, inconsistent with the document's notation, or form unusual expressions; state the correct interpretation for any you fix.
+          \item Find symbols that are ambiguous in the handwriting, inconsistent with the document's notation, or part of unusual expressions. State the correct interpretation for each one you fix.
           \item Symbols that differ from the document's conventions (e.g., you used $\alpha$ but the document uses $a$ for the same quantity).
           \item Mathematical environments that do not match the document's style.
           \item Subscripts/superscripts correctly ordered and nested.

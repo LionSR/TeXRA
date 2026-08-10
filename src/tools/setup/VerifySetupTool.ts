@@ -108,7 +108,7 @@ export class VerifySetupTool extends defineTool({
     } else if (auth.authenticated) {
       credSummary = `signed in but ${INCLUDED_ACCESS.inline} is off. Turn it back on or add an API key`;
     } else {
-      credSummary = 'NONE — need an API key or sign-in';
+      credSummary = 'NONE: need an API key or sign-in';
     }
     lines.push(`Credentials: ${credSummary}.`);
 

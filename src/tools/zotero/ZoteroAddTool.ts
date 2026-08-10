@@ -82,7 +82,7 @@ const ZoteroItemSchema = z
         'preprint',
       ])
       .describe(
-        'Type of the item. Defaults to journalArticle. Use "preprint" for arXiv papers and other preprints — never use "webpage" for preprints.',
+        'Type of the item. Defaults to journalArticle. Use "preprint" for arXiv papers and other preprints: never use "webpage" for preprints.',
       )
       .nullish(),
     abstract: z.string().describe('Abstract of the item.').nullish(),

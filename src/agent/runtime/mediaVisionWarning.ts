@@ -29,7 +29,7 @@ export function formatMediaNeedsVisionWarning(
 ): string {
   const subject = modelName ? `Model "${modelName}"` : 'Model';
   return (
-    `${subject} has no vision support — ${count} ${kind} ` +
+    `${subject} has no vision support: ${count} ${kind} ` +
     `${count === 1 ? 'media file is' : 'media files are'} not sent to the model. ` +
     `Switch to a vision-capable model to use ${count === 1 ? 'it' : 'them'}.`
   );

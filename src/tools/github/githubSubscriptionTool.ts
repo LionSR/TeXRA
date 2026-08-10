@@ -178,7 +178,7 @@ async function execSubscribe(
     const slug = slugOf(target);
     return executed(
       created
-        ? `Subscribed to repo ${slug}. PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, and newly-detected merge conflicts on open PRs arrive as <github-webhook-activity> follow-ups. Each event uses GitHub's URL form (${slug}/pulls/N or ${slug}/issues/N) — pass that path back to command="subscribe" to delegate a worker.`
+        ? `Subscribed to repo ${slug}. PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, and newly-detected merge conflicts on open PRs arrive as <github-webhook-activity> follow-ups. Each event uses GitHub's URL form (${slug}/pulls/N or ${slug}/issues/N): pass that path back to command="subscribe" to delegate a worker.`
         : `Already subscribed to repo ${slug}. Activity continues until command="unsubscribe".`,
       created
         ? `Subscribed to repo ${slug}`
@@ -242,7 +242,7 @@ async function execSubscribe(
   const created = bindIssueSubscription(streamId, target);
   return executed(
     created
-      ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught — call command="unsubscribe" to release the slot.`
+      ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
       : `Already subscribed to ${issueSlug}. Activity continues until command="unsubscribe".`,
     created
       ? `Subscribed to ${issueSlug}`
@@ -452,7 +452,7 @@ async function execFindCurrent(
     throw new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`);
   }
   if (branch === 'HEAD') {
-    throw new ToolError('HEAD is detached — cannot infer a PR branch.');
+    throw new ToolError('HEAD is detached: cannot infer a PR branch.');
   }
   const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
   const res =
@@ -494,15 +494,15 @@ export class GitHubSubscriptionTool extends defineTool({
   name: 'github_subscription',
   description: [
     'Manage GitHub activity subscriptions for the current agent stream.',
-    'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (nuanced, worker-friendly).',
+    'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (detailed, worker-friendly).',
     'Commands:',
-    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
+    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a repo-wide merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once: typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened: the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
     'For PR subscriptions, min_annotation_level controls inline check annotations: "failure" (default) sends failures only, "warning" includes warnings, and "notice" includes every annotation.',
     '- unsubscribe: stop watching the path.',
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
     'Bot-authored events are dropped end-to-end by policy.',
-    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, 10 concurrent issue subscriptions, 3 concurrent repo subscriptions per process. Poll interval ≈ 30s. Requires a GitHub token — set it in host settings, or via GITHUB_TOKEN or GH_TOKEN.`,
+    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, 10 concurrent issue subscriptions, 3 concurrent repo subscriptions per process. Poll interval ≈ 30s. Requires a GitHub token: set it in host settings, or via GITHUB_TOKEN or GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
 }) {

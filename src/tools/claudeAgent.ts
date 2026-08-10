@@ -498,7 +498,7 @@ export class ClaudeAgentTool extends defineTool({
     'Requires the Claude Code CLI (auto-installed with @anthropic-ai/claude-agent-sdk, or via `npm install -g @anthropic-ai/claude-code`). ' +
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with an execution ID; each turn is delivered back as a follow-up message (including the session_id). ' +
-    'Pass session_id on a later call to send a follow-up to an existing session — mirrors delegate_agent(execution_id=…).',
+    'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…).',
   schema: ClaudeAgentInputSchema,
 }) {
   protected async execute(input: ClaudeAgentInput): Promise<ToolResult> {
@@ -586,6 +586,6 @@ async function launchClaudeAgentSession(
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
     launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
-    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id — pass it back on a later call to send a follow-up.`,
+    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id. Pass it back on a later call to send a follow-up.`,
   });
 }

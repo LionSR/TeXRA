@@ -338,7 +338,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       return;
     }
     this.logger.warn(
-      `No usage data in ${responseLabel} — token tracking and compaction may be affected`,
+      `No usage data in ${responseLabel}: token tracking and compaction may be affected`,
     );
   }
 

@@ -106,11 +106,11 @@ export class WorkflowAgentTool extends defineTool({
   // resolveAgentTools boundary.
   description: `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
-Delegations run asynchronously: when subtasks are independent, launch them all in one turn and continue your own work — each result arrives automatically as a follow-up message.
+Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
 
 Available agents: loaded from the active roster at runtime.
 
-Pick the agent whose description matches the task — do not default to the first listed agent.
+Pick the agent whose description matches the task. Do not default to the first listed agent.
 
 Available models: loaded from the active API mode at runtime.
 Largest models for deep reasoning; long-context for lengthy tedious work; cost-effective for parallel routine work.
@@ -188,7 +188,7 @@ const DelegateAgentInputSchema = z
     instruction: z
       .string()
       .describe(
-        'Plain prose instruction for the agent. For new delegations, include file paths naturally and copy every relevant parent constraint into this field: tool/network/file/approval limits, output format, and scope. The subagent does not automatically inherit the parent conversation or hidden constraints. For resumes, reference previous work freely — the subagent retains its full history.',
+        'Plain prose instruction for the agent. For new delegations, include file paths naturally and copy every relevant parent constraint into this field: tool/network/file/approval limits, output format, and scope. The subagent does not automatically inherit the parent conversation or hidden constraints. For resumes, reference previous work freely because the subagent retains its full history.',
       ),
     memories: memoriesField,
     working_directory: workingDirectoryField,
@@ -201,7 +201,7 @@ const DelegateAgentInputSchema = z
   })
   .refine((data) => Boolean(data.agent) !== Boolean(data.execution_id), {
     error:
-      "Provide exactly one of 'agent' (to start a new delegation) or 'execution_id' (to resume an existing one) — not both, not neither.",
+      "Provide exactly one of 'agent' (to start a new delegation) or 'execution_id' (to resume an existing one), not both or neither.",
   });
 
 type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -216,11 +216,11 @@ export class DelegateAgentTool extends defineTool({
   // boundary.
   description: `Delegate a task to a tool-use agent, or queue follow-up instructions for a tool-use subagent.
 
-**New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents are versatile—they can create entire documents, make targeted edits, perform research, or run multi-step investigations.
+**New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents can create entire documents, make targeted edits, perform research, or run multi-step investigations.
 
 **Resume** (with execution_id): Sends follow-up instructions to a WAITING or still-running subagent. If the subagent is busy, the instruction is queued for its next turn. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
-Delegations run asynchronously: when subtasks are independent, launch them all in one turn and continue your own work — each result arrives automatically as a follow-up message.
+Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
 
 Available agents: loaded from the active roster at runtime.
 
@@ -299,13 +299,13 @@ Git worktree support: resolved from the active workspace at runtime.`,
     // queueing instructions whose results would never come back here.
     if (!handle.isChildExecution) {
       throw new Error(
-        `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session — start a new delegation instead.`,
+        `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
       );
     }
     const callerStreamId = getRunContextStreamId(parentContext);
     if (callerStreamId && !handle.isOwnedBy(callerStreamId)) {
       throw new Error(
-        `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here — start a new delegation instead.`,
+        `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
       );
     }
 
