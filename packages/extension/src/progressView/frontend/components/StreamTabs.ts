@@ -55,8 +55,6 @@ import {
 } from '../utils';
 import {
   computeStreamTreeProjection,
-  getStreamBranchActivity,
-  type StreamBranchActivity,
   type StreamTreeExpansionOverride,
 } from '../streamTree';
 import type { StreamState } from '../store';
@@ -64,23 +62,16 @@ import type { StreamState } from '../store';
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-/**
- * Non-color cue for the states that light the row's status rail. The rail's
- * `border-left-color` alone put running/failed/waiting/starting apart by hue
- * only, which is no distinction at all for a red-green colorblind reader and
- * left "blocked on your approval" — the one state that wants you now —
- * carrying no shape. Finished states (completed/cancelled/ready) leave the
- * rail transparent and get no glyph, so a settled rail stays quiet.
- *
- * Rendered in `currentColor`: the border carries hue for fast scanning, the
- * glyph carries shape, and neither introduces a new foreground to contrast-check.
- */
-const STATUS_ICONS: Partial<Record<StreamStatusDisplayKey, TeXRAIconName>> = {
+/** Shape cue paired with the visible status label on every canonical state. */
+const STATUS_ICONS: Record<StreamStatusDisplayKey, TeXRAIconName> = {
   [STREAM_SUBSTATE.STARTING]: 'spinner',
   [STREAM_SUBSTATE.RESUMING]: 'spinner',
   [STREAM_PHASE.RUNNING]: 'play',
   [STREAM_PHASE.WAITING]: 'clock',
+  [STREAM_PHASE.COMPLETED]: 'circle-check',
   [STREAM_PHASE.FAILED]: 'circle-exclamation',
+  [STREAM_PHASE.CANCELLED]: 'circle-stop',
+  ready: 'circle',
 };
 
 function buildTooltip(
@@ -155,30 +146,14 @@ class StreamTab extends LitElement {
     readonly icon: TeXRAIconName;
     readonly label: string;
   } = getAgentCategoryDecorator('toolUse');
-  private _tooltip = '';
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (
-      !changed.has('info') &&
-      !changed.has('status') &&
-      !changed.has('substate') &&
-      !changed.has('lastTimestamp')
-    )
-      return;
-    if (changed.has('info')) {
-      const identityKind = this.info.identity?.kind;
-      this._streamDecorator =
-        identityKind === 'multiAgentWorkflow' || identityKind === 'process'
-          ? AGENT_DECORATORS.streamKinds[identityKind]
-          : getAgentCategoryDecorator(this.info.agentCategory);
-    }
-    const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
-    const statusLabel =
-      formatStreamStatusLabel(status, {
-        style: 'progressHeader',
-        ...(this.substate ? { substate: this.substate } : {}),
-      }) ?? status;
-    this._tooltip = buildTooltip(this.info, this.lastTimestamp, statusLabel);
+    if (!changed.has('info')) return;
+    const identityKind = this.info.identity?.kind;
+    this._streamDecorator =
+      identityKind === 'multiAgentWorkflow' || identityKind === 'process'
+        ? AGENT_DECORATORS.streamKinds[identityKind]
+        : getAgentCategoryDecorator(this.info.agentCategory);
   }
 
   override render(): TemplateResult {
@@ -186,13 +161,22 @@ class StreamTab extends LitElement {
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
     const displayKey = streamStatusDisplayKey(status, this.substate);
     const statusKey = displayKey ?? status;
+    const lifecycleStatusLabel =
+      formatStreamStatusLabel(status, {
+        style: 'progressHeader',
+        ...(this.substate ? { substate: this.substate } : {}),
+      }) ?? status;
     // Pending approval outranks the lifecycle phase: a run held at the
     // approval gate is still "running", and the gate is what you act on.
-    const phaseGlyph =
-      displayKey === undefined ? undefined : STATUS_ICONS[displayKey];
-    const statusGlyph: TeXRAIconName | undefined = this.hasPendingApproval
+    const statusGlyph = this.hasPendingApproval
       ? 'triangle-exclamation'
-      : phaseGlyph;
+      : displayKey && STATUS_ICONS[displayKey];
+    const visibleStatusLabel = this.hasPendingApproval
+      ? 'Approval'
+      : lifecycleStatusLabel;
+    const accessibleStatusLabel = this.hasPendingApproval
+      ? 'Approval required'
+      : lifecycleStatusLabel;
     // Also names the delete button: one "Delete" repeated down the rail tells
     // a screen-reader user nothing about which session it destroys.
     const streamTitle = stream.description || streamDisplayLabel(stream);
@@ -209,6 +193,14 @@ class StreamTab extends LitElement {
     const childToggleLabel = this.expanded
       ? BACKGROUND_TASK.collapseAction
       : childCountLabel;
+    const selectLabel = buildTooltip(
+      stream,
+      this.lastTimestamp,
+      accessibleStatusLabel,
+    );
+    const compactSelectLabel = showCompactChildHint
+      ? `${selectLabel}\n${childCountLabel}`
+      : selectLabel;
     // RunIdentity is the declared authority for what owns the stream, shown
     // in the meta line so a glance at the row says who ran it. Only when the
     // title is the AI one-liner (`stream.description`) — otherwise the title
@@ -249,91 +241,89 @@ class StreamTab extends LitElement {
                 >`
             : nothing
         }
-        <button
-          id="stream-tab-select-button"
-          class="tab"
-          data-stream=${stream.name}
-          data-action="select"
-          aria-label=${this._tooltip}
+        <div
+          id="stream-tab-select-tooltip-anchor"
+          class="tab-select-tooltip-anchor"
         >
-          <div class="tab-header">
+          <button
+            id="stream-tab-select-button"
+            class="tab"
+            data-stream=${stream.name}
+            data-action="select"
+            aria-label=${compactSelectLabel}
+          >
+            <div class="tab-header">
+              <span id="stream-tab-title" class="tab-title"
+                >${
+                  stream.parentStreamId
+                    ? waIcon('chevron-right', {
+                        className: 'nested-stream-icon',
+                      })
+                    : nothing
+                }${streamTitle}</span
+              >
+              <span class="tab-status" aria-hidden="true">
+                ${
+                  statusGlyph
+                    ? waIcon(statusGlyph, { className: 'tab-status-icon' })
+                    : nothing
+                }
+                <span class="tab-status-label">${visibleStatusLabel}</span>
+              </span>
+            </div>
             ${
-              statusGlyph
-                ? waIcon(statusGlyph, { className: 'tab-status-icon' })
-                : nothing
+              this.compact
+                ? nothing
+                : html`
+                    <div id="stream-tab-meta" class="tab-meta">
+                      ${
+                        metaAgentName
+                          ? html`<span class="agent-name"
+                              >${metaAgentName}</span
+                            >`
+                          : nothing
+                      }
+                      ${
+                        stream.worktree
+                          ? html`<worktree-chip
+                              .info=${stream.worktree}
+                            ></worktree-chip>`
+                          : nothing
+                      }
+                      ${
+                        this.lastTimestamp
+                          ? html`<wa-relative-time
+                              class="last-active"
+                              .date=${new Date(this.lastTimestamp)}
+                              format="narrow"
+                              sync
+                            ></wa-relative-time>`
+                          : nothing
+                      }
+                      <span class="model"
+                        >${
+                          stream.identity?.kind === 'agent'
+                            ? (stream.modelLabel ?? stream.model ?? '')
+                            : ''
+                        }</span
+                      >
+                      ${waIcon(streamDecorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
+                      ${when(
+                        stream.isRemote,
+                        () => html`
+                          ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
+                        `,
+                      )}
+                    </div>
+                  `
             }
-            <span id="stream-tab-title" class="tab-title"
-              >${
-                stream.parentStreamId
-                  ? waIcon('chevron-right', { className: 'nested-stream-icon' })
-                  : nothing
-              }${streamTitle}</span
-            >
-            ${
-              showCompactChildHint
-                ? waIcon('chevron-right', {
-                    id: 'stream-tab-compact-children',
-                    className: 'compact-subagent-hint',
-                    label: childCountLabel,
-                  })
-                : nothing
-            }
-          </div>
-          ${
-            this.compact
-              ? nothing
-              : html`
-                  <div id="stream-tab-meta" class="tab-meta">
-                    ${
-                      metaAgentName
-                        ? html`<span class="agent-name">${metaAgentName}</span>`
-                        : nothing
-                    }
-                    ${
-                      stream.worktree
-                        ? html`<worktree-chip
-                            .info=${stream.worktree}
-                          ></worktree-chip>`
-                        : nothing
-                    }
-                    ${
-                      this.lastTimestamp
-                        ? html`<wa-relative-time
-                            class="last-active"
-                            .date=${new Date(this.lastTimestamp)}
-                            format="narrow"
-                            sync
-                          ></wa-relative-time>`
-                        : nothing
-                    }
-                    <span class="model"
-                      >${
-                        stream.identity?.kind === 'agent'
-                          ? (stream.modelLabel ?? stream.model ?? '')
-                          : ''
-                      }</span
-                    >
-                    ${waIcon(streamDecorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
-                    ${when(
-                      stream.isRemote,
-                      () => html`
-                        ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
-                      `,
-                    )}
-                  </div>
-                `
-          }
-        </button>
-        ${
-          showCompactChildHint
-            ? html`<wa-tooltip for="stream-tab-compact-children"
-                >${childCountLabel}</wa-tooltip
-              >`
-            : nothing
-        }
+          </button>
+        </div>
         ${
           this.compact
-            ? nothing
+            ? html`<wa-tooltip for="stream-tab-select-tooltip-anchor"
+                >${streamTitle}</wa-tooltip
+              >`
             : html`<wa-tooltip for="stream-tab-kind"
                   >${
                     // Only agent runs have an execution-mode category; other
@@ -410,8 +400,6 @@ export class StreamTabs extends LitElement {
    * `manuallyCollapsed` + `finishedCollapseHandled` sets.
    */
   private userOverride: Map<string, StreamTreeExpansionOverride> = new Map();
-  private branchActivityByStream: Map<StreamTabId, StreamBranchActivity> =
-    new Map();
 
   protected override willUpdate(changed: PropertyValues): void {
     if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
@@ -423,7 +411,6 @@ export class StreamTabs extends LitElement {
       userOverrides: this.userOverride,
     });
 
-    this.branchActivityByStream = projection.branchActivityByStream;
     this.userOverride = projection.userOverrides;
     if (!setsEqual(projection.expandedParents, this.expandedParents)) {
       this.expandedParents = projection.expandedParents;
@@ -460,21 +447,9 @@ export class StreamTabs extends LitElement {
       childCount > 0 &&
       this.expandedParents.has(stream.name);
     const streamState = this.streamStates.get(stream.name);
-    const isFinished =
-      stream.parentStreamId != null &&
-      getStreamBranchActivity(
-        {
-          streamStates: this.streamStates,
-          childStreamsByParent: this.childStreamsByParent,
-        },
-        stream.name,
-        options.visited,
-        this.branchActivityByStream,
-      ) === 'finished';
 
     return html`
       <stream-tab
-        class=${classMap({ 'is-finished': isFinished })}
         .info=${stream}
         .compact=${options.compact}
         .status=${streamState?.status ?? DEFAULT_STREAM_METADATA_STATUS}
