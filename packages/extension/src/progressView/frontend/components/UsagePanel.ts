@@ -98,6 +98,7 @@ export class UsagePanel extends LitElement {
 
       .run-summary__route {
         font-weight: var(--wa-font-weight-semibold);
+        white-space: nowrap;
       }
 
       .run-summary__route--free {
@@ -137,6 +138,7 @@ export class UsagePanel extends LitElement {
       }
 
       .run-summary {
+        min-width: 0;
         margin-inline-start: auto;
       }
 
@@ -146,6 +148,10 @@ export class UsagePanel extends LitElement {
       :is(.run-summary__value, .context-state__value) {
         color: var(--wa-color-text-normal);
         font-variant-numeric: tabular-nums;
+      }
+
+      .run-summary__value {
+        min-width: 0;
       }
     `,
   ];
@@ -265,13 +271,13 @@ export class UsagePanel extends LitElement {
       return html`<span
         id="usage-route-badge"
         class="run-summary__route run-summary__route--free"
-        >Free · ${badge.label}</span
+        >Free · ${badge.compactLabel}</span
       >`;
     }
 
     return html`${formatCostUsd(cost)} ·
       <span id="usage-route-badge" class="run-summary__route">
-        ${badge.label}
+        ${badge.compactLabel}
       </span>`;
   }
 

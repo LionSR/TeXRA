@@ -1199,7 +1199,7 @@ const SCENARIOS = [
     keys: ['/approval never', '\r', '/status', '\r'],
     expect: [
       'Approval mode: Deny Bash commands and tool edits.',
-      'own API keys',
+      'API keys',
       'never',
       '/status details',
     ],
@@ -2656,7 +2656,7 @@ const SCENARIOS = [
     // nothing under the removed parent is reachable from root. Opening and
     // confirming the root row must leave the frame and exit path intact.
     keys: ['\t', DOWN, '\r'],
-    expect: ['◆ — own API keys'],
+    expect: ['◆ — API keys'],
     unexpect: ['1 sub', 'orderChecker'],
     expectExit: true,
   },
@@ -2711,7 +2711,7 @@ const SCENARIOS = [
     // the removed child is unreachable, so confirming the root row must leave
     // the frame and exit path intact.
     keys: ['\t', DOWN, '\r'],
-    expect: ['◆ — own API keys'],
+    expect: ['◆ — API keys'],
     unexpect: ['orderChecker', '1 sub'],
     expectExit: true,
   },
@@ -3229,7 +3229,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
-      '◆ stopped own API keys',
+      '◆ stopped API keys',
       'latest stopped prompt',
     ],
     unexpect: ['older stopped prompt', 'Choosing a session'],
@@ -3365,7 +3365,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
-      '◆ stopped own API keys',
+      '◆ stopped API keys',
       '3 subagents',
       'Tab sessions',
       'Ctrl-C exit',
