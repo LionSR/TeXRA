@@ -11,7 +11,10 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { STREAM_TAB_META_SCHEMA_VERSION } from '@shared/schemas';
+import {
+  STREAM_TAB_META_SCHEMA_VERSION,
+  USER_FOLLOW_UP_SUPPORT,
+} from '@shared/schemas';
 import type {
   CompileFailure,
   ExecutionId,
@@ -267,6 +270,7 @@ describe('StreamSnapshotStore', () => {
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
       identity: { kind: 'agent', agent: 'session-label' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       description: 'session-search / kimi26T',
     });
 
@@ -278,6 +282,7 @@ describe('StreamSnapshotStore', () => {
         streamId: STREAM,
         executionId,
         identity: { kind: 'agent', agent: 'session-label' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       },
     });
     events.emit({
@@ -395,18 +400,24 @@ describe('StreamSnapshotStore', () => {
     expect(snap.runUsage[RUN]).not.toHaveProperty('toolUseTokens');
     expect(snap.executionId).toBe(executionId);
     // The live event updated the writer's display value in memory only.
-    expect(writer.getDescription(STREAM)).toBe('session-search / kimi26T');
+    expect(writer.getRunMetadata(STREAM)).toMatchObject({
+      description: 'session-search / kimi26T',
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    });
     // Every seed (bulk load included) hydrates the description from the one
     // authority, ExecutionMeta — it rides the same read as identity. Nothing
     // writes a sidecar copy, so the assembled snapshot carries none.
-    expect(reader.getDescription(STREAM)).toBe('session-search / kimi26T');
+    expect(reader.getRunMetadata(STREAM)).toMatchObject({
+      config: runConfig,
+      description: 'session-search / kimi26T',
+      identity: {
+        kind: 'agent',
+        agent: 'session-label',
+      },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    });
     expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
-    expect(reader.getRunConfig(STREAM)).toEqual(runConfig);
-    expect(reader.getRunIdentity(STREAM)).toEqual({
-      kind: 'agent',
-      agent: 'session-label',
-    });
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);
     expect(goalPausedOnly.todos).toEqual([]);
@@ -440,7 +451,7 @@ describe('StreamSnapshotStore', () => {
       },
     });
     // No synthesis from the config: identity stays pending until run.start.
-    expect(writer.getRunIdentity(STREAM)).toBeUndefined();
+    expect(writer.getRunMetadata(STREAM).identity).toBeUndefined();
 
     events.emit({
       scope: 'run',
@@ -455,11 +466,11 @@ describe('StreamSnapshotStore', () => {
     detach();
     await writer.flush();
 
-    expect(writer.getRunIdentity(STREAM)).toEqual(workflowIdentity);
+    expect(writer.getRunMetadata(STREAM).identity).toEqual(workflowIdentity);
     const reader = new StreamSnapshotStore();
     await reader.load([STREAM]);
-    expect(reader.getExecutionId(STREAM)).toBe(executionId);
-    expect(reader.getRunIdentity(STREAM)).toEqual(workflowIdentity);
+    expect(reader.getRunMetadata(STREAM).executionId).toBe(executionId);
+    expect(reader.getRunMetadata(STREAM).identity).toEqual(workflowIdentity);
   });
 
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {
@@ -819,16 +830,16 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'abc123' as ExecutionId;
 
     snapshotFacts(store).setRunConfig(STREAM, runConfig, executionId);
-    expect(store.getRunConfig(STREAM)).toEqual(runConfig);
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).config).toEqual(runConfig);
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
     snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
     expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject(
       usage(50, 10, 0.25),
     );
     await store.flush();
 
-    expect(store.getRunConfig(STREAM)).toEqual(runConfig);
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).config).toEqual(runConfig);
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
     const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       [RUN]: usage(100, 20, 0.5),
@@ -845,7 +856,7 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getDescription(STREAM)).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).description).toBeUndefined();
 
     snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
     await store.flush();
@@ -876,9 +887,9 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await expect(store.load([STREAM])).resolves.toBeUndefined();
 
-    expect(store.getRunConfig(STREAM)).toBeUndefined();
-    expect(store.getRunIdentity(STREAM)).toBeUndefined();
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).config).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).identity).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
@@ -901,7 +912,7 @@ describe('StreamSnapshotStore', () => {
     expect(await store.readPersistedExecutionId(STREAM)).toBeUndefined();
     await store.load([STREAM]);
 
-    expect(store.getExecutionId(STREAM)).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();
     await expect(store.read(STREAM)).resolves.toMatchObject({
       executionId: undefined,
       parentStreamId: OTHER_STREAM,
@@ -978,8 +989,8 @@ describe('StreamSnapshotStore', () => {
     deferredRead.resolve(oldMeta);
     await loading;
 
-    expect(store.getRunIdentity(STREAM)).toEqual(newIdentity);
-    expect(store.getDescription(STREAM)).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).identity).toEqual(newIdentity);
+    expect(store.getRunMetadata(STREAM).description).toBeUndefined();
   });
 
   it('does not overwrite a live description that lands during hydration', async () => {
@@ -1014,7 +1025,7 @@ describe('StreamSnapshotStore', () => {
     await flushing;
 
     // The live event owns the field by presence; hydration does not clobber it.
-    expect(store.getDescription(STREAM)).toBe('New live label');
+    expect(store.getRunMetadata(STREAM).description).toBe('New live label');
   });
 
   it('hydrates a current no-mirror description during first lazy seed', async () => {
@@ -1031,7 +1042,9 @@ describe('StreamSnapshotStore', () => {
     snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
     await store.flush();
 
-    expect(store.getDescription(STREAM)).toBe('Lazy authority label');
+    expect(store.getRunMetadata(STREAM).description).toBe(
+      'Lazy authority label',
+    );
     expect(
       ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
         .description,
@@ -1070,7 +1083,7 @@ describe('StreamSnapshotStore', () => {
         payload: { streamId: STREAM, description: 'Current label' },
       },
     });
-    expect(store.getDescription(STREAM)).toBe('Current label');
+    expect(store.getRunMetadata(STREAM).description).toBe('Current label');
     detach();
     await store.flush();
 
@@ -1088,7 +1101,7 @@ describe('StreamSnapshotStore', () => {
     const reloaded = new StreamSnapshotStore();
     snapshotFacts(reloaded).setParentStream(STREAM, OTHER_STREAM);
     await reloaded.flush();
-    expect(reloaded.getDescription(STREAM)).toBe('Current label');
+    expect(reloaded.getRunMetadata(STREAM).description).toBe('Current label');
 
     // The label is execution-scoped: a live run.start handing the stream to a
     // new execution synchronously drops the previous run's description.
@@ -1097,7 +1110,7 @@ describe('StreamSnapshotStore', () => {
       executionId: 'bb77bb88' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
     });
-    expect(reloaded.getDescription(STREAM)).toBeUndefined();
+    expect(reloaded.getRunMetadata(STREAM).description).toBeUndefined();
   });
 
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
@@ -1118,8 +1131,8 @@ describe('StreamSnapshotStore', () => {
 
     await store.load([STREAM]);
     expect(wasRuntimeUpdateInjected).toHaveBeenCalledOnce();
-    expect(store.getRunConfig(STREAM)).toEqual(newConfig);
-    expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
+    expect(store.getRunMetadata(STREAM).config).toEqual(newConfig);
+    expect(store.getRunMetadata(STREAM).executionId).toBe(newExecutionId);
 
     await store.flush();
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
@@ -1150,8 +1163,8 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
 
     expect(wasModelSwitchInjected).toHaveBeenCalledOnce();
-    expect(store.getRunConfig(STREAM)?.model).toBe('kimi26T');
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).config?.model).toBe('kimi26T');
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
   it('does not re-derive the run.start identity when a seed re-reads disk meta', async () => {
@@ -1179,8 +1192,8 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, { executionId });
     await store.load([STREAM]);
 
-    expect(store.getRunIdentity(STREAM)).toEqual(workflowIdentity);
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).identity).toEqual(workflowIdentity);
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
   it('adopts run identity from disk when meta names a different execution', async () => {
@@ -1205,9 +1218,9 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, { executionId: foreignExecutionId });
     await store.load([STREAM]);
 
-    expect(store.getExecutionId(STREAM)).toBe(foreignExecutionId);
-    expect(store.getRunConfig(STREAM)).toEqual(foreignConfig);
-    expect(store.getRunIdentity(STREAM)).toEqual({
+    expect(store.getRunMetadata(STREAM).executionId).toBe(foreignExecutionId);
+    expect(store.getRunMetadata(STREAM).config).toEqual(foreignConfig);
+    expect(store.getRunMetadata(STREAM).identity).toEqual({
       kind: 'agent',
       agent: 'foreign-search',
     });
@@ -1223,7 +1236,7 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunConfig(STREAM)?.model).toBe('deepseekproT');
+    expect(store.getRunMetadata(STREAM).config?.model).toBe('deepseekproT');
 
     // The model switch runs in another host: it rewrites the execution config
     // for the SAME execution and this store never sees the `run.config` event.
@@ -1232,8 +1245,19 @@ describe('StreamSnapshotStore', () => {
     );
     await store.load([STREAM]);
 
-    expect(store.getRunConfig(STREAM)?.model).toBe('kimi26T');
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).config?.model).toBe('kimi26T');
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
+  });
+
+  it('returns a fresh immutable outer run-metadata record', () => {
+    const store = new StreamSnapshotStore();
+
+    const first = store.getRunMetadata(STREAM);
+    const second = store.getRunMetadata(STREAM);
+
+    expect(first).not.toBe(second);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(second)).toBe(true);
   });
 
   it('drops run identity when disk meta no longer names an execution', async () => {
@@ -1244,15 +1268,15 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
 
     await writeMetaFile(STREAM, {});
     await store.load([STREAM]);
 
-    expect(store.getRunIdentity(STREAM)).toBeUndefined();
-    expect(store.getRunConfig(STREAM)).toBeUndefined();
-    expect(store.getExecutionId(STREAM)).toBeUndefined();
-    expect(store.getDescription(STREAM)).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).identity).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).config).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).description).toBeUndefined();
   });
 
   it('does not attach the seeded run config to a run.start that lands during hydration', async () => {
@@ -1265,7 +1289,7 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunConfig(STREAM)).toEqual(oldConfig);
+    expect(store.getRunMetadata(STREAM).config).toEqual(oldConfig);
 
     const newIdentity = {
       kind: 'multiAgentWorkflow',
@@ -1286,8 +1310,8 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
 
     expect(wasRunStartInjected).toHaveBeenCalledOnce();
-    expect(store.getRunIdentity(STREAM)).toEqual(newIdentity);
-    expect(store.getRunConfig(STREAM)).toBeUndefined();
+    expect(store.getRunMetadata(STREAM).identity).toEqual(newIdentity);
+    expect(store.getRunMetadata(STREAM).config).toBeUndefined();
   });
 
   it('persists a late reset and round patch that arrive during async hydration', async () => {

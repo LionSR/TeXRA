@@ -1,9 +1,9 @@
 // Local imports
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { platform } from '@platform/platform';
-import type { RunIdentity, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
+import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 
 // Local file imports
 import {
@@ -46,9 +46,7 @@ interface ProgressViewHostCommandOptions {
 }
 
 interface ProgressViewRunState {
-  getRunConfig(stream: StreamTabId): AgentConfig | undefined;
-  getRunIdentity(stream: StreamTabId): RunIdentity | undefined;
-  getExecutionId(stream: StreamTabId): string | undefined;
+  getRunMetadata(stream: StreamTabId): RunMetadata;
 }
 
 interface ProgressViewRunDependencies {
@@ -73,11 +71,12 @@ async function resumeStream(
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
-  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) {
+  const { config, executionId, identity } =
+    dependencies.state.getRunMetadata(stream);
+  if (!isNativeAgentRun(identity)) {
     await reportNonNativeRunRefusal(showInfo, 'resumed');
     return;
   }
-  const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
   if (config.agentCategory !== AgentCategory.Workflow) {
@@ -85,7 +84,6 @@ async function resumeStream(
     return;
   }
 
-  const executionId = dependencies.state.getExecutionId(stream);
   await dependencies.runExecutionRequest({
     config,
     ...(executionId && { executionId }),
@@ -97,11 +95,11 @@ async function runNewStream(
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
-  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) {
+  const { config, identity } = dependencies.state.getRunMetadata(stream);
+  if (!isNativeAgentRun(identity)) {
     await reportNonNativeRunRefusal(showInfo, 're-run');
     return;
   }
-  const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
   await dependencies.runExecutionRequest({ config });

@@ -278,14 +278,14 @@ function makeResumeSnapshotStore(options: {
       todos: [],
       plan: undefined,
     })),
-    getExecutionId: vi.fn(() => options.executionId),
-    readPersistedExecutionId: vi.fn(async () => options.persistedExecutionId),
-    getRunConfig: vi.fn(() => options.config),
-    getRunIdentity: vi.fn(() =>
-      options.config
+    getRunMetadata: vi.fn(() => ({
+      executionId: options.executionId,
+      config: options.config,
+      identity: options.config
         ? { kind: 'agent' as const, agent: options.config.agent }
         : undefined,
-    ),
+    })),
+    readPersistedExecutionId: vi.fn(async () => options.persistedExecutionId),
     getParentStreamId: vi.fn(() => options.parentStreamId),
   } as unknown as StreamSnapshotStore;
 }
@@ -1390,7 +1390,7 @@ describe('createChatSessionController', () => {
         todos: [],
         plan: undefined,
       })),
-      getRunIdentity: vi.fn(() => undefined),
+      getRunMetadata: vi.fn(() => ({})),
     } as unknown as StreamSnapshotStore;
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),

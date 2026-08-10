@@ -61,6 +61,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { getFirstRunDone } from '@shared/state/onboardingState';
@@ -107,7 +108,6 @@ import {
 import { parentStream as parentStreamSignal } from './state/childExecutions';
 import {
   focusedChildFollowUpRoute,
-  stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
   type FocusedChildFollowUpRoute,
 } from './state/focusedChildFollowUp';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
@@ -210,14 +210,6 @@ export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
   return focusedChildFollowUpRoute({
     activeStreamId: activeStreamIdSignal.get(),
     parentStream: parentStreamSignal.get(),
-    streams: streamsSignal.get(),
-  });
-}
-
-function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
-  return focusedChildStoppedMessage({
-    parentStream: parentStreamSignal.get(),
-    streamId,
     streams: streamsSignal.get(),
   });
 }
@@ -656,7 +648,7 @@ export async function runChat(
     const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
     if (focusedChildRoute.kind === 'reject') {
       appendLocalAssistantTranscript(
-        stoppedFocusedChildFollowUpMessage(focusedChildRoute.streamId),
+        FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
         focusedChildRoute.streamId,
       );
       return;
@@ -758,7 +750,7 @@ export async function runChat(
             session.stopRequested = true;
           } else {
             appendLocalAssistantTranscript(
-              stoppedFocusedChildFollowUpMessage(followUpTarget),
+              FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
               followUpTarget,
             );
           }

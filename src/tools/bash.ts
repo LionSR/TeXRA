@@ -34,7 +34,11 @@ import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   backgroundBashOutputData,
 } from '@shared/toolUse';
-import { type StreamTabId, type ExecutionId } from '@shared/schemas';
+import {
+  USER_FOLLOW_UP_SUPPORT,
+  type StreamTabId,
+  type ExecutionId,
+} from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { deliverChildRunFollowUp } from '@tools/delegation/childRunDelivery';
@@ -416,6 +420,7 @@ export class BashTool extends defineTool({
       {
         streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
         identity: { kind: 'process', tool: 'bash' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentExecutionId,
         description: childStreamDescription(command),
       },
@@ -428,6 +433,7 @@ export class BashTool extends defineTool({
         childStream = createChildStream(executionId, parentStreamId, {
           streamPrefix: BASH_CHILD_STREAM_PREFIX,
           run: { kind: 'process', tool: 'bash' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           description: command,
           config: syntheticConfig,
         });

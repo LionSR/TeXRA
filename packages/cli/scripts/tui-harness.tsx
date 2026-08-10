@@ -44,6 +44,7 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
+  USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
@@ -56,6 +57,7 @@ import {
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isActivePhase,
@@ -107,10 +109,7 @@ import {
   setParentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
-import {
-  focusedChildFollowUpRoute,
-  stoppedFocusedChildFollowUpMessage,
-} from '../src/chat/tui/state/focusedChildFollowUp';
+import { focusedChildFollowUpRoute } from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
@@ -164,6 +163,7 @@ import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 const STREAM_ID = 'harness-stream-1';
 const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
+const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
   process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
@@ -273,8 +273,6 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
-const RETARGET_FOCUSED_ESCAPE =
-  process.env.HARNESS_RETARGET_FOCUSED_ESCAPE === '1';
 // Opt-in fixture for the PTY ordering tests (issue #7972, follow-up from
 // #7967 / the "PTY ordering tests" section of
 // docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md): drives one child
@@ -1457,6 +1455,32 @@ function seedRunningWorkflow(): void {
   });
 }
 
+function seedRunningProcessChild(): void {
+  const childStreamId = 'bash#aaaa0003f10e' as StreamTabId;
+  patchStream(childStreamId, (slice) => ({
+    ...slice,
+    identity: { kind: 'process', tool: 'bash' },
+    // Matches the synthetic run config emitted by background Bash.
+    category: AgentCategory.ToolUse,
+    description: 'sleep 30',
+  }));
+  setStreamStatusInCliState({
+    streamId: childStreamId,
+    status: STREAM_PHASE.RUNNING,
+  });
+  projectChildRoster(STREAM_ID, [
+    {
+      executionId: 'aaaa0003f10e',
+      agentName: 'bash',
+      childStreamId,
+      identity: { kind: 'process', tool: 'bash' },
+      status: STREAM_PHASE.RUNNING,
+    },
+  ]);
+  setParentStream(childStreamId, STREAM_ID);
+  activeStreamIdSignal.set(childStreamId);
+}
+
 // One child stream, its attachment/roster/edge/status/removal facts driven
 // through the real production subscription path rather than the CHILD_STREAMS
 // map mutators (`projectChildRoster`/`setParentStream`) directly — a
@@ -1784,6 +1808,9 @@ if (SHOW_CHILDREN) {
     if (addNestedChildren) projectChildRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
+      category: AgentCategory.ToolUse,
+      identity: child.identity,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       // One child carries usage so scenarios pin the row metadata column's
@@ -1807,6 +1834,8 @@ if (SHOW_CHILDREN) {
     );
     patchStream('harness-nested-local-checker-stream', (slice) => ({
       ...slice,
+      category: AgentCategory.ToolUse,
+      identity: nestedStrategyChild.identity,
       description: 'localChecker nested proof check',
       entries: makeChildEntries('localChecker', 'nested proof check'),
     }));
@@ -2006,23 +2035,11 @@ function markHarnessInterrupted(): void {
   }
 }
 
-let focusedEscapeRetargeted = false;
-
 function canInterruptHarnessStream(streamId: StreamTabId): boolean {
   return isInFlightPhase(streams.get().get(streamId)?.status);
 }
 
 function markHarnessStreamInterrupted(streamId: StreamTabId): void {
-  if (
-    RETARGET_FOCUSED_ESCAPE &&
-    !focusedEscapeRetargeted &&
-    streamId === 'harness-child-strategy-stream'
-  ) {
-    focusedEscapeRetargeted = true;
-    setTimeout(() => {
-      activeStreamIdSignal.set('harness-child-review-stream');
-    }, 50);
-  }
   clearApprovalsWhere(
     (payload) => approvalPayloadStreamId(payload) === streamId,
   );
@@ -2206,11 +2223,7 @@ function handleHarnessSubmit(line: string): void {
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
-      stoppedFocusedChildFollowUpMessage({
-        parentStream: parentStream.get(),
-        streamId: focusedChildRoute.streamId,
-        streams: streams.get(),
-      }),
+      FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
       focusedChildRoute.streamId,
     );
     return;
@@ -2438,6 +2451,10 @@ if (SHOW_WORKFLOW_TIMELINE) {
 
 if (SHOW_WORKFLOW_RUNNING) {
   seedRunningWorkflow();
+}
+
+if (SHOW_PROCESS_CHILD) {
+  seedRunningProcessChild();
 }
 
 if (CHILD_EVENT_ORDER) {

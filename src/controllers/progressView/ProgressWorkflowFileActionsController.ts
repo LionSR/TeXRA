@@ -9,16 +9,14 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
-  getExecutionId(stream: StreamTabId): string | undefined;
+  getRunMetadata(stream: StreamTabId): RunMetadata;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
-  getAgentModel(
-    stream: StreamTabId,
-  ): { agent: string; model: string } | undefined;
 }
 
 interface ProgressWorkflowFileActionsHost {
@@ -57,7 +55,7 @@ export class ProgressWorkflowFileActionsController {
 
   async openTaskStorage(stream: StreamTabId): Promise<void> {
     try {
-      const executionId = this.deps.state.getExecutionId(stream);
+      const { executionId } = this.deps.state.getRunMetadata(stream);
       const runOutputs = this.deps.state.getOutputFiles(stream);
       let directoryToReveal: string | undefined;
 
@@ -238,7 +236,7 @@ export class ProgressWorkflowFileActionsController {
     stream: StreamTabId,
     file: string,
   ): AcceptCopyMeta | undefined {
-    const config = this.deps.state.getAgentModel(stream);
+    const { config } = this.deps.state.getRunMetadata(stream);
     if (!config) return undefined;
 
     // Use the matched entry's own `round` and prefer the most recent match:

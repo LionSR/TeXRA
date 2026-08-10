@@ -1513,7 +1513,7 @@ describe('DesktopProgressBridge', () => {
     const executionId = 'ca110ad' as ExecutionId;
     let snapshots: ProgressSnapshotStore | undefined;
     const detectWaitingStreams = vi.fn(async () => {
-      expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
+      expect(snapshots?.getRunMetadata(streamId).executionId).toBe(executionId);
       return new Set<StreamTabId>();
     });
 
@@ -2153,8 +2153,10 @@ describe('DesktopProgressBridge', () => {
     });
 
     try {
-      expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
-      expect(snapshots?.getRunConfig(streamId)).toMatchObject(runConfig);
+      expect(snapshots?.getRunMetadata(streamId)).toMatchObject({
+        config: runConfig,
+        executionId,
+      });
       await expect(tryResumeStream(streamId)).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         streamId,
@@ -2785,7 +2787,8 @@ describe('DesktopProgressBridge', () => {
           ).toHaveLength(1);
         });
         expect(
-          owner.progressSnapshotStore.getRunConfig(childStreamId)?.agent,
+          owner.progressSnapshotStore.getRunMetadata(childStreamId).config
+            ?.agent,
         ).toBe('search');
         expect(
           owner.progressSnapshotStore.getParentStreamId(childStreamId),

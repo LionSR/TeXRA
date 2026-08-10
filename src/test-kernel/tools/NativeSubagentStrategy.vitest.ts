@@ -536,7 +536,7 @@ describe('NativeSubagentStrategy', () => {
     ).rejects.toBe(resumeError);
   });
 
-  it('consumes one child-loop follow-up in one resumed WAITING turn without requeueing it', async () => {
+  it('keeps a second child follow-up available after two resumed WAITING turns', async () => {
     const session = defaultSession();
     const childStreamId = 'native-follow-up-loop-child' as StreamTabId;
     const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
@@ -592,12 +592,11 @@ describe('NativeSubagentStrategy', () => {
     mocks.retrieveSessionResumeData.mockResolvedValue(resume);
     mocks.resumeToolUseFromResumeData.mockImplementation(
       async (_snapshot, options) => {
-        if (mocks.resumeToolUseFromResumeData.mock.calls.length > 1) {
-          throw new Error('the same follow-up batch resumed more than once');
-        }
         options.onRun?.(handle);
         session.status.transitionToWaiting(childStreamId, 'wait');
-        return waitingTurn('follow-up response');
+        return waitingTurn(
+          `follow-up response ${mocks.resumeToolUseFromResumeData.mock.calls.length}`,
+        );
       },
     );
 
@@ -631,30 +630,58 @@ describe('NativeSubagentStrategy', () => {
       await vi.waitFor(() =>
         expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2),
       );
-      // Give an accidentally re-enqueued batch enough time to start a second
-      // immediate resume. The guarded mock above prevents an actual busy loop.
+
+      expect(
+        session.followUps.submit(
+          childStreamId,
+          {
+            text: 'Now give the shortest equivalent statement.',
+            origin: 'user',
+          },
+          'live_owner',
+        ),
+      ).toEqual({ kind: 'live' });
+
+      await vi.waitFor(() =>
+        expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(2),
+      );
+      await vi.waitFor(() =>
+        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(3),
+      );
       await sleep(50);
 
-      expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(1);
-      expect(mocks.resumeToolUseFromResumeData.mock.calls[0]?.[0]).toEqual(
-        resume,
-      );
+      expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(2);
       expect(
-        mocks.resumeToolUseFromResumeData.mock.calls[0]?.[1].drainedFollowUps,
+        mocks.resumeToolUseFromResumeData.mock.calls.map((call) => call[0]),
+      ).toEqual([resume, resume]);
+      expect(
+        mocks.resumeToolUseFromResumeData.mock.calls.map(
+          (call) => call[1].drainedFollowUps,
+        ),
       ).toEqual([
-        {
-          text: 'Also state exactly where finiteness is used.',
-          displayText: undefined,
-          mediaFiles: undefined,
-          origin: 'user',
-        },
+        [
+          {
+            text: 'Also state exactly where finiteness is used.',
+            displayText: undefined,
+            mediaFiles: undefined,
+            origin: 'user',
+          },
+        ],
+        [
+          {
+            text: 'Now give the shortest equivalent statement.',
+            displayText: undefined,
+            mediaFiles: undefined,
+            origin: 'user',
+          },
+        ],
       ]);
       expect(session.followUps.getAll(childStreamId)).toEqual([]);
       expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
       const resumedDeliveries = mocks.deliverChildRunFollowUp.mock.calls.filter(
         ([delivery]) => delivery.followUp.text.includes('follow-up response'),
       );
-      expect(resumedDeliveries).toHaveLength(1);
+      expect(resumedDeliveries).toHaveLength(2);
     } finally {
       const handleWasTracked =
         session.executions.getHandle(executionId) !== undefined;
