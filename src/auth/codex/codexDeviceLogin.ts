@@ -4,8 +4,14 @@
  * The user opens a URL and types a one-time code; we poll until they approve.
  * Host-neutral: the host renders the prompt (`onPrompt`) however it likes.
  */
-import { setTimeout as sleep } from 'node:timers/promises';
+// Local imports - oauth
+import {
+  deviceCodeAuthorized,
+  deviceCodePending,
+  pollUntilDeviceAuthorized,
+} from '@auth/oauth/deviceCodePoll';
 
+// Local imports - codex
 import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants';
 import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
 import { CodexAuthError, type CodexSession } from './codexSessionTypes';
@@ -56,29 +62,35 @@ export async function loginWithDeviceCode(
     userCodeResponse.expires_in == null
       ? DEVICE_TIMEOUT_FALLBACK_MS
       : userCodeResponse.expires_in * 1000;
-  const deadline = Date.now() + expiresInMs;
-  while (Date.now() < deadline) {
-    await sleep(intervalMs, undefined, { signal: options.signal });
-    options.onPoll?.();
-    try {
-      const token = await pollDeviceToken(
-        {
-          deviceAuthId: userCodeResponse.device_auth_id,
-          userCode,
-        },
-        options.signal,
-      );
-      options.signal?.throwIfAborted();
-      return await options.coordinator.completeDeviceLogin({
-        authorizationCode: token.authorization_code,
-        codeVerifier: token.code_verifier,
-      });
-    } catch (error) {
-      if (error instanceof CodexAuthError && error.kind === 'pending') {
-        continue;
+
+  return pollUntilDeviceAuthorized({
+    intervalMs,
+    deadlineMs: Date.now() + expiresInMs,
+    signal: options.signal,
+    onPoll: options.onPoll,
+    createTimeoutError: () =>
+      new Error('Device-code sign-in timed out. Run sign-in again.'),
+    attempt: async () => {
+      try {
+        const token = await pollDeviceToken(
+          {
+            deviceAuthId: userCodeResponse.device_auth_id,
+            userCode,
+          },
+          options.signal,
+        );
+        options.signal?.throwIfAborted();
+        const session = await options.coordinator.completeDeviceLogin({
+          authorizationCode: token.authorization_code,
+          codeVerifier: token.code_verifier,
+        });
+        return deviceCodeAuthorized(session);
+      } catch (error) {
+        if (error instanceof CodexAuthError && error.kind === 'pending') {
+          return deviceCodePending();
+        }
+        throw error;
       }
-      throw error;
-    }
-  }
-  throw new Error('Device-code sign-in timed out. Run sign-in again.');
+    },
+  });
 }

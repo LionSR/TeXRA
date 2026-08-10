@@ -5,16 +5,21 @@
 // code from a browser on any device. Session storage and relay-cache
 // invalidation live with the other sign-in flows in `supabaseAuth.ts`.
 
-import { setTimeout as sleepMs } from 'node:timers/promises';
-
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - auth
 import { DEVICE_AUTH_BASE_URL } from '@auth/config';
 import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import {
   parseTokenExchangeResponse,
   type GitHubTokenExchangeResponse,
 } from '@auth/SupabaseSession';
+import {
+  deviceCodeAuthorized,
+  deviceCodePending,
+  pollUntilDeviceAuthorized,
+} from '@auth/oauth/deviceCodePoll';
 
 const DEVICE_AUTH_REQUEST_TIMEOUT_MS = 30000;
 
@@ -102,73 +107,73 @@ export async function pollForDeviceSession(
   hooks: DeviceAuthPollHooks = {},
 ): Promise<GitHubTokenExchangeResponse> {
   const now = hooks.now ?? Date.now;
-  const sleep =
-    hooks.sleep ??
-    ((ms: number) => sleepMs(ms, undefined, { signal: hooks.signal }));
-  const deadline = now() + authorization.expires_in * 1000;
-  let intervalSeconds = authorization.interval;
   let transientFailures = 0;
+  const sleepHook = hooks.sleep;
 
-  for (;;) {
-    hooks.signal?.throwIfAborted();
-    await sleep(intervalSeconds * 1000);
-    hooks.signal?.throwIfAborted();
-    if (now() >= deadline) throw deviceCodeExpiredError();
-
-    let response: Response;
-    try {
-      response = await fetchWithTimeout(
-        `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/token`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_code: authorization.device_code }),
-          signal: hooks.signal,
-        },
-        DEVICE_AUTH_REQUEST_TIMEOUT_MS,
-        'Device sign-in poll timed out',
-        hooks.fetchImpl,
-      );
-    } catch (error) {
-      hooks.signal?.throwIfAborted();
-      // Headless/SSH connections blip; tolerate a few in a row before failing.
-      transientFailures += 1;
-      if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) throw error;
-      continue;
-    }
-
-    if (response.ok) {
-      return parseTokenExchangeResponse(response);
-    }
-
-    const errorCode = await readDeviceErrorCode(response);
-    switch (errorCode) {
-      case 'authorization_pending':
-        transientFailures = 0;
-        continue;
-      case 'slow_down':
-        transientFailures = 0;
-        intervalSeconds += SLOW_DOWN_INCREMENT_SECONDS;
-        continue;
-      case 'expired_token':
-        throw deviceCodeExpiredError();
-      case 'access_denied':
-        throw new Error('Sign-in was denied in the browser.');
-      default:
-        if (response.status === 429 || response.status >= 500) {
-          transientFailures += 1;
-          if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) {
-            throw new Error(
-              `Device sign-in failed (HTTP ${response.status}). Try again.`,
-            );
-          }
-          continue;
-        }
-        throw new Error(
-          `Device sign-in failed: ${errorCode ?? `HTTP ${response.status}`}`,
+  return pollUntilDeviceAuthorized({
+    intervalMs: authorization.interval * 1000,
+    deadlineMs: now() + authorization.expires_in * 1000,
+    signal: hooks.signal,
+    sleep: sleepHook ? (ms: number) => sleepHook(ms) : undefined,
+    now,
+    // Sleep first, then check the deadline (historical CLI timing).
+    checkDeadlineBeforeSleep: false,
+    createTimeoutError: deviceCodeExpiredError,
+    attempt: async () => {
+      let response: Response;
+      try {
+        response = await fetchWithTimeout(
+          `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/token`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_code: authorization.device_code }),
+            signal: hooks.signal,
+          },
+          DEVICE_AUTH_REQUEST_TIMEOUT_MS,
+          'Device sign-in poll timed out',
+          hooks.fetchImpl,
         );
-    }
-  }
+      } catch (error) {
+        hooks.signal?.throwIfAborted();
+        // Headless/SSH connections blip; tolerate a few in a row before failing.
+        transientFailures += 1;
+        if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) throw error;
+        return deviceCodePending();
+      }
+
+      if (response.ok) {
+        return deviceCodeAuthorized(await parseTokenExchangeResponse(response));
+      }
+
+      const errorCode = await readDeviceErrorCode(response);
+      switch (errorCode) {
+        case 'authorization_pending':
+          transientFailures = 0;
+          return deviceCodePending();
+        case 'slow_down':
+          transientFailures = 0;
+          return deviceCodePending(SLOW_DOWN_INCREMENT_SECONDS * 1000);
+        case 'expired_token':
+          throw deviceCodeExpiredError();
+        case 'access_denied':
+          throw new Error('Sign-in was denied in the browser.');
+        default:
+          if (response.status === 429 || response.status >= 500) {
+            transientFailures += 1;
+            if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) {
+              throw new Error(
+                `Device sign-in failed (HTTP ${response.status}). Try again.`,
+              );
+            }
+            return deviceCodePending();
+          }
+          throw new Error(
+            `Device sign-in failed: ${errorCode ?? `HTTP ${response.status}`}`,
+          );
+      }
+    },
+  });
 }
 
 function deviceCodeExpiredError(): Error {
