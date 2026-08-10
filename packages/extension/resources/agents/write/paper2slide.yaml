@@ -19,7 +19,6 @@ prompts:
     - End with a conclusion slide summarizing the main findings and potential future work
     - Include appropriate equations, figures, and tables from the paper
     - Use condensed bullet points; every bullet states a specific fact, result, or step. Each slide makes one point, and the deck has one or two peaks rather than uniform emphasis
-    - Keep the tone scientifically precise; let concrete results carry the emphasis
     - Write slide text in plain human style: no buzzword filler (``novel'', ``comprehensive'', ``robust'', ``cutting-edge''), no generic significance claims (``profound implications''), no throat-clearing (``It is important to note that\ldots'')
     - Use appropriate notation and terminology consistently
     - Prioritize visual representations and concrete takeaways over verbose descriptions

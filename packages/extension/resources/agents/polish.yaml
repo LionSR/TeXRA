@@ -43,11 +43,11 @@ prompts:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
+    If asked to revise section A, do not modify section B unless consistency requires it.
 
   userRequest:
     - |
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name. Make targeted changes that address the specific instruction. Do not make changes unrelated to the instruction.
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name. Make targeted changes that address the instruction and nothing else.
 
       Use the following format:
 

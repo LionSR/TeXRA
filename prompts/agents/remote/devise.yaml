@@ -71,11 +71,11 @@ prompts:
 
   userRequest:
     - |
-      Your task is to enhance these papers focusing solely on the following specific instruction:
+      Your task is to enhance these papers following only this instruction:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      Important: Focus solely on the given instruction. If asked to revise section A in all papers, do not modify section B in any paper unless absolutely necessary for consistency.
+      If asked to revise section A in all papers, do not modify section B in any paper unless consistency requires it.
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 

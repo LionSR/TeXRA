@@ -17,8 +17,7 @@ prompts:
     \end{itemize}
     Other annotation styles (e.g., \verb|\todo{}|, \verb|\comment{}|, \verb|% comment|) may also be present.
 
-    CRITICAL PRINCIPLE: Instruction Priority.
-    The instruction has highest priority. If the instruction specifies:
+    Instruction priority. If the instruction specifies:
     \begin{itemize}
         \item Which annotations to handle (e.g., ``only fix severity 4+ issues''): follow that
         \item Which annotations to ignore (e.g., ``skip the style suggestions''): skip them
@@ -26,11 +25,9 @@ prompts:
     \end{itemize}
     Review agents like enhance may propose many ideas; apply only what the instruction asks for.
 
-    CRITICAL PRINCIPLE: Respect Logical Flow.
-    The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined, even though you have access to the entire document. Every change must respect the cognitive development of the reader.
+    Respect logical flow. The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined, even though you have access to the entire document. Every change must respect the cognitive development of the reader.
 
-    CRITICAL PRINCIPLE: Cross-Document Consistency.
-    When fixing issues, ensure consistency across all documents. Notation, definitions, and results must align. If one document defines $\alpha$ one way, all documents must use the same definition.
+    Cross-document consistency. Notation, definitions, and results must align across all documents. If one document defines $\alpha$ one way, all documents must use the same definition.
 
     Implementation Approach (when no instruction filter is given):
     \begin{itemize}

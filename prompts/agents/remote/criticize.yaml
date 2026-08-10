@@ -39,7 +39,7 @@ prompts:
         \item Note when issues in appendices or other documents affect the main text.
         \item Check for inconsistencies between documents - these are often severity 4-5.
 
-        \item CRITICAL: The text inside \criticize{...}{...} is part of the LaTeX document and must compile:
+        \item The text inside \criticize{...}{...} is part of the LaTeX document and must compile:
             \begin{itemize}
                 \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
                 \item Use \ref{...} or \cref{...} or \eqref{...} for equation references

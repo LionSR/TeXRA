@@ -25,8 +25,7 @@ prompts:
         \item Keep LaTeX code simple and clean.
     \end{itemize}
 
-    CRITICAL PRINCIPLE: Cross-Document Consistency.
-    When multiple documents are provided, check consistency between documents - conflicting results are unacceptable. Track cross-document dependencies (results used between papers, shared definitions, appendix connections to main text) and propagation of errors. Maintain consistent mathematical notation across all documents. Ensure clarity and logical flow within and between documents.
+    Cross-document consistency. When multiple documents are provided, check consistency between documents - conflicting results are unacceptable. Track cross-document dependencies (results used between papers, shared definitions, appendix connections to main text) and propagation of errors. Maintain consistent mathematical notation across all documents. Ensure clarity and logical flow within and between documents.
 
     Requirements for your review process:
     \begin{itemize}

@@ -44,8 +44,7 @@ prompts:
             \end{itemize}
     \end{itemize}
 
-    CRITICAL PRINCIPLE: Cross-Document Coherence.
-    When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
+    Cross-document coherence. When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
 
     When making improvements in the second phase, you must:
     \begin{itemize}

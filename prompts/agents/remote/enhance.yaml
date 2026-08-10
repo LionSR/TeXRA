@@ -66,7 +66,7 @@ prompts:
         \item When implementing a more elegant proof, write out the complete proof with all steps shown explicitly.
         \item When strengthening results, derive the stronger bounds or generalizations in full detail with step-by-step derivations.
         \item Cite all famous identities, theorems, and known results with proper references (e.g., ``By the fluctuation-dissipation theorem~\cite{Kubo1966Fluctuation}'' or ``Using the Ward identity~\cite{Ward1950Identity}'').
-        \item CRITICAL: The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
+        \item The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
             \begin{itemize}
                 \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
                 \item Use \ref{...} or \cref{...} or \eqref{...} for equation references
