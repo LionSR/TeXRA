@@ -102,7 +102,6 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import {
   createRunTrace,
@@ -354,10 +353,7 @@ function toolEntry(
   } as const;
 }
 
-/** Run `body` with a TUI run-fact subscription attached to a fresh hub. The
- *  snapshot store attaches to the hub first — mirroring production, where the
- *  session attaches its store at construction — so the TUI projection reads
- *  accumulated artifact/usage state the store has already folded in. */
+/** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
 function withRunFacts(
   body: (hub: SessionEventHub, session: SessionHandle) => void,
 ): void {
@@ -375,29 +371,6 @@ function withRunFacts(
   });
   try {
     body(hub, session);
-  } finally {
-    detach();
-    snapshots.evictAll();
-  }
-}
-
-async function withRunFactsAsync(
-  body: (hub: SessionEventHub, session: SessionHandle) => Promise<void>,
-): Promise<void> {
-  const hub = new SessionEventHub();
-  const snapshots = new StreamSnapshotStore();
-  const session = new SessionHandle({
-    events: hub,
-    snapshots,
-    transcripts: StreamLogStore.ephemeral('TUI async session signals test'),
-  });
-  const detach = attachSessionSignalsAdapter({
-    events: hub,
-    session,
-    snapshots,
-  });
-  try {
-    await body(hub, session);
   } finally {
     detach();
     snapshots.evictAll();
