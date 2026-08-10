@@ -66,7 +66,7 @@ export function estimateTokensFromText(text: string): number {
 }
 
 /** System prompt used for client-side conversation compaction. */
-export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise but complete summary of the conversation below. Preserve:
+export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
 - The original user request and goals
 - All key decisions made
 - File paths and code changes discussed or made
@@ -74,7 +74,7 @@ export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Crea
 - Current state of the task (what is done, what is pending)
 - Any errors encountered and how they were resolved
 
-Format the summary as a structured narrative that allows the conversation to continue seamlessly. Do NOT add any preamble or explanation — output only the summary.`;
+Write a structured summary with enough context to continue the task. Output only the summary.`;
 
 /** Final user instruction that makes the compaction task explicit after history. */
 export const COMPACTION_USER_PROMPT =

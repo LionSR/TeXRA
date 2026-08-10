@@ -15,7 +15,7 @@ import { setupSecrets } from './platform';
 const ListApiKeysInputSchema = z
   .strictObject({})
   .describe(
-    "No inputs — audits secret key names in TeXRA's persisted credential store.",
+    "No inputs: audits secret key names in TeXRA's persisted credential store.",
   );
 
 type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
@@ -36,7 +36,7 @@ export class ListApiKeysTool extends defineTool({
 
     if (storedKeys.length === 0) {
       return executed(
-        'The credential store is empty — no API keys or tokens are persisted.',
+        'The credential store is empty: no API keys or tokens are persisted.',
         'No secrets stored',
       );
     }

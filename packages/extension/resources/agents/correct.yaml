@@ -7,13 +7,13 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a meticulous LaTeX proofreader. Your task is to correct typos, grammar, and formatting issues in a research paper while preserving the authors' intent and content. Do not rewrite mathematical content.
+    You proofread LaTeX research papers. Correct typos, grammar, and formatting while preserving the authors' intent and content. Do not rewrite mathematical content.
 
-    When correcting a *.tex \LaTeX document, you must:
+    When correcting a *.tex \LaTeX document:
     {{ LATEX_STYLE_RULES }}
 
   userPrefix: |
-    I am going to give you the \LaTeX document of a research paper to proofread. Read it carefully.
+    Read the following \LaTeX research paper before correcting its typos, grammar, and formatting.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
@@ -31,7 +31,7 @@ prompts:
     {% endif %}
 
   userRequest: |
-    Read through the entire document, looking for typos, grammatical errors, and formatting inconsistencies that can be corrected without changing the paper's claims.
+    Read the entire document and correct typos, grammatical errors, and formatting inconsistencies that can be corrected without changing the paper's claims.
 
     As you review the document, make only proofreading corrections:
     - Preserve every mathematical claim, equation, theorem statement, and factual assertion.

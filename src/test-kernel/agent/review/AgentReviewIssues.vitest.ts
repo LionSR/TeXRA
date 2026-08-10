@@ -131,9 +131,9 @@ describe('buildFixInstruction', () => {
       'main branch (origin/main)',
     );
     expect(instruction).toContain('2 issues');
-    expect(instruction).toContain('src/x.ts:5-7 [critical] — Broken loop');
+    expect(instruction).toContain('src/x.ts:5-7 [critical]: Broken loop');
     expect(instruction).toContain('Suggested fix: Use < instead of <=.');
-    expect(instruction).toContain('a.tex:2 [info] — Stale label');
+    expect(instruction).toContain('a.tex:2 [info]: Stale label');
     expect(instruction).toContain('smallest change');
   });
 });

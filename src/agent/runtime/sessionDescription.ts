@@ -51,7 +51,7 @@ export function cleanSessionDescription(text: string): string {
   return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
 }
 
-const SYSTEM_PROMPT = `You generate very short session labels for an AI theorist tool. Given an agent name, its description, and the user's instruction, write a single short phrase (max ~10 words, no trailing period) that captures what the session aims to accomplish. Be specific but terse — no full sentences, no meta-commentary, no quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
+const SYSTEM_PROMPT = `Generate a short TeXRA session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
 
 /**
  * Build a user prompt for session description generation.

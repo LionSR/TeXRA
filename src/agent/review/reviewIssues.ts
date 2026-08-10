@@ -95,7 +95,7 @@ export function buildReviewInstruction(input: ReviewInstructionInput): string {
   ];
   if (input.userInstructions) {
     sections.push(
-      `The user gave extra instructions for this review — prioritize them, but still report any other critical issues you find:\n<reviewer-instructions>\n${input.userInstructions}\n</reviewer-instructions>`,
+      `Prioritize the user review instructions below. Also report other critical issues:\n<reviewer-instructions>\n${input.userInstructions}\n</reviewer-instructions>`,
     );
   }
   sections.push(
@@ -124,14 +124,14 @@ export function buildFixInstruction(
         ? `${issue.startLine}-${issue.endLine}`
         : `${issue.startLine}`;
     lines.push(
-      `${index + 1}. ${issue.file}:${lineRange} [${issue.severity}] — ${issue.title}`,
+      `${index + 1}. ${issue.file}:${lineRange} [${issue.severity}]: ${issue.title}`,
     );
     if (issue.description) lines.push(`   ${issue.description}`);
     if (issue.suggestion) lines.push(`   Suggested fix: ${issue.suggestion}`);
     lines.push('');
   }
   lines.push(
-    'Make the smallest change that resolves each issue; do not refactor unrelated code. Read each file before editing — line numbers may have drifted since the review.',
+    'Make the smallest change that resolves each issue; do not refactor unrelated code. Read each file before editing because line numbers may have drifted since the review.',
   );
   return lines.join('\n');
 }

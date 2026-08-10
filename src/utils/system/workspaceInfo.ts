@@ -162,12 +162,12 @@ export async function buildWorkspaceInfoBlock(
   if (externalRoots.length > 0) {
     lines.push('');
     lines.push(
-      'Accessible external directories (absolute paths — use read_file, write_file, grep, glob, edit_file):',
+      'Accessible external directories (absolute paths; use read_file, write_file, grep, glob, edit_file):',
     );
     for (const root of externalRoots) {
       const rw = root.writable ? 'writable' : 'read-only';
       lines.push(
-        `  ${escapeTextStrict(root.absolutePath)} — ${escapeTextStrict(root.label)} (${rw})`,
+        `  ${escapeTextStrict(root.absolutePath)}: ${escapeTextStrict(root.label)} (${rw})`,
       );
     }
   }

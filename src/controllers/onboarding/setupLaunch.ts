@@ -23,7 +23,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =
-  'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
+  'Finish installing TeXRA. Probe my environment, install anything missing, and configure a working credential.';
 
 /**
  * Scan non-OpenRouter setup credentials in host-shared priority order:

@@ -1,12 +1,12 @@
 # Prompt template for polishing user instruction text.
-# Used by polishModel.ts, not an agent definition.
+# Used by polishModel.ts: not an agent definition.
 prompts:
   userRequest: |
-    Please review the following instruction text and correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
+    Correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
 
-    {% if FILE_CONTEXT %}{{ FILE_CONTEXT }}This text will be used as an instruction for editing the files mentioned above. If the text contains references to these files, please ensure they are correctly spelled and match the exact filenames.
+    {% if FILE_CONTEXT %}{{ FILE_CONTEXT }}This text will be used as an instruction for editing the files mentioned above. If the text contains references to these files, make them match the exact filenames.
 
-    {% endif %}Also, please follow these specific formatting rules:
+    {% endif %}Apply these formatting rules:
     1. If you spot inline LaTeX formulas, ensure they are wrapped with $ symbols (e.g., $E=mc^2$)
     2. If you spot XML tags, fix any unbalanced or unpaired tags
     3. If you spot Markdown syntax (like headers, lists, emphasis, links), fix any incorrect syntax

@@ -166,7 +166,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.match(output, /^Output for \S+ \(process, running/);
     assert.match(
       output,
-      /— [\d,]+ retained transcript chars; command-output cap 200,000 chars, 3 lines\./,
+      /: [\d,]+ retained transcript chars; command-output cap 200,000 chars, 3 lines\./,
     );
     assert.ok(!output.includes('of 200,000 logged chars'));
     assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));

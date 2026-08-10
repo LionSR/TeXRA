@@ -127,7 +127,7 @@ export class WebSearchTool extends defineTool({
       throw toFetchToolError(error, {
         timeout: `Web search timed out after ${DDG_TIMEOUT_MS / 1000}s. Retry the request.`,
         http: (status) => `Web search failed: HTTP ${status} from DuckDuckGo.`,
-        network: (message) => `Web search failed: network error — ${message}`,
+        network: (message) => `Web search failed: network error: ${message}`,
         fallback: (message) => `Web search failed: ${message}`,
       });
     }

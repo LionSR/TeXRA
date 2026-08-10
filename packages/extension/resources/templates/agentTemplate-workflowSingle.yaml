@@ -26,8 +26,8 @@ prompts:
         \item Preserve comments that start with "%" in the document.
         \item Use `` or '' rather than straight quotes.
         \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
-        \item \textbf{IMPORTANT:} Provide a complete output with sections in the original order.
-        \item \textbf{IMPORTANT:} Use math commands defined in commands.tex or preamble.tex.
+        \item Provide a complete output with sections in the original order.
+        \item Use math commands defined in commands.tex or preamble.tex.
     \end{itemize}
 
   userPrefix: |
@@ -48,7 +48,6 @@ prompts:
     - |
       Output the revised \LaTeX as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
     - |
-      Critically reflect on your previous revision, identify the most impactful
-      follow-up edits, and output the updated <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+      Review your previous revision, make any required follow-up edits, and output the updated <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
       If the previous output already satisfies the instruction, reproduce it
       unchanged. Do not make changes beyond what the instruction requires.

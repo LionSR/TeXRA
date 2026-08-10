@@ -478,7 +478,7 @@ export class BashTool extends defineTool({
       if (loggedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
         logCapReached = true;
         logger.warn(
-          `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars — tail available in follow-up result]`,
+          `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: tail available in follow-up result]`,
         );
         return;
       }
@@ -648,7 +648,7 @@ export class BashTool extends defineTool({
         `Command launched in background.`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
-        'Result arrives automatically as a follow-up message when complete — continue other work or end your turn.',
+        'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
         `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
         `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
       ].join('\n'),

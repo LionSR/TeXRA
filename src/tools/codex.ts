@@ -472,9 +472,9 @@ export class CodexTool extends defineTool({
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
-    'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
+    'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with an execution ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
-    'Pass thread_id on a later call to send a follow-up instruction to an existing session — mirrors delegate_agent(execution_id=…).',
+    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
@@ -539,6 +539,6 @@ async function launchCodexSession(
       }),
     summary: `Launched Codex: ${preview}`,
     launchedLine: `Codex agent launched (sandbox: ${input.sandbox_mode}).`,
-    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id — pass it to codex on a later call to send a follow-up instruction.`,
+    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to send a follow-up instruction.`,
   });
 }

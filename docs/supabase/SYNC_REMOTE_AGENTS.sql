@@ -60,7 +60,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'elevate',
-  'Two-phase writing strategist that elevates academic papers for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.',
+  'Revises academic papers for publication in two phases. Checks the argument for editors, specialists, adjacent-field reviewers, and non-specialists. Applies clear local improvements and marks strategic decisions with \criticize{}{}{} comments for author review.',
   'researcher/elevate.yaml',
   ARRAY['researcher'],
   'workflow',
@@ -124,7 +124,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'humanize',
-  'Removes LLM stylistic tells from research prose. Phase 1 annotates problems; phase 2 directly rewrites for natural voice while strictly preserving meaning.',
+  'Removes LLM stylistic tells from research prose. Phase 1 annotates problems. Phase 2 directly rewrites for natural voice while strictly preserving meaning.',
   'researcher/humanize.yaml',
   ARRAY['researcher'],
   'workflow',
@@ -224,7 +224,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'progressCheck',
-  'End-of-session reviewer. Looks at what was just done, the project''s standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still sitting on the table. Read-only; it advises, and does not edit or delegate.',
+  'End-of-session reviewer. Looks at what was just done, the project''s standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still sitting on the table. Read-only. Advises without editing or delegating.',
   'tool-use/progressCheck.yaml',
   ARRAY['public'],
   'toolUse',
@@ -292,7 +292,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'leanBlueprint',
-  'Creates and maintains LeanBlueprint documents following Patrick Massot''s plasTeX plugin (https://github.com/PatrickMassot/leanblueprint); dependency-tracked LaTeX that bridges informal math and Lean 4 formalization.',
+  'Creates and maintains dependency-tracked LeanBlueprint documents that bridge informal mathematics and Lean 4 formalization.',
   'tool-use-lean/leanBlueprint.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
@@ -308,7 +308,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'leanOrchestrator',
-  'Lean 4 project orchestrator that coordinates formalization, delegates to specialized Lean agents, and manages the proof development workflow.',
+  'Lean 4 project orchestrator. Coordinates formalization, delegates to specialized Lean agents, and manages proof development workflow.',
   'tool-use-lean/leanOrchestrator.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
@@ -324,7 +324,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'leanSearch',
-  'Lean 4 and Mathlib research assistant that finds lemmas, explores APIs, and answers formalization questions.',
+  'Lean 4 and Mathlib research assistant. Finds lemmas, explores APIs, and answers formalization questions.',
   'tool-use-lean/leanSearch.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
@@ -340,7 +340,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'leanSimplifier',
-  'Simplifies Lean 4 proofs and code to Mathlib-quality standards, leaving them clear, general, and ready to upstream.',
+  'Simplifies Lean 4 proofs and code into clear, general, upstream-ready Mathlib style.',
   'tool-use-lean/leanSimplifier.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',

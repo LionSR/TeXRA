@@ -328,7 +328,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  Mac:     brew install --cask wolfram-engine\n' +
       '  Ubuntu:  Download from wolfram.com/engine\n' +
       '  Windows: Download from wolfram.com/engine\n\n' +
-      'Note: A Mathematica installation alone is not enough — you\n' +
+      'Note: A Mathematica installation alone is not enough: you\n' +
       'need WolframScript on your PATH. The Wolfram Engine includes\n' +
       'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
@@ -390,9 +390,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files. Active language servers (one per project root) are listed below.',
     installGuide:
       'TeXRA can drive Lean 4 in two ways:\n\n' +
-      '  • VS Code build — uses the "lean4" extension\n' +
+      '  • VS Code build: uses the "lean4" extension\n' +
       '    (leanprover.lean4) and its running language server.\n' +
-      '  • CLI / desktop build — spawns `lake env lean --server`\n' +
+      '  • CLI / desktop build: spawns `lake env lean --server`\n' +
       '    directly, one process per Lake project root. Requires\n' +
       '    `lake` (from elan/Lean) on PATH; install via\n' +
       '    https://leanprover-community.github.io/install/.\n\n' +
@@ -454,7 +454,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     name: 'Multi-Agent Workflow',
     category: 'workflow',
     description:
-      'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it — this switch is an additional kill switch on top of that per-agent opt-in.',
+      'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
     configNotes:
       'No local install required. Turning this off removes delegate_multi_agents from every agent tool list, even agents whose configuration names it explicitly.',
     toggleable: true,
@@ -514,7 +514,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     name: 'External Inquiry',
     category: 'ai-agents',
     description:
-      'Tap your premium chat subscriptions — ChatGPT Pro, Claude Opus, Gemini Deep Think, Grok, and similar — without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
+      'Use premium chat subscriptions such as ChatGPT Pro, Claude Opus, Gemini Deep Think, and Grok without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
     configNotes:
       'No local install required. Uses your own external chat subscription through a human-in-the-loop copy/paste flow.',
     authNote: 'Uses your premium chat subscription',
@@ -534,10 +534,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     description:
       'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
     installGuide:
-      'Run the same agents on your .tex projects without an editor — ideal for scripts, CI, and remote machines.\n\n' +
+      'Run the same agents on your .tex projects without an editor. This works well for scripts, CI, and remote machines.\n\n' +
       `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY}):\n` +
       '  npm install -g @texra-ai/cli\n\n' +
-      'The CLI also ships with the TeXRA package — make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
+      'The CLI also ships with the TeXRA package. Make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
       'Check from a terminal:\n' +
       '  texra --version',
     installUrl: 'https://www.npmjs.com/package/@texra-ai/cli',
@@ -575,8 +575,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'In WSL, install inside the WSL environment (not on the Windows side).\n' +
       'See: https://developers.openai.com/codex/cli\n\n' +
       'Authentication (choose one):\n' +
-      '  • codex login        — sign in with ChatGPT account (recommended)\n' +
-      '  • OPENAI_API_KEY     — environment variable with API key',
+      '  • codex login       : sign in with ChatGPT account (recommended)\n' +
+      '  • OPENAI_API_KEY    : environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
     get installCommand() {
       return preferredInstallCommand({
@@ -630,7 +630,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     name: 'Claude Code CLI',
     category: 'ai-agents',
     description:
-      'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf — great for delegating focused exploration or implementation while another agent stays in charge.',
+      'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
     installGuide:
       'Install the Claude Code CLI (choose one):\n\n' +
       '  npm install -g @anthropic-ai/claude-code\n' +
@@ -640,9 +640,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'See: https://code.claude.com/docs/en/setup\n\n' +
       'Authentication (choose one):\n' +
       '  • Set ANTHROPIC_API_KEY in TeXRA Settings → API Keys → Anthropic\n' +
-      '  • claude login          — OAuth sign-in (Pro/Max subscription, recommended)\n' +
-      '  • claude setup-token    — long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
-      '  • ANTHROPIC_API_KEY     — environment variable with Console API key',
+      '  • claude login         : OAuth sign-in (Pro/Max subscription, recommended)\n' +
+      '  • claude setup-token   : long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
+      '  • ANTHROPIC_API_KEY    : environment variable with Console API key',
     installUrl: 'https://code.claude.com/docs/en/setup',
     get installCommand() {
       return preferredInstallCommand({
@@ -695,7 +695,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       const authNote =
         authBits.length > 0
           ? `Auth detected: ${authBits.join(', ')}.`
-          : 'No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN detected — the CLI will use whatever `claude login` session you have.';
+          : 'No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN detected: the CLI will use whatever `claude login` session you have.';
 
       return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
     },
