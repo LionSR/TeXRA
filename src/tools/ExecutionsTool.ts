@@ -43,6 +43,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  TERMINAL_WORKFLOW_CALL_STATUSES,
   type ExecutionId,
   type StreamLogEntry,
   type WorkflowExecutionSnapshot,
@@ -233,13 +234,6 @@ const WORKFLOW_SUMMARY_MAX_ENTRIES = 8;
 const WORKFLOW_SUMMARY_MAX_ATTEMPTS = 2;
 const WORKFLOW_SUMMARY_MAX_FILES_PER_KIND = 3;
 const WORKFLOW_SUMMARY_TEXT_LENGTH = 160;
-const WORKFLOW_LIVE_CALL_STATUSES = new Set([
-  'planned',
-  'stageBlocked',
-  'queued',
-  'starting',
-  'running',
-]);
 
 function compactWorkflowText(value: string | undefined): string | undefined {
   return value?.slice(0, WORKFLOW_SUMMARY_TEXT_LENGTH);
@@ -264,24 +258,23 @@ function workflowAttemptView(
   return {
     number: attempt.number,
     id: compactWorkflowText(attempt.id),
+    childStreamId: compactWorkflowText(attempt.childStreamId),
+    model: compactWorkflowText(attempt.model),
+    costUsd: attempt.costUsd,
     startedAt: attempt.startedAt,
     completedAt: attempt.completedAt,
   };
 }
 
 function workflowExecutionView(snapshot: WorkflowExecutionSnapshot): unknown {
-  const byPriority = snapshot.calls.toSorted((left, right) => {
-    const priority = (call: (typeof snapshot.calls)[number]): number => {
-      if (call.stageId === snapshot.currentStageId) return 0;
-      if (WORKFLOW_LIVE_CALL_STATUSES.has(call.status)) return 1;
-      if (call.status === 'failed' || call.status === 'cancelled') return 2;
-      return 3;
-    };
-    return (
-      priority(left) - priority(right) ||
-      right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt)
-    );
-  });
+  const byPriority = snapshot.calls.toSorted(
+    (left, right) =>
+      Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(left.status)) -
+        Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(right.status)) ||
+      Number(left.stageId !== snapshot.currentStageId) -
+        Number(right.stageId !== snapshot.currentStageId) ||
+      right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
+  );
   const stages = snapshot.stages
     .toSorted((left, right) => {
       const priority = (stage: (typeof snapshot.stages)[number]): number => {

@@ -1,22 +1,14 @@
 import {
+  TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   type ExecutionId,
   type StreamTabId,
   type WorkflowExecutionCall,
-  type WorkflowExecutionCallStatus,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 
 import type { WorkflowScriptTask } from './types';
-
-const TERMINAL_CALL_STATUSES = new Set<WorkflowExecutionCallStatus>([
-  WORKFLOW_CALL_STATUS.COMPLETED,
-  WORKFLOW_CALL_STATUS.FAILED,
-  WORKFLOW_CALL_STATUS.CANCELLED,
-  WORKFLOW_CALL_STATUS.SKIPPED,
-  WORKFLOW_CALL_STATUS.CACHED,
-]);
 
 interface WorkflowCallDefinition {
   readonly id: string;
@@ -94,10 +86,6 @@ export class WorkflowExecutionState {
 
   snapshot(): WorkflowExecutionSnapshot {
     return structuredClone(this.#snapshot);
-  }
-
-  get isSealed(): boolean {
-    return this.#sealed;
   }
 
   enterStage(title: string): number {
@@ -237,6 +225,24 @@ export class WorkflowExecutionState {
     return call;
   }
 
+  queueCall(id: string): void {
+    const call = this.call(id);
+    const queuedAt = now();
+    this.updateCall(id, {
+      status: WORKFLOW_CALL_STATUS.QUEUED,
+      childExecutionId: undefined,
+      childStreamId: undefined,
+      model: undefined,
+      blockedReason: undefined,
+      error: undefined,
+      timestamps: {
+        createdAt: call.timestamps.createdAt,
+        queuedAt,
+        updatedAt: queuedAt,
+      },
+    });
+  }
+
   beginAttempt(id: string): void {
     if (this.#sealed) return;
     const call = this.call(id);
@@ -261,11 +267,36 @@ export class WorkflowExecutionState {
 
   reportChildStream(id: string, streamId: StreamTabId): void {
     if (this.#sealed) return;
-    this.updateCall(id, { childStreamId: streamId });
+    const call = this.call(id);
+    call.childStreamId = streamId;
+    const attempt = call.attempts.at(-1);
+    if (attempt) attempt.childStreamId = streamId;
+    call.timestamps.updatedAt = now();
+    this.#emit();
   }
 
-  settleAttempt(id: string): void {
+  reportModel(id: string, model: string): void {
     if (this.#sealed) return;
+    const call = this.call(id);
+    call.model = model;
+    const attempt = call.attempts.at(-1);
+    if (attempt) attempt.model = model;
+    call.timestamps.updatedAt = now();
+    this.#emit();
+  }
+
+  reportCostUsd(id: string, costUsd: number): void {
+    if (this.#sealed) return;
+    const call = this.call(id);
+    const attempt = call.attempts.at(-1);
+    if (attempt) attempt.costUsd = costUsd;
+    call.costUsd = totalAttemptCost(call.attempts);
+    call.timestamps.updatedAt = now();
+    this.#emit();
+  }
+
+  settleAttempt(id: string): boolean {
+    if (this.#sealed) return false;
     const call = this.call(id);
     const attempt = call.attempts.at(-1);
     if (attempt && attempt.completedAt === undefined) {
@@ -273,6 +304,7 @@ export class WorkflowExecutionState {
       call.timestamps.updatedAt = now();
       this.#emit();
     }
+    return true;
   }
 
   finish(
@@ -329,7 +361,9 @@ export class WorkflowExecutionState {
     const calls = this.#snapshot.calls.filter(
       (call) => call.stageId === stageId,
     );
-    if (calls.every((call) => TERMINAL_CALL_STATUSES.has(call.status))) {
+    if (
+      calls.every((call) => TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status))
+    ) {
       this.#settleStage(stageId, now());
     }
   }
@@ -397,6 +431,28 @@ function emptyCounts(): WorkflowExecutionSnapshot['counts'] {
   };
 }
 
+function totalAttemptCost(
+  attempts: WorkflowExecutionCall['attempts'],
+): number | undefined {
+  const costs = attempts.flatMap((attempt) =>
+    attempt.costUsd === undefined ? [] : [attempt.costUsd],
+  );
+  return costs.length === 0
+    ? undefined
+    : costs.reduce((total, costUsd) => total + costUsd, 0);
+}
+
+function closeOpenAttempts(
+  attempts: WorkflowExecutionCall['attempts'],
+  recoveryAt: string,
+): WorkflowExecutionCall['attempts'] {
+  return attempts.map((attempt) =>
+    attempt.completedAt === undefined
+      ? { ...attempt, completedAt: recoveryAt }
+      : attempt,
+  );
+}
+
 function hydrate(
   fresh: WorkflowExecutionSnapshot,
   persisted: WorkflowExecutionSnapshot | undefined,
@@ -412,22 +468,24 @@ function hydrate(
     if (!prior) return call;
     const reusable =
       prior.status === WORKFLOW_CALL_STATUS.COMPLETED ||
-      prior.status === WORKFLOW_CALL_STATUS.CACHED ||
-      prior.status === WORKFLOW_CALL_STATUS.SKIPPED;
+      prior.status === WORKFLOW_CALL_STATUS.CACHED;
+    const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
     return {
       ...prior,
       label: call.label,
       stageId: call.stageId,
       stageTitle: call.stageTitle,
       files: call.files,
+      attempts,
+      costUsd: totalAttemptCost(attempts),
       status: reusable ? prior.status : call.status,
       ...(!reusable && {
         childExecutionId: undefined,
         childStreamId: undefined,
+        model: undefined,
         blockedReason: call.blockedReason,
         error: undefined,
         timestamps: {
-          ...call.timestamps,
           createdAt: prior.timestamps.createdAt,
           updatedAt: recoveryAt,
         },
@@ -436,16 +494,28 @@ function hydrate(
   });
   for (const prior of persisted.calls) {
     if (!freshIds.has(prior.id)) {
+      const reusable =
+        prior.status === WORKFLOW_CALL_STATUS.COMPLETED ||
+        prior.status === WORKFLOW_CALL_STATUS.CACHED;
+      const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
       snapshot.calls.push({
         ...prior,
         stageId: undefined,
         stageTitle: undefined,
-        status: WORKFLOW_CALL_STATUS.PLANNED,
-        childExecutionId: undefined,
-        childStreamId: undefined,
-        blockedReason: undefined,
-        error: undefined,
-        timestamps: { ...prior.timestamps, updatedAt: recoveryAt },
+        attempts,
+        costUsd: totalAttemptCost(attempts),
+        status: reusable ? prior.status : WORKFLOW_CALL_STATUS.PLANNED,
+        ...(!reusable && {
+          childExecutionId: undefined,
+          childStreamId: undefined,
+          model: undefined,
+          blockedReason: undefined,
+          error: undefined,
+          timestamps: {
+            createdAt: prior.timestamps.createdAt,
+            updatedAt: recoveryAt,
+          },
+        }),
       });
     }
   }

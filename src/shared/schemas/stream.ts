@@ -79,8 +79,8 @@ export const USER_FOLLOW_UP_SUPPORT = {
 export const UserFollowUpSupportSchema = z.enum(USER_FOLLOW_UP_SUPPORT);
 export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
 
-/** Execution metadata stored alongside config at launch time. */
-export const ExecutionMetaSchema = z.object({
+/** Core execution metadata that remains readable without workflow observability. */
+export const ExecutionMetaCoreSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
@@ -99,14 +99,18 @@ export const ExecutionMetaSchema = z.object({
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
-  /** Canonical execution state for a detached workflow run. */
-  workflow: WorkflowExecutionSnapshotSchema.optional(),
   /**
    * The transcript stream this execution's data lives under — the ONE
    * execution→stream mapping, written at registration. A row without one has
    * no persisted stream; nothing re-derives it from names or scans.
    */
   streamId: StreamTabIdSchema.optional(),
+});
+
+/** Execution metadata stored alongside config at launch time. */
+export const ExecutionMetaSchema = ExecutionMetaCoreSchema.extend({
+  /** Canonical execution state for a detached workflow run. */
+  workflow: WorkflowExecutionSnapshotSchema.optional(),
 });
 
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;

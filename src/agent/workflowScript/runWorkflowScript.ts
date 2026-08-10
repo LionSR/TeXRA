@@ -214,6 +214,28 @@ function isRunFatalAbort(reason: unknown): reason is WorkflowRunAbortError {
   );
 }
 
+class JournalCommitFence {
+  readonly #pending = new Set<Promise<void>>();
+  #sealed = false;
+
+  async commit(write: () => Promise<void>): Promise<boolean> {
+    if (this.#sealed) return false;
+    const pending = write();
+    this.#pending.add(pending);
+    try {
+      await pending;
+      return true;
+    } finally {
+      this.#pending.delete(pending);
+    }
+  }
+
+  async sealAndFlush(): Promise<void> {
+    this.#sealed = true;
+    await Promise.allSettled([...this.#pending]);
+  }
+}
+
 class CoalescedSnapshotWriter {
   readonly #write: WorkflowScriptRunOptions['onSnapshot'];
   readonly #onFailure: (failure: WorkflowRunAbortError) => void;
@@ -311,10 +333,11 @@ export async function runWorkflowScript(
   const journal = new Map<number, WorkflowJournalEntry>();
   const queue = new PQueue({ concurrency });
   const runAbort = new AbortController();
+  let firstFatalFault: WorkflowRunAbortError | undefined;
   const failRun = (fault: WorkflowRunAbortError): WorkflowRunAbortError => {
+    if (isRunFatalAbort(fault)) firstFatalFault ??= fault;
     runAbort.abort(fault);
-    const { reason } = runAbort.signal;
-    return isRunFatalAbort(reason) ? reason : fault;
+    return firstFatalFault ?? fault;
   };
   // One record per in-flight call, keyed by call index and linked to runAbort
   // (a run abort cascades to every entry; a per-call abort leaves the others
@@ -337,6 +360,7 @@ export async function runWorkflowScript(
   const hasTaskPlan = meta.tasks !== undefined;
   const plannedTasks = meta.tasks ?? [];
   const plannedTasksById = new Map(plannedTasks.map((task) => [task.id, task]));
+  const journalCommitFence = new JournalCommitFence();
   const snapshotWriter = new CoalescedSnapshotWriter(
     options.onSnapshot,
     (failure) => {
@@ -387,18 +411,15 @@ export async function runWorkflowScript(
     emit({ type: 'plan', tasks: plannedTasks });
   }
 
-  // The run's abort reason is its fault register: AbortController keeps the
-  // first reason, so the earliest fault wins over every abort that cascades
-  // from it and the run reports that reason rather than a copy of it. A
-  // cleanup, timeout, or parent reason is not a fault, so a fault raised
-  // afterwards (only reachable while abandoned calls drain) still reports
-  // itself.
-  const recordJournalEntry = async (
+  // failRun records faults separately from cancellation. Cleanup, timeout, or
+  // a parent abort may already own the controller reason when an abandoned
+  // persistence callback rejects, but the first fatal rejection still wins.
+  const persistJournalEntry = async (
     entry: WorkflowJournalEntry,
   ): Promise<void> => {
-    journal.set(entry.index, entry);
     try {
       await onJournalEntry?.(entry);
+      journal.set(entry.index, entry);
     } catch (error) {
       const message = `Failed to persist workflow journal entry ${entry.index}: ${toErrorMessage(error)}`;
       throw failRun(
@@ -632,8 +653,16 @@ export async function runWorkflowScript(
             payload === undefined ? undefined : JSON.parse(payload),
         };
       } catch (error) {
-        emitFailedEnd(error, metadata);
-        throw error;
+        const fault = failRun(
+          error instanceof WorkflowRunAbortError
+            ? error
+            : new WorkflowRunAbortError(toErrorMessage(error), {
+                kind: 'runner',
+                cause: error,
+              }),
+        );
+        emitFailedEnd(fault, metadata);
+        throw fault;
       }
     };
 
@@ -676,15 +705,7 @@ export async function runWorkflowScript(
       ...(childStreamId !== undefined && { childStreamId }),
       durationMs: Date.now() - startedAt,
     });
-    executionState.updateCall(progressId, {
-      status: WORKFLOW_CALL_STATUS.QUEUED,
-      blockedReason: undefined,
-      timestamps: {
-        ...executionState.call(progressId).timestamps,
-        queuedAt: now(),
-        updatedAt: now(),
-      },
-    });
+    executionState.queueCall(progressId);
     emit({ type: 'agent:queued', ...eventBase });
 
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
@@ -720,6 +741,8 @@ export async function runWorkflowScript(
               ),
             );
           }
+          resolvedModel = undefined;
+          childStreamId = undefined;
           executionState.beginAttempt(progressId);
           if (!startEmitted) {
             startEmitted = true;
@@ -742,14 +765,14 @@ export async function runWorkflowScript(
               signal: callController.signal,
               reportModel: (model) => {
                 resolvedModel = model;
-                executionState.updateCall(progressId, { model });
+                executionState.reportModel(progressId, model);
               },
               reportAgent: (agent) =>
                 executionState.updateCall(progressId, { agent }),
               reportChildExecution: (executionId) =>
                 executionState.reportChildExecution(progressId, executionId),
               reportCostUsd: (costUsd) =>
-                executionState.updateCall(progressId, { costUsd }),
+                executionState.reportCostUsd(progressId, costUsd),
               reportChildStream: (streamId) => {
                 executionState.reportChildStream(progressId, streamId);
                 childStreamId = streamId;
@@ -782,16 +805,16 @@ export async function runWorkflowScript(
         }
       }
 
-      executionState.settleAttempt(progressId);
-      if (executionState.isSealed) return undefined;
+      // The terminal drain may have timed out while this runner ignored its
+      // abort signal. Do not let that late settlement mutate sealed state or
+      // append a journal entry after the terminal snapshot was persisted.
+      if (!executionState.settleAttempt(progressId)) return undefined;
 
       // Control action wins over whatever the (possibly signal-ignoring) runner
       // did: a deliberate skip/retry discards this attempt's outcome.
       const action = call.action;
       if (action === 'retry') {
-        executionState.updateCall(progressId, {
-          status: WORKFLOW_CALL_STATUS.QUEUED,
-        });
+        executionState.queueCall(progressId);
         emit({ type: 'agent:queued', ...eventBase });
         continue;
       }
@@ -863,29 +886,32 @@ export async function runWorkflowScript(
         attemptMetadata(),
       );
       try {
-        await recordJournalEntry({
-          index,
-          key,
-          result: normalizedResult,
+        const committed = await journalCommitFence.commit(async () => {
+          await persistJournalEntry({
+            index,
+            key,
+            result: normalizedResult,
+          });
+          executionState.updateCall(progressId, {
+            status: WORKFLOW_CALL_STATUS.COMPLETED,
+            timestamps: {
+              ...executionState.call(progressId).timestamps,
+              updatedAt: now(),
+              completedAt: now(),
+            },
+          });
+          emit({
+            type: 'agent:end',
+            ...eventBase,
+            outcome: 'completed',
+            ...attemptMetadata(),
+          });
         });
+        if (!committed) return undefined;
       } catch (error) {
         emitFailedEnd(error, attemptMetadata());
         throw error;
       }
-      executionState.updateCall(progressId, {
-        status: WORKFLOW_CALL_STATUS.COMPLETED,
-        timestamps: {
-          ...executionState.call(progressId).timestamps,
-          updatedAt: now(),
-          completedAt: now(),
-        },
-      });
-      emit({
-        type: 'agent:end',
-        ...eventBase,
-        outcome: 'completed',
-        ...attemptMetadata(),
-      });
       return payload;
     }
   }
@@ -898,9 +924,6 @@ export async function runWorkflowScript(
 
   let result: unknown;
   let scriptFailure: { readonly error: unknown } | undefined;
-  // The fault an abandoned call raised while draining, after the cleanup abort
-  // had already fixed the run's abort reason.
-  let drainFault: WorkflowRunAbortError | undefined;
   try {
     result = await runScriptInSandbox(
       body,
@@ -935,12 +958,10 @@ export async function runWorkflowScript(
                 }),
               );
             }
-            const { phaseIndex, phaseTotal } = phaseContextFor(
-              executionState.currentPhase,
-            );
+            const { phaseIndex, phaseTotal } = phaseContextFor(nextPhase);
             emit({
               type: 'phase',
-              title: executionState.currentPhase!,
+              title: nextPhase,
               ...(phaseIndex !== undefined && {
                 index: phaseIndex,
                 total: phaseTotal,
@@ -990,38 +1011,30 @@ export async function runWorkflowScript(
       // past its timeout by more than the grace period; stragglers beyond
       // it are orphaned (their journal entries may be lost, which resume
       // treats as a retry).
-      const drained = await pTimeout(
-        Promise.allSettled([...pendingAgentCalls]),
-        { milliseconds: DRAIN_GRACE_MS, fallback: () => [] },
-      );
-      // A draining call can still hit a run-level fault, typically a
-      // checkpoint write that fails after the script settled. Its rejection
-      // is that fault, so read it here instead of mirroring it into run state.
-      for (const outcome of drained) {
-        if (outcome.status === 'rejected' && isRunFatalAbort(outcome.reason)) {
-          drainFault = outcome.reason;
-          break;
-        }
-      }
+      await pTimeout(Promise.allSettled([...pendingAgentCalls]), {
+        milliseconds: DRAIN_GRACE_MS,
+        fallback: () => [],
+      });
     }
   }
 
+  // Stop admitting journal commits before writing the terminal snapshot. An
+  // admitted persistence callback is opaque and cannot be cancelled safely, so
+  // it must settle even after the runner drain grace expires. If it never
+  // settles, the run deliberately remains unsealed rather than persisting a
+  // terminal snapshot that the callback could later invalidate.
+  await journalCommitFence.sealAndFlush();
+
   const succeeded =
-    scriptFailure === undefined &&
-    drainFault === undefined &&
-    !isRunFatalAbort(runAbort.signal.reason);
+    scriptFailure === undefined && firstFatalFault === undefined;
   let terminalLifecycle: 'completed' | 'failed' | 'cancelled' =
     WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
   if (succeeded) {
     terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.COMPLETED;
-  } else if (options.signal?.aborted) {
+  } else if (firstFatalFault === undefined && options.signal?.aborted) {
     terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED;
   }
-  const terminalError =
-    drainFault ??
-    (isRunFatalAbort(runAbort.signal.reason)
-      ? runAbort.signal.reason
-      : scriptFailure?.error);
+  const terminalError = firstFatalFault ?? scriptFailure?.error;
   executionState.finish(
     terminalLifecycle,
     terminalError === undefined ? undefined : toErrorMessage(terminalError),
@@ -1034,9 +1047,7 @@ export async function runWorkflowScript(
   // reject while the final drain is running. Checkpoint failure is a run-level
   // invariant, so a fault outranks the script outcome, and the earliest fault
   // outranks the ones that cascade from it.
-  const abortReason: unknown = runAbort.signal.reason;
-  if (isRunFatalAbort(abortReason)) throw abortReason;
-  if (drainFault) throw drainFault;
+  if (firstFatalFault) throw firstFatalFault;
   if (scriptFailure) throw scriptFailure.error;
 
   return {
