@@ -57,7 +57,7 @@ export const OWN_API_KEYS = {
  *  the detailed payment name, `compactLabel` is its width-constrained badge
  *  name, and `subscription` marks routes covered by a top-up-free plan. Hosts
  *  share this contract so payment attribution and compact copy cannot drift. */
-export interface UsageRouteBadge {
+interface UsageRouteBadge {
   readonly label: string;
   readonly compactLabel: string;
   readonly subscription: boolean;

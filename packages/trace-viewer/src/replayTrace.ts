@@ -132,12 +132,6 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
     : STREAM_STATUS.READY;
 }
 
-/**
- * Identity fallback for pre-migration exports (`trace.meta.identity` absent):
- * the stream-id prefix is the one surviving discriminator, read here and in
- * the storage entrance stamper only — production classification reads the
- * stamped identity.
- */
 /** The record's display name across both arms of the config union. */
 export function recordName(config: TraceDocument['config']): string {
   return 'agentCategory' in config ? config.agent : config.name;

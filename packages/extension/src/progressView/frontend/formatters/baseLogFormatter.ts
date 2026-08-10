@@ -13,8 +13,6 @@ import type { TemplateResult } from 'lit';
 export type FormatResult = TemplateResult | null;
 
 export type FormatOptions = {
-  preservedOpen?: boolean;
-  defaultOpen?: boolean;
   executionLabels?: ExecutionLabels;
 };
 

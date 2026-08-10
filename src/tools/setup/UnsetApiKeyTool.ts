@@ -5,15 +5,16 @@ import { z } from 'zod';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
+  invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { getSetupPlatform, setupSecrets } from './platform';
-import { refreshApiKeyCaches } from './apiKeyHelpers';
 
 const UnsetApiKeyInputSchema = z.strictObject({
   provider: z
@@ -62,10 +63,19 @@ export class UnsetApiKeyTool extends defineTool({
     }
 
     await setupSecrets.deleteApiKey(provider);
-    // Mirror the manual removal flow: drop cached model availability and
-    // key-origin lookups so models that just lost their credential stop
-    // appearing selectable.
-    await refreshApiKeyCaches(platform);
+    // Mirror the manual `texra.setApiKey` command ordering: drop cached model
+    // availability and key-origin lookups so models that just lost their
+    // credential stop appearing selectable, then refresh the status surfaces.
+    invalidateModelOptionsCache();
+    invalidateApiKeyCache();
+    if (platform.commands) {
+      // Credential changes must remain successful when a host cannot refresh
+      // its status surfaces; the next ordinary refresh reconciles stale UI.
+      await Promise.allSettled([
+        platform.commands.invoke('texra.refreshApiKeyStatus'),
+        platform.commands.invoke('texra.refreshAllOptions'),
+      ]);
+    }
 
     // A shell env var can shadow the deletion — flag that so the agent can
     // tell the user why the key still appears to exist after removal.

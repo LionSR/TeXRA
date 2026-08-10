@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AgentEntry } from '@agent/index';
 import {
   createSettingsAgentControllers,
   type SettingsAgentControllers,
@@ -30,14 +31,17 @@ const agents = {
 
 function createControllers(
   workspaceState: StateStore,
+  getAgents: (category: AgentCategory) => AgentEntry[] = (category) => [
+    ...agents[category],
+  ],
 ): SettingsAgentControllers {
   return createSettingsAgentControllers({
     workspaceState,
     globalState: new FakeStateStore(),
     getCustomAgentDirectory: async () => '/agents/custom',
     getSourceDirectory: async () => undefined,
-    getAgents: (category: AgentCategory) => [...agents[category]],
-    getVisibleAgents: (category: AgentCategory) => [...agents[category]],
+    getAgents,
+    getVisibleAgents: getAgents,
   });
 }
 
@@ -64,11 +68,25 @@ describe('createSettingsAgentControllers', () => {
 
   it('writes visibility changes through the canonical roster controller', async () => {
     const workspaceState = new FakeStateStore();
-    const controllers = createControllers(workspaceState);
+    const controllers = createControllers(workspaceState, (category) =>
+      category === 'toolUse'
+        ? [
+            ...agents.toolUse,
+            {
+              category: 'toolUse',
+              source: 'custom',
+              name: 'extra',
+              path: '/agents/custom/extra.yaml',
+            },
+          ]
+        : [...agents[category]],
+    );
 
-    await controllers.state.setEnabledAgentKeys('toolUse', [
-      'builtInToolUse:assistant',
-    ]);
+    await controllers.visibility.setAllAgentsEnabled({
+      category: 'toolUse',
+      source: 'custom',
+      enabled: false,
+    });
 
     expect(rosterSelection(workspaceState)).toEqual({
       kind: 'custom',

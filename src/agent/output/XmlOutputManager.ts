@@ -79,7 +79,7 @@ export class XmlOutputManager {
     private readonly streamId: string,
   ) {}
 
-  async processXmlContent(content: string): Promise<string> {
+  private async processXmlContent(content: string): Promise<string> {
     // applyNonRegex already applies all enabled non-regex categories
     // (including latex_xml), so no need to re-apply them.
     const normalized = replacementEngine.applyNonRegex(content);

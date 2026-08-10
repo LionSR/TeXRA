@@ -475,7 +475,7 @@ travel through the flows are described in `docs/architecture/pocketflow-state.md
 
 **Webviews and UI**
 
-- Generate HTML through `BaseViewContentProvider` (`packages/extension/src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`packages/extension/src/common/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
+- Generate HTML through `BaseViewContentProvider` (`packages/extension/src/common/webview/BaseViewContentProvider.ts`) and its `buildWebviewHtml` helper. Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js) local to reduce extension size.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.

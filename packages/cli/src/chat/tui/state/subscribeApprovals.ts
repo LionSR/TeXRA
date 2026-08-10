@@ -17,6 +17,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   matchesCancelSelector,
   type BashSettlement,
+  type HostApprovalBypassStateUpdate,
   type HostBashApprovalRequest,
   type HostInteractionCancelSelector,
   type HostInteractions,
@@ -56,7 +57,6 @@ import {
 } from '@model/apiProviders';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
@@ -497,11 +497,7 @@ function setTuiApprovalBypassState({
   streamId,
   kind,
   bypassActive,
-}: {
-  readonly streamId: string;
-  readonly kind: ApprovalBypassKind;
-  readonly bypassActive: boolean;
-}): void {
+}: HostApprovalBypassStateUpdate): void {
   patchStream(streamId, (s) => ({
     ...s,
     bypass: { ...s.bypass, [kind]: bypassActive },

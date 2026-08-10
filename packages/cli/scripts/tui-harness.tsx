@@ -2284,7 +2284,7 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   clearApprovals();
-  harnessFollowUpQueue.drain();
+  harnessFollowUpQueue.drainItems();
   void GoalStore.forget(STREAM_ID);
   const store = defaultSession().transcripts;
   for (const streamId of streams.get().keys()) {

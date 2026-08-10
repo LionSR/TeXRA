@@ -60,7 +60,7 @@ export interface RoundAwareState {
 /**
  * Callbacks for round orchestration. All are optional.
  */
-export interface RoundCallbacks<S extends RoundAwareState> {
+interface RoundCallbacks<S extends RoundAwareState> {
   /**
    * Create a round stage for logging. Also receives the created stage
    * for side effects (e.g. registering usage tracking).

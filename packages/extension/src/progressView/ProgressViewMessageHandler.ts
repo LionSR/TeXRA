@@ -80,8 +80,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly recordingManager: RecordingManager;
   private readonly progressHost: ProgressViewHost;
   private readonly workflowActionsController: ProgressWorkflowActionsController;
-  private readonly workflowFileActionsController: ProgressViewHost['workflowFileActionsController'];
-  private readonly agentProposalController: ProgressViewHost['agentProposalController'];
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
@@ -118,9 +116,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     this.workflowActionsController = this.createWorkflowActionsController();
     this.progressHost = this.createProgressViewHost();
-    this.workflowFileActionsController =
-      this.progressHost.workflowFileActionsController;
-    this.agentProposalController = this.progressHost.agentProposalController;
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
     this.followUpPolishController = new ProgressFollowUpPolishController();
@@ -145,7 +140,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   public cleanupDeletedStream(stream: StreamTabId): void {
     releaseStreamResources(stream);
-    this.workflowFileActionsController.clearStreamBackups(stream);
+    this.progressHost.workflowFileActionsController.clearStreamBackups(stream);
   }
 
   public cleanupDeletedStreams(options: { allDeleted: boolean }): void {
@@ -216,7 +211,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       restoreProposalConfig: async (proposal) => {
         const restored =
-          await this.agentProposalController.restoreProposalConfig(proposal);
+          await this.progressHost.agentProposalController.restoreProposalConfig(
+            proposal,
+          );
         if (!restored) return;
         this.logger.info(
           this.channel,

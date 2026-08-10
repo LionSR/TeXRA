@@ -379,7 +379,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     new BackgroundPoller<GoogleGenAIInteraction>({
       pollIntervalMs: 5000,
       maxDurationMs: ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS,
-      isPending: (r) => this.isBackgroundPending(r),
+      isPending: (r) =>
+        ModelHandlerGoogleInteractions.BACKGROUND_PENDING_STATUSES.includes(
+          r.status as InteractionStatus,
+        ),
       logger: () => this.logger,
     });
 
@@ -596,41 +599,41 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /**
    * Map the model's reasoning effort to a Gemini `thinking_level`.
+   * Interactions emits the lowercase `thinking_level` string literals.
    *
-   * Returns `levels.low` (not `undefined`) for `NONE` so the API does not fall
+   * Returns `'low'` (not `undefined`) for `NONE` so the API does not fall
    * back to its default medium/high — that would defeat the user's intent.
    * Gemini tops out at HIGH thinking, so xhigh/max both map to it; Gemini 3 Pro
    * only supports low/high, so MEDIUM falls back to HIGH for Pro.
    */
   protected getThinkingLevel(): ThinkingLevel | undefined {
-    const { levels, labels } = this.thinkingLevelConfig;
     const isGemini3 = this.isGemini3Model();
 
     switch (this.capabilities.reasoningEffort) {
       case ReasoningEffort.NONE:
         if (isGemini3) {
           this.logger.warn(
-            `Gemini 3 models can't fully disable thinking. Using thinking_level '${labels.low}'.`,
+            "Gemini 3 models can't fully disable thinking. Using thinking_level 'low'.",
           );
         }
-        return levels.low;
+        return 'low';
 
       case ReasoningEffort.LOW:
-        return levels.low;
+        return 'low';
 
       case ReasoningEffort.MEDIUM:
         if (isGemini3 && this.config.fullName.includes('-pro')) {
           this.logger.debug(
-            `Gemini 3 Pro does not support ${labels.medium} thinking level. Using ${labels.high}.`,
+            'Gemini 3 Pro does not support medium thinking level. Using high.',
           );
-          return levels.high;
+          return 'high';
         }
-        return levels.medium;
+        return 'medium';
 
       case ReasoningEffort.HIGH:
       case ReasoningEffort.XHIGH:
       case ReasoningEffort.MAX:
-        return levels.high;
+        return 'high';
 
       default:
         return undefined;
@@ -725,17 +728,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   /** `apiVersion` is left unset for v0 — see spec §6.4. */
   protected get sdkLabel(): string {
     return 'Interactions';
-  }
-
-  protected get thinkingLevelConfig(): {
-    levels: { low: ThinkingLevel; medium: ThinkingLevel; high: ThinkingLevel };
-    labels: { low: string; medium: string; high: string };
-  } {
-    // Interactions emits the lowercase `thinking_level` string literals.
-    return {
-      levels: { low: 'low', medium: 'medium', high: 'high' },
-      labels: { low: 'low', medium: 'medium', high: 'high' },
-    };
   }
 
   /**
@@ -1849,12 +1841,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // which `finalizeChain` enforces from its own `stateful` guard.
     this.finalizeChain(completed, totalStepCount, stateful);
     return { response: completed };
-  }
-
-  private isBackgroundPending(interaction: GoogleGenAIInteraction): boolean {
-    return ModelHandlerGoogleInteractions.BACKGROUND_PENDING_STATUSES.includes(
-      interaction.status as InteractionStatus,
-    );
   }
 
   private clearPendingBackgroundInteraction(interactionId: string): boolean {

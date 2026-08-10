@@ -69,7 +69,7 @@ const LeanDiagnosticsInputSchema = z.strictObject({
   file: z.string().describe('Path to the .lean file'),
 });
 
-export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
+type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 
 const LeanFileInputSchema = z.strictObject({
   /** Command to execute on the file */
@@ -82,7 +82,7 @@ const LeanFileInputSchema = z.strictObject({
   file: z.string().describe('Path to the .lean file'),
 });
 
-export type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
+type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
 
 const LeanProjectInputSchema = z.strictObject({
   /** Command to execute */
@@ -91,7 +91,7 @@ const LeanProjectInputSchema = z.strictObject({
     .describe(`Global command to execute:\n${PROJECT_COMMAND_GROUP_INDEX}`),
 });
 
-export type LeanProjectInput = z.infer<typeof LeanProjectInputSchema>;
+type LeanProjectInput = z.infer<typeof LeanProjectInputSchema>;
 
 const INSPECT_TYPES = ['goal', 'term_goal', 'hover'] as const;
 
@@ -114,7 +114,7 @@ const LeanInspectInputSchema = z.strictObject({
     .describe('Column number (1-indexed, default: 1)'),
 });
 
-export type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
+type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
 
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
@@ -146,8 +146,8 @@ Tips:
     const { command, file } = input;
 
     try {
-      const diagnostics =
-        await getLeanLanguageServices().fetchDiagnosticsForFile(file);
+      const services = getLeanLanguageServices();
+      const diagnostics = await services.fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return errorResult(
           `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
@@ -155,7 +155,7 @@ Tips:
         );
       }
 
-      await getLeanLanguageServices().navigateToFirstError(file, diagnostics);
+      await services.navigateToFirstError(file, diagnostics);
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);

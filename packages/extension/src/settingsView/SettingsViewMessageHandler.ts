@@ -78,7 +78,6 @@ import {
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
-  type SettingsViewInboundMessage,
   type SettingsMessageFor,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
@@ -122,10 +121,6 @@ import {
   type SubscriptionUsageReader,
 } from './handlers/subscriptionUsageHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
-
-// Re-use the shared type helper for extracting specific message types.
-type MessageFor<C extends SettingsViewInboundMessage['command']> =
-  SettingsMessageFor<C>;
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -520,7 +515,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private handleRunToolCommand(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
   ): void {
     const action = planToolTerminalAction({
       toolId: data.toolId,
@@ -601,7 +596,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetMemoryPreview(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
     await this.withActiveWebview(async (webview) => {
       await this.settingsHost.sendMemoryPreview(data, {
@@ -788,7 +783,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleOpenMemoryFile(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE>,
   ): Promise<void> {
     try {
       const resolvedPath = resolveMemoryStoragePath(data.storagePath);
@@ -835,7 +830,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleDeleteMemory(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
       await this.settingsHost.deleteMemory(data, (message) =>
@@ -852,7 +847,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetMemoryEnabled(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
     await this.settingsHost.setMemoryEnabled(data.enabled, (message) =>
       this.postMessageToActiveWebview(message),
@@ -882,7 +877,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleSetApiAccessMode(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
     const update = await this.profileController.setApiAccessMode(data.mode);
     if (update.kind === 'rejected') {
@@ -1055,7 +1050,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetProviderSetting(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_SETTING>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_SETTING>,
   ): Promise<void> {
     const result = await this.profileController.setProviderSetting(data);
     if (result.kind === 'rejected') {

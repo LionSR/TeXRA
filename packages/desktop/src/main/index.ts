@@ -50,7 +50,6 @@ import {
   agentKeyOf,
   type AgentSource,
 } from '@shared/schemas/agent';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';

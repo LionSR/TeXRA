@@ -16,6 +16,7 @@ import {
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { buildUserVarPassthrough } from '@agent/utils/userVars';
 import * as logger from '@logger/logUtils';
+import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -26,7 +27,7 @@ const CHANNEL = 'AgentCreator';
 
 // ── Types ───────────────────────────────────────────────────
 
-export type AgentCategory = 'workflow' | 'toolUse';
+export type { AgentCategory };
 
 interface AgentPromptPair {
   systemPrompt: string;

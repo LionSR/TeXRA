@@ -2,6 +2,15 @@ import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 export type JsonObject = Record<string, unknown>;
 
+export interface ParsedSubscriptionUsage {
+  readonly planName?: string;
+  readonly windows: readonly SubscriptionUsageWindow[];
+}
+
+export interface SubscriptionUsageHttp {
+  (url: string, init: RequestInit): Promise<Response>;
+}
+
 export class SubscriptionUsageHttpError extends Error {
   constructor(readonly status: number) {
     super(`Subscription usage request failed with HTTP ${status}`);

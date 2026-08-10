@@ -77,10 +77,6 @@ export abstract class BaseWebviewProvider {
     );
   }
 
-  protected addViewDisposables(...disposables: vscode.Disposable[]): void {
-    this._viewDisposables.push(...disposables);
-  }
-
   /**
    * Create or reveal a webview panel.
    * Common pattern for showing secondary views (History, Profile) as panels.

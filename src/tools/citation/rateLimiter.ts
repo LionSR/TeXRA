@@ -38,29 +38,15 @@ export async function waitForRateLimit(
 }
 
 /**
- * Run a rate-limited, cancellable request against an external metadata API.
+ * Run a rate-limited, cancellable request against an external metadata API,
+ * with uniform error wrapping via {@link wrapApiCall}.
  *
  * Combines the throttle wait ({@link waitForRateLimit}) with cancellation
- * ({@link abandonOnAbort}) against the current tool call's signal — the exact
+ * ({@link abandonOnAbort}) against the current tool call's signal, then
+ * rethrows failures as a ToolError with a descriptive prefix — the exact
  * pattern every arXiv/Crossref lookup repeats. These clients expose no
  * AbortSignal hook, so on cancellation the in-flight request is *abandoned*:
  * only safe for the idempotent, read-only lookups these tools perform.
- */
-export async function rateLimitedRequest<T>(
-  apiName: string,
-  minDelayMs: number,
-  label: string,
-  request: () => Promise<T>,
-): Promise<T> {
-  await waitForRateLimit(apiName, minDelayMs);
-  return abandonOnAbort(request(), getCurrentToolCallContext()?.signal, label);
-}
-
-/**
- * Compose {@link rateLimitedRequest} with uniform error wrapping via
- * {@link wrapApiCall}. The shape every arXiv/Crossref lookup repeats:
- * rate-limit + cancellable request, then rethrow as a ToolError with a
- * descriptive prefix.
  */
 export async function rateLimitedApiCall<T>(
   apiName: string,
@@ -69,10 +55,14 @@ export async function rateLimitedApiCall<T>(
   failureMessage: string,
   request: () => Promise<T>,
 ): Promise<T> {
-  return wrapApiCall(
-    () => rateLimitedRequest(apiName, minDelayMs, label, request),
-    failureMessage,
-  );
+  return wrapApiCall(async () => {
+    await waitForRateLimit(apiName, minDelayMs);
+    return abandonOnAbort(
+      request(),
+      getCurrentToolCallContext()?.signal,
+      label,
+    );
+  }, failureMessage);
 }
 
 /**

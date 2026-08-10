@@ -3791,7 +3791,7 @@ describe('sessionSignalsAdapter run facts', () => {
           'Keep the proof under one page.',
         ]);
 
-        queue.drain();
+        queue.drainItems();
         hub.emit({
           scope: 'session',
           event: {

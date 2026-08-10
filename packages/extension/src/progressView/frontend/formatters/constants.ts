@@ -3,12 +3,9 @@
  */
 
 // Local imports
-import {
-  languageForPath,
-  SPECIAL_BASENAME_LANGUAGES,
-} from '@progressView/frontend/languageForPath';
 import type { LogLevel } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { getBasename } from '@utils/core';
 
 /**
  * Font Awesome icon name per log level, rendered via `waIcon`. Replaces
@@ -84,12 +81,15 @@ const EXTENSION_ALIASES = new Map<string, string>([
 
 /** Get highlight.js language from file path based on extension. Uses alias map for non-standard extensions, otherwise tries the extension directly. */
 export function getLanguageFromPath(filePath: string): string {
-  return languageForPath(filePath, {
-    basenameLanguages: SPECIAL_BASENAME_LANGUAGES,
-    extensionLanguages: EXTENSION_ALIASES,
-    fallbackLanguage: 'plaintext',
-    unknownExtensionLanguage: (extension) => extension,
-  });
+  if (!filePath) return 'plaintext';
+  const fileName = getBasename(filePath) || filePath;
+  const lowerFileName = fileName.toLowerCase();
+  if (lowerFileName === 'dockerfile') return 'dockerfile';
+  if (lowerFileName === 'makefile') return 'makefile';
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot === -1 || lastDot === fileName.length - 1) return 'plaintext';
+  const extension = fileName.slice(lastDot + 1).toLowerCase();
+  return EXTENSION_ALIASES.get(extension) ?? extension;
 }
 
 // Threshold constants for diff detection heuristics

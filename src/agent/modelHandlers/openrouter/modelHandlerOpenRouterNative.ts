@@ -132,10 +132,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     );
   }
 
-  protected get usageProvider(): NormalizedUsage['provider'] {
-    return 'openrouter';
-  }
-
   /** Whether this is an Anthropic model routed through OpenRouter. */
   private get isAnthropicViaOpenRouter(): boolean {
     return this.config.provider === ModelProvider.ANTHROPIC;
@@ -588,7 +584,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return normalizeOpenRouterUsage(
       rawUsage,
       responseTimeMs,
-      this.usageProvider,
+      'openrouter',
       this.standardPricingConfig(),
     );
   }

@@ -62,10 +62,7 @@ import type { FormatResult } from '../baseLogFormatter';
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
-  options?: {
-    defaultOpen?: boolean;
-    executionLabels?: ExecutionLabels;
-  },
+  options?: { executionLabels?: ExecutionLabels },
 ): FormatResult {
   const { timestamp, data } = message;
   const normalizedToolLog = normalizeToolUseData(data);
@@ -194,8 +191,7 @@ export function formatToolUseTemplate(
   // Workflow scripts already have a compact live summary and can be very
   // large, so keep their source behind disclosure even while launching.
   const shouldOpen =
-    options?.defaultOpen ??
-    (isInProgress && toolName !== DELEGATE_MULTI_AGENTS_TOOL_NAME);
+    isInProgress && toolName !== DELEGATE_MULTI_AGENTS_TOOL_NAME;
 
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);

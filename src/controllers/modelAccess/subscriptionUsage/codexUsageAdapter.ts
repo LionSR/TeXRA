@@ -8,18 +8,15 @@ import {
   timestampField,
   usageWindow,
   type JsonObject,
+  type ParsedSubscriptionUsage,
+  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
-import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 export const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 
 export interface ChatGptUsageCredential {
   readonly accessToken: string;
   readonly accountId?: string;
-}
-
-export interface SubscriptionUsageHttp {
-  (url: string, init: RequestInit): Promise<Response>;
 }
 
 function validWindowSeconds(value: number | undefined): number | undefined {

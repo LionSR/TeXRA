@@ -104,18 +104,6 @@ export class DiffCommandExecutor {
     );
   }
 
-  /** Insert --flatten flag at specified position if needed (returns new array) */
-  private insertFlattenFlag(
-    command: string[],
-    position: number,
-    useFlatten: boolean,
-  ): string[] {
-    if (!useFlatten) {
-      return command;
-    }
-    return command.toSpliced(position, 0, '--flatten');
-  }
-
   /** Markup-related flags shared by the latexdiff and latexdiff-vc commands. */
   private markupFlags(
     mathMarkup: MathMarkupOption,
@@ -137,8 +125,9 @@ export class DiffCommandExecutor {
   ): string[] {
     const { mathMarkup, pictureEnvs, subtype } =
       this.getLatexdiffConfig(options);
-    const command = [
+    return [
       'latexdiff',
+      ...(useFlatten ? ['--flatten'] : []),
       '--encoding=utf8',
       '-c',
       `PICTUREENV=${pictureEnvs}`,
@@ -146,7 +135,6 @@ export class DiffCommandExecutor {
       inputFile,
       editedFile,
     ];
-    return this.insertFlattenFlag(command, 1, useFlatten);
   }
 
   private buildLatexdiffVcCommand(
@@ -157,19 +145,19 @@ export class DiffCommandExecutor {
   ): string[] {
     const { mathMarkup, pictureEnvs, subtype } =
       this.getLatexdiffConfig(options);
-    const command = [
+    return [
       'latexdiff-vc',
       '--encoding=utf8',
       '-c',
       `PICTUREENV=${pictureEnvs}`,
       '--force',
+      ...(useFlatten ? ['--flatten'] : []),
       '--git',
       ...this.markupFlags(mathMarkup, subtype),
       '-r',
       commitHash,
       inputFile,
     ];
-    return this.insertFlattenFlag(command, 5, useFlatten);
   }
 
   private async executeWithFallback(

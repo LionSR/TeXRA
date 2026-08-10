@@ -1,5 +1,4 @@
-import prettyMilliseconds from 'pretty-ms';
-
+import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
   errorBodyCandidates,
   pickNumberField,
@@ -114,19 +113,6 @@ export function describeGlmCodingPlanRateLimit(): string {
     'GLM Coding Plan rate limit reached. Wait a moment and retry; the plan is ' +
     'still active.'
   );
-}
-
-/**
- * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count,
- * matching {@link describeChatGptSubscriptionLimit}. Pure (no clock read), so
- * it stays usable from the synchronous error formatter.
- */
-function formatResetDuration(totalSeconds: number): string {
-  const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-  if (wholeMinutes === 0) return 'less than a minute';
-  const flooredMinutes =
-    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
-  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
 }
 
 /**

@@ -219,7 +219,7 @@ function registerTexLanguages(monaco: MonacoModule): void {
 
 export function monacoThemeForHostTheme(
   themeKind: string,
-): 'vs' | 'vs-dark' | 'hc-black' | 'hc-light' {
+): 'vs' | 'vs-dark' | 'hc-black' {
   if (themeKind === DESKTOP_THEME_KIND.LIGHT) return 'vs';
   if (themeKind === DESKTOP_THEME_KIND.HIGH_CONTRAST) return 'hc-black';
   return 'vs-dark';

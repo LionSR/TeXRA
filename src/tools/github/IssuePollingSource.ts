@@ -14,6 +14,7 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
+import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -32,7 +33,6 @@ import {
   type DedupedResource,
   PollingSourceBase,
 } from './PollingSourceBase';
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import {
   GhIssueCommentArraySchema,
   GhIssueSchema,
@@ -88,7 +88,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   }
 
   protected emitKeysChangedEvent(keys: readonly string[]): void {
-    emitGitHubSubscriptionChanged('issueSubscriptionsChanged', { keys });
+    appSignals.emit('issueSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

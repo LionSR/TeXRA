@@ -149,7 +149,6 @@ function buildContextManagementItems(data: ContextManagementData): {
 /** Format context management event as TemplateResult. */
 export function formatContextManagementTemplate(
   message: LogMessageData,
-  _options?: { defaultOpen?: boolean },
 ): FormatResult {
   const { id, data } = message;
 

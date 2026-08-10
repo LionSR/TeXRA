@@ -226,7 +226,7 @@ async function writeThreadManifest(
 }
 
 // ============================================================================
-// Execution mirroring (unchanged)
+// Execution mirroring
 // ============================================================================
 
 async function copyGlobalDirectoryToExecution(

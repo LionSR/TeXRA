@@ -7,9 +7,9 @@ import {
   ratioWindow,
   stringField,
   timestampField,
+  type ParsedSubscriptionUsage,
+  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
-import type { SubscriptionUsageHttp } from './codexUsageAdapter';
-import type { ParsedSubscriptionUsage } from './subscriptionUsageTypes';
 
 export const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
 
