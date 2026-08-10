@@ -4,8 +4,14 @@
  * RFC 8628: the user opens a URL and types a one-time code; we poll the token
  * endpoint until they approve. Host-neutral: the host renders the prompt.
  */
-import { setTimeout as sleep } from 'node:timers/promises';
+// Local imports - oauth
+import {
+  deviceCodeAuthorized,
+  deviceCodePending,
+  pollUntilDeviceAuthorized,
+} from '@auth/oauth/deviceCodePoll';
 
+// Local imports - xai
 import {
   XAI_DEVICE_DEFAULT_EXPIRES_SEC,
   XAI_DEVICE_DEFAULT_INTERVAL_SEC,
@@ -41,7 +47,7 @@ export async function loginWithDeviceCode(
 ): Promise<XaiSession> {
   const device = await requestDeviceCode(options.signal);
   // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
-  let intervalMs = Math.max(
+  const intervalMs = Math.max(
     (device.interval ?? XAI_DEVICE_DEFAULT_INTERVAL_SEC) * 1000,
     1000,
   );
@@ -54,23 +60,33 @@ export async function loginWithDeviceCode(
 
   const expiresInMs =
     (device.expires_in ?? XAI_DEVICE_DEFAULT_EXPIRES_SEC) * 1000;
-  const deadline = Date.now() + expiresInMs;
-  while (Date.now() < deadline) {
-    await sleep(intervalMs, undefined, { signal: options.signal });
-    options.onPoll?.();
-    try {
-      const tokens = await pollDeviceToken(device.device_code, options.signal);
-      options.signal?.throwIfAborted();
-      return await options.coordinator.completeDeviceLogin(tokens);
-    } catch (error) {
-      if (error instanceof XaiAuthError && error.kind === 'pending') {
-        if (error.message === 'slow_down') {
-          intervalMs += XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC * 1000;
+
+  return pollUntilDeviceAuthorized({
+    intervalMs,
+    deadlineMs: Date.now() + expiresInMs,
+    signal: options.signal,
+    onPoll: options.onPoll,
+    createTimeoutError: () =>
+      new Error('Device-code sign-in timed out. Run sign-in again.'),
+    attempt: async () => {
+      try {
+        const tokens = await pollDeviceToken(
+          device.device_code,
+          options.signal,
+        );
+        options.signal?.throwIfAborted();
+        const session = await options.coordinator.completeDeviceLogin(tokens);
+        return deviceCodeAuthorized(session);
+      } catch (error) {
+        if (error instanceof XaiAuthError && error.kind === 'pending') {
+          return deviceCodePending(
+            error.message === 'slow_down'
+              ? XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC * 1000
+              : undefined,
+          );
         }
-        continue;
+        throw error;
       }
-      throw error;
-    }
-  }
-  throw new Error('Device-code sign-in timed out. Run sign-in again.');
+    },
+  });
 }
