@@ -29,6 +29,7 @@ import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type StreamTabId,
+  type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -379,6 +380,25 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       AgentConfigSchema.parse(runConfigPayload),
     );
 
+    // Capture any prior workflow snapshot *before* registerExecution overwrites
+    // meta.json. Deterministic meta.name reuses the same execution id, so a
+    // post-register read always sees a fresh meta with no workflow field and
+    // hydration would drop interrupted attempts, costs, and child identities.
+    // Strict read preserves absent-vs-malformed: corrupt present snapshots stop
+    // recovery rather than being treated as a clean first launch.
+    const runStore = getExecutionStore(runExecutionId);
+    let initialSnapshot: WorkflowExecutionSnapshot | undefined;
+    try {
+      initialSnapshot = (await runStore.readMetaStrict())?.workflow;
+    } catch (error) {
+      throw workflowScriptToolError(
+        new ToolError(
+          `Failed to launch workflow script '${meta.name}': prior workflow execution snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
+        ),
+        scriptPath,
+      );
+    }
+
     try {
       // The durable record states only what the container run has: the
       // workflow's name and the real model its agent steps will use. The
@@ -434,7 +454,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       // the deterministic run lease is held, so a throw here must release the
       // lease — otherwise it survives to its heartbeat timeout and a prompt
       // relaunch is refused.
-      const runStore = getExecutionStore(runExecutionId);
       let runChildStreamId: StreamTabId;
       let runCompletion: Promise<void>;
       try {
@@ -485,7 +504,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             files,
             name: meta.name,
             workflowControls: runScope.session.workflowControls,
-            initialSnapshot: (await runStore.readMeta())?.workflow,
+            initialSnapshot,
             onSnapshot: (snapshot) =>
               writeWorkflowExecutionSnapshot(runExecutionId, snapshot),
             ...(parent.stopAfterCycle && {

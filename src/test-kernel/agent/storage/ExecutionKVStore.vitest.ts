@@ -255,7 +255,7 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
   });
 
-  it('drops only malformed workflow observability from otherwise valid metadata', async () => {
+  it('drops only malformed workflow observability from ordinary metadata reads', async () => {
     const id = 'bad-workflow-meta' as ExecutionId;
     const warnSpy = mockWarn();
     const store = getExecutionStore(id);
@@ -274,8 +274,11 @@ describe('ExecutionKVStore meta read shims', () => {
       identity: { kind: 'process', tool: 'bash' },
       description: 'Readable core metadata',
     };
+    // Ordinary reads keep core metadata available for listing/finalization.
     await expect(store.readMeta()).resolves.toEqual(expectedCore);
-    await expect(store.readMetaStrict()).resolves.toEqual(expectedCore);
+    // Strict recovery must fail closed so a present corrupt snapshot is never
+    // treated as "no prior workflow state."
+    await expect(store.readMetaStrict()).rejects.toThrow();
     expect(warnSpy).toHaveBeenCalledWith(
       'ExecutionKVStore',
       expect.stringContaining(
