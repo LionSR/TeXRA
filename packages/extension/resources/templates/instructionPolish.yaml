@@ -1,5 +1,5 @@
 # Prompt template for polishing user instruction text.
-# Used by polishModel.ts — not an agent definition.
+# Used by polishModel.ts, not an agent definition.
 prompts:
   userRequest: |
     Please review the following instruction text and correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
