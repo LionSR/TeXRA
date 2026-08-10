@@ -72,6 +72,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
 import { cliSettingsStores } from '../src/runtime/settingsStores';
 import {
   formatSlashCommandHelp,
@@ -1879,6 +1880,25 @@ if (SHOW_TODOS) {
       ].join('\n'),
     },
   }));
+  const workPlan = streams.get().get(STREAM_ID)!;
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: STREAM_ID,
+    event: {
+      type: 'updateTodos',
+      streamId: STREAM_ID,
+      todos: [...workPlan.todos],
+    },
+  });
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: STREAM_ID,
+    event: {
+      type: 'updatePlan',
+      streamId: STREAM_ID,
+      plan: workPlan.plan,
+    },
+  });
 }
 
 if (SHOW_EDIT_APPROVAL) {
@@ -2297,6 +2317,9 @@ function handleHarnessSlashCommand(line: string): boolean {
     case 'status':
       appendHarnessStatus();
       return true;
+    case 'plan':
+      void showCliWorkPlan();
+      return true;
     case 'goal':
     case 'goals':
       appendHarnessAssistantTranscript(GOAL_MODE_HELP);
@@ -2378,6 +2401,7 @@ registerBuiltinSlashCommands({
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
+  workPlanSnapshots: defaultSession().snapshots,
   getConfigStores: cliSettingsStores,
   onError: (error) => {
     appendHarnessAssistantTranscript(

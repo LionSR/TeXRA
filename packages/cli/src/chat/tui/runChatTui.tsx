@@ -563,6 +563,7 @@ export async function runChat(
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
     onResumeSelect: chatController.resume,
+    workPlanSnapshots: runtimeSession.snapshots,
     getConfigStores: cliSettingsStores,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));

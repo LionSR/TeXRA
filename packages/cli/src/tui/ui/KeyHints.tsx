@@ -20,6 +20,8 @@ export interface KeyHintsProps {
    *  Modals override to `false` when their primary affordance is different
    *  (e.g. a `y / n` prompt). */
   readonly confirmCancel?: boolean;
+  /** Allow a reader footer to consume multiple rows instead of truncating. */
+  readonly wrap?: boolean;
 }
 
 export const KEY_HINT_SEPARATOR = ' · ';
@@ -43,7 +45,7 @@ export function KeyHints(props: KeyHintsProps): React.JSX.Element {
       : [...props.hints, ...DEFAULT_TAIL];
   return (
     <Box>
-      <Text dimColor wrap="truncate-end">
+      <Text dimColor wrap={props.wrap ? 'wrap' : 'truncate-end'}>
         {all.map((hint, index) => (
           <Text key={`${hint.key}-${hint.action}-${index}`}>
             {index > 0 ? KEY_HINT_SEPARATOR : ''}

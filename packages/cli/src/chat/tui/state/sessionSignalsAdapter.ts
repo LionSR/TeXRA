@@ -27,11 +27,11 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-
 import {
   activeStreamId,
   focusStream,
   getCliStateGeneration,
+  isCliStreamRetired,
   patchStream,
   registerCliStateResetHook,
   removeStream,
@@ -270,14 +270,22 @@ class TuiSessionRenderer implements SessionRendererPort {
     }));
   }
 
+  // Live todos/plan use the event payload (same as LitSessionRenderer). The
+  // snapshot store may still be queueing the write until a stream is seeded,
+  // so getWorkPlan is not a reliable synchronous read here. Disk preload stays
+  // on the focus/`/plan` hydration path only.
   onTodosChanged(streamId: StreamTabId, todos: TodoItem[]): void {
     if (this.isStaleDispatch(streamId)) return;
-    patchStream(streamId, (slice) => ({ ...slice, todos }));
+    patchStream(streamId, (slice) =>
+      isDeepStrictEqual(slice.todos, todos) ? slice : { ...slice, todos },
+    );
   }
 
   onPlanChanged(streamId: StreamTabId, plan: Plan | null): void {
     if (this.isStaleDispatch(streamId)) return;
-    patchStream(streamId, (slice) => ({ ...slice, plan }));
+    patchStream(streamId, (slice) =>
+      isDeepStrictEqual(slice.plan, plan) ? slice : { ...slice, plan },
+    );
   }
 
   onQueuedFollowUpsChanged(streamId: StreamTabId): void {
