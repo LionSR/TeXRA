@@ -565,6 +565,7 @@ export class SessionFactApplier {
       this.renderer.onStreamStatusChanged(
         streamId,
         status,
+        this.state.streamLogs.get(streamId)?.head ?? 0,
         lastTimestamp,
         substate,
       );

@@ -154,12 +154,32 @@ describe('LOG_DELTA text deltas', () => {
       }),
     ]);
 
-    dispatchLogDelta([activityEntry(2, 'completed')]);
+    dispatchLogDelta([
+      {
+        seqNo: 2,
+        id: 'later-user-message',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 200,
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+        text: 'Continue',
+      },
+    ]);
+    expect(getState().streamLogs.get(STREAM_ID)?.logs[0]).toMatchObject({
+      id: 'compaction:operation-1',
+      data: { status: 'interrupted', finalized: false },
+    });
+
+    dispatchLogDelta([activityEntry(3, 'completed')]);
     const streamLogs = getState().streamLogs.get(STREAM_ID);
-    expect(streamLogs?.logs).toHaveLength(1);
+    expect(streamLogs?.logs).toHaveLength(2);
     expect(streamLogs?.logs[0]).toMatchObject({
       id: 'compaction:operation-1',
-      data: { status: 'completed', operationId: 'operation-1' },
+      data: {
+        status: 'completed',
+        finalized: true,
+        operationId: 'operation-1',
+      },
     });
     expect(streamLogs?.updatedMessageIndices).toEqual([0]);
   });

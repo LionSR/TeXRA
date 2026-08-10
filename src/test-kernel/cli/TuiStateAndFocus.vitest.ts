@@ -2594,7 +2594,7 @@ describe('CLI transcript state', () => {
     output.finalize();
   });
 
-  it('clears an unmatched compaction start when later live activity arrives', () => {
+  it('keeps an interrupted compaction replaceable until its provider outcome arrives', () => {
     const logger = runTrace(root);
 
     const activity = startCompactionActivity(logger);
@@ -2604,14 +2604,61 @@ describe('CLI transcript state', () => {
     logUserMessage(logger, 'A later turn started.');
     syncStreamLog(root);
 
-    const slice = streams.get().get(root);
+    let slice = streams.get().get(root);
     expect(slice?.compactingActive).toBe(false);
     expect(slice?.entries).toContainEqual(
       expect.objectContaining({
         id: `compaction:${activity.operationId}`,
         role: 'activity',
-        finalized: true,
+        finalized: false,
         activity: expect.objectContaining({ status: 'interrupted' }),
+      }),
+    );
+
+    activity.finish('completed');
+    syncStreamLog(root);
+
+    slice = streams.get().get(root);
+    expect(slice?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        role: 'activity',
+        finalized: true,
+        activity: expect.objectContaining({ status: 'completed' }),
+      }),
+    );
+  });
+
+  it('finalizes unmatched compaction when the transcript settles', () => {
+    const logger = runTrace(root);
+    const activity = startCompactionActivity(logger);
+    syncStreamLog(root);
+
+    setStatus(root, STREAM_PHASE.WAITING);
+    syncStreamLog(root);
+
+    expect(streams.get().get(root)?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        finalized: true,
+        activity: expect.objectContaining({
+          status: 'interrupted',
+          finalized: true,
+        }),
+      }),
+    );
+
+    activity.finish('completed');
+    syncStreamLog(root);
+
+    expect(streams.get().get(root)?.entries).toContainEqual(
+      expect.objectContaining({
+        id: `compaction:${activity.operationId}`,
+        finalized: true,
+        activity: expect.objectContaining({
+          status: 'interrupted',
+          finalized: true,
+        }),
       }),
     );
   });

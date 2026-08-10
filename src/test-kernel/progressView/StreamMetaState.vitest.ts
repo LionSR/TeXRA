@@ -25,11 +25,13 @@ import {
   STREAM_SUBSTATE,
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
+  type StreamLogEntry,
   type StreamStage,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { projectCompactionActivities } from '@shared/streams/compactionActivityProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
 
 /** Seed the shared appState singleton and return a live reader over it. */
@@ -87,28 +89,46 @@ function seedStream(
   return seedState(state);
 }
 
+function compactionStartEntry(): StreamLogEntry {
+  return {
+    seqNo: 1,
+    id: 'compaction-start',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: 'info',
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+    data: {
+      activity: 'context_compaction',
+      operationId: 'operation-1',
+      state: 'started',
+    },
+  };
+}
+
 function startCompaction(streamId: StreamTabId): void {
   dispatch(logHandlers, {
     command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
     streamId,
-    entries: [
-      {
-        seqNo: 1,
-        id: 'compaction-start',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: 'info',
-        timestamp: 100,
-        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-        data: {
-          activity: 'context_compaction',
-          operationId: 'operation-1',
-          state: 'started',
-        },
-      },
-    ],
+    entries: [compactionStartEntry()],
     updates: [],
     textDeltas: [],
   });
+}
+
+function compactionOutcomeEntry(): StreamLogEntry {
+  return {
+    seqNo: 2,
+    id: 'compaction-outcome',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: 'info',
+    timestamp: 200,
+    messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+    data: {
+      activity: 'context_compaction',
+      operationId: 'operation-1',
+      state: 'completed',
+    },
+  };
 }
 
 function compactionStatus(
@@ -262,8 +282,17 @@ describe('stream meta frontend state', () => {
       },
     });
 
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [],
+      updates: [],
+      textDeltas: [],
+    });
+
     expect(compactionStatus(getState(), streamId)).toMatchObject({
       status: 'interrupted',
+      finalized: true,
       finishedAt: 250,
     });
   });
@@ -277,12 +306,46 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.WAITING,
+      logHead: 1,
       lastTimestamp: 300,
     });
 
     expect(compactionStatus(getState(), streamId)).toMatchObject({
       status: 'interrupted',
+      finalized: true,
       finishedAt: 300,
+    });
+  });
+
+  it('applies a queued provider outcome through the terminal status watermark', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
+    startCompaction(streamId);
+    const outcome = compactionOutcomeEntry();
+
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.WAITING,
+      logHead: outcome.seqNo,
+      lastTimestamp: 300,
+    });
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [outcome],
+      updates: [],
+      textDeltas: [],
+    });
+
+    const replayed = projectCompactionActivities(
+      [compactionStartEntry(), outcome],
+      { streamTerminal: true, settledThroughSeqNo: outcome.seqNo },
+    );
+    expect(compactionStatus(getState(), streamId)).toEqual(replayed.blocks[0]);
+    expect(compactionStatus(getState(), streamId)).toMatchObject({
+      status: 'completed',
+      finalized: true,
     });
   });
 
@@ -294,6 +357,7 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.RUNNING,
+      logHead: 0,
       substate: STREAM_SUBSTATE.STARTING,
     });
 
@@ -305,6 +369,7 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.COMPLETED,
+      logHead: 0,
     });
 
     expect(getState().streamStates.get(streamId)?.status).toBe(

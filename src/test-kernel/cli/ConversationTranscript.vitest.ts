@@ -61,6 +61,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
@@ -88,18 +89,22 @@ function entry(
   return { id, role, text, finalized };
 }
 
-function compactionEntry(status: 'running' | 'completed'): ConversationEntry {
+function compactionEntry(
+  status: 'running' | 'interrupted' | 'completed',
+  finalized = status === 'completed',
+): ConversationEntry {
   return {
     id: 'compaction:operation-1',
     role: 'activity',
-    text: status === 'running' ? 'Compacting context…' : 'Context compacted',
-    finalized: status !== 'running',
+    text: COMPACTION_ACTIVITY_LABEL[status],
+    finalized,
     activity: {
       operationId: 'operation-1',
       status,
+      finalized,
       startPosition: 1,
       startedAt: 100,
-      ...(status === 'completed' ? { finishedAt: 200 } : {}),
+      ...(status !== 'running' ? { finishedAt: 200 } : {}),
     },
   };
 }
@@ -191,6 +196,27 @@ describe('CLI conversation transcript', () => {
         currentItems: staticItems([completed]),
       }),
     ).toEqual(['session-header', 'compaction:operation-1']);
+  });
+
+  it('holds later rows out of Static until interrupted compaction is final', () => {
+    const interrupted = compactionEntry('interrupted');
+    const laterUser = entry('u1', 'user', 'Continue', true);
+    const liveItems = staticItems([interrupted, laterUser]);
+
+    expect(liveItems.map((item) => item.id)).toEqual(['session-header']);
+    expect(
+      splitTranscriptEntries([interrupted, laterUser], STREAM_PHASE.RUNNING)
+        .pending,
+    ).toEqual([interrupted, laterUser]);
+
+    const finalItems = staticItems([compactionEntry('completed'), laterUser], {
+      currentItems: liveItems,
+    });
+    expect(finalItems.map((item) => item.id)).toEqual([
+      'session-header',
+      'compaction:operation-1',
+      'u1',
+    ]);
   });
 
   it('wraps compaction activity within a narrow viewport', () => {

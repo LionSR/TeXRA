@@ -37,8 +37,11 @@ import {
 import { normalizeToolUseData } from '@shared/toolUse';
 import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import {
+  applyCompactionActivityEntries,
   COMPACTION_ACTIVITY_LABEL,
-  projectCompactionActivities,
+  createCompactionActivityProjection,
+  settleCompactionActivities,
+  type CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import {
   isActivePhase,
@@ -560,7 +563,7 @@ function isSettledEntry(
 ): boolean {
   switch (entry.role) {
     case 'activity':
-      return entry.activity.status !== 'running';
+      return entry.activity.finalized;
     case 'user':
     case 'error':
     case 'phase':
@@ -600,7 +603,8 @@ export function finalizeSettledPrefix(
     const settled = isSettledEntry(entry, index, entries);
     if (
       sealed ||
-      (entry.role === 'workflowTask' && !settled) ||
+      ((entry.role === 'activity' || entry.role === 'workflowTask') &&
+        !settled) ||
       (!streamFinal && !settled)
     ) {
       sealed = true;
@@ -674,7 +678,21 @@ interface TaskGroupProjectionState {
 }
 
 const TASK_GROUP_PROJECTIONS = new Map<StreamTabId, TaskGroupProjectionState>();
-registerCliStateResetHook(() => TASK_GROUP_PROJECTIONS.clear());
+
+interface CompactionProjectionState {
+  readonly projection: CompactionActivityProjection;
+  appliedHead: number;
+  terminal: boolean;
+}
+
+const COMPACTION_PROJECTIONS = new Map<
+  StreamTabId,
+  CompactionProjectionState
+>();
+registerCliStateResetHook(() => {
+  TASK_GROUP_PROJECTIONS.clear();
+  COMPACTION_PROJECTIONS.clear();
+});
 
 function projectTaskGroupsIncrementally(
   streamId: StreamTabId,
@@ -702,6 +720,35 @@ function projectTaskGroupsIncrementally(
   // snapshot by reference, replacing the former per-tick deep-equality walk.
   if (changed) state.snapshot = [...state.working];
   return state.snapshot;
+}
+
+function projectCompactionIncrementally(
+  streamId: StreamTabId,
+  entries: readonly StreamLogEntry[],
+  streamTerminal: boolean,
+): CompactionActivityProjection {
+  let state = COMPACTION_PROJECTIONS.get(streamId);
+  if (!state || state.appliedHead > entries.length) {
+    state = {
+      projection: createCompactionActivityProjection(),
+      appliedHead: 0,
+      terminal: false,
+    };
+    COMPACTION_PROJECTIONS.set(streamId, state);
+  }
+
+  applyCompactionActivityEntries(
+    state.projection,
+    entries.slice(state.appliedHead),
+  );
+  state.appliedHead = entries.length;
+  if (streamTerminal && !state.terminal) {
+    settleCompactionActivities(state.projection, {
+      throughSeqNo: entries.length,
+    });
+  }
+  state.terminal = streamTerminal;
+  return state.projection;
 }
 
 function trySyncStreamLog(streamId: StreamTabId): void {
@@ -788,6 +835,7 @@ export function syncStreamLog(
 ): void {
   if (isChildStreamRemoved(streamId)) {
     TASK_GROUP_PROJECTIONS.delete(streamId);
+    COMPACTION_PROJECTIONS.delete(streamId);
     return;
   }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
@@ -838,9 +886,11 @@ export function syncStreamLog(
           WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
     );
     const streamFinal = isTranscriptSettlementPhase(lifecycle.status);
-    const compactionProjection = projectCompactionActivities(allEntries, {
-      streamTerminal: streamFinal,
-    });
+    const compactionProjection = projectCompactionIncrementally(
+      streamId,
+      allEntries,
+      streamFinal,
+    );
     const compactingActive = compactionProjection.blocks.some(
       (block) => block.status === 'running',
     );
@@ -854,7 +904,7 @@ export function syncStreamLog(
         role: 'activity',
         text: COMPACTION_ACTIVITY_LABEL[block.status],
         messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-        finalized: block.status !== 'running',
+        finalized: block.finalized,
         activity: block,
       };
       logCandidates.push({

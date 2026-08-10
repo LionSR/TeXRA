@@ -12,6 +12,10 @@ export type CompactionActivityStatus =
 export interface CompactionActivityBlock {
   readonly operationId: string;
   readonly status: CompactionActivityStatus;
+  /** Whether the block may move into finalized transcript output. */
+  readonly finalized: boolean;
+  /** Source-log boundary that finalized an otherwise unmatched start. */
+  readonly settledThroughSeqNo?: number;
   readonly startPosition: number;
   readonly startedAt: number;
   readonly finishedAt?: number;
@@ -40,6 +44,9 @@ export function isCompactionActivityBlock(
     block.operationId.length > 0 &&
     typeof block.status === 'string' &&
     Object.hasOwn(COMPACTION_ACTIVITY_LABEL, block.status) &&
+    typeof block.finalized === 'boolean' &&
+    (block.settledThroughSeqNo === undefined ||
+      typeof block.settledThroughSeqNo === 'number') &&
     typeof block.startPosition === 'number' &&
     typeof block.startedAt === 'number' &&
     (block.finishedAt === undefined || typeof block.finishedAt === 'number')
@@ -49,11 +56,12 @@ export function isCompactionActivityBlock(
 export interface CompactionActivityProjection {
   readonly blocks: CompactionActivityBlock[];
   readonly indexByOperationId: Map<string, number>;
+  maxAppliedSeqNo: number;
 }
 
 /** Fresh mutable working state for incremental activity projection. */
 export function createCompactionActivityProjection(): CompactionActivityProjection {
-  return { blocks: [], indexByOperationId: new Map() };
+  return { blocks: [], indexByOperationId: new Map(), maxAppliedSeqNo: 0 };
 }
 
 const STREAM_ADVANCING_MESSAGE_TYPES: ReadonlySet<string> = new Set([
@@ -89,6 +97,10 @@ export function applyCompactionActivityEntries(
   const changedIndices = new Set<number>();
 
   for (const entry of entries) {
+    projection.maxAppliedSeqNo = Math.max(
+      projection.maxAppliedSeqNo,
+      entry.seqNo,
+    );
     if (entry.messageType !== MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
       interruptRunningBlocks(projection, entry, changedIndices);
       continue;
@@ -106,6 +118,7 @@ export function applyCompactionActivityEntries(
       projection.blocks.push({
         operationId,
         status: 'running',
+        finalized: false,
         startPosition: entry.seqNo,
         startedAt: entry.timestamp,
       });
@@ -114,18 +127,21 @@ export function applyCompactionActivityEntries(
     }
 
     // A terminal event without its start is ambiguous and must not create a
-    // phantom transcript row. The first terminal event wins thereafter.
+    // phantom transcript row. An outcome queued before settlement may still
+    // replace its provisional interruption; one appended afterward may not.
     if (existingIndex === undefined) continue;
     const block = projection.blocks[existingIndex];
-    if (
-      !block ||
-      (block.status !== 'running' && block.status !== 'interrupted')
-    ) {
-      continue;
-    }
+    const withinSettlementBoundary =
+      block?.status === 'interrupted' &&
+      block.settledThroughSeqNo !== undefined &&
+      entry.seqNo <= block.settledThroughSeqNo;
+    if (!block || (block.finalized && !withinSettlementBoundary)) continue;
+    const { settledThroughSeqNo: _settledThroughSeqNo, ...unsettledBlock } =
+      block;
     projection.blocks[existingIndex] = {
-      ...block,
+      ...unsettledBlock,
       status: state,
+      finalized: true,
       finishedAt: entry.timestamp,
     };
     changedIndices.add(existingIndex);
@@ -134,18 +150,26 @@ export function applyCompactionActivityEntries(
   return [...changedIndices];
 }
 
-/** Close unmatched starts when the current transcript turn settles. */
-export function interruptRunningCompactionActivities(
+/** Finalize starts covered by one canonical source-log settlement boundary. */
+export function settleCompactionActivities(
   projection: CompactionActivityProjection,
-  finishedAt?: number,
+  options: {
+    readonly throughSeqNo?: number;
+    readonly finishedAt?: number;
+  },
 ): readonly number[] {
+  const throughSeqNo = options.throughSeqNo ?? projection.maxAppliedSeqNo;
   const changedIndices: number[] = [];
   for (const [index, block] of projection.blocks.entries()) {
-    if (block.status !== 'running') continue;
+    if (block.finalized || block.startPosition > throughSeqNo) continue;
     projection.blocks[index] = {
       ...block,
       status: 'interrupted',
-      ...(finishedAt !== undefined ? { finishedAt } : {}),
+      finalized: true,
+      settledThroughSeqNo: throughSeqNo,
+      ...(block.finishedAt === undefined && options.finishedAt !== undefined
+        ? { finishedAt: options.finishedAt }
+        : {}),
     };
     changedIndices.push(index);
   }
@@ -157,13 +181,17 @@ export function projectCompactionActivities(
   entries: readonly StreamLogEntry[],
   options: {
     readonly streamTerminal?: boolean;
+    readonly settledThroughSeqNo?: number;
     readonly finishedAt?: number;
   } = {},
 ): CompactionActivityProjection {
   const projection = createCompactionActivityProjection();
   applyCompactionActivityEntries(projection, entries);
   if (options.streamTerminal) {
-    interruptRunningCompactionActivities(projection, options.finishedAt);
+    settleCompactionActivities(projection, {
+      throughSeqNo: options.settledThroughSeqNo,
+      finishedAt: options.finishedAt,
+    });
   }
   return projection;
 }

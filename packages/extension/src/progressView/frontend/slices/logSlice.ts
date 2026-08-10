@@ -14,7 +14,7 @@ import {
 } from '@shared/schemas';
 import {
   applyCompactionActivityEntries,
-  interruptRunningCompactionActivities,
+  settleCompactionActivities,
 } from '@shared/streams/compactionActivityProjection';
 import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
@@ -75,14 +75,17 @@ function syncCompactionProjectionChanges(
   return { logChanged, updatedIndices };
 }
 
-/** Interrupt unmatched activity rows when the current transcript turn settles. */
-export function interruptCompactionActivityLogs(
+/** Settle unmatched activity rows when the current transcript turn settles. */
+export function settleCompactionActivityLogs(
   streamLogs: StreamLogs,
-  finishedAt?: number,
+  options: {
+    readonly throughSeqNo?: number;
+    readonly finishedAt?: number;
+  },
 ): readonly number[] {
-  const changedIndices = interruptRunningCompactionActivities(
+  const changedIndices = settleCompactionActivities(
     streamLogs.compactionProjection,
-    finishedAt,
+    options,
   );
   return syncCompactionProjectionChanges(streamLogs, changedIndices)
     .updatedIndices;
@@ -229,10 +232,9 @@ export const logHandlers = {
           }
         }
         if (isTranscriptSettlementPhase(streamState.status)) {
-          for (const index of interruptCompactionActivityLogs(
-            streamLogs,
-            streamState.lastTimestamp,
-          )) {
+          for (const index of settleCompactionActivityLogs(streamLogs, {
+            finishedAt: streamState.lastTimestamp,
+          })) {
             logChanged = true;
             updatedMessageIndices.add(index);
           }

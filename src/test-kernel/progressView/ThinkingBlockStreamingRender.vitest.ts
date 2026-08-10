@@ -74,6 +74,7 @@ describe('progress view live activity rendering', () => {
         data: {
           operationId: 'operation-1',
           status: 'running',
+          finalized: false,
           startPosition: 4,
           startedAt: 10,
         },

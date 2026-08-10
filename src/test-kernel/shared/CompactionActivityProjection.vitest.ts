@@ -9,8 +9,8 @@ import {
 import {
   applyCompactionActivityEntries,
   createCompactionActivityProjection,
-  interruptRunningCompactionActivities,
   projectCompactionActivities,
+  settleCompactionActivities,
 } from '@shared/streams/compactionActivityProjection';
 
 function activityEntry(
@@ -55,6 +55,7 @@ describe('compaction activity projection', () => {
       {
         operationId: 'a',
         status: 'completed',
+        finalized: true,
         startPosition: 2,
         startedAt: 20,
         finishedAt: 40,
@@ -135,6 +136,7 @@ describe('compaction activity projection', () => {
     ]);
     expect(projection.blocks[0]).toMatchObject({
       status: 'interrupted',
+      finalized: false,
       finishedAt: 40,
     });
 
@@ -143,20 +145,32 @@ describe('compaction activity projection', () => {
     ]);
     expect(projection.blocks[0]).toMatchObject({
       status: 'completed',
+      finalized: true,
       finishedAt: 50,
     });
   });
 
-  it('keeps a late live start running but interrupts it for terminal hydration', () => {
-    const live = projectCompactionActivities([
+  it('finalizes unmatched activity for terminal hydration', () => {
+    const projection = projectCompactionActivities([
       activityEntry(1, 'late', 'started'),
+      advancingEntry(2, MESSAGE_TYPES.USER_MESSAGE),
     ]);
-    expect(live.blocks[0]?.status).toBe('running');
-
-    interruptRunningCompactionActivities(live, 25);
-    expect(live.blocks[0]).toMatchObject({
+    expect(projection.blocks[0]).toMatchObject({
       status: 'interrupted',
-      finishedAt: 25,
+      finalized: false,
+      finishedAt: 20,
     });
+
+    settleCompactionActivities(projection, { finishedAt: 25 });
+    expect(projection.blocks[0]).toMatchObject({
+      status: 'interrupted',
+      finalized: true,
+      finishedAt: 20,
+    });
+
+    applyCompactionActivityEntries(projection, [
+      activityEntry(4, 'late', 'completed'),
+    ]);
+    expect(projection.blocks[0]?.status).toBe('interrupted');
   });
 });

@@ -15,27 +15,10 @@ import {
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 
-import { isToolUseState, type StreamLogs } from '../store';
-import { interruptCompactionActivityLogs } from './logSlice';
+import { isToolUseState } from '../store';
+import { settleCompactionActivityLogs } from './logSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';
-
-function interruptSettledCompaction(
-  streamLogs: StreamLogs,
-  finishedAt?: number,
-): StreamLogs | undefined {
-  const updatedMessageIndices = interruptCompactionActivityLogs(
-    streamLogs,
-    finishedAt,
-  );
-  if (updatedMessageIndices.length === 0) return undefined;
-  return {
-    ...streamLogs,
-    updatedMessageIndices: [...updatedMessageIndices],
-    updatedMessageBaseGeneration: streamLogs.generation,
-    generation: streamLogs.generation + 1,
-  };
-}
 
 /**
  * Buffer for subagent descriptions that race their own UPDATE_STREAMS
@@ -104,19 +87,10 @@ export const streamMetaHandlers = {
           draft.streamById.set(name, streamInfo);
         }
 
-        if (mergedState) {
-          draft.streamStates.set(name, mergedState);
-          if (isTranscriptSettlementPhase(mergedState.status)) {
-            const streamLogs = draft.streamLogs.get(name);
-            if (streamLogs) {
-              const updated = interruptSettledCompaction(
-                streamLogs,
-                mergedState.lastTimestamp,
-              );
-              if (updated) draft.streamLogs.set(name, updated);
-            }
-          }
-        }
+        // Metadata registration is followed by bridge replay. LOG_DELTA
+        // settles only after applying that batch, so hydration cannot close
+        // a start before its already-recorded outcome arrives.
+        if (mergedState) draft.streamStates.set(name, mergedState);
 
         if (data.activeStream !== undefined) {
           draft.activeStreamId = data.activeStream || null;
@@ -126,10 +100,13 @@ export const streamMetaHandlers = {
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data) => {
-    const { stream, status, lastTimestamp, substate } = data;
+    const { stream, status, logHead, lastTimestamp, substate } = data;
+    const previous = appState.get();
+    const wasSettled = isTranscriptSettlementPhase(
+      previous.streamStates.get(stream)?.status,
+    );
     const shouldFocus =
-      stream === appState.get().activeStreamId &&
-      status === STREAM_PHASE.WAITING;
+      stream === previous.activeStreamId && status === STREAM_PHASE.WAITING;
 
     setStreamStateForId(stream, (current) =>
       create(current, (draft) => {
@@ -146,13 +123,22 @@ export const streamMetaHandlers = {
       }),
     );
 
-    if (isTranscriptSettlementPhase(status)) {
+    if (!wasSettled && isTranscriptSettlementPhase(status)) {
       appState.set(
         create(appState.get(), (draft) => {
           const streamLogs = draft.streamLogs.get(stream);
           if (!streamLogs) return;
-          const updated = interruptSettledCompaction(streamLogs, lastTimestamp);
-          if (updated) draft.streamLogs.set(stream, updated);
+          const updatedMessageIndices = settleCompactionActivityLogs(
+            streamLogs,
+            { throughSeqNo: logHead, finishedAt: lastTimestamp },
+          );
+          if (updatedMessageIndices.length === 0) return;
+          draft.streamLogs.set(stream, {
+            ...streamLogs,
+            updatedMessageIndices: [...updatedMessageIndices],
+            updatedMessageBaseGeneration: streamLogs.generation,
+            generation: streamLogs.generation + 1,
+          });
         }),
       );
     }

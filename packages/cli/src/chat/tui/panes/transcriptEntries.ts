@@ -157,6 +157,7 @@ export function orderedStaticTranscriptEntries(
     key: readonly [number, number];
   }> = [];
   for (const [index, entry] of entries.entries()) {
+    if (entry.role === 'activity' && !entry.finalized) break;
     if (!isStaticTranscriptEntryAt(entries, index, status)) continue;
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
@@ -195,14 +196,18 @@ export function splitTranscriptEntries(
   const showLiveAssistant = isActivePhase(status);
   const finalized: ConversationEntry[] = [];
   const pending: ConversationEntry[] = [];
+  let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
+    if (entry.role === 'activity' && !entry.finalized) {
+      canPromoteToStatic = false;
+    }
     if (!isRenderableTranscriptEntry(entry)) continue;
     if (userPromptAwaitsLiveContinuation(entries, index, status)) {
       pending.push(entry);
       continue;
     }
     if (entry.finalized) {
-      finalized.push(entry);
+      (canPromoteToStatic ? finalized : pending).push(entry);
       continue;
     }
     if (
