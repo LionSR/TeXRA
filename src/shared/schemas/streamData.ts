@@ -88,9 +88,8 @@ export const TokenUsageStatsParsingBaseSchema = z
     // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
     // TypeScript cannot recover the required keys through `Object.fromEntries`.
   })
-  .transform(
-    ({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
-      resolveLegacyUsageRoute(usage as TokenUsageStats, viaChatGptSubscription),
+  .transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
+    resolveLegacyUsageRoute(usage as TokenUsageStats, viaChatGptSubscription),
   ) as z.ZodType<TokenUsageStats>;
 
 export interface ParsedUsageData {

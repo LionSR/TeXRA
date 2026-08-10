@@ -50,9 +50,10 @@ export type TokenUsageStats = z.infer<typeof TokenUsageStatsBaseSchema>;
  * rows written before `usageRoute` existed are reparsed on every load, so
  * the copies must not drift.
  */
-export function resolveLegacyUsageRoute<
-  T extends { usageRoute?: UsageRoute },
->(usage: T, viaChatGptSubscription: boolean | undefined): T {
+export function resolveLegacyUsageRoute<T extends { usageRoute?: UsageRoute }>(
+  usage: T,
+  viaChatGptSubscription: boolean | undefined,
+): T {
   const usageRoute =
     usage.usageRoute ??
     (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
@@ -61,9 +62,8 @@ export function resolveLegacyUsageRoute<
 
 export const TokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
   viaChatGptSubscription: z.boolean().optional(),
-}).transform(
-  ({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
-    resolveLegacyUsageRoute(usage, viaChatGptSubscription),
+}).transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
+  resolveLegacyUsageRoute(usage, viaChatGptSubscription),
 );
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &

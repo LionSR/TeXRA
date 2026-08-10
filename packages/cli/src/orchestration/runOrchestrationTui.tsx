@@ -499,8 +499,10 @@ export function OrchestrationApp(
   );
 }
 
-export interface RunOrchestrationTuiOptions
-  extends Omit<OrchestrationAppProps, 'items' | 'onResolve'> {
+export interface RunOrchestrationTuiOptions extends Omit<
+  OrchestrationAppProps,
+  'items' | 'onResolve'
+> {
   readonly colorEnabled?: boolean;
 }
 

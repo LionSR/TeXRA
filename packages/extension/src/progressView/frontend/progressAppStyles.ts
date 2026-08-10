@@ -149,5 +149,4 @@ export const progressAppStyles = css`
     min-width: 240px;
     max-width: 360px;
   }
-
 `;
