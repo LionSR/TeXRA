@@ -394,7 +394,7 @@ Use action: "wait" on /executions or /executions/{id} to wait for a status chang
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
 Use action: "subscribe" on /executions/{id} to receive future status and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.
-Delegated subagent and workflow results are delivered automatically as follow-up messages — no wait or subscribe is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change; use action: "subscribe" for push updates on executions whose results are not auto-delivered.`,
+Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait or subscription is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change; use action: "subscribe" for push updates on executions whose results are not auto-delivered.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -987,7 +987,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const log = streamId ? transcripts.get(streamId) : undefined;
     if (!log) {
       return executed(
-        `No retained output for ${executionId} — its stream log is no longer available. ` +
+        `No retained output for ${executionId}: its stream log is no longer available. ` +
           `Use /executions/${executionId}/report for the result summary.`,
       );
     }
@@ -995,10 +995,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const { lines, chars } = projectProcessOutput(log.toJSON());
     const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
-      ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
-      : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;
+      ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
+      : `[finished: this is the retained log; /executions/${executionId}/report has the result summary]`;
     const out: string[] = [
-      `Output for ${executionId} (process, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+      `Output for ${executionId} (process, ${formatStatusInfo(info)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
     ];
 
     if (lines.length === 0) {
@@ -1028,9 +1028,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     let hint = '';
     if (last < requestedLast) {
-      hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read — continue from view_range: [${last + 1}, …])`;
+      hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read; continue from view_range: [${last + 1}, …])`;
     } else if (!viewRange && first > 1) {
-      hint = ` (the last ${OUTPUT_TAIL_LINES} by default — use view_range to page earlier ones)`;
+      hint = ` (the last ${OUTPUT_TAIL_LINES} by default; use view_range to page earlier ones)`;
     }
     out.push(
       `Showing lines ${first}-${last} of ${lines.length}${hint}.`,

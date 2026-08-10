@@ -25,7 +25,7 @@ import { locateTool, missingCoreTools, PROBED_CORE_TOOLS } from './toolProbing';
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
   .describe(
-    'No inputs — returns a structured JSON summary of the host environment.',
+    'No inputs: returns a structured JSON summary of the host environment.',
   );
 
 type ProbeInput = z.infer<typeof ProbeEnvironmentInputSchema>;

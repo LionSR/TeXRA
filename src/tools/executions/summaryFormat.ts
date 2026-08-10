@@ -72,7 +72,7 @@ export function formatChildLine(
 ): string {
   const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
   const ts = formatTimestamp(child.timestamp);
-  const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
+  const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
 }
 

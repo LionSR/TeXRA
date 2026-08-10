@@ -88,7 +88,7 @@ export async function seedDisabledToolDefaults(
   await state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
   logger.info(
     'toolAvailability',
-    `First install — default-disabled toggleable tools: ${defaults.join(', ')}`,
+    `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
   );
 }
 

@@ -146,7 +146,7 @@ export class OutputFileProcessor {
     );
     if (rawText.trim().length > 0) {
       this.ctx.logger.warn(
-        `The model returned output but no files could be extracted from it — it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
+        `The model returned output but no files could be extracted from it: it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
         {
           data: {
             round: currRound,

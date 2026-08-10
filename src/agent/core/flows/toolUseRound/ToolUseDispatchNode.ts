@@ -45,7 +45,7 @@ const STREAM_BUFFER_MAX = 50_000;
  * follow-up requests otherwise.
  */
 const CANCELLED_CALL_ERROR =
-  'Tool call cancelled — the run was interrupted and no result was recorded for this call.';
+  'Tool call cancelled: the run was interrupted and no result was recorded for this call.';
 
 /**
  * Result of executing a single tool call, capturing everything needed

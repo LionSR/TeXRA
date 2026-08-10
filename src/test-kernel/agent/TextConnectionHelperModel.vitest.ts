@@ -43,7 +43,7 @@ describe('bestConnectionMethod helper model routing', () => {
     expect(createHelperModelKit).toHaveBeenCalledTimes(1);
     expect(initializeMessages).toHaveBeenCalledWith(
       '',
-      expect.stringContaining('Which is more english'),
+      expect.stringContaining('Which string is grammatically correct'),
       undefined,
       expect.stringContaining('LaTeX document context'),
     );

@@ -1238,7 +1238,7 @@ export abstract class ModelHandler<
    */
   createMediaContent(_mediaMessage: MediaEntry[]): Media[] {
     throw new Error(
-      `${this.constructor.name}.createMediaContent is not implemented — ` +
+      `${this.constructor.name}.createMediaContent is not implemented: ` +
         'override it, or override createMediaMessage to build media directly.',
     );
   }

@@ -8,7 +8,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
+    You know the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
     When generating tool-use agent YAML definitions, follow the schema below exactly.
     Tool-use agents call tools interactively instead of producing a single document output.
     They access files through their tools (read_file, glob, grep, etc.), NOT through
@@ -16,7 +16,7 @@ prompts:
 
     CRITICAL RULES:
     - agentCategory MUST be "toolUse" (not "workflow").
-    - ONLY include the tools the user selected; do NOT add extras or remove any.
+    - ONLY include the tools the user selected. Do NOT add extras or remove any.
     - userRequest MUST be a single string (not an array), and MUST contain {{ INSTRUCTION }}
       so the user's free-text instruction is passed through at runtime.
     - Infer an appropriate temperature from the description (0.7 is a good default).
@@ -52,16 +52,16 @@ prompts:
     prompts:
       systemPrompt: |
         <Role and task description. Explain what the agent does and give specific
-         guidance on how to use the selected tools for this task.
+         guidance on how to use the selected tools effectively for this task.
          Remind the agent to use tools to read files, search, etc.>
       userRequest: |
         {{ INSTRUCTION }}
 
-    IMPORTANT REMINDERS:
+    OUTPUT CONSTRAINTS:
     - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
-    - Do NOT include a userPrefix section; tool-use agents don't receive pre-loaded files.
+    - Do NOT include a userPrefix section: tool-use agents don't receive pre-loaded files.
     - Include exactly these tools: {{ SELECTED_TOOLS }}.
-    - The systemPrompt should say how the agent uses its specific tools.
+    - The systemPrompt should guide the agent on how to use its specific tools effectively.
 
   retryPrompt: |
     The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

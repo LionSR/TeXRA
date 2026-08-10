@@ -11,7 +11,7 @@ settings:
 # Tool-use prompts live in agentCreatorToolUse.yaml.
 prompts:
   systemPrompt: |
-    You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
+    You know the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
     When generating workflow agent YAML definitions, follow the schema below exactly.
     Workflow agents process LaTeX documents in fixed rounds (default 2), producing output
     wrapped in the standard <documents><document name="..."> container. Modern
@@ -21,7 +21,7 @@ prompts:
     CRITICAL RULES:
     - agentCategory MUST be "workflow" (not "toolUse"). Workflow agents do NOT call tools.
     - The output container (<documents><document name="...">) is fixed
-      protocol, not a per-agent setting; do not add settings for it.
+      protocol, not a per-agent setting. Do not add settings for it.
     - Infer appropriate settings from the agent's description:
       - isRewrite: true when the agent edits/revises/corrects existing documents, false when it creates new content.
       - temperature: low (0.1) for editing/correction tasks, higher (0.5-0.8) for creative/generation tasks.
@@ -81,15 +81,15 @@ prompts:
       agentCategory: workflow
     prompts:
       systemPrompt: |
-        You are a scientist revising a LaTeX research paper. Improve the paper
-        following the given instructions and nothing else.
-        When writing a *.tex \LaTeX document, you must:
+        Improve a LaTeX research paper
+        focusing solely on addressing the given instructions.
+        When writing a professional *.tex \LaTeX document, you must:
         \begin{itemize}
             \item Follow chktex-friendly conventions.
             \item Use appropriate notation consistently.
             \item Preserve comments starting with `%'.
             \item Use `` or '' rather than straight quotes.
-            \item \textbf{IMPORTANT:} Give complete output with all sections in original order.
+            \item Give complete output with all sections in their original order.
         \end{itemize}
       userPrefix: |
         <documents>
@@ -101,20 +101,20 @@ prompts:
         - |
           Output the revised \LaTeX as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>, focusing solely on the instruction.
         - |
-          Critically reflect on the changes and output a further enhanced version. Check for these
+          Review the changes and output a corrected version. Check for these
           failure modes and fix any you find:
           \begin{itemize}
-              \item Review each change you made: is it inaccurate, unnecessary, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone; do not invent weaknesses to satisfy this checklist.
+              \item Review each change you made: is it inaccurate, unnecessary, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone. Do not invent weaknesses to satisfy this checklist.
               \item Are any equations or notations from the original now missing or used before defined?
               \item Did you add generic filler sentences? Use ``show not tell.''
               \item Did you change anything NOT required by the instruction? If so, revert it.
           \end{itemize}
           If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged.
-          Output the further enhanced content as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+          Output the corrected content as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
 
-    IMPORTANT REMINDERS:
+    OUTPUT CONSTRAINTS:
     - Wrap the final output in <documents><document name="..."> exactly as shown
-      above; this container is fixed protocol, not a setting to configure.
+      above: this container is fixed protocol, not a setting to configure.
     - userRequest must be an array with exactly as many entries as rounds (1 or 2).
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.

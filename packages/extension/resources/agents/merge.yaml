@@ -7,11 +7,11 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert LaTeX editor tasked with merging changes from an edited version of a \LaTeX document back into the original document. Your goal is to produce an accurate and complete representation of the edited document, incorporating all changes while maintaining the original structure and formatting.
+    Merge changes from an edited \LaTeX document into the original. Preserve the original structure and formatting while incorporating every edit.
 
   userPrefix: |
     {% if INPUT_FILES[1] %}
-    You are tasked with creating full versions of multiple edited \LaTeX documents by combining pairs of sources: each original \LaTeX document and its corresponding edited version. The result enables accurate comparison between versions with tools like latexdiff. Produce a complete, updated version of each document that incorporates all changes while maintaining the original structure.
+    Create complete edited \LaTeX documents from each original and edited pair. Preserve the original structure so tools such as latexdiff can compare the versions accurately.
 
     Here are the original \LaTeX documents:
     {{ ALL_INPUTS }}
@@ -19,7 +19,7 @@ prompts:
     Here are the edited versions of the \LaTeX documents:
     {{ ALL_EDITEDS }}
     {% else %}
-    You are tasked with creating a full version of an edited \LaTeX document by combining two sources: an original \LaTeX document and an edited version of that document. The result enables accurate comparison between versions with tools like latexdiff. Produce a complete, updated version of the document that incorporates all changes while maintaining the original structure.
+    Create one complete edited \LaTeX document from the original and edited versions. Preserve the original structure so tools such as latexdiff can compare the versions accurately.
 
     Here is the original \LaTeX document {{ INPUT_FILE }}:
     <original_latex>
@@ -36,10 +36,10 @@ prompts:
     Follow these steps to create and verify the full version{% if INPUT_FILES[1] %}s{% endif %} of the edited document{% if INPUT_FILES[1] %}s{% endif %}:
 
     STEP 1 - MERGE:
-    1. Carefully read through both the original and edited versions of {% if INPUT_FILES[1] %}each {% endif %}document.
+    1. Read both the original and edited versions of {% if INPUT_FILES[1] %}each {% endif %}document.
     2. For parts indicated as ``unchanged'' or ``previous parts remain unchanged'' in the edited version, copy the corresponding sections from the original document verbatim.
     3. Where specific edits or additions are shown in the edited version, incorporate these changes exactly as they appear, replacing the corresponding parts in the original document.
-    4. Pay close attention to any structural elements like section headers, equations, figures, or tables. Ensure that these are maintained in their correct positions and formats.
+    4. Preserve any structural elements like section headers, equations, figures, or tables. Keep them in their correct positions and formats.
     5. Maintain all LaTeX formatting, including commands, environments, and any custom macros or definitions present in the original document.
     6. If there are any ambiguities or unclear instructions in the edited version, default to the original document's content for those sections.
     {% if INPUT_FILES[1] %}
@@ -53,7 +53,7 @@ prompts:
     - No parts of the document are accidentally omitted or duplicated.
     - {% if INPUT_FILES[1] %}Each output is{% else %}The output is{% endif %} a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
 
-    Provide your output as complete \LaTeX document{% if INPUT_FILES[1] %}s{% endif %}. Accuracy is paramount - even small discrepancies can affect diff tools.
+    Provide your output as complete \LaTeX document{% if INPUT_FILES[1] %}s{% endif %}. Small discrepancies can affect diff tools, so preserve the source exactly where no edit applies.
 
     <documents>
     {% for output in INPUT_FILES %}

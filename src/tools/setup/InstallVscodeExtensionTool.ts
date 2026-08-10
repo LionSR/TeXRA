@@ -71,7 +71,7 @@ export class InstallVscodeExtensionTool extends defineTool({
     return executed(
       installed
         ? `Successfully installed "${id}". It is now available in VS Code.`
-        : `Requested install of "${id}". VS Code has not yet confirmed the extension is active — you may need to reload the window.`,
+        : `Requested install of "${id}". VS Code has not yet confirmed the extension is active. You may need to reload the window.`,
       installed
         ? `Installed extension ${id}`
         : `Install issued for ${id} (verify manually)`,
