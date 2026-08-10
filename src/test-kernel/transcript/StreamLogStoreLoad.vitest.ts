@@ -25,8 +25,8 @@ import {
   STREAM_LOG_SUMMARIES_DIR,
   type StreamLogAppendInput,
 } from '@transcript';
-import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
 
 interface MockStorageOptions {
   /** Values are usually arrays; non-array values simulate corrupt logs. */

@@ -14,14 +14,14 @@ import type {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  AbsoluteFS,
   createRunStorageLocation,
   getComparablePath,
   pathToLocation,
-  WorkspaceFS,
-  type TaskRunFileService,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
+import { type TaskRunFileService } from '@utils/files/taskRunStorage';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { readPlatformSetting } from '@utils/config/platformSettings';

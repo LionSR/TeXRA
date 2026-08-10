@@ -15,9 +15,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, historyStyles } from '@shared/styles';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import { historyStyles } from '@shared/styles/historyStyles';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

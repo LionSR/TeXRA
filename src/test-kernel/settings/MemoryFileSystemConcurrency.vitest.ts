@@ -13,8 +13,8 @@ import {
   countPinnedMemories,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
-import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
 
 const MEMORY_LISTING_CONCURRENCY = 8;
 const FILE_COUNT_PER_DIRECTORY = 12;

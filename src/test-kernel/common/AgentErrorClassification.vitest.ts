@@ -14,7 +14,7 @@ import {
 import {
   attachContextWindowError,
   attachMissingApiKeyError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorMetadata';
 import { RUN_OUTCOME } from '@shared/schemas';
 
 function diskFullError(): NodeJS.ErrnoException {

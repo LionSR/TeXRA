@@ -205,12 +205,7 @@ describe('Copilot route preference on a canonical base model', () => {
       'ModelHandlerVscodeLm',
     );
 
-    const directHandler = await createModelHandler(
-      config,
-      undefined,
-      undefined,
-      'direct',
-    );
+    const directHandler = await createModelHandler(config, undefined, 'direct');
     const concurrentHandler = await createModelHandler(config);
     try {
       expect(directHandler.constructor.name).toBe(

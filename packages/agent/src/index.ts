@@ -7,13 +7,13 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 
 // Local imports - runtime
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadAgents, resolveAgent } from '@agent/index/agentRegistry';
 import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import {
   ClaudeAgentSessions,
   CodexThreads,
@@ -257,7 +257,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
         );
       }
       const config = AgentConfigSchema.parse({
-        agent: resolved.resolvedName,
+        agent: resolved.entry.name,
         agentCategory: resolved.entry.category,
         agentSource: resolved.entry.source,
         instruction: input.instruction,

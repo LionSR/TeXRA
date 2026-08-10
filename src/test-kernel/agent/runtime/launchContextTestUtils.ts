@@ -6,7 +6,6 @@ import { vi } from 'vitest';
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
@@ -19,6 +18,7 @@ import {
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 
+import { AgentCategory } from '@shared/schemas';
 import { testModelCell } from '../modelCellTestUtils';
 
 /** The zero-priced OpenAI model every runtime fixture bills against. */

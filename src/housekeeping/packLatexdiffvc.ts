@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';

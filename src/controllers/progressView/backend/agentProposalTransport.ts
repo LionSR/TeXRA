@@ -47,9 +47,9 @@ export function createAgentProposalTransport(options: {
       }));
     };
     const [modelOptionsData, agentOptionsData] = await Promise.all([
-      computeModelOptionsData(undefined, undefined, {
-        agentCategory: proposal.agentCategory,
-      }).catch(() => buildVisibleBasicModelOptionsData()),
+      computeModelOptionsData().catch(() =>
+        buildVisibleBasicModelOptionsData(),
+      ),
       loadAgentOptions().catch(() => undefined),
     ]);
     if (!isPending(proposal.proposalId)) return;

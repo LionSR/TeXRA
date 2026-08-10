@@ -10,7 +10,6 @@ import {
 } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
-import { AgentCategory } from '@shared/schemas/agent';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
@@ -86,7 +85,6 @@ describe('selectCliRunModel precedence', () => {
         { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
       ],
       {
-        agentCategory: AgentCategory.Workflow,
         apiMode: 'personal',
       },
     );
@@ -105,14 +103,14 @@ describe('selectCliRunModel precedence', () => {
       expect.arrayContaining([
         { model: OTHER_MODEL, reason: 'command-config' },
       ]),
-      expect.objectContaining({ agentCategory: AgentCategory.ToolUse }),
+      expect.objectContaining({ apiMode: 'personal' }),
     );
     expect(selectCliRunnableModelMock).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining([
         { model: 'deepseekR', reason: 'command-config' },
       ]),
-      expect.objectContaining({ agentCategory: AgentCategory.Workflow }),
+      expect.objectContaining({ apiMode: 'personal' }),
     );
   });
 
@@ -132,7 +130,7 @@ describe('selectCliRunModel precedence', () => {
       expect.arrayContaining([
         { model: 'staleConfiguredModel', reason: 'command-config' },
       ]),
-      expect.objectContaining({ agentCategory: AgentCategory.Workflow }),
+      expect.objectContaining({ apiMode: 'personal' }),
     );
     expect(mocks.initCliPlatform).toHaveBeenCalledWith({
       ...context,
@@ -161,7 +159,6 @@ describe('selectCliRunModel precedence', () => {
         { model: 'opus48T', reason: 'explicit-override' },
       ]),
       {
-        agentCategory: AgentCategory.Workflow,
         apiMode: 'personal',
       },
     );

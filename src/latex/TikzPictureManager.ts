@@ -5,7 +5,8 @@ import * as path from 'node:path';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils

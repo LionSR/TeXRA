@@ -2,7 +2,6 @@
 import { vi } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -19,6 +18,7 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 
 export function createAgentConfig(
   overrides: Partial<AgentConfig> = {},

@@ -9,7 +9,9 @@ import { fromPath } from 'pdf2pic';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { generateShortId } from '@utils/core';
-import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { getMimeType } from '@utils/files/mimeUtils';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { getConfig } from '@utils/config/configUtils';
 import { detectImageTool } from '@utils/system/toolUtils';

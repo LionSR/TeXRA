@@ -7,7 +7,8 @@ import { z } from 'zod';
 // Local imports
 import * as logger from '@logger/logUtils';
 import type { ExecResult, FileLocation } from '@shared/schemas';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';

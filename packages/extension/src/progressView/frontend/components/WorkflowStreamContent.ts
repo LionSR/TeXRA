@@ -4,12 +4,14 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
+// Local imports - shared schemas
+import { isWorkflowState, type WorkflowStreamState } from '@shared/schemas';
+
 // Local imports - progress view
 import { hasOutputFiles, totalRunUsage } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 import { renderStreamHeader } from './streamHeaderView';
-import { isWorkflowState, type WorkflowStreamState } from '../store';
 
 // Side-effect imports - sibling components
 import './TaskGroupList';

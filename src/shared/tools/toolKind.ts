@@ -22,15 +22,10 @@ export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash';
  *  - `read`: shows a file link instead of the raw input/output.
  *  - `write`: shows a file link plus syntax-highlighted content.
  *  - `bash`: shows a shell-style command/output block.
- *
- * `str_replace_based_edit_tool` is Anthropic's native tool-use alias for the
- * text-editor tool. It can surface verbatim instead of the canonical
- * `str_replace_editor`, but it is not a registered TeXRA tool name.
  */
 const TOOL_DISPLAY_KIND = {
   edit_file: 'edit',
   str_replace_editor: 'edit',
-  str_replace_based_edit_tool: 'edit',
 
   read_file: 'read',
 
@@ -40,10 +35,7 @@ const TOOL_DISPLAY_KIND = {
 } as const satisfies Readonly<Record<string, ToolDisplayKind>>;
 
 /** Canonical mapped keys that must remain present in the tool registry. */
-export type CanonicalToolDisplayName = Exclude<
-  keyof typeof TOOL_DISPLAY_KIND,
-  'str_replace_based_edit_tool'
->;
+export type CanonicalToolDisplayName = keyof typeof TOOL_DISPLAY_KIND;
 
 /** Look up a tool's display kind. The name is normalized first, so a
  *  provider-namespaced name from a delegated sub-agent (`claude:Bash`) or an
@@ -57,4 +49,21 @@ export function toolDisplayKind(toolName: string): ToolDisplayKind | undefined {
   return Object.hasOwn(TOOL_DISPLAY_KIND, key)
     ? TOOL_DISPLAY_KIND[key]
     : undefined;
+}
+
+/** True for tools whose input renders as an old/new diff. Beyond the exact
+ *  `edit` display-kind names above: a delegated Claude Code sub-agent reports
+ *  its own built-in tool names (`edit`, `multiedit`) verbatim, and some
+ *  provider tool-use variants carry a `str_replace`/`text_editor` substring
+ *  instead of one of the exact names. This is the single edit-classification
+ *  entry point so every host's diff treatment matches. */
+export function isEditLikeToolName(toolName: string): boolean {
+  if (toolDisplayKind(toolName) === 'edit') return true;
+  const name = normalizeToolName(toolName);
+  return (
+    name === 'edit' ||
+    name === 'multiedit' ||
+    name.includes('str_replace') ||
+    name.includes('text_editor')
+  );
 }

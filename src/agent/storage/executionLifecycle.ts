@@ -23,12 +23,13 @@ import {
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { KeyedMutex } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
   captureOwnedExecutionLease,
+  type OwnedExecutionLeaseScope,
   releaseOwnedExecutionLease,
 } from './executionLease';
 
@@ -88,6 +89,23 @@ export function writeWorkflowExecutionSnapshot(
   return enqueueMetaUpdate(executionId, () => ({ workflow }));
 }
 
+interface RegisterExecutionOptions {
+  readonly streamId: StreamTabId;
+  /** The run's identity, declared by the launch site — the durable authority. */
+  readonly identity: RunIdentity;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly parentExecutionId?: ExecutionId;
+  /**
+   * Display description persisted on `ExecutionMeta.description` — the one
+   * description authority (#9590 A4). Child-stream launchers pass the
+   * delegated task label here so it is durable at birth; the later
+   * `updateStreamDescription` session event is display-only and no longer
+   * writes a sidecar copy (#9590 Stage 6).
+   */
+  readonly description?: string;
+}
+
 /**
  * Register a new execution: persist config, metadata, and parent linkage.
  * Awaits all writes before returning.
@@ -96,22 +114,7 @@ export async function registerExecution(
   executionId: ExecutionId,
   record: RunRecord,
   agentName: string,
-  options: {
-    readonly streamId: StreamTabId;
-    /** The run's identity, declared by the launch site — the durable authority. */
-    readonly identity: RunIdentity;
-    /** Runtime behavior declared by the launch source, not UI visibility. */
-    readonly userFollowUpSupport?: UserFollowUpSupport;
-    readonly parentExecutionId?: ExecutionId;
-    /**
-     * Display description persisted on `ExecutionMeta.description` — the one
-     * description authority (#9590 A4). Child-stream launchers pass the
-     * delegated task label here so it is durable at birth; the later
-     * `updateStreamDescription` session event is display-only and no longer
-     * writes a sidecar copy (#9590 Stage 6).
-     */
-    readonly description?: string;
-  },
+  options: RegisterExecutionOptions,
 ): Promise<void> {
   const {
     streamId,
@@ -174,6 +177,24 @@ export async function registerExecution(
       throw error;
     }
   });
+}
+
+/**
+ * Register a detached child execution and capture its fresh lease as the
+ * caller's ownership scope — the register → capture pair every detached
+ * launch site shares, owned here so the launch failure path has one home.
+ * Wrap the pre-handoff launch work in `runWithOwnedExecutionLeaseLaunchGuard`
+ * (from `./executionLease`) inside the returned scope so a failed launch
+ * releases the lease instead of stranding it until the stale horizon.
+ */
+export async function registerOwnedExecution(
+  executionId: ExecutionId,
+  record: RunRecord,
+  agentName: string,
+  options: RegisterExecutionOptions,
+): Promise<OwnedExecutionLeaseScope> {
+  await registerExecution(executionId, record, agentName, options);
+  return captureOwnedExecutionLease(executionId);
 }
 
 /**

@@ -7,7 +7,6 @@ import {
 import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 
 import {
-  shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
   signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
@@ -15,14 +14,6 @@ import {
   type CliSubscriptionLoginTransportInit,
   type CliSubscriptionSignOutResult,
 } from './subscriptionLogin';
-import type { CliContext } from './cliContext';
-
-export function shouldUseGrokDeviceCode(
-  context: CliContext,
-  init: CliSubscriptionLoginTransportInit,
-): boolean {
-  return shouldUseSubscriptionDeviceCode(context, init);
-}
 
 export async function signInCliGrok(
   init: CliSubscriptionLoginTransportInit,
@@ -47,6 +38,16 @@ export function grokSignOutPreferenceMessage(
     disabledFor: 'xAI models',
     result,
   });
+}
+
+/**
+ * Full Grok sign-out outcome text, owned here so the auth command and the
+ * launcher account action report the same lines.
+ */
+export function grokSignOutOutcomeMessage(
+  result: CliSubscriptionSignOutResult,
+): string {
+  return `Signed out of Grok.\n${grokSignOutPreferenceMessage(result)}`;
 }
 
 export async function signOutCliGrok(): Promise<CliSubscriptionSignOutResult> {

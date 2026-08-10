@@ -1,8 +1,8 @@
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 
 // Local file imports

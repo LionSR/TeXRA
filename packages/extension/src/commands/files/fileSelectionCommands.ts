@@ -8,7 +8,7 @@ import { FILE_SELECTION_COMMAND_IDS } from '@frontend/files/fileSelectionRegistr
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'fileSelectionCommands';
 

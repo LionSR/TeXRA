@@ -23,7 +23,6 @@ import {
   rootRunPending as rootRunPendingSignal,
   rootRunStreamId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
-  streamAccessTarget,
   streams as streamsSignal,
   NO_BYPASS,
 } from '../state/cliState';
@@ -89,9 +88,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
-  const accessTarget = streamAccessTarget(statusSlice, sessionMeta);
+  // Use root-session access facts only before any stream exists.
+  const accessModel = statusSlice?.model ?? sessionMeta.model;
 
-  // Whether the selected stream's model/category would currently route through
+  // Whether the selected stream's model would currently route through
   // ChatGPT, Grok, or Kimi Code subscription access. The completed usage
   // snapshot supersedes this prospective value in the display. Polling
   // re-reads external config changes; an in-process access change also bumps
@@ -99,15 +99,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
   const [subscriptionResolution, setSubscriptionResolution] = useState<{
     readonly model: string;
-    readonly category: typeof accessTarget.category;
     readonly preferenceVersion: number;
     readonly active: boolean;
     readonly grokActive: boolean;
     readonly kimiCodeActive: boolean;
   }>();
   const resolutionCurrent =
-    subscriptionResolution?.model === accessTarget.model &&
-    subscriptionResolution.category === accessTarget.category &&
+    subscriptionResolution?.model === accessModel &&
     subscriptionResolution.preferenceVersion === codexPreferenceVersion;
   const resolution = resolutionCurrent ? subscriptionResolution : undefined;
   const subscriptionActive = resolution?.active ?? false;
@@ -130,26 +128,21 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     ): void => {
       if (cancelled) return;
       setSubscriptionResolution({
-        ...accessTarget,
+        model: accessModel,
         preferenceVersion: codexPreferenceVersion,
         active,
         grokActive,
         kimiCodeActive: kimiActive,
       });
     };
-    const agentCategory = accessTarget.category;
-    if (agentCategory === undefined) {
-      resolve(false, false, false);
-      return;
-    }
     let inFlight = false;
     const refresh = (): void => {
       if (inFlight) return; // Skip if the previous read has not resolved.
       inFlight = true;
       void Promise.all([
-        isCodexSubscriptionActive(accessTarget.model, agentCategory),
-        isXaiSubscriptionActive(accessTarget.model),
-        isKimiCodeSubscriptionActive(accessTarget.model),
+        isCodexSubscriptionActive(accessModel),
+        isXaiSubscriptionActive(accessModel),
+        isKimiCodeSubscriptionActive(accessModel),
       ])
         .then(([active, grokActive, kimiActive]) =>
           resolve(active, grokActive, kimiActive),
@@ -166,7 +159,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       cancelled = true;
       clearInterval(refreshTimer);
     };
-  }, [accessTarget.category, accessTarget.model, codexPreferenceVersion]);
+  }, [accessModel, codexPreferenceVersion]);
 
   // The relay spend snapshot only changes when the tier config is refetched
   // (5-minute TTL), so poll the cached accessor rather than waiting for the
@@ -217,7 +210,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    model: accessTarget.model,
+    model: accessModel,
     modelAccess,
     relayQuota,
     transcriptMode: sessionMeta.transcriptMode,

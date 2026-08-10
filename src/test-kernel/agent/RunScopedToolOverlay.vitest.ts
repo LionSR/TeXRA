@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - agent
 import { noopTrace } from '@agent/trace';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
@@ -18,6 +17,7 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Test support imports
+import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 

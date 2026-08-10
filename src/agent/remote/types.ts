@@ -1,11 +1,10 @@
 import { z } from 'zod';
 
 import {
-  AgentCategory,
   AgentSettingSchema,
   AgentPromptSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentNameSchema } from '@shared/schemas/agent';
+import { AgentNameSchema, AgentCategory } from '@shared/schemas/agent';
 
 /**
  * Remote agent list item from DB. Description is cached; YAML is source of truth.

@@ -1,6 +1,6 @@
 import pRetry from 'p-retry';
 
-import { isProviderErrorAutoRetryable } from '@common/errors/sdkErrorUtils';
+import { isProviderErrorAutoRetryable } from '@common/errors/sdkError/providerErrorFormat';
 
 /**
  * Bounded retry count for auxiliary provider calls (token counting, uploads,

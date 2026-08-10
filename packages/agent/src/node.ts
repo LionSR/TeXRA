@@ -1,12 +1,6 @@
 import process from 'node:process';
 
 // Local imports - types
-import type {
-  ConfigInspection,
-  ConfigProvider,
-  ConfigTarget,
-  Disposable,
-} from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -14,6 +8,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -22,67 +17,12 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import {
-  canonicalConfigKey,
-  createWatcherRegistry,
-} from '@shared/config/configKeys';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
   readonly agentsDir: string;
   readonly workspaceDir?: string;
   readonly storageDir?: string;
-}
-
-class MemoryConfigProvider implements ConfigProvider {
-  private readonly global = new Map<string, unknown>();
-  private readonly workspace = new Map<string, unknown>();
-  private readonly watchers = createWatcherRegistry();
-
-  get<T>(key: string, defaultValue?: T): T {
-    const storedKey = canonicalConfigKey(key);
-    const workspaceValue = this.workspace.get(storedKey) as T | undefined;
-    if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = this.global.get(storedKey) as T | undefined;
-    if (globalValue !== undefined) return globalValue;
-    return defaultValue as T;
-  }
-
-  async update<T>(
-    key: string,
-    value: T,
-    target: ConfigTarget = 'workspace',
-  ): Promise<void> {
-    const values = target === 'global' ? this.global : this.workspace;
-    const storedKey = canonicalConfigKey(key);
-    if (value === undefined) {
-      values.delete(storedKey);
-    } else {
-      values.set(storedKey, value);
-    }
-    this.watchers.notify(storedKey);
-  }
-
-  inspect<T = unknown>(key: string): ConfigInspection<T> {
-    const storedKey = canonicalConfigKey(key);
-    return {
-      globalValue: this.global.get(storedKey) as T | undefined,
-      workspaceValue: this.workspace.get(storedKey) as T | undefined,
-      effectiveValue: this.get<T>(key),
-    };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    const storedKey = canonicalConfigKey(key);
-    return this.workspace.has(storedKey) || this.global.has(storedKey);
-  }
-
-  watch(
-    key: string | readonly string[] | RegExp,
-    listener: () => void,
-  ): Disposable {
-    return this.watchers.add({ key, listener });
-  }
 }
 
 const environmentSecrets: PlatformSecrets = {

@@ -18,10 +18,10 @@ import type {
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import {
-  handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,

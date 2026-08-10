@@ -22,7 +22,7 @@ import {
   type CopilotRouteOverride,
 } from '@model/copilotRouting';
 import { includedModelAccess } from '@model/includedModelAccess';
-import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
@@ -42,7 +42,6 @@ import {
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { AgentCategory } from '@shared/schemas/agent';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import {
   getPreferKimiCode,
@@ -423,7 +422,6 @@ function withCompatibilityRoutingMode(
  */
 export async function createModelHandler(
   originalConfig: ModelConfig,
-  agentCategory?: AgentCategory,
   responseTextProcessing?: ResponseTextProcessing,
   copilotRouteOverride?: CopilotRouteOverride,
 ): Promise<ModelHandler> {
@@ -446,7 +444,7 @@ export async function createModelHandler(
     config,
     compatibilityKey,
     useOpenRouter,
-    { allowCodexSubscriptionOverride: true, agentCategory },
+    { allowCodexSubscriptionOverride: true },
     responseTextProcessing,
   );
 }
@@ -459,7 +457,6 @@ export async function createModelHandler(
 export async function createModelHandlerForCompatibilityKey(
   originalConfig: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey,
-  agentCategory?: AgentCategory,
   responseTextProcessing?: ResponseTextProcessing,
 ): Promise<ModelHandler> {
   const routedConfig = withCompatibilityRoutingMode(
@@ -474,7 +471,6 @@ export async function createModelHandlerForCompatibilityKey(
     {
       allowCodexSubscriptionOverride:
         compatibilityKey === 'ModelHandlerOpenAIResponse',
-      agentCategory,
     },
     responseTextProcessing,
   );
@@ -486,7 +482,6 @@ async function createModelHandlerForResolvedCompatibilityKey(
   useOpenRouter: boolean,
   options: {
     allowCodexSubscriptionOverride: boolean;
-    agentCategory: AgentCategory | undefined;
   },
   responseTextProcessing?: ResponseTextProcessing,
 ): Promise<ModelHandler> {
@@ -510,11 +505,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
     options.allowCodexSubscriptionOverride &&
     compatibilityKey !== 'ModelHandlerValidation' &&
     compatibilityKey !== 'ModelHandlerVscodeLm' &&
-    resolveCodexSubscriptionCapabilitiesForAgentCategory(
-      config,
-      useOpenRouter,
-      options.agentCategory,
-    ) !== null;
+    resolveCodexSubscriptionCapabilities(config, useOpenRouter) !== null;
   if (codexSubscriptionEligible) {
     let codexSessionRoutable: boolean;
     try {

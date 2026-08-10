@@ -6,7 +6,6 @@ import {
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -39,6 +38,7 @@ import {
 } from '@model/codex/codexPreference';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { AgentCategory } from '@shared/schemas';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   dispatchProgressViewInbound,
@@ -50,7 +50,9 @@ import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
 } from '@tools/approval';
-import { AbsoluteFS, pathToLocation, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   getGLMCodingPlan,
   getPreferKimiCode,
@@ -99,7 +101,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     private readonly host: PromptHost,
     private readonly interactions: ProgressHostInteractions,
   ) {
-    super('ProgressView', { trackActiveView: true });
+    super('ProgressView');
 
     this.recordingManager = new RecordingManager({
       buildRecordingMessage: (message) => ({
@@ -200,10 +202,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       onPolishError: (stream, error) => this.reportPolishError(stream, error),
       loadFollowUpOptions: async () => {
-        const { agentOptions, modelOptions } = await loadOptions();
+        const { agentOptions, modelOptionsByCategory } = await loadOptions();
         return {
           toolUseAgentsData: agentOptions.toolUse,
-          modelOptionsData: modelOptions,
+          modelOptionsData: modelOptionsByCategory.workflow,
         };
       },
       postToRenderer: (message) => {
@@ -620,8 +622,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       getAgentCategory: (agent) =>
         getAgent(agent, AgentCategory.ToolUse)?.category,
       loadModelOptions: async () => {
-        const { modelOptions } = await loadOptions();
-        return modelOptions;
+        const { modelOptionsByCategory } = await loadOptions();
+        return modelOptionsByCategory.workflow;
       },
       state: {
         getRunMetadata: (stream) =>

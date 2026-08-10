@@ -1,7 +1,7 @@
 // Local imports
 import { ExecutionLeaseSchema } from '@agent/storage/executionLease';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 /**
  * A lease owner that is never this process: local ownership always uses a

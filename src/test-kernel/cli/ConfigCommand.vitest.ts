@@ -22,8 +22,9 @@ vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
   initLocalCliPlatform: mocks.initLocalCliPlatform,
 }));
 
-vi.mock('@cli/runtime/agentRoster', () => ({
-  cliAgentRosterController: () => ({
+vi.mock('@agent/index', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/index')>()),
+  createWorkspaceAgentRosterController: () => ({
     clearDefaultTeam: mocks.clearDefaultTeam,
     getVisibleAgents: mocks.getVisibleAgents,
     setAll: mocks.setAll,
@@ -33,6 +34,9 @@ vi.mock('@cli/runtime/agentRoster', () => ({
     setInherited: mocks.setInherited,
     setTeam: mocks.setTeam,
   }),
+}));
+
+vi.mock('@cli/runtime/agentRoster', () => ({
   formatCliAgentRoster: () => 'Agent roster',
   readCliAgentRoster: mocks.readCliAgentRoster,
 }));

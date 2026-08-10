@@ -68,7 +68,6 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 }));
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
@@ -78,6 +77,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 

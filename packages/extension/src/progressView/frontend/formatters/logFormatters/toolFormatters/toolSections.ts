@@ -28,7 +28,7 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
-import { toolDisplayKind } from '@shared/tools/toolKind';
+import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -95,13 +95,15 @@ function buildFileGroupsSection(
  * Common shape of the edit_file and str_replace_editor tool inputs, for
  * display purposes only.
  *
- * No single canonical schema validates this shape: this dispatch entry
- * ('edit' display kind) covers three different tool names — edit_file
- * (`EditInputSchema`), str_replace_editor (`TextEditorInputSchema`, a
- * discriminated union where only the `str_replace` branch has
- * old_str/new_str), and str_replace_based_edit_tool, which is Anthropic's
- * native tool-use alias and is not a registered TeXRA tool with its own
- * schema at all. Rather than fabricate a schema spanning all three, this
+ * No single canonical schema validates this shape: this dispatch entry (the
+ * shared `isEditLikeToolName` classifier) covers three different registered
+ * tool names — edit_file (`EditInputSchema`), str_replace_editor
+ * (`TextEditorInputSchema`, a discriminated union where only the `str_replace`
+ * branch has old_str/new_str), and str_replace_based_edit_tool, which is
+ * Anthropic's native tool-use alias — plus the verbatim built-in names
+ * (`edit`, `multiedit`, provider `str_replace`/`text_editor` variants) a
+ * delegated sub-agent reports, none of which has its own TeXRA schema. Rather
+ * than fabricate a schema spanning all of them, this
  * keeps the type-only cast but narrows with explicit runtime `typeof` checks
  * below before any field is used.
  */
@@ -605,8 +607,7 @@ const TOOL_SECTION_BUILDERS: Array<{
   build: (ctx: ToolSectionContext) => TemplateResult[];
 }> = [
   {
-    match: (ctx) =>
-      toolDisplayKind(ctx.toolName) === 'edit' && isObject(ctx.input),
+    match: (ctx) => isEditLikeToolName(ctx.toolName) && isObject(ctx.input),
     build: buildEditDiffInputSections,
   },
   {

@@ -76,7 +76,7 @@ describe('extension subscription usage credential lifecycle', () => {
     await handler.refreshAfterProviderKeyChange('glm');
 
     expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
-    expect(usage.getUsage).toHaveBeenCalledTimes(4);
+    expect(usage.getUsage).toHaveBeenCalledTimes(3);
     expect(posted).toContainEqual(
       expect.objectContaining({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
@@ -113,7 +113,7 @@ describe('extension subscription usage credential lifecycle', () => {
     });
 
     expect(usage.invalidate).not.toHaveBeenCalled();
-    expect(usage.getUsage).toHaveBeenCalledTimes(4);
+    expect(usage.getUsage).toHaveBeenCalledTimes(3);
     expect(posted).toContainEqual(
       expect.objectContaining({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,

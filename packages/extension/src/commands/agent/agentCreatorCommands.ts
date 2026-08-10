@@ -5,7 +5,6 @@ import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import {
-  type AgentCategory,
   type AgentCreatorUI,
   type CreatorConfig,
   TOOL_GROUPS,
@@ -16,7 +15,8 @@ import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { AbsoluteFS } from '@utils/files';
+import type { AgentCategory } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const CHANNEL = 'AgentCreator';
 

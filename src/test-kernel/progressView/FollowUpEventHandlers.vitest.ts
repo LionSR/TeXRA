@@ -25,14 +25,14 @@ import {
 } from '@progressView/frontend/progressState';
 import {
   createInitialState,
-  isToolUseState,
   type ProgressState,
-  type StreamState,
 } from '@progressView/frontend/store';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   createStreamState,
+  isToolUseState,
+  type StreamState,
   type StreamTabId,
 } from '@shared/schemas';
 

@@ -25,7 +25,6 @@ describe('Codex subscription preference', () => {
       platform().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
     ).toMatchObject({
       workspaceValue: true,
-      effectiveValue: true,
     });
   });
 
@@ -41,7 +40,6 @@ describe('Codex subscription preference', () => {
     expect(config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY)).toMatchObject({
       globalValue: true,
       workspaceFolderValue: false,
-      effectiveValue: false,
     });
   });
 });

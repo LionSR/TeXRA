@@ -1,7 +1,8 @@
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';

@@ -13,12 +13,13 @@ import type {
   InquiryThreadUpdatedEvent,
   PhaseStage,
   StreamLifecycleStatus,
+  StreamState,
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import type { FollowupOptionsState, StreamState } from './store';
+import type { FollowupOptionsState } from './store';
 
 // Local imports - progress view components
 import type { PermissionState } from './permissionState';

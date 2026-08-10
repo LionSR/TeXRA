@@ -10,7 +10,7 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
-import { buildFailedRetryInfo } from '@common/errors';
+import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';

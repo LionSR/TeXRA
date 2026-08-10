@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -15,6 +14,7 @@ import {
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 // Local file imports
+import { AgentCategory } from '@shared/schemas';
 import {
   createOutputFile,
   createWorkflowConfig,

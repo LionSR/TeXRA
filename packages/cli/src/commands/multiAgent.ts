@@ -1,9 +1,8 @@
 import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
-import { byCategory } from '@shared/schemas';
+import { byCategory, AgentCategory } from '@shared/schemas';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
@@ -95,7 +94,7 @@ function writeMultiAgentRunResult(
 async function runMultiAgentList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const presets = readCliMultiAgentPresets();
-  const { plans, remoteAgentLoadAttempted } =
+  const { plans, remoteCatalogRefreshAttempted } =
     await loadCliMultiAgentPresetPlanSet(presets);
   const records = cliMultiAgentPresetListRecords(plans);
 
@@ -103,7 +102,7 @@ async function runMultiAgentList(context: CliContext): Promise<number> {
     json: records,
     ndjson: cliMultiAgentPresetNdjsonRecords(plans),
     text: formatCliMultiAgentPresetList(plans, {
-      includeLoginHint: !remoteAgentLoadAttempted,
+      includeLoginHint: !remoteCatalogRefreshAttempted,
     }),
   });
   return CliExitCode.Success;
@@ -115,15 +114,16 @@ async function runMultiAgentShow(
 ): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
 
-  const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan({
-    preset: presetIdOrName,
-  });
+  const { plan, remoteCatalogRefreshAttempted } =
+    await loadCliMultiAgentRunPlan({
+      preset: presetIdOrName,
+    });
 
   emitCliResult(context, {
     json: plan,
     ndjson: { kind: 'multi-agent-preset-inspection', plan },
     text: formatCliMultiAgentPresetInspection(plan, {
-      includeLoginHint: !remoteAgentLoadAttempted,
+      includeLoginHint: !remoteCatalogRefreshAttempted,
     }),
   });
   return CliExitCode.Success;
@@ -142,17 +142,15 @@ export async function runMultiAgentPreset(
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
-  const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan(
-    init,
-    {
+  const { plan, remoteCatalogRefreshAttempted } =
+    await loadCliMultiAgentRunPlan(init, {
       reloadRemoteAgents: !rejectsHeadlessAsk,
-    },
-  );
+    });
   if (rejectsHeadlessAsk) {
     writeTextStderr(headlessAskMultiAgentMessage(plan.preset.id));
     return CliExitCode.Usage;
   }
-  if (remoteAgentLoadAttempted) {
+  if (remoteCatalogRefreshAttempted) {
     const inspectAdvice = `Run \`texra multi-agent show ${plan.preset.id}\` to view the resolved team.`;
     // Otherwise the silent second load makes runs behave differently from a
     // signed-out shell with no visible reason.

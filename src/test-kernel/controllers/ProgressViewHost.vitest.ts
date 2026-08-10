@@ -14,12 +14,12 @@ vi.mock('@platform/platform', () => ({
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RunIdentity } from '@shared/schemas';
 
 // Local file imports
+import { AgentCategory } from '@shared/schemas';
 import {
   createAgentConfig,
   createWorkflowConfig,

@@ -11,7 +11,7 @@ import {
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import type { FileLocation } from '@shared/schemas';
-import { createWorkspaceLocation } from '@utils/files';
+import { createWorkspaceLocation } from '@utils/files/fileLocation';
 
 function absolutePath(...segments: string[]): string {
   return path.join(path.sep, ...segments);

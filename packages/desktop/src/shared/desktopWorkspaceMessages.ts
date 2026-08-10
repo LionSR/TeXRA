@@ -42,9 +42,17 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
 } as const;
 
 // ── Editor ──
+//
+// Editor file I/O is request/response RPC over the fire-and-forget channel.
+// The renderer tags each request with a `requestId` (the same correlation
+// pattern as `desktopPromptMessages.ts`) and the main process echoes it in
+// the response, so concurrent requests for the same path cannot
+// cross-resolve. `path`/`directory` still ride along for the main process's
+// own use and for logging context.
 
 const DesktopListFilesMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES),
+  requestId: z.uuid(),
   directory: z.string().prefault(''),
 });
 
@@ -55,40 +63,47 @@ const DesktopWorkspaceFileEntrySchema = z.object({
 
 export const DesktopFilesListedMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED),
+  requestId: z.uuid(),
   directory: z.string(),
   files: z.array(DesktopWorkspaceFileEntrySchema),
 });
 
 export const DesktopFilesListErrorMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR),
+  requestId: z.uuid(),
   directory: z.string(),
   message: z.string(),
 });
 
 const DesktopReadFileMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.READ_FILE),
+  requestId: z.uuid(),
   path: z.string(),
 });
 
 export const DesktopFileReadMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_READ),
+  requestId: z.uuid(),
   path: z.string(),
   contents: z.string(),
 });
 
 const DesktopWriteFileMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE),
+  requestId: z.uuid(),
   path: z.string(),
   contents: z.string(),
 });
 
 export const DesktopFileWrittenMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN),
+  requestId: z.uuid(),
   path: z.string(),
 });
 
 export const DesktopFileErrorMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR),
+  requestId: z.uuid(),
   path: z.string(),
   message: z.string(),
 });

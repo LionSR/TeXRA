@@ -1,6 +1,6 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { AgentCategory } from '@shared/schemas';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
@@ -52,7 +52,6 @@ async function gatherOptions(apiMode: ApiAccessMode): Promise<{
   );
   const models = await getCliModelAccessList({
     apiMode,
-    agentCategory: AgentCategory.ToolUse,
   });
   return { agents, models };
 }

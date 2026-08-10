@@ -8,8 +8,10 @@ const ACTIVITY_LABEL: Record<SessionTitleState, string | undefined> = {
 
 /**
  * Format the product title shared by native windows and terminal tabs.
- * Optional `activityDetail` appends to the state label (e.g. a spinner frame
- * for the running state) without string-splicing the final title.
+ * Optional `activityDetail` (e.g. a live spinner frame) REPLACES the state
+ * label for the running state — an animated frame already says "running",
+ * so `TeXRA — ⠋ — proj` instead of `TeXRA — Running ⠋ — proj`; the label
+ * stays when there is no live detail to carry it.
  */
 export function formatSessionTitle(
   project: string | undefined,
@@ -18,7 +20,10 @@ export function formatSessionTitle(
 ): string {
   const label = ACTIVITY_LABEL[state];
   let activity = label;
-  if (label != null && activityDetail) {
+  if (state === 'running' && activityDetail) {
+    // A live spinner frame already says "running"; no redundant word.
+    activity = activityDetail;
+  } else if (label != null && activityDetail) {
     activity = `${label} ${activityDetail}`;
   }
   return ['TeXRA', activity, project]

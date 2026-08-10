@@ -29,7 +29,6 @@ export interface ConfigInspection<T = unknown> {
   globalValue?: T;
   workspaceValue?: T;
   workspaceFolderValue?: T;
-  effectiveValue?: T;
 }
 
 /**

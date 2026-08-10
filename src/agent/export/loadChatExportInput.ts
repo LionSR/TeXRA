@@ -23,10 +23,10 @@
  * (and no risk of it throwing on a corrupt record) is needed.
  */
 
-import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,

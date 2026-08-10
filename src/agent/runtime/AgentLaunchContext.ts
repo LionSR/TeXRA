@@ -18,7 +18,6 @@ import {
 import { getExecutionStore } from '@agent/storage';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
   AttachedMemoryMissesSchema,
@@ -36,7 +35,8 @@ import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/m
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import { AgentError, getSdkErrorMessage } from '@common/errors';
+import { AgentError } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -47,7 +47,7 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import { INSTRUCTION_ACTION } from '@shared/schemas';
+import { AgentCategory, INSTRUCTION_ACTION } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
@@ -305,12 +305,10 @@ async function assembleAgentLaunchContext(
       ? await createModelHandlerForCompatibilityKey(
           modelConfig,
           modelHandlerCompatibilityKey,
-          setting.agentCategory,
           session.responseTextProcessing,
         )
       : await createModelHandler(
           modelConfig,
-          setting.agentCategory,
           session.responseTextProcessing,
           input.copilotRouteOverride,
         ),
@@ -392,7 +390,7 @@ async function assembleAgentLaunchContext(
     );
   }
 
-  const agentPath = path.dirname(resolution.definitionPath);
+  const agentPath = path.dirname(resolution.entry.path);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
   const runAbortController = new AbortController();
   const runScope = createRunScope({

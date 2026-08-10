@@ -349,7 +349,7 @@ describe('CLI multi-agent run command', () => {
       preset: 'mathematician',
     });
 
-    expect(result.remoteAgentLoadAttempted).toBe(true);
+    expect(result.remoteCatalogRefreshAttempted).toBe(true);
     expect(result.plan.rootAgent?.name).toBe('orchestrator');
     expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
@@ -369,7 +369,7 @@ describe('CLI multi-agent run command', () => {
       preset: 'mathematician',
     });
 
-    expect(result.remoteAgentLoadAttempted).toBe(false);
+    expect(result.remoteCatalogRefreshAttempted).toBe(false);
     expect(mocks.loadAgents).toHaveBeenCalledOnce();
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.refreshAgents).not.toHaveBeenCalled();
@@ -395,7 +395,7 @@ describe('CLI multi-agent run command', () => {
       },
     ]);
 
-    expect(result.remoteAgentLoadAttempted).toBe(true);
+    expect(result.remoteCatalogRefreshAttempted).toBe(true);
     expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });

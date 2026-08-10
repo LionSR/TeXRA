@@ -21,8 +21,8 @@ import type {
   RunOutcome,
   StreamTabId,
 } from '@shared/schemas';
-import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 

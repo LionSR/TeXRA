@@ -91,8 +91,9 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
-import { StorageFS, WorkspaceFS } from '@utils/files';
 import { debounce } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
@@ -146,7 +147,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     context: vscode.ExtensionContext,
     subscriptionUsage: SubscriptionUsageReader = new SubscriptionUsageService(),
   ) {
-    super('SettingsView', { trackActiveView: true });
+    super('SettingsView');
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,

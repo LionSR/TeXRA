@@ -1,11 +1,11 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   OutputFileInfo,
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { unique } from '@utils/core';
 

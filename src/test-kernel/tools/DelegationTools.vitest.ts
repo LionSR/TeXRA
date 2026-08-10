@@ -29,7 +29,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-vi.mock('@tools/delegation/childRunDelivery', () => ({
+vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
@@ -45,7 +45,7 @@ import {
   withToolUseSubagentHandoffInstruction,
   workingDirectoryField,
 } from '@tools/delegation/inputFields';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 function stat(size: number): FileStat {
   return {

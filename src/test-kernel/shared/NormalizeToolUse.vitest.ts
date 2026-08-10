@@ -80,6 +80,44 @@ describe('normalizeToolUseData', () => {
     expect(topLevel).not.toHaveProperty('parsed');
   });
 
+  it('derives the exit code from prose when no structured field exists', () => {
+    const fromError = normalizeToolUseData({
+      toolName: 'Bash',
+      error: 'Command failed (exit 7)',
+      status: 'failed',
+    });
+    const fromSummary = normalizeToolUseData({
+      toolName: 'Bash',
+      output: {
+        summary: 'Background bash failed with exit code 2.',
+        isError: true,
+      },
+      status: 'completed',
+    });
+
+    expect(fromError?.exitCode).toBe(7);
+    expect(fromSummary?.exitCode).toBe(2);
+  });
+
+  it('prefers a structured exit code over prose', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Bash',
+      exit_code: 7,
+      error: 'Command failed (exit 3)',
+      status: 'failed',
+    });
+    expect(normalized?.exitCode).toBe(7);
+  });
+
+  it('leaves exitCode unset when prose mentions no exit code', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Bash',
+      error: 'cancelled by user',
+      status: 'failed',
+    });
+    expect(normalized?.exitCode).toBeUndefined();
+  });
+
   it('reports errors via isError and errorText', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',

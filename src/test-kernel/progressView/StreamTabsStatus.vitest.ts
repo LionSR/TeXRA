@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
-import type { StreamState } from '@progressView/frontend/store';
 import {
   AgentCategory,
   createStreamState,
@@ -11,6 +10,7 @@ import {
   STREAM_STATUS,
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
+  type StreamState,
   type StreamTabInfo,
 } from '@shared/schemas';
 

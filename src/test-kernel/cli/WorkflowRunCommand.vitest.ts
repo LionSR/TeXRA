@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { runWorkflowAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -12,7 +11,7 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => {
@@ -48,7 +47,8 @@ vi.mock('@agent/index', () => ({
   loadAgents: vi.fn(),
 }));
 
-vi.mock('@utils/files', () => ({
+vi.mock('@utils/files/runStorageFs', async (importActual) => ({
+  ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
   getRunDir: vi.fn((executionId: string) => `/tmp/runs/${executionId}`),
 }));
 

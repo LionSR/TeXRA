@@ -9,7 +9,8 @@ import { isFileNotFoundError } from '@common/errors';
 
 // Local imports - utils
 import { filterNotNull } from '@utils/core';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
 import { safeHomedir } from '@utils/system/platformPaths';
 

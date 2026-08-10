@@ -27,6 +27,8 @@ import {
 } from '@shared/approvalPolicy';
 import {
   byCategory,
+  DEFAULT_GLOBAL_STREAMING,
+  DEFAULT_QUOTA_AUTO_SWITCHED,
   SETTINGS_TAB,
   type AgentCategory,
   type ByCategory,
@@ -142,9 +144,13 @@ export const spendingStatus = trackedSignal<SpendingStatus | null>(() => null);
 export const spendingStatusError = trackedSignal<SpendingStatusError | null>(
   () => null,
 );
-export const quotaAutoSwitched = trackedSignal(() => false);
+export const quotaAutoSwitched = trackedSignal(
+  () => DEFAULT_QUOTA_AUTO_SWITCHED,
+);
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
-export const globalStreamingDefault = trackedSignal(() => true);
+export const globalStreamingDefault = trackedSignal(
+  () => DEFAULT_GLOBAL_STREAMING,
+);
 export const providerKeyModal = trackedSignal<ProviderKeyModalTarget | null>(
   () => null,
 );

@@ -24,8 +24,8 @@ import {
   migrateSharedState,
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import {
   inferAndLogPersistedModelHandlerCompatibilityKey,
   inferPersistedModelHandlerCompatibilityKey,
@@ -189,7 +189,7 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    const { messages, stateSlices } = migrationResult.data;
+    const { stateSlices } = migrationResult.data;
     if (stateSlices === null) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
@@ -205,7 +205,6 @@ async function retrieveToolUseResumeData(
       migrationResult.data.modelHandlerCompatibilityKey ??
       inferAndLogPersistedModelHandlerCompatibilityKey(
         currentConfig.model,
-        messages,
         logger,
       );
 
@@ -267,10 +266,7 @@ async function retrieveWorkflowResumeData(
     });
     const modelHandlerCompatibilityKey =
       parseResult.data.modelHandlerCompatibilityKey ??
-      inferPersistedModelHandlerCompatibilityKey(
-        agentConfig.model,
-        parseResult.data.conversation,
-      );
+      inferPersistedModelHandlerCompatibilityKey(agentConfig.model);
     return {
       type: 'workflow',
       agentConfig,
