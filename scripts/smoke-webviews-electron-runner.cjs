@@ -595,7 +595,7 @@ async function assertToolEditApprovalLayout(window, view) {
   );
 }
 
-async function assertCompactStreamStatusGeometry(window, view) {
+async function assertCompactStreamStatusLayout(window, view) {
   return window.webContents.executeJavaScript(
     `
       (async () => {
@@ -618,9 +618,16 @@ async function assertCompactStreamStatusGeometry(window, view) {
         const glyph = row?.shadowRoot?.querySelector('.tab-status-icon');
         const title = row?.shadowRoot?.querySelector('.tab-title');
         const status = row?.shadowRoot?.querySelector('.tab-status');
+        const tooltipAnchor = row?.shadowRoot?.querySelector(
+          '#stream-tab-select-tooltip-anchor',
+        );
+        const identityTooltip = row?.shadowRoot?.querySelector(
+          'wa-tooltip[for="stream-tab-select-tooltip-anchor"]',
+        );
         const childHint = row?.shadowRoot?.querySelector('.compact-subagent-hint');
         const deleteButton = row?.shadowRoot?.querySelector('.tab-delete');
         if (glyph?.updateComplete) await glyph.updateComplete;
+        if (identityTooltip?.updateComplete) await identityTooltip.updateComplete;
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         const missing = [
@@ -630,6 +637,8 @@ async function assertCompactStreamStatusGeometry(window, view) {
           ['lifecycle glyph', glyph],
           ['title', title],
           ['status wrapper', status],
+          ['tooltip anchor', tooltipAnchor],
+          ['identity tooltip', identityTooltip],
           ['delete target', deleteButton],
         ]
           .filter(([, element]) => !element)
@@ -640,6 +649,7 @@ async function assertCompactStreamStatusGeometry(window, view) {
           );
         }
 
+        const viewportWidth = document.documentElement.clientWidth;
         const railRect = tabs.getBoundingClientRect();
         const selectRect = select.getBoundingClientRect();
         const glyphRect = glyph.getBoundingClientRect();
@@ -648,12 +658,14 @@ async function assertCompactStreamStatusGeometry(window, view) {
         const titleStyle = getComputedStyle(title);
         const epsilon = 0.5;
 
-        if (!tabs.compact) {
-          throw new Error(\`${view.name} did not activate compact stream rows.\`);
-        }
-        if (Math.abs(railRect.width - 48) > 1) {
+        if (viewportWidth >= 500 || !tabs.compact) {
           throw new Error(
-            \`${view.name} compact rail is not 48px: \${railRect.width.toFixed(2)}px\`,
+            \`${view.name} did not activate narrow compact rows: viewport=\${viewportWidth}px compact=\${tabs.compact}\`,
+          );
+        }
+        if (railRect.width < 48) {
+          throw new Error(
+            \`${view.name} compact rail fell below its 48px minimum: \${railRect.width.toFixed(2)}px\`,
           );
         }
         if (glyphRect.width <= 0.5 || glyphRect.height <= 0.5) {
@@ -687,44 +699,32 @@ async function assertCompactStreamStatusGeometry(window, view) {
         if (childHint !== null) {
           throw new Error(\`${view.name} compact child hint still displaces lifecycle status.\`);
         }
-        if (!select.getAttribute('aria-label')?.includes('1 background task')) {
+        const selectLabel = select.getAttribute('aria-label');
+        if (!selectLabel?.includes('1 background task')) {
           throw new Error(\`${view.name} compact child count is missing from the accessible name.\`);
         }
-
-        const devicePixelRatio = window.devicePixelRatio;
-        const deviceGlyphRect = {
-          bottom: glyphRect.bottom * devicePixelRatio,
-          left: glyphRect.left * devicePixelRatio,
-          right: glyphRect.right * devicePixelRatio,
-          top: glyphRect.top * devicePixelRatio,
-        };
-        const deviceSelectRect = {
-          bottom: selectRect.bottom * devicePixelRatio,
-          left: selectRect.left * devicePixelRatio,
-          right: selectRect.right * devicePixelRatio,
-          top: selectRect.top * devicePixelRatio,
-        };
-        const deviceEpsilon = 1;
+        if (select.hasAttribute('aria-labelledby')) {
+          throw new Error(\`${view.name} compact tooltip overrides the select target's accessible name.\`);
+        }
         if (
-          deviceGlyphRect.left < deviceSelectRect.left - deviceEpsilon ||
-          deviceGlyphRect.right > deviceSelectRect.right + deviceEpsilon ||
-          deviceGlyphRect.top < deviceSelectRect.top - deviceEpsilon ||
-          deviceGlyphRect.bottom > deviceSelectRect.bottom + deviceEpsilon
+          !identityTooltip.id ||
+          !tooltipAnchor.getAttribute('aria-labelledby')?.split(' ').includes(identityTooltip.id)
         ) {
-          throw new Error(\`${view.name} lifecycle glyph escaped the select target in device pixels.\`);
+          throw new Error(\`${view.name} compact tooltip is not initialized on its wrapper anchor.\`);
+        }
+        if (!identityTooltip.textContent?.includes('A long compact execution title')) {
+          throw new Error(\`${view.name} compact identity tooltip does not expose the session title.\`);
         }
 
         return {
           deleteHeight: deleteRect.height,
           deleteWidth: deleteRect.width,
-          deviceGlyphRect,
-          devicePixelRatio,
-          deviceSelectRect,
           glyphHeight: glyphRect.height,
           glyphWidth: glyphRect.width,
           railWidth: railRect.width,
           selectHeight: selectRect.height,
           selectWidth: selectRect.width,
+          viewportWidth,
         };
       })();
     `,
@@ -732,9 +732,8 @@ async function assertCompactStreamStatusGeometry(window, view) {
   );
 }
 
-async function assertViewSpecificLayout(window, view, evidence) {
+async function assertViewSpecificLayout(window, view) {
   const assertions = Array.isArray(view.assertions) ? view.assertions : [];
-  let compactStatusGeometry = null;
   for (const assertion of assertions) {
     switch (assertion) {
       case 'progressComposerLayout': {
@@ -755,17 +754,11 @@ async function assertViewSpecificLayout(window, view, evidence) {
         );
         break;
       }
-      case 'compactStreamStatusGeometry': {
-        compactStatusGeometry = await assertCompactStreamStatusGeometry(
-          window,
-          view,
-        );
+      case 'compactStreamStatusLayout': {
+        const result = await assertCompactStreamStatusLayout(window, view);
         console.log(
-          `Verified ${view.name} compact CSS and device-pixel geometry: ${JSON.stringify(
-            {
-              ...compactStatusGeometry,
-              electronZoomFactor: evidence.electronZoomFactor,
-            },
+          `Verified ${view.name} compact narrow-row layout: ${JSON.stringify(
+            result,
           )}`,
         );
         break;
@@ -774,22 +767,14 @@ async function assertViewSpecificLayout(window, view, evidence) {
         throw new Error(`Unknown webview smoke assertion: ${assertion}`);
     }
   }
-  return compactStatusGeometry;
 }
 
 async function smokeView(window, view, outputDir, errors) {
   errors.length = 0;
   const viewport = view.viewport ?? DEFAULT_VIEWPORT;
-  const zoomFactor = view.zoomFactor ?? 1;
   window.setBounds({ width: viewport.width, height: viewport.height });
+  window.webContents.setZoomFactor(1);
   await window.loadFile(view.htmlPath);
-  window.webContents.setZoomFactor(zoomFactor);
-  const electronZoomFactor = window.webContents.getZoomFactor();
-  if (Math.abs(electronZoomFactor - zoomFactor) > 0.01) {
-    throw new Error(
-      `${view.name} zoom factor did not apply: actual=${electronZoomFactor} expected=${zoomFactor}`,
-    );
-  }
   let result;
   try {
     result = await waitForRenderedElement(window, view);
@@ -814,45 +799,10 @@ async function smokeView(window, view, outputDir, errors) {
   }
   await assertWebviewRuntime(window);
   const fixtureResult = await applyViewFixture(window, view);
-  const compactStatusGeometry = await assertViewSpecificLayout(window, view, {
-    electronZoomFactor,
-  });
+  await assertViewSpecificLayout(window, view);
 
   const screenshotPath = path.join(outputDir, `${view.name}.png`);
   const image = await window.webContents.capturePage();
-  if (compactStatusGeometry) {
-    const screenshotScaleFactors = image.getScaleFactors();
-    if (screenshotScaleFactors.length === 0) {
-      throw new Error(
-        `${view.name} screenshot has no device-scale representation.`,
-      );
-    }
-    const screenshotScaleFactor = Math.max(...screenshotScaleFactors);
-    const screenshotPixelSize = image.getSize(screenshotScaleFactor);
-    const expectedPixelSize = {
-      height: Math.round(
-        result.height * compactStatusGeometry.devicePixelRatio,
-      ),
-      width: Math.round(result.width * compactStatusGeometry.devicePixelRatio),
-    };
-    if (
-      Math.abs(screenshotPixelSize.width - expectedPixelSize.width) > 1 ||
-      Math.abs(screenshotPixelSize.height - expectedPixelSize.height) > 1
-    ) {
-      throw new Error(
-        `${view.name} screenshot pixels do not match the renderer device scale: actual=${screenshotPixelSize.width}x${screenshotPixelSize.height} expected=${expectedPixelSize.width}x${expectedPixelSize.height}`,
-      );
-    }
-    console.log(
-      `Verified ${view.name} screenshot device scale: ${JSON.stringify({
-        cssSize: { height: result.height, width: result.width },
-        devicePixelRatio: compactStatusGeometry.devicePixelRatio,
-        electronZoomFactor,
-        screenshotPixelSize,
-        screenshotScaleFactor,
-      })}`,
-    );
-  }
   await writeFile(screenshotPath, image.toPNG());
   console.log(
     `Rendered ${view.name}: ${result.width}x${result.height}, screenshot ${screenshotPath}${

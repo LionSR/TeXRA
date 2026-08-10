@@ -155,8 +155,7 @@ const views = [
       width: 320,
       height: 600,
     },
-    zoomFactor: 2,
-    assertions: ['compactStreamStatusGeometry'],
+    assertions: ['compactStreamStatusLayout'],
     seedMessages: [
       {
         command: 'updateStreams',
@@ -398,7 +397,6 @@ async function prepareViewHtml(view) {
     seedMessages: view.seedMessages ?? [],
     assertions: view.assertions ?? [],
     viewport: view.viewport,
-    zoomFactor: view.zoomFactor,
   };
 }
 

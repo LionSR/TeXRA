@@ -226,14 +226,29 @@ describe('stream-tab lifecycle distinction', () => {
         ?.querySelector('#stream-tab-select-button')
         ?.getAttribute('aria-label'),
     ).toContain('Status: Approval required');
-    expect(
-      rows[0]?.shadowRoot
-        ?.querySelector('#stream-tab-select-button')
-        ?.getAttribute('aria-label'),
-    ).toContain('1 background task');
+    const startingSelect = rows[0]?.shadowRoot?.querySelector(
+      '#stream-tab-select-button',
+    );
     expect(
       rows[0]?.shadowRoot?.querySelector('.compact-subagent-hint'),
     ).toBeNull();
+    const identityTooltip = rows[0]?.shadowRoot?.querySelector<HTMLElement>(
+      'wa-tooltip[for="stream-tab-select-tooltip-anchor"]',
+    );
+    await (identityTooltip as HTMLElement & { updateComplete?: Promise<void> })
+      ?.updateComplete;
+    const tooltipAnchor = rows[0]?.shadowRoot?.querySelector(
+      '#stream-tab-select-tooltip-anchor',
+    );
+    expect(identityTooltip?.textContent?.trim()).toBe('starting');
+    expect(
+      tooltipAnchor?.getAttribute('aria-labelledby')?.split(/\s+/),
+    ).toContain(identityTooltip?.id);
+    expect(startingSelect?.getAttribute('aria-labelledby')).toBeNull();
+    const accessibleLabel = startingSelect?.getAttribute('aria-label');
+    expect(accessibleLabel).toContain('starting');
+    expect(accessibleLabel).toContain('Status: Initializing');
+    expect(accessibleLabel).toContain('1 background task');
     const compactStyles = styleText(rows[0]!);
     expect(compactStyles).toContain(
       '.tab-container.is-compact .tab-status-label',
@@ -261,6 +276,11 @@ describe('stream-tab lifecycle distinction', () => {
         ?.querySelector('.tab-container')
         ?.classList.contains('is-active'),
     ).toBe(false);
+    const select = rows[0]?.shadowRoot?.querySelector<HTMLElement>(
+      '#stream-tab-select-button',
+    );
+    select?.focus();
+    expect(rows[0]?.shadowRoot?.activeElement).toBe(select);
     expect(styleText(tabs)).not.toContain('stream-tab.is-finished');
   });
 
@@ -289,11 +309,26 @@ describe('stream-tab lifecycle distinction', () => {
     expect(styles).toContain('--stream-status-color: Highlight');
     expect(styles).toContain('--stream-status-color: CanvasText');
     expect(styles).toContain('--stream-status-color: GrayText');
+    expect(styles).toContain('--stream-status-rail-color: transparent');
     expect(styles).not.toContain('--stream-status-rail-color: GrayText');
+    expect(styles).toContain(
+      'var(--stream-status-rail-color, var(--stream-status-color, transparent))',
+    );
+    for (const status of [
+      'running',
+      'waiting',
+      'starting',
+      'resuming',
+      'failed',
+      'error',
+    ]) {
+      expect(styles).toContain(`.tab-container.status-${status}`);
+    }
     expect(styles).toContain('.tab-container.is-active:is(');
     expect(styles).toContain('--stream-status-rail-color: HighlightText');
     expect(styles).toContain('background-color: Highlight');
     expect(styles).toContain('color: HighlightText');
+    expect(styles).toContain('.tab-container.is-active *');
     expect(styles).not.toContain('outline: none');
     expect(
       row?.shadowRoot?.querySelector('.tab-status-label')?.textContent?.trim(),

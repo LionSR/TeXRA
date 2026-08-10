@@ -241,78 +241,89 @@ class StreamTab extends LitElement {
                 >`
             : nothing
         }
-        <button
-          id="stream-tab-select-button"
-          class="tab"
-          data-stream=${stream.name}
-          data-action="select"
-          aria-label=${compactSelectLabel}
+        <div
+          id="stream-tab-select-tooltip-anchor"
+          class="tab-select-tooltip-anchor"
         >
-          <div class="tab-header">
-            <span id="stream-tab-title" class="tab-title"
-              >${
-                stream.parentStreamId
-                  ? waIcon('chevron-right', { className: 'nested-stream-icon' })
-                  : nothing
-              }${streamTitle}</span
-            >
-            <span class="tab-status" aria-hidden="true">
-              ${
-                statusGlyph
-                  ? waIcon(statusGlyph, { className: 'tab-status-icon' })
-                  : nothing
-              }
-              <span class="tab-status-label">${visibleStatusLabel}</span>
-            </span>
-          </div>
-          ${
-            this.compact
-              ? nothing
-              : html`
-                  <div id="stream-tab-meta" class="tab-meta">
-                    ${
-                      metaAgentName
-                        ? html`<span class="agent-name">${metaAgentName}</span>`
-                        : nothing
-                    }
-                    ${
-                      stream.worktree
-                        ? html`<worktree-chip
-                            .info=${stream.worktree}
-                          ></worktree-chip>`
-                        : nothing
-                    }
-                    ${
-                      this.lastTimestamp
-                        ? html`<wa-relative-time
-                            class="last-active"
-                            .date=${new Date(this.lastTimestamp)}
-                            format="narrow"
-                            sync
-                          ></wa-relative-time>`
-                        : nothing
-                    }
-                    <span class="model"
-                      >${
-                        stream.identity?.kind === 'agent'
-                          ? (stream.modelLabel ?? stream.model ?? '')
-                          : ''
-                      }</span
-                    >
-                    ${waIcon(streamDecorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
-                    ${when(
-                      stream.isRemote,
-                      () => html`
-                        ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
-                      `,
-                    )}
-                  </div>
-                `
-          }
-        </button>
+          <button
+            id="stream-tab-select-button"
+            class="tab"
+            data-stream=${stream.name}
+            data-action="select"
+            aria-label=${compactSelectLabel}
+          >
+            <div class="tab-header">
+              <span id="stream-tab-title" class="tab-title"
+                >${
+                  stream.parentStreamId
+                    ? waIcon('chevron-right', {
+                        className: 'nested-stream-icon',
+                      })
+                    : nothing
+                }${streamTitle}</span
+              >
+              <span class="tab-status" aria-hidden="true">
+                ${
+                  statusGlyph
+                    ? waIcon(statusGlyph, { className: 'tab-status-icon' })
+                    : nothing
+                }
+                <span class="tab-status-label">${visibleStatusLabel}</span>
+              </span>
+            </div>
+            ${
+              this.compact
+                ? nothing
+                : html`
+                    <div id="stream-tab-meta" class="tab-meta">
+                      ${
+                        metaAgentName
+                          ? html`<span class="agent-name"
+                              >${metaAgentName}</span
+                            >`
+                          : nothing
+                      }
+                      ${
+                        stream.worktree
+                          ? html`<worktree-chip
+                              .info=${stream.worktree}
+                            ></worktree-chip>`
+                          : nothing
+                      }
+                      ${
+                        this.lastTimestamp
+                          ? html`<wa-relative-time
+                              class="last-active"
+                              .date=${new Date(this.lastTimestamp)}
+                              format="narrow"
+                              sync
+                            ></wa-relative-time>`
+                          : nothing
+                      }
+                      <span class="model"
+                        >${
+                          stream.identity?.kind === 'agent'
+                            ? (stream.modelLabel ?? stream.model ?? '')
+                            : ''
+                        }</span
+                      >
+                      ${waIcon(streamDecorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
+                      ${when(
+                        stream.isRemote,
+                        () => html`
+                          ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
+                        `,
+                      )}
+                    </div>
+                  `
+            }
+          </button>
+        </div>
         ${
           this.compact
-            ? nothing
+            ? html`<wa-tooltip for="stream-tab-select-tooltip-anchor"
+                >${streamTitle}</wa-tooltip
+              >`
             : html`<wa-tooltip for="stream-tab-kind"
                   >${
                     // Only agent runs have an execution-mode category; other

@@ -55,6 +55,12 @@ export const streamTabStyles = css`
     --stream-status-rail-color: var(--wa-color-chart-orange, #d18616);
   }
 
+  .tab-select-tooltip-anchor {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+  }
+
   .tab {
     flex: 1;
     display: flex;
@@ -243,8 +249,8 @@ export const streamTabStyles = css`
     padding: var(--wa-space-3xs) var(--wa-space-3xs);
   }
 
-  /* No compact override for .tab-delete: the narrow rail is 48px wide, which
-     still fits the 24px target, and shrinking it there would put the same
+  /* No compact override for .tab-delete: even the narrow rail's 48px minimum
+     fits the 24px target, and shrinking it there would put the same
      sub-minimum hit area back on the layout that most needs a reliable one. */
 
   .tab-container.is-compact .tab-header {
@@ -252,9 +258,9 @@ export const streamTabStyles = css`
     gap: 0;
   }
 
-  /* The 48px rail reserves its remaining select width for lifecycle state.
-     The accessible button name retains the title and child count, but neither
-     can shrink or clip the status glyph at 200% zoom. */
+  /* The compact rail reserves its remaining select width for lifecycle state.
+     The accessible button name and visual tooltip retain the title, while the
+     hidden title cannot shrink or clip the status glyph. */
   .tab-container.is-compact .tab-title,
   .tab-container.is-compact .tab-status-label {
     display: none;
@@ -358,6 +364,7 @@ export const streamTabStyles = css`
 
     .tab-container:is(.status-completed, .status-cancelled, .status-ready) {
       --stream-status-color: GrayText;
+      --stream-status-rail-color: transparent;
     }
 
     /* System selection colors override authored status hues. The focused
