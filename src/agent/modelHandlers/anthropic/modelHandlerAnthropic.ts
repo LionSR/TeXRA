@@ -1807,7 +1807,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         .join(', ');
       toolResultContent.unshift({
         type: 'text',
-        text: `PDF page limit reached — could not include: ${names}. ${remaining} of ${this.getMaxPdfPages()} PDF pages remaining in this conversation. Tell the user.`,
+        text: `PDF page limit reached. Could not include: ${names}. ${remaining} of ${this.getMaxPdfPages()} PDF pages remaining in this conversation. Tell the user.`,
       });
     }
 

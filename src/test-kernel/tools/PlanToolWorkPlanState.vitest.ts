@@ -149,7 +149,7 @@ describe('PlanTool — update (plan approval)', () => {
       ).toBe(true);
       await expect(resultPromise).resolves.toMatchObject({
         status: 'executed',
-        summary: 'Plan approved — proceed with implementation',
+        summary: 'Plan approved: proceed with implementation',
       });
     } finally {
       cleanupApprovalsForStream(streamId, session);
@@ -332,7 +332,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     });
     expect(result.status).toBe('executed');
     expect(result.summary).toBe(
-      'Plan-only work complete — summarize the result.',
+      'Plan-only work complete: summarize the result.',
     );
     expect(result.output).toContain(
       'do not call plan(command="complete") again',

@@ -80,7 +80,7 @@ const UPDATABLE_KEY_LIST = Object.keys(UPDATABLE_KEYS) as UpdatableKey[];
 
 function describeAllowlist(): string {
   return UPDATABLE_KEY_LIST.map(
-    (k) => `- \`${k}\` — ${UPDATABLE_KEYS[k].summary}`,
+    (k) => `- \`${k}\`: ${UPDATABLE_KEYS[k].summary}`,
   ).join('\n');
 }
 
@@ -103,7 +103,7 @@ export class ReadConfigTool extends defineTool({
   name: 'read_config',
   description: `Read the effective value of a TeXRA configuration key.
 
-Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls — read first, explain, then propose a change with \`update_config\`.`,
+Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
 }) {
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
@@ -122,7 +122,7 @@ const UpdateConfigInputSchema = z.strictObject({
   value: z
     .unknown()
     .describe(
-      "New value. Type depends on the key — see the allowlist for each key's expected schema.",
+      "New value. Type depends on the key: see the allowlist for each key's expected schema.",
     ),
   target: z
     .enum(['user', 'workspace'])
@@ -139,7 +139,7 @@ export class UpdateConfigTool extends defineTool({
   requiresApproval: true,
   description: `Update a TeXRA configuration value (allowlisted keys only).
 
-Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean — every change should be educative. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences shared across workspaces.
+Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean. Explain every change clearly. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences shared across workspaces.
 
 Allowlisted keys:
 ${describeAllowlist()}

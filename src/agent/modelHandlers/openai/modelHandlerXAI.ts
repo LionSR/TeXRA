@@ -112,7 +112,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     if (!(await this.wantsSubscriptionRoute(selection))) {
       if (this.prefersSubscriptionRoute(selection)) {
         this.logger.debug(
-          'Prefer Grok subscription is on but no signed-in session — using the xAI API key path.',
+          'Prefer Grok subscription is on but no signed-in session: using the xAI API key path.',
         );
       }
       return super.createOpenAIClient(selection);

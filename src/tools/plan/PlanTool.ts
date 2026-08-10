@@ -80,7 +80,7 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
     reason: z
       .string()
       .min(1)
-      .describe('Why you are pausing — describe what you need from the user.'),
+      .describe('Why you are pausing: describe what you need from the user.'),
   }),
   z.strictObject({
     command: z.literal('complete'),
@@ -88,7 +88,7 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
       .string()
       .min(1)
       .describe(
-        'How you verified completion — cite current filesystem state, ' +
+        'How you verified completion: cite current filesystem state, ' +
           'test output, or command results (never conversation memory).',
       ),
   }),
@@ -137,14 +137,14 @@ pause/complete only affect autonomous goals; with no goal running they return gu
 
     if (!callContext?.workPlanState) {
       logger.warn(
-        'plan called without workPlanState in context — plan will not persist or display in UI',
+        'plan called without workPlanState in context: plan will not persist or display in UI',
       );
       return {
         status: 'executed',
         summary: 'Created plan (no active session)',
         output: `Plan objective:\n${plan.objective}`,
         diagnostics: {
-          warning: 'No active plan context — plan may not persist',
+          warning: 'No active plan context: plan may not persist',
         },
       };
     }
@@ -156,7 +156,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     // that decision belongs to the user.
     const streamId = getRunContextStreamId(runContext);
     if (!streamId) {
-      logger.warn('Plan created without streamId — skipping approval gate');
+      logger.warn('Plan created without streamId: skipping approval gate');
       return this.buildApprovedResult();
     }
     return this.requestApproval(plan, streamId, callContext.workPlanState);
@@ -177,7 +177,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     if (goal.status !== 'active') {
       return executed(
         `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
-        `Goal already ${goal.status} — pause is a no-op.`,
+        `Goal already ${goal.status}: pause is a no-op.`,
       );
     }
     const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
@@ -214,7 +214,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
       return executed(
         'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
           'The plan work is otherwise finished; return the final answer to the user and do not call plan(command="complete") again.',
-        'Plan-only work complete — summarize the result.',
+        'Plan-only work complete: summarize the result.',
       );
     }
     // Completing forgets the record — a goal is a live pursuit, not an
@@ -281,7 +281,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     return errorResult(
       `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
       {
-        summary: 'Plan rejected — revise approach',
+        summary: 'Plan rejected: revise approach',
         ...(feedback ? { userInstruction: feedback } : {}),
       },
     );
@@ -308,7 +308,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           `goal was started.\n\n` +
           `Work toward the objective as a normal turn-by-turn workflow, ` +
           `tracking concrete steps with the todo tool.`,
-        'Plan approved — autonomous run unavailable',
+        'Plan approved: autonomous run unavailable',
       );
     }
 
@@ -337,7 +337,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
             `- Do not call plan(command="complete") until the stopping condition is verifiably true.\n` +
             `- If you genuinely need user input, call plan(command="pause") with a reason.\n\n` +
             `Objective:\n${objective}`,
-          `Plan approved — goal ${active.goalId} retargeted`,
+          `Plan approved: goal ${active.goalId} retargeted`,
         );
       } catch (err) {
         const reason = toErrorMessage(err);
@@ -353,7 +353,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
             `against its previous objective until the user pauses or abandons it.`,
           {
             summary:
-              'Plan approved — goal could not be retargeted, proceeding without it',
+              'Plan approved: goal could not be retargeted, proceeding without it',
           },
         );
       }
@@ -371,7 +371,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           `- If you genuinely need user input, call plan(command="pause") with a reason describing what you need.\n` +
           `- Otherwise, keep working until the objective is done.\n\n` +
           `Objective:\n${objective}`,
-        `Plan approved — goal ${goal.goalId} started`,
+        `Plan approved: goal ${goal.goalId} started`,
       );
     } catch (err) {
       const reason = toErrorMessage(err);
@@ -384,7 +384,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           `the goal could not be started: ${reason}\n\n` +
           `Work toward the objective as a normal turn-by-turn workflow, ` +
           `tracking concrete steps with the todo tool.`,
-        'Plan approved — goal could not be started, proceeding without it',
+        'Plan approved: goal could not be started, proceeding without it',
       );
     }
   }
@@ -392,7 +392,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   private buildApprovedResult(): ToolResult {
     return executed(
       'Plan approved by the user. Work toward the objective, tracking concrete steps with the todo tool.',
-      'Plan approved — proceed with implementation',
+      'Plan approved: proceed with implementation',
     );
   }
 }

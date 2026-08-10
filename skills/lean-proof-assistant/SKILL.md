@@ -11,7 +11,7 @@ Use this skill for day-to-day Lean 4 proof development: proving lemmas, debuggin
 
 ## Workflow
 
-1. Read the target file and surrounding declarations before editing. Understand the theorem statement, available hypotheses, and local notation. Also read the project's canonical tactic ledger in `AGENTS.md` if one exists — prefer the project's custom tactics, simp sets, and workhorse lemmas over rebuilding inline tactic chains.
+1. Read the target file and surrounding declarations before editing. Understand the theorem statement, available hypotheses, and local notation. Also read the project's canonical tactic ledger in `AGENTS.md` if one exists. Prefer the project's custom tactics, simp sets, and workhorse lemmas over rebuilding inline tactic chains.
 2. Check the current diagnostics first. Let the elaborator tell you what is actually wrong before you guess.
 3. Outline the proof strategy informally before writing code when the theorem is nontrivial.
 4. Search for existing lemmas and APIs before inventing helper lemmas or long tactic scripts.

@@ -101,7 +101,7 @@ describe('summarizeLeanServers', () => {
     );
     expect(summary).toBe(
       '1 Lean server registered:\n' +
-        '• /work/proj (direct LSP, leanprover/lean4:v4.12.0) — uptime 1m 5s',
+        '• /work/proj (direct LSP, leanprover/lean4:v4.12.0): uptime 1m 5s',
     );
   });
 
@@ -127,9 +127,9 @@ describe('summarizeLeanServers', () => {
       ],
       NOW,
     );
-    expect(summary).toContain('/a (direct LSP) — starting…');
-    expect(summary).toContain('/b (direct LSP) — error: spawn ENOENT');
-    expect(summary).toContain('/c (direct LSP) — stopped');
+    expect(summary).toContain('/a (direct LSP): starting…');
+    expect(summary).toContain('/b (direct LSP): error: spawn ENOENT');
+    expect(summary).toContain('/c (direct LSP): stopped');
     expect(summary.startsWith('3 Lean servers registered:')).toBe(true);
   });
 });

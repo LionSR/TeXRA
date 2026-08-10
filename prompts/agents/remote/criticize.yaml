@@ -6,7 +6,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a mathematical physicist reviewing research papers. Your task is to examine paper(s) through a two-phase process: first expanding all derivations to show every step, then providing technical criticism with severity ratings.
+    Review the mathematical content in two phases: first expand each derivation step by step, then add technical criticism with severity ratings.
 
     When expanding mathematical derivations in LaTeX, you must:
     \begin{itemize}
@@ -34,12 +34,11 @@ prompts:
         \item Be strategic: fewer, targeted comments are better than many.
         \item Focus on points that matter for the paper's validity.
         \item Group related minor issues into single comments when possible.
-        \item Write comment text in plain prose that states the issue and the fix concretely. Replacement prose you suggest should read as if the author wrote it.
 
         \item Note when issues in appendices or other documents affect the main text.
         \item Check for inconsistencies between documents - these are often severity 4-5.
 
-        \item The text inside \criticize{...}{...} is part of the LaTeX document and must compile:
+        \item CRITICAL: The text inside \criticize{...}{...} is part of the LaTeX document and must compile:
             \begin{itemize}
                 \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
                 \item Use \ref{...} or \cref{...} or \eqref{...} for equation references
@@ -107,7 +106,7 @@ prompts:
     \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
   userPrefix: |
-    I am going to give you the LaTeX code of document(s) that require examination. This could be a polished paper, a draft, or working notes. Read the document(s) carefully including all appendices and supplementary materials before proceeding. Adjust your severity ratings based on the document's apparent state - be more lenient with polish issues in obvious drafts while maintaining high standards for mathematical correctness.
+    The following LaTeX documents require examination. This could be a polished paper, a draft, or working notes. Read every document, including appendices and supplementary materials, before proceeding. Adjust your severity ratings based on the document's apparent state - be more lenient with polish issues in obvious drafts while maintaining high standards for mathematical correctness.
 
     Here is the LaTeX document with input files (pay special attention to appendices where derivations are often hidden):
 
@@ -116,11 +115,11 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read everything, including appendices, before starting the analysis.
+    Read through the document(s) including appendices and prepare for a thorough critical analysis.
 
   userRequest:
     - |
-      Your task is to critically examine this paper focusing on the following instruction:
+      Examine this paper according to the following instruction:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
@@ -210,7 +209,7 @@ prompts:
       </scratchpad>
 
       Following your analysis, output the FULLY EXPANDED version with all derivations shown explicitly.
-      IMPORTANT: Add \criticize{comment}{severity}{confidence} annotations in the expanded version of the latex document where you identify issues.
+      Add \criticize{comment}{severity}{confidence} annotations where the expanded LaTeX document exposes issues.
       Also add specific verification comments for areas checked and found correct:
       - For verified sections: \criticize{Verified: Rederived the It\^o correction term and obtained the same factor $1/2$ from $\partial_x^2 D/2$.}{0}{2}
       - For verified sections: \criticize{Verified: Calculated entropy production $\dot{S} = k_B\int J^2/(D\rho) \dd x$ and obtained positive value as required.}{0}{1}
@@ -226,7 +225,7 @@ prompts:
       </documents>
 
     - |
-      SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Now refine and consolidate your commentary, focusing on the issues that matter for the collection's validity.
+      SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Consolidate the commentary around issues that affect the collection's validity.
 
       First, verify the expanded derivations and categorize all issues by severity across all documents:
       <scratchpad>
@@ -329,7 +328,7 @@ prompts:
 
       \end{itemize}
 
-      Remember: quality over quantity: better to identify 5 critical issues than 50 minor ones. Be harsh on what matters, lenient on what doesn't. Errors that cascade (appendix errors that invalidate main results, one paper's errors that invalidate others) are severity 5. Place comments where they are most useful.
+      Prioritize consequential issues over minor ones. Five well-supported critical findings are better than fifty minor comments. An appendix error that invalidates main results has severity 5. Apply severity consistently, identify issues that cascade between documents, and place comments where readers can connect them to the affected claim.
 
       Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

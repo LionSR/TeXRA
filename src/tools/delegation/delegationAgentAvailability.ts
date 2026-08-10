@@ -36,7 +36,7 @@ import { replaceDelegationDescriptionBlock } from './delegationDescriptionBlock'
 const AVAILABLE_AGENTS_BLOCK = /^Available agents:.*(?:\n(?!\n).+)*/m;
 
 const NO_AGENTS_LINE =
-  'Available agents: none are currently in the active roster — ask the user to enable delegation targets in Settings → Agents before delegating.';
+  'Available agents: none are currently in the active roster. Ask the user to enable delegation targets in Settings → Agents before delegating.';
 
 /** Format an agent list for tool descriptions. Newlines inside a description
  * are collapsed to single spaces so each agent stays one paragraph — a blank

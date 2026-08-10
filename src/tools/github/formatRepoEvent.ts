@@ -86,7 +86,7 @@ export function formatRepoMergeConflictDetected(
 ): string {
   return wrap(
     `Merge conflict detected on ${prRef(slug, prNumber)}: mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
-      `Subscribe to ${prRef(slug, prNumber)} for nuanced events, or rebase / merge the base back in to resolve.`,
+      `Subscribe to ${prRef(slug, prNumber)} for detailed events, or rebase / merge the base back in to resolve.`,
   );
 }
 
@@ -102,7 +102,7 @@ export function formatRepoMergeConflictSummary(
 ): string {
   return wrap(
     sections(
-      `Merge conflicts detected on ${prNumbers.length} PRs in ${slug} (mergeable_state="dirty"). Likely caused by a recent base-branch update — subscribe per-PR for nuanced events, or rebase / merge the base back in.`,
+      `Merge conflicts detected on ${prNumbers.length} PRs in ${slug} (mergeable_state="dirty"). Likely caused by a recent base-branch update: subscribe per-PR for detailed events, or rebase / merge the base back in.`,
       prNumbers.map((n) => prRef(slug, n)).join('\n'),
     ),
   );

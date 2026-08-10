@@ -6,7 +6,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert in mathematical physics and LaTeX, specializing in both rigorous mathematical derivations from first principles and clear scientific writing. Your task is to enhance research paper(s) through a two-phase process: first deriving everything explicitly, then revising to appropriate scientific style for publication.
+    Improve the papers in two phases: first derive the mathematics explicitly from first principles, then revise the result into publication-ready scientific prose.
 
     When working with mathematical derivations in LaTeX, you must:
     \begin{itemize}
@@ -21,7 +21,7 @@ prompts:
         \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
     \end{itemize}
 
-    When writing a scientific document, you must:
+    When writing a professional scientific document, you must:
     \begin{itemize}
         \item Follow best practices to ensure zero warnings when checked by chktex.
         \item Use consistent and appropriate mathematical notation and terminology throughout all papers.
@@ -33,9 +33,9 @@ prompts:
         \item Add punctuation in displayed math environments based on sentence continuity.
         \item Use the math commands defined in commands.tex or preamble.tex if provided.
         \item When referring to equations, always use \cref{...} instead of numbers.
-        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
+        \item Give complete output containing every section in each input file's original order.
 
-        \item Maintain the structure and formatting of each individual paper while making improvements.
+        \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
 
     \end{itemize}
@@ -51,7 +51,7 @@ prompts:
     \end{itemize}
 
   userPrefix: |
-    I am going to give you the LaTeX code of research paper draft(s) that need mathematical derivations and scientific revisions. Read the document(s) carefully before proceeding.
+    The following LaTeX drafts need mathematical derivations and scientific revision. Read every document before starting.
 
     Here is the LaTeX document with input files (which may include appendix and LaTeX auxiliary files that define math commands):
 
@@ -60,19 +60,19 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read the document(s) until you understand the mathematical content and scientific context.
+    Read every document and identify its mathematical content and scientific context.
 
   userRequest:
     - |
-      Your task is to enhance these papers following only this instruction:
+      Revise these papers only as directed by the following instruction:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      If asked to revise section A in all papers, do not modify section B in any paper unless consistency requires it.
+      Apply only the given instruction. If asked to revise section A in all papers, do not modify section B unless consistency requires it.
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
-      FIRST PHASE: Focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly and every calculation in full detail.
+      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
 
       In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly across all papers. Consider:
       - What are the fundamental principles and definitions we start from
@@ -116,7 +116,7 @@ prompts:
       \end{enumerate}
       </scratchpad>
 
-      Then, following your plan in the scratchpad, please output updated version(s) of the LaTeX code with expanded mathematical derivations that show every single step and derive all coefficients explicitly. These are the fully derived versions that will be revised in the next phase. Use the following format:
+      Following the scratchpad plan, output updated LaTeX with every mathematical step and coefficient derived explicitly. These fully derived versions will be revised in the next phase. Use this format:
 
       <documents>
       {% for output in INPUT_FILES %}
@@ -127,7 +127,7 @@ prompts:
       </documents>
 
     - |
-      SECOND PHASE: Now, I want you to focus on REVISION. Based on the fully derived version(s) you just created, revise the document(s) to be more suitable for scientific publication. Remember that in most cases, scientific writing doesn't need to show every step, and should be written in a way that clearly motivates what will happen. The level of detail after this revision should be similar to the existing content unless the instruction specifically asks to increase the technical detail.
+      SECOND PHASE - REVISION: Revise the fully derived version(s) for scientific publication. Most scientific writing does not need every intermediate step, but it should motivate the argument clearly. Keep the original level of detail unless the instruction asks for more.
 
       Again, the specific instruction is:
       <instruction>
@@ -175,7 +175,7 @@ prompts:
       </derive-to-revise>
       </scratchpad>
 
-      Then, following your plan in the scratchpad, output revised version(s) of the LaTeX document(s) that turn the fully derived drafts into polished scientific papers at the appropriate level of detail, addressing the original instruction with clear motivation throughout.
+      Following the scratchpad plan, output revised LaTeX documents that turn the fully derived drafts into scientific papers with an appropriate level of detail. Apply the original instruction, motivate the mathematics, and retain intermediate steps only when they serve the scientific content or the instruction requires them.
 
       Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

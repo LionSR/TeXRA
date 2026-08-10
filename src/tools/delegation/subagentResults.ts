@@ -159,7 +159,7 @@ export function formatSubagentDelivery(
   if (result.category === 'workflow') {
     if (result.diffsUnavailable) {
       lines.push(
-        `<diffs-unavailable reason="${escapeAttr(result.diffsUnavailable)}">Diff computation failed — read the output files directly to review the changes.</diffs-unavailable>`,
+        `<diffs-unavailable reason="${escapeAttr(result.diffsUnavailable)}">Diff computation failed: read the output files directly to review the changes.</diffs-unavailable>`,
       );
     }
     if (result.outputs.length > 0) {

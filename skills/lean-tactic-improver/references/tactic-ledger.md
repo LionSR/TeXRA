@@ -1,6 +1,6 @@
 # Tactic Ledger Protocol
 
-The tactic ledger is the persistent memory of a Lean project's automation. It lives in the project's `AGENTS.md` so that every agent session — regardless of harness — reads it at startup and inherits earlier extractions instead of rederiving them. Never replace a distinct `CLAUDE.md` with a link: preserve its contents and add a pointer to the `AGENTS.md` ledger, or leave it unchanged when both paths already identify the same file.
+The tactic ledger is the persistent memory of a Lean project's automation. It lives in the project's `AGENTS.md` so that every agent session, regardless of harness, reads it at startup and inherits earlier extractions instead of rederiving them. Never replace a distinct `CLAUDE.md` with a link: preserve its contents and add a pointer to the `AGENTS.md` ledger, or leave it unchanged when both paths already identify the same file.
 
 ## Ledger format
 
@@ -23,7 +23,7 @@ and add it here. Prune entries whose automation is removed.
 
 Rules:
 
-- One line per entry; the "use when" column is the searchable part — describe the goal shape, not the implementation.
+- One line per entry; the "use when" column is the searchable part. Describe the goal shape, not the implementation.
 - Record only automation with three or more real call sites. Single-use helpers are ordinary lemmas and do not belong in the ledger.
 - Deleting automation means deleting its ledger row in the same change.
 - If the project has an `AGENTS.md` convention already (sections, ordering), fit into it rather than imposing this layout.
@@ -36,7 +36,7 @@ Consumers should use the lean-tactic-improver workflow when the skill is availab
 
 Extract at the cheapest rung that eliminates the repetition. Each rung costs more to build, review, and maintain than the one before it.
 
-1. **Helper lemma.** The default. A recurring goal shape usually means a missing lemma with the right statement. Search Mathlib first — the lemma often exists.
+1. **Helper lemma.** The default. A recurring goal shape usually means a missing lemma with the right statement. Search Mathlib first because the lemma often exists.
 2. **`@[simp]` lemma or named simp set.** When the repetition is "the same rewrites over and over". Prefer a named set for domain-specific normal forms:
 
    ```lean
@@ -70,7 +70,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 
 ## Extraction checklist
 
-- [ ] The pattern has at least three real occurrences (rule of three) — count them before building anything.
+- [ ] The pattern has at least three real occurrences (rule of three). Count them before building anything.
 - [ ] Searched Mathlib for existing automation (`simp` lemma families, `positivity`/`gcongr`/`fun_prop` extensions, existing aesop rule sets) before writing project-local machinery.
 - [ ] Picked the lowest sufficient ladder rung.
 - [ ] Any framework-specific rung is already available in the project; otherwise stayed on a lower rung rather than adding an incidental dependency.
@@ -85,4 +85,4 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 - **Simp set pollution.** A broad `@[simp]` lemma can loop, slow the whole build, or break unrelated proofs. Named sets keep the blast radius local.
 - **Opaque macros.** If a reviewer cannot guess what `crush` does from its name and docstring, split it or rename it. Automation names should describe the goal shape they close.
 - **Ledger rot.** An entry that no longer matches the code is worse than no entry. Curation is part of every extraction pass.
-- **Unrecorded automation.** Building a tactic without a ledger row wastes the work — the next session cannot see it, and the linear growth resumes.
+- **Unrecorded automation.** Building a tactic without a ledger row wastes the work. The next session cannot see it, and the linear growth resumes.

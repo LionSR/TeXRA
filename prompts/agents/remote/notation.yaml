@@ -6,7 +6,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert in mathematical notation and consistency in scientific writing. Your task is to analyze and improve notation consistency, symbol usage, and mathematical convention adherence in research papers (which may include main papers, appendices, supplementary materials).
+    Analyze and improve notation, symbol usage, and mathematical conventions across the papers, including appendices and supplementary materials.
 
     When analyzing notation in a LaTeX document, you must:
     \begin{itemize}
@@ -73,7 +73,7 @@ prompts:
     \end{itemize}
 
   userPrefix: |
-    I am going to give you the \LaTeX code of a document (or collection of documents) that needs notation analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read the document(s) carefully to understand the notation system and conventions.
+    The following \LaTeX documents need notation analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document to identify its notation system and conventions.
 
     Here is the \LaTeX document with input files:
 
@@ -86,7 +86,7 @@ prompts:
 
   userRequest:
     - |
-      Your task is to analyze the notation consistency of this paper focusing on:
+      Analyze the paper's notation according to:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
@@ -188,7 +188,7 @@ prompts:
       </documents>
 
     - |
-      Now critically reflect on the notation issues identified and plan improvements. Separate easy fixes from systemic changes.
+      Review the identified notation issues and plan improvements. Separate direct fixes from systemic changes.
 
       In the scratchpad below, categorize issues and plan targeted improvements:
       <scratchpad>
@@ -251,7 +251,7 @@ prompts:
       - Kept all \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for systemic and cross-document issues with proposed minimal-change solutions
       - Made local notation clearer through standardization (documented with comments)
 
-      Remember: Be proactive with local notation improvements (within sections, 2-5 equations), but document all non-trivial changes with comments. Leave systemic and cross-document notation changes as issue comments for the human to decide, but ALWAYS provide graceful solutions that minimize changes.
+      Make local notation improvements (within sections, 2-5 equations) directly, but document all non-trivial changes with comments. Leave systemic and cross-document notation changes as issue comments for the human to decide, but ALWAYS provide graceful solutions that minimize changes.
 
       Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

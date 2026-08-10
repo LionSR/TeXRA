@@ -71,7 +71,7 @@ const AskSchema = z.strictObject({
     .describe(
       'Dispatch a question to the user (who will consult an external AI model). ' +
         'Returns immediately with {status: "dispatched", thread_id}. ' +
-        'Do NOT wait — the answer arrives as a separate [inquiry] continuation message later.',
+        'Do NOT wait: the answer arrives as a separate [inquiry] continuation message later.',
     ),
   question: z
     .string()
@@ -82,7 +82,7 @@ const AskSchema = z.strictObject({
         'answer you need (proof sketch, calculation, reference, etc.).',
     ),
   thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
-    'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up — ' +
+    'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up: ' +
       'prior Q/A in that thread is preserved and shown to the user. ' +
       'Passing a thread_id that is still open or dropped will error.',
   ),
@@ -129,7 +129,7 @@ const ListSchema = z.strictObject({
     .enum(['open', 'answered', 'dropped', 'any'])
     .prefault('open')
     .describe(
-      '"open" → awaiting user answer (default — matches the most common need). ' +
+      '"open" → awaiting user answer (default: matches the most common need). ' +
         '"answered" → user has submitted an answer. ' +
         '"dropped" → user rejected the inquiry. ' +
         '"any" → all threads regardless of status.',
@@ -336,18 +336,18 @@ function buildListOutput(
 const TOOL_DESCRIPTION = `Ask a question to an external AI model (ChatGPT, Gemini, Claude, etc.) via the user's own subscription, or inspect prior inquiry threads.
 
 Subcommands:
-  - ask   — dispatch a new question or follow up on an existing thread
-  - read  — return the full untruncated transcript of one inquiry thread
-  - list  — enumerate inquiry threads. Defaults: status='open', scope='stream'
+  - ask  : dispatch a new question or follow up on an existing thread
+  - read : return the full untruncated transcript of one inquiry thread
+  - list : enumerate inquiry threads. Defaults: status='open', scope='stream'
 
-Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", thread_id}; continue independent work or end your turn, and the answer — possibly minutes or hours later — arrives as a [inquiry] continuation message on the originating stream.
+Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", thread_id}; continue independent work or end your turn, and the answer, possibly minutes or hours later, arrives as a [inquiry] continuation message on the originating stream.
 
 Follow-up semantics:
-  Omit thread_id to start a new thread. Pass an answered thread_id to ask a follow-up turn; prior Q/A is preserved and rendered as a conversation in the user's panel. You cannot re-dispatch on an open or dropped thread — read or list to recover state instead.
+  Omit thread_id to start a new thread. Pass an answered thread_id to ask a follow-up turn; prior Q/A is preserved and rendered as a conversation in the user's panel. You cannot re-dispatch on an open or dropped thread: read or list to recover state instead.
 
 When the [inquiry] continuation arrives, its Q is truncated to 400 chars and its A to 2000 chars. If you need the full content, call inquiry { command: 'read', thread_id }.
 
-Do not treat paper-specific claims from the external model as automatically verified — verify with arxiv_search / arxiv_metadata / download_arxiv_source before building on them.`;
+Do not treat paper-specific claims from the external model as automatically verified: verify with arxiv_search / arxiv_metadata / download_arxiv_source before building on them.`;
 
 export class ExternalInquiryTool extends defineTool({
   name: 'inquiry',

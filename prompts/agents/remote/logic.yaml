@@ -6,7 +6,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert in scientific writing and argumentation structure. Your task is to analyze and improve the logical flow, structural coherence, and argument organization of research papers (which may include main papers, appendices, supplementary materials).
+    Analyze and improve the papers' logical flow, structural coherence, and argument organization, including appendices and supplementary materials.
 
     When analyzing the logical structure of a LaTeX document, you must:
     \begin{itemize}
@@ -81,7 +81,7 @@ prompts:
     \end{itemize}
 
   userPrefix: |
-    I am going to give you the \LaTeX code of a document (or collection of documents) that needs logical structure analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read the document(s) carefully to understand the overall narrative and argument structure.
+    The following \LaTeX documents need logical-structure analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document to identify its narrative and argument structure.
 
     Here is the \LaTeX document with input files:
 
@@ -94,7 +94,7 @@ prompts:
 
   userRequest:
     - |
-      Your task is to analyze the logical structure and flow of this paper focusing on:
+      Analyze the paper's logical structure and flow according to:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
@@ -231,7 +231,7 @@ prompts:
       </documents>
 
     - |
-      Now critically reflect on the structural issues identified and plan improvements. Separate easy fixes from major decisions.
+      Review the identified structural issues and plan improvements. Separate direct fixes from major decisions.
 
       In the scratchpad below, categorize issues and plan targeted improvements:
       <scratchpad>
@@ -290,7 +290,7 @@ prompts:
       - Improved paragraph flow and coherence actively (documented with comments)
       - Made the logical flow clearer through better organization within sections (documented with comments)
 
-      Remember: If appendix derivations are questionable, add comments in the main text where those results are used, warning about the shaky foundation. Be proactive with improvements that don't cross section boundaries, delete substantial content, or require cross-document coordination; leave major reorganization and cross-document changes as issue comments for the human to decide.
+      If appendix derivations are questionable, add comments in the main text where those results are used, warning about the weak foundation. Be proactive with improvements that don't cross section boundaries, delete substantial content, or require cross-document coordination; leave major reorganization and cross-document changes as issue comments for the human to decide.
 
       Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 

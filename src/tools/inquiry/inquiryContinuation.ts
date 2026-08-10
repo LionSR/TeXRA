@@ -103,7 +103,7 @@ export function buildContinuationText(params: {
   lines.push(...formatStillOpen(stillOpen));
   lines.push(
     '',
-    'Proceed without this answer — either re-formulate (new thread) or take an ' +
+    'Proceed without this answer: either re-formulate (new thread) or take an ' +
       `alternate approach. Do not re-dispatch ${threadId}.`,
   );
   return lines.join('\n');
