@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { format } from 'node:util';
 
+import escapeRegExp from 'escape-string-regexp';
 import {
   app,
   type WebContents,
@@ -191,14 +192,10 @@ function redactPathPrefixes(
         ? ''
         : `(?=$|[\\s\\\\/,:;!?\\])}'"]|\\.(?:$|\\s))`;
       return redacted.replaceAll(
-        new RegExp(`${escapeRegex(prefix)}${boundary}`, 'g'),
+        new RegExp(`${escapeRegExp(prefix)}${boundary}`, 'g'),
         '[path]',
       );
     }, text);
-}
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function toConsoleLevel(

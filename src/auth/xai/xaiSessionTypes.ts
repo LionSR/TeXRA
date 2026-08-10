@@ -5,7 +5,10 @@
 import { z } from 'zod';
 
 import { XAI_DEFAULT_EXPIRES_IN_SEC } from './xaiConstants';
-import type { SubscriptionOAuthErrorKind } from '../oauth/subscriptionOAuthError';
+import {
+  SubscriptionOAuthError,
+  type SubscriptionOAuthErrorKind,
+} from '../oauth/subscriptionOAuthError';
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
 export const XaiTokenResponseSchema = z.object({
@@ -54,24 +57,15 @@ export type XaiDeviceCode = z.infer<typeof XaiDeviceCodeSchema>;
 
 export type XaiAuthErrorKind = SubscriptionOAuthErrorKind;
 
-export class XaiAuthError extends Error {
-  readonly kind: XaiAuthErrorKind;
-  readonly status?: number;
-
+export class XaiAuthError extends SubscriptionOAuthError {
   constructor(
     message: string,
     kind: XaiAuthErrorKind,
     status?: number,
     options?: ErrorOptions,
   ) {
-    super(message, options);
+    super(message, kind, status, options);
     this.name = 'XaiAuthError';
-    this.kind = kind;
-    this.status = status;
-  }
-
-  get needsReauth(): boolean {
-    return this.kind === 'fatal' || this.kind === 'expired';
   }
 }
 
