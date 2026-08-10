@@ -103,7 +103,7 @@ function foregroundInput(
     formBusy: false,
     infoPaneOpen: false,
     pendingApproval: true,
-    transcriptReaderOpen: false,
+    readerKind: undefined,
     ...overrides,
   };
 }
@@ -196,6 +196,8 @@ describe('app interaction policy', () => {
     const surfaceCases = [
       [{ kind: 'form' }, 18],
       [{ kind: 'infoPane' }, undefined],
+      [{ kind: 'transcriptReader' }, undefined],
+      [{ kind: 'workPlanReader' }, undefined],
     ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
     const expectedByKind = {
       planApproval: undefined,
@@ -330,18 +332,23 @@ describe('app interaction policy', () => {
       ],
       [foregroundInput(), 'approval'],
       [foregroundInput({ pendingApproval: false }), undefined],
-      // The transcript reader is passive, so every surface that needs an
-      // answer takes the foreground away from it.
+      // Readers are passive, so every surface that needs an answer takes the
+      // foreground away from them.
       [
-        foregroundInput({ pendingApproval: false, transcriptReaderOpen: true }),
+        foregroundInput({ pendingApproval: false, readerKind: 'transcript' }),
         'transcriptReader',
       ],
-      [foregroundInput({ transcriptReaderOpen: true }), 'approval'],
+      [foregroundInput({ readerKind: 'transcript' }), 'approval'],
+      [
+        foregroundInput({ pendingApproval: false, readerKind: 'workPlan' }),
+        'workPlanReader',
+      ],
+      [foregroundInput({ readerKind: 'workPlan' }), 'approval'],
       [
         foregroundInput({
           activeFormOpen: true,
           pendingApproval: false,
-          transcriptReaderOpen: true,
+          readerKind: 'transcript',
         }),
         'form',
       ],
@@ -349,7 +356,7 @@ describe('app interaction policy', () => {
         foregroundInput({
           infoPaneOpen: true,
           pendingApproval: false,
-          transcriptReaderOpen: true,
+          readerKind: 'transcript',
         }),
         'infoPane',
       ],
@@ -378,6 +385,8 @@ describe('app interaction policy', () => {
     const surfaceCases = [
       [{ foregroundKind: 'form' }, 'close'],
       [{ foregroundKind: 'infoPane' }, 'close'],
+      [{ foregroundKind: 'transcriptReader' }, 'close'],
+      [{ foregroundKind: 'workPlanReader' }, 'close'],
       [{ activeFormEscapeAction: 'cancel', foregroundKind: 'form' }, 'cancel'],
     ] satisfies readonly (readonly [ForegroundEscapeInput, string])[];
     const approvalCases = [

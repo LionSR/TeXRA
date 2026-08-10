@@ -72,9 +72,11 @@ import {
   showCliGoalModeHelp,
   showCliSessionStatus,
   showCliSlashCommandHelp,
+  showCliWorkPlan,
 } from './handlers/sessionCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
+import type { StreamArtifactReader } from '../state/subscribeStreamArtifacts';
 
 type SelectHandler<T> = (value: T) => void | Promise<void>;
 type FormActionResult =
@@ -271,6 +273,7 @@ export function registerBuiltinSlashCommands(options?: {
   onMemorySelect?: SelectHandler<string>;
   onResumeSelect?: SelectHandler<ExecutionId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
+  workPlanSnapshots?: StreamArtifactReader;
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
@@ -649,6 +652,13 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'session',
     echo: 'ifPersists',
     handler: (_remainder, context) => showCliSessionStatus(context),
+  });
+  registerSlashCommand({
+    name: 'plan',
+    description: 'Read the focused session work plan',
+    category: 'session',
+    echo: 'never',
+    handler: () => showCliWorkPlan(options?.workPlanSnapshots),
   });
   registerSlashCommand({
     name: 'goal',
