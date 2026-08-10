@@ -20,37 +20,39 @@ export const streamTabStyles = css`
     min-width: 0;
     max-width: 100%;
     gap: var(--wa-space-3xs);
-    border-inline-start: var(--border-medium) solid transparent;
+    border-inline-start: var(--border-medium) solid
+      var(--stream-status-rail-color, var(--stream-status-color, transparent));
     box-sizing: border-box;
     overflow: hidden;
   }
 
   .tab-container.status-running {
-    border-inline-start-color: var(--color-success);
+    --stream-status-color: var(--color-success);
   }
 
   .tab-container.status-error,
   .tab-container.status-failed {
-    border-inline-start-color: var(--color-error);
+    --stream-status-color: var(--color-error);
   }
 
   .tab-container.status-waiting,
   .tab-container.status-resuming {
-    border-inline-start-color: var(--wa-color-text-link);
+    --stream-status-color: var(--wa-color-text-link);
+  }
+
+  .tab-container.status-initializing,
+  .tab-container.status-starting {
+    --stream-status-color: var(--color-warning);
   }
 
   /* Finished states (stopped/completed/cancelled/ready) keep the
      transparent default: the rail only lights up while something is
      happening or needs attention. */
 
-  .tab-container.status-initializing,
-  .tab-container.status-starting {
-    border-inline-start-color: var(--color-warning);
-  }
-
   /* Pending approval — solid orange start rail. */
   .tab-container.has-pending-approval {
-    border-inline-start-color: var(--wa-color-chart-orange, #d18616);
+    --stream-status-color: var(--color-warning);
+    --stream-status-rail-color: var(--wa-color-chart-orange, #d18616);
   }
 
   .tab {
@@ -85,13 +87,34 @@ export const streamTabStyles = css`
     text-overflow: ellipsis;
   }
 
-  /* Shape half of the status cue — border-left carries the hue. Renders in
-     the row's own foreground so it stays legible on the selection background
-     and adds no new color pair to verify. No opacity fade: this is the only
-     non-color signal the status has, so it is information, not decoration. */
-  .tab-status-icon {
+  /* The label and glyph are redundant non-color cues. The glyph uses the
+     semantic foreground while the text keeps normal-text contrast; selection
+     overrides both below so row hierarchy remains stronger than lifecycle. */
+  .tab-status {
+    display: inline-flex;
+    align-items: center;
     flex-shrink: 0;
+    gap: var(--wa-space-3xs);
+    max-width: 50%;
+    overflow: hidden;
+    color: var(--wa-color-text-normal);
     font-size: var(--font-size-xs);
+    line-height: var(--line-height-tight);
+    white-space: nowrap;
+  }
+
+  .tab-status-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    inline-size: 1em;
+    min-inline-size: 1em;
+    block-size: 1em;
+    color: var(--stream-status-color, var(--color-text-muted));
+  }
+
+  .tab-status-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .tab-meta {
@@ -182,6 +205,21 @@ export const streamTabStyles = css`
     color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
   }
 
+  /* Selection is the primary row state. Keep the lifecycle rail present, but
+     neutralize its hue against the selected surface. */
+  .tab-container.is-active:is(
+      .status-running,
+      .status-waiting,
+      .status-resuming,
+      .status-initializing,
+      .status-starting,
+      .status-failed,
+      .status-error,
+      .has-pending-approval
+    ) {
+    --stream-status-rail-color: currentColor;
+  }
+
   /*
    * Destructive-action cue on hover: a color flip only, no hover box — the
    * row's own hover background already carries the affordance. The descendant
@@ -210,13 +248,23 @@ export const streamTabStyles = css`
      sub-minimum hit area back on the layout that most needs a reliable one. */
 
   .tab-container.is-compact .tab-header {
-    gap: var(--wa-space-3xs);
+    justify-content: center;
+    gap: 0;
   }
 
-  .compact-subagent-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    flex-shrink: 0;
+  /* The 48px rail reserves its remaining select width for lifecycle state.
+     The accessible button name retains the title and child count, but neither
+     can shrink or clip the status glyph at 200% zoom. */
+  .tab-container.is-compact .tab-title,
+  .tab-container.is-compact .tab-status-label {
+    display: none;
+  }
+
+  .tab-container.is-compact .tab-status {
+    inline-size: 1em;
+    min-inline-size: 1em;
+    max-width: none;
+    overflow: visible;
   }
 
   .nested-stream-icon {
@@ -287,5 +335,53 @@ export const streamTabStyles = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  @media (forced-colors: active) {
+    .tab-container:is(
+      .status-running,
+      .status-waiting,
+      .status-resuming,
+      .status-initializing,
+      .status-starting,
+      .has-pending-approval
+    ) {
+      --stream-status-color: Highlight;
+      --stream-status-rail-color: Highlight;
+    }
+
+    .tab-container.status-failed,
+    .tab-container.status-error {
+      --stream-status-color: CanvasText;
+      --stream-status-rail-color: CanvasText;
+    }
+
+    .tab-container:is(.status-completed, .status-cancelled, .status-ready) {
+      --stream-status-color: GrayText;
+    }
+
+    /* System selection colors override authored status hues. The focused
+       button keeps its native forced-color outline. */
+    .tab-container.is-active {
+      background-color: Highlight;
+      color: HighlightText;
+    }
+
+    .tab-container.is-active:is(
+        .status-running,
+        .status-waiting,
+        .status-resuming,
+        .status-initializing,
+        .status-starting,
+        .status-failed,
+        .status-error,
+        .has-pending-approval
+      ) {
+      --stream-status-rail-color: HighlightText;
+    }
+
+    .tab-container.is-active * {
+      color: HighlightText;
+    }
   }
 `;

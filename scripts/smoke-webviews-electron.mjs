@@ -148,6 +148,62 @@ const views = [
     replacements: progressViewReplacements,
   },
   {
+    name: 'progress-compact-status',
+    tagName: 'progress-app',
+    templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
+    viewport: {
+      width: 320,
+      height: 600,
+    },
+    zoomFactor: 2,
+    assertions: ['compactStreamStatusGeometry'],
+    seedMessages: [
+      {
+        command: 'updateStreams',
+        streams: [
+          {
+            kind: 'agent',
+            name: 'compact-parent',
+            label: 'compact-parent',
+            agent: 'research',
+            agentCategory: 'toolUse',
+            creationTimestamp: 1_783_353_600_000,
+            description:
+              'A long compact execution title that must not displace status.',
+          },
+          {
+            kind: 'agent',
+            name: 'compact-child',
+            label: 'compact-child',
+            agent: 'reviewer',
+            agentCategory: 'toolUse',
+            creationTimestamp: 1_783_353_601_000,
+            parentStreamId: 'compact-parent',
+          },
+        ],
+        activeStream: 'compact-parent',
+        agentFilter: 'all',
+        streamStates: {
+          'compact-parent': {
+            kind: 'toolUse',
+            status: 'running',
+            lastTimestamp: 1_783_353_600_000,
+            subagents: [],
+            processes: [],
+          },
+          'compact-child': {
+            kind: 'toolUse',
+            status: 'waiting',
+            lastTimestamp: 1_783_353_601_000,
+            subagents: [],
+            processes: [],
+          },
+        },
+      },
+    ],
+    replacements: progressViewReplacements,
+  },
+  {
     name: 'progress-approval',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
@@ -342,6 +398,7 @@ async function prepareViewHtml(view) {
     seedMessages: view.seedMessages ?? [],
     assertions: view.assertions ?? [],
     viewport: view.viewport,
+    zoomFactor: view.zoomFactor,
   };
 }
 
