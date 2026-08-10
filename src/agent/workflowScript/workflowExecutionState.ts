@@ -320,6 +320,9 @@ export class WorkflowExecutionState {
   ): void {
     if (this.#sealed) return;
     const completedAt = now();
+    // Capture before clearing so orchestration failures can terminalize the
+    // stage the script was inside even when no call encodes that failure.
+    const activeStageId = this.#snapshot.currentStageId;
     this.#snapshot.lifecycle = lifecycle;
     this.#snapshot.currentStageId = undefined;
     this.#snapshot.timestamps.completedAt = completedAt;
@@ -357,6 +360,27 @@ export class WorkflowExecutionState {
         stage.completedAt = completedAt;
       } else {
         this.#settleStage(stage.id, completedAt);
+      }
+    }
+    // Call-derived settlement alone can mark the active stage completed or
+    // skipped when the script threw/cancelled after phase() with no live
+    // failed call (e.g. a JS reduction error). Force the active stage to the
+    // workflow terminal lifecycle so /executions/{id} shows where orchestration
+    // failed.
+    if (
+      activeStageId !== undefined &&
+      (lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.FAILED ||
+        lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED)
+    ) {
+      const activeStage = this.#snapshot.stages.find(
+        (stage) => stage.id === activeStageId,
+      );
+      if (activeStage) {
+        activeStage.lifecycle =
+          lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
+            ? WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
+            : WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
+        activeStage.completedAt = completedAt;
       }
     }
     this.#emit();
@@ -482,7 +506,12 @@ function hydrate(
       label: call.label,
       stageId: call.stageId,
       stageTitle: call.stageTitle,
-      files: call.files,
+      // Reusable completed/cached calls keep their resolved file lists. The
+      // fresh meta.tasks stub has empty arrays; overwriting would flush blank
+      // files on the constructor emit before the script re-issues those calls.
+      // Non-reusable interrupted calls take the fresh plan (issueCall fills
+      // files when the call is relaunched).
+      files: reusable ? prior.files : call.files,
       attempts,
       costUsd: totalAttemptCost(attempts),
       status: reusable ? prior.status : call.status,

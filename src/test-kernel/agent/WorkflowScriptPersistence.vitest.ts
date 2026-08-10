@@ -223,6 +223,60 @@ return [first, second]`;
     });
   });
 
+  it('preserves completed task-plan call files across resume hydrate', async () => {
+    const resumeScript = `export const meta = {
+  name: 'resume-completed-files',
+  description: 'completed planned call keeps files on resume',
+  tasks: [{ id: 'planned-call', label: 'Planned call', phase: 'Work' }],
+  phases: ['Work'],
+}
+phase('Work')
+return await agent('run planned call', {
+  id: 'planned-call',
+  inputFiles: ['/workspace/paper.tex'],
+  contextFiles: ['/workspace/notes.tex'],
+})`;
+    const completed = await runWorkflowScript({
+      script: resumeScript,
+      fingerprintAgentDependencies: async () => 'fingerprint',
+      runAgent: async () => 'done',
+    });
+    expect(completed.snapshot.calls[0]?.status).toBe('completed');
+    expect(completed.snapshot.calls[0]?.files).toEqual({
+      input: ['paper.tex'],
+      context: ['notes.tex'],
+      media: [],
+    });
+
+    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const resumed = await runWorkflowScript({
+      script: resumeScript,
+      initialSnapshot: completed.snapshot,
+      journal: completed.journal,
+      fingerprintAgentDependencies: async () => 'fingerprint',
+      runAgent: async () => {
+        throw new Error('must replay from journal');
+      },
+      onSnapshot: (snapshot) => {
+        snapshots.push(snapshot);
+      },
+    });
+
+    // Constructor hydrate emits before the script re-issues calls. Reusable
+    // completed calls must keep prior files, not the empty meta.tasks stub.
+    expect(snapshots[0]?.calls[0]?.files).toEqual({
+      input: ['paper.tex'],
+      context: ['notes.tex'],
+      media: [],
+    });
+    expect(resumed.snapshot.calls[0]?.status).toBe('cached');
+    expect(resumed.snapshot.calls[0]?.files).toEqual({
+      input: ['paper.tex'],
+      context: ['notes.tex'],
+      media: [],
+    });
+  });
+
   it('re-runs a skipped planned call with fresh execution timestamps', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
