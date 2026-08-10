@@ -73,17 +73,17 @@ describe('usage-panel route badges', () => {
   it.each([
     {
       route: 'relay' as UsageRoute,
-      visibleLabel: 'included access',
-      ariaCost: '$0.123 via included access',
+      visibleLabel: 'Included',
+      detailedLabel: 'included access',
     },
     {
       route: 'api-key' as UsageRoute,
-      visibleLabel: 'your own API keys',
-      ariaCost: '$0.123 via your own API keys',
+      visibleLabel: 'API keys',
+      detailedLabel: 'your own API keys',
     },
   ])(
     'shows $visibleLabel beside the cost',
-    async ({ route, visibleLabel, ariaCost }) => {
+    async ({ route, visibleLabel, detailedLabel }) => {
       const element = await mountUsagePanel(
         usage({
           usageRoute: route,
@@ -93,7 +93,25 @@ describe('usage-panel route badges', () => {
       const text = panelText(element);
       expect(text).toContain('$0.123');
       expect(text).toContain(visibleLabel);
-      expect(usageAriaLabel(element)).toContain(ariaCost);
+      expect(text).not.toContain(detailedLabel);
+      expect(usageAriaLabel(element)).toContain(`$0.123 via ${detailedLabel}`);
     },
   );
+
+  it('keeps the route badge intact while the summary can shrink', async () => {
+    const element = await mountUsagePanel(usage({ usageRoute: 'api-key' }));
+    const styles = (element.constructor as typeof UsagePanel).elementStyles
+      .flatMap((style) =>
+        'cssText' in style
+          ? style.cssText
+          : [...style.cssRules].map((rule) => rule.cssText),
+      )
+      .join('\n');
+
+    expect(styles).toMatch(
+      /\.run-summary__route\s*{[^}]*white-space:\s*nowrap/s,
+    );
+    expect(styles).toMatch(/\.run-summary\s*{[^}]*min-width:\s*0/s);
+    expect(styles).toMatch(/\.run-summary__value\s*{[^}]*min-width:\s*0/s);
+  });
 });
