@@ -188,7 +188,7 @@
     "tree-kill": "^1.2.2",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
-    "undici": "^7.29.0",
+    "undici": "^8.10.0",
     "vscode-jsonrpc": "^9.0.1",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
