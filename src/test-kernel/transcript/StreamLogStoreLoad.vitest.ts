@@ -1586,3 +1586,121 @@ describe('StreamLogStore load', () => {
     expect(storage.writes.size).toBe(0);
   });
 });
+
+describe('StreamLogStore save throttle', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('writes periodically under sustained sub-window appends and drains on flush', async () => {
+    let logWrites = 0;
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      onLogWrite: () => {
+        logWrites += 1;
+      },
+    });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, ''));
+    // 20 chunks 100ms apart: a trailing debounce would reset its timer on
+    // every append and never write until the stream pauses; the max-wait
+    // throttle must produce a durable write per 300ms window regardless.
+    for (let i = 0; i < 20; i += 1) {
+      writer.appendText('m1', `chunk-${i} `);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(logWrites).toBeGreaterThanOrEqual(5);
+
+    // The tail landed after the last periodic write; flush drains it.
+    const writesBeforeFlush = logWrites;
+    writer.close();
+    await store.flush();
+    expect(logWrites).toBeGreaterThan(writesBeforeFlush);
+    expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe(
+      Array.from({ length: 20 }, (_, i) => `chunk-${i} `).join(''),
+    );
+  });
+
+  it('bounds the durability gap to one throttle window for a first append', async () => {
+    const storage = mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, 'first entry'));
+    expect(writtenLog(storage.writes, 'alpha')).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(writtenLog(storage.writes, 'alpha')).toHaveLength(1);
+    writer.close();
+  });
+
+  it('queues a save window that fires while a write batch is in flight', async () => {
+    const bothWritesLanded = createDeferred();
+    let logWrites = 0;
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      pauseLogWriteKey: 'alpha',
+      onLogWrite: () => {
+        logWrites += 1;
+        if (logWrites === 2) bothWritesLanded.resolve();
+      },
+    });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, ''));
+    writer.appendText('m1', 'first ');
+    await vi.advanceTimersByTimeAsync(300);
+    await storage.waitForPausedWrite();
+
+    // Mutate while the first batch's write hangs, and let a second window
+    // fire. An unserialized second batch would persist the newer snapshot
+    // during the pause and then get clobbered when the paused older write
+    // completes last; the queued batch must instead run after it.
+    writer.appendText('m1', 'second');
+    await vi.advanceTimersByTimeAsync(300);
+    storage.releasePausedWrite();
+    await bothWritesLanded.promise;
+    writer.close();
+    await store.flush();
+
+    expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe('first second');
+  });
+
+  it('drains an in-flight write batch before a discarding reload', async () => {
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      pauseLogWriteKey: 'alpha',
+    });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, 'first'));
+    await vi.advanceTimersByTimeAsync(300);
+    await storage.waitForPausedWrite();
+
+    // A rollback reload must not resolve while a write batch is still
+    // running against the pre-rollback adapters.
+    let reloaded = false;
+    const reload = store.reload({ discardPendingWrites: true }).then(() => {
+      reloaded = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reloaded).toBe(false);
+
+    storage.releasePausedWrite();
+    await reload;
+    expect(reloaded).toBe(true);
+    writer.close();
+  });
+});
