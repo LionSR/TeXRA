@@ -226,10 +226,14 @@ export class ProgressViewProvider extends BaseWebviewProvider {
           },
         );
       }),
-      vscode.window.onDidChangeActiveColorTheme(() => {
-        if (this.isViewVisible()) {
-          this.syncFullView();
-        }
+      vscode.window.onDidChangeActiveColorTheme(({ kind }) => {
+        // The webview only needs the THEME_SET message here (BaseWebviewApp's
+        // onThemeChange swaps the body class); rebuilding metadata for every
+        // persisted stream on a theme flip is pure waste (#9959).
+        if (!this.isViewVisible() || !this.canSendToWebview()) return;
+        this.webviewUpdater.setTheme(
+          kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light',
+        );
       }),
     );
   }
