@@ -1,10 +1,10 @@
 // Third-party imports
-import type { Interactions } from '@google/genai';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import type { Interactions } from '@google/genai';
 
 /**
  * The model every offline Google Interactions suite runs against. Pass the

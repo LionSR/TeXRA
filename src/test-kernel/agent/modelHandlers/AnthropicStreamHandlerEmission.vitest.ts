@@ -1,8 +1,8 @@
-import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { AnthropicStreamHandler } from '@agent/modelHandlers/support/AnthropicStreamHandler';
+import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 
 /**
  * Builds a handler wired to a captured event callback, so tests can push

@@ -1,5 +1,3 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +5,8 @@ import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandl
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import type Anthropic from '@anthropic-ai/sdk';
 
 const EXTENDED_CACHE_TTL_BETA = 'extended-cache-ttl-2025-04-11';
 

@@ -1,7 +1,3 @@
-import type {
-  BetaContentBlock,
-  BetaMessage,
-} from '@anthropic-ai/sdk/resources/beta/messages';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,6 +5,10 @@ import {
   extractAnthropicServerToolData,
   buildAnthropicAssistantContent,
 } from '@agent/modelHandlers/anthropic/anthropicServerTools';
+import type {
+  BetaContentBlock,
+  BetaMessage,
+} from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Minimal block fixtures. The production guards discriminate on `type`, so these
 // runtime shapes are sufficient; cast through unknown to satisfy the SDK types.

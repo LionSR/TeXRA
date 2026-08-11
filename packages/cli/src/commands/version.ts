@@ -14,7 +14,7 @@ import {
 function isCliOutputFormat(value: unknown): value is CliOutputFormat {
   return (
     typeof value === 'string' &&
-    CLI_OUTPUT_FORMATS.some((format) => format === value)
+    CLI_OUTPUT_FORMATS.includes(value)
   );
 }
 

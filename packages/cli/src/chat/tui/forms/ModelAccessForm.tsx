@@ -62,12 +62,11 @@ export function ModelAccessForm(
           kind: 'pending',
           state: status?.state ?? 'loading',
         });
-  const detailLines =
-    status?.state === 'loaded'
-      ? status.overview.lines
-      : status?.state === 'failed'
-        ? [status.message]
-        : undefined;
+  const detailLines = (() => {
+    if (status?.state === 'loaded') return status.overview.lines;
+    if (status?.state === 'failed') return [status.message];
+    return undefined;
+  })();
 
   return (
     <ListForm
