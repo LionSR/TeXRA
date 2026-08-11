@@ -48,6 +48,8 @@ return 'done'`,
           'stageBlocked',
       ),
     ).toBe(true);
+    // Drain-time cloning: every delivered snapshot is its own isolated copy.
+    expect(new Set(snapshots).size).toBe(snapshots.length);
     expect(result.snapshot.stages.map((stage) => stage.lifecycle)).toEqual([
       'completed',
       'skipped',

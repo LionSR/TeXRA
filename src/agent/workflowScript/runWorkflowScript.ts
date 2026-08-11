@@ -258,7 +258,10 @@ class CoalescedSnapshotWriter {
   async #drain(): Promise<void> {
     try {
       while (this.#pending) {
-        const snapshot = this.#pending;
+        // The publisher hands over a live reference; snapshot it here, at
+        // drain time, so publications coalesced away never pay the clone and
+        // each onSnapshot consumer still gets its own isolated copy.
+        const snapshot = structuredClone(this.#pending);
         this.#pending = undefined;
         await this.#write?.(snapshot);
       }

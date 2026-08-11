@@ -33,6 +33,11 @@ export class WorkflowExecutionState {
     readonly phases: readonly { readonly title: string }[];
     readonly tasks: readonly WorkflowCallIdentity[];
     readonly initialSnapshot?: WorkflowExecutionSnapshot;
+    /**
+     * Receives the live snapshot on every transition, not a copy. Consumers
+     * that retain it or persist asynchronously must clone it first (the
+     * runner's snapshot writer clones at drain time).
+     */
     readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
   }) {
     this.#publish = options.publish;
@@ -447,7 +452,9 @@ export class WorkflowExecutionState {
 
   #emit(): void {
     this.#snapshot.timestamps.updatedAt = now();
-    this.#publish(structuredClone(this.#snapshot));
+    // Live reference by contract (see the publish option): coalesced-away
+    // publications then never pay a full structuredClone of the snapshot.
+    this.#publish(this.#snapshot);
   }
 }
 
