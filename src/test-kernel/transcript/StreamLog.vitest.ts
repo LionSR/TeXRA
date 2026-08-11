@@ -55,6 +55,9 @@ describe('StreamLog', () => {
     expect(entries[0]?.seqNo).toBe(1);
     expect(entries.at(-1)?.seqNo).toBe(5_001);
 
+    // Drain the appends so the update emission below is isolated.
+    log.drainEmission();
+
     const updated = log.update('message-2500', { text: 'changed' });
     expect(updated?.seqNo).toBe(2_502);
 
@@ -64,13 +67,16 @@ describe('StreamLog', () => {
     });
     expect(log.hasRunningGroup).toBe(false);
 
-    const dirty = log.getDirtyUpdates();
-    expect(dirty.map((entry) => entry.id)).toEqual(['run', 'message-2500']);
-    log.ackDirtyUpdates(dirty);
-    expect(log.getDirtyUpdates()).toEqual([]);
+    const delta = log.drainEmission();
+    expect(delta.appended).toEqual([]);
+    expect(delta.dirtied.map((entry) => entry.id)).toEqual([
+      'run',
+      'message-2500',
+    ]);
+    expect(log.hasUndrainedChanges).toBe(false);
   });
 
-  it('does not mark no-op updates dirty', () => {
+  it('does not emit no-op updates', () => {
     const log = new StreamLog();
     log.append({
       id: 'message',
@@ -80,9 +86,14 @@ describe('StreamLog', () => {
       text: 'unchanged',
       messageType: MESSAGE_TYPES.DEFAULT,
     });
+    log.drainEmission();
 
     expect(log.update('message', { text: 'unchanged' })).toBeUndefined();
-    expect(log.getDirtyUpdates()).toEqual([]);
+    expect(log.hasUndrainedChanges).toBe(false);
+    const delta = log.drainEmission();
+    expect(delta.appended).toEqual([]);
+    expect(delta.dirtied).toEqual([]);
+    expect(delta.textChunks).toEqual([]);
   });
 
   it('assigns one durable settlement order when rows become printable', () => {
@@ -131,75 +142,78 @@ describe('StreamLog', () => {
     expect(later.settlementSeqNo).toBe(3);
   });
 
-  it('tracks text appends separately from whole-entry updates', () => {
+  it('emits text appends as merged chunks, not dirtied entries', () => {
     const log = logWithMessage();
+    log.drainEmission();
 
     log.appendText('message', 'hello');
     log.appendText('message', ' world');
 
     expect(log.getRange(0, log.head)[0]?.text).toBe('hello world');
-    expect(log.getDirtyUpdates()).toEqual([]);
-    expect(log.getDirtyTextDeltas()).toEqual([
+    const delta = log.drainEmission();
+    expect(delta.dirtied).toEqual([]);
+    expect(delta.textChunks).toEqual([
       { id: 'message', appendText: 'hello world' },
     ]);
   });
 
-  it('builds text deltas across the joined prefix and chunk tail', () => {
+  it('starts a fresh chunk window after each drain, across materialization', () => {
     const log = logWithMessage();
+    log.drainEmission();
 
     log.appendText('message', 'hello');
     // Materialize the joined prefix, then keep streaming unjoined chunks:
-    // the delta must be assembled piecewise, not by re-joining the text.
+    // the chunk window is captured at append time, not re-derived from text.
     expect(log.getRange(0, log.head)[0]?.text).toBe('hello');
     log.appendText('message', ' wor');
     log.appendText('message', 'ld');
 
-    expect(log.getDirtyTextDeltas()).toEqual([
+    expect(log.drainEmission().textChunks).toEqual([
       { id: 'message', appendText: 'hello world' },
     ]);
 
-    log.ackDirtyTextDeltas(log.getDirtyTextDeltas());
     log.appendText('message', '!');
-    expect(log.getDirtyTextDeltas()).toEqual([
+    expect(log.drainEmission().textChunks).toEqual([
       { id: 'message', appendText: '!' },
     ]);
   });
 
-  it('keeps text appended while a delta frame is in flight', () => {
+  it('lets a same-window update supersede text chunks with its full value', () => {
+    const log = logWithMessage();
+    log.drainEmission();
+
+    log.appendText('message', 'hel');
+    log.update('message', { text: 'rewritten' });
+
+    const delta = log.drainEmission();
+    expect(delta.textChunks).toEqual([]);
+    expect(delta.dirtied.map((entry) => entry.text)).toEqual(['rewritten']);
+  });
+
+  it('folds same-window chunks into a newly appended entry by value', () => {
     const log = logWithMessage();
 
     log.appendText('message', 'hello');
-    const inFlight = log.getDirtyTextDeltas();
-    log.appendText('message', ' world');
-    log.ackDirtyTextDeltas(inFlight);
 
-    expect(log.getDirtyTextDeltas()).toEqual([
-      { id: 'message', appendText: ' world' },
-    ]);
+    const delta = log.drainEmission();
+    expect(delta.textChunks).toEqual([]);
+    expect(delta.dirtied).toEqual([]);
+    expect(delta.appended.map((entry) => entry.text)).toEqual(['hello']);
   });
 
-  it('drops pending text deltas when a full entry replay covers them', () => {
-    const log = logWithMessage();
+  it('carries chunks appended after a same-window update inside the dirtied value', () => {
+    const log = logWithMessage('base');
+    log.drainEmission();
 
-    log.appendText('message', 'hello');
-    const [entry] = log.getRange(0, log.head);
-    if (!entry) throw new Error('expected delivered entry');
-    log.ackDirtyTextDeltas([], [entry]);
+    log.update('message', { text: 'rewritten' });
+    log.appendText('message', ' plus');
 
-    expect(log.getDirtyTextDeltas()).toEqual([]);
-  });
-
-  it('keeps only text appended while a full entry replay is in flight', () => {
-    const log = logWithMessage('prefix ');
-
-    log.appendText('message', 'hello');
-    const [entry] = log.getRange(0, log.head);
-    if (!entry) throw new Error('expected delivered entry');
-    log.appendText('message', ' world');
-    log.ackDirtyTextDeltas([], [entry]);
-
-    expect(log.getDirtyTextDeltas()).toEqual([
-      { id: 'message', appendText: ' world' },
+    // The dirtied entry resolves to the current object at drain time, whose
+    // text already includes the trailing chunk — so the chunk is dropped.
+    const delta = log.drainEmission();
+    expect(delta.textChunks).toEqual([]);
+    expect(delta.dirtied.map((entry) => entry.text)).toEqual([
+      'rewritten plus',
     ]);
   });
 
