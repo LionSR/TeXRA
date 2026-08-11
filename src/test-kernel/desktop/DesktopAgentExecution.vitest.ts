@@ -2073,6 +2073,12 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       runAgent,
       canonicalStreamIds: ['stream-1'],
+      // The sidecar existence probe (listKeys) consults the backing map;
+      // reads themselves stay answered by kvRead above, as in production
+      // where the listing and the reads see the same directory.
+      kvStoreBacking: new Map<string, unknown>([
+        ['streamData/stream-1/meta', {}],
+      ]),
     });
 
     try {
