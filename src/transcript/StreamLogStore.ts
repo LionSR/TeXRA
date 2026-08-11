@@ -13,7 +13,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { debounce, filterNotNull, isObject } from '@utils/core';
+import { createFlushableDebounce, filterNotNull, isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -30,7 +30,7 @@ import {
   type StreamLogUpdatePatch,
 } from './StreamLog';
 
-const SAVE_DEBOUNCE_MS = 300;
+const SAVE_MAX_WAIT_MS = 300;
 export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
 export const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
@@ -273,20 +273,20 @@ export class StreamLogStore {
    */
   private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
 
-  private readonly debouncedSave = debounce(
-    () => this.executeWrite(),
-    SAVE_DEBOUNCE_MS,
+  /**
+   * Max-wait throttle for the persistence path: the first dirty mutation in a
+   * window starts the timer and later mutations join it without resetting it
+   * (`scheduleSave`'s `pending` guard), so sustained sub-window appends still
+   * produce a durable write every SAVE_MAX_WAIT_MS instead of starving a
+   * trailing debounce. A crash mid-stream loses at most one window.
+   */
+  private readonly saveThrottle = createFlushableDebounce(
+    () => void this.executeWrite(),
+    SAVE_MAX_WAIT_MS,
   );
   /**
-   * Track save() awaiters so we can settle them when the debounced write is
-   * cancelled (flush / delete / clear). perfect-debounce's cancel() drops
-   * pending resolvers without settling them, which would hang any awaited
-   * save() indefinitely.
-   */
-  private pendingSaveAwaiters: Array<() => void> = [];
-  /**
-   * Tracks the active write. A flush can cancel the debounce and start a write
-   * while an already-queued debounce callback also runs; that is safe because
+   * Tracks the active write. A flush can cancel the throttle and start a write
+   * while an already-queued throttle callback also runs; that is safe because
    * each write snapshots and clears `dirtyIds`, so the second call only
    * sees newly dirtied streams or settles with no work.
    */
@@ -480,7 +480,7 @@ export class StreamLogStore {
     this.stateRevision += 1;
     if (this.mode.kind === 'persistent') {
       this.markDirty(streamId);
-      void this.save();
+      this.scheduleSave();
     }
   }
 
@@ -681,7 +681,7 @@ export class StreamLogStore {
           this.stateRevision += 1;
           this.refreshSummary(streamId, merged);
           this.markDirty(streamId);
-          void this.save();
+          this.scheduleSave();
           // The merge renumbered seqNos under a fresh log instance, so
           // fold-state consumers must rebuild rather than apply a delta.
           this.notify(streamId, { reset: true });
@@ -710,7 +710,7 @@ export class StreamLogStore {
         // append to unblock it.
         const recovered = this.streams.get(streamId);
         if (recovered) recovered.loadFailed = false;
-        if (this.dirtyIds.has(streamId)) void this.save();
+        if (this.dirtyIds.has(streamId)) this.scheduleSave();
       } catch (err) {
         // Keep the disk copy authoritative and surface the failed read. A
         // caller may retry `ensureLoaded`, but no append is accepted until a
@@ -769,7 +769,7 @@ export class StreamLogStore {
       ? logInstance.appendSettled(entry)
       : logInstance.append(entry);
     this.commitChange(streamId, logInstance);
-    void this.save();
+    this.scheduleSave();
     return appended;
   }
 
@@ -790,7 +790,7 @@ export class StreamLogStore {
     if (!updated) return undefined;
 
     this.commitChange(streamId, logInstance);
-    void this.save();
+    this.scheduleSave();
     return updated;
   }
 
@@ -816,7 +816,7 @@ export class StreamLogStore {
   async delete(streamId: StreamTabId): Promise<void> {
     this.assertWritableStore('delete a transcript stream');
     this.writeTombstones.add(streamId);
-    this.debouncedSave.cancel();
+    this.saveThrottle.cancel();
 
     try {
       await this.inFlightWrite;
@@ -847,7 +847,7 @@ export class StreamLogStore {
     const count = this.summaries.size;
     this.clearing = true;
     this.writeGeneration += 1;
-    this.cancelPendingSave();
+    this.saveThrottle.cancel();
     this.forgetAllStreamState();
     this.stateRevision += 1;
 
@@ -888,7 +888,7 @@ export class StreamLogStore {
       status,
     );
     if (affected.length > 0) {
-      void this.save();
+      this.scheduleSave();
     }
     // Preserve logs that were resident before this call; only release the
     // cold logs loaded specifically for recovery.
@@ -993,22 +993,16 @@ export class StreamLogStore {
   }
 
   /**
-   * Debounced internal persistence trigger; every mutator schedules it.
-   * External durability is `flush()`, which drains, retries, and throws.
+   * Throttled internal persistence trigger; every mutator schedules it.
+   * Fire-and-forget by design: only `flush()` is awaitable, and it drains,
+   * retries, and throws.
    */
-  private save(): Promise<void> {
+  private scheduleSave(): void {
     this.assertWritableStore('save transcripts');
-    if (this.mode.kind === 'ephemeral' || this.dirtyIds.size === 0) {
-      return Promise.resolve();
-    }
-    // Start/extend the debounce timer. perfect-debounce handles timer
-    // management and returns a shared promise, but we ignore it and track
-    // our own awaiters so we can settle them when the debounce is cancelled
-    // during flush / delete / clear.
-    this.debouncedSave();
-    return new Promise<void>((resolve) => {
-      this.pendingSaveAwaiters.push(resolve);
-    });
+    if (this.mode.kind === 'ephemeral' || this.dirtyIds.size === 0) return;
+    // Throttle, not debounce: only start a window when none is open, so a
+    // sustained stream of mutations cannot keep pushing the write out.
+    if (!this.saveThrottle.pending) this.saveThrottle.schedule();
   }
 
   async flush(): Promise<void> {
@@ -1028,8 +1022,8 @@ export class StreamLogStore {
     let writeAttempts = 0;
     while (true) {
       const loads = this.pendingLoads();
-      if (this.debouncedSave.isPending()) {
-        this.debouncedSave.cancel();
+      if (this.saveThrottle.pending) {
+        this.saveThrottle.cancel();
         await this.executeWrite();
         writeAttempts++;
       } else if (this.inFlightWrite) {
@@ -1102,7 +1096,7 @@ export class StreamLogStore {
 
   private async executeReload(discardPendingWrites: boolean): Promise<void> {
     if (discardPendingWrites) {
-      this.cancelPendingSave();
+      this.saveThrottle.cancel();
     } else if (this.mode.kind === 'persistent') {
       await this.flush();
     }
@@ -1403,18 +1397,6 @@ export class StreamLogStore {
     }
   }
 
-  private cancelPendingSave(): void {
-    this.debouncedSave.cancel();
-    // `clear()` discards all streams, so there is nothing left for pending
-    // save() callers to wait on.
-    this.settlePendingSaveAwaiters();
-  }
-
-  private settlePendingSaveAwaiters(): void {
-    const awaiters = this.pendingSaveAwaiters.splice(0);
-    for (const resolve of awaiters) resolve();
-  }
-
   private parsePersistedEntries(
     streamId: StreamTabId,
     rawEntries: unknown,
@@ -1485,15 +1467,8 @@ export class StreamLogStore {
     }
 
     if (toWrite.length === 0) {
-      this.settlePendingSaveAwaiters();
       return Promise.resolve();
     }
-
-    // Snapshot current save awaiters so new save() calls during this write
-    // get fresh awaiters for the next debounce window. We settle these after
-    // the write completes (success or failure) so flush / delete / clear
-    // don't strand callers that are awaiting save().
-    const awaiters = this.pendingSaveAwaiters.splice(0);
 
     log.debug(LOG_TAG, `Writing ${toWrite.length} dirty stream(s)`);
     const writeGeneration = this.writeGeneration;
@@ -1535,10 +1510,6 @@ export class StreamLogStore {
         this.inFlightWrite = null;
       }
       this.drainPendingReleases();
-      // Settle the snapshotted save awaiters — on failure the dirty
-      // streams have already been re-marked for retry, so resolve
-      // regardless.
-      for (const resolve of awaiters) resolve();
     });
 
     this.inFlightWrite = writePromise;

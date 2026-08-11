@@ -1586,3 +1586,57 @@ describe('StreamLogStore load', () => {
     expect(storage.writes.size).toBe(0);
   });
 });
+
+describe('StreamLogStore save throttle', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('writes periodically under sustained sub-window appends and drains on flush', async () => {
+    let logWrites = 0;
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      onLogWrite: () => {
+        logWrites += 1;
+      },
+    });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, ''));
+    // 20 chunks 100ms apart: a trailing debounce would reset its timer on
+    // every append and never write until the stream pauses; the max-wait
+    // throttle must produce a durable write per 300ms window regardless.
+    for (let i = 0; i < 20; i += 1) {
+      writer.appendText('m1', `chunk-${i} `);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(logWrites).toBeGreaterThanOrEqual(5);
+
+    // The tail landed after the last periodic write; flush drains it.
+    const writesBeforeFlush = logWrites;
+    writer.close();
+    await store.flush();
+    expect(logWrites).toBeGreaterThan(writesBeforeFlush);
+    expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe(
+      Array.from({ length: 20 }, (_, i) => `chunk-${i} `).join(''),
+    );
+  });
+
+  it('bounds the durability gap to one throttle window for a first append', async () => {
+    const storage = mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, 'first entry'));
+    expect(writtenLog(storage.writes, 'alpha')).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(writtenLog(storage.writes, 'alpha')).toHaveLength(1);
+    writer.close();
+  });
+});

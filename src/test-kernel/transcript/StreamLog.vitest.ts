@@ -4,6 +4,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  type StreamLogEntry,
 } from '@shared/schemas';
 import { StreamLog } from '@transcript';
 
@@ -179,5 +180,82 @@ describe('StreamLog', () => {
     expect(log.getDirtyTextDeltas()).toEqual([
       { id: 'message', appendText: ' world' },
     ]);
+  });
+
+  it('returns point-in-time text on emitted entries across later appends', () => {
+    const log = logWithMessage();
+
+    const first = log.appendText('message', 'hel');
+    const second = log.appendText('message', 'lo');
+    log.appendText('message', '!');
+
+    // Each emitted entry object keeps the text as of its own mutation, even
+    // though the chunks live in one shared accumulator that keeps growing.
+    expect(second?.text).toBe('hello');
+    expect(first?.text).toBe('hel');
+    expect(log.getRange(0, log.head)[0]?.text).toBe('hello!');
+  });
+
+  it('keeps materialized text equal to the chunk-join oracle across interleavings', () => {
+    // Deterministic LCG so the append/update/settle interleaving corpus is
+    // reproducible without a fixture file.
+    let seed = 42;
+    const rand = (bound: number): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed % bound;
+    };
+
+    const log = new StreamLog();
+    const oracle = new Map<string, string>();
+    const ids: string[] = [];
+    const snapshots: Array<{ entry: StreamLogEntry; text: string }> = [];
+
+    for (let step = 0; step < 400; step += 1) {
+      const op = rand(10);
+      if (op < 2 || ids.length === 0) {
+        const id = `row-${ids.length}`;
+        ids.push(id);
+        log.append({
+          id,
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: step,
+          text: 'seed',
+          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+        });
+        oracle.set(id, 'seed');
+        continue;
+      }
+      const id = ids[rand(ids.length)];
+      if (op < 8) {
+        const chunk = `c${step}|`;
+        const updated = log.appendText(id, chunk);
+        oracle.set(id, `${oracle.get(id) ?? ''}${chunk}`);
+        const expected = oracle.get(id);
+        if (updated && expected !== undefined) {
+          snapshots.push({ entry: updated, text: expected });
+        }
+      } else if (op === 8) {
+        const text = `rewritten-${step}`;
+        if (log.update(id, { text })) oracle.set(id, text);
+      } else {
+        log.settle(id, { data: { status: 'completed', step } });
+      }
+    }
+
+    for (const entry of log.getRange(0)) {
+      expect(entry.text).toBe(oracle.get(entry.id));
+    }
+    // Emitted entries stay point-in-time even after later chunks landed.
+    for (const { entry, text } of snapshots) {
+      expect(entry.text).toBe(text);
+    }
+    // The save path (JSON serialization) sees the same materialized text.
+    const persisted = JSON.parse(
+      JSON.stringify(log.toPersistedEntries()),
+    ) as StreamLogEntry[];
+    for (const entry of persisted) {
+      expect(entry.text).toBe(oracle.get(entry.id));
+    }
   });
 });
