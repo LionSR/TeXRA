@@ -3,6 +3,14 @@
 // entries land in side panels and modals; tool rows render inline alongside
 // assistant prose.
 //
+// The projection is a fold over the store's entry-level change feed: every
+// `StreamLogStore.onChange` emission carries a `StreamLogDelta` (appended
+// entries + dirtied entries by value + a monotonic emission seq), and the
+// per-stream `TranscriptFoldState` on the slice is advanced in O(delta) per
+// tick. A fresh consumer, an emission gap, a reset emission, or a
+// projection-mode flip rebuilds the state from `getRange(0)` through the
+// same application path — the from-scratch build IS the resync path.
+//
 // Secrets are redacted at record time by TexraTranscriptRecorder, which is
 // what every host and the HTML export share. The `redactSecrets` calls below
 // remain only to cover rows persisted before that landed; they are idempotent
@@ -25,7 +33,6 @@ import {
   TOOL_USE_STATUS,
   WorkflowCallProgressSchema,
   isTerminalWorkflowCallProgress,
-  type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -48,6 +55,11 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import {
+  StreamLogDeltaBuffer,
+  type StreamLog,
+  type StreamLogDelta,
+} from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -69,6 +81,8 @@ import {
   type ConversationEntry,
   type LoadedImage,
   type StreamSlice,
+  type TranscriptFoldItem,
+  type TranscriptFoldState,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
@@ -169,9 +183,10 @@ function safeWorkflowOperationalSummary(text: string): string | undefined {
 }
 
 function workflowOperationalLatestLine(
-  entries: readonly ConversationEntry[],
+  items: readonly TranscriptFoldItem[],
 ): string | undefined {
-  for (const entry of entries.toReversed()) {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const entry = items[index].rendered;
     if (entry.role === 'tool') {
       const line =
         safeWorkflowOperationalSummary(entry.toolUse.headerSummary) ??
@@ -197,102 +212,12 @@ function workflowOperationalLatestLine(
   return undefined;
 }
 
-function transcriptMessageTypesForStream(
-  slice: Pick<StreamSlice, 'identity'> | undefined,
-): Set<string> {
-  // Detached child runs surface their full log output (phase group rows and
-  // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
-  // transcript which shows only model/tool/user/error rows. A workflow-script
-  // run is one such child: its phases and per-agent Running/Finished lines
-  // project onto its own stream trace and must render in its focused viewport.
-  return isFullLogChildStream(slice)
-    ? CHILD_STREAM_LOG_MESSAGE_TYPES
-    : TRANSCRIPT_MESSAGE_TYPES;
-}
-
 function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
   const data = entry.data;
   if (typeof data !== 'object' || data === null || !('status' in data)) {
     return (entry.text ?? '').trim().length > 0;
   }
   return data.status === 'running';
-}
-
-function latestLogActivityIsThinking(
-  entries: readonly StreamLogEntry[],
-): boolean {
-  const entry = entries.findLast((candidate) =>
-    LIVE_ACTIVITY_MESSAGE_TYPES.has(candidate.messageType ?? ''),
-  );
-  if (!entry) return false;
-  return (
-    entry.messageType === MESSAGE_TYPES.THINKING &&
-    logEntryStreamIsRunning(entry)
-  );
-}
-
-/** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
- *  via Zod passthrough, so a `===` compare would defeat the cache the
- *  moment any upstream code reconstructs `data` (deserialization,
- *  structured clone, future log replay). Inputs are small — tool call
- *  args, not output — so a structural comparison is cheap. */
-function inputEqual(prev: unknown, next: unknown): boolean {
-  return prev === next || isDeepStrictEqual(prev, next);
-}
-
-// Field-by-field — a stringified signature over the whole NormalizedToolUse
-// would allocate the full outputText (potentially 50 KB+ of bash output) on
-// every comparison. Cover every field ToolUseRow reads so future changes
-// can't be silently swallowed.
-function toolUseEqual(
-  prev: NormalizedToolUse,
-  next: NormalizedToolUse,
-): boolean {
-  return (
-    prev.status === next.status &&
-    prev.toolName === next.toolName &&
-    prev.outputText === next.outputText &&
-    prev.errorText === next.errorText &&
-    prev.exitCode === next.exitCode &&
-    prev.headerSummary === next.headerSummary &&
-    prev.isError === next.isError &&
-    prev.isUserFeedback === next.isUserFeedback &&
-    prev.userInstructionText === next.userInstructionText &&
-    inputEqual(prev.input, next.input)
-  );
-}
-
-function entriesEqual(
-  prev: ConversationEntry,
-  next: ConversationEntry,
-): boolean {
-  if (
-    prev.role !== next.role ||
-    prev.text !== next.text ||
-    prev.sourceSeqNo !== next.sourceSeqNo ||
-    prev.messageType !== next.messageType ||
-    prev.pendingEmbeddedSubagentFollowup !==
-      next.pendingEmbeddedSubagentFollowup ||
-    prev.finalized !== next.finalized ||
-    prev.settlementSeqNo !== next.settlementSeqNo
-  ) {
-    return false;
-  }
-  if (prev.role === 'tool' && next.role === 'tool') {
-    return toolUseEqual(prev.toolUse, next.toolUse);
-  }
-  if (prev.role === 'media' && next.role === 'media') {
-    return isDeepStrictEqual(prev.images, next.images);
-  }
-  if (prev.role === 'phase' && next.role === 'phase') {
-    return (
-      prev.phaseIndex === next.phaseIndex && prev.phaseTotal === next.phaseTotal
-    );
-  }
-  if (prev.role === 'workflowTask' && next.role === 'workflowTask') {
-    return isDeepStrictEqual(prev.task, next.task);
-  }
-  return true;
 }
 
 /**
@@ -379,50 +304,11 @@ function baseLogEntryFields<R extends ConversationEntry['role']>(
   };
 }
 
-/** Reuses `prev` when `next` is content-equal, so an unchanged row keeps identity. */
-function dedupeEntry(
-  prev: ConversationEntry | undefined,
-  next: ConversationEntry,
-): ConversationEntry {
-  return prev && entriesEqual(prev, next) ? prev : next;
-}
-
-/**
- * One log entry's cached render. `StreamLog` is append-only and replaces
- * the entry object on any mutation (tool-output patches, text appends, the
- * in-place GROUP_START → GROUP_END upsert), so an unchanged entry reference
- * guarantees an unchanged render.
- */
-interface CachedLogRender {
-  /** The log-entry object `rendered` was computed from. */
-  readonly source: StreamLogEntry;
-  /**
-   * The render with only source-owned finalization applied
-   * (`settlementSeqNo`, or the always-finalized kinds). Promotion inherited
-   * from the slice's copy is applied at assembly time, never baked in here,
-   * so a cached render stays valid even after the slice drops and
-   * re-projects the row (compact workflow dashboard ↔ full transcript).
-   */
-  readonly rendered: ConversationEntry | null;
-  /** `rendered` with inherited promotion applied — computed at most once. */
-  promoted?: ConversationEntry;
-}
-
-interface StreamRenderState {
-  readonly renders: Map<string, CachedLogRender>;
-  /**
-   * The `renderLogEntryFresh` parameter the cache was built under. A stream
-   * whose category flips the lifecycle-to-taskGroups projection rebuilds
-   * from scratch rather than serving renders computed for the other mode.
-   */
-  readonly projectLifecycleToTaskGroups: boolean;
-}
-
 /**
  * Renders a log entry from scratch. `prev` is consulted only for phase
  * count inheritance (a GROUP_END row carries no index/total of its own);
- * finalization here is source-owned only — the slice's promotion is
- * re-inherited by {@link renderLogEntry} at assembly time.
+ * finalization here is source-owned only — the fold re-applies inherited
+ * promotion at the row's slot, so an already-promoted row never rolls back.
  */
 function renderLogEntryFresh(
   entry: StreamLogEntry,
@@ -445,8 +331,8 @@ function renderLogEntryFresh(
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
     if (!toolUse) return null;
-    // Never finalize here. `finalizeSettledPrefix` promotes a tool row only
-    // once it completes AND every entry before it has promoted, so a
+    // Never finalize here. The settled-prefix promotion advances over a tool
+    // row only once it completes AND every entry before it has promoted, so a
     // fast tool can't jump ahead of still-streaming assistant text in
     // `<Static>` (which is append-only).
     const next: ConversationEntry = {
@@ -524,7 +410,7 @@ function renderLogEntryFresh(
   ) {
     renderedText = redactSecrets(safeTerminalText(renderedText));
   }
-  // Assistant text is promoted by `finalizeSettledPrefix` once the model
+  // Assistant text is promoted by the settled-prefix advance once the model
   // moves on to a later entry. User/error rows can't change after they
   // appear, so they finalize immediately.
   const finalized = entry.settlementSeqNo !== undefined || role !== 'assistant';
@@ -540,40 +426,6 @@ function renderLogEntryFresh(
   return next;
 }
 
-/**
- * Renders one log entry against the slice's previous entries, re-rendering
- * only when the entry object has changed since the last sync (see
- * {@link STREAM_RENDER_STATES}). Once an entry settles — or, for its kind,
- * always finalizes — it stays finalized: an entry the slice already
- * promoted to `<Static>` re-inherits the flag here, so a re-sync tick can
- * never roll an already-promoted entry back.
- */
-function renderLogEntry(
-  state: StreamRenderState,
-  entry: StreamLogEntry,
-  prev: ConversationEntry | undefined,
-): ConversationEntry | null {
-  let cached = state.renders.get(entry.id);
-  if (cached === undefined || cached.source !== entry) {
-    cached = {
-      source: entry,
-      rendered: renderLogEntryFresh(
-        entry,
-        prev,
-        state.projectLifecycleToTaskGroups,
-      ),
-    };
-    state.renders.set(entry.id, cached);
-  }
-  const { rendered } = cached;
-  if (rendered === null || prev === undefined) return rendered;
-  const candidate =
-    prev.finalized && !rendered.finalized
-      ? (cached.promoted ??= { ...rendered, finalized: true })
-      : rendered;
-  return dedupeEntry(prev, candidate);
-}
-
 // An entry is "settled" once its content can no longer change, so it is
 // safe to print once into `<Static>` scrollback:
 //   - user / error: fixed the moment they appear.
@@ -584,7 +436,7 @@ function renderLogEntry(
 function isSettledEntry(
   entry: ConversationEntry,
   index: number,
-  entries: readonly ConversationEntry[],
+  total: number,
 ): boolean {
   switch (entry.role) {
     case 'activity':
@@ -602,9 +454,7 @@ function isSettledEntry(
     case 'workflowTask':
       return isTerminalWorkflowCallProgress(entry.task);
     case 'assistant':
-      return (
-        !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1
-      );
+      return !entry.pendingEmbeddedSubagentFollowup && index < total - 1;
   }
 }
 
@@ -625,7 +475,7 @@ export function finalizeSettledPrefix(
   let sealed = false; // hit the first still-pending entry in this round
   for (const [index, entry] of entries.entries()) {
     if (entry.finalized) continue;
-    const settled = isSettledEntry(entry, index, entries);
+    const settled = isSettledEntry(entry, index, entries.length);
     if (
       sealed ||
       ((entry.role === 'activity' || entry.role === 'workflowTask') &&
@@ -648,36 +498,6 @@ export function finalizeSettledPrefix(
 // can land before the first sync fires); one animation frame is enough
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
-
-type TranscriptCandidate = {
-  readonly rendered: ConversationEntry;
-  readonly sortSeq: number;
-  readonly tieBreak: number;
-};
-
-function compareTranscriptCandidates(
-  left: TranscriptCandidate,
-  right: TranscriptCandidate,
-): number {
-  return left.sortSeq - right.sortSeq || left.tieBreak - right.tieBreak;
-}
-
-// Log entries already arrive in seqNo order, so the per-tick common case is
-// fully sorted — only synthetic rows (spliced in by syntheticAfterSeq) can
-// land out of order. Detect sortedness in O(N) instead of paying the sort's
-// comparator churn on every streaming delta.
-function sortTranscriptCandidatesIfNeeded(
-  candidates: TranscriptCandidate[],
-): TranscriptCandidate[] {
-  for (let index = 1; index < candidates.length; index += 1) {
-    if (
-      compareTranscriptCandidates(candidates[index - 1], candidates[index]) > 0
-    ) {
-      return candidates.sort(compareTranscriptCandidates);
-    }
-  }
-  return candidates;
-}
 
 /**
  * Incremental task-group projection state, kept beside the slice: the
@@ -709,30 +529,60 @@ const COMPACTION_PROJECTIONS = new Map<
 >();
 
 /**
- * Per-stream render caches for the transcript projection, keyed beside the
- * other incremental projections. Same proven in-file pattern as
- * {@link TASK_GROUP_PROJECTIONS}: walk the log each tick, skip every entry
- * whose object reference is unchanged, re-render exactly the appended or
- * in-place-updated rows — never a full re-render per tick.
+ * Store-emitted deltas awaiting the next batched sync, coalesced per stream.
+ * Written by the `onChange` subscriber; drained by `syncStreamLog`, so an
+ * out-of-band sync (status transition, focus switch, tests) folds the same
+ * buffered changes instead of rescanning the log.
  */
-const STREAM_RENDER_STATES = new Map<StreamTabId, StreamRenderState>();
+interface PendingStreamDeltas {
+  readonly buffer: StreamLogDeltaBuffer;
+  generation: number;
+}
+
+const PENDING_DELTAS = new Map<StreamTabId, PendingStreamDeltas>();
 
 registerCliStateResetHook(() => {
   TASK_GROUP_PROJECTIONS.clear();
   COMPACTION_PROJECTIONS.clear();
-  STREAM_RENDER_STATES.clear();
+  PENDING_DELTAS.clear();
 });
 
-/** Test-only: per-stream render-cache occupancy, for eviction-path regression coverage. */
+let foldApplicationsForTest = 0;
+let rebuildApplicationsForTest = 0;
+
+/** Test-only: how many syncs folded buffered deltas vs rebuilt from scratch.
+ *  The equivalence property test asserts the fold path actually ran. */
+export function transcriptFoldCountersForTest(): {
+  readonly folds: number;
+  readonly rebuilds: number;
+} {
+  return {
+    folds: foldApplicationsForTest,
+    rebuilds: rebuildApplicationsForTest,
+  };
+}
+
+/** Test-only: drop a stream's fold state so the next sync rebuilds from
+ *  scratch — the production resync path, used as the equivalence oracle. */
+export function invalidateTranscriptFoldForTest(streamId: StreamTabId): void {
+  const fold = streams.get().get(streamId)?.transcriptFold;
+  if (fold) resetTranscriptFoldState(fold);
+}
+
+/** Test-only: per-stream projection-state occupancy, for eviction-path regression coverage. */
 export function streamRenderCacheSizesForTest(): {
   readonly taskGroups: number;
   readonly compaction: number;
   readonly render: number;
 } {
+  let render = 0;
+  for (const slice of streams.get().values()) {
+    if (slice.transcriptFold?.hydrated) render += 1;
+  }
   return {
     taskGroups: TASK_GROUP_PROJECTIONS.size,
     compaction: COMPACTION_PROJECTIONS.size,
-    render: STREAM_RENDER_STATES.size,
+    render,
   };
 }
 
@@ -766,11 +616,11 @@ function projectTaskGroupsIncrementally(
 
 function projectCompactionIncrementally(
   streamId: StreamTabId,
-  entries: readonly StreamLogEntry[],
+  log: StreamLog,
   streamTerminal: boolean,
 ): CompactionActivityProjection {
   let state = COMPACTION_PROJECTIONS.get(streamId);
-  if (!state || state.appliedHead > entries.length) {
+  if (!state || state.appliedHead > log.size) {
     state = {
       projection: createCompactionActivityProjection(),
       appliedHead: 0,
@@ -779,19 +629,606 @@ function projectCompactionIncrementally(
     COMPACTION_PROJECTIONS.set(streamId, state);
   }
 
+  // Only the appended tail is read (O(delta)); in-place mutations behind the
+  // head were already applied when their entries were first appended.
   applyCompactionActivityEntries(
     state.projection,
-    entries.slice(state.appliedHead),
+    log.getRange(state.appliedHead),
   );
-  state.appliedHead = entries.length;
+  state.appliedHead = log.size;
   if (streamTerminal && !state.terminal) {
     settleCompactionActivities(state.projection, {
-      throughSeqNo: entries.length,
+      throughSeqNo: log.size,
     });
   }
   state.terminal = streamTerminal;
   return state.projection;
 }
+
+// ---------------------------------------------------------------------------
+// Transcript fold: items maintenance
+// ---------------------------------------------------------------------------
+
+/** Per-application change summary, driving output rebuilds and cursor rescans. */
+interface FoldChangeFlags {
+  itemsChanged: boolean;
+  /** A change touched a row the compact workflow output selects. */
+  compactAffected: boolean;
+  syntheticsChanged: boolean;
+  userRescan: boolean;
+  responseRescan: boolean;
+}
+
+function newFoldChangeFlags(): FoldChangeFlags {
+  return {
+    itemsChanged: false,
+    compactAffected: false,
+    syntheticsChanged: false,
+    userRescan: false,
+    responseRescan: false,
+  };
+}
+
+function createTranscriptFoldState(): TranscriptFoldState {
+  return {
+    hydrated: false,
+    logInstanceId: 0,
+    emissionSeq: 0,
+    items: [],
+    indexById: new Map(),
+    finalizedFrontier: 0,
+    latestUserPos: -1,
+    latestResponsePos: -1,
+    fullLogChild: false,
+    workflowOperationalOnly: false,
+    projectLifecycleToTaskGroups: false,
+    activeSkills: [],
+    synthetics: [],
+  };
+}
+
+function resetTranscriptFoldState(state: TranscriptFoldState): void {
+  state.hydrated = false;
+  state.logInstanceId = 0;
+  state.emissionSeq = 0;
+  state.items.length = 0;
+  state.indexById.clear();
+  state.finalizedFrontier = 0;
+  state.latestUserPos = -1;
+  state.latestResponsePos = -1;
+  state.activeSkillsEntry = undefined;
+  state.activeSkillsParsedFor = undefined;
+  state.activeSkills = [];
+  state.liveActivityEntry = undefined;
+  state.synthetics = [];
+  state.lastOutputFull = undefined;
+  state.lastEntriesOutput = undefined;
+}
+
+/** `sortSeq`/`tieBreak`/`rank` total order over fold items. `Infinity`
+ *  anchors compare as equal on the first term (NaN is falsy), falling
+ *  through to the tiebreaks, which is exactly the order wanted. */
+function compareFoldOrder(
+  a: TranscriptFoldItem,
+  b: TranscriptFoldItem,
+): number {
+  return a.sortSeq - b.sortSeq || a.tieBreak - b.tieBreak || a.rank - b.rank;
+}
+
+/** Upper bound: first index whose item orders strictly after `item`, so an
+ *  equal-key later insert lands after its equals (stable across sources). */
+function foldInsertPosition(
+  items: readonly TranscriptFoldItem[],
+  item: TranscriptFoldItem,
+): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (compareFoldOrder(items[mid], item) <= 0) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+function isUserLineRow(entry: ConversationEntry): boolean {
+  return entry.role === 'user' && entry.text.trim().length > 0;
+}
+
+function isFinalizedResponseRow(entry: ConversationEntry): boolean {
+  return (
+    entry.role === 'assistant' &&
+    entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+    entry.finalized &&
+    entry.text.trim().length > 0
+  );
+}
+
+function touchesCompactOutput(entry: ConversationEntry): boolean {
+  return entry.synthetic === true || WORKFLOW_DASHBOARD_ROLES.has(entry.role);
+}
+
+function findLastFoldPos(
+  items: readonly TranscriptFoldItem[],
+  matches: (entry: ConversationEntry) => boolean,
+): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (matches(items[index].rendered)) return index;
+  }
+  return -1;
+}
+
+function reindexFoldFrom(state: TranscriptFoldState, from: number): void {
+  for (let index = from; index < state.items.length; index += 1) {
+    state.indexById.set(state.items[index].rendered.id, index);
+  }
+}
+
+function insertFoldItem(
+  state: TranscriptFoldState,
+  item: TranscriptFoldItem,
+  flags: FoldChangeFlags,
+): void {
+  const items = state.items;
+  const last = items.at(-1);
+  const pos =
+    last === undefined || compareFoldOrder(last, item) <= 0
+      ? items.length
+      : foldInsertPosition(items, item);
+  if (pos === items.length) {
+    items.push(item);
+    state.indexById.set(item.rendered.id, pos);
+  } else {
+    items.splice(pos, 0, item);
+    reindexFoldFrom(state, pos);
+    if (pos < state.finalizedFrontier) state.finalizedFrontier = pos;
+    if (state.latestUserPos >= pos) state.latestUserPos += 1;
+    if (state.latestResponsePos >= pos) state.latestResponsePos += 1;
+  }
+  if (isUserLineRow(item.rendered) && pos > state.latestUserPos) {
+    state.latestUserPos = pos;
+  }
+  if (isFinalizedResponseRow(item.rendered) && pos > state.latestResponsePos) {
+    state.latestResponsePos = pos;
+  }
+  flags.itemsChanged = true;
+  if (touchesCompactOutput(item.rendered)) flags.compactAffected = true;
+}
+
+function replaceFoldRendered(
+  state: TranscriptFoldState,
+  pos: number,
+  rendered: ConversationEntry,
+  flags: FoldChangeFlags,
+): void {
+  const item = state.items[pos];
+  const previous = item.rendered;
+  item.rendered = rendered;
+  flags.itemsChanged = true;
+  if (touchesCompactOutput(previous) || touchesCompactOutput(rendered)) {
+    flags.compactAffected = true;
+  }
+  if (pos < state.finalizedFrontier && !rendered.finalized) {
+    state.finalizedFrontier = pos;
+  }
+  if (pos === state.latestUserPos && !isUserLineRow(rendered)) {
+    flags.userRescan = true;
+  } else if (isUserLineRow(rendered) && pos > state.latestUserPos) {
+    state.latestUserPos = pos;
+  }
+  if (pos === state.latestResponsePos && !isFinalizedResponseRow(rendered)) {
+    flags.responseRescan = true;
+  } else if (
+    isFinalizedResponseRow(rendered) &&
+    pos > state.latestResponsePos
+  ) {
+    state.latestResponsePos = pos;
+  }
+}
+
+function removeFoldItemAt(
+  state: TranscriptFoldState,
+  pos: number,
+  flags: FoldChangeFlags,
+): void {
+  const [removed] = state.items.splice(pos, 1);
+  state.indexById.delete(removed.rendered.id);
+  reindexFoldFrom(state, pos);
+  if (pos < state.finalizedFrontier) state.finalizedFrontier -= 1;
+  if (pos === state.latestUserPos) flags.userRescan = true;
+  else if (pos < state.latestUserPos) state.latestUserPos -= 1;
+  if (pos === state.latestResponsePos) flags.responseRescan = true;
+  else if (pos < state.latestResponsePos) state.latestResponsePos -= 1;
+  flags.itemsChanged = true;
+  if (touchesCompactOutput(removed.rendered)) flags.compactAffected = true;
+}
+
+/** Recompute every position-derived cursor after a bulk items rebuild. */
+function recomputeFoldCursors(state: TranscriptFoldState): void {
+  const items = state.items;
+  let frontier = 0;
+  while (frontier < items.length && items[frontier].rendered.finalized) {
+    frontier += 1;
+  }
+  state.finalizedFrontier = frontier;
+  state.latestUserPos = findLastFoldPos(items, isUserLineRow);
+  state.latestResponsePos = findLastFoldPos(items, isFinalizedResponseRow);
+}
+
+// ---------------------------------------------------------------------------
+// Transcript fold: change application
+// ---------------------------------------------------------------------------
+
+interface FoldContext {
+  readonly streamId: StreamTabId;
+  readonly log: StreamLog;
+  /** Current slice entries, consulted only for CLI-synthetic rows. */
+  readonly sliceEntries: readonly ConversationEntry[];
+  /** Settled-prefix promotion signal: real settlement OR a turn-boundary
+   *  caller's `forceFinal`. Never drives compaction settlement. */
+  readonly streamFinal: boolean;
+  /** The stream's lifecycle actually reached a settlement phase. Only this
+   *  settles compaction activities: a turn-boundary `forceFinal` while a
+   *  compaction is still running must not record it as interrupted — its
+   *  completion event is still to come. */
+  readonly streamSettled: boolean;
+  /** Resync only: previous rows by id, so an already-promoted row keeps its
+   *  `finalized` flag and a closed phase keeps its inherited counts. */
+  readonly inherit?: ReadonlyMap<string, ConversationEntry>;
+  readonly flags: FoldChangeFlags;
+}
+
+/** Merge two seqNo-ascending change lists into one seqNo-ascending pass. */
+function mergeChangedBySeqNo(
+  dirtied: readonly StreamLogEntry[],
+  appended: readonly StreamLogEntry[],
+): readonly StreamLogEntry[] {
+  if (dirtied.length === 0) return appended;
+  if (appended.length === 0) return dirtied;
+  const merged: StreamLogEntry[] = [];
+  let d = 0;
+  let a = 0;
+  while (d < dirtied.length && a < appended.length) {
+    merged.push(
+      dirtied[d].seqNo <= appended[a].seqNo ? dirtied[d++] : appended[a++],
+    );
+  }
+  while (d < dirtied.length) merged.push(dirtied[d++]);
+  while (a < appended.length) merged.push(appended[a++]);
+  return merged;
+}
+
+/**
+ * A tracked singleton row was mutated away from its tracked message type:
+ * re-derive both singletons from the full log (rare, producer-anomaly path;
+ * keeps the ordinary fold allocation-free).
+ */
+function retrackFoldSingletons(
+  state: TranscriptFoldState,
+  log: StreamLog,
+): void {
+  const entries = log.getRange(0);
+  state.activeSkillsEntry = entries.findLast(
+    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
+  );
+  state.liveActivityEntry = entries.findLast((entry) =>
+    LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? ''),
+  );
+}
+
+/** Fold one changed (appended or dirtied) log entry into the items array. */
+function applyChangedLogEntry(
+  state: TranscriptFoldState,
+  entry: StreamLogEntry,
+  ctx: FoldContext,
+): void {
+  const messageType = entry.messageType ?? '';
+  const wOO = state.workflowOperationalOnly;
+  // Detached child runs surface their full log output (phase group rows and
+  // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
+  // transcript which shows only model/tool/user/error rows.
+  const transcriptCandidate = (
+    state.fullLogChild
+      ? CHILD_STREAM_LOG_MESSAGE_TYPES
+      : TRANSCRIPT_MESSAGE_TYPES
+  ).has(messageType);
+  const workflowDefaultLog =
+    wOO &&
+    entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+    entry.level !== 'debug' &&
+    messageType === MESSAGE_TYPES.DEFAULT;
+  const workflowPhaseHeader =
+    wOO &&
+    messageType === MESSAGE_TYPES.DEFAULT &&
+    phaseGroupData(entry) !== null;
+  const workflowCall = wOO && messageType === MESSAGE_TYPES.WORKFLOW_TASK;
+
+  const trackedPos = state.indexById.get(entry.id);
+  const existingPos =
+    trackedPos !== undefined && state.items[trackedPos].rank === 1
+      ? trackedPos
+      : undefined;
+
+  if (
+    !transcriptCandidate &&
+    !workflowDefaultLog &&
+    !workflowPhaseHeader &&
+    !workflowCall
+  ) {
+    if (existingPos !== undefined)
+      removeFoldItemAt(state, existingPos, ctx.flags);
+    return;
+  }
+
+  const prev =
+    existingPos !== undefined
+      ? state.items[existingPos].rendered
+      : ctx.inherit?.get(entry.id);
+  let rendered = renderLogEntryFresh(
+    entry,
+    prev,
+    state.projectLifecycleToTaskGroups,
+  );
+  // Workflow-agent details are an operational feed, not a model transcript.
+  // Detached workflow-script runs intentionally keep their full child log,
+  // including Running/Finished and error rows. A phase uses the DEFAULT
+  // message type, but remains an operational row.
+  if (
+    rendered !== null &&
+    wOO &&
+    !WORKFLOW_OPERATIONAL_ROLES.has(rendered.role) &&
+    !workflowDefaultLog
+  ) {
+    rendered = null;
+  }
+  if (rendered === null) {
+    if (existingPos !== undefined)
+      removeFoldItemAt(state, existingPos, ctx.flags);
+    return;
+  }
+  // An entry the slice already promoted re-inherits the flag here, so a
+  // re-render can never roll an already-printed `<Static>` row back.
+  if (prev?.finalized && !rendered.finalized) {
+    rendered = { ...rendered, finalized: true };
+  }
+  if (existingPos !== undefined) {
+    replaceFoldRendered(state, existingPos, rendered, ctx.flags);
+  } else {
+    insertFoldItem(
+      state,
+      { rendered, sortSeq: entry.seqNo, tieBreak: 0, rank: 1 },
+      ctx.flags,
+    );
+  }
+}
+
+/** Reconcile projected compaction blocks into their transcript rows. */
+function reconcileCompactionRows(
+  state: TranscriptFoldState,
+  projection: CompactionActivityProjection,
+  flags: FoldChangeFlags,
+): void {
+  for (const block of projection.blocks) {
+    const id = `compaction:${block.operationId}`;
+    const pos = state.indexById.get(id);
+    if (pos !== undefined && state.items[pos].block === block) continue;
+    const rendered: ConversationEntry = {
+      id,
+      sourceSeqNo: block.startPosition,
+      role: 'activity',
+      text: COMPACTION_ACTIVITY_LABEL[block.status],
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      finalized: block.finalized,
+      activity: block,
+    };
+    if (pos !== undefined) {
+      state.items[pos].block = block;
+      replaceFoldRendered(state, pos, rendered, flags);
+    } else {
+      insertFoldItem(
+        state,
+        { rendered, sortSeq: block.startPosition, tieBreak: 0, rank: 0, block },
+        flags,
+      );
+    }
+  }
+}
+
+/**
+ * Reconcile CLI-synthetic rows from the slice into the items array. Synthetic
+ * rows are CLI-owned objects appended to `slice.entries` out of band, so the
+ * fold detects them by object identity against the last reconciled list.
+ * Changes are rare, user-paced events; the bulk rebuild keeps insertion-order
+ * tiebreaks exact and recomputes the position cursors in one pass.
+ */
+function reconcileSynthetics(
+  state: TranscriptFoldState,
+  sliceEntries: readonly ConversationEntry[],
+  flags: FoldChangeFlags,
+): void {
+  const wOO = state.workflowOperationalOnly;
+  const current: ConversationEntry[] = [];
+  for (const entry of sliceEntries) {
+    if (
+      entry.synthetic &&
+      (!wOO || WORKFLOW_OPERATIONAL_ROLES.has(entry.role))
+    ) {
+      current.push(entry);
+    }
+  }
+  const previous = state.synthetics;
+  if (
+    current.length === previous.length &&
+    current.every((entry, index) => entry === previous[index])
+  ) {
+    return;
+  }
+  flags.syntheticsChanged = true;
+  flags.itemsChanged = true;
+  flags.compactAffected = true;
+  let removed = false;
+  for (let index = state.items.length - 1; index >= 0; index -= 1) {
+    if (state.items[index].rank === 2) {
+      state.items.splice(index, 1);
+      removed = true;
+    }
+  }
+  // Stale ids of removed rows must leave the map; positions are rebuilt by
+  // the unconditional reindex after the inserts below.
+  if (removed) state.indexById.clear();
+  for (const [index, entry] of current.entries()) {
+    const item: TranscriptFoldItem = {
+      rendered: entry,
+      // Synthetic (CLI-owned) rows are positioned by `syntheticAfterSeq`
+      // alongside the ordered log entries.
+      sortSeq: entry.syntheticAfterSeq ?? Number.POSITIVE_INFINITY,
+      tieBreak: index + 1,
+      rank: 2,
+    };
+    const pos = foldInsertPosition(state.items, item);
+    state.items.splice(pos, 0, item);
+  }
+  reindexFoldFrom(state, 0);
+  recomputeFoldCursors(state);
+  flags.userRescan = false;
+  flags.responseRescan = false;
+  state.synthetics = current;
+}
+
+// Advance the contiguous settled-prefix promotion (same rule as
+// `finalizeSettledPrefix`, folded: positions below the frontier are already
+// finalized, so each application only touches newly promotable rows).
+function advanceSettledPrefix(
+  state: TranscriptFoldState,
+  streamFinal: boolean,
+  flags: FoldChangeFlags,
+): void {
+  const items = state.items;
+  let index = state.finalizedFrontier;
+  while (index < items.length) {
+    const entry = items[index].rendered;
+    if (entry.finalized) {
+      index += 1;
+      continue;
+    }
+    const settled = isSettledEntry(entry, index, items.length);
+    if (
+      !settled &&
+      (entry.role === 'activity' ||
+        entry.role === 'workflowTask' ||
+        !streamFinal)
+    ) {
+      break;
+    }
+    replaceFoldRendered(state, index, { ...entry, finalized: true }, flags);
+    index += 1;
+  }
+  state.finalizedFrontier = index;
+}
+
+/**
+ * Apply one coalesced change set to the fold state. The from-scratch rebuild
+ * is this same function fed `getRange(0)` as the appended list over a reset
+ * state — the resync path and the fold share every ordering rule.
+ */
+function applyStreamChanges(
+  state: TranscriptFoldState,
+  appended: readonly StreamLogEntry[],
+  dirtied: readonly StreamLogEntry[],
+  ctx: FoldContext,
+): {
+  taskGroups: readonly TaskGroup[];
+  compaction: CompactionActivityProjection;
+} {
+  const changed = mergeChangedBySeqNo(dirtied, appended);
+  let retrack = false;
+  for (const entry of changed) {
+    if (entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS) {
+      if (
+        !state.activeSkillsEntry ||
+        entry.seqNo >= state.activeSkillsEntry.seqNo
+      ) {
+        state.activeSkillsEntry = entry;
+      }
+    } else if (state.activeSkillsEntry?.id === entry.id) {
+      retrack = true;
+    }
+    if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) {
+      if (
+        !state.liveActivityEntry ||
+        entry.seqNo >= state.liveActivityEntry.seqNo
+      ) {
+        state.liveActivityEntry = entry;
+      }
+    } else if (state.liveActivityEntry?.id === entry.id) {
+      retrack = true;
+    }
+  }
+  if (retrack) retrackFoldSingletons(state, ctx.log);
+
+  const taskGroups = projectTaskGroupsIncrementally(ctx.streamId, changed);
+  const compaction = projectCompactionIncrementally(
+    ctx.streamId,
+    ctx.log,
+    ctx.streamSettled,
+  );
+  for (const entry of changed) applyChangedLogEntry(state, entry, ctx);
+  reconcileCompactionRows(state, compaction, ctx.flags);
+  reconcileSynthetics(state, ctx.sliceEntries, ctx.flags);
+  // Promote only after the merged order is final: "is there a later entry"
+  // and `<Static>` append order are both defined on the final stream order.
+  advanceSettledPrefix(state, ctx.streamFinal, ctx.flags);
+  if (ctx.flags.userRescan) {
+    state.latestUserPos = findLastFoldPos(state.items, isUserLineRow);
+    ctx.flags.userRescan = false;
+  }
+  if (ctx.flags.responseRescan) {
+    state.latestResponsePos = findLastFoldPos(
+      state.items,
+      isFinalizedResponseRow,
+    );
+    ctx.flags.responseRescan = false;
+  }
+  return { taskGroups, compaction };
+}
+
+/** The bounded dashboard + synthetic selection for an unfocused workflow stream. */
+function compactWorkflowEntries(
+  items: readonly TranscriptFoldItem[],
+): ConversationEntry[] {
+  let dashboardCount = 0;
+  for (const item of items) {
+    if (
+      !item.rendered.synthetic &&
+      WORKFLOW_DASHBOARD_ROLES.has(item.rendered.role)
+    ) {
+      dashboardCount += 1;
+    }
+  }
+  let skip = Math.max(
+    0,
+    dashboardCount - MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES,
+  );
+  const out: ConversationEntry[] = [];
+  for (const item of items) {
+    const entry = item.rendered;
+    if (entry.synthetic) {
+      out.push(entry);
+      continue;
+    }
+    if (!WORKFLOW_DASHBOARD_ROLES.has(entry.role)) continue;
+    if (skip > 0) {
+      skip -= 1;
+      continue;
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Subscription + sync entry points
+// ---------------------------------------------------------------------------
 
 function trySyncStreamLog(streamId: StreamTabId): void {
   try {
@@ -806,26 +1243,37 @@ function trySyncStreamLog(streamId: StreamTabId): void {
 
 export function subscribeStreamLog(): () => void {
   const store = defaultSession().transcripts;
-  const pendingStreams = new Map<StreamTabId, number>();
   let previousActiveStreamId = activeStreamId.get();
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
   // timers would fire staggered — one sync→render pass per stream. A shared
-  // batch window coalesces them into a single pass; syncStreamLog reads the
-  // full log when it fires, so batching loses nothing.
+  // batch window coalesces them into a single pass; each stream's buffered
+  // delta is folded when it fires, so batching loses nothing.
   const syncDebounce = createFlushableDebounce(() => {
-    const streamIds = [...pendingStreams];
-    pendingStreams.clear();
-    for (const [id, generation] of streamIds) {
-      if (generation !== getCliStateGeneration()) continue;
-      trySyncStreamLog(id);
+    for (const [streamId, pending] of [...PENDING_DELTAS]) {
+      if (pending.generation !== getCliStateGeneration()) {
+        PENDING_DELTAS.delete(streamId);
+        continue;
+      }
+      trySyncStreamLog(streamId);
     }
   }, STREAM_SYNC_THROTTLE_MS);
 
-  const dispose = store.onChange((streamId) => {
+  const dispose = store.onChange((streamId, delta) => {
     if (isCliStreamRetired(streamId)) return;
-    pendingStreams.set(streamId, getCliStateGeneration());
+    const pending = PENDING_DELTAS.get(streamId);
+    if (pending) {
+      pending.buffer.push(delta);
+      pending.generation = getCliStateGeneration();
+    } else {
+      const buffer = new StreamLogDeltaBuffer(delta.emissionSeq - 1);
+      buffer.push(delta);
+      PENDING_DELTAS.set(streamId, {
+        buffer,
+        generation: getCliStateGeneration(),
+      });
+    }
     // Only start the window on its first tick — later ticks in the same
     // window join the batch without resetting the countdown (`pending`
     // guard), unlike a classic debounce that would restart on every call.
@@ -867,43 +1315,54 @@ export function subscribeStreamLog(): () => void {
     // unmount), so a final render of whatever was still pending isn't
     // needed and would race an already-torn-down UI.
     syncDebounce.cancel();
-    pendingStreams.clear();
+    PENDING_DELTAS.clear();
   };
 }
 
 export function syncStreamLog(
   streamId: StreamTabId,
-  options: { readonly forceFull?: boolean } = {},
+  options: {
+    readonly forceFull?: boolean;
+    /** Treat the stream as final for settled-prefix promotion, even when its
+     *  status has not reached a settlement phase (turn-boundary callers). */
+    readonly forceFinal?: boolean;
+  } = {},
 ): void {
   if (isChildStreamRemoved(streamId)) {
+    PENDING_DELTAS.delete(streamId);
     TASK_GROUP_PROJECTIONS.delete(streamId);
     COMPACTION_PROJECTIONS.delete(streamId);
-    STREAM_RENDER_STATES.delete(streamId);
     return;
   }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
   // between two TUI sync ticks), the assistant text is still sitting in
   // an in-memory buffer and never reaches the transcript. Force any
-  // pending flushers to materialize before we read.
+  // pending flushers to materialize before we read — their emissions land
+  // in this stream's pending buffer and are folded below.
   const session = defaultSession();
   session.flushPendingTraces();
   const store = session.transcripts;
   const log = store.get(streamId);
-  if (!log) return;
+  const pending = PENDING_DELTAS.get(streamId);
+  PENDING_DELTAS.delete(streamId);
+  if (!log) {
+    // No resident log (never created, or evicted): nothing to fold, but a
+    // turn-boundary caller may still promote rows the slice already holds.
+    // Fold continuity is gone either way, so drop any hydrated state; the
+    // next rebuild inherits promotion from the slice rows.
+    if (options.forceFinal === true) {
+      patchStream(streamId, (slice) => {
+        const entries = finalizeSettledPrefix(slice.entries, true);
+        return entries === slice.entries ? slice : { ...slice, entries };
+      });
+      const fold = streams.get().get(streamId)?.transcriptFold;
+      if (fold) resetTranscriptFoldState(fold);
+    }
+    return;
+  }
+  const buffer = pending?.buffer;
 
-  const allEntries = log.getRange(0);
-  const activeSkillsEntry = allEntries.findLast(
-    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
-  );
-  const parsedActiveSkills = activeSkillsEntry
-    ? ActiveSkillsSnapshotSchema.safeParse(activeSkillsEntry.data)
-    : undefined;
-  const taskGroups = projectTaskGroupsIncrementally(streamId, allEntries);
-  const thinkingActive = latestLogActivityIsThinking(allEntries);
-  const transcriptMessageTypes = transcriptMessageTypesForStream(
-    streams.get().get(streamId),
-  );
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
     options.forceFull === true ||
@@ -912,190 +1371,142 @@ export function syncStreamLog(
   let releaseAfterSync = false;
 
   patchStream(streamId, (slice, lifecycle) => {
-    const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const workflowStream = slice.category === AgentCategory.Workflow;
-    let activeSkills = slice.activeSkills;
-    if (slice.category === AgentCategory.ToolUse && parsedActiveSkills) {
-      activeSkills = parsedActiveSkills.success
-        ? parsedActiveSkills.data.skills
-        : [];
-    }
-    const workflowOperationalOnly =
-      workflowStream && !isFullLogChildStream(slice);
-    const syntheticEntries = slice.entries.filter(
-      (entry) =>
-        entry.synthetic &&
-        (!workflowOperationalOnly ||
-          WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
-    );
-    const streamFinal = isTranscriptSettlementPhase(lifecycle.status);
-    const compactionProjection = projectCompactionIncrementally(
+    const fullLogChild = isFullLogChildStream(slice);
+    const workflowOperationalOnly = workflowStream && !fullLogChild;
+    const streamSettled = isTranscriptSettlementPhase(lifecycle.status);
+    const streamFinal = options.forceFinal === true || streamSettled;
+    const state = slice.transcriptFold ?? createTranscriptFoldState();
+    const flags = newFoldChangeFlags();
+    const modeCurrent =
+      state.fullLogChild === fullLogChild &&
+      state.workflowOperationalOnly === workflowOperationalOnly &&
+      state.projectLifecycleToTaskGroups === workflowStream;
+    // Fold continuity: same log instance, and either the buffered burst picks
+    // up exactly where the state left off and reaches the log's emission
+    // head, or (no buffer) the state already sits at the head. Anything else
+    // — fresh state, gap, reset emission, mode flip — rebuilds from scratch.
+    const canFold =
+      state.hydrated &&
+      modeCurrent &&
+      state.logInstanceId === log.instanceId &&
+      !log.hasUndrainedChanges &&
+      (buffer
+        ? !buffer.resyncRequired &&
+          buffer.baseEmissionSeq === state.emissionSeq &&
+          buffer.emissionSeq === log.emissionHead
+        : state.emissionSeq === log.emissionHead);
+
+    const ctx: FoldContext = {
       streamId,
-      allEntries,
+      log,
+      sliceEntries: slice.entries,
       streamFinal,
-    );
-    const compactingActive = compactionProjection.blocks.some(
-      (block) => block.status === 'running',
-    );
-    const projectLifecycleToTaskGroups =
-      slice.category === AgentCategory.Workflow;
-    let renderState = STREAM_RENDER_STATES.get(streamId);
-    if (
-      renderState === undefined ||
-      renderState.projectLifecycleToTaskGroups !== projectLifecycleToTaskGroups
-    ) {
-      renderState = {
-        renders: new Map(),
-        projectLifecycleToTaskGroups,
-      };
-      STREAM_RENDER_STATES.set(streamId, renderState);
-    }
-    const logCandidates: TranscriptCandidate[] = [];
-    const workflowLatestLineCandidates: TranscriptCandidate[] = [];
-    for (const block of compactionProjection.blocks) {
-      const id = `compaction:${block.operationId}`;
-      const next: ConversationEntry = {
-        id,
-        sourceSeqNo: block.startPosition,
-        role: 'activity',
-        text: COMPACTION_ACTIVITY_LABEL[block.status],
-        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-        finalized: block.finalized,
-        activity: block,
-      };
-      logCandidates.push({
-        rendered: dedupeEntry(existing.get(id), next),
-        sortSeq: block.startPosition,
-        tieBreak: 0,
+      streamSettled,
+      flags,
+    };
+    let projections;
+    if (canFold) {
+      foldApplicationsForTest += 1;
+      const changes = buffer?.drain();
+      projections = applyStreamChanges(
+        state,
+        changes?.appended ?? [],
+        changes?.dirtied ?? [],
+        ctx,
+      );
+      state.emissionSeq = log.emissionHead;
+    } else {
+      rebuildApplicationsForTest += 1;
+      const inheritRows = state.hydrated
+        ? state.items.map((item) => item.rendered)
+        : slice.entries;
+      const inherit = new Map<string, ConversationEntry>();
+      for (const row of inheritRows) {
+        if (!row.synthetic) inherit.set(row.id, row);
+      }
+      resetTranscriptFoldState(state);
+      state.fullLogChild = fullLogChild;
+      state.workflowOperationalOnly = workflowOperationalOnly;
+      state.projectLifecycleToTaskGroups = workflowStream;
+      state.logInstanceId = log.instanceId;
+      state.emissionSeq = log.emissionHead;
+      state.hydrated = true;
+      flags.itemsChanged = true;
+      flags.compactAffected = true;
+      flags.syntheticsChanged = true;
+      projections = applyStreamChanges(state, log.getRange(0), [], {
+        ...ctx,
+        inherit,
       });
     }
-    for (const entry of allEntries) {
-      const messageType = entry.messageType ?? '';
-      const transcriptCandidate = transcriptMessageTypes.has(messageType);
-      const workflowDefaultLog =
-        workflowOperationalOnly &&
-        entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-        entry.level !== 'debug' &&
-        messageType === MESSAGE_TYPES.DEFAULT;
-      const workflowPhaseHeader =
-        workflowOperationalOnly &&
-        messageType === MESSAGE_TYPES.DEFAULT &&
-        phaseGroupData(entry) !== null;
-      const workflowCall =
-        workflowOperationalOnly && messageType === MESSAGE_TYPES.WORKFLOW_TASK;
-      if (
-        !transcriptCandidate &&
-        !workflowDefaultLog &&
-        !workflowPhaseHeader &&
-        !workflowCall
-      ) {
-        continue;
-      }
-      const rendered = renderLogEntry(
-        renderState,
-        entry,
-        existing.get(entry.id),
-      );
-      if (!rendered) continue;
-      if (workflowOperationalOnly) {
-        workflowLatestLineCandidates.push({
-          rendered,
-          sortSeq: entry.seqNo,
-          tieBreak: 0,
-        });
-      }
-      // Workflow-agent details are an operational feed, not a model
-      // transcript. Detached workflow-script runs intentionally keep their
-      // full child log, including Running/Finished and error rows. A phase
-      // uses the DEFAULT message type, but remains an operational row.
-      if (
-        workflowOperationalOnly &&
-        !WORKFLOW_OPERATIONAL_ROLES.has(rendered.role) &&
-        !workflowDefaultLog
-      ) {
-        continue;
-      }
-      logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
-    }
-    // Synthetic (CLI-owned) rows are positioned by `syntheticAfterSeq`
-    // alongside the ordered log entries; push into a copy so we don't mutate
-    // `logCandidates` itself.
-    const candidates: TranscriptCandidate[] =
-      syntheticEntries.length === 0 ? logCandidates : [...logCandidates];
 
-    for (const [index, entry] of syntheticEntries.entries()) {
-      const candidate = {
-        rendered: entry,
-        sortSeq: entry.syntheticAfterSeq ?? Number.POSITIVE_INFINITY,
-        tieBreak: index + 1,
-      };
-      candidates.push(candidate);
-      if (workflowOperationalOnly) {
-        workflowLatestLineCandidates.push(candidate);
+    const { taskGroups, compaction } = projections;
+    const compactingActive = compaction.blocks.some(
+      (block) => block.status === 'running',
+    );
+    const live = state.liveActivityEntry;
+    const thinkingActive =
+      live !== undefined &&
+      live.messageType === MESSAGE_TYPES.THINKING &&
+      logEntryStreamIsRunning(live);
+
+    let activeSkills = slice.activeSkills;
+    if (slice.category === AgentCategory.ToolUse && state.activeSkillsEntry) {
+      if (state.activeSkillsParsedFor !== state.activeSkillsEntry) {
+        const parsed = ActiveSkillsSnapshotSchema.safeParse(
+          state.activeSkillsEntry.data,
+        );
+        state.activeSkills = parsed.success ? parsed.data.skills : [];
+        state.activeSkillsParsedFor = state.activeSkillsEntry;
       }
+      activeSkills = state.activeSkills;
     }
 
-    const ordered = sortTranscriptCandidatesIfNeeded(candidates).map(
-      (candidate) => candidate.rendered,
-    );
-    // Promote the settled prefix only after sorting: "is there a later
-    // entry" and Static append order are both defined on the final stream
-    // order, not the per-entry render order.
-    const next = finalizeSettledPrefix(ordered, streamFinal);
-    const latestUserIndex = next.findLastIndex(
-      (entry) => entry.role === 'user' && entry.text.trim(),
-    );
-    const latestInstruction =
-      latestUserIndex >= 0 ? next[latestUserIndex]?.text : undefined;
     // Transcript-derived live status only. `slice.description` is the
     // runtime's own one-liner and is never written from here.
+    const latestUserPos = state.latestUserPos;
+    const latestInstruction =
+      latestUserPos >= 0 ? state.items[latestUserPos].rendered.text : undefined;
     const latestLine = workflowOperationalOnly
-      ? (workflowOperationalLatestLine(
-          sortTranscriptCandidatesIfNeeded(workflowLatestLineCandidates).map(
-            (candidate) => candidate.rendered,
-          ),
-        ) ?? slice.latestLine)
-      : (next.findLast(
-          (entry, index) =>
-            index > latestUserIndex &&
-            entry.role === 'assistant' &&
-            entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
-            entry.finalized &&
-            entry.text.trim(),
-        )?.text ??
+      ? (workflowOperationalLatestLine(state.items) ?? slice.latestLine)
+      : ((state.latestResponsePos > latestUserPos
+          ? state.items[state.latestResponsePos].rendered.text
+          : undefined) ??
         latestInstruction ??
         slice.latestLine);
+
     releaseAfterSync =
       !projectFullTranscript &&
       lifecycle.status !== undefined &&
       !isActivePhase(lifecycle.status);
 
     // A compact workflow keeps only its bounded canonical dashboard rows plus
-    // synthetic operational rows. Ordinary inactive streams retain the prior
-    // synthetic-only behavior.
-    const compactWorkflowDashboardIds = new Set(
-      next
-        .filter((entry) => WORKFLOW_DASHBOARD_ROLES.has(entry.role))
-        .slice(-MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES)
-        .map((entry) => entry.id),
-    );
-    const compactEntries = workflowStream
-      ? next.filter(
-          (entry) =>
-            entry.synthetic || compactWorkflowDashboardIds.has(entry.id),
-        )
-      : syntheticEntries;
-    const nextEntries = projectFullTranscript ? next : compactEntries;
-    const entriesUnchanged =
-      slice.entries.length === nextEntries.length &&
-      slice.entries.every((entry, index) => {
-        const candidate = nextEntries[index];
-        return projectFullTranscript
-          ? entry.id === candidate.id && entriesEqual(entry, candidate)
-          : entry === candidate;
-      });
+    // synthetic operational rows; ordinary inactive streams keep synthetic
+    // rows only. Each selection is rebuilt only when a change touched it —
+    // the change detection comes from the delta, not from re-deriving and
+    // deep-comparing the whole projection.
+    const outputStale =
+      state.lastEntriesOutput !== slice.entries ||
+      state.lastOutputFull !== projectFullTranscript;
+    let entries: readonly ConversationEntry[] = slice.entries;
+    if (projectFullTranscript) {
+      if (flags.itemsChanged || outputStale) {
+        entries = state.items.map((item) => item.rendered);
+      }
+    } else if (workflowStream) {
+      if (flags.compactAffected || outputStale) {
+        entries = compactWorkflowEntries(state.items);
+      }
+    } else if (flags.syntheticsChanged || outputStale) {
+      entries = state.synthetics;
+    }
+    state.lastOutputFull = projectFullTranscript;
+    state.lastEntriesOutput = entries;
+
     if (
-      entriesUnchanged &&
+      slice.transcriptFold === state &&
+      entries === slice.entries &&
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
@@ -1106,8 +1517,9 @@ export function syncStreamLog(
     }
     return {
       ...slice,
+      transcriptFold: state,
       latestLine,
-      entries: nextEntries,
+      entries,
       activeSkills,
       thinkingActive,
       compactingActive,
@@ -1120,11 +1532,12 @@ export function syncStreamLog(
     // The store dropped its resident log; these incremental caches would
     // otherwise keep every entry (and rendered row) of a completed stream
     // alive for the rest of the session. Safe to drop: each projection
-    // rebuilds from scratch — cheaply, from the store's own summary — the
-    // next time this stream syncs (e.g. if it's reactivated).
+    // rebuilds from scratch — through the shared resync path — the next
+    // time this stream syncs (e.g. if it's reactivated).
     TASK_GROUP_PROJECTIONS.delete(streamId);
     COMPACTION_PROJECTIONS.delete(streamId);
-    STREAM_RENDER_STATES.delete(streamId);
+    const fold = streams.get().get(streamId)?.transcriptFold;
+    if (fold) resetTranscriptFoldState(fold);
   }
 
   // Surface stream as active if we don't already have one — handles bare

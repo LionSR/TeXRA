@@ -25,6 +25,7 @@ import {
   nonterminalWorkflowCall,
   StreamLog,
   type StreamLogAppendInput,
+  type StreamLogDelta,
   type StreamLogPreservedRawEntry,
   type StreamLogUpdatePatch,
 } from './StreamLog';
@@ -49,7 +50,7 @@ function createSummaryKv(): KVStore {
   });
 }
 
-type StreamLogListener = (streamId: StreamTabId) => void;
+type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 
 // No per-field `.catch()`: this schema covers the crash-recovery flags
 // (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowCall`)
@@ -681,7 +682,9 @@ export class StreamLogStore {
           this.refreshSummary(streamId, merged);
           this.markDirty(streamId);
           void this.save();
-          this.notify(streamId);
+          // The merge renumbered seqNos under a fresh log instance, so
+          // fold-state consumers must rebuild rather than apply a delta.
+          this.notify(streamId, { reset: true });
         } else {
           const logInstance = new StreamLog(
             diskEntries.entries,
@@ -1378,9 +1381,25 @@ export class StreamLogStore {
     this.dirtyIds.add(streamId);
   }
 
-  private notify(streamId: StreamTabId): void {
+  /**
+   * Drain the log's pending entry-level changes into one immutable delta and
+   * multicast it. The delta is drained exactly once per notification and
+   * shared by every listener; no listener acks anything and nothing here is
+   * destructive, unlike the webview ack machinery (`getDirtyUpdates` et al.),
+   * which stays a separate per-consumer channel.
+   */
+  private notify(
+    streamId: StreamTabId,
+    options: { readonly reset?: boolean } = {},
+  ): void {
+    const logInstance = this.streams.get(streamId)?.log;
+    if (!logInstance) return;
+    const delta: StreamLogDelta = Object.freeze({
+      ...logInstance.drainEmission(),
+      reset: options.reset === true,
+    });
     for (const listener of this.listeners) {
-      listener(streamId);
+      listener(streamId, delta);
     }
   }
 
