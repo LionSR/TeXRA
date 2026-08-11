@@ -169,24 +169,31 @@ export async function getApiKey(
   return key;
 }
 
-/** Check if an API key exists for a provider. */
-export async function apiKeyExists(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<boolean> {
-  return (await lookupApiKey(secrets, provider)) !== undefined;
-}
-
 /**
- * Check whether the resolved key is usable for authentication.
- * This rejects whitespace-only SecretStorage values while still sharing the
- * canonical secret → environment fallback and cache.
+ * Check whether a usable API key is resolved for a provider (secret storage,
+ * then environment, both already trimmed and blank-filtered by
+ * {@link resolveApiKeyUncached}). `apiKeyExists` and `hasUsableApiKey` are
+ * intentionally the same check under two names — kept distinct, like the
+ * lookup trio above, so call sites read self-evidently: reach for
+ * `apiKeyExists` at plain "is a key configured" display sites, and
+ * `hasUsableApiKey` at security-sensitive sites (credential-retry decisions,
+ * launch-readiness checks) where the name should make the stakes obvious.
+ * There is only one implementation; do not let a future edit reintroduce a
+ * real behavioral gap between them without renaming one away.
  */
 export async function hasUsableApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<boolean> {
   return isNonEmptyString(await lookupApiKey(secrets, provider));
+}
+
+/** Alias of {@link hasUsableApiKey} for existence-check call sites. See its doc. */
+export async function apiKeyExists(
+  secrets: PlatformSecrets,
+  provider: ApiProvider,
+): Promise<boolean> {
+  return hasUsableApiKey(secrets, provider);
 }
 
 /** Check if an API key exists without using the process-wide provider cache. */
