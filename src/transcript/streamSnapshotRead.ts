@@ -62,6 +62,23 @@ export interface StreamData {
 }
 
 /**
+ * Fresh empty {@link StreamData} for a stream whose sidecar directory was
+ * verified absent. Fresh containers per call: the store's accumulators mutate
+ * the round-indexed records in place.
+ */
+export function emptyStreamData(): StreamData {
+  return {
+    meta: undefined,
+    outputFiles: {},
+    missingOutputs: {},
+    compileFailures: {},
+    usage: new Map(),
+    usageUnparsed: new Map(),
+    workPlan: EMPTY_WORK_PLAN,
+  };
+}
+
+/**
  * Treat corrupt/truncated JSON (crash mid-write) as a missing file — the next
  * write replaces it — but log it so it is not silently swallowed.
  */
