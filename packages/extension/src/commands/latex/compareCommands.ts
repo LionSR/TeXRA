@@ -31,10 +31,11 @@ const CHANNEL = 'CompareCommands';
 function validateFileLocations(
   inputLocation: FileLocation | null | undefined,
   baseLocation: FileLocation | null | undefined,
+  editedLocation: FileLocation,
   errorMessage: string,
 ): FileLocation | null {
   const fileToUseLocation = baseLocation ?? inputLocation;
-  if (!fileToUseLocation) {
+  if (!fileToUseLocation || !editedLocation) {
     void showLoggedMessage(CHANNEL, errorMessage);
     return null;
   }
@@ -98,6 +99,7 @@ export async function handleCompare(
     const fileToUseLocation = validateFileLocations(
       inputLocation,
       baseLocation,
+      editedLocation,
       'Both base file and edited file must be selected for comparison',
     );
     if (!fileToUseLocation) return;
@@ -224,6 +226,7 @@ export async function handleAcceptEdited(
     const fileToUseLocation = validateFileLocations(
       inputLocation,
       baseLocation,
+      editedLocation,
       'Both base file and edited file must be selected to accept changes',
     );
     if (!fileToUseLocation) return false;

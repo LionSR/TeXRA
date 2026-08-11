@@ -420,7 +420,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     return new Promise((resolve, reject) => {
       let isCleanedUp = false;
-      const cancellationListener: vscode.Disposable | undefined;
+      let cancellationListener: vscode.Disposable | undefined = undefined;
 
       const cleanupListeners = () => {
         if (isCleanedUp) return;

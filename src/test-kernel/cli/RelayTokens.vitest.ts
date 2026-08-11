@@ -63,7 +63,7 @@ function pendingFetch(): {
     new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     })) as unknown as typeof fetch;
-  return { fetchImpl, resolveFetch };
+  return { fetchImpl, resolveFetch: (response) => resolveFetch(response) };
 }
 
 describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
