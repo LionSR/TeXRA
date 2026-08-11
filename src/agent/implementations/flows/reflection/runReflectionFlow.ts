@@ -192,10 +192,11 @@ export async function runReflectionFlow<C = unknown>(
     // Boundary hydration: the one place a freshly-read persisted record
     // (possibly written by an older build, hence the legacy todos/plan
     // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
-    // `RoundPersistedFlow`'s own per-step revalidation uses
-    // ReflectionFlowStateCanonicalSchema instead — see its constructor call
-    // below — since by then `shared` is always this run's own canonical
-    // toSnapshot() output, never a legacy shape.
+    // `RoundPersistedFlow` validates records it re-reads from storage with
+    // ReflectionFlowStateCanonicalSchema (see its constructor call below),
+    // since those are always this run's own canonical toSnapshot() output,
+    // never a legacy shape; records it wrote itself stay trusted per the
+    // boundary-only validation rule.
     const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
     if (!validated.success) {
       throw new PersistedFlowStateError(executionId, 'invalid-shared', {
