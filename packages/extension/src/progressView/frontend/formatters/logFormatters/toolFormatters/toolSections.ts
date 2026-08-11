@@ -54,7 +54,7 @@ import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 // `WriteInput` is used purely for its (erased) type shape, the rest are
 // documented in each builder's own comment.
 import type { WriteInput } from '@tools/WriteTool';
-import { isObject } from '@utils/core';
+import { filterNotNullish, isObject } from '@utils/core';
 
 import { codexToolRenderers } from '../codexToolTemplates';
 import {
@@ -102,41 +102,69 @@ function buildFileGroupsSection(
  * branch has old_str/new_str), and str_replace_based_edit_tool, which is
  * Anthropic's native tool-use alias — plus the verbatim built-in names
  * (`edit`, `multiedit`, provider `str_replace`/`text_editor` variants) a
- * delegated sub-agent reports, none of which has its own TeXRA schema. Rather
- * than fabricate a schema spanning all of them, this
- * keeps the type-only cast but narrows with explicit runtime `typeof` checks
- * below before any field is used.
+ * delegated sub-agent reports. A delegated Claude `Edit` reports
+ * `old_string`/`new_string` (not `old_str`/`new_str`) and a `file_path` (not
+ * `path`); a delegated `MultiEdit` nests a whole array of those under
+ * `edits`. None of these has its own TeXRA schema, so rather than fabricate
+ * one spanning all of them, this reads each candidate with explicit runtime
+ * `typeof` checks before any field is used.
  */
-type EditDiffLikeInput = { old_str?: unknown; new_str?: unknown };
+type EditDiffLikeInput = {
+  old_str?: unknown;
+  new_str?: unknown;
+  old_string?: unknown;
+  new_string?: unknown;
+  path?: unknown;
+  file_path?: unknown;
+  edits?: unknown;
+};
+
+interface EditCandidate {
+  readonly oldText: string;
+  readonly newText: string;
+}
+
+function editCandidateOf(input: unknown): EditCandidate | undefined {
+  if (!isObject(input)) return undefined;
+  const edit = input as EditDiffLikeInput;
+  const oldText = asString(edit.old_str) ?? asString(edit.old_string);
+  const newText = asString(edit.new_str) ?? asString(edit.new_string);
+  return oldText === undefined || newText === undefined
+    ? undefined
+    : { oldText, newText };
+}
 
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath, parsedOutput } = ctx;
   if (!isObject(input)) return [];
   const editInput = input as EditDiffLikeInput;
-  if (
-    typeof editInput.old_str !== 'string' ||
-    typeof editInput.new_str !== 'string'
-  ) {
-    return [];
-  }
+  const candidates = Array.isArray(editInput.edits)
+    ? editInput.edits.map(editCandidateOf).filter(filterNotNullish)
+    : [editCandidateOf(editInput)].filter(filterNotNullish);
+  if (candidates.length === 0) return [];
+
   const sections: TemplateResult[] = [];
   const edits = getOutputEdits<{ startLine?: number }>(parsedOutput);
   const startLine = edits?.[0]?.startLine;
+  const resolvedPath =
+    filePath || asString(editInput.path) || asString(editInput.file_path);
 
-  if (filePath) {
+  if (resolvedPath) {
     sections.push(
       buildToolUseSection(
         'File:',
-        buildFileLinkWithLines(filePath, { startLine }),
+        buildFileLinkWithLines(resolvedPath, { startLine }),
       ),
     );
   }
-  sections.push(
-    buildToolUseSection(
-      '',
-      buildEditDiffSection(editInput.old_str, editInput.new_str),
-    ),
-  );
+  for (const candidate of candidates) {
+    sections.push(
+      buildToolUseSection(
+        '',
+        buildEditDiffSection(candidate.oldText, candidate.newText),
+      ),
+    );
+  }
   return sections;
 }
 
@@ -651,7 +679,14 @@ export function dispatchToolSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
   for (const { match, build } of TOOL_SECTION_BUILDERS) {
-    if (match(ctx)) return build(ctx);
+    // A matched builder that finds nothing displayable (e.g. an edit-like
+    // tool whose input shape it doesn't recognize) falls through to the
+    // generic renderer instead of leaving the card blank.
+    if (match(ctx)) {
+      const sections = build(ctx);
+      if (sections.length > 0) return sections;
+      break;
+    }
   }
   return buildDefaultSections(ctx);
 }

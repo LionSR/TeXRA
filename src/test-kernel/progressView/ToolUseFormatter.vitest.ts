@@ -272,6 +272,45 @@ return { papers, question: args.question };`;
     expect(title).toBe('Edit — paper.tex');
   });
 
+  it('renders a diff for a delegated Edit call (old_string/new_string, file_path)', () => {
+    const message = toolUseMessage('claude-edit-diff', {
+      toolName: 'claude:Edit',
+      input: {
+        file_path: 'paper.tex',
+        old_string: 'We use a CNN.',
+        new_string: 'We use a transformer.',
+      },
+      status: 'completed',
+    });
+
+    const container = renderTemplate(formatToolUseTemplate(message));
+
+    expect(container.querySelector('.edit-diff-container')).not.toBeNull();
+    expect(container.textContent).toContain('CNN');
+    expect(container.textContent).toContain('transformer');
+    expect(container.textContent).toContain('paper.tex');
+  });
+
+  it('renders a diff per edit for a delegated MultiEdit call', () => {
+    const message = toolUseMessage('claude-multiedit-diff', {
+      toolName: 'claude:MultiEdit',
+      input: {
+        file_path: 'paper.tex',
+        edits: [
+          { old_string: 'We use a CNN.', new_string: 'We use a transformer.' },
+          { old_string: 'Section 1', new_string: 'Section One' },
+        ],
+      },
+      status: 'completed',
+    });
+
+    const container = renderTemplate(formatToolUseTemplate(message));
+
+    expect(container.querySelectorAll('.edit-diff-container')).toHaveLength(2);
+    expect(container.textContent).toContain('transformer');
+    expect(container.textContent).toContain('Section 1');
+  });
+
   it('gives a delegated bash call the same command preview as the native tool', () => {
     const message = toolUseMessage('claude-bash', {
       toolName: 'claude:Bash',

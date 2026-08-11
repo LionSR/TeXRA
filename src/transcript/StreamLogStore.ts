@@ -1208,10 +1208,13 @@ export class StreamLogStore {
         this.summaryKv.modifiedAt(streamId),
         this.kv.modifiedAt(streamId),
       ]);
+      // A missing log mtime means the authoritative log is gone (deleted, or
+      // never written) — orphaned summary, not merely stale. Trusting it here
+      // would register a stream that has no log to load, so `ensureLoaded`
+      // reads back an empty transcript instead of surfacing it as missing.
       if (
         summaryMtime !== undefined &&
-        logMtime !== undefined &&
-        summaryMtime < logMtime
+        (logMtime === undefined || summaryMtime < logMtime)
       ) {
         return undefined;
       }
