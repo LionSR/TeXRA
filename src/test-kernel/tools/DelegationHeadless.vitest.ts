@@ -149,6 +149,7 @@ function parentRunContext(
     streamId: StreamTabId;
     stopAfterCycle: boolean;
     session: SessionHandle;
+    approvalPromptsUnavailable: boolean;
   }> = {},
 ): RunContext {
   return createRunContext({
@@ -1127,6 +1128,37 @@ describe('headless delegation', () => {
     );
     expect(result.error).toContain('continue directly with available context');
     expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it('proceeds without a proposal when the run cannot present approval prompts', async () => {
+    // Headless `--approval-policy never` withholds `requiresApproval` tools up
+    // front, so a delegation tool that still executes was deliberately offered
+    // (delegate_multi_agents). The proposal gate must not settle a
+    // guaranteed denial; the child stays on inherited approval state.
+    mocks.isProposalBypassed.mockReturnValue(false);
+    const session = createTestSession();
+    const requestAgentProposal = vi.fn();
+    session.useHostInteractions({
+      cancel: vi.fn(),
+      requestAgentProposal,
+    } satisfies HostInteractions);
+    try {
+      const result = await withRunContext(
+        parentRunContext({ session, approvalPromptsUnavailable: true }),
+        () => callDelegateReview(),
+      );
+
+      expect(requestAgentProposal).not.toHaveBeenCalled();
+      expect(result.status).toBe('executed');
+      expect(result.summary).toBe("Launched 'review' (async)");
+      expect(mocks.executeAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: 'review' }),
+        expect.any(String),
+        expect.anything(),
+      );
+    } finally {
+      session.dispose();
+    }
   });
 
   it('rejects an approved model override unavailable in the active API mode', async () => {
