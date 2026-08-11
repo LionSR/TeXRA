@@ -1,3 +1,8 @@
+---
+created: 2026-08-11
+updated: 2026-08-11
+---
+
 # PRD: Transcript, persistence, and projection architecture for long-lived sessions
 
 **Status:** draft. Companion to the investigation in
@@ -13,9 +18,12 @@ workspace history instead of with the active delta.
 
 Three OOM crashes (local `errorLogs/`, gitignored) all end with
 `Ineffective mark-compacts near heap limit` at ~4 GB after 32-47 h of process
-life. The fatal allocation frames map directly onto the hot paths below:
+life. The native frames identify the final failed allocation, not the graph
+retaining the preceding gigabytes; the sites below are the code whose shape
+fits those frames (a JS allocation profile is the confirming step, per the
+audit's measurement plan):
 
-- `error8`: `SetConstructor` inside `ArrayMap` = the
+- `error8`: `SetConstructor` inside `ArrayMap` fits the
   `new Set(next.filter().slice().map())` built at
   `packages/cli/src/chat/tui/state/subscribeStreamLog.ts:1021` on every 16 ms
   sync tick, for every stream.
@@ -68,9 +76,12 @@ flowchart TB
   WVU --> PVP
 ```
 
-Ownership as it stands: the stores own hydration but nobody clearly owns
-release. `StreamLogStore.requestEviction` exists but its only production
-caller is a flag computed inside the CLI render closure. The snapshot store
+Ownership as it stands: the stores own hydration but release ownership is
+split. The extension and desktop hosts do evict correctly, on terminal
+transition and on tab switch (`SessionFactApplier.ts:510-512`,
+`SessionState.ts:185-189`); in the CLI, the only `requestEviction` caller is
+a flag computed inside the render closure, so the missing-cleanup work is
+CLI-side. The snapshot store
 retains every seeded record until a `load()` with a smaller set happens, which
 never does. The CLI memos are process-global and outlive stream eviction.
 
@@ -256,7 +267,11 @@ Component summary of the grafted architecture:
   `{seq, appended entries, dirtied entries by value, textChunks, reset}`
   payload. A dirtied entry supersedes buffered text chunks for its id.
   Emission seq is monotonic; a detected gap triggers a `getRange(0)` resync
-  that shares the oracle code path.
+  that shares the oracle code path. Because a gap is only detectable when a
+  later frame arrives, webview delivery keeps an explicit handshake: consumer
+  registration or reconnect (and any failed `postMessage`) re-registers and
+  resyncs from scratch through the same oracle path, so the no-ack multicast
+  cannot leave a disposed-and-restored view permanently stale.
 - **Streaming text:** entries hold chunk segments, joined at settle. Both
   quadratic re-concats and `dirtyTextDeltas` die.
 - **Save path:** a max-wait throttle replaces perfect-debounce; mutators call
@@ -270,15 +285,23 @@ Component summary of the grafted architecture:
   retained and shrunk later behind a per-mutator caller audit.
 - **Startup:** hydration bounded to unfinished plus active lineage. The
   persisted summary widens (derived tier per #9434: rebuild loudly, never
-  migrate, never `.catch`) with identity, executionId, and parentStreamId,
-  with lazy backfill for the ~4,610 legacy rows. The 9 silent-empty accessors
+  migrate, never `.catch`) with identity, executionId, parentStreamId, and
+  whatever else tab construction actually needs. The exact field set comes
+  from a `buildStreamTabInfo` caller audit: it also consumes category,
+  description, model/working-directory config, and follow-up capability, so
+  either those ride in the summary as bounded scalars or a lazy per-stream
+  metadata fetch covers them; "sidebars never touch sidecars" is the
+  invariant, not the three-field list. Lazy backfill covers the ~4,610
+  legacy rows. The 9 silent-empty accessors
   go loud one full release before the bounding lands.
 - **CLI:** five per-output reducers folding the delta; background streams
   render zero transcript entries; projection state moves into the stream
   slice and the module-global memos are deleted as globals (memo semantics
   kept, relocated, lifetime tied to the stream).
 - **Extension/desktop:** WebviewBridge consumes the same feed; bounded
-  metadata wire list from a single sorted source; theme changes send
+  metadata wire list from a single sorted source, with an explicit on-demand
+  path (paging or per-stream fetch) so streams outside the bound remain
+  selectable; the webview must never lose access to on-disk history; theme changes send
   `THEME_SET` alone; git worktree probes gated to active/running streams;
   the executions history watcher registered only while a settings webview is
   actually active.
@@ -288,8 +311,12 @@ Component summary of the grafted architecture:
 
 ## The top 5 changes
 
-Ranked by operations cut times memory cut over risk. Shippable in this order;
-each step is independently landable.
+Ranked by operations cut times memory cut over risk; each step is
+independently landable. One dependency-order exception to the ranking: the
+tri-state disk provenance PR (the first half of item 2) is a small standalone
+blocker that lands before everything else, because it removes the
+data-loss landmine every later change would otherwise widen. After it,
+items land in ranked order.
 
 ### 1. Store-emitted delta feed + O(delta) CLI reducers (#9946 rescoped)
 
@@ -325,8 +352,11 @@ assert merge, not overwrite).
 Deletes both quadratic per-chunk re-concats, the `dirtyTextDeltas` duplicate
 string, `pendingSaveAwaiters`, and perfect-debounce on the save path. Adds
 `textChunks` with a memoized join and the flushable-throttle idiom already in
-`@utils/core`. Scope: `StreamLog.ts` + `StreamLogStore.ts` only. Risk: low.
-Required test: cadence test that sustained sub-300 ms appends still produce
+`@utils/core`. Scope: `StreamLog.ts` + `StreamLogStore.ts` only. The durable schema keeps text as
+a string: each throttled save joins the chunks (memoized join, O(text) per
+save at the throttle cadence, not per provider chunk), so crash-resilient
+partial-response durability is preserved without a sidecar format change.
+Risk: low. Required test: cadence test that sustained sub-300 ms appends still produce
 periodic durable writes; text-materialization equivalence in the harness.
 
 ### 4. Lease residency + lifecycle-owned eviction (#9945 rescoped)

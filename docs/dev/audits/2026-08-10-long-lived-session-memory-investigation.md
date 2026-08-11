@@ -143,7 +143,7 @@ At a 16 ms cadence, transcript synchronization can create/recreate:
 - a `Set` of dashboard IDs;
 - another filtered array.
 
-The `filter -> slice -> map -> new Set` chain around lines 954-959 fits the final `Array.map` then `Set` frames from `error8`. `error5` also reports `Array.map` and `Array.prototype.reverse`, consistent with this general projection/render family.
+The `filter -> slice -> map -> new Set` chain at lines 1021-1026 fits the final `Array.map` then `Set` frames from `error8`. `error5` also reports `Array.map` and `Array.prototype.reverse`, consistent with this general projection/render family.
 
 This likely creates large temporary allocation pressure proportional to total resident transcript history rather than to the new delta. Some rendered entries are then retained by TUI signals and static transcript state.
 
@@ -194,7 +194,7 @@ The CLI status subscriber depends on later projection or focus changes to set `r
 
 ### Finding 6: process-global task-group projections outlive transcript eviction
 
-**Location:** `packages/cli/src/chat/tui/state/subscribeStreamLog.ts:682-710`
+**Location:** `packages/cli/src/chat/tui/state/subscribeStreamLog.ts:681-710`
 
 `TASK_GROUP_PROJECTIONS` is process-global. It is cleared only by whole-CLI reset or explicit child removal. Evicting a stream log does not clear its task projection. The projection retains original group-entry objects in `applied`, plus working/snapshot representations.
 
@@ -204,7 +204,7 @@ This is a genuine cross-stream retention leak. It may not explain 4 GB alone, bu
 
 **Candidate remediation:** tie projection lifecycle to stream eviction/removal, or retain only minimal group version metadata.
 
-**Verification (2026-08-10, code-confirmed — severity downgraded):** the structural facts hold (`TASK_GROUP_PROJECTIONS` at `subscribeStreamLog.ts:682` is module-level; cleared only by the reset hook (`:683`) or `.delete()` on explicit `removeStream` (`:796` via `isChildStreamRemoved`); eviction at `:996` → `requestEviction` does not touch it). However, "defeats transcript eviction" is overstated. `requestEviction` (`StreamLogStore.ts:473-504`) sets `state.log = undefined`, which **does** release the heavy per-message transcript (model responses, tool output, user text). The leaked `applied` map (`:704`) retains only `GROUP_START`/`GROUP_END` boundary entries — the loop at `:695-701` filters to those — whose `data` payload is small scalars (`GroupLogPayload`: status, kind, index, total, name, endTime). Heavy entries are not retained. The leak also self-heals: on re-sync, rehydrated entries are new objects, so the identity check at `:702` fails and `:704` overwrites stale references. This is a minor structural nit, not a material 4 GB contributor; a fix here would not cut elements that matter. Deprioritize relative to Finding 1.
+**Verification (2026-08-10, code-confirmed — severity downgraded):** the structural facts hold (`TASK_GROUP_PROJECTIONS` at `subscribeStreamLog.ts:681` is module-level; cleared only by the reset hook (`:683`) or `.delete()` on explicit `removeStream` (`:796` via `isChildStreamRemoved`); eviction at `:996` → `requestEviction` does not touch it). However, "defeats transcript eviction" is overstated. `requestEviction` (`StreamLogStore.ts:473-504`) sets `state.log = undefined`, which **does** release the heavy per-message transcript (model responses, tool output, user text). The leaked `applied` map (`:704`) retains only `GROUP_START`/`GROUP_END` boundary entries — the loop at `:695-701` filters to those — whose `data` payload is small scalars (`GroupLogPayload`: status, kind, index, total, name, endTime). Heavy entries are not retained. The leak also self-heals: on re-sync, rehydrated entries are new objects, so the identity check at `:702` fails and `:704` overwrites stale references. This is a minor structural nit, not a material 4 GB contributor; a fix here would not cut elements that matter. Deprioritize relative to Finding 1.
 
 ### Finding 7: streaming text has duplicate retention and superlinear copying
 
