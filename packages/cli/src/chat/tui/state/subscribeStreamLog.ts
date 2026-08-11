@@ -1409,12 +1409,34 @@ export function syncStreamLog(
     if (canFold) {
       foldApplicationsForTest += 1;
       const changes = buffer?.drain();
-      projections = applyStreamChanges(
-        state,
-        changes?.appended ?? [],
-        changes?.dirtied ?? [],
-        ctx,
-      );
+      const appended = changes?.appended ?? [];
+      let dirtied = changes?.dirtied ?? [];
+      if (changes && changes.textChunks.length > 0) {
+        // The fold applies whole entry values, so resolve each text chunk to
+        // its entry's current object. Safe: `canFold` pinned the buffer at
+        // the log's emission head, so current values are exactly the
+        // post-burst state the chunks stream toward. A chunk's id may also
+        // be buffered by (older) value; the resolved current value replaces
+        // it in place to keep appended/dirtied disjoint by id.
+        const appendedIndexById = new Map(
+          appended.map((entry, index) => [entry.id, index] as const),
+        );
+        const dirtiedById = new Map(
+          dirtied.map((entry) => [entry.id, entry] as const),
+        );
+        for (const chunk of changes.textChunks) {
+          const current = log.getById(chunk.id);
+          if (!current) continue;
+          const appendedIndex = appendedIndexById.get(chunk.id);
+          if (appendedIndex !== undefined) {
+            appended[appendedIndex] = current;
+          } else {
+            dirtiedById.set(chunk.id, current);
+          }
+        }
+        dirtied = [...dirtiedById.values()].sort((a, b) => a.seqNo - b.seqNo);
+      }
+      projections = applyStreamChanges(state, appended, dirtied, ctx);
       state.emissionSeq = log.emissionHead;
     } else {
       rebuildApplicationsForTest += 1;

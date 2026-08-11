@@ -794,11 +794,6 @@ export class StreamLogStore {
     return updated;
   }
 
-  clearDirtyUpdates(streamId: StreamTabId): void {
-    this.assertWritableStore('clear transcript update state');
-    this.streams.get(streamId)?.log?.clearDirtyUpdates();
-  }
-
   getFirstTimestamp(streamId: StreamTabId): number | undefined {
     return (
       this.streams.get(streamId)?.log?.firstTimestamp ??
@@ -1385,8 +1380,8 @@ export class StreamLogStore {
    * Drain the log's pending entry-level changes into one immutable delta and
    * multicast it. The delta is drained exactly once per notification and
    * shared by every listener; no listener acks anything and nothing here is
-   * destructive, unlike the webview ack machinery (`getDirtyUpdates` et al.),
-   * which stays a separate per-consumer channel.
+   * destructive — this is the single change-feed surface, and consumers that
+   * miss or lose a delta resync from `getRange(0)`.
    */
   private notify(
     streamId: StreamTabId,
