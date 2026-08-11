@@ -239,24 +239,24 @@ describe('RelativeFS JSON helpers', () => {
       .catch(() => undefined);
   });
 
-  it('writeJson and readJson round trip preserves data', async () => {
+  it('readJson round trip preserves written JSON data', async () => {
     const payload = {
       foo: 'bar',
       nested: { count: 3 },
       list: [1, 2, 3],
     };
 
-    await TestRelativeFS.writeJson('sample.json', payload);
+    await TestRelativeFS.write('sample.json', JSON.stringify(payload));
     const result = await TestRelativeFS.readJson<typeof payload>('sample.json');
 
     assert.deepStrictEqual(result, payload);
   });
 
   it('validates readJson results with a schema', async () => {
-    await TestRelativeFS.writeJson('typed.json', {
-      name: 'alpha',
-      extra: true,
-    });
+    await TestRelativeFS.write(
+      'typed.json',
+      JSON.stringify({ name: 'alpha', extra: true }),
+    );
 
     const result = await TestRelativeFS.readJson(
       'typed.json',

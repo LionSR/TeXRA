@@ -19,6 +19,7 @@ import {
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
+import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
@@ -41,7 +42,7 @@ import type {
 } from './AgentTrace';
 
 export class TraceEmitter implements AgentTrace {
-  private readonly subscribers = new Set<AgentTraceSubscriber>();
+  private readonly subscribers = createListenerSet<AgentTraceSubscriber>();
 
   /**
    * Per-instance stage scope. Kept on the instance — NOT a module singleton —
@@ -61,10 +62,7 @@ export class TraceEmitter implements AgentTrace {
   // ─── SSoT primitives ───────────────────────────────────────────────
 
   subscribe(subscriber: AgentTraceSubscriber): () => void {
-    this.subscribers.add(subscriber);
-    return () => {
-      this.subscribers.delete(subscriber);
-    };
+    return this.subscribers.add(subscriber);
   }
 
   emit(event: AgentEvent): void {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TraceEmitter } from '@agent/trace';
+import { TraceEmitter, type StatusEvent } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -23,15 +23,24 @@ import { isObject } from '@utils/core';
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
 function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
   trace: TraceEmitter;
+  handleStatus: (event: StatusEvent) => void;
   rows: () => StreamLogEntry[];
   row: (id: string | undefined) => StreamLogEntry | undefined;
 } {
   const trace = new TraceEmitter();
   const store = StreamLogStore.ephemeral('test');
   store.ensureStream(streamId);
-  attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+  const recorder = attachTranscriptRecorder(
+    trace,
+    store.acquireWriter(streamId, streamId),
+  );
   const rows = (): StreamLogEntry[] => store.get(streamId)?.getRange(0) ?? [];
-  return { trace, rows, row: (id) => rows().find((entry) => entry.id === id) };
+  return {
+    trace,
+    handleStatus: recorder.handleStatus,
+    rows,
+    row: (id) => rows().find((entry) => entry.id === id),
+  };
 }
 
 /** A persisted row's `data` payload, or {} when the row carries none. */
@@ -238,7 +247,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 describe('attachTranscriptRecorder workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const streamId = 'stream:terminal-settlement' as StreamTabId;
-    const { trace, row, rows } = attachRecorder(streamId);
+    const { trace, handleStatus, row, rows } = attachRecorder(streamId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -258,7 +267,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       },
     });
 
-    trace.emit({
+    handleStatus({
       type: 'status',
       streamId,
       phase: STREAM_PHASE.CANCELLED,
@@ -328,7 +337,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       data: { status: 'skipped', reason: 'not-reached' },
     });
 
-    trace.emit({
+    handleStatus({
       type: 'status',
       streamId,
       phase: STREAM_PHASE.RUNNING,
@@ -355,7 +364,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
     const streamId = 'stream:waiting-settlement' as StreamTabId;
-    const { trace, rows } = attachRecorder(streamId);
+    const { trace, handleStatus, rows } = attachRecorder(streamId);
 
     const waitingResponse = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
@@ -364,7 +373,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       toolName: 'read',
       input: { path: 'waiting.tex' },
     });
-    trace.emit({
+    handleStatus({
       type: 'status',
       streamId,
       phase: STREAM_PHASE.WAITING,
@@ -385,7 +394,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       },
     ]);
 
-    trace.emit({
+    handleStatus({
       type: 'status',
       streamId,
       phase: STREAM_PHASE.RUNNING,

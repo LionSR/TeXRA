@@ -1,4 +1,4 @@
-import type { AgentTrace, StatusEvent } from '@agent/trace';
+import type { StatusEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   STREAM_PHASE,
@@ -17,7 +17,6 @@ import {
 } from '@shared/streams/streamStatus';
 
 export interface StreamStatusEmitOptions {
-  trace?: AgentTrace;
   substate?: StreamSubstate;
 }
 
@@ -60,12 +59,12 @@ export class StreamStatusMachine {
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
-   *   on. The session constructs both and hands the hub over once, so a
-   *   transition reaches every consumer on the session-fact rail no matter
-   *   which caller triggered it. It is required and never rebound: a machine
-   *   publishing where nobody listens is a status plane that silently loses
-   *   every transition. Callers pass a trace only for the transcript
-   *   compatibility bridge.
+   *   on — the ONLY status rail; every consumer, including the transcript
+   *   recorder (via its `handleStatus` port), reads it. The session constructs
+   *   both and hands the hub over once, so a transition reaches every consumer
+   *   no matter which caller triggered it. It is required and never rebound: a
+   *   machine publishing where nobody listens is a status plane that silently
+   *   loses every transition.
    */
   constructor(private readonly eventHub: SessionEventHub) {}
 
@@ -309,11 +308,6 @@ export class StreamStatusMachine {
         : {}),
       ...(options.substate ? { substate: options.substate } : {}),
     };
-    // Transcript recording still consumes run traces. Forward the same
-    // canonical fact first so recorder-owned rows settle before synchronous
-    // host projectors read them. This is a compatibility bridge, not a second
-    // status vocabulary or delivery rail.
-    options.trace?.emit(event);
     this.eventHub.emit({
       scope: 'session',
       event,

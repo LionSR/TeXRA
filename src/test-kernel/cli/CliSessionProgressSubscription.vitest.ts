@@ -529,27 +529,10 @@ describe('attachCliSessionProgressProjection', () => {
     });
   });
 
-  it('ignores run-scope status trace events', () => {
-    withProjection(({ events, writeRecord }) => {
-      // `StreamStatusMachine` owns the canonical session-fact rail, so a
-      // stray run-scope status event must never reach the public NDJSON
-      // stream.
-      events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'status',
-          streamId,
-          phase: STREAM_PHASE.RUNNING,
-          previousPhase: STREAM_PHASE.WAITING,
-          cause: STREAM_TRANSITION_CAUSE.RESUME,
-          substate: STREAM_SUBSTATE.RESUMING,
-        },
-      });
-
-      expect(writeRecord).not.toHaveBeenCalled();
-    });
-  });
+  // A run-scope status event is no longer representable: `status` left the
+  // `AgentEvent` union, so the session-fact rail is the only status channel
+  // by construction — the old "ignore stray run-scope status" guard is now
+  // enforced by the compiler.
 
   it('writes one record per published status fact without renderer dedup', () => {
     const startingPayload: RunStatusProjectionPayload = {
