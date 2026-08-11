@@ -3,7 +3,11 @@
  */
 
 // Local imports
-import { createChannelWriter, type ChannelWriter } from '@logger/logUtils';
+import {
+  createChannelWriter,
+  disposeAgentChannel,
+  type ChannelWriter,
+} from '@logger/logUtils';
 import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 
 // Local file imports
@@ -63,5 +67,16 @@ export function attachChannelSubscriber(
     writer(event.level, event.message, event.data);
   };
 
-  return trace.subscribe(subscriber);
+  const unsubscribe = trace.subscribe(subscriber);
+  // Run-once: a second invocation after a same-name re-attach (resumed runs
+  // reuse their stream ID) must not dispose the new owner's channel.
+  let released = false;
+  return () => {
+    unsubscribe();
+    if (released) return;
+    released = true;
+    // A per-run agent channel dies with its run; without this every run leaks
+    // a live host output channel. Shared channels outlive the subscriber.
+    if (options.isAgent) disposeAgentChannel(options.channel);
+  };
 }

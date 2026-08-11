@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as logUtils from '@logger/logUtils';
 import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
@@ -14,6 +15,22 @@ describe('createRunTrace dispose', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    logUtils.setOutputChannelFactory(null);
+  });
+
+  it('disposes the per-run output channel on teardown', () => {
+    const dispose = vi.fn();
+    logUtils.setOutputChannelFactory(() => ({
+      appendLine: vi.fn(),
+      dispose,
+    }));
+    const handle = createRunTrace('channel-stream', store);
+
+    handle.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
+
+    handle.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
   });
 
   it('removes the flusher from its owning session set on dispose', () => {
