@@ -2,11 +2,21 @@
 // (streamOrdering + streamTabInfo).
 
 import { strict as assert } from 'node:assert';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
+import {
+  buildStreamInfo,
+  type StreamInfoSource,
+} from '@controllers/session/streamInfoUtils';
 import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
+
+vi.mock('@utils/git/worktreeInfo', () => ({
+  peekWorktreeInfo: vi.fn(() => undefined),
+  resolveWorktreeInfo: vi.fn(async () => ({ workingDirectory: '/wt' })),
+}));
 
 const CHILD_STREAM_ID = 'bash@tool#exec:child-stream';
 
@@ -57,6 +67,54 @@ describe('compareByNewestCreationTime', () => {
       streams.sort(compareByNewestCreationTime).map((stream) => stream.name),
       expected,
     );
+  });
+});
+
+describe('buildStreamInfo git probe gating', () => {
+  function stateWith(overrides: {
+    activeStream?: string;
+    inFlight?: string[];
+  }): StreamInfoSource {
+    return {
+      getStreamMetadata: () => ({
+        creationTimestamp: 1,
+        config: { instruction: '', workingDirectory: '/wt' },
+      }),
+      activeStream: overrides.activeStream ?? '',
+      streamStatus: {
+        isInFlight: (id: string) => overrides.inFlight?.includes(id) ?? false,
+      },
+    } as unknown as StreamInfoSource;
+  }
+
+  beforeEach(() => {
+    vi.mocked(resolveWorktreeInfo).mockClear();
+    vi.mocked(peekWorktreeInfo).mockClear().mockReturnValue(undefined);
+  });
+
+  it('probes git for in-flight streams and the selected tab', () => {
+    const source = stateWith({
+      activeStream: 'selected#1',
+      inFlight: ['running#1'],
+    });
+
+    buildStreamInfo(source, 'running#1');
+    buildStreamInfo(source, 'selected#1');
+
+    expect(vi.mocked(resolveWorktreeInfo).mock.calls).toEqual([
+      ['/wt'],
+      ['/wt'],
+    ]);
+  });
+
+  it('shows the last-known value for terminal streams without spawning git', () => {
+    const cached = { workingDirectory: '/wt', branch: 'main', dirty: false };
+    vi.mocked(peekWorktreeInfo).mockReturnValue(cached);
+
+    const info = buildStreamInfo(stateWith({}), 'finished#1');
+
+    expect(info.worktree).toEqual(cached);
+    expect(resolveWorktreeInfo).not.toHaveBeenCalled();
   });
 });
 

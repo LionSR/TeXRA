@@ -128,6 +128,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 > {
   private executionsWatcher: vscode.FileSystemWatcher | undefined;
   private executionsWatcherGeneration = 0;
+  private executionsWatcherWanted = false;
+  private visibilityTrackedView:
+    vscode.WebviewView | vscode.WebviewPanel | undefined;
+  private visibilityListener: vscode.Disposable | undefined;
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
 
   // Domain-specific handler delegates
@@ -260,16 +264,72 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Cross-host history refresh (#8625): the shared ~/.texra executions dir
     // is written by the CLI and desktop too, so an open history tab re-lists
-    // when any host adds, finishes, or deletes a run. Re-registered on
-    // workspace-folder changes because the storage path follows the current
-    // workspace.
-    void this.registerExecutionsWatcher();
+    // when any host adds, finishes, or deletes a run. The watcher lives only
+    // while the settings webview is visible — every event debounces into a
+    // full listExecutions() rescan, and the Dashboard panel retains its
+    // context when hidden, so a background tab would otherwise keep rescanning
+    // for days (#9959). Re-registered on workspace-folder changes because the
+    // storage path follows the current workspace.
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        void this.registerExecutionsWatcher();
+        if (this.executionsWatcherWanted) {
+          void this.registerExecutionsWatcher();
+        }
       }),
-      { dispose: () => this.invalidateExecutionsWatcher() },
+      { dispose: () => this.detachViewVisibility() },
     );
+  }
+
+  /**
+   * Track the dispatching view's visibility so the executions watcher runs
+   * only while the settings webview is actually on screen. Dispatch is the
+   * first (and only) place this handler learns which view it serves.
+   */
+  protected override onDispatch(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): void {
+    if (this.visibilityTrackedView === view) return;
+    this.visibilityListener?.dispose();
+    this.visibilityTrackedView = view;
+    const onVisibilityChange = () =>
+      this.syncWatcherToVisibility({ refreshOnShow: true });
+    this.visibilityListener =
+      'viewColumn' in view
+        ? view.onDidChangeViewState(onVisibilityChange)
+        : view.onDidChangeVisibility(onVisibilityChange);
+    // The dispatch in flight already produces fresh data; no extra refresh.
+    this.syncWatcherToVisibility({ refreshOnShow: false });
+  }
+
+  public override clearActiveView(): void {
+    super.clearActiveView();
+    this.detachViewVisibility();
+  }
+
+  private detachViewVisibility(): void {
+    this.visibilityListener?.dispose();
+    this.visibilityListener = undefined;
+    this.visibilityTrackedView = undefined;
+    this.executionsWatcherWanted = false;
+    this.invalidateExecutionsWatcher();
+  }
+
+  private syncWatcherToVisibility(options: { refreshOnShow: boolean }): void {
+    const visible = this.visibilityTrackedView?.visible === true;
+    if (visible === this.executionsWatcherWanted) return;
+    this.executionsWatcherWanted = visible;
+    if (!visible) {
+      this.invalidateExecutionsWatcher();
+      return;
+    }
+    void this.registerExecutionsWatcher();
+    // Runs recorded while hidden never fired the watcher; one list refresh
+    // brings the history tab current on re-show.
+    if (options.refreshOnShow) {
+      void this.withActiveWebview((w) =>
+        this.historyHandlers.sendHistoryData(w),
+      );
+    }
   }
 
   private invalidateExecutionsWatcher(): number {

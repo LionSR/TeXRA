@@ -91,7 +91,12 @@ function createHandler(): SettingsViewMessageHandler {
 }
 
 function createWebviewView(): vscode.WebviewView {
+  // Dispatch attaches visibility tracking for the executions watcher (#9959),
+  // so the view must expose the visibility surface. `visible: false` keeps the
+  // watcher unregistered — history refresh is orthogonal to routing.
   return {
+    visible: false,
+    onDidChangeVisibility: () => ({ dispose: () => {} }),
     webview: { postMessage: vi.fn(async () => true) },
   } as unknown as vscode.WebviewView;
 }

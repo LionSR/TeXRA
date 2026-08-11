@@ -5,7 +5,10 @@ import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
 
 /** The state a single tab info is built from. */
-export type StreamInfoSource = Pick<SessionState, 'getStreamMetadata'>;
+export type StreamInfoSource = Pick<
+  SessionState,
+  'getStreamMetadata' | 'activeStream' | 'streamStatus'
+>;
 
 /** The state the full tab list is built from. */
 export type StreamInfoListSource = StreamInfoSource &
@@ -21,11 +24,16 @@ export function buildStreamInfo(
   let worktreeInfo;
   if (workingDirectory) {
     worktreeInfo = peekWorktreeInfo(workingDirectory);
-    // Fire-and-forget; the resolver owns TTL/in-flight de-duplication. Calling
-    // it on each render lets branch/dirty state refresh after the cache expires.
-    void resolveWorktreeInfo(workingDirectory).catch(() => {
-      /* best-effort chip enrichment */
-    });
+    // Probe git only for live streams plus the selected tab: the resolver's
+    // LRU holds 32 entries, so probing every historical stream on a metadata
+    // rebuild thrashes the cache and spawns git per stream (#9959). Terminal
+    // streams render their last-known value from the peek above, or nothing.
+    if (id === state.activeStream || state.streamStatus.isInFlight(id)) {
+      // Fire-and-forget; the resolver owns TTL/in-flight de-duplication.
+      void resolveWorktreeInfo(workingDirectory).catch(() => {
+        /* best-effort chip enrichment */
+      });
+    }
   }
 
   return buildStreamTabInfo({
