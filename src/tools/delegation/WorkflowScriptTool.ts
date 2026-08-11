@@ -57,14 +57,16 @@ import {
   createWorkflowScriptStrategy,
   formatWorkflowScriptReference,
 } from './workflowScriptStrategy';
-import { rejectOversizedBibAttachments } from './inputFields';
+import {
+  assertWorkflowFilesExist,
+  rejectOversizedBibAttachments,
+} from './inputFields';
 import {
   proposalResultToToolResult,
   requestDelegationProposal,
   requireWorkflowOrToolUseAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
-import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 const WorkflowScriptToolInputSchema = z
   .strictObject({

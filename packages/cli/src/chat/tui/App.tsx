@@ -13,7 +13,7 @@ import {
 
 // Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { type StreamTabId } from '@shared/schemas';
+import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
@@ -63,7 +63,6 @@ import {
 import {
   numericFocusTargetForActiveStream,
   resolveChildListTarget,
-  type WorkflowControlRequest,
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -129,7 +128,7 @@ export interface AppProps {
   /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onWorkflowControl: (
     executionId: string,
-    action: WorkflowControlRequest,
+    action: WorkflowControlAction,
   ) => void;
   /** Whether Ctrl-C may stop the current root run. */
   readonly canInterruptActiveRun: () => boolean;

@@ -22,6 +22,7 @@ import {
   isTerminalWorkflowCallProgress,
   type StreamTabId,
   type WorkflowCallProgress,
+  type WorkflowControlAction,
 } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
@@ -43,10 +44,7 @@ import { formatCliStatusLabel } from '../sessionStatus';
 import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 
 // Local imports - TUI state and controls
-import {
-  childElapsed,
-  type WorkflowControlRequest,
-} from '../state/childControls';
+import { childElapsed } from '../state/childControls';
 import {
   childListStreamId,
   childStreamListValue,
@@ -487,7 +485,7 @@ function WorkflowDashboard({
 const WORKFLOW_CONTROL_KEYS = {
   s: 'skip',
   r: 'retry',
-} as const satisfies Record<string, WorkflowControlRequest>;
+} as const satisfies Record<string, WorkflowControlAction>;
 
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
@@ -498,7 +496,7 @@ export interface SubagentListProps {
   /** Skip or retry the focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onWorkflowControl?: (
     executionId: string,
-    action: WorkflowControlRequest,
+    action: WorkflowControlAction,
   ) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,

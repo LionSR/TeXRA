@@ -32,6 +32,18 @@ export type WorkflowExecutionCallStatus = z.infer<
   typeof WorkflowExecutionCallStatusSchema
 >;
 
+/**
+ * What an interactive control request does to the workflow-script `agent()`
+ * attempt it targets: `skip` resolves the call without journaling it (its
+ * result is the engine's skipped sentinel), `retry` discards the attempt and
+ * re-runs the call as a fresh one whose result the call resolves with.
+ *
+ * One vocabulary for both sides — the engine that acts on a request and the
+ * host UI that offers it — so a control a host can name is always a control
+ * the engine implements.
+ */
+export type WorkflowControlAction = 'skip' | 'retry';
+
 const WorkflowExecutionTimestampsSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   queuedAt: z.iso.datetime().optional(),

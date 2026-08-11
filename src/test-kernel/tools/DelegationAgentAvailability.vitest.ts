@@ -25,7 +25,7 @@ const {
   formatAgentList,
   visibleDelegationAgentsBlock,
   withDelegationAgentAvailability,
-} = await import('@tools/delegation/delegationAgentAvailability');
+} = await import('@tools/delegation/delegationAvailability');
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
 const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');

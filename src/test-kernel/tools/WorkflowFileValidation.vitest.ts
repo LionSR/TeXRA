@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { assertWorkflowFilesExist } from '@tools/delegation/workflowFileValidation';
+import { assertWorkflowFilesExist } from '@tools/delegation/inputFields';
 import { WorkspaceFS } from '@utils/files';
 
 const originalExists = WorkspaceFS.exists;

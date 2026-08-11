@@ -1,6 +1,6 @@
 /**
- * `WorkflowControlRegistry` — a session-scoped map from a live workflow-script
- * run to that run's engine control handle.
+ * `WorkflowControlRegistry` — the session-scoped set of engine control handles
+ * of the live workflow-script runs.
  *
  * Both sides speak one identity: the host UI targets a run's `agent()`
  * grandchild by its execution id (the same identity the child list, focus, and
@@ -13,30 +13,24 @@
  * strategy (`src/tools/delegation`), consumption in a host (the CLI child list).
  */
 
-import type {
-  WorkflowControlAction,
-  WorkflowScriptControl,
-} from '@agent/workflowScript';
-import type { ExecutionId } from '@shared/schemas';
+import type { WorkflowScriptControl } from '@agent/workflowScript';
+import type { ExecutionId, WorkflowControlAction } from '@shared/schemas';
 
-/** Session-owned map of live workflow runs to their control handles. */
+/** Session-owned set of the control handles of live workflow runs. */
 export class WorkflowControlRegistry {
-  private readonly runs = new Map<ExecutionId, WorkflowScriptControl>();
+  private readonly runs = new Set<WorkflowScriptControl>();
 
   /**
-   * Register a run's control handle under its run execution id. Returns a
-   * disposer that removes exactly this registration (identity-checked so a
-   * relaunch under the same id cannot tear out the fresh entry).
+   * Register a run's control handle. Returns a disposer that removes exactly
+   * this handle, so a relaunched run's fresh registration survives the old
+   * run's teardown. Each run's control is a distinct closure, so two live runs
+   * coexist here and both see every request — which is what fan-out already
+   * assumes.
    */
-  register(
-    runExecutionId: ExecutionId,
-    control: WorkflowScriptControl,
-  ): () => void {
-    this.runs.set(runExecutionId, control);
+  register(control: WorkflowScriptControl): () => void {
+    this.runs.add(control);
     return () => {
-      if (this.runs.get(runExecutionId) === control) {
-        this.runs.delete(runExecutionId);
-      }
+      this.runs.delete(control);
     };
   }
 

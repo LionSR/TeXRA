@@ -879,6 +879,10 @@ return await agent('Inspect src', { id: 'inspect' })`,
   });
 
   it('refreshes file identity after waiting in the concurrency queue', async () => {
+    const script = `${META}return await parallel([
+  () => agent('blocker', { id: 'blocker' }),
+  () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
+])`;
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => {
       releaseFirst = resolve;
@@ -886,10 +890,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     let fingerprint = 'old-proof';
     const invocations: WorkflowAgentInvocation[] = [];
     const runPromise = runWorkflowScript({
-      script: `${META}return await parallel([
-  () => agent('blocker', { id: 'blocker' }),
-  () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
-])`,
+      script,
       concurrency: 1,
       fingerprintAgentDependencies: async () => fingerprint,
       runAgent: async (invocation) => {
@@ -902,9 +903,19 @@ return await agent('Inspect src', { id: 'inspect' })`,
     await vi.waitFor(() => expect(invocations).toHaveLength(1));
     fingerprint = 'new-proof';
     releaseFirst();
-    await runPromise;
+    const run = await runPromise;
 
-    expect(invocations[1]?.dependencyFingerprint).toBe('new-proof');
+    // The refresh is observable as the journal key it re-keys: against a
+    // baseline run whose bytes never changed, only the file-backed call's
+    // identity moves.
+    const baseline = await runWorkflowScript({
+      script,
+      concurrency: 1,
+      fingerprintAgentDependencies: async () => 'old-proof',
+      runAgent: async (invocation) => invocation.options.id,
+    });
+    expect(run.journal[0]?.key).toBe(baseline.journal[0]?.key);
+    expect(run.journal[1]?.key).not.toBe(baseline.journal[1]?.key);
   });
 
   it('refreshes file identity before an interactive retry', async () => {
@@ -940,7 +951,6 @@ return await agent('Inspect src', { id: 'inspect' })`,
     control(childExecutionIdFor(0), 'retry');
     const run = await runPromise;
 
-    expect(invocations[1]?.dependencyFingerprint).toBe('new-proof');
     expect(invocations[1]?.key).not.toBe(firstKey);
     expect(run.journal[0]?.key).toBe(invocations[1]?.key);
   });

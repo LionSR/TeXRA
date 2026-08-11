@@ -8,17 +8,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { runCleanSingle } from '@housekeeping/clean';
+import { runPack } from '@housekeeping/pack';
 import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
 } from '@housekeeping/utils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
-  getAgentFirstNameChunk,
   legacyWorkflowOutputRoundRegex,
-  legacyWorkflowOutputStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
+  workflowOutputCopyStem,
 } from '@shared/constants/workflowOutput';
 import { installPlatform } from '@test/support/setupPlatform';
 
@@ -52,12 +52,19 @@ describe('filename-era workflow output grammar', () => {
     ['custom:alpha_beta', 'alpha'],
     ['remote:alpha-beta', 'alpha'],
     ['vendor:alpha_beta', 'vendor:alpha'],
-  ])('preserves the XML-packing agent chunk for %s', (agent, expected) => {
-    expect(getAgentFirstNameChunk(agent)).toBe(expected);
+  ])('preserves the agent chunk in the stem for %s', (agent, expected) => {
+    expect(
+      workflowOutputCopyStem({
+        base: 'paper',
+        agent,
+        model: 'gpt-4',
+        round: 0,
+      }),
+    ).toBe(`paper_${expected}_r0_gpt-4`);
   });
 
   it('preserves the flat Save as copy filename', () => {
-    const stem = legacyWorkflowOutputStem({
+    const stem = workflowOutputCopyStem({
       base: 'paper[1]',
       agent: 'builtInWorkflow:write-polish',
       model: 'gpt-4.5',
@@ -128,6 +135,29 @@ describe('filename-era workflow output grammar', () => {
     for (const relativePath of nonMatching) {
       expect(found).not.toContain(relativePath);
     }
+  });
+
+  it('packs a flat XML round output written for a dotted model', async () => {
+    // The on-disk name normalizes the model's dots, so a packer that spells
+    // the raw model silently leaves the file behind.
+    const xmlRelativePath = 'paper_polish_r0_gpt-45.xml';
+    await writeFile(path.join(workspacePath, 'paper.tex'), 'source');
+    await writeFile(path.join(workspacePath, 'paper2.tex'), 'source');
+    await writeFile(path.join(workspacePath, xmlRelativePath), '<xml/>');
+
+    const result = await runPack('gpt-4.5', 'paper.tex', 'custom:polish_long', [
+      'paper2.tex',
+    ]);
+
+    if (result.status !== 'success' || result.outputFolder === undefined) {
+      throw new Error(`Expected a successful pack, got ${result.status}`);
+    }
+    await expect(
+      access(path.join(workspacePath, xmlRelativePath)),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      access(path.join(workspacePath, result.outputFolder, xmlRelativePath)),
+    ).resolves.toBeUndefined();
   });
 
   it('deletes a file matched by overlapping legacy patterns only once', async () => {

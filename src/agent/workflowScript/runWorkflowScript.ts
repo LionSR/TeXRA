@@ -10,6 +10,7 @@ import {
   type ExecutionId,
   type StreamTabId,
   type WorkflowCallIdentity,
+  type WorkflowControlAction,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
@@ -24,7 +25,6 @@ import {
   WorkflowAgentCallOptionsSchema,
   normalizeWorkflowScriptPhaseTitle,
   type WorkflowAgentCallOptions,
-  type WorkflowControlAction,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
   type WorkflowScriptEvent,
@@ -752,9 +752,6 @@ export async function runWorkflowScript(
               index,
               progressId,
               key,
-              ...(dependencyFingerprint !== undefined && {
-                dependencyFingerprint,
-              }),
               prompt,
               options: callOptions,
               signal: callController.signal,

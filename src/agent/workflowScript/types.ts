@@ -4,6 +4,7 @@ import {
   WorkflowCallIdentitySchema,
   type ExecutionId,
   type WorkflowCallIdentity,
+  type WorkflowControlAction,
   type WorkflowExecutionSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
@@ -251,8 +252,6 @@ export interface WorkflowAgentInvocation {
   progressId: WorkflowScriptProgressId;
   /** Stable hash of the prompt and normalized execution-affecting options. */
   key: string;
-  /** Opaque host fingerprint already incorporated into `key`, when present. */
-  dependencyFingerprint?: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
   /**
@@ -411,14 +410,6 @@ export type WorkflowScriptEvent =
  * Skipped calls are never journaled, so a later resume re-runs them.
  */
 export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
-
-/**
- * What an interactive control request does to the attempt it targets: `skip`
- * resolves the call to {@link WORKFLOW_SKIPPED_RESULT} without journaling it,
- * `retry` discards the attempt and re-runs the call as a fresh one whose result
- * the call resolves with.
- */
-export type WorkflowControlAction = 'skip' | 'retry';
 
 /**
  * Per-call control handle for an in-flight run, handed to the host once via

@@ -22,10 +22,17 @@ import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
+import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId, WorkflowExecutionSnapshot } from '@shared/schemas';
+import {
+  deriveWorkflowCounts,
+  type WorkflowScriptDeliverySummary,
+} from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
+import { escapeText } from '@shared/utils/xmlEscape';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -39,10 +46,20 @@ import {
   runPersistedWorkflowScriptWithProgress,
 } from './workflowScriptRun';
 import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
-import { createWorkflowDeliverySummaryCollector } from './workflowScriptDeliverySummary';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
+const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
+
+/**
+ * What the delivery line needs from a settled run: the canonical execution
+ * snapshot the engine terminalizes (phase and task tallies) and the durable
+ * journal (delivered files). A run that died before the engine published any
+ * snapshot has none, and reports zero work.
+ */
+type SettledWorkflowRun = Pick<WorkflowScriptRunResult, 'journal'> & {
+  readonly snapshot: WorkflowScriptRunResult['snapshot'] | undefined;
+};
 
 /** One model-facing reference for editing and rerunning a persisted script. */
 export function formatWorkflowScriptReference(scriptPath: string): string {
@@ -136,17 +153,93 @@ export function createWorkflowScriptStrategy(
   params: WorkflowScriptStrategyParams,
 ): ChildRunStrategy<WorkflowScriptRunResult> {
   const runLog = createRunLogCollector();
-  const summary = createWorkflowDeliverySummaryCollector(
-    params.name,
-    params.scriptPath,
-  );
+
+  /**
+   * Delivery-summary facts, collected without changing the model-facing run
+   * report.
+   *
+   * `taskDone` counts the tasks that produced a result (completed or cached),
+   * which is deliberately narrower than the phase header's `done/total`
+   * (workflowPhaseCallProgress), where every settled call counts, failures and
+   * skips included. The two answer different questions, so the delivery line
+   * labels its count "succeeded".
+   *
+   * Every task and phase number is read off the engine's own terminal snapshot —
+   * the canonical record of what ran — so this line can never disagree with
+   * `/executions/{id}` about the same run.
+   */
+  const summaryFiles = new Map<
+    string,
+    WorkflowScriptDeliverySummary['files'][number]
+  >();
+  let startedAt = Date.now();
+  let phaseCount = 0;
+  let taskDone = 0;
+  let taskTotal = 0;
+  let settledCostUsd = 0;
+
+  const settleSummary = (run: SettledWorkflowRun, costUsd: number) => {
+    settledCostUsd = costUsd;
+    const counts = deriveWorkflowCounts(run.snapshot?.calls ?? []);
+    phaseCount = run.snapshot?.stages.length ?? 0;
+    taskDone = counts.completed + counts.cached;
+    taskTotal = counts.total;
+    for (const entry of run.journal) {
+      const parsed = AgentFinalResultSchema.safeParse(entry.result);
+      if (!parsed.success) {
+        // Presentation tolerates what accounting does not: the cost path
+        // (`workflowJournalEntryCost`) throws on this same corruption because
+        // a mis-billed run is a correctness fault, while a delivery line that
+        // omits one entry's files is merely incomplete. Loud either way — a
+        // silently short file list is how corruption goes unreported.
+        logger.warn(
+          SUMMARY_CHANNEL,
+          `Workflow '${params.name}' journal entry ${entry.index} is not an agent final result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
+          { data: parsed.error },
+        );
+        continue;
+      }
+      if (parsed.data.category === 'workflow') {
+        for (const output of parsed.data.outputs) {
+          summaryFiles.set(output.relativePath, {
+            path: output.relativePath,
+            added: output.added,
+            removed: output.removed,
+          });
+        }
+      } else {
+        for (const path of parsed.data.files) {
+          summaryFiles.set(path, { path, added: null, removed: null });
+        }
+      }
+    }
+  };
+
+  const formatSummaryLine = (
+    outcome: 'completed' | 'failed',
+    errorCause?: string,
+  ): string => {
+    const summary: WorkflowScriptDeliverySummary = {
+      name: params.name,
+      outcome,
+      phaseCount,
+      taskDone,
+      taskTotal,
+      costUsd: settledCostUsd,
+      durationMs: Date.now() - startedAt,
+      files: [...summaryFiles.values()],
+      scriptPath: params.scriptPath,
+      errorCause: errorCause ?? null,
+    };
+    return `<workflow-summary>${escapeText(JSON.stringify(summary))}</workflow-summary>`;
+  };
 
   return {
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {
-      summary.start();
+      startedAt = Date.now();
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
       const attemptCost = createWorkflowAttemptCostTracker();
@@ -186,10 +279,7 @@ export function createWorkflowScriptStrategy(
           // The engine's control is already keyed by the grandchild execution
           // id a host targets, so the run registers it as-is.
           onControl: (control) => {
-            unregisterControls = params.workflowControls.register(
-              params.executionId,
-              control,
-            );
+            unregisterControls = params.workflowControls.register(control);
           },
         });
       } catch (runError) {
@@ -203,7 +293,7 @@ export function createWorkflowScriptStrategy(
           );
           const costUsd = attemptCost.total(checkpoint?.journal ?? []);
           ports.recordCost(costUsd);
-          summary.settle(
+          settleSummary(
             { journal: checkpoint?.journal ?? [], snapshot: lastSnapshot },
             costUsd,
           );
@@ -228,7 +318,7 @@ export function createWorkflowScriptStrategy(
       // completed-call fallback; baseline history contributes zero.
       const costUsd = attemptCost.total(run.journal);
       ports.recordCost(costUsd);
-      summary.settle(run, costUsd);
+      settleSummary(run, costUsd);
       return run;
     },
 
@@ -245,7 +335,7 @@ export function createWorkflowScriptStrategy(
         },
         {
           response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
-          lines: [summary.formatLine('completed')],
+          lines: [formatSummaryLine('completed')],
         },
       ),
 
@@ -258,7 +348,7 @@ export function createWorkflowScriptStrategy(
         },
         {
           message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
-          lines: [summary.formatLine('failed', errorCause)],
+          lines: [formatSummaryLine('failed', errorCause)],
         },
       );
     },

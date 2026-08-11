@@ -8,7 +8,7 @@ import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamTabId, WorkflowControlAction } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -42,10 +42,7 @@ import {
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type {
-  ChildListTarget,
-  WorkflowControlRequest,
-} from '../state/childControls';
+import type { ChildListTarget } from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -92,7 +89,7 @@ interface ConversationRegionProps {
   readonly onKillExecution: (executionId: string) => void;
   readonly onWorkflowControl: (
     executionId: string,
-    action: WorkflowControlRequest,
+    action: WorkflowControlAction,
   ) => void;
 }
 

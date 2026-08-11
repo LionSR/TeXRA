@@ -68,11 +68,8 @@ vi.mock('@utils/files/taskRunStorage', () => ({
     mocks.runStorageLocationFromAnyAbsolutePath,
 }));
 
-vi.mock('@tools/delegation/workflowFileValidation', () => ({
-  assertWorkflowFilesExist: mocks.assertWorkflowFilesExist,
-}));
-
 vi.mock('@tools/delegation/inputFields', () => ({
+  assertWorkflowFilesExist: mocks.assertWorkflowFilesExist,
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
@@ -270,43 +267,6 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     expect(first).toEqual(expect.any(String));
     expect(first).toBe(second);
-  });
-
-  it('rejects dependencies that change between engine hashing and launch', async () => {
-    const options = { inputFiles: ['proof.tex'] };
-    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
-    const dependencyFingerprint = await fingerprintWorkflowAgentDependencies(
-      runExecutionId,
-      options,
-    );
-    mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('new proof'));
-    const runner = defaultRunner();
-
-    await expect(
-      runner({
-        ...invocation(options),
-        dependencyFingerprint,
-      }),
-    ).rejects.toThrow(/changed while the child was launching/);
-    expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
-  });
-
-  it('makes launch fingerprint read failures run-fatal', async () => {
-    const readError = new Error('proof.tex became unreadable');
-    const runner = defaultRunner();
-    mocks.workspaceReadBytes.mockRejectedValueOnce(readError);
-
-    await expect(
-      runner({
-        ...invocation({ inputFiles: ['proof.tex'] }),
-        dependencyFingerprint: 'old-proof',
-      }),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining(readError.message),
-      cause: readError,
-    });
-    expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
