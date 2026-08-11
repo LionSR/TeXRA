@@ -2711,7 +2711,9 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const store = new StreamSnapshotStore();
     const seen: { stream: string; meta: Record<string, unknown> }[] = [];
-    store.attachSummaryMetaSink((stream, meta) => seen.push({ stream, meta }));
+    store.attachSessionEvents(new SessionEventHub(), {
+      summaryMetaSink: (stream, meta) => seen.push({ stream, meta }),
+    });
 
     snapshotFacts(store).setRunStart({
       streamId: STREAM,

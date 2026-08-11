@@ -400,19 +400,13 @@ export class StreamLogStore {
     return store;
   }
 
-  /** Open persisted transcripts for reading without creating or writing files. */
-  static async openReadOnly(): Promise<StreamLogStore> {
-    const store = new StreamLogStore({ kind: 'read-only' });
-    store.replaceSummaries(await store.readPersistentSummaries());
-    return store;
-  }
-
   /**
    * Open persisted transcripts for reading ONE known stream, seeding only
-   * that stream's summary. {@link openReadOnly} scans the entire streamLogs
-   * directory (`listKeys` + a summary read and mtime stats per persisted
-   * stream); archive consumers that already know which stream they need
-   * (via the execution→stream mapping) use this to pay O(1) instead.
+   * that stream's summary — `listKeys` plus a summary read and mtime stats
+   * for just that stream, so archive consumers that already know which
+   * stream they need (via the execution→stream mapping) pay O(1) instead of
+   * a whole-directory scan. (The scan-all `openReadOnly` variant was deleted
+   * with #9947's surface-neutral rework: it had no production caller.)
    * An unknown `streamId` yields a store that simply has no such stream, so
    * `ensureLoaded` no-ops and `get` returns `undefined` exactly as with a
    * full open that did not find the stream.

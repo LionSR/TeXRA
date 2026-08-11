@@ -4,7 +4,6 @@
     "StreamLogStore": [
       "acquireWriter",
       "clear",
-      "clearDirtyUpdates",
       "delete",
       "endRunningGroupsForStreams",
       "ensureLoaded",
@@ -14,6 +13,7 @@
       "get",
       "getFirstTimestamp",
       "getLastTimestamp",
+      "getSummaryMeta",
       "getUnfinishedStreamIds",
       "has",
       "hasAuthoritativeStream",
@@ -22,8 +22,8 @@
       "onChange",
       "open",
       "openOrEphemeral",
-      "openReadOnly",
       "openReadOnlyForStream",
+      "recordSummaryMeta",
       "reload",
       "requestEviction"
     ],

@@ -215,16 +215,14 @@ export class SessionHandle {
     // session projects its own run events into it and flushes it below, so no
     // host has to construct, attach, and flush one of its own.
     this.snapshots = init.snapshots ?? new StreamSnapshotStore();
-    this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events);
-    // Mirror snapshot-owned display metadata into the always-resident stream
-    // summaries, so sidebars and all-streams metadata paths read summaries
-    // instead of per-stream sidecars (#9947). Read-only transcript stores
-    // have no summary authority to record into.
-    if (transcripts.mode.kind !== 'read-only') {
-      this.snapshots.attachSummaryMetaSink((stream, meta) =>
+    // The summary sink mirrors snapshot-owned display metadata into the
+    // always-resident stream summaries, so sidebars and all-streams metadata
+    // paths read summaries instead of per-stream sidecars (#9947). Always
+    // writable: this constructor rejects read-only transcript stores above.
+    this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events, {
+      summaryMetaSink: (stream, meta) =>
         transcripts.recordSummaryMeta(stream, meta),
-      );
-    }
+    });
     this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = init.modelRetries ?? new ModelRetryGate();

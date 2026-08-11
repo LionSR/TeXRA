@@ -191,7 +191,8 @@ describe('SessionHandle', () => {
   });
 
   it('rejects a read-only transcript store', async () => {
-    const transcripts = await StreamLogStore.openReadOnly();
+    const transcripts =
+      await StreamLogStore.openReadOnlyForStream('any-stream');
 
     expect(() => new SessionHandle({ transcripts })).toThrow(
       'requires a writable transcript store',

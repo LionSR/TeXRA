@@ -415,7 +415,7 @@ describe('StreamLogStore load', () => {
       summaries: {},
     });
 
-    const store = await StreamLogStore.openReadOnly();
+    const store = await StreamLogStore.openReadOnlyForStream('alpha');
 
     expect(store.mode).toEqual({ kind: 'read-only' });
     expect(storage.ensuredDirs).toEqual([]);

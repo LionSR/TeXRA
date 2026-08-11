@@ -425,13 +425,6 @@ export class StreamSnapshotStore {
   private summaryMetaSink:
     ((stream: StreamTabId, meta: StreamSummaryMeta) => void) | undefined;
 
-  /** Wire the summary registry that mirrors this store's display metadata. */
-  attachSummaryMetaSink(
-    sink: (stream: StreamTabId, meta: StreamSummaryMeta) => void,
-  ): void {
-    this.summaryMetaSink = sink;
-  }
-
   /**
    * Publish the whole current metadata view of a stream to the summary
    * mirror. Called after every metadata mutation and after sidecar
@@ -543,9 +536,19 @@ export class StreamSnapshotStore {
 
   /**
    * Persist already-migrated durable facts directly from the session event
-   * plane.
+   * plane. `summaryMetaSink` rides the same attachment (the surface stays
+   * one member): it wires the summary registry that mirrors this store's
+   * display metadata, invoked on every metadata mutation and hydration.
    */
-  attachSessionEvents(events: SessionEventHub): () => void {
+  attachSessionEvents(
+    events: SessionEventHub,
+    options?: {
+      summaryMetaSink?: (stream: StreamTabId, meta: StreamSummaryMeta) => void;
+    },
+  ): () => void {
+    if (options?.summaryMetaSink) {
+      this.summaryMetaSink = options.summaryMetaSink;
+    }
     const detachRunEvents = events.subscribe(
       (sessionEvent) => {
         if (sessionEvent.scope !== 'run') return;
