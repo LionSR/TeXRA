@@ -9,8 +9,10 @@ const require = createRequire(import.meta.url);
 const QUICKJS_WASM_ID = '@jitl/quickjs-wasmfile-release-sync/wasm';
 const QUICKJS_WASM_VIRTUAL_ID = '\0texra-quickjs-wasm';
 const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
-// Full hosted Windows shards intermittently exceed 10s in unrelated suites;
-// retain the tighter timeout elsewhere so genuine local/Linux hangs fail fast.
+// Full Windows shards intermittently exceed 10s in unrelated suites; retain the
+// tighter timeout elsewhere so genuine local/Linux hangs fail fast. Windows CI
+// is opt-in (see the `test` job in .github/workflows/ci.yml), so this branch
+// still applies to on-demand runs and to local runs on Windows.
 const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 export default defineConfig({
