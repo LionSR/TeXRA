@@ -46,8 +46,8 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.224",
-    "@anthropic-ai/sdk": "^0.115.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.226",
+    "@anthropic-ai/sdk": "^0.116.0",
     "@cantoo/pdf-lib": "^2.8.1",
     "@google/genai": "^2.16.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
@@ -55,7 +55,7 @@
     "@octokit/request": "^10.0.13",
     "@octokit/request-error": "^7.1.1",
     "@openai/codex-sdk": "^0.147.0",
-    "@openrouter/sdk": "^1.2.11",
+    "@openrouter/sdk": "^1.2.17",
     "@supabase/supabase-js": "2.112.2",
     "acorn": "^8.18.0",
     "acorn-walk": "^8.3.5",
@@ -114,7 +114,7 @@
     "vscode-jsonrpc": "^9.0.1",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
-    "ws": "^8.21.2",
+    "ws": "^8.21.3",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {
