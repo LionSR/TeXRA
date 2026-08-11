@@ -864,7 +864,14 @@ interface FoldContext {
   readonly log: StreamLog;
   /** Current slice entries, consulted only for CLI-synthetic rows. */
   readonly sliceEntries: readonly ConversationEntry[];
+  /** Settled-prefix promotion signal: real settlement OR a turn-boundary
+   *  caller's `forceFinal`. Never drives compaction settlement. */
   readonly streamFinal: boolean;
+  /** The stream's lifecycle actually reached a settlement phase. Only this
+   *  settles compaction activities: a turn-boundary `forceFinal` while a
+   *  compaction is still running must not record it as interrupted — its
+   *  completion event is still to come. */
+  readonly streamSettled: boolean;
   /** Resync only: previous rows by id, so an already-promoted row keeps its
    *  `finalized` flag and a closed phase keeps its inherited counts. */
   readonly inherit?: ReadonlyMap<string, ConversationEntry>;
@@ -1066,10 +1073,9 @@ function reconcileSynthetics(
       removed = true;
     }
   }
-  if (removed) {
-    state.indexById.clear();
-    reindexFoldFrom(state, 0);
-  }
+  // Stale ids of removed rows must leave the map; positions are rebuilt by
+  // the unconditional reindex after the inserts below.
+  if (removed) state.indexById.clear();
   for (const [index, entry] of current.entries()) {
     const item: TranscriptFoldItem = {
       rendered: entry,
@@ -1164,7 +1170,7 @@ function applyStreamChanges(
   const compaction = projectCompactionIncrementally(
     ctx.streamId,
     ctx.log,
-    ctx.streamFinal,
+    ctx.streamSettled,
   );
   for (const entry of changed) applyChangedLogEntry(state, entry, ctx);
   reconcileCompactionRows(state, compaction, ctx.flags);
@@ -1368,9 +1374,8 @@ export function syncStreamLog(
     const workflowStream = slice.category === AgentCategory.Workflow;
     const fullLogChild = isFullLogChildStream(slice);
     const workflowOperationalOnly = workflowStream && !fullLogChild;
-    const streamFinal =
-      options.forceFinal === true ||
-      isTranscriptSettlementPhase(lifecycle.status);
+    const streamSettled = isTranscriptSettlementPhase(lifecycle.status);
+    const streamFinal = options.forceFinal === true || streamSettled;
     const state = slice.transcriptFold ?? createTranscriptFoldState();
     const flags = newFoldChangeFlags();
     const modeCurrent =
@@ -1397,6 +1402,7 @@ export function syncStreamLog(
       log,
       sliceEntries: slice.entries,
       streamFinal,
+      streamSettled,
       flags,
     };
     let projections;

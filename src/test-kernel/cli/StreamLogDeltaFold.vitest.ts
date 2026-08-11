@@ -339,7 +339,7 @@ class MirroredOps {
 function syncBothAndCompare(
   step: number,
   extra = '',
-  options: { readonly forceFull?: boolean } = {},
+  options: { readonly forceFull?: boolean; readonly forceFinal?: boolean } = {},
 ): void {
   syncStreamLog(FOLD_STREAM, options);
   invalidateTranscriptFoldForTest(ORACLE_STREAM);
@@ -443,6 +443,89 @@ describe('transcript fold vs from-scratch oracle', () => {
         ops.step();
         syncBothAndCompare(step, ' (compact)');
       }
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not settle a running compaction on a turn-boundary forceFinal', () => {
+    // Regression: `forceFinal` (projectStreamTranscript at turn boundaries)
+    // must only drive settled-prefix promotion. Compaction settlement derives
+    // from the real lifecycle phase — a forceFinal while a compaction is
+    // still running must not record it as interrupted, or the later
+    // completion event lands beyond the settlement boundary and is ignored.
+    const dispose = subscribeStreamLog();
+    try {
+      const store = defaultSession().transcripts;
+      configureStreams(CONFIGS[0]);
+      activeStreamId.set(undefined);
+      for (const streamId of MIRRORED) {
+        setStreamStatusInCliState({ streamId, status: STREAM_PHASE.RUNNING });
+        appendTranscriptEntry(store, streamId, {
+          id: 'u1',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 1,
+          messageType: MESSAGE_TYPES.USER_MESSAGE,
+          text: 'please compact',
+        });
+        appendTranscriptEntry(store, streamId, {
+          id: 'c-start',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 2,
+          messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+          text: 'Compacting context…',
+          data: {
+            activity: 'context_compaction',
+            operationId: 'op-1',
+            state: 'started',
+          },
+        });
+      }
+      syncBothAndCompare(0, ' (running compaction)', { forceFull: true });
+
+      // Turn-boundary finalize while the compaction is still running.
+      const before = transcriptFoldCountersForTest();
+      syncBothAndCompare(1, ' (forceFinal)', {
+        forceFull: true,
+        forceFinal: true,
+      });
+      expect(transcriptFoldCountersForTest().folds).toBeGreaterThan(
+        before.folds,
+      );
+      const slice = streams.get().get(FOLD_STREAM);
+      const row = slice?.entries.find((e) => e.id === 'compaction:op-1');
+      expect(row?.text).toBe('Compacting context…');
+      expect(row?.finalized).toBe(false);
+      expect(slice?.compactingActive).toBe(true);
+      // The settled prefix ahead of the compaction is still promoted.
+      expect(slice?.entries.find((e) => e.id === 'u1')?.finalized).toBe(true);
+
+      // The later completion event must still complete the block.
+      for (const streamId of MIRRORED) {
+        appendTranscriptEntry(store, streamId, {
+          id: 'c-done',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 3,
+          messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+          text: 'Conversation context compacted',
+          data: {
+            activity: 'context_compaction',
+            operationId: 'op-1',
+            state: 'completed',
+          },
+        });
+      }
+      syncBothAndCompare(2, ' (completion)', { forceFull: true });
+      const done = streams
+        .get()
+        .get(FOLD_STREAM)
+        ?.entries.find((e) => e.id === 'compaction:op-1');
+      expect(done?.text).toBe('Context compacted');
+      expect(done?.finalized).toBe(true);
+      expect(streams.get().get(FOLD_STREAM)?.compactingActive).toBe(false);
     } finally {
       dispose();
     }
