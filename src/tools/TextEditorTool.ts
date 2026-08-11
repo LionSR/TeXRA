@@ -23,7 +23,8 @@ import {
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { executed } from '@tools/core/result';
 import { assertNever } from '@utils/core';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';

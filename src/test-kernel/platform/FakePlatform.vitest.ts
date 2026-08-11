@@ -146,7 +146,6 @@ describe('FakePlatform', () => {
     assert.deepEqual(platform.config.inspect('enabled'), {
       globalValue: true,
       workspaceValue: undefined,
-      effectiveValue: true,
     });
     assert.equal(changes, 1);
   });
@@ -169,7 +168,6 @@ describe('FakePlatform', () => {
     assert.deepEqual(platform.config.inspect('files.exclude'), {
       globalValue: undefined,
       workspaceValue: ['node_modules'],
-      effectiveValue: ['node_modules'],
     });
     assert.equal(changes, 1);
   });

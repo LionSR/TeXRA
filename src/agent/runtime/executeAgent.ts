@@ -5,11 +5,9 @@ import { createChannelTrace } from '@agent/trace';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
 import {
-  AgentCategory,
   type AgentToolUseSetting,
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
@@ -32,12 +30,13 @@ import {
   type ExecutionId,
   type SubagentProgressUpdate,
   type UserFollowUpSupport,
+  AgentCategory,
 } from '@shared/schemas';
 import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas/output';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { ensureRunDir } from '@utils/files/runStorageFs';
 
 import {
   buildAgentLaunchContext,
@@ -510,13 +509,6 @@ export async function resumeToolUseFromResumeData(
   }
   const runWithOwnership = captureOwnedExecutionLease(resume.executionId);
   return await runWithOwnership(async () => {
-    const modelHandlerCompatibilityKey =
-      resume.shared.modelHandlerCompatibilityKey ??
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        resume.agentConfig.model,
-        resume.shared.messages,
-        logger,
-      );
     // Resolve persisted lineage before launch assembly activates the stream and
     // transfers its resources. Storage failures must propagate without leaving
     // an activated resume stream outside lifecycle cleanup.
@@ -536,7 +528,10 @@ export async function resumeToolUseFromResumeData(
         config: resume.agentConfig,
         executionId: resume.executionId,
         streamTabIdOverride: resume.streamId,
-        modelHandlerCompatibilityKey,
+        // SessionResumeRetrieval already resolved the persisted ?? inferred key
+        // for this exact record; do not re-infer here.
+        modelHandlerCompatibilityKey:
+          resume.shared.modelHandlerCompatibilityKey,
         suppressViewSwitch: isSubagent,
         // resumeCommand surfaces its own warning toast on failure; skip the
         // bus-level error to avoid double-notifying.

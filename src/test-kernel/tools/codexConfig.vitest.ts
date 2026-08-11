@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentCategory } from '@shared/schemas';
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,

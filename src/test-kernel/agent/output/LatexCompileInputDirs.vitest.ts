@@ -6,10 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import {
-  AgentCategory,
-  AgentWorkflowSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
+import { AgentWorkflowSettingSchema } from '@agent/core/definition/AgentDataclass';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   resolveWorkspaceSourceDir,
@@ -17,14 +14,15 @@ import {
 } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import {
-  TaskRunFileService,
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import {

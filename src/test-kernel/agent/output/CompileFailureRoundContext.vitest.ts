@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
-  shouldUseCompileFailureRepairContext,
 } from '@agent/output/compileFailureRoundContext';
 import type { CompileFailure, CompileResult } from '@shared/schemas';
 
@@ -50,15 +49,5 @@ describe('compile failure round context', () => {
     expect(
       appendCompileFailureRoundContext('Revise the document.\n', 'log tail'),
     ).toBe('Revise the document.\n\nlog tail');
-  });
-
-  it('uses compile failure repair context only when enabled', () => {
-    expect(shouldUseCompileFailureRepairContext(failedResult, true)).toBe(true);
-    expect(shouldUseCompileFailureRepairContext(failedResult, false)).toBe(
-      false,
-    );
-    expect(
-      shouldUseCompileFailureRepairContext({ status: 'ok', round: 0 }, true),
-    ).toBe(false);
   });
 });

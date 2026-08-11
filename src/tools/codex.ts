@@ -36,6 +36,7 @@ import type {
   ExecutionId,
   TodoItem,
   ToolUseLog,
+  ToolUseStatus,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
@@ -67,7 +68,6 @@ import {
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
   buildCodexUsageStats,
-  type ToolUseStatus,
 } from './codexShared';
 
 // Third-party imports

@@ -33,6 +33,8 @@ export {
 
 export {
   API_ACCESS_MODE_OPTIONS,
+  DEFAULT_GLOBAL_STREAMING,
+  DEFAULT_QUOTA_AUTO_SWITCHED,
   type ApiAccessMode,
   type NumberSetting,
   type ProviderKeyStatus,

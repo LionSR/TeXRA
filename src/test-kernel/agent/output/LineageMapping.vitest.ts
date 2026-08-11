@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { ExecutionId } from '@shared/schemas';
-import { createRunStorageLocation, getComparablePath } from '@utils/files';
+import {
+  createRunStorageLocation,
+  getComparablePath,
+} from '@utils/files/fileLocation';
 
 describe('workflow output lineage mapping', () => {
   const executionId: ExecutionId = 'abc123';

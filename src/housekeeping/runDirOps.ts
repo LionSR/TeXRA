@@ -7,9 +7,9 @@ import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { getCleanAgentName } from '@shared/schemas/agent';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { findRunDir } from '@utils/files/taskRunStorage';
+import { findRunDir } from '@utils/files/runStorageFs';
 
 // Local file imports
 import { CHANNEL, HISTORY_DIR } from './constants';

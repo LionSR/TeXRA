@@ -253,7 +253,6 @@
         "SettingsMessageFor",
         "SettingsTab",
         "SettingsViewInboundHandlerRegistry",
-        "SettingsViewInboundMessage",
         "ToolCategory",
         "ToolCommandKind",
         "ToolDashboardItem",
@@ -262,7 +261,6 @@
         "UpdateAgentSelectionMessage",
         "UpdateAgentSkillsSettingsMessage",
         "UpdateApprovalAndSafetySettingsMessage",
-        "UpdateChatGptAuthStatusMessage",
         "UpdateCustomAgentDirMessage",
         "UpdateGitAuthorSettingsMessage",
         "UpdateHistoryMessage",
@@ -321,9 +319,13 @@
       ]
     },
     "@shared/schemas/stream": {
-      "type": ["ExecutionMeta", "ExecutionStatus", "RunOutcome", "StreamPhase"],
+      "type": [
+        "ExecutionStatus",
+        "RunOutcome",
+        "StreamLifecycleStatus",
+        "StreamPhase"
+      ],
       "value": [
-        "EXECUTION_META_SCHEMA_VERSION",
         "EXECUTION_STATUS",
         "ExecutionMetaSchema",
         "ExecutionStatusSchema",
@@ -379,23 +381,15 @@
     "@shared/schemas/agent": [
       "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "packages/cli/src/chat/tui/forms/ModelListForm.tsx (type-only)",
       "packages/cli/src/commands/config.ts",
-      "packages/cli/src/commands/models.ts",
-      "packages/cli/src/runtime/credentialStatus.ts",
-      "packages/cli/src/runtime/modelAccess.ts (type-only)",
       "packages/cli/src/runtime/orchestration.ts",
-      "packages/cli/src/runtime/runModel.ts",
       "packages/desktop/src/main/desktopAgentSettingsController.ts (type-only)",
-      "packages/desktop/src/main/desktopCredentialSettingsController.ts",
-      "packages/desktop/src/main/desktopMainViewStartup.ts",
       "packages/desktop/src/main/desktopShellIpc.ts",
       "packages/desktop/src/main/index.ts",
       "packages/desktop/src/shared/desktopCommandSurface.ts (type-only)",
       "packages/extension/src/commands/extensionCommandHandlers.ts",
       "packages/extension/src/commands/setup/setupAssistantCommand.ts",
       "packages/extension/src/frontend/agents/AgentDirectoryManager.ts",
-      "packages/extension/src/frontend/agents/optionsLoader.ts",
       "packages/extension/src/frontend/agents/register.ts (type-only)",
       "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
       "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts",
@@ -406,7 +400,6 @@
       "src/agent/core/definition/AgentDataclass.ts",
       "src/agent/index/AgentDirectoryService.ts (type-only)",
       "src/agent/index/agentEntry.ts (type-only)",
-      "src/agent/index/agentOptionsBuilder.ts",
       "src/agent/index/agentRegistry.ts",
       "src/agent/index/agentRegistry.ts (type-only)",
       "src/agent/index/agentYamlScanner.ts (type-only)",
@@ -416,9 +409,7 @@
       "src/agent/runtime/AgentLaunchContext.ts (type-only)",
       "src/agent/runtime/agentLoad.ts",
       "src/agent/runtime/AgentRunLifecycle.ts",
-      "src/agent/runtime/agentToolResolution.ts (type-only)",
       "src/agent/runtime/ExecutionHandle.ts (type-only)",
-      "src/agent/runtime/ModelFactory.ts (type-only)",
       "src/agent/runtime/streamTab.ts",
       "src/common/teams/TeamPlan.ts",
       "src/common/teams/TeamRoster.ts",
@@ -433,16 +424,12 @@
       "src/controllers/settingsView/SettingsAgentVisibilityController.ts (type-only)",
       "src/housekeeping/pack.ts",
       "src/housekeeping/runDirOps.ts",
-      "src/model/computeModelOptions.ts",
-      "src/model/providerCapabilities.ts (type-only)",
-      "src/model/setupCredentialAccess.ts",
       "src/model/ToolDefinition.ts",
       "src/shared/constants/workflowOutput.ts",
       "src/telemetry/UsageLogTypes.ts",
       "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
       "src/tools/executionFormatters.ts (type-only)",
-      "src/tools/setup/ApplyTeamTool.ts",
-      "src/tools/setup/platform.ts"
+      "src/tools/setup/ApplyTeamTool.ts"
     ],
     "@shared/schemas/agentCliSettings": [
       "packages/extension/src/settingsView/frontend/settingsState.ts",
@@ -625,7 +612,6 @@
     ],
     "@shared/schemas/settingsViewMessages": [
       "packages/cli/src/chat/tui/commands/handlers/apiModeCommands.ts (type-only)",
-      "packages/cli/src/chat/tui/commands/handlers/statusAssembly.ts (type-only)",
       "packages/cli/src/chat/tui/forms/ModelAccessForm.tsx (type-only)",
       "packages/cli/src/chat/tui/forms/ModelListForm.tsx (type-only)",
       "packages/cli/src/chat/tui/state/approvalQueue.ts (type-only)",
@@ -688,7 +674,6 @@
       "src/shared/settingsView/handlers/agentSelectionHandlers.ts (type-only)",
       "src/shared/settingsView/handlers/agentSkillsHandlers.ts (type-only)",
       "src/shared/settingsView/handlers/approvalHandlers.ts (type-only)",
-      "src/shared/settingsView/handlers/chatGptHandlers.ts (type-only)",
       "src/shared/settingsView/handlers/superYoloHandlers.ts (type-only)",
       "src/shared/tools/toolStatusLabels.ts (type-only)",
       "src/tools/externalToolDefs.ts (type-only)",
@@ -696,7 +681,6 @@
     ],
     "@shared/schemas/spendingStatus": [
       "packages/extension/src/settingsView/frontend/components/profile/RelayQuotaMeter.ts",
-      "packages/extension/src/settingsView/frontend/settingsState.ts (type-only)",
       "packages/extension/src/settingsView/frontend/slices/profileSlice.ts (type-only)",
       "packages/extension/src/settingsView/frontend/tabs/AccountTab.ts (type-only)",
       "src/auth/serverKeys/ServerSideKeyService.ts (type-only)",
@@ -719,7 +703,6 @@
       "src/utils/system/gitAuthorSettings.ts"
     ],
     "@shared/schemas/stream": [
-      "src/agent/storage/index.ts",
       "src/shared/streams/streamStatus.ts",
       "src/transcript/traceDocumentSchema.ts"
     ],
@@ -727,7 +710,7 @@
       "packages/trace-viewer/src/traceDataSchema.ts",
       "src/transcript/traceDocumentSchema.ts"
     ],
-    "@shared/schemas/todoDisplay": ["src/tools/delegation/subagentResults.ts"],
+    "@shared/schemas/todoDisplay": ["src/shared/subagentFollowup.ts"],
     "@shared/schemas/toolConfig": [
       "src/agent/core/definition/AgentConfig.ts",
       "src/controllers/mainView/MainViewExecutionController.ts",
@@ -835,6 +818,6 @@
       "src/tools/delegation/workflowScriptStrategy.ts (type-only)",
       "src/tools/delegation/WorkflowScriptTool.ts"
     ],
-    "@shared/schemas/workPlan": ["src/tools/delegation/subagentResults.ts"]
+    "@shared/schemas/workPlan": ["src/shared/subagentFollowup.ts"]
   }
 }

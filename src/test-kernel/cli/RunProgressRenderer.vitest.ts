@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -28,6 +27,7 @@ import {
   type RoundStage,
   type StreamPhase,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';

@@ -47,15 +47,6 @@ const snapshots: SubscriptionUsageSnapshots = {
   chatgpt: snapshot('chatgpt', 'ChatGPT'),
   kimiCode: snapshot('kimiCode', 'Kimi Code'),
   glmCodingPlan: snapshot('glmCodingPlan', 'GLM'),
-  grok: {
-    state: 'unavailable',
-    provider: 'grok',
-    providerName: 'Grok',
-    planName: 'Grok subscription',
-    fetchedAt: NOW,
-    windows: [],
-    reason: 'unsupported',
-  },
 };
 
 type SubscriptionsTabElement = HTMLElement & {

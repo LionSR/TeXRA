@@ -32,7 +32,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import {
   applyGitAuthorSettings,
   buildGitAuthorSettingsMessage,

@@ -32,7 +32,7 @@ import pMap from 'p-map';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 // Local imports - transcript

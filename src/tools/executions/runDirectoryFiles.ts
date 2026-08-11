@@ -7,7 +7,7 @@
 import * as path from 'node:path';
 
 import { normalizeFilePath } from '@utils/core';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { isKVFile } from './executionKvFiles';

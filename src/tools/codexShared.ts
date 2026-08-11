@@ -1,5 +1,9 @@
 // Local imports - shared schemas
-import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import type {
+  TokenUsageStats,
+  ToolUseLog,
+  ToolUseStatus,
+} from '@shared/schemas';
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
@@ -28,7 +32,6 @@ import type {
 export const CODEX_AGENT_NAME = 'codex';
 export const CODEX_DISPLAY_MODEL = 'gpt55';
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
-export type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 type CodexFileChange = FileChangeItem['changes'][number];
 type CodexCommandToolLogOptions = Pick<

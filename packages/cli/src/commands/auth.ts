@@ -34,6 +34,7 @@ import {
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
+  supabaseSignOutOutcomeMessage,
   type CliAuthProfile,
 } from '../runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
@@ -273,7 +274,7 @@ export const logoutCommand = defineCliCommand({
     emitCliResult(context, {
       json: payload,
       ndjson: { kind: 'auth', ...payload },
-      text: relayNotice ? `Signed out.\n${relayNotice}` : 'Signed out.',
+      text: supabaseSignOutOutcomeMessage('Signed out.'),
     });
     return CliExitCode.Success;
   },

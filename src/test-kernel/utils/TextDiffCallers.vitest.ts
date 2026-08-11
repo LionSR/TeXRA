@@ -18,12 +18,12 @@ import {
   firstChangedLine,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  AbsoluteFS,
   createExternalLocation,
   getComparablePath,
-} from '@utils/files';
-import { getRunDir } from '@utils/files/taskRunStorage';
+} from '@utils/files/fileLocation';
+import { getRunDir } from '@utils/files/runStorageFs';
 
 function installFakePlatform(
   files: Record<string, string> = {},

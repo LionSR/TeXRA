@@ -2,13 +2,12 @@ import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
   MainViewStartupController,
+  type MainViewAuthStatus,
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
-import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory } from '@shared/schemas/agent';
 import { getConfig } from '@utils/config/configUtils';
 
 import {
@@ -38,28 +37,17 @@ export function createDesktopMainViewStartup({
     getConfig,
     loadOptions: async () => {
       if (loadOptions != null) return loadOptions();
-      const [
-        agentOptions,
-        teamOptions,
-        workflowModelOptions,
-        toolUseModelOptions,
-      ] = await Promise.all([
+      const [agentOptions, teamOptions, modelOptions] = await Promise.all([
         computeAgentOptionsData(),
         loadTeamOptions(createTeamCatalogPorts()),
-        computeModelOptionsData(undefined, undefined, {
-          agentCategory: AgentCategory.Workflow,
-        }),
-        computeModelOptionsData(undefined, undefined, {
-          agentCategory: AgentCategory.ToolUse,
-        }),
+        computeModelOptionsData(),
       ]);
       return {
         agentOptions,
         teamOptions,
-        modelOptions: workflowModelOptions,
         modelOptionsByCategory: {
-          workflow: workflowModelOptions,
-          toolUse: toolUseModelOptions,
+          workflow: modelOptions,
+          toolUse: modelOptions,
         },
       };
     },

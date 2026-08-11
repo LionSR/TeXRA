@@ -20,7 +20,7 @@ import {
   type EditRecord,
 } from '@shared/schemas/toolResult';
 import { isObject } from '@utils/core';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 /** Schema for thinking blocks (used by model handlers). */
 const ThinkingBlockSchema = z.object({

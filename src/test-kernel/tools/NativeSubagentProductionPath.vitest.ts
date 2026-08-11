@@ -34,7 +34,6 @@ import {
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -44,6 +43,7 @@ import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
+import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import {
@@ -51,6 +51,7 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import {
   cleanupTempDirs,
@@ -59,7 +60,6 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { deliverChildRunFollowUp } from '@tools/delegation/childRunDelivery';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentExecution';
 import { readCompletedRunConversation, StreamLogStore } from '@transcript';

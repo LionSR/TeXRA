@@ -8,7 +8,7 @@ import type {
   ResolvedClientCredential,
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { isNonEmptyString } from '@utils/core';
 
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';

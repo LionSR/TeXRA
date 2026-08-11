@@ -27,15 +27,19 @@ import {
   attachProviderError,
   attachSdkErrorMetadata,
   attachStreamDiagnostics,
-  buildErrorLogData,
-  formatProviderHttpError,
-  getSdkErrorMessage,
+} from '@common/errors/sdkError/errorMetadata';
+import {
   isContextWindowError,
   isPreviousResponseIdError,
   isUserAbort,
+} from '@common/errors/sdkError/errorPatterns';
+import {
+  buildErrorLogData,
+  formatProviderHttpError,
+  getSdkErrorMessage,
   normalizeProviderError,
-  sdkErrorKindFromStatusCode,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
+import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import type { ProviderError, RetryErrorInfo } from '@shared/schemas/errors';
 import {
   ErrorLogDataSchema,

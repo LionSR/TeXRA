@@ -8,12 +8,9 @@
  */
 
 // Local imports
-import { registerExecution } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
-import {
-  captureOwnedExecutionLease,
-  releaseOwnedExecutionLeaseAfterFailure,
-} from '@agent/storage/executionLease';
+import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
+import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -163,16 +160,20 @@ export async function executeSubagent(
   const childStreamId = getStreamTabId(config.agent, {
     executionId,
   });
-  await registerExecution(executionId, config, agentName, {
-    streamId: childStreamId,
-    identity: { kind: 'agent', agent: config.agent },
-    userFollowUpSupport:
-      config.agentCategory === AgentCategory.ToolUse
-        ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-        : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    parentExecutionId,
-  });
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
+  const runWithOwnership = await registerOwnedExecution(
+    executionId,
+    config,
+    agentName,
+    {
+      streamId: childStreamId,
+      identity: { kind: 'agent', agent: config.agent },
+      userFollowUpSupport:
+        config.agentCategory === AgentCategory.ToolUse
+          ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+          : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      parentExecutionId,
+    },
+  );
 
   return await runWithOwnership(async () => {
     const isToolUse = config.agentCategory === AgentCategory.ToolUse;
@@ -192,7 +193,7 @@ export async function executeSubagent(
       onStreamResolved: inheritChildStreamApprovals,
     };
 
-    try {
+    await runWithOwnedExecutionLeaseLaunchGuard(executionId, async () => {
       const { createNativeSubagentStrategy } =
         await import('./nativeSubagentStrategy.js');
       const { completion } = startChildRunLoop({
@@ -209,9 +210,7 @@ export async function executeSubagent(
           { data: error },
         );
       });
-    } catch (error) {
-      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
-    }
+    });
 
     const meta = options?.approvalMeta;
     const metaLines: string[] = [];

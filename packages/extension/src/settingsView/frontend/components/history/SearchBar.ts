@@ -9,9 +9,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { historyStyles } from '@shared/styles/historyStyles';
 import { debounce } from '@utils/core';
 
 // Local imports - history view events

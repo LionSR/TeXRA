@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';

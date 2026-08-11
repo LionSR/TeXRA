@@ -15,7 +15,7 @@ import * as vscode from 'vscode';
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import * as logger from '@logger/logUtils';
 import { createFlushableDebounce } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';

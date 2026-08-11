@@ -28,7 +28,7 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
-import { toolDisplayKind } from '@shared/tools/toolKind';
+import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -54,7 +54,7 @@ import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 // `WriteInput` is used purely for its (erased) type shape, the rest are
 // documented in each builder's own comment.
 import type { WriteInput } from '@tools/WriteTool';
-import { isObject } from '@utils/core';
+import { filterNotNullish, isObject } from '@utils/core';
 
 import { codexToolRenderers } from '../codexToolTemplates';
 import {
@@ -95,28 +95,53 @@ function buildFileGroupsSection(
  * Common shape of the edit_file and str_replace_editor tool inputs, for
  * display purposes only.
  *
- * No single canonical schema validates this shape: this dispatch entry
- * ('edit' display kind) covers three different tool names — edit_file
- * (`EditInputSchema`), str_replace_editor (`TextEditorInputSchema`, a
- * discriminated union where only the `str_replace` branch has
- * old_str/new_str), and str_replace_based_edit_tool, which is Anthropic's
- * native tool-use alias and is not a registered TeXRA tool with its own
- * schema at all. Rather than fabricate a schema spanning all three, this
- * keeps the type-only cast but narrows with explicit runtime `typeof` checks
- * below before any field is used.
+ * No single canonical schema validates this shape: this dispatch entry (the
+ * shared `isEditLikeToolName` classifier) covers three different registered
+ * tool names — edit_file (`EditInputSchema`), str_replace_editor
+ * (`TextEditorInputSchema`, a discriminated union where only the `str_replace`
+ * branch has old_str/new_str), and str_replace_based_edit_tool, which is
+ * Anthropic's native tool-use alias — plus the verbatim built-in names
+ * (`edit`, `multiedit`, provider `str_replace`/`text_editor` variants) a
+ * delegated sub-agent reports. A delegated Claude `Edit` reports
+ * `old_string`/`new_string` (not `old_str`/`new_str`); a delegated
+ * `MultiEdit` nests a whole array of those under `edits`. (The `file_path`
+ * vs. `path` field-name split is handled once, upstream, in `ctx.filePath`.)
+ * None of these has its own TeXRA schema, so rather than fabricate one
+ * spanning all of them, this reads each candidate with explicit runtime
+ * `typeof` checks before any field is used.
  */
-type EditDiffLikeInput = { old_str?: unknown; new_str?: unknown };
+type EditDiffLikeInput = {
+  old_str?: unknown;
+  new_str?: unknown;
+  old_string?: unknown;
+  new_string?: unknown;
+  edits?: unknown;
+};
+
+interface EditCandidate {
+  readonly oldText: string;
+  readonly newText: string;
+}
+
+function editCandidateOf(input: unknown): EditCandidate | undefined {
+  if (!isObject(input)) return undefined;
+  const edit = input as EditDiffLikeInput;
+  const oldText = asString(edit.old_str) ?? asString(edit.old_string);
+  const newText = asString(edit.new_str) ?? asString(edit.new_string);
+  return oldText === undefined || newText === undefined
+    ? undefined
+    : { oldText, newText };
+}
 
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath, parsedOutput } = ctx;
   if (!isObject(input)) return [];
   const editInput = input as EditDiffLikeInput;
-  if (
-    typeof editInput.old_str !== 'string' ||
-    typeof editInput.new_str !== 'string'
-  ) {
-    return [];
-  }
+  const candidates = Array.isArray(editInput.edits)
+    ? editInput.edits.map(editCandidateOf).filter(filterNotNullish)
+    : [editCandidateOf(editInput)].filter(filterNotNullish);
+  if (candidates.length === 0) return [];
+
   const sections: TemplateResult[] = [];
   const edits = getOutputEdits<{ startLine?: number }>(parsedOutput);
   const startLine = edits?.[0]?.startLine;
@@ -129,12 +154,14 @@ function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
       ),
     );
   }
-  sections.push(
-    buildToolUseSection(
-      '',
-      buildEditDiffSection(editInput.old_str, editInput.new_str),
-    ),
-  );
+  for (const candidate of candidates) {
+    sections.push(
+      buildToolUseSection(
+        '',
+        buildEditDiffSection(candidate.oldText, candidate.newText),
+      ),
+    );
+  }
   return sections;
 }
 
@@ -605,8 +632,7 @@ const TOOL_SECTION_BUILDERS: Array<{
   build: (ctx: ToolSectionContext) => TemplateResult[];
 }> = [
   {
-    match: (ctx) =>
-      toolDisplayKind(ctx.toolName) === 'edit' && isObject(ctx.input),
+    match: (ctx) => isEditLikeToolName(ctx.toolName) && isObject(ctx.input),
     build: buildEditDiffInputSections,
   },
   {
@@ -650,7 +676,13 @@ export function dispatchToolSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
   for (const { match, build } of TOOL_SECTION_BUILDERS) {
-    if (match(ctx)) return build(ctx);
+    if (!match(ctx)) continue;
+    // A matched builder that finds nothing displayable (e.g. an edit-like
+    // tool whose input shape it doesn't recognize) falls through to the
+    // generic renderer instead of leaving the card blank.
+    const sections = build(ctx);
+    if (sections.length > 0) return sections;
+    break;
   }
   return buildDefaultSections(ctx);
 }

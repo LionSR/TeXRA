@@ -7,12 +7,12 @@
 import { afterEach } from 'vitest';
 
 // Local imports
-import {
-  getExecutionStore,
-  type DeleteExecutionOptions,
-  type DeleteExecutionResult,
-} from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
+import type {
+  DeleteExecutionOptions,
+  DeleteExecutionResult,
+} from '@agent/storage/executionListing';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {

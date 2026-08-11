@@ -8,7 +8,7 @@ import { describe, it, afterEach, vi } from 'vitest';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractTikzFiguresTool } from '@tools/latex/ExtractTikzFiguresTool';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 function installPlatform(files: Record<string, string>) {
   return installFakePlatform({ workspacePath: '/workspace', files });

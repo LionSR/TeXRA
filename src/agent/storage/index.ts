@@ -15,14 +15,9 @@ export {
   isReservedKvKeyName,
 } from './ExecutionKVStore';
 export {
-  EXECUTION_META_SCHEMA_VERSION,
-  type ExecutionMeta,
-} from '@shared/schemas/stream';
-export {
   buildCliWorkflowResultMeta,
   unwrapResultMeta,
   type ResultMeta,
-  ResultMetaSchema,
 } from './resultMeta';
 export {
   listExecutionWorkspaceFiles,
@@ -39,10 +34,7 @@ export {
 export {
   type AgentExecutionListingEntry,
   type ExecutionListingEntry,
-  type DeleteExecutionOptions,
-  type DeleteExecutionResult,
   listExecutions,
-  listExecutionStreamReferences,
   deleteExecution,
   deleteAllExecutions,
   isAgentRunEntry,

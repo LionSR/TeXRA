@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { entriesToOptionData } from '@agent/index/agentOptionsBuilder';
+import { entriesToOptionData } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
+import { AgentCategory } from '@shared/schemas';
 
 describe('agent option labels', () => {
   function toolUseAgent(

@@ -64,7 +64,6 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     expect(provider.inspect('files.exclude')).toEqual({
       globalValue: ['dist'],
       workspaceValue: ['node_modules'],
-      effectiveValue: ['node_modules'],
     });
   });
 

@@ -31,14 +31,16 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS, WorkspaceFS, createWorkspaceLocation } from '@utils/files';
 import { filterNotNull } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { createWorkspaceLocation } from '@utils/files/fileLocation';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePath,
   getOriginalSnapshotPath,
   inspectRunStorageEntry,
-} from '@utils/files/taskRunStorage';
+} from '@utils/files/runStorageFs';
 
 // ============================================================================
 // Schema

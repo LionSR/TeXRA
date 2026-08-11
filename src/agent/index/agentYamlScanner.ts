@@ -5,16 +5,16 @@ import pMap from 'p-map';
 
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
-  AgentCategory,
   AgentDefinitionSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
+import { AgentCategory } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
-import { AbsoluteFS } from '@utils/files';
 import { filterNotNull, groupBy } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 

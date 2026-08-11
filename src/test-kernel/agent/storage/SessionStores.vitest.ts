@@ -5,11 +5,8 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  getExecutionStore,
-  SessionStores,
-  type DeleteExecutionOptions,
-} from '@agent/storage';
+import { getExecutionStore, SessionStores } from '@agent/storage';
+import type { DeleteExecutionOptions } from '@agent/storage/executionListing';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as logUtils from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

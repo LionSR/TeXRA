@@ -1,11 +1,10 @@
 import {
   DEFAULT_STREAM_METADATA_STATUS,
+  type StreamState,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-
-import type { StreamState } from './store';
 
 export type StreamBranchActivity = 'active' | 'finished' | 'unknown';
 export type StreamTreeExpansionOverride = 'expanded' | 'collapsed';

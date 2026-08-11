@@ -1,8 +1,4 @@
-import {
-  AgentRosterController,
-  createWorkspaceAgentRosterController,
-  loadAgents,
-} from '@agent/index';
+import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
 import { platform } from '@platform/platform';
 import { byCategory, type ByCategory } from '@shared/schemas';
 import type {
@@ -24,14 +20,9 @@ export interface CliAgentRosterRecord {
   readonly unresolvedNames: readonly string[];
 }
 
-/** Construct the CLI's single roster controller over the active host stores. */
-export function cliAgentRosterController(): AgentRosterController {
-  return createWorkspaceAgentRosterController();
-}
-
 export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
   await loadAgents({ includeRemote: false });
-  const roster = cliAgentRosterController();
+  const roster = createWorkspaceAgentRosterController();
   const snapshot = roster.snapshot();
   const cwd = platform().workspace.getWorkspacePath();
   const config = cwd ? await loadWorkspaceCliConfig(cwd) : undefined;

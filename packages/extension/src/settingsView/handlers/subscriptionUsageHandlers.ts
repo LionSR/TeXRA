@@ -9,7 +9,6 @@ const SUBSCRIPTION_USAGE_PROVIDERS = [
   'chatgpt',
   'kimiCode',
   'glmCodingPlan',
-  'grok',
 ] as const;
 
 export interface SubscriptionUsageReader {
@@ -26,13 +25,13 @@ export async function sendSubscriptionUsage(
   reader: SubscriptionUsageReader,
   forceRefresh = false,
 ): Promise<void> {
-  const [chatgpt, kimiCode, glmCodingPlan, grok] = await Promise.all(
+  const [chatgpt, kimiCode, glmCodingPlan] = await Promise.all(
     SUBSCRIPTION_USAGE_PROVIDERS.map((provider) =>
       reader.getUsage(provider, { forceRefresh }),
     ),
   );
   await webview.postMessage({
     command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-    snapshots: { chatgpt, kimiCode, glmCodingPlan, grok },
+    snapshots: { chatgpt, kimiCode, glmCodingPlan },
   });
 }

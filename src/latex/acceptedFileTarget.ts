@@ -5,12 +5,12 @@ import path from 'node:path';
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
+import { normalizeFilePath } from '@utils/core';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-} from '@utils/files';
-import { normalizeFilePath } from '@utils/core';
+} from '@utils/files/fileLocation';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 
 export type AcceptedFileTarget = {

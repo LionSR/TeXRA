@@ -2,7 +2,7 @@
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileLocation, RoundOutput } from '@shared/schemas';
-import type { TaskRunFileService } from '@utils/files';
+import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 /** Get files to process for a round (input files for round 0, previous outputs otherwise). */
 export function getFilesForRound(

@@ -8,7 +8,7 @@ import {
 } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;
 const childExecutionId = 'bbbbbb222222' as ExecutionId;

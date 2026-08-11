@@ -1,11 +1,8 @@
 import * as logger from '@logger/logUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  ProgressViewOutboundMessage,
-  StreamLogEntry,
-  StreamLogTextDelta,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
+import type { StreamLog } from '@transcript/StreamLog';
+import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 
 const CHANNEL = 'WebviewBridge';
@@ -16,23 +13,20 @@ export type ProgressViewMessageSender = (
   message: ProgressViewOutboundMessage,
 ) => boolean | PromiseLike<boolean>;
 
-interface ProgressLogSource {
-  readonly head: number;
-  getRange(fromSeq: number, toSeq: number): StreamLogEntry[];
-  getDirtyUpdates(maxSeqInclusive: number): StreamLogEntry[];
-  getDirtyTextDeltas(maxSeqInclusive: number): StreamLogTextDelta[];
-  ackDirtyUpdates(updates: readonly StreamLogEntry[]): void;
-  ackDirtyTextDeltas(
-    deltas: readonly StreamLogTextDelta[],
-    fullEntries: readonly StreamLogEntry[],
-  ): void;
-}
+type ProgressLogSource = Pick<
+  StreamLog,
+  | 'head'
+  | 'getRange'
+  | 'getDirtyUpdates'
+  | 'getDirtyTextDeltas'
+  | 'ackDirtyUpdates'
+  | 'ackDirtyTextDeltas'
+>;
 
-export interface ProgressLogStore {
-  onChange(listener: (streamId: StreamTabId) => void): () => void;
-  get(streamId: StreamTabId): ProgressLogSource | undefined;
-  clearDirtyUpdates(streamId: StreamTabId): void;
-}
+type ProgressLogStore = Pick<
+  StreamLogStore,
+  'onChange' | 'get' | 'clearDirtyUpdates'
+>;
 
 /** Per-stream cursor and pending-flush state, created by `syncStream`. */
 interface StreamEntry {

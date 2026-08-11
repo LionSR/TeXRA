@@ -33,10 +33,3 @@ export function appendCompileFailureRoundContext(
     ? [trimmedRequest, compileFailureContext].join('\n\n')
     : compileFailureContext;
 }
-
-export function shouldUseCompileFailureRepairContext(
-  result: CompileResult | undefined,
-  enabled: boolean,
-): boolean {
-  return enabled && result?.status === 'failed';
-}

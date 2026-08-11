@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resetCodexCoordinator } from '@auth/codex';
+import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 

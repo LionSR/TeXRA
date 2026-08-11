@@ -18,7 +18,7 @@ import type {
   MediaAttachmentKind,
   WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
-import type { TaskRunFileService } from '@utils/files';
+import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 
 interface FollowUpMessageServices<C> {

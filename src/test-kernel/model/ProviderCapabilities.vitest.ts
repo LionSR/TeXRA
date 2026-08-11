@@ -19,10 +19,9 @@ import {
   CODEX_GPT56_SUBSCRIPTION_INPUT_LIMIT,
   CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionActive,
-  resolveCodexSubscriptionCapabilitiesForAgentCategory,
+  resolveCodexSubscriptionCapabilities,
   resolveProviderCapabilities,
 } from '@model/providerCapabilities';
-import { AgentCategory } from '@shared/schemas/agent';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const gpt55Config: ModelConfig = {
@@ -131,76 +130,44 @@ describe('ChatGPT subscription model routing', () => {
     resetCodexCoordinator();
   });
 
-  function subscriptionCapabilities(
-    useOpenRouter: boolean,
-    category?: AgentCategory,
-  ) {
-    return resolveCodexSubscriptionCapabilitiesForAgentCategory(
+  function subscriptionCapabilities(useOpenRouter: boolean) {
+    return resolveCodexSubscriptionCapabilities(
       MODEL_CONFIGS.gpt55,
       useOpenRouter,
-      category,
     );
   }
 
   it('keeps eligible OpenAI models on the direct API route when the preference is off', async () => {
     await installPlatform();
 
-    expect(subscriptionCapabilities(false, AgentCategory.ToolUse)).toBeNull();
+    expect(subscriptionCapabilities(false)).toBeNull();
   });
 
   it('does not override OpenRouter routing', async () => {
     await installSubscriptionPlatform({ useOpenRouter: true });
 
-    expect(subscriptionCapabilities(true, AgentCategory.ToolUse)).toBeNull();
-    await expect(
-      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
-    ).resolves.toBe(false);
+    expect(subscriptionCapabilities(true)).toBeNull();
+    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(false);
   });
 
   it('routes an eligible direct OpenAI model through the preferred subscription', async () => {
     await installSubscriptionPlatform();
 
-    expect(
-      subscriptionCapabilities(false, AgentCategory.ToolUse),
-    ).not.toBeNull();
-  });
-
-  it('routes workflow and untagged agents through the subscription too', async () => {
-    await installSubscriptionPlatform();
-
-    expect(
-      subscriptionCapabilities(false, AgentCategory.Workflow),
-    ).not.toBeNull();
-    expect(subscriptionCapabilities(false, undefined)).not.toBeNull();
-    await expect(
-      isCodexSubscriptionActive('gpt55', AgentCategory.Workflow),
-    ).resolves.toBe(true);
+    expect(subscriptionCapabilities(false)).not.toBeNull();
+    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(true);
   });
 
   it('reports eligible models inactive while signed out', async () => {
     await installSubscriptionPlatform({ signedIn: false });
 
-    await expect(
-      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
-    ).resolves.toBe(false);
-  });
-
-  it('reports eligible models active for a signed-in preferred subscription', async () => {
-    await installSubscriptionPlatform();
-
-    await expect(
-      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
-    ).resolves.toBe(true);
+    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(false);
   });
 
   it('reports unknown model identifiers inactive', async () => {
     await installSubscriptionPlatform();
 
     await expect(
-      isCodexSubscriptionActive(
-        'unknown-subscription-model',
-        AgentCategory.ToolUse,
-      ),
+      isCodexSubscriptionActive('unknown-subscription-model'),
     ).resolves.toBe(false);
   });
 });

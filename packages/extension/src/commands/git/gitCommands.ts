@@ -17,14 +17,12 @@ import {
 } from '@latex/overleafProject';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
-import {
-  COMMIT_LABEL_FORMAT,
-  splitCommitLines,
-} from '@utils/git/commitLogFormat';
+import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
+import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
 import { isGitRepository } from '@utils/system/isGitRepository';
@@ -47,6 +45,9 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
 }
 
 async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
+  // The probe runs before the config validation so an invalid
+  // `numberOfCommitsToShow` in a non-git workspace still answers `null`
+  // rather than throwing.
   const workspacePath = rootPath ?? WorkspaceFS.getPath();
   if (!workspacePath || !(await isGitRepository(workspacePath))) {
     return null;
@@ -63,20 +64,8 @@ async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
     );
   }
 
-  const result = executeCommandSync(
-    [
-      'git',
-      'log',
-      '-n',
-      String(numberOfCommits),
-      `--pretty=format:${COMMIT_LABEL_FORMAT}`,
-    ],
-    { cwd: workspacePath },
-  );
-  if (!result.success) {
-    return [];
-  }
-  return splitCommitLines(result.stdout ?? '');
+  const commits = await readRecentCommitLabels(workspacePath, numberOfCommits);
+  return commits ?? [];
 }
 
 function findCommitInHistory(

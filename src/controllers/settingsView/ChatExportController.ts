@@ -30,7 +30,9 @@ import {
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
-import { AbsoluteFS, StorageFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
+import { StorageFS } from '@utils/files/storageFS';
 
 // ============================================================
 // Result types

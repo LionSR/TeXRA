@@ -21,9 +21,8 @@ import {
   DEFAULT_STREAM_METADATA_STATUS,
   type StreamLifecycleStatus,
 } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, selectStyles } from '@shared/styles';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import { selectStyles } from '@shared/styles/selectStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   readSelectValue,

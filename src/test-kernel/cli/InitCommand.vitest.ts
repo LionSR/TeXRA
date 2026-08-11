@@ -32,7 +32,6 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
   };
 });
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { runCli } from '@cli/commands/root';
 import {
   defaultInitAgentOptions,
@@ -44,6 +43,7 @@ import {
   initWizardModelSelectItems,
 } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
+import { AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 

@@ -27,7 +27,7 @@ import {
   hexId12,
   normalizeFilePath,
 } from '@utils/core';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { GlobalStorageFS, StorageFS } from '@utils/files/storageFS';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 const THREADS_DIR = EXTERNAL_INQUIRY_THREADS_DIR;

@@ -12,6 +12,11 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 export interface AgentReviewCollection {
   readonly repoRoot: string;
   readonly baseDescription: string;
+  /**
+   * Paths in the reviewed diff, already run through
+   * `normalizeReviewFilePath` by the collector — `isPathInChangeSet`
+   * validates per issue and must not re-normalize the whole list.
+   */
   readonly changedFiles: readonly string[];
 }
 

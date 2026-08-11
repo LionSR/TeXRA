@@ -8,14 +8,12 @@ import { describe, expect, it } from 'vitest';
 import type { ExecutionListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
+import { formatSubagentProgress } from '@shared/subagentFollowup';
 import {
   formatListingLine,
   formatTodoSection,
 } from '@tools/executionFormatters';
-import {
-  formatSubagentError,
-  formatSubagentProgress,
-} from '@tools/delegation/subagentResults';
+import { formatSubagentError } from '@tools/delegation/subagentResults';
 
 describe('tool status formatting', () => {
   it('formats execution todos with the shared status display', () => {

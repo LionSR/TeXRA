@@ -7,10 +7,10 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
+  AgentCategory,
 } from '@shared/schemas';
 
 /**

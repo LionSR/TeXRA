@@ -1,11 +1,8 @@
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
-import {
-  hasMissingApiKeyErrorMarker,
-  isContextWindowError,
-  isUserAbort,
-} from './sdkErrorUtils';
+import { hasMissingApiKeyErrorMarker } from './sdkError/errorMetadata';
+import { isContextWindowError, isUserAbort } from './sdkError/errorPatterns';
 
 export type AgentErrorKind =
   'abort' | 'context-window' | 'disk-full' | 'missing-api-key' | 'unexpected';

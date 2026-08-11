@@ -14,9 +14,9 @@ import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-  getRunDir,
-  TaskRunFileService,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
+import { getRunDir } from '@utils/files/runStorageFs';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),

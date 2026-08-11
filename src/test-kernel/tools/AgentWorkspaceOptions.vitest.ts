@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 describe('agent workspace options', () => {
   const originalGetPath = WorkspaceFS.getPath;

@@ -1,4 +1,4 @@
-import { getMimeType } from '@utils/files';
+import { getMimeType } from '@utils/files/mimeUtils';
 import type { ModelCapabilities } from 'llm-zoo';
 
 type MediaVisionWarningKind = 'attached' | 'pasted';

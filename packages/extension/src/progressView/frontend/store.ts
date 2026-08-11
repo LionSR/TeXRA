@@ -16,16 +16,6 @@ import {
 } from '@shared/streams/compactionActivityProjection';
 import type { Draft } from 'mutative';
 
-// Re-export schema types for components (single source of truth)
-export {
-  isToolUseState,
-  isWorkflowState,
-  type StreamState,
-  type ToolUseStreamState,
-  type WorkflowStreamState,
-  type ContextStateData,
-} from '@shared/schemas';
-
 /** Followup options derived from schema (minus command/stream fields) */
 export type FollowupOptionsState = Omit<
   SetFollowupOptionsMessage,

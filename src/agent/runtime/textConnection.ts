@@ -2,7 +2,8 @@ import {
   createHelperModelKit,
   runHelperModelCompletion,
 } from '@agent/runtime/helperModel';
-import { classifyAgentError, getSdkErrorMessage } from '@common/errors';
+import { classifyAgentError } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'LaTeXCommands';

@@ -15,7 +15,6 @@ import {
 // Local imports
 import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   AgentPrompt,
   AgentSetting,
@@ -38,7 +37,12 @@ import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { RUN_OUTCOME, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  type StreamTabId,
+  AgentCategory,
+} from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import {
@@ -49,7 +53,7 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import * as subagentResults from '@tools/delegation/subagentResults';
 import { createRunTrace, StreamLogStore } from '@transcript';
-import { TaskRunFileService } from '@utils/files';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports

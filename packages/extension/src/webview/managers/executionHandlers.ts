@@ -18,7 +18,7 @@ import type {
   FileOperationMessage,
   MainViewInboundMessage,
 } from '@shared/schemas/mainView/inbound';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 const CHANNEL = 'ExecutionHandlers';
 

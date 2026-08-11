@@ -31,14 +31,15 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
+import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
 import {
   attachManualRetryOnlyError,
   attachPartialText,
-  detectStatusCode,
-  isUserAbort,
+} from '@common/errors/sdkError/errorMetadata';
+import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
@@ -47,7 +48,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
-import { getShortDisplayPath } from '@utils/files';
+import { getShortDisplayPath } from '@utils/files/fileLocation';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -64,9 +65,10 @@ import {
   normalizeGoogleInteractionsUsage,
 } from './googleInteractionsUsage';
 import {
-  BackgroundPoller,
-  type BackgroundPollStats,
-} from '../support/BackgroundPoller';
+  BackgroundRunLifecycle,
+  type BackgroundRetrieveFailureVerdict,
+  type BackgroundTerminalVerdict,
+} from '../support/BackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import {
@@ -76,6 +78,7 @@ import {
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
 import { convertGoogleToolSchema, toGoogleTools } from '../toolConversion';
+import type { BackgroundPollStats } from '../support/BackgroundPoller';
 
 // Interactions SDK aliases (public surface; the SDK re-exports these under the
 // `Interactions` namespace — the internal `_2`-suffixed types are not exported).
@@ -335,11 +338,6 @@ type InteractionsRequestOptions = {
   fetchOptions: RequestInit;
 };
 
-interface PendingBackgroundInteraction {
-  readonly id: string;
-  readonly deadlineAtMs: number;
-}
-
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
   Usage | null,
@@ -375,16 +373,71 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private static readonly BACKGROUND_FAILURE_STATUSES: readonly InteractionStatus[] =
     ['failed', 'cancelled', 'incomplete', 'budget_exceeded'];
 
-  private readonly backgroundPoller =
-    new BackgroundPoller<GoogleGenAIInteraction>({
-      pollIntervalMs: 5000,
-      maxDurationMs: ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS,
-      isPending: (r) =>
-        ModelHandlerGoogleInteractions.BACKGROUND_PENDING_STATUSES.includes(
-          r.status as InteractionStatus,
-        ),
-      logger: () => this.logger,
-    });
+  /**
+   * Pending background-interaction id + resume/poll choreography, owned by the
+   * shared provider-neutral {@link BackgroundRunLifecycle} (also used by the
+   * OpenAI Responses handler). The hooks below carry every Google-specific
+   * decision: the Interactions status vocabulary (`requires_action` is a
+   * serviceable terminal), the stale-id predicate (deliberately
+   * provider-specific — see the SMOKE-TEST note on
+   * {@link isStaleInteractionChainError}), the manual-retry error factories,
+   * and the best-effort server-side cancel (fire-and-forget on abort, awaited
+   * on timeout).
+   */
+  private readonly backgroundLifecycle = new BackgroundRunLifecycle<
+    GoogleGenAI,
+    GoogleGenAIInteraction,
+    InteractionGetParamsNonStreaming
+  >({
+    logger: () => this.logger,
+    providerLabel: 'Google Interactions',
+    resourceLabel: 'interaction',
+    pollIntervalMs: 5000,
+    maxDurationMs: ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS,
+    isPendingStatus: (r) =>
+      ModelHandlerGoogleInteractions.BACKGROUND_PENDING_STATUSES.includes(
+        r.status as InteractionStatus,
+      ),
+    // `completed` and `requires_action` are both serviceable terminals: the
+    // latter carries function_call steps, so return it (don't throw) and let
+    // the cycle service the tools, mirroring the streaming/non-streaming paths
+    // and finalizeChain's chain-safe handling. Workflow agents normally carry
+    // no tools, but the gate (isWorkflowMode) is not a hard guarantee, so
+    // handle it rather than crash a run that does emit a call.
+    isServiceableStatus: (r) =>
+      r.status === 'completed' || r.status === 'requires_action',
+    extractId: (r) => r.id,
+    extractStatus: (r) => r.status ?? 'unknown',
+    retrieve: (client, interactionId, _retrieveParams, signal) =>
+      client.interactions.get(
+        interactionId,
+        ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
+        this.interactionsRequestOptions(signal),
+      ),
+    tagSdkError: (error) => this.sdkErrorTagger(error, this.config.provider),
+    onResumeRetrieveError: (error, interactionId) =>
+      this.classifyBackgroundRetrieveFailure(error, interactionId),
+    onPollRetrieveError: (error, interactionId) =>
+      this.classifyBackgroundRetrieveFailure(error, interactionId),
+    createTimeoutError: (interactionId) =>
+      this.createBackgroundTimeoutError(interactionId),
+    // A resumed interaction — completed, requires_action, failed, or unknown —
+    // always routes through the poll driver so its terminal handling (and
+    // logs) is identical to a fresh submission's.
+    onResumedSettled: () => ({ action: 'poll' }),
+    clearOnServiceableTerminal: true,
+    createTerminalVerdict: (polled, interactionId, stats) =>
+      this.backgroundTerminalVerdict(polled, interactionId, stats),
+    extraFinishData: (interaction) => ({
+      usage: interaction.usage ?? undefined,
+    }),
+    onAbortDiscard: (client, interactionId) => {
+      // Fire-and-forget cancel; never awaited so abort propagation is instant.
+      void this.cancelBackgroundInteraction(client, interactionId);
+    },
+    onTimeoutDiscard: (client, interactionId) =>
+      this.cancelBackgroundInteraction(client, interactionId),
+  });
 
   /**
    * Set true after the model rejects `background:true` (HTTP 400 "does not
@@ -396,10 +449,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * this runtime fallback is the model gate.
    */
   private backgroundUnsupported = false;
-
-  /** In-memory identity and original lifetime for the current background turn. */
-  private pendingBackgroundInteraction: PendingBackgroundInteraction | null =
-    null;
 
   // ===========================================================================
   // STATEFUL chaining state (store:true + previous_interaction_id)
@@ -457,7 +506,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   public override isBackgroundModeActive(): boolean {
     return (
-      this.pendingBackgroundInteraction !== null ||
+      this.backgroundLifecycle.hasPendingResume() ||
       this.useBackgroundMode(this.serverStateEnabled())
     );
   }
@@ -1438,14 +1487,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // leaves a later re-enable on a safe full-resend boundary.
     if (!stateful) this.chainState.invalidateChain();
 
-    const pending = this.pendingBackgroundInteraction;
-    if (pending) {
-      this.throwIfPendingBackgroundInteractionAborted(
-        client,
-        pending.id,
-        signal,
-      );
-    }
+    this.backgroundLifecycle.assertPendingNotAborted(client, signal);
 
     const generationConfig = this.buildGenerationConfig(endTag);
     const interactionsTools = tools?.length
@@ -1535,7 +1577,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // submitted, disabling background or server state must not replace it with a
     // foreground create. New submissions still obey the normal eligibility gate.
     const useBackground =
-      this.pendingBackgroundInteraction !== null ||
+      this.backgroundLifecycle.hasPendingResume() ||
       this.useBackgroundMode(stateful);
     // super.getStreamingConfig() (not this.) — the override would recompute
     // background mode (extra config reads) when we already know useBackground.
@@ -1671,7 +1713,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       // useBackgroundMode() false on the retry, so it cannot re-hit this error.
       if (
         useBackground &&
-        this.pendingBackgroundInteraction === null &&
+        !this.backgroundLifecycle.hasPendingResume() &&
         isBackgroundUnsupportedError(error)
       ) {
         this.logger.warn(
@@ -1762,78 +1804,66 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     requestOptions: InteractionsRequestOptions,
     signal: AbortSignal | undefined,
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
-    const pending = this.pendingBackgroundInteraction;
     // A NEW background submission requires server-side state. A known pending
     // interaction was already submitted with store:true and must still be
     // retrieved if the setting changed while its poll was being retried.
-    if (!stateful && !pending) {
+    if (!stateful && !this.backgroundLifecycle.hasPendingResume()) {
       throw new Error(
         'Background mode requires server-side state (store:true); refusing to ' +
           'submit a background interaction in stateless mode.',
       );
     }
 
-    let initial: GoogleGenAIInteraction;
-    if (pending) {
-      this.throwIfPendingBackgroundInteractionAborted(
-        client,
-        pending.id,
-        signal,
-      );
-      await this.throwIfPendingBackgroundInteractionExpired(client, pending);
-      try {
-        initial = await this.retrieveBackgroundInteraction(
-          client,
-          pending.id,
-          requestOptions,
-        );
-      } finally {
-        // Retrieval happens before BackgroundPoller installs its guards.
-        // Recheck both boundaries after success or failure so neither outcome
-        // can bypass cancellation or extend the original lifetime.
-        this.throwIfPendingBackgroundInteractionAborted(
-          client,
-          pending.id,
-          signal,
-        );
-        await this.throwIfPendingBackgroundInteractionExpired(client, pending);
+    if (this.backgroundLifecycle.hasPendingResume()) {
+      // Resume the interaction a prior attempt left pending: the lifecycle
+      // re-checks the abort/deadline boundaries, retrieves it (mapping abort,
+      // expiry, and stale-id outcomes to their pinned errors), and polls it
+      // to a terminal status.
+      const resumed = await this.backgroundLifecycle.tryResume(client, signal);
+      if (resumed !== null) {
+        this.finalizeChain(resumed, totalStepCount, stateful);
+        return { response: resumed };
       }
-    } else {
-      // background:true forces store:true (already true under `stateful`).
-      const submitParams = {
-        ...commonParams,
-        stream: false as const,
-        store: true,
-        background: true,
-      };
-      logProgressStatus(
-        this.logger,
-        'Running Google Interactions in background mode; polling for completion ' +
-          '(this may take longer than usual).',
-      );
-      // SMOKE-TEST: the initial status of a background:true create, and whether
-      // background:true is accepted with store:true (and rejected/ignored with
-      // store:false), are unconfirmed offline; verify on a real-key run.
-      initial = await client.interactions.create(submitParams, requestOptions);
-      if (typeof initial.id === 'string') {
-        this.pendingBackgroundInteraction = {
-          id: initial.id,
-          deadlineAtMs:
-            Date.now() +
-            ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS,
-        };
-      }
+      // The Google hooks never yield null (definitive resume failures throw
+      // instead of auto-restarting), but honor the lifecycle contract and
+      // fall through to a fresh submission.
     }
 
-    const lifecycle = pending ?? this.pendingBackgroundInteraction;
-    const completed = await this.pollBackgroundInteraction(
-      client,
-      initial,
-      lifecycle?.id,
-      lifecycle?.deadlineAtMs,
-      requestOptions,
-      signal,
+    // background:true forces store:true (already true under `stateful`).
+    const submitParams = {
+      ...commonParams,
+      stream: false as const,
+      store: true,
+      background: true,
+    };
+    logProgressStatus(
+      this.logger,
+      'Running Google Interactions in background mode; polling for completion ' +
+        '(this may take longer than usual).',
     );
+    // SMOKE-TEST: the initial status of a background:true create, and whether
+    // background:true is accepted with store:true (and rejected/ignored with
+    // store:false), are unconfirmed offline; verify on a real-key run.
+    const initial = await client.interactions.create(
+      submitParams,
+      requestOptions,
+    );
+
+    let completed: GoogleGenAIInteraction;
+    if (typeof initial.id !== 'string') {
+      // No id ⇒ cannot poll. Trust the submit response (its status drives
+      // finalizeChain, which invalidates the chain if not 'completed').
+      this.logger.warn(
+        'Background submit returned no interaction id; skipping polling.',
+      );
+      completed = initial;
+    } else {
+      completed = await this.backgroundLifecycle.waitForCompletion(
+        client,
+        initial,
+        signal,
+      );
+    }
 
     // Capture the chain anchor from the COMPLETED polled interaction (NOT the
     // submit), so the next turn chains onto a server-retained, completed id.
@@ -1841,34 +1871,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // which `finalizeChain` enforces from its own `stateful` guard.
     this.finalizeChain(completed, totalStepCount, stateful);
     return { response: completed };
-  }
-
-  private clearPendingBackgroundInteraction(interactionId: string): boolean {
-    if (this.pendingBackgroundInteraction?.id !== interactionId) return false;
-    this.pendingBackgroundInteraction = null;
-    return true;
-  }
-
-  private throwIfPendingBackgroundInteractionAborted(
-    client: GoogleGenAI,
-    interactionId: string,
-    signal: AbortSignal | undefined,
-  ): void {
-    if (!signal?.aborted) return;
-    if (this.clearPendingBackgroundInteraction(interactionId)) {
-      void this.cancelBackgroundInteraction(client, interactionId);
-    }
-    signal.throwIfAborted();
-  }
-
-  private async throwIfPendingBackgroundInteractionExpired(
-    client: GoogleGenAI,
-    pending: PendingBackgroundInteraction,
-  ): Promise<void> {
-    if (Date.now() < pending.deadlineAtMs) return;
-    this.clearPendingBackgroundInteraction(pending.id);
-    await this.cancelBackgroundInteraction(client, pending.id);
-    throw this.createBackgroundTimeoutError(pending.id);
   }
 
   private createManualBackgroundError(message: string, cause?: unknown): Error {
@@ -1890,126 +1892,49 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     );
   }
 
-  private async retrieveBackgroundInteraction(
-    client: GoogleGenAI,
+  /**
+   * Classify a failed background retrieve (resume or poll — the policy is the
+   * same on both paths). A definitively missing interaction (404/410, or the
+   * provider-specific stale-id predicate) clears the pending id via a
+   * manual-retry replacement error. Every other retrieval failure retains the
+   * known id and rethrows the original: retryable transport, 408/409/429, and
+   * 5xx failures can resume it automatically; non-missing 4xx and unknown
+   * failures fail closed under the existing retry policy.
+   */
+  private classifyBackgroundRetrieveFailure(
+    error: unknown,
     interactionId: string,
-    requestOptions: InteractionsRequestOptions,
-  ): Promise<GoogleGenAIInteraction> {
-    try {
-      return await client.interactions.get(
-        interactionId,
-        ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
-        requestOptions,
-      );
-    } catch (error) {
-      this.sdkErrorTagger(error, this.config.provider);
-      if (isUserAbort(error)) {
-        if (this.clearPendingBackgroundInteraction(interactionId)) {
-          void this.cancelBackgroundInteraction(client, interactionId);
-        }
-        throw error;
-      }
-
-      const status = detectStatusCode(error);
-      if (
-        status === 404 ||
-        status === 410 ||
-        isStaleInteractionChainError(error)
-      ) {
-        this.clearPendingBackgroundInteraction(interactionId);
-        throw this.createManualBackgroundError(
+  ): BackgroundRetrieveFailureVerdict {
+    const status = detectStatusCode(error);
+    if (
+      status === 404 ||
+      status === 410 ||
+      isStaleInteractionChainError(error)
+    ) {
+      return {
+        action: 'replace',
+        error: this.createManualBackgroundError(
           `Google Interactions background interaction ${interactionId} is no longer available` +
             `${status === undefined ? '' : ` (HTTP ${status})`}. ` +
             'Retry explicitly to start a new interaction.',
           error,
-        );
-      }
-
-      // Every other retrieval failure retains the known id. Retryable transport,
-      // 408/409/429, and 5xx failures can resume it automatically; non-missing
-      // 4xx and unknown failures fail closed under the existing retry policy.
-      throw error;
+        ),
+      };
     }
+    return { action: 'retain' };
   }
 
   /**
-   * Poll interactions.get(id) until a terminal status. Throws on a non-completed
-   * terminal status, on the max-duration timeout, and on abort (after requesting
-   * a best-effort cancel of the interaction).
+   * Terminal-verdict hook for the shared lifecycle: known failure statuses
+   * drop the pending id and throw a manual-retry error. The SDK status union
+   * is open, so an unrecognized value does not prove the remote job is
+   * terminal — retain its identity and fail closed.
    */
-  private async pollBackgroundInteraction(
-    client: GoogleGenAI,
-    initial: GoogleGenAIInteraction,
-    lifecycleInteractionId: string | undefined,
-    deadlineAtMs: number | undefined,
-    requestOptions: InteractionsRequestOptions,
-    signal: AbortSignal | undefined,
-  ): Promise<GoogleGenAIInteraction> {
-    const interactionId = lifecycleInteractionId ?? initial.id;
-    if (typeof interactionId !== 'string') {
-      // No id ⇒ cannot poll. Trust the submit response (its status drives
-      // finalizeChain, which invalidates the chain if not 'completed').
-      this.logger.warn(
-        'Background submit returned no interaction id; skipping polling.',
-      );
-      return initial;
-    }
-
-    let pollStats: BackgroundPollStats | undefined;
-    let timedOut = false;
-    let polled: GoogleGenAIInteraction;
-
-    try {
-      polled = await this.backgroundPoller.poll({
-        initialResponse: initial,
-        retrieve: (id, sig) =>
-          this.retrieveBackgroundInteraction(
-            client,
-            id,
-            sig ? this.interactionsRequestOptions(sig) : requestOptions,
-          ),
-        extractId: () => interactionId,
-        extractStatus: (r) => r.status ?? 'unknown',
-        signal,
-        deadlineAtMs,
-        resourceLabel: 'interaction',
-        providerLabel: 'Google Interactions',
-        onAbort: () => {
-          if (this.clearPendingBackgroundInteraction(interactionId)) {
-            // Fire-and-forget cancel; do NOT await inside the listener.
-            void this.cancelBackgroundInteraction(client, interactionId);
-          }
-        },
-        formatTimeoutError: () => {
-          timedOut = true;
-          return this.createBackgroundTimeoutError(interactionId);
-        },
-        extraFinishData: (interaction) => ({
-          usage: interaction.usage ?? undefined,
-        }),
-        onFinished: (_interaction, stats) => {
-          pollStats = stats;
-        },
-      });
-    } catch (error) {
-      if (timedOut) {
-        this.clearPendingBackgroundInteraction(interactionId);
-        await this.cancelBackgroundInteraction(client, interactionId);
-      }
-      throw error;
-    }
-
-    // `completed` and `requires_action` are both serviceable terminals: the
-    // latter carries function_call steps, so return it (don't throw) and let the
-    // cycle service the tools, mirroring the streaming/non-streaming paths and
-    // finalizeChain's chain-safe handling. Workflow agents normally carry no
-    // tools, but the gate (isWorkflowMode) is not a hard guarantee, so handle it
-    // rather than crash a run that does emit a call.
-    if (polled.status === 'completed' || polled.status === 'requires_action') {
-      this.clearPendingBackgroundInteraction(interactionId);
-      return polled;
-    }
-
+  private backgroundTerminalVerdict(
+    polled: GoogleGenAIInteraction,
+    interactionId: string,
+    stats: BackgroundPollStats | undefined,
+  ): BackgroundTerminalVerdict {
     const status = polled.status ?? 'unknown';
     this.logger.error(
       'Background interaction ended with a non-completed status.',
@@ -2017,8 +1942,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         data: {
           interactionId,
           status,
-          pollCount: pollStats?.pollCount,
-          elapsedMs: pollStats?.elapsedMs,
+          pollCount: stats?.pollCount,
+          elapsedMs: stats?.elapsedMs,
         },
       },
     );
@@ -2028,19 +1953,22 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         status as InteractionStatus,
       )
     ) {
-      this.clearPendingBackgroundInteraction(interactionId);
-      throw this.createManualBackgroundError(
-        `Google Interactions background interaction ${interactionId} ended with ` +
-          `status "${status}". Retry explicitly to start a new interaction.`,
-      );
+      return {
+        clearPending: true,
+        error: this.createManualBackgroundError(
+          `Google Interactions background interaction ${interactionId} ended with ` +
+            `status "${status}". Retry explicitly to start a new interaction.`,
+        ),
+      };
     }
 
-    // The SDK status union is open. An unrecognized value does not prove the
-    // remote job is terminal, so retain its identity and fail closed.
-    throw this.createManualBackgroundError(
-      `Google Interactions background interaction ${interactionId} returned ` +
-        `unknown status "${status}"; refusing to submit a replacement.`,
-    );
+    return {
+      clearPending: false,
+      error: this.createManualBackgroundError(
+        `Google Interactions background interaction ${interactionId} returned ` +
+          `unknown status "${status}"; refusing to submit a replacement.`,
+      ),
+    };
   }
 
   /** Cancel the in-flight background interaction (best-effort; swallow errors). */

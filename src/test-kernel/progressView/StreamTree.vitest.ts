@@ -7,13 +7,13 @@ import {
   type StreamTreeExpansionOverride,
   type StreamTreeProjection,
 } from '@progressView/frontend/streamTree';
-import type { StreamState } from '@progressView/frontend/store';
 import {
   AgentCategory,
   createStreamState,
   STREAM_PHASE,
   STREAM_STATUS,
   type StreamLifecycleStatus,
+  type StreamState,
   type StreamTabInfo,
 } from '@shared/schemas';
 

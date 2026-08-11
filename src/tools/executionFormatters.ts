@@ -9,7 +9,6 @@
 import type {
   ChildRecord,
   ExecutionListingEntry,
-  ExecutionMeta,
   TodoEntry,
 } from '@agent/storage';
 import {
@@ -31,6 +30,7 @@ import {
   TODO_STATUS,
   runIdentityName,
   type ExecutionId,
+  type ExecutionMeta,
   type RunIdentity,
   type RunOutcome,
   type TodoStatus,

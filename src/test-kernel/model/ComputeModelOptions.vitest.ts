@@ -26,7 +26,6 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { AgentCategory } from '@shared/schemas/agent';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
@@ -324,10 +323,7 @@ describe('computeModelOptionsData relay quota state', () => {
       },
       secrets: codexSessionSecrets(),
     });
-    const access = {
-      ...createModelOptionsAccess({ useIncludedAccess: false }, {}),
-      agentCategory: AgentCategory.ToolUse,
-    };
+    const access = createModelOptionsAccess({ useIncludedAccess: false }, {});
 
     const [model] = await computeModelOptionsData(['gpt56pro'], access);
 
@@ -431,21 +427,13 @@ describe('computeModelOptionsData relay quota state', () => {
     }
   });
 
-  it('shows subscription access for tool-use, workflow, and untagged availability', async () => {
+  it('shows subscription access for a signed-in preferred subscription', async () => {
     await initSubscriptionPlatform(codexSessionSecrets());
     const access = createModelOptionsAccess({ useIncludedAccess: false });
 
-    const [toolUseModel] = await computeModelOptionsData(['gpt55'], access, {
-      agentCategory: AgentCategory.ToolUse,
-    });
-    const [workflowModel] = await computeModelOptionsData(['gpt55'], access, {
-      agentCategory: AgentCategory.Workflow,
-    });
-    const [untaggedModel] = await computeModelOptionsData(['gpt55'], access);
+    const [model] = await computeModelOptionsData(['gpt55'], access);
 
-    expect(toolUseModel.availability).toBe('subscription-access');
-    expect(workflowModel.availability).toBe('subscription-access');
-    expect(untaggedModel.availability).toBe('subscription-access');
+    expect(model.availability).toBe('subscription-access');
   });
 
   it('does not reuse cached provider keys for injected access', async () => {

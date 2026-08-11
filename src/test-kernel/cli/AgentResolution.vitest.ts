@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentEntry, ResolvedAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { AgentCategory } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),
@@ -40,7 +40,7 @@ function agent(
 }
 
 function resolution(entry: AgentEntry): ResolvedAgent {
-  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+  return { entry };
 }
 
 describe('CLI agent resolution', () => {

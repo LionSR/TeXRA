@@ -4,7 +4,7 @@ import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { SubagentProgressUpdate } from '@shared/schemas';
-import type { TaskRunFileService } from '@utils/files';
+import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 import type { PreparedShared, ToolUseRunShared } from './nodes/types';
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {

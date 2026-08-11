@@ -13,6 +13,7 @@ import { getExecutionStore } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
+import { resolveStreamForExecution } from './completedRunArchive';
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { TraceDocument } from './traceDocumentSchema';
@@ -30,20 +31,19 @@ export async function assembleTrace(
   executionId: ExecutionId,
 ): Promise<AssembleTraceResult> {
   const executionStore = getExecutionStore(executionId);
-  // A call-scoped read-only store avoids reloading a live host's session or
-  // mutating persistence while reading the same transcript files.
-  const [streamLogStore, config, meta] = await Promise.all([
-    StreamLogStore.openReadOnly(),
+  const [resolution, config] = await Promise.all([
+    resolveStreamForExecution(executionId),
     executionStore.readRunRecord(),
-    executionStore.readMeta(),
   ]);
   const snapshotStore = new StreamSnapshotStore();
-  // The execution→stream mapping is the streamId stamped at registration;
-  // a row without one has no persisted stream.
   if (!config) return { status: 'config_missing' };
-  const streamId = meta?.streamId;
-  if (!streamId) return { status: 'streamLogs_missing' };
+  if ('reason' in resolution) return { status: 'streamLogs_missing' };
+  const { streamId, meta } = resolution;
 
+  // A call-scoped read-only store seeded with just this stream avoids
+  // reloading a live host's session, scanning the whole streamLogs
+  // directory, or mutating persistence while reading the transcript files.
+  const streamLogStore = await StreamLogStore.openReadOnlyForStream(streamId);
   const [, snapshot] = await Promise.all([
     streamLogStore.ensureLoaded(streamId),
     snapshotStore.read(streamId),
@@ -51,7 +51,7 @@ export async function assembleTrace(
   const log = streamLogStore.get(streamId);
   if (!log) return { status: 'streamLogs_missing' };
 
-  const terminalStatus = meta?.outcome
+  const terminalStatus = meta.outcome
     ? runOutcomeToExecutionStatus(meta.outcome)
     : null;
 

@@ -1198,7 +1198,7 @@ describe('createChatSessionController', () => {
       'stream-resume',
       { finalize: true },
     );
-    expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
   });
 
   it('manual resume supersedes stale interrupted recovery state', async () => {
@@ -1497,7 +1497,7 @@ describe('createChatSessionController', () => {
       finalize: true,
     });
     expect(rootStreamId.get()).toBe('stream-1');
-    expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
@@ -1675,7 +1675,7 @@ describe('createChatSessionController', () => {
     await expect(ctrl.tryResumeStream(child)).resolves.toBe(true);
 
     expect(rootStreamId.get()).toBe(root);
-    expect(mocks.notify).toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(mocks.notify).toHaveBeenCalledWith('agentFinished');
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {
@@ -1713,7 +1713,7 @@ describe('createChatSessionController', () => {
     expect(mocks.projectStreamTranscript).not.toHaveBeenCalledWith('stream-1', {
       finalize: true,
     });
-    expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 

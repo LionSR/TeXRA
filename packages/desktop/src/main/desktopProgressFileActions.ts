@@ -14,11 +14,11 @@ import type {
   DiffRunResult,
 } from '@latex/latexdiff/types';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  AbsoluteFS,
   createExternalLocation,
   pathToLocation,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 type DesktopProgressFileActionUi = Pick<

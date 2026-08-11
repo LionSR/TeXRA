@@ -1,5 +1,4 @@
 import type { AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
@@ -10,6 +9,7 @@ import type {
   StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { UsageProviderSchema } from '@shared/schemas/usage';
 import {
   USAGE_LOG_FLUSH_OUTCOME,

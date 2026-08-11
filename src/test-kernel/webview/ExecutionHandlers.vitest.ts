@@ -57,7 +57,9 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   logErrorMessage: vi.fn(),
 }));
 vi.mock('@logger/logUtils', () => ({ info: vi.fn() }));
-vi.mock('@utils/files', () => ({ pathToLocation: mocks.pathToLocation }));
+vi.mock('@utils/files/fileLocation', () => ({
+  pathToLocation: mocks.pathToLocation,
+}));
 
 const { handleExecute, handleFileOperation } =
   await import('@webview/managers/executionHandlers');

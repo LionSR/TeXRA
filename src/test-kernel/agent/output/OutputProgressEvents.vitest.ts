@@ -23,11 +23,11 @@ import type {
   RoundOutput,
   StreamTabId,
 } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  AbsoluteFS,
   createExternalLocation,
   createWorkspaceLocation,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
 import {
   createRecordingHost,
   recordSessionEvents,

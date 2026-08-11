@@ -17,7 +17,7 @@ import treeKill from 'tree-kill';
 // Internal imports
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';

@@ -55,7 +55,7 @@ import {
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { mapToRecord, throwAggregated } from '@utils/core';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { ResidentStreamRegistry } from './ResidentStreamRegistry';
@@ -193,6 +193,25 @@ interface OverlayPatches {
   usage: Map<StorageKey, TokenUsageStats>;
   workPlan: WorkPlanOverlay;
 }
+
+/**
+ * Overlay field → sidecar key. The single enumeration of which overlay patch
+ * flushes to which sidecar: both `applyStreamData` and `persistEagerOverlays`
+ * collect their write sets through this table, and the `satisfies` makes a
+ * new {@link OverlayPatches} field a compile error here until its sidecar is
+ * named.
+ */
+const OVERLAY_TO_SIDECAR_KEY = {
+  outputFiles: STREAM_DATA_KEYS.OUTPUT_FILES,
+  missingOutputs: STREAM_DATA_KEYS.MISSING_OUTPUTS,
+  compileFailures: STREAM_DATA_KEYS.COMPILE_FAILURES,
+  usage: STREAM_DATA_KEYS.USAGE_STATS,
+  workPlan: STREAM_DATA_KEYS.WORK_PLAN,
+} as const satisfies Record<keyof OverlayPatches, string>;
+
+/** Sidecar keys an overlay flush can target (values of {@link OVERLAY_TO_SIDECAR_KEY}). */
+type OverlaySidecarKey =
+  (typeof OVERLAY_TO_SIDECAR_KEY)[keyof typeof OVERLAY_TO_SIDECAR_KEY];
 
 /** Later unseeded todos/plan patches win per field. */
 function mergeWorkPlanOverlay(
@@ -1701,7 +1720,7 @@ export class StreamSnapshotStore {
     const record = this.getOrCreateRecord(stream);
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
-    const sidecarsToWrite = new Set<string>();
+    const sidecarsToWrite = new Set<OverlaySidecarKey>();
 
     record.outputFiles = data.outputFiles;
     record.missingOutputs = data.missingOutputs;
@@ -1776,7 +1795,7 @@ export class StreamSnapshotStore {
     const { overlays } = record;
     if (overlays.outputFiles) {
       this.applyRoundPatch((r) => r.outputFiles, record, overlays.outputFiles);
-      sidecarsToWrite.add(STREAM_DATA_KEYS.OUTPUT_FILES);
+      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.outputFiles);
       overlays.outputFiles = undefined;
     }
     if (overlays.missingOutputs) {
@@ -1786,7 +1805,7 @@ export class StreamSnapshotStore {
         record,
         overlays.missingOutputs.patch,
       );
-      sidecarsToWrite.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
+      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.missingOutputs);
       overlays.missingOutputs = undefined;
     }
     if (overlays.compileFailures) {
@@ -1795,14 +1814,14 @@ export class StreamSnapshotStore {
         record,
         overlays.compileFailures,
       );
-      sidecarsToWrite.add(STREAM_DATA_KEYS.COMPILE_FAILURES);
+      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.compileFailures);
       overlays.compileFailures = undefined;
     }
     if (overlays.usage) {
       for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(record, storageKey, delta);
       }
-      sidecarsToWrite.add(STREAM_DATA_KEYS.USAGE_STATS);
+      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.usage);
       overlays.usage = undefined;
     }
     if (overlays.workPlan) {
@@ -1819,7 +1838,7 @@ export class StreamSnapshotStore {
             : null,
         };
       }
-      sidecarsToWrite.add(STREAM_DATA_KEYS.WORK_PLAN);
+      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.workPlan);
       overlays.workPlan = undefined;
     }
     record.seeded = true;
@@ -1830,7 +1849,7 @@ export class StreamSnapshotStore {
   private writeMergedSidecars(
     stream: StreamTabId,
     record: StreamRecord,
-    keys: Iterable<string>,
+    keys: Iterable<OverlaySidecarKey>,
   ): void {
     // `record` rode across `applyStreamData`'s hydration await. Identity —
     // not mere presence — against the live map entry: eviction during the
@@ -1869,27 +1888,15 @@ export class StreamSnapshotStore {
       record.metaOverlay = false;
     }
 
-    const keys = new Set<string>();
+    const keys = new Set<OverlaySidecarKey>();
     const { overlays } = record;
-    if (overlays.outputFiles) {
-      keys.add(STREAM_DATA_KEYS.OUTPUT_FILES);
-      overlays.outputFiles = undefined;
-    }
-    if (overlays.missingOutputs) {
-      keys.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
-      overlays.missingOutputs = undefined;
-    }
-    if (overlays.compileFailures) {
-      keys.add(STREAM_DATA_KEYS.COMPILE_FAILURES);
-      overlays.compileFailures = undefined;
-    }
-    if (overlays.usage) {
-      keys.add(STREAM_DATA_KEYS.USAGE_STATS);
-      overlays.usage = undefined;
-    }
-    if (overlays.workPlan) {
-      keys.add(STREAM_DATA_KEYS.WORK_PLAN);
-      overlays.workPlan = undefined;
+    for (const [field, key] of Object.entries(OVERLAY_TO_SIDECAR_KEY) as [
+      keyof OverlayPatches,
+      OverlaySidecarKey,
+    ][]) {
+      if (!overlays[field]) continue;
+      keys.add(key);
+      overlays[field] = undefined;
     }
     this.writeMergedSidecars(stream, record, keys);
   }

@@ -4,7 +4,7 @@ import nunjucks from 'nunjucks';
 
 import * as logger from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'promptUtils';
 

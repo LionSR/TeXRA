@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
-import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
   inferAndLogPersistedModelHandlerCompatibilityKey,
   inferPersistedFlowModelHandlerCompatibilityKey,
@@ -37,17 +36,8 @@ describe('model handler compatibility inference', () => {
   });
 
   it('keeps keyless legacy Copilot transcripts on OpenRouter', () => {
-    const message = {
-      role: 'user',
-      content: [{ type: 'text', text: 'continue' }],
-    };
-
     expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        'copilot4o',
-        [message as ProviderMessage],
-        logger,
-      ),
+      inferAndLogPersistedModelHandlerCompatibilityKey('copilot4o', logger),
     ).toBe('ModelHandlerOpenRouterNative');
     expect(info).toHaveBeenCalledWith(
       'Inferred model-handler compatibility for keyless persisted run',
@@ -95,9 +85,22 @@ describe('model handler compatibility inference', () => {
     expect(info).not.toHaveBeenCalled();
   });
 
+  it('infers from the model alone when the record carries no parseable messages', () => {
+    expect(
+      inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
+        stateSlices: {
+          userChannels: {
+            input: {},
+            transient: { MODEL: 'copilot4o' },
+          },
+        },
+      }),
+    ).toBe('ModelHandlerOpenRouterNative');
+  });
+
   it('does not log when inference is inconclusive', () => {
     expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey('gpt54', [], logger),
+      inferAndLogPersistedModelHandlerCompatibilityKey('gpt54', logger),
     ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });

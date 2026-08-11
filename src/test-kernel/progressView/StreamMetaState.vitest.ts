@@ -14,7 +14,6 @@ import {
 import {
   createInitialState,
   type ProgressState,
-  type StreamState,
 } from '@progressView/frontend/store';
 import {
   AgentCategory,
@@ -27,6 +26,7 @@ import {
   type ProgressViewOutboundMessage,
   type StreamLogEntry,
   type StreamStage,
+  type StreamState,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';

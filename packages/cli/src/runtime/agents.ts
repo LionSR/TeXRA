@@ -6,12 +6,12 @@ import {
   resolveAgentForLaunch,
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
   agentName,
+  AgentCategory,
 } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 

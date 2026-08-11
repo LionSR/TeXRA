@@ -3,7 +3,6 @@ import { includedModelAccess } from '@model/includedModelAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { PlatformSecrets } from '@platform/secrets';
-import { AgentCategory } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
 
 /** True when any provider has a usable API key in secret storage or the environment. */
@@ -29,9 +28,7 @@ export async function hasAnyUsableProviderApiKey(
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
 ): Promise<boolean> {
-  if (
-    await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL, AgentCategory.ToolUse)
-  ) {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
     return true;
   }
   if (await hasAnyUsableProviderApiKey(secrets)) return true;

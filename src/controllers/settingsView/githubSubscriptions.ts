@@ -3,12 +3,9 @@ import { SharedIssuePollingSource } from '@tools/github/IssuePollingSource';
 import { SharedPRPollingSource } from '@tools/github/PRPollingSource';
 import { SharedRepoPollingSource } from '@tools/github/RepoPollingSource';
 import {
-  listIssueSubscriptionBindings,
-  listPRSubscriptionBindings,
-  listRepoSubscriptionBindings,
-  unbindAllForIssue,
-  unbindAllForPR,
-  unbindAllForRepo,
+  issueSubscriptionRegistry,
+  prSubscriptionRegistry,
+  repoSubscriptionRegistry,
 } from '@tools/github/subscriptionBindings';
 
 /**
@@ -47,21 +44,21 @@ export function listGitHubSubscriptionEntries(
   }
 
   return [
-    ...listPRSubscriptionBindings(SharedPRPollingSource.activeKeys()).map(
-      toEntry,
-    ),
-    ...listRepoSubscriptionBindings(SharedRepoPollingSource.activeKeys()).map(
-      toEntry,
-    ),
-    ...listIssueSubscriptionBindings(SharedIssuePollingSource.activeKeys()).map(
-      toEntry,
-    ),
+    ...prSubscriptionRegistry
+      .list(SharedPRPollingSource.activeKeys())
+      .map(toEntry),
+    ...repoSubscriptionRegistry
+      .list(SharedRepoPollingSource.activeKeys())
+      .map(toEntry),
+    ...issueSubscriptionRegistry
+      .list(SharedIssuePollingSource.activeKeys())
+      .map(toEntry),
   ];
 }
 
 /** Removes every binding for a GitHub URL-shaped subscription key. */
 export function unsubscribeGitHubKey(key: string): number {
-  if (key.includes('/pulls/')) return unbindAllForPR(key);
-  if (key.includes('/issues/')) return unbindAllForIssue(key);
-  return unbindAllForRepo(key);
+  if (key.includes('/pulls/')) return prSubscriptionRegistry.unbindAll(key);
+  if (key.includes('/issues/')) return issueSubscriptionRegistry.unbindAll(key);
+  return repoSubscriptionRegistry.unbindAll(key);
 }

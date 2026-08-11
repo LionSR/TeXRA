@@ -7,10 +7,10 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
+import { AgentCategory } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';

@@ -10,8 +10,8 @@ import which from 'which';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files';
 import { normalizeFilePath, unique } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { hasExtension } from '@utils/core/pathCore';
 
 /** Whether the current platform is Windows (cached at module load). */

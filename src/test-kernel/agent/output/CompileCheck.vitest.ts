@@ -9,7 +9,7 @@ import { runCompileCheck } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import {
@@ -247,7 +247,7 @@ describe('runCompileCheck', () => {
         'Compile check failed for main.tex (Windows pre-normalization hash)\n',
     });
 
-    const filesModule = await import('@utils/files');
+    const filesModule = await import('@utils/files/fileLocation');
     const comparablePathSpy = vi
       .spyOn(filesModule, 'getComparablePath')
       .mockReturnValueOnce('r0\\main.tex');
@@ -321,7 +321,7 @@ describe('runCompileCheck', () => {
     const executionId = 'compile-outer-backstop';
     await seedCompilableMainTex(executionId);
 
-    const filesModule = await import('@utils/files');
+    const filesModule = await import('@utils/files/fileLocation');
     const comparablePathSpy = vi
       .spyOn(filesModule, 'getComparablePath')
       .mockImplementationOnce(() => {
