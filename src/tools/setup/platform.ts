@@ -35,16 +35,16 @@ import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 export interface SetupSecretsAdapter {
   deleteApiKey(provider: ApiProvider): Promise<void>;
   /**
-   * Like `apiKeyExists` but rejects empty values. A stale
-   * `PROVIDER_API_KEY=""` env var is "present" but unusable at launch,
-   * so setup-readiness checks must use this helper rather than raw
-   * `apiKeyExists` to avoid misleading the agent (and the user).
+   * Whether a usable key is resolved for the provider (secret storage, then
+   * environment; blank values already filtered — see `hasUsableApiKey` in
+   * `@model/apiProviders`). Named for the launch/retry-readiness call sites
+   * here, which want the "is this actually usable" framing.
    */
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   /** Whether a usable key comes from TeXRA secrets, the environment, or neither. */
   apiKeyOrigin(provider: ApiProvider): Promise<ApiKeyOrigin>;
   /**
-   * Like `apiKeyExists` but only reports persisted entries — ignores
+   * Unlike `hasUsableApiKey`, only reports persisted entries — ignores
    * environment-variable-backed keys. Needed by `unset_api_key` so the
    * agent doesn't claim to have removed a key that still comes from
    * `PROVIDER_API_KEY` in the user's shell.

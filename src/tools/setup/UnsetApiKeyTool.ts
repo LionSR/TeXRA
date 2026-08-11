@@ -46,9 +46,6 @@ export class UnsetApiKeyTool extends defineTool({
       // If no persisted entry exists but a *usable* (non-blank) key
       // is still reported, it's coming from the `<PROVIDER>_API_KEY`
       // env var — `deleteApiKey` can't touch that, so be explicit.
-      // Use `hasUsableApiKey` (not `apiKeyExists`) so a stale
-      // `PROVIDER_API_KEY=""` doesn't falsely claim an env var is
-      // supplying credentials.
       const envExists = await setupSecrets.hasUsableApiKey(provider);
       if (envExists) {
         return executed(
@@ -79,8 +76,6 @@ export class UnsetApiKeyTool extends defineTool({
 
     // A shell env var can shadow the deletion — flag that so the agent can
     // tell the user why the key still appears to exist after removal.
-    // `hasUsableApiKey` here too, so a blank env var doesn't trip the
-    // "env var still active" branch.
     const stillPresent = await setupSecrets.hasUsableApiKey(provider);
     if (stillPresent) {
       return executed(
