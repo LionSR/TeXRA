@@ -41,6 +41,15 @@ export interface StreamLogDelta {
    */
   readonly dirtied: readonly StreamLogEntry[];
   /**
+   * Streaming-text appends since the previous emission, merged to one chunk
+   * per entry id. An `appendText` mutation emits here *instead of* `dirtied`.
+   * An entry present in `appended`/`dirtied` already carries its full current
+   * text, so no id appears both by value and as a chunk within one delta —
+   * and across deltas, an entry-by-value supersedes any chunks a consumer
+   * has buffered for its id.
+   */
+  readonly textChunks: readonly StreamLogTextDelta[];
+  /**
    * The stream's log instance was replaced (disk history merged under live
    * appends), renumbering seqNos. Consumers must resync, not fold.
    */
@@ -59,6 +68,9 @@ export class StreamLogDeltaBuffer {
   private appended: StreamLogEntry[] = [];
   private readonly appendedIndexById = new Map<string, number>();
   private readonly dirtiedById = new Map<string, StreamLogEntry>();
+  /** Buffered streaming-text chunks per id, in arrival order. Cleared for an
+   *  id when a later entry-by-value supersedes them. */
+  private readonly textChunksById = new Map<string, string[]>();
   private lastSeq: number;
   private needsResync = false;
 
@@ -99,6 +111,9 @@ export class StreamLogDeltaBuffer {
       this.appended.push(entry);
     }
     for (const entry of delta.dirtied) {
+      // The by-value entry carries its full current text: chunks buffered
+      // from earlier emissions are already included, so drop them.
+      this.textChunksById.delete(entry.id);
       const appendedIndex = this.appendedIndexById.get(entry.id);
       if (appendedIndex !== undefined) {
         this.appended[appendedIndex] = entry;
@@ -106,18 +121,40 @@ export class StreamLogDeltaBuffer {
         this.dirtiedById.set(entry.id, entry);
       }
     }
+    for (const chunk of delta.textChunks) {
+      const chunks = this.textChunksById.get(chunk.id);
+      if (chunks) {
+        chunks.push(chunk.appendText);
+      } else {
+        this.textChunksById.set(chunk.id, [chunk.appendText]);
+      }
+    }
   }
 
-  /** The coalesced changes, dirtied in seqNo order. Call once, then discard. */
-  drain(): { appended: StreamLogEntry[]; dirtied: StreamLogEntry[] } {
+  /**
+   * The coalesced changes, dirtied in seqNo order. Call once, then discard.
+   * Apply `appended`/`dirtied` before `textChunks`: buffered chunks for an id
+   * always postdate its buffered value (a later value deletes earlier
+   * chunks), so chunks append on top of the value.
+   */
+  drain(): {
+    appended: StreamLogEntry[];
+    dirtied: StreamLogEntry[];
+    textChunks: StreamLogTextDelta[];
+  } {
     const dirtied = [...this.dirtiedById.values()].sort(
       (a, b) => a.seqNo - b.seqNo,
     );
+    const textChunks = [...this.textChunksById].map(([id, chunks]) => ({
+      id,
+      appendText: chunks.join(''),
+    }));
     const appended = this.appended;
     this.appended = [];
     this.appendedIndexById.clear();
     this.dirtiedById.clear();
-    return { appended, dirtied };
+    this.textChunksById.clear();
+    return { appended, dirtied, textChunks };
   }
 }
 
@@ -142,35 +179,6 @@ function materializeText(acc: StreamingTextAccumulator, end: number): string {
     acc.chunks.length = 0;
   }
   return end === acc.joined.length ? acc.joined : acc.joined.slice(0, end);
-}
-
-/**
- * Read `[from, end)` from the accumulator without collapsing its chunk tail:
- * the webview delta path calls this at render cadence during streaming, and
- * materializing there would re-copy the whole joined prefix per frame. The
- * chunk walk stays short because every throttled save materializes (via the
- * persisted entries' `text` getters) and resets the tail.
- */
-function sliceAccumulatedText(
-  acc: StreamingTextAccumulator,
-  from: number,
-  end: number,
-): string {
-  if (end <= acc.joined.length) return acc.joined.slice(from, end);
-  const parts: string[] = [];
-  if (from < acc.joined.length) parts.push(acc.joined.slice(from));
-  let pos = acc.joined.length;
-  for (const chunk of acc.chunks) {
-    if (pos >= end) break;
-    const next = pos + chunk.length;
-    if (next > from) {
-      parts.push(
-        chunk.slice(Math.max(0, from - pos), Math.min(chunk.length, end - pos)),
-      );
-    }
-    pos = next;
-  }
-  return parts.join('');
 }
 
 /**
@@ -256,7 +264,6 @@ export class StreamLog {
   private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
   private seqCounter = 0;
   private readonly indexById = new Map<string, number>();
-  private readonly dirtyUpdates = new Set<string>();
   /**
    * Per-entry chunk accumulators for in-flight streaming text. An entry whose
    * id is present here carries a lazy `text` getter over the accumulator;
@@ -264,15 +271,16 @@ export class StreamLog {
    * accumulator, so persisted and settled entries are always plain.
    */
   private readonly streamingText = new Map<string, StreamingTextAccumulator>();
-  /**
-   * Offset into an entry's text where the webview's unacked text-delta window
-   * starts, keyed by id. The delta itself is a slice of the one canonical
-   * text, replacing the old second accumulated delta string per entry.
-   */
-  private readonly dirtyTextFrom = new Map<string, number>();
   private emissionSeqCounter = 0;
   private pendingAppendedIds: string[] = [];
   private readonly pendingDirtiedIds = new Set<string>();
+  /**
+   * Streaming-text appends since the last drain, per id in arrival order.
+   * Drained into the emission's `textChunks` arm — except for ids the same
+   * emission carries by value (`appended`/`dirtied`), whose current text
+   * already includes them.
+   */
+  private readonly pendingTextChunks = new Map<string, string[]>();
   private settlementSeqCounter = 0;
   private runningGroupCount = 0;
   private runningStreamingTextCount = 0;
@@ -355,7 +363,9 @@ export class StreamLog {
    */
   get hasUndrainedChanges(): boolean {
     return (
-      this.pendingAppendedIds.length > 0 || this.pendingDirtiedIds.size > 0
+      this.pendingAppendedIds.length > 0 ||
+      this.pendingDirtiedIds.size > 0 ||
+      this.pendingTextChunks.size > 0
     );
   }
 
@@ -369,18 +379,30 @@ export class StreamLog {
     const emissionSeq = ++this.emissionSeqCounter;
     if (
       this.pendingAppendedIds.length === 0 &&
-      this.pendingDirtiedIds.size === 0
+      this.pendingDirtiedIds.size === 0 &&
+      this.pendingTextChunks.size === 0
     ) {
-      return { emissionSeq, appended: [], dirtied: [] };
+      return { emissionSeq, appended: [], dirtied: [], textChunks: [] };
     }
     const appendedIds = new Set(this.pendingAppendedIds);
     const appended = this.resolveEntries(this.pendingAppendedIds);
     const dirtied = this.resolveEntries(
       [...this.pendingDirtiedIds].filter((id) => !appendedIds.has(id)),
     ).sort((a, b) => a.seqNo - b.seqNo);
+    // An entry emitted by value resolves to its *current* object, whose text
+    // already includes every chunk accumulated in this window — emitting its
+    // chunks too would double-apply them, so they are dropped here. This is
+    // the precedence rule consumers rely on: value supersedes chunks.
+    const textChunks: StreamLogTextDelta[] = [];
+    for (const [id, chunks] of this.pendingTextChunks) {
+      if (!appendedIds.has(id) && !this.pendingDirtiedIds.has(id)) {
+        textChunks.push({ id, appendText: chunks.join('') });
+      }
+    }
     this.pendingAppendedIds = [];
     this.pendingDirtiedIds.clear();
-    return { emissionSeq, appended, dirtied };
+    this.pendingTextChunks.clear();
+    return { emissionSeq, appended, dirtied, textChunks };
   }
 
   /** Current entry objects for `ids`; entries are never removed, so every id resolves. */
@@ -491,8 +513,6 @@ export class StreamLog {
 
     this.entries[index] = updated;
     this.streamingText.delete(id);
-    this.dirtyUpdates.add(id);
-    this.dirtyTextFrom.delete(id);
     this.pendingDirtiedIds.add(id);
     return updated;
   }
@@ -519,10 +539,12 @@ export class StreamLog {
 
     const updated = entryWithLazyText(current, acc, acc.length);
     this.entries[index] = updated;
-    if (!this.dirtyUpdates.has(id) && !this.dirtyTextFrom.has(id)) {
-      this.dirtyTextFrom.set(id, acc.length - appendText.length);
+    const chunks = this.pendingTextChunks.get(id);
+    if (chunks) {
+      chunks.push(appendText);
+    } else {
+      this.pendingTextChunks.set(id, [appendText]);
     }
-    this.pendingDirtiedIds.add(id);
     return updated;
   }
 
@@ -533,130 +555,10 @@ export class StreamLog {
     return this.entries.slice(safeFrom, safeTo);
   }
 
-  getDirtyUpdates(maxSeqInclusive: number = this.seqCounter): StreamLogEntry[] {
-    const updates: StreamLogEntry[] = [];
-    for (const id of this.dirtyUpdates) {
-      const index = this.indexById.get(id);
-      if (index === undefined) {
-        this.dirtyUpdates.delete(id);
-        continue;
-      }
-      const entry = this.entries[index];
-      if (entry.seqNo <= maxSeqInclusive) {
-        updates.push(entry);
-      }
-    }
-    updates.sort((a, b) => a.seqNo - b.seqNo);
-    return updates;
-  }
-
-  getDirtyTextDeltas(
-    maxSeqInclusive: number = this.seqCounter,
-  ): StreamLogTextDelta[] {
-    const deltas: Array<{
-      delta: StreamLogTextDelta;
-      seqNo: number;
-    }> = [];
-    for (const [id, from] of this.dirtyTextFrom) {
-      const index = this.indexById.get(id);
-      if (index === undefined) {
-        this.dirtyTextFrom.delete(id);
-        continue;
-      }
-      const entry = this.entries[index];
-      if (entry.seqNo <= maxSeqInclusive) {
-        const acc = this.streamingText.get(id);
-        deltas.push({
-          delta: {
-            id,
-            appendText: acc
-              ? sliceAccumulatedText(acc, from, acc.length)
-              : (entry.text ?? '').slice(from),
-          },
-          seqNo: entry.seqNo,
-        });
-      }
-    }
-    deltas.sort((a, b) => a.seqNo - b.seqNo);
-    return deltas.map(({ delta }) => delta);
-  }
-
-  clearDirtyUpdates(maxSeqInclusive: number = this.seqCounter): void {
-    for (const dirty of [this.dirtyUpdates, this.dirtyTextFrom] as const) {
-      for (const id of dirty.keys()) {
-        const index = this.indexById.get(id);
-        if (
-          index === undefined ||
-          this.entries[index].seqNo <= maxSeqInclusive
-        ) {
-          dirty.delete(id);
-        }
-      }
-    }
-  }
-
-  ackDirtyUpdates(updates: readonly StreamLogEntry[]): void {
-    for (const update of updates) {
-      const index = this.indexById.get(update.id);
-      if (index === undefined || this.entries[index] === update) {
-        this.dirtyUpdates.delete(update.id);
-      }
-    }
-  }
-
-  ackDirtyTextDeltas(
-    deltas: readonly StreamLogTextDelta[],
-    fullEntries: readonly StreamLogEntry[] = [],
-  ): void {
-    for (const entry of fullEntries) {
-      const index = this.indexById.get(entry.id);
-      if (index === undefined || this.entries[index] === entry) {
-        this.dirtyTextFrom.delete(entry.id);
-        continue;
-      }
-
-      const from = this.dirtyTextFrom.get(entry.id);
-      if (from === undefined) continue;
-      const currentText = this.entries[index].text ?? '';
-      const deliveredText = typeof entry.text === 'string' ? entry.text : '';
-      // A full-entry frame covers all appended text up to the delivered
-      // text's length, even if later appends replaced the row.
-      if (
-        deliveredText.length > from &&
-        currentText.startsWith(deliveredText)
-      ) {
-        if (deliveredText.length >= currentText.length) {
-          this.dirtyTextFrom.delete(entry.id);
-        } else {
-          this.dirtyTextFrom.set(entry.id, deliveredText.length);
-        }
-      }
-    }
-
-    for (const delta of deltas) {
-      const from = this.dirtyTextFrom.get(delta.id);
-      if (from === undefined) continue;
-      const index = this.indexById.get(delta.id);
-      if (index === undefined) {
-        this.dirtyTextFrom.delete(delta.id);
-        continue;
-      }
-      const currentText = this.entries[index].text ?? '';
-      const end = from + delta.appendText.length;
-      // Advance only when the delivered frame still matches the canonical
-      // text at the window start (an interleaved update() resets the window).
-      if (
-        end > currentText.length ||
-        !currentText.startsWith(delta.appendText, from)
-      ) {
-        continue;
-      }
-      if (end === currentText.length) {
-        this.dirtyTextFrom.delete(delta.id);
-      } else {
-        this.dirtyTextFrom.set(delta.id, end);
-      }
-    }
+  /** The current (immutable, post-mutation) entry object for `id`, if any. */
+  getById(id: string): StreamLogEntry | undefined {
+    const index = this.indexById.get(id);
+    return index === undefined ? undefined : this.entries[index];
   }
 
   toJSON(): StreamLogEntry[] {
