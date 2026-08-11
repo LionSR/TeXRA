@@ -103,10 +103,11 @@ function buildFileGroupsSection(
  * Anthropic's native tool-use alias — plus the verbatim built-in names
  * (`edit`, `multiedit`, provider `str_replace`/`text_editor` variants) a
  * delegated sub-agent reports. A delegated Claude `Edit` reports
- * `old_string`/`new_string` (not `old_str`/`new_str`) and a `file_path` (not
- * `path`); a delegated `MultiEdit` nests a whole array of those under
- * `edits`. None of these has its own TeXRA schema, so rather than fabricate
- * one spanning all of them, this reads each candidate with explicit runtime
+ * `old_string`/`new_string` (not `old_str`/`new_str`); a delegated
+ * `MultiEdit` nests a whole array of those under `edits`. (The `file_path`
+ * vs. `path` field-name split is handled once, upstream, in `ctx.filePath`.)
+ * None of these has its own TeXRA schema, so rather than fabricate one
+ * spanning all of them, this reads each candidate with explicit runtime
  * `typeof` checks before any field is used.
  */
 type EditDiffLikeInput = {
@@ -114,8 +115,6 @@ type EditDiffLikeInput = {
   new_str?: unknown;
   old_string?: unknown;
   new_string?: unknown;
-  path?: unknown;
-  file_path?: unknown;
   edits?: unknown;
 };
 
@@ -146,14 +145,12 @@ function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const sections: TemplateResult[] = [];
   const edits = getOutputEdits<{ startLine?: number }>(parsedOutput);
   const startLine = edits?.[0]?.startLine;
-  const resolvedPath =
-    filePath || asString(editInput.path) || asString(editInput.file_path);
 
-  if (resolvedPath) {
+  if (filePath) {
     sections.push(
       buildToolUseSection(
         'File:',
-        buildFileLinkWithLines(resolvedPath, { startLine }),
+        buildFileLinkWithLines(filePath, { startLine }),
       ),
     );
   }
@@ -679,14 +676,13 @@ export function dispatchToolSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
   for (const { match, build } of TOOL_SECTION_BUILDERS) {
+    if (!match(ctx)) continue;
     // A matched builder that finds nothing displayable (e.g. an edit-like
     // tool whose input shape it doesn't recognize) falls through to the
     // generic renderer instead of leaving the card blank.
-    if (match(ctx)) {
-      const sections = build(ctx);
-      if (sections.length > 0) return sections;
-      break;
-    }
+    const sections = build(ctx);
+    if (sections.length > 0) return sections;
+    break;
   }
   return buildDefaultSections(ctx);
 }
