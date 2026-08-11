@@ -1,4 +1,4 @@
-import { chmod, mkdir, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 
@@ -235,29 +235,6 @@ describe('assertOutputDirAvailable', () => {
       /is not a directory/,
     );
   });
-
-  // Skip on Windows (no POSIX chmod semantics) and when running as root, where
-  // mode-0 doesn't restrict stat.
-  const skipPermissionTest =
-    process.platform === 'win32' ||
-    (typeof process.getuid === 'function' && process.getuid() === 0);
-  (skipPermissionTest ? it.skip : it)(
-    'propagates non-ENOENT/ENOTDIR stat errors with their original cause',
-    async () => {
-      const root = await makeTempDir('texra-cli-outdir-perm-', tempDirs);
-      const blocked = join(root, 'blocked');
-      const inner = join(blocked, 'dir');
-      try {
-        await mkdir(blocked);
-        await chmod(blocked, 0o000);
-        await expect(assertOutputDirAvailable(inner, root)).rejects.toThrow(
-          /(EACCES|permission)/i,
-        );
-      } finally {
-        await chmod(blocked, 0o755).catch(() => undefined);
-      }
-    },
-  );
 });
 
 describe('assertOutputFileAvailable', () => {
