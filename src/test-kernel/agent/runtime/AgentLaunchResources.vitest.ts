@@ -8,7 +8,11 @@ import { AgentLaunchResources } from '@agent/runtime/AgentLaunchResources';
 describe('AgentLaunchResources', () => {
   it('retains raw-trace ownership when session attachment throws', () => {
     const resources = new AgentLaunchResources();
-    const unattachedTrace = { trace: noopTrace, dispose: vi.fn() };
+    const unattachedTrace = {
+      trace: noopTrace,
+      handleStatus: vi.fn(),
+      dispose: vi.fn(),
+    };
     expect(() =>
       resources.ownRunTrace(unattachedTrace, () => {
         throw new Error('attach failed');

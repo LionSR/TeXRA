@@ -360,82 +360,28 @@ describe('StreamStatusMachine', () => {
     });
   });
 
-  it('bridges canonical status facts to a supplied run trace', () => {
-    const events = new SessionEventHub();
-    const machine = new StreamStatusMachine(events);
-    const publishedRunEvents = recordSessionEvents(events, { scope: 'run' });
-    const publishedSessionEvents = recordSessionEvents(events, {
-      scope: 'session',
-    });
-    const trace = new TraceEmitter();
-    const streamId = 'stream-status-projection-test' as StreamTabId;
-    const statusEvents: StatusEvent[] = [];
-
-    trace.subscribe((event) => {
-      if (event.type !== 'status') return;
-      statusEvents.push(event);
-      events.emit({ scope: 'run', streamId, event });
-    });
-
-    expect(
-      machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle', {
-        trace,
-      }),
-    ).toBe(true);
-
-    expect(statusEvents[0]).toMatchObject({
-      type: 'status',
-      streamId,
-      phase: STREAM_PHASE.RUNNING,
-      cause: 'lifecycle',
-    });
-    expect(runEventsOfType(publishedRunEvents.events, 'status')).toEqual([
-      statusEvents[0],
-    ]);
-    expect(sessionFactsOfType(publishedSessionEvents.events, 'status')).toEqual(
-      statusEvents,
-    );
-  });
-
-  it('settles trace subscribers before publishing to session subscribers', () => {
-    const events = new SessionEventHub();
-    const machine = new StreamStatusMachine(events);
-    const trace = new TraceEmitter();
-    const streamId = 'stream-status-order-test' as StreamTabId;
-    const order: string[] = [];
-
-    trace.subscribe((event) => {
-      if (event.type === 'status') order.push('trace');
-    });
-    events.subscribeStatus(() => order.push('session'));
-
-    machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle', { trace });
-
-    expect(order).toEqual(['trace', 'session']);
-  });
-
   // One rail: the session fact is published by the machine itself, so a
-  // trace-owned transition (run start, terminal, manual-retry wait, restart
-  // repair) reaches every projector without the caller passing a hub.
-  it('publishes the session fact when a trace bridge is present', () => {
+  // status transition (run start, terminal, manual-retry wait, restart
+  // repair) reaches every projector — including the transcript recorder,
+  // which subscribes the same rail via its handleStatus port — without the
+  // caller routing anything.
+  it('publishes the canonical session fact on the single status rail', () => {
     const { machine, statusEvents, streamId } = setupMachine(
       'stream-status-single-rail',
     );
-    const trace = new TraceEmitter();
 
     seedStreamStatusForTest(machine, streamId, { phase: STREAM_PHASE.WAITING });
 
     expect(
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        trace,
         substate: STREAM_SUBSTATE.RESUMING,
       }),
     ).toBe(true);
 
     const payloads = statusEvents();
 
-    // The hub and transcript bridge share the canonical status vocabulary;
-    // the public CLI adapter alone performs the frozen wire rename.
+    // Every consumer shares the canonical status vocabulary; the public CLI
+    // adapter alone performs the frozen wire rename.
     expect(payloads).toEqual([
       {
         streamId,

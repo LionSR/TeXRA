@@ -749,19 +749,8 @@ describe('CLI run progress renderer', () => {
       const detach = host.attachRunProgressRenderer(events);
 
       events.emit(runConfigEvent());
-      // Out of the renderer's run-fact contract: the subscription filter keeps
-      // it away from the renderer, so only the session fact renders a line.
-      events.emit({
-        scope: 'run',
-        streamId: 'stream-1' as StreamTabId,
-        event: {
-          type: 'status',
-          streamId: 'stream-1' as StreamTabId,
-          phase: STREAM_PHASE.COMPLETED,
-          previousPhase: STREAM_PHASE.RUNNING,
-          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        },
-      });
+      // Status travels only as a session fact (run-scope status is no longer
+      // representable), so exactly one line renders for the transition.
       events.emit({
         scope: 'session',
         event: {

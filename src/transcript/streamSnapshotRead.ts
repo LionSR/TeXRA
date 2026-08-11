@@ -80,7 +80,10 @@ export function emptyStreamData(): StreamData {
 
 /**
  * Treat corrupt/truncated JSON (crash mid-write) as a missing file — the next
- * write replaces it — but log it so it is not silently swallowed.
+ * write replaces it — but log it so it is not silently swallowed. I/O errors
+ * propagate: an unreadable-but-present sidecar must fail the read so seeding
+ * keeps the record's `diskState` unknown instead of marking an empty base
+ * `loaded` and letting a later mutation persist over the real on-disk data.
  */
 async function tryRead(kv: KVStore, key: string): Promise<unknown | undefined> {
   try {

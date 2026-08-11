@@ -5,12 +5,12 @@
  */
 
 import {
+  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_PHASE } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 
@@ -54,13 +54,21 @@ export function shouldSkipWait(executionId: string): boolean {
  * AbortController when one arrives. This lets users break out of a blocking
  * `executions wait` by sending a follow-up message.
  *
+ * Subscribes to the owning session's `followUpSent` fact — the same hub
+ * `notifyFollowUpSent` publishes on — so follow-up delivery has exactly one
+ * emission channel.
+ *
  * Returns a cleanup function that removes the listener.
  */
 export function listenForFollowUp(ac: AbortController): () => void {
-  const streamId = getRunContextStreamId(tryUseRunContext());
+  const context = tryUseRunContext();
+  const streamId = getRunContextStreamId(context);
   if (!streamId) return () => {};
 
-  return onFollowUpSent((followUpStreamId) => {
-    if (followUpStreamId === streamId) ac.abort();
+  const session = getRunContextSession(context) ?? currentSession();
+  return session.events.subscribeSessionFacts((fact) => {
+    if (fact.type === 'followUpSent' && fact.payload.streamId === streamId) {
+      ac.abort();
+    }
   });
 }

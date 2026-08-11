@@ -422,7 +422,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     });
 
-    runTrace.trace.emit({
+    runTrace.handleStatus({
       type: 'status',
       streamId: STREAM_ID,
       phase: STREAM_PHASE.CANCELLED,

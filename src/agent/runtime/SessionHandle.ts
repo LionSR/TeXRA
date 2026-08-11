@@ -79,11 +79,6 @@ import {
 
 const logger = createChannelTrace('sessionHandle');
 
-interface ResultListenerRegistration {
-  readonly listener: (event: ResultEvent) => void;
-  readonly replayMissed: boolean;
-}
-
 interface WaitingRepairProbe {
   readonly executionId: string;
   readonly statusGeneration: object | undefined;
@@ -371,7 +366,6 @@ export class SessionHandle {
     const repaired = this.status.transitionToWaiting(
       streamId,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      { trace: logger },
     );
     if (repaired) {
       logger.debug(`Stream ${streamId} restored to WAITING before follow-up`);
@@ -625,7 +619,6 @@ export class SessionHandle {
         if (closed.length > 0) await this.transcripts.flush();
         return closed;
       },
-      statusEmitOptions: { trace: logger },
       logger,
       signal: this.restartRepairAbort.signal,
     });
@@ -735,94 +728,100 @@ export class SessionHandle {
     );
   }
 
-  /** Listeners for terminal run results in this session (the host channel). */
-  private readonly resultListeners = new Set<ResultListenerRegistration>();
   private readonly missedTerminalResults = new Map<
     ResultEvent['executionId'],
     ResultEvent
   >();
+  /** Currently-subscribed `onResult` listeners that asked for missed replay. */
+  private replayResultListenerCount = 0;
   private replayMissedResultsEnabled = false;
+  /**
+   * Disposers for active `onResult` hub subscriptions, so `dispose()` can
+   * drop them like the pre-hub listener set did — a late `publishRunEvent`
+   * after teardown must not reach host closures.
+   */
+  private readonly resultListenerDetachers = new Set<() => void>();
   private disposeStarted = false;
 
   /**
    * Subscribe to terminal `result` events for runs in this session. Hosts hold
    * the session, so this is how they receive a run's outcome — per-run traces
    * are created inside the run and are not reachable from the host otherwise.
+   *
+   * Delivery rides the session event hub (`result` events travel as run-scoped
+   * facts); this method only adds the missed-terminal-result replay that the
+   * hub deliberately has no concept of.
    */
   onResult(
     listener: (event: ResultEvent) => void,
     options: { replayMissed?: boolean } = {},
   ): () => void {
-    const registration: ResultListenerRegistration = {
-      listener,
-      replayMissed: options.replayMissed ?? false,
-    };
-    this.resultListeners.add(registration);
-    if (registration.replayMissed) {
+    const replayMissed = options.replayMissed ?? false;
+    const detach = this.events.subscribeRunFacts(
+      ({ event }) => listener(event),
+      { types: ['result'] },
+    );
+    let disposed = false;
+    if (replayMissed) {
+      this.replayResultListenerCount += 1;
       this.replayMissedResultsEnabled = true;
       queueMicrotask(() => {
-        if (!this.resultListeners.has(registration)) return;
+        if (disposed) return;
         const missed = [...this.missedTerminalResults.values()];
         this.missedTerminalResults.clear();
-        for (const event of missed) this.notifyResultListener(listener, event);
+        for (const event of missed) {
+          try {
+            listener(event);
+          } catch (err) {
+            logger.warn('onResult listener threw', { data: err });
+          }
+        }
       });
     }
-    return () => this.resultListeners.delete(registration);
+    const dispose = (): void => {
+      if (disposed) return;
+      disposed = true;
+      this.resultListenerDetachers.delete(dispose);
+      if (replayMissed) this.replayResultListenerCount -= 1;
+      detach();
+    };
+    this.resultListenerDetachers.add(dispose);
+    return dispose;
   }
 
   /**
-   * Bridge a run's trace into this session's `onResult` channel: re-publish its
-   * `result` events to the session's listeners. Returns a detach disposer the
-   * run bundles into its trace teardown.
+   * Bridge a run's trace into this session's event hub: re-publish each event
+   * as a run-scoped fact. Returns a detach disposer the run bundles into its
+   * trace teardown.
    */
   attachRunTrace(trace: AgentTrace, streamId: StreamTabId): () => void {
     return trace.subscribe((event) => this.publishRunEvent(streamId, event));
   }
 
   /**
-   * Forward one run-scoped event to this session's event bus and, for
-   * terminal `result` events, to `onResult` listeners. Shared by
-   * `attachRunTrace` (the live per-run trace subscription above) and by
-   * `ExecutionRegistry`'s injected `publishResult` callback (see
-   * `attachSessionEvents`), which needs the identical forwarding for a
-   * terminal event synthesized *after* the originating run's own trace has
-   * already been disposed — killing a native subagent suspended at WAITING
-   * (`terminateWaitingHandle`) settles `handle.result` and the run's own
-   * (already-torn-down) trace, but has no other way to reach this session's
-   * `onResult` subscribers.
+   * Forward one run-scoped event to this session's event bus, recording
+   * terminal `result` events for missed replay when no replay-subscribed
+   * listener is attached. Shared by `attachRunTrace` (the live per-run trace
+   * subscription above) and by `ExecutionRegistry`'s injected `publishResult`
+   * callback (see `attachSessionEvents`), which needs the identical
+   * forwarding for a terminal event synthesized *after* the originating run's
+   * own trace has already been disposed — killing a native subagent suspended
+   * at WAITING (`terminateWaitingHandle`) settles `handle.result` and the
+   * run's own (already-torn-down) trace, but has no other way to reach this
+   * session's `onResult` subscribers.
    */
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
+    if (event.type === 'result') {
+      if (this.replayResultListenerCount > 0) {
+        this.missedTerminalResults.delete(event.executionId);
+      } else if (
+        this.replayMissedResultsEnabled &&
+        isReplayableTerminalResult(event)
+      ) {
+        this.missedTerminalResults.set(event.executionId, event);
+      }
+    }
     this.events.emit({ scope: 'run', streamId, event });
-    if (event.type !== 'result') return;
-    const replaying = [...this.resultListeners].some(
-      (registration) => registration.replayMissed,
-    );
-    if (replaying) {
-      this.missedTerminalResults.delete(event.executionId);
-    } else if (
-      this.replayMissedResultsEnabled &&
-      isReplayableTerminalResult(event)
-    ) {
-      this.missedTerminalResults.set(event.executionId, event);
-    }
-    // Guard each listener so one throwing consumer can't starve the rest:
-    // the whole fan-out is a single trace subscriber, so without this a throw
-    // would skip the remaining listeners (TraceEmitter only guards at the
-    // subscriber boundary, not between listeners).
-    for (const registration of this.resultListeners) {
-      this.notifyResultListener(registration.listener, event);
-    }
-  }
-
-  private notifyResultListener(
-    listener: (event: ResultEvent) => void,
-    event: ResultEvent,
-  ): void {
-    try {
-      listener(event);
-    } catch (err) {
-      logger.warn('onResult listener threw', { data: err });
-    }
   }
 
   /**
@@ -865,7 +864,7 @@ export class SessionHandle {
     this.interactions.dispose();
     this.detachSnapshotEvents();
     this.artifactFlushers.clear();
-    this.resultListeners.clear();
+    for (const detach of [...this.resultListenerDetachers]) detach();
     this.missedTerminalResults.clear();
   }
 }

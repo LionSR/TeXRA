@@ -30,6 +30,7 @@ import {
   recordSessionEvents,
   runEventsOfType,
   sessionFactPayloads,
+  sessionFactsOfType,
 } from '../progressTestUtils';
 
 const executionId = 'c11111' as ExecutionId;
@@ -188,7 +189,7 @@ describe('child stream progress events', () => {
         streamId: childStreamId,
         description: 'Run a background bash command',
       });
-      expect(runEventsOfType(recorded.events, 'status')).toEqual(
+      expect(sessionFactsOfType(recorded.events, 'status')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             streamId: childStreamId,
@@ -278,7 +279,7 @@ describe('child stream progress events', () => {
           status: STREAM_PHASE.RUNNING,
         }),
       );
-      expect(runEventsOfType(recorded.events, 'status')).toContainEqual(
+      expect(sessionFactsOfType(recorded.events, 'status')).toContainEqual(
         expect.objectContaining({
           cause: 'resume',
           phase: STREAM_PHASE.RUNNING,
@@ -536,7 +537,9 @@ describe('child stream progress events', () => {
     }
 
     expect(
-      runEventsOfType(recorded.events, 'status').map((event) => event.phase),
+      sessionFactsOfType(recorded.events, 'status')
+        .filter((event) => event.streamId === loopChildStreamId)
+        .map((event) => event.phase),
     ).toEqual([
       STREAM_PHASE.WAITING,
       STREAM_PHASE.RUNNING,
@@ -589,7 +592,11 @@ describe('child stream progress events', () => {
       expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
         STREAM_PHASE.CANCELLED,
       );
-      expect(runEventsOfType(recorded.events, 'status')).toHaveLength(0);
+      expect(
+        sessionFactsOfType(recorded.events, 'status').filter(
+          (event) => event.streamId === stoppedChildStreamId,
+        ),
+      ).toHaveLength(0);
       await expect(handle?.result).resolves.toMatchObject({
         type: 'result',
         outcome: 'cancelled',

@@ -10,7 +10,6 @@ import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
-  onFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
@@ -24,6 +23,7 @@ import {
 } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
 // Local file imports
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
@@ -178,58 +178,36 @@ describe('tool-use follow-up progress events', () => {
     }
   });
 
-  it('notifies local follow-up observers through onFollowUpSent', async () => {
-    const observed: StreamTabId[] = [];
-    unsubscribeFollowUpObservers.push(
-      onFollowUpSent((observedStreamId) => {
-        observed.push(observedStreamId);
-      }),
-    );
+  it('aborts a blocking wait when the owning session emits followUpSent', () => {
+    const session = trackSession();
+    const ac = new AbortController();
+    const otherStream = 'stream:other' as StreamTabId;
 
-    trackToolUseFlow({ appendFollowUp: vi.fn() });
+    let cleanup: () => void = () => {};
+    withRunContext(createRunContext({ session, streamId }), () => {
+      cleanup = listenForFollowUp(ac);
+    });
+    unsubscribeFollowUpObservers.push(cleanup);
 
-    await submitFollowUp(streamId, 'break wait');
-    unsubscribeFollowUpObservers.pop()?.();
-    await submitFollowUp(streamId, 'after unsubscribe');
+    notifyFollowUpSent(otherStream, session);
+    expect(ac.signal.aborted).toBe(false);
 
-    expect(observed).toEqual([streamId]);
+    notifyFollowUpSent(streamId, session);
+    expect(ac.signal.aborted).toBe(true);
   });
 
-  it('runs observers before session emission and catches observer errors', async () => {
+  it('stops aborting waits once the follow-up listener is cleaned up', () => {
     const session = trackSession();
-    const order: string[] = [];
-    const detachFacts = session.events.subscribe(() => {
-      order.push('session event');
+    const ac = new AbortController();
+
+    let cleanup: () => void = () => {};
+    withRunContext(createRunContext({ session, streamId }), () => {
+      cleanup = listenForFollowUp(ac);
     });
-    unsubscribeFollowUpObservers.push(
-      onFollowUpSent(() => {
-        order.push('throwing observer');
-        throw new Error('observer failure');
-      }),
-      onFollowUpSent(() => {
-        order.push('next observer');
-      }),
-    );
+    cleanup();
 
-    try {
-      trackToolUseFlow({
-        appendFollowUp: vi.fn(),
-        session,
-      });
-
-      const result = await submitFollowUp(streamId, 'observer ordering', {
-        session,
-      });
-
-      expect(result).toEqual({ status: 'sent' });
-      expect(order).toEqual([
-        'throwing observer',
-        'next observer',
-        'session event',
-      ]);
-    } finally {
-      detachFacts();
-    }
+    notifyFollowUpSent(streamId, session);
+    expect(ac.signal.aborted).toBe(false);
   });
 
   it('does not append through stale active contexts after final status', async () => {

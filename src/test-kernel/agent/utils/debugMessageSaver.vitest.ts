@@ -35,7 +35,7 @@ describe('maybeSaveDebugObject', () => {
     const infoLogs: string[] = [];
     const errorLogs: string[] = [];
 
-    vi.spyOn(StorageFS, 'writeJson').mockImplementation(
+    vi.spyOn(StorageFS, 'write').mockImplementation(
       async (relativePath, value) => {
         storageWrites.push({ relativePath, value });
       },
@@ -48,7 +48,7 @@ describe('maybeSaveDebugObject', () => {
     vi.spyOn(StorageFS, 'fullPath').mockImplementation((relativePath) =>
       path.join('/mock/storage', relativePath),
     );
-    vi.spyOn(WorkspaceFS, 'writeJson').mockImplementation(
+    vi.spyOn(WorkspaceFS, 'write').mockImplementation(
       async (relativePath, value) => {
         workspaceWrites.push({ relativePath, value });
       },

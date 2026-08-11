@@ -159,7 +159,12 @@ interface UsageEvent extends StageStamp {
   readonly recordTranscript?: boolean;
 }
 
-/** Stream lifecycle phase change emitted by the session-owned status machine. */
+/**
+ * Stream lifecycle phase change emitted by the session-owned status machine.
+ * Not an {@link AgentEvent} arm: status travels only as a canonical session
+ * fact on the `SessionEventHub` rail. The type stays here because the trace
+ * package owns the event vocabulary the fact reuses.
+ */
 export interface StatusEvent extends StageStamp {
   readonly type: 'status';
   readonly streamId: StreamTabId;
@@ -365,7 +370,6 @@ export type AgentEvent =
   | WorkflowCallEvent
   | ActiveSkillsEvent
   | UsageEvent
-  | StatusEvent
   | ChildActivityEvent
   | ConversationProgressEvent
   | RunFactEvent
@@ -382,10 +386,10 @@ export type AgentEvent =
  * This host subscription vocabulary is intentionally broader than
  * `RunFactEvent`: it also includes transient runtime events that hosts project.
  *
- * `status` is deliberately absent. `StreamStatusMachine` publishes every
- * transition as a canonical `status` session fact, so projectors read
- * status from that one rail; the `status` trace event survives only for
- * `TexraTranscriptRecorder`, which subscribes to the run trace directly.
+ * `status` is not an `AgentEvent` at all: `StreamStatusMachine` publishes
+ * every transition as a canonical `status` session fact, and every consumer —
+ * including `TexraTranscriptRecorder`, via its `handleStatus` port — reads
+ * that one rail.
  */
 export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'conversation.progress',

@@ -754,11 +754,14 @@ describe('ProgressBackend', () => {
       streamId: parentStreamId,
       agentCategory: AgentCategory.ToolUse,
     });
-    emitRunEvent(target, parentStreamId, {
-      type: 'status',
-      streamId: parentStreamId,
-      phase: STREAM_PHASE.RUNNING,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    target.session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'status',
+        streamId: parentStreamId,
+        phase: STREAM_PHASE.RUNNING,
+        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      },
     });
     const followUpLease = target.session.followUps.claimLive(
       parentStreamId,

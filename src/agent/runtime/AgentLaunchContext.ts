@@ -326,9 +326,18 @@ async function assembleAgentLaunchContext(
     executionId,
     transcriptWriter,
   );
-  const runTrace = resources.ownRunTrace(rawRunTrace, () =>
-    session.attachRunTrace(rawRunTrace.trace, streamId),
-  );
+  const runTrace = resources.ownRunTrace(rawRunTrace, () => {
+    const detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
+    // Status is a session fact, not an AgentEvent: bridge the hub's canonical
+    // status rail into the recorder's transcript-boundary port.
+    const detachStatus = session.events.subscribeStatus(
+      rawRunTrace.handleStatus,
+    );
+    return () => {
+      detachStatus();
+      detachTrace();
+    };
+  });
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
@@ -526,7 +535,6 @@ function compensateFailedActivation(args: {
         activatedStreamId,
         STREAM_PHASE.FAILED,
         STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        runTrace ? { trace: runTrace.trace } : {},
       )
     ) {
       runTrace?.trace.warn('Failed to mark activation failure terminal', {
