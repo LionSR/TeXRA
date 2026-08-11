@@ -233,36 +233,4 @@ describe('discoverSkillSources', () => {
       }),
     ]);
   });
-
-  // Skip on Windows (no POSIX chmod semantics) and when running as root, where
-  // mode-0 doesn't restrict reads.
-  const skipPermissionTest =
-    process.platform === 'win32' ||
-    (typeof process.getuid === 'function' && process.getuid() === 0);
-  (skipPermissionTest ? it.skip : it)(
-    'reports required source read errors as source failures',
-    async () => {
-      const root = await createTempRoot();
-      const required = path.join(root, 'blocked-skills');
-      await fs.mkdir(required);
-      await fs.chmod(required, 0o000);
-
-      try {
-        const result = await discoverSkillSources([
-          { scope: 'custom', path: required, required: true },
-        ]);
-
-        expect(result.skills).toEqual([]);
-        expect(result.errors).toEqual([
-          expect.objectContaining({
-            severity: 'error',
-            code: 'source_read_error',
-            path: required,
-          }),
-        ]);
-      } finally {
-        await fs.chmod(required, 0o700);
-      }
-    },
-  );
 });

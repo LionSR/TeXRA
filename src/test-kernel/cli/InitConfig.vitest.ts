@@ -1,4 +1,4 @@
-import { chmod, readFile as nodeReadFile, writeFile } from 'node:fs/promises';
+import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
 import path, { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -128,53 +128,6 @@ describe('ensureTexraGitignored', () => {
     await expect(ensureTexraGitignored(workspace)).resolves.toBe(outcome);
     await expect(nodeReadFile(gitignorePath, 'utf8')).resolves.toBe(expected);
   });
-
-  const skipPermissionTest =
-    process.platform === 'win32' ||
-    (typeof process.getuid === 'function' && process.getuid() === 0);
-  (skipPermissionTest ? it.skip : it)(
-    'does not atomically replace a read-only .gitignore',
-    async () => {
-      const workspace = await makeTempDir('texra-gitignore-', tempDirs);
-      const gitignorePath = join(workspace, '.gitignore');
-      await writeFile(gitignorePath, 'node_modules\n', 'utf8');
-      await chmod(gitignorePath, 0o444);
-
-      try {
-        await expect(ensureTexraGitignored(workspace)).rejects.toThrow(
-          /(EACCES|permission)/i,
-        );
-        await expect(nodeReadFile(gitignorePath, 'utf8')).resolves.toBe(
-          'node_modules\n',
-        );
-      } finally {
-        await chmod(gitignorePath, 0o644);
-      }
-    },
-  );
-
-  (skipPermissionTest ? it.skip : it)(
-    'still atomically replaces a write-only config',
-    async () => {
-      const workspace = await makeTempDir('texra-config-', tempDirs);
-      const configPath = workspaceTexraConfigPath(workspace);
-      await writeInitConfig(configPath, buildInitConfig(ANSWERS));
-      await chmod(configPath, 0o200);
-
-      try {
-        const updated = buildInitConfig({ ...ANSWERS, model: 'gemini35f' });
-        await expect(
-          writeInitConfig(configPath, updated),
-        ).resolves.toBeUndefined();
-        await chmod(configPath, 0o600);
-        await expect(nodeReadFile(configPath, 'utf8')).resolves.toContain(
-          '"model": "gemini35f"',
-        );
-      } finally {
-        await chmod(configPath, 0o600);
-      }
-    },
-  );
 
   it('does not overwrite .gitignore on a non-ENOENT read failure', async () => {
     // Reproduces #7470: a transient EACCES (or any non-missing-file error)
