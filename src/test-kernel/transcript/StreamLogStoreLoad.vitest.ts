@@ -1639,4 +1639,39 @@ describe('StreamLogStore save throttle', () => {
     expect(writtenLog(storage.writes, 'alpha')).toHaveLength(1);
     writer.close();
   });
+
+  it('queues a save window that fires while a write batch is in flight', async () => {
+    const bothWritesLanded = createDeferred();
+    let logWrites = 0;
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      pauseLogWriteKey: 'alpha',
+      onLogWrite: () => {
+        logWrites += 1;
+        if (logWrites === 2) bothWritesLanded.resolve();
+      },
+    });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, ''));
+    writer.appendText('m1', 'first ');
+    await vi.advanceTimersByTimeAsync(300);
+    await storage.waitForPausedWrite();
+
+    // Mutate while the first batch's write hangs, and let a second window
+    // fire. An unserialized second batch would persist the newer snapshot
+    // during the pause and then get clobbered when the paused older write
+    // completes last; the queued batch must instead run after it.
+    writer.appendText('m1', 'second');
+    await vi.advanceTimersByTimeAsync(300);
+    storage.releasePausedWrite();
+    await bothWritesLanded.promise;
+    writer.close();
+    await store.flush();
+
+    expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe('first second');
+  });
 });

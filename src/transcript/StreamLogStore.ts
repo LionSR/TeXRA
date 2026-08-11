@@ -1,4 +1,5 @@
 import pMap from 'p-map';
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -285,12 +286,11 @@ export class StreamLogStore {
     SAVE_MAX_WAIT_MS,
   );
   /**
-   * Tracks the active write. A flush can cancel the throttle and start a write
-   * while an already-queued throttle callback also runs; that is safe because
-   * each write snapshots and clears `dirtyIds`, so the second call only
-   * sees newly dirtied streams or settles with no work.
+   * Serializes write batches: a throttle window, a flush, or a delete that
+   * starts a write while one is still in flight queues behind it instead of
+   * racing it, so two batches can never persist the same stream out of order.
    */
-  private inFlightWrite: Promise<void> | null = null;
+  private readonly writeQueue = new PQueue({ concurrency: 1 });
   private writeGeneration = 0;
   private readonly writeTombstones = new Set<StreamTabId>();
   private clearing = false;
@@ -819,7 +819,6 @@ export class StreamLogStore {
     this.saveThrottle.cancel();
 
     try {
-      await this.inFlightWrite;
       await this.executeWrite();
       if (this.mode.kind !== 'ephemeral') {
         log.info(LOG_TAG, `Deleting stream: ${streamId}`);
@@ -852,7 +851,7 @@ export class StreamLogStore {
     this.stateRevision += 1;
 
     try {
-      await this.inFlightWrite;
+      await this.writeQueue.onIdle();
       this.forgetAllStreamState();
       if (this.mode.kind === 'ephemeral') return;
 
@@ -1026,8 +1025,8 @@ export class StreamLogStore {
         this.saveThrottle.cancel();
         await this.executeWrite();
         writeAttempts++;
-      } else if (this.inFlightWrite) {
-        await this.inFlightWrite;
+      } else if (this.writeQueue.size > 0 || this.writeQueue.pending > 0) {
+        await this.writeQueue.onIdle();
       } else if (loads.length > 0) {
         await Promise.allSettled(loads);
       } else {
@@ -1449,6 +1448,16 @@ export class StreamLogStore {
   }
 
   private executeWrite(): Promise<void> {
+    // One batch at a time: a save window that fires while a batch is still
+    // writing queues behind it, so two batches can never interleave `kv`
+    // writes for the same stream (the later batch could otherwise persist
+    // the older snapshot last). The batch snapshots `dirtyIds` when it
+    // starts, so a queued batch picks up mutations made during its
+    // predecessor; a batch that finds nothing dirty is a no-op.
+    return this.writeQueue.add(() => this.runWriteBatch());
+  }
+
+  private async runWriteBatch(): Promise<void> {
     // Skip streams whose rehydrate is pending or errored — writing now
     // would clobber the authoritative on-disk history with a fresh
     // empty-plus-new-appends log before `ensureLoaded` merges disk entries
@@ -1466,9 +1475,7 @@ export class StreamLogStore {
       }
     }
 
-    if (toWrite.length === 0) {
-      return Promise.resolve();
-    }
+    if (toWrite.length === 0) return;
 
     log.debug(LOG_TAG, `Writing ${toWrite.length} dirty stream(s)`);
     const writeGeneration = this.writeGeneration;
@@ -1484,7 +1491,7 @@ export class StreamLogStore {
     // stream together retains all of those large JSON strings simultaneously.
     // Sequential writes keep peak memory proportional to one serialized
     // transcript while preserving independent per-stream failure handling.
-    const writePromise = (async () => {
+    try {
       for (const streamId of toWrite) {
         const logInstance = this.streams.get(streamId)?.log;
         if (!logInstance) continue;
@@ -1498,7 +1505,7 @@ export class StreamLogStore {
             this.markDirty(streamId);
         }
       }
-    })().finally(() => {
+    } finally {
       for (const streamId of toWrite) {
         const state = this.streams.get(streamId);
         if (state) {
@@ -1506,14 +1513,8 @@ export class StreamLogStore {
           this.pruneStreamState(streamId);
         }
       }
-      if (this.inFlightWrite === writePromise) {
-        this.inFlightWrite = null;
-      }
       this.drainPendingReleases();
-    });
-
-    this.inFlightWrite = writePromise;
-    return writePromise;
+    }
   }
 
   /**
