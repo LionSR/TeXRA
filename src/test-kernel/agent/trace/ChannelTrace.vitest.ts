@@ -129,6 +129,31 @@ describe('channel trace adapters', () => {
     expect(dispose).toHaveBeenCalledTimes(2);
   });
 
+  it('stale detach after a same-name re-attach leaves the new sink alive', () => {
+    const dispose = vi.fn();
+    logUtils.setOutputChannelFactory(() => ({
+      appendLine: vi.fn(),
+      dispose,
+    }));
+
+    const trace = new TraceEmitter();
+    const detachFirst = attachChannelSubscriber(trace, {
+      channel: 'run-stream',
+      isAgent: true,
+    });
+    detachFirst();
+    expect(dispose).toHaveBeenCalledOnce();
+
+    // A resumed run reuses the stream ID; the stale first detach must not
+    // tear down the channel the second attachment now owns.
+    attachChannelSubscriber(trace, {
+      channel: 'run-stream',
+      isAgent: true,
+    });
+    detachFirst();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it('keeps the shared channel alive when a shared subscriber detaches', () => {
     const dispose = vi.fn();
     logUtils.setOutputChannelFactory(() => ({
