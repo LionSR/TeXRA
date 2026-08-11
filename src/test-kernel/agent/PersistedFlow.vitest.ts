@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
 import { BaseNode } from '@agent/node';
@@ -10,8 +11,10 @@ import {
   PersistedFlow,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -153,5 +156,54 @@ describe('PersistedFlow', () => {
         lastAction: FlowTransition.WAITING,
       },
     });
+  });
+
+  it('persists flow records as compact JSON', async () => {
+    const executionId = 'abc130' as ExecutionId;
+    const store = getExecutionStore(executionId);
+
+    await new PersistedFlow(new CompleteNode(), store, executionId).run({
+      count: 0,
+    });
+
+    const raw = await StorageFS.read(
+      resolveRunStoragePath(executionId, `${flowKey(executionId)}.json`),
+    );
+    expect(raw).toContain('"schemaVersion"');
+    expect(raw).not.toContain('\n');
+  });
+
+  it('parses shared through the schema only at the deserialization boundary', async () => {
+    const executionId = 'abc131' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    interface Shared {
+      count: number;
+      continue: boolean;
+    }
+    let parses = 0;
+    const schema: z.ZodType<Shared> = z
+      .object({ count: z.number(), continue: z.boolean() })
+      .refine(() => {
+        parses += 1;
+        return true;
+      });
+    const buildFlow = () => {
+      const first = new ContinueOnceNode();
+      first.on('again', new CompleteNode());
+      return new PersistedFlow(first, store, executionId, schema);
+    };
+
+    // A fresh run owns every record it writes: no re-parse per transition.
+    await buildFlow().run({ count: 0, continue: true });
+    expect(parses).toBe(0);
+
+    // A new instance hits the true deserialization boundary exactly once,
+    // and getShared() returns the record's live object, not a copy.
+    const resumed = buildFlow();
+    const shared = await resumed.getShared();
+    expect(shared).toEqual({ count: 2, continue: true });
+    expect(parses).toBe(1);
+    await expect(resumed.getShared()).resolves.toBe(shared);
+    expect(parses).toBe(1);
   });
 });
