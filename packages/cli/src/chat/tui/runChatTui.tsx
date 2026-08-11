@@ -11,7 +11,6 @@ import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   presentFollowUpResult,
@@ -60,6 +59,7 @@ import {
   type ExecutionId,
   type StreamPhase,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -315,7 +315,6 @@ export async function runChat(
         apiMode,
         CHAT_STARTUP_MODEL_RECOVERY,
       ),
-      agentCategory: AgentCategory.ToolUse,
     });
     await setCliHelperModel(modelSelection.model);
   } catch (error: unknown) {
@@ -592,7 +591,6 @@ export async function runChat(
             meta.apiMode,
             CHAT_API_MODE_MODEL_RECOVERY,
           ),
-          agentCategory: AgentCategory.ToolUse,
         });
         await setCliHelperModel(selection.model);
         if (session.stopRequested) {
@@ -870,7 +868,7 @@ export async function runChat(
         change.phase === STREAM_PHASE.WAITING &&
         !session.stopRequested
       ) {
-        notify({ kind: 'agentFinished' });
+        notify('agentFinished');
       }
     }),
   );

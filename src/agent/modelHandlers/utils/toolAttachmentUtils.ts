@@ -6,7 +6,7 @@ import {
 
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // Local imports - model handlers

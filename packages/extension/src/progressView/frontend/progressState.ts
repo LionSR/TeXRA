@@ -15,11 +15,13 @@ import { create } from 'mutative';
 import { Signal, signal, select } from '@shared/signals';
 import {
   createStreamState,
+  isToolUseState,
   STREAM_STATUS,
   type ProgressViewPlacement,
   type InquiryThreadUpdatedEvent,
   type PhaseStage,
   type StreamLifecycleStatus,
+  type StreamState,
   type StreamTabId,
   type StreamTabInfo,
   type TaskGroup,
@@ -35,8 +37,6 @@ import {
   createInitialState,
   ensureStreamState,
   EMPTY_STREAM_LOGS,
-  isToolUseState,
-  type StreamState,
 } from './store';
 import {
   EMPTY_LOG_CONTEXT,

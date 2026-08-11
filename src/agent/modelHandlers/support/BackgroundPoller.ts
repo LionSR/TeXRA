@@ -1,6 +1,7 @@
 // Local imports - utils
 import type { AgentTrace } from '@agent/trace';
-import { getSdkErrorMessage, isUserAbort } from '@common/errors/sdkErrorUtils';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { delay, onAbort as registerAbortHandler } from '@utils/core';
 
 export interface BackgroundPollStats {

@@ -370,6 +370,25 @@ export class StreamLogStore {
   }
 
   /**
+   * Open persisted transcripts for reading ONE known stream, seeding only
+   * that stream's summary. {@link openReadOnly} scans the entire streamLogs
+   * directory (`listKeys` + a summary read and mtime stats per persisted
+   * stream); archive consumers that already know which stream they need
+   * (via the execution→stream mapping) use this to pay O(1) instead.
+   * An unknown `streamId` yields a store that simply has no such stream, so
+   * `ensureLoaded` no-ops and `get` returns `undefined` exactly as with a
+   * full open that did not find the stream.
+   */
+  static async openReadOnlyForStream(
+    streamId: StreamTabId,
+  ): Promise<StreamLogStore> {
+    const store = new StreamLogStore({ kind: 'read-only' });
+    const result = await store.loadStreamSummary(streamId);
+    if (result) store.summaries.set(result.streamId, result.summary);
+    return store;
+  }
+
+  /**
    * Open the persistent transcript store, degrading to an in-memory store
    * when the open fails.
    *
@@ -1189,10 +1208,13 @@ export class StreamLogStore {
         this.summaryKv.modifiedAt(streamId),
         this.kv.modifiedAt(streamId),
       ]);
+      // A missing log mtime means the authoritative log is gone (deleted, or
+      // never written) — orphaned summary, not merely stale. Trusting it here
+      // would register a stream that has no log to load, so `ensureLoaded`
+      // reads back an empty transcript instead of surfacing it as missing.
       if (
         summaryMtime !== undefined &&
-        logMtime !== undefined &&
-        summaryMtime < logMtime
+        (logMtime === undefined || summaryMtime < logMtime)
       ) {
         return undefined;
       }

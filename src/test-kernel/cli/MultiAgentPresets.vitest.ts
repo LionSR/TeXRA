@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
@@ -22,6 +21,7 @@ import {
   teamPlanHasGaps,
   teamPresets,
 } from '@common/teams/TeamPlan';
+import { AgentCategory } from '@shared/schemas';
 
 function agent(
   name: string,

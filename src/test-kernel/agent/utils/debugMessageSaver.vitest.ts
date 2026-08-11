@@ -14,7 +14,8 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { WorkspaceFS, StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // getConfig reads through the platform config provider; enable the
 // debug-object saving flag there instead of patching the ESM export.

@@ -5,10 +5,10 @@ import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import { noopTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { resolveProviderCapabilities } from '@model/providerCapabilities';
+import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 import type OpenAI from 'openai';

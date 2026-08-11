@@ -1,5 +1,4 @@
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   ToolUseAgentConfigSchema,
   type AgentConfig,
@@ -14,6 +13,7 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { pluralize } from '@utils/text/stringUtils';
 

@@ -7,7 +7,6 @@ import {
   type DeleteAllStreamsResult,
   type DeleteStreamResult,
 } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -25,6 +24,7 @@ import {
   type StreamPhase,
   type StreamTabId,
   type UserFollowUpSupport,
+  AgentCategory,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {

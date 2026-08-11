@@ -58,6 +58,10 @@ import {
   PollingSourceBase,
 } from './PollingSourceBase';
 import {
+  MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
+import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
   GhPullsListEntryArraySchema,
@@ -154,11 +158,11 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       // Repo-scoped polling fans out to every active PR in the repo via three
       // shared endpoints. With 5,000 req/hr per token and ~3 GETs per repo
       // per tick (every 30s = 120 ticks/hr), one repo costs ~360 req/hr;
-      // 3 repos ≈ 1,080 req/hr — well below the limit even sharing with a
-      // couple of per-PR pollers.
+      // MAX_CONCURRENT_REPO_SUBSCRIPTIONS repos ≈ 1,080 req/hr — well below
+      // the limit even sharing with a couple of per-PR pollers.
       name: 'RepoPollingSource',
-      pollIntervalMs: 30_000,
-      maxConcurrent: 3,
+      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      maxConcurrent: MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
       ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
   }

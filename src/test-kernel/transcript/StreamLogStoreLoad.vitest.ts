@@ -25,8 +25,8 @@ import {
   STREAM_LOG_SUMMARIES_DIR,
   type StreamLogAppendInput,
 } from '@transcript';
-import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
 
 interface MockStorageOptions {
   /** Values are usually arrays; non-array values simulate corrupt logs. */
@@ -910,6 +910,24 @@ describe('StreamLogStore load', () => {
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(200, 250),
     );
+  });
+
+  it('does not register an orphaned summary once its log file is gone', async () => {
+    // openReadOnlyForStream trusts the caller's streamId instead of
+    // discovering it via a directory listing, so it must independently guard
+    // against a summary left behind after its log was deleted.
+    const storage = mockStorage({
+      logs: {},
+      summaries: {
+        alpha: summary(100, 150),
+      },
+    });
+
+    const store = await StreamLogStore.openReadOnlyForStream('alpha');
+
+    expect(storage.fullLogReads()).toBe(0);
+    expect(store.has('alpha')).toBe(false);
+    expect(store.keys()).toEqual([]);
   });
 
   it('rehydrates summarized streams with stale running groups', async () => {

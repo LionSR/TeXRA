@@ -17,10 +17,6 @@ import { terminalCapabilities } from '../state/terminalCapabilities';
 
 type NotificationKind = 'agentFinished' | 'approvalNeeded';
 
-export interface NotifyInit {
-  readonly kind: NotificationKind;
-}
-
 const BEL = '';
 const ESC = '';
 
@@ -33,9 +29,9 @@ function osc99(message: string): string {
   return `${ESC}]99;;${message}${ESC}\\`;
 }
 
-export function notify(init: NotifyInit): void {
+export function notify(kind: NotificationKind): void {
   const caps = terminalCapabilities.get();
-  const message = defaultMessageFor(init.kind);
+  const message = defaultMessageFor(kind);
   if (caps.oscColorReports) {
     // OSC-capable terminal — use the structured notification protocol.
     writeRawStdout(osc99(message));

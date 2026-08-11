@@ -20,11 +20,12 @@ import {
   getGLMCodingPlan,
   getPreferKimiCode,
   setGLMCodingPlan,
-  setPreferKimiCode,
 } from '@utils/config/providerConfig';
 
-import { shouldUseChatGptDeviceCode, signInCliChatGpt } from './chatgptLogin';
-import { shouldUseGrokDeviceCode, signInCliGrok } from './grokLogin';
+import { signInCliChatGpt } from './chatgptLogin';
+import { signInCliGrok } from './grokLogin';
+import { setKimiCodePreference } from './kimiCodePreference';
+import { shouldUseSubscriptionDeviceCode } from './subscriptionLogin';
 import {
   effectiveCliApiMode,
   getCliApiMode,
@@ -108,7 +109,7 @@ export async function updateCliModelAccess(
   const apiMode = context ? effectiveCliApiMode(context) : getCliApiMode();
   if (selection.provider === 'kimi-code') {
     if (selection.state === 'off') {
-      await setPreferKimiCode(false);
+      await setKimiCodePreference(false);
       invalidateModelOptionsCache();
       return {
         apiMode,
@@ -125,9 +126,7 @@ export async function updateCliModelAccess(
           'No Kimi Code API key configured — add one with /key or /config → API keys (get one at https://www.kimi.com/code/console).',
       };
     }
-    await setPreferKimiCode(true);
-    // Dual-backend Kimi routing requires the OpenRouter toggle off.
-    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    await setKimiCodePreference(true);
     invalidateModelOptionsCache();
     return {
       apiMode,
@@ -178,7 +177,8 @@ export async function updateCliModelAccess(
     let accountLabel = xaiAccountLabel(status);
     if (!status.signedIn) {
       const init = { device: false, noBrowser: false };
-      const device = context != null && shouldUseGrokDeviceCode(context, init);
+      const device =
+        context != null && shouldUseSubscriptionDeviceCode(context, init);
       const session = await signInCliGrok({ ...init, device }, options);
       accountLabel = xaiAccountLabel(session);
     }
@@ -209,7 +209,8 @@ export async function updateCliModelAccess(
   let accountLabel = codexAccountLabel(status);
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
-    const device = context != null && shouldUseChatGptDeviceCode(context, init);
+    const device =
+      context != null && shouldUseSubscriptionDeviceCode(context, init);
     const session = await signInCliChatGpt({ ...init, device }, options);
     accountLabel = codexAccountLabel(session);
   }

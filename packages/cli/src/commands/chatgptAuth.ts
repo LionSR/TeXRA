@@ -3,8 +3,7 @@ import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 
 import {
-  chatGptSignOutPreferenceMessage,
-  shouldUseChatGptDeviceCode,
+  chatGptSignOutOutcomeMessage,
   signInCliChatGpt,
   signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
@@ -23,9 +22,8 @@ export const chatgptAuthCommand = defineSubscriptionAuthCommand({
   accountLabel: codexAccountLabel,
   loginPayloadExtras: (session) => ({ accountId: session.accountId ?? null }),
   signIn: signInCliChatGpt,
-  shouldUseDeviceCode: shouldUseChatGptDeviceCode,
   signOut: signOutCliChatGpt,
-  signOutPreferenceMessage: chatGptSignOutPreferenceMessage,
+  signOutOutcomeMessage: chatGptSignOutOutcomeMessage,
   setPreferSubscription: setPreferCodexSubscription,
   getStatus: () => codexCoordinator().getStatus(),
 });

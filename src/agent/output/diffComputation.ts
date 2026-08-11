@@ -8,12 +8,12 @@
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import type { DiffStats } from '@shared/schemas/lineChanges';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  AbsoluteFS,
   createWorkspaceLocation,
   getComparablePath,
-  WorkspaceFS,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { diffLineChanges } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';

@@ -8,7 +8,6 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
@@ -21,6 +20,7 @@ import {
   getToolFlags,
   resolveOutputFiles,
 } from '@agent/utils/userVars';
+import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';

@@ -70,8 +70,7 @@ export function formatSubscriptionUsageSummary(
   now = Date.now(),
 ): string | undefined {
   if (snapshot.state === 'unavailable') {
-    return snapshot.reason === 'missing_credentials' ||
-      snapshot.reason === 'unsupported'
+    return snapshot.reason === 'missing_credentials'
       ? undefined
       : 'usage unavailable';
   }

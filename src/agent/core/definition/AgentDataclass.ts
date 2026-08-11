@@ -8,8 +8,6 @@ import {
 } from '@shared/schemas/agent';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
 
-export { AgentCategory };
-
 /**
  * Field validators shared between `AgentSettingBaseSchema` (materialised
  * settings, defaults applied) and `AgentSettingInputSchema` below (raw

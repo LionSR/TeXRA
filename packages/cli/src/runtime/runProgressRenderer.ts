@@ -5,7 +5,6 @@ import path from 'node:path';
 import { getAgent } from '@agent/index';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   SessionEvent,
   SessionEventHub,
@@ -18,6 +17,7 @@ import type {
   StreamPhase,
   StreamTabId,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {

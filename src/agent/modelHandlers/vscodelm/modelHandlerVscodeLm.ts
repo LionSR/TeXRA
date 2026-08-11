@@ -15,13 +15,13 @@ import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessi
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentError } from '@common/errors';
-import type { SdkErrorKind } from '@common/errors/sdkErrorUtils';
+import type { SdkErrorKind } from '@common/errors/sdkError/sdkErrorKinds';
+import { attachSdkErrorMetadata } from '@common/errors/sdkError/errorMetadata';
 import {
-  attachSdkErrorMetadata,
-  handleStreamingFailure,
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
@@ -41,7 +41,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-import { getMimeType } from '@utils/files';
+import { getMimeType } from '@utils/files/mimeUtils';
 
 // Local file imports
 import { ModelHandler } from '../ModelHandler';

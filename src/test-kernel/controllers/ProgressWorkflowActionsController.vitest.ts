@@ -5,9 +5,9 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local file imports
+import { AgentCategory } from '@shared/schemas';
 import {
   createAgentConfig,
   createOutputFile,

@@ -8,12 +8,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
-  TaskRunFileService,
-} from '@utils/files/taskRunStorage';
+} from '@utils/files/runStorageFs';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 const executionId = 'abcdef123456' as ExecutionId;
 const storageRoot = path.resolve(path.sep, 'storage');

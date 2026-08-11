@@ -23,14 +23,14 @@ import type {
   DeepSeekToolCall,
   OpenAIToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import { detectRequestId } from '@common/errors/sdkError/errorInspection';
 import {
-  buildErrorLogData,
-  detectRequestId,
   isMissingFinishReasonError,
-  handleStreamingFailure,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
+import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {

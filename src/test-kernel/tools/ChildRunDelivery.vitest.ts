@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResultMeta } from '@agent/storage';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   writeResultMeta: vi.fn(),
@@ -9,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage/ExecutionKVStore', () => ({
   getExecutionStore: vi.fn(() => ({
     writeReport: mocks.writeReport,
     writeResultMeta: mocks.writeResultMeta,
@@ -20,11 +19,12 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
+import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import {
-  deliverChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
-} from '@tools/delegation/childRunDelivery';
+} from '@agent/storage/childRunPersistence';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 describe('child run delivery', () => {
   beforeEach(() => vi.clearAllMocks());

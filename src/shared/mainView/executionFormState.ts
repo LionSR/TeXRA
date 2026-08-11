@@ -1,4 +1,4 @@
-import { AgentCategory, type ByCategory } from '../schemas/agent';
+import { type ByCategory } from '../schemas/agent';
 import type { MainViewExecuteMessage } from '../schemas/mainView/executeMessage';
 import type {
   CheckboxValues,
@@ -31,16 +31,14 @@ export interface MainViewExecutionFormState {
 export function buildMainViewExecuteMessage(
   state: MainViewExecutionFormState,
 ): MainViewExecuteMessage {
-  const agentCategory =
-    state.sessionType === 'toolUse'
-      ? AgentCategory.ToolUse
-      : AgentCategory.Workflow;
+  // SessionType and AgentCategory share one value set (SessionTypeSchema
+  // aliases AgentCategorySchema), so no vocabulary conversion is needed here.
   const { inputFiles, contextFiles, mediaFiles } = state.multiFiles;
   return {
     agent: state.agent[state.sessionType],
     model: state.model,
     instruction: state.instruction,
-    agentCategory,
+    agentCategory: state.sessionType,
     files: {
       editedFile: state.singleFiles.editedFile,
       baseFile: state.singleFiles.baseFile,

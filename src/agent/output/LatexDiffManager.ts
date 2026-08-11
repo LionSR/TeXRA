@@ -14,13 +14,11 @@ import {
   type RoundIndexed,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  AbsoluteFS,
-  createRunStorageLocation,
-  TaskRunFileService,
-} from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { getComparablePath } from '@utils/files/taskRunStorage';
+import { getComparablePath } from '@utils/files/fileLocation';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

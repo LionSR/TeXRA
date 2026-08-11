@@ -23,6 +23,7 @@
       "open",
       "openOrEphemeral",
       "openReadOnly",
+      "openReadOnlyForStream",
       "reload",
       "requestEviction"
     ],

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  AgentCategory,
   AgentDefinitionSchema,
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
+import { AgentCategory } from '@shared/schemas';
 
 describe('AgentDefinitionSchema', () => {
   it('keeps inherited child settings and prompts partial before merging', () => {

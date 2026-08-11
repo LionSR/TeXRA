@@ -14,12 +14,12 @@ import { debug } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@shared/schemas/coreSettings';
+import { generateShortId } from '@utils/core';
 import {
   createExternalLocation,
   createWorkspaceLocation,
-  WorkspaceFS,
-} from '@utils/files';
-import { generateShortId } from '@utils/core';
+} from '@utils/files/fileLocation';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { isStrictlyWithin } from '@utils/core/pathCore';

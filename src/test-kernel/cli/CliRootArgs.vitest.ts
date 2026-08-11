@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hasMagic } from 'glob';
 import stripAnsi from 'strip-ansi';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   detectUnknownCliCommand,
   detectUnknownCliFlag,
@@ -51,7 +50,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 

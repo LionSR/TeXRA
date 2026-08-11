@@ -404,7 +404,7 @@ describe('completedRunArchive facade', () => {
       async (_executionId: ExecutionId, error: unknown) => error,
     );
     launchMocks.resolveAgent.mockReturnValue({
-      definitionPath: '/agents/orchestrator.yaml',
+      entry: { path: '/agents/orchestrator.yaml' },
     });
     launchMocks.loadAgent.mockResolvedValue([
       { agentCategory: AgentCategory.ToolUse },

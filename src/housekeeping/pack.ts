@@ -11,7 +11,7 @@ import {
   workflowOutputCopyStem,
   workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -163,18 +163,6 @@ export async function runPackMultiple(
     logger.error(CHANNEL, `Error during multiple pack operation: ${message}`);
     return { status: 'error', error: message };
   }
-}
-
-export async function runPack(
-  model: string,
-  inputFile: string,
-  agent: string,
-  additionalInputFiles: string[] = [],
-): Promise<FileOpResult> {
-  if (additionalInputFiles.length > 0) {
-    return runPackMultiple(model, inputFile, agent, additionalInputFiles);
-  }
-  return runPackSingle(model, inputFile, agent);
 }
 
 function buildFileListLog(movedFiles: string[], copiedFiles: string[]): string {

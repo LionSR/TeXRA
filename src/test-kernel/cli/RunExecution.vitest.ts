@@ -886,8 +886,7 @@ describe('executeCliConfig', () => {
 
   /** Stubs a completed tool-use run and drives executeCliToolUseConfig. */
   async function runCompletedToolUseConfig(resolvedOutcome: string) {
-    const { AgentCategory } =
-      await import('@agent/core/definition/AgentDataclass');
+    const { AgentCategory } = await import('@shared/schemas/agent');
     const { executeCliToolUseConfig } = await loadRunExecution();
     mocks.runAgent.mockResolvedValueOnce({
       category: AgentCategory.ToolUse,
@@ -904,8 +903,7 @@ describe('executeCliConfig', () => {
 
   /** Stubs a workflow-category result where a tool-use run was expected. */
   async function runWorkflowCategoryMismatch() {
-    const { AgentCategory } =
-      await import('@agent/core/definition/AgentDataclass');
+    const { AgentCategory } = await import('@shared/schemas/agent');
     const { executeCliConfig } = await loadRunExecution();
     mocks.runAgent.mockResolvedValueOnce({
       category: AgentCategory.Workflow,

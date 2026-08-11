@@ -10,7 +10,7 @@ import Mark from 'mark.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -26,10 +26,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - history view styles
-import {
-  historyStyles,
-  searchHighlightStyles,
-} from '@shared/styles/historyStyles';
+// `searchHighlightStyles` is not part of the '@shared/styles' barrel (see its header).
+import { searchHighlightStyles } from '@shared/styles/historyStyles';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - history view events

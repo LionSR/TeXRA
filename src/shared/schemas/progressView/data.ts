@@ -61,7 +61,8 @@ export const TOOL_USE_STATUS = {
   FAILED: 'failed',
 } as const;
 
-type ToolUseStatus = (typeof TOOL_USE_STATUS)[keyof typeof TOOL_USE_STATUS];
+export type ToolUseStatus =
+  (typeof TOOL_USE_STATUS)[keyof typeof TOOL_USE_STATUS];
 
 const ToolUseStatusSchema = z.enum(TOOL_USE_STATUS);
 

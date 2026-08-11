@@ -8,12 +8,14 @@ import pMap from 'p-map';
 // Local imports - agent utils
 import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-import { getSdkErrorMessage } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import type { FileLocation, LoadedMediaMetadata } from '@shared/schemas';
 
 // Local imports - utils
 import { ensureArray } from '@utils/core';
-import { AbsoluteFS, getComparablePath, getMimeType } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { getComparablePath } from '@utils/files/fileLocation';
+import { getMimeType } from '@utils/files/mimeUtils';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   countPdfPages,

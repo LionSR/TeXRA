@@ -1,6 +1,9 @@
 import { defineCommand } from 'citty';
 
-import { InvalidAgentTeamError } from '@agent/index';
+import {
+  createWorkspaceAgentRosterController,
+  InvalidAgentTeamError,
+} from '@agent/index';
 import { readSetting } from '@shared/config/settingsAccess';
 import { agentKeyOf } from '@shared/schemas/agent';
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
@@ -12,7 +15,6 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import {
-  cliAgentRosterController,
   formatCliAgentRoster,
   readCliAgentRoster,
 } from '../runtime/agentRoster';
@@ -95,7 +97,7 @@ async function configureAgentRoster(
 ): Promise<number> {
   await initLocalCliPlatform(context);
   await readCliAgentRoster();
-  const roster = cliAgentRosterController();
+  const roster = createWorkspaceAgentRosterController();
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;
   const workspaceChoices = [

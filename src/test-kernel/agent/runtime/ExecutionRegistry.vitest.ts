@@ -8,7 +8,6 @@ import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   AgentExecutionHandle,
   LiveToolUseFlowContext,
@@ -29,6 +28,7 @@ import {
   STREAM_SUBSTATE,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';

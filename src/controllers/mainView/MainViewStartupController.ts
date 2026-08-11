@@ -11,14 +11,19 @@ import type {
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-// Local imports - controllers
-import type { MainViewAuthStatus } from './MainViewTypes';
+/**
+ * Login-banner input for the main view. Only the authenticated flag is
+ * consumed, so hosts deliberately avoid the profile and tier round-trips that
+ * the settings-view profile message makes.
+ */
+export interface MainViewAuthStatus {
+  authenticated: boolean;
+}
 
 export interface MainViewStartupOptions {
-  modelOptions: ModelOptionData[];
-  modelOptionsByCategory?: {
-    workflow?: ModelOptionData[];
-    toolUse?: ModelOptionData[];
+  modelOptionsByCategory: {
+    workflow: ModelOptionData[];
+    toolUse: ModelOptionData[];
   };
   agentOptions: {
     workflow?: AgentOptionData[];
@@ -74,10 +79,8 @@ export class MainViewStartupController {
   }
 
   async getOptionsAndLoginMessages(): Promise<MainViewStartupMessage[]> {
-    const [
-      { modelOptions, modelOptionsByCategory, agentOptions, teamOptions },
-      authStatus,
-    ] = await Promise.all([this.deps.loadOptions(), this.deps.getAuthStatus()]);
+    const [{ modelOptionsByCategory, agentOptions, teamOptions }, authStatus] =
+      await Promise.all([this.deps.loadOptions(), this.deps.getAuthStatus()]);
 
     const showLoginBanner =
       !authStatus.authenticated &&
@@ -89,10 +92,7 @@ export class MainViewStartupController {
     return [
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: modelOptions,
-        ...(modelOptionsByCategory && {
-          optionsDataByCategory: modelOptionsByCategory,
-        }),
+        optionsDataByCategory: modelOptionsByCategory,
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,

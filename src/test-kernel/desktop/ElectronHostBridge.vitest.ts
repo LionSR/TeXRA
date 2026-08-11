@@ -245,13 +245,36 @@ describe('desktop Electron host bridge', () => {
       ]);
     });
 
-    it('passes a desktop-only command unrecognized by either outbound schema through unchecked', async () => {
+    it('throws on a malformed desktop-only command (now covered by the composed desktop schema)', async () => {
+      const { bridge } = await createBridge();
+      // `desktop:showPdf` is claimed by `DesktopOutboundMessageSchema`, so a
+      // payload missing `pdfPath` fails validation instead of passing through
+      // unchecked.
+      expect(() =>
+        bridge.postToRenderer({ command: 'desktop:showPdf', title: 't' }),
+      ).toThrow(/Outbound message failed schema validation/);
+    });
+
+    it('forwards a well-formed desktop-only message unchanged', async () => {
       const { bridge, sends } = await createBridge();
-      // `desktop:showPdf` (and settings/history/onboarding commands) aren't
-      // modeled by MainViewMessageSchema or ProgressViewOutboundMessageSchema
-      // — out of scope for this change, so no schema claims the command and
-      // it must not throw.
-      const message = { command: 'desktop:showPdf', title: 't' };
+      const message = {
+        command: 'desktop:showPdf',
+        title: 't',
+        pdfPath: '/tmp/paper.pdf',
+      };
+      expect(() => bridge.postToRenderer(message)).not.toThrow();
+      expect(sends).toEqual([
+        { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },
+      ]);
+    });
+
+    it('passes a command no listed outbound schema claims through unchecked', async () => {
+      const { bridge, sends } = await createBridge();
+      // Settings-domain pushes (`historyCleared` and friends) cross this
+      // bridge but are modeled by the settings-view outbound schema, which
+      // this assertion does not compose — the command stays out of scope and
+      // must not throw.
+      const message = { command: 'historyCleared' };
       expect(() => bridge.postToRenderer(message)).not.toThrow();
       expect(sends).toEqual([
         { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },

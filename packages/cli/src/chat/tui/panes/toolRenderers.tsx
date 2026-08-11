@@ -16,13 +16,9 @@ import {
   executionsSubagentSummary,
   type ExecutionLabels,
 } from '@shared/tools/executionsDisplay';
-import {
-  displayToolName,
-  isMcpToolName,
-  normalizeToolName,
-} from '@shared/tools/toolDisplayName';
+import { displayToolName, isMcpToolName } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
-import { toolDisplayKind } from '@shared/tools/toolKind';
+import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
 import {
   collapseWhitespace,
@@ -178,25 +174,11 @@ function statusColor(
   return undefined;
 }
 
-function isEditLikeTool(toolName: string): boolean {
-  if (toolDisplayKind(toolName) === 'edit') return true;
-  const name = normalizeToolName(toolName);
-  // Beyond TeXRA's own tool registry: a delegated Claude Code sub-agent
-  // reports its own built-in tool names (`edit`, `multiedit`) verbatim, and
-  // some provider tool-use variants carry a `str_replace`/`text_editor`
-  // substring instead of one of the exact names classified above.
-  return (
-    name === 'edit' ||
-    name === 'multiedit' ||
-    name.includes('str_replace') ||
-    name.includes('text_editor')
-  );
-}
-
 function toolUsePatchGroups(
   toolUse: NormalizedToolUse,
 ): readonly InlinePatchGroup[] | undefined {
-  if (toolUse.isError || !isEditLikeTool(toolUse.toolName)) return undefined;
+  if (toolUse.isError || !isEditLikeToolName(toolUse.toolName))
+    return undefined;
   return editPatchGroups(toolUse.input);
 }
 
@@ -269,15 +251,6 @@ function visibleOutputLines(
     return [];
   }
   return toolUse.outputText ? toolUse.outputText.split('\n') : [];
-}
-
-function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
-  if (toolUse.exitCode !== undefined) return toolUse.exitCode;
-
-  const match = /\bexit(?: code)?\s+(\d+)\b/i.exec(
-    [toolUse.errorText, toolUse.headerSummary, toolUse.outputText].join('\n'),
-  );
-  return match ? Number(match[1]) : undefined;
 }
 
 const CORNER_PREFIX_SPAN: ToolDisplaySpan = Object.freeze({
@@ -379,7 +352,7 @@ function buildStyledLines(
 
   const output = opts.showOutput ? outputRows(toolUse, elide) : [];
   const exitCode =
-    opts.showExitCode && toolUse.isError ? extractExitCode(toolUse) : undefined;
+    opts.showExitCode && toolUse.isError ? toolUse.exitCode : undefined;
   const errorText = errorTextForDisplay(toolUse);
   const showNoOutput =
     opts.showOutput &&

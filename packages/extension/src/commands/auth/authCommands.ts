@@ -3,7 +3,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { relayTokenSignOutNotice } from '@auth/relayToken';
-import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
+import type { MainViewAuthStatus } from '@controllers/mainView/MainViewStartupController';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { confirmModal } from '@frontend/ui/dialogs';
 import {

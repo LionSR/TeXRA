@@ -35,7 +35,7 @@ import {
   stagedStreamDataDir,
   STREAM_DATA_DIR,
 } from '@transcript/streamDataPaths';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 import {
   createIsolatedRecordingBackend,

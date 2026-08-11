@@ -7,7 +7,7 @@ import { css } from 'lit';
 import katexStyles from 'katex/dist/katex.min.css?inline';
 
 // Shared styles
-import { commonViewStyles } from '@shared/styles/commonViewStyles';
+import { commonViewStyles } from '@shared/styles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 
 // Import individual style modules

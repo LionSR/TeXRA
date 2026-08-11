@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

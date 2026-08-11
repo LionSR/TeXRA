@@ -8,7 +8,7 @@ import {
   replaceInputCommands,
 } from '@agent/output/fileMapping';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { createExternalLocation as externalLocation } from '@utils/files';
+import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 afterEach(() => {

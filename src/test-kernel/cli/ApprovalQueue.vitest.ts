@@ -197,9 +197,7 @@ describe('CLI approval queue', () => {
           payload: { streamId: 'child-1' },
         },
       });
-      expect(notifyMock).toHaveBeenNthCalledWith(1, {
-        kind: 'approvalNeeded',
-      });
+      expect(notifyMock).toHaveBeenNthCalledWith(1, 'approvalNeeded');
 
       const secondResult = enqueueTuiApproval(second);
       await Promise.resolve();
@@ -216,9 +214,7 @@ describe('CLI approval queue', () => {
           payload: { streamId: 'child-2' },
         },
       });
-      expect(notifyMock).toHaveBeenNthCalledWith(2, {
-        kind: 'approvalNeeded',
-      });
+      expect(notifyMock).toHaveBeenNthCalledWith(2, 'approvalNeeded');
 
       decideForeground(false);
       await expect(secondResult).resolves.toEqual({ accepted: false });

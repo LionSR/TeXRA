@@ -119,7 +119,7 @@ const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
 const { registerFileDecorations } =
   await import('@frontend/ui/fileDecorations');
-const { AbsoluteFS } = await import('@utils/files');
+const { AbsoluteFS } = await import('@utils/files/absoluteFS');
 const vscode = await import('vscode');
 
 const streamId = 'stream:frontend-run-fact' as StreamTabId;

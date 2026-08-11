@@ -1,8 +1,8 @@
 /** Remote agent metadata persistence and loading for the agent registry. */
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';

@@ -30,14 +30,12 @@ const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT',
   kimiCode: 'Kimi Code',
   glmCodingPlan: 'GLM',
-  grok: 'Grok',
 };
 
 const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
   kimiCode: 'Kimi Code',
   glmCodingPlan: 'GLM Coding Plan',
-  grok: 'Grok subscription',
 };
 
 export interface SubscriptionUsageCredentials {
@@ -251,8 +249,6 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     useGlmChina: boolean | undefined,
   ): Promise<SubscriptionUsageSnapshot> {
-    if (provider === 'grok') return this.unavailable(provider, 'unsupported');
-
     try {
       const parsed = await this.fetchProviderUsage(provider, useGlmChina);
       if (parsed === null) {
@@ -282,7 +278,7 @@ export class SubscriptionUsageService {
   }
 
   private async fetchProviderUsage(
-    provider: Exclude<SubscriptionUsageProvider, 'grok'>,
+    provider: SubscriptionUsageProvider,
     useGlmChina: boolean | undefined,
   ): Promise<ParsedSubscriptionUsage | null> {
     if (provider === 'chatgpt') {

@@ -59,6 +59,14 @@ import {
 import { dispatchToolSections } from './toolFormatters/toolSections';
 import type { FormatResult } from '../baseLogFormatter';
 
+/** TeXRA's native tools name the target file `path`; a delegated sub-agent's
+ *  built-in Read/Write/Edit tools use Anthropic's own `file_path`. */
+function inputPathOf(input: Record<string, unknown>): string {
+  if (typeof input.path === 'string') return input.path;
+  if (typeof input.file_path === 'string') return input.file_path;
+  return '';
+}
+
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
@@ -120,8 +128,9 @@ export function formatToolUseTemplate(
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
 
-  const filePath =
-    isObject(input) && typeof input.path === 'string' ? input.path : '';
+  // `file_path` is Anthropic's own field name for a delegated sub-agent's
+  // built-in Read/Write/Edit tools; TeXRA's native tools use `path`.
+  const filePath = isObject(input) ? inputPathOf(input) : '';
 
   const sections: TemplateResult[] = dispatchToolSections({
     toolName,

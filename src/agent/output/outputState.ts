@@ -25,11 +25,8 @@ import {
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
-import {
-  TaskRunFileService,
-  getComparablePath,
-  pathToLocation,
-} from '@utils/files';
+import { getComparablePath, pathToLocation } from '@utils/files/fileLocation';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export interface OutputState {
   rounds: Map<number, RoundOutput>;

@@ -7,7 +7,7 @@ import type { ExternalOpener } from '@hosts/uiHosts';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getFileStem } from '@utils/core';
-import { createExternalLocation } from '@utils/files';
+import { createExternalLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

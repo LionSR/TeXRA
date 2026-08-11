@@ -10,12 +10,12 @@ import {
   createOpenAIBackgroundTerminalError,
   normalizeOpenAIResponseError,
 } from '@agent/modelHandlers/openai/openAIResponseErrors';
+import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
-  attachContextWindowError,
   formatProviderHttpError,
   isProviderErrorAutoRetryable,
   normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
 
 describe('OpenAI Responses error normalization', () => {
   function notFoundError(requestId: string): OpenAINotFoundError {

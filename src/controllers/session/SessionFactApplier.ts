@@ -4,7 +4,6 @@ import {
   type AgentEvent,
   type AgentTrace,
 } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
@@ -27,6 +26,7 @@ import {
   type UpdateConversationProgressPayload,
   type UpdateStreamDescriptionPayload,
   type UpdateStreamUsagePayload,
+  AgentCategory,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { streamStageFromStageStart } from '@shared/streams/stage';

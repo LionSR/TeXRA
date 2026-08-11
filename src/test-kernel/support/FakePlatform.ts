@@ -112,7 +112,6 @@ export class FakeConfigProvider implements ConfigProvider {
     return {
       globalValue: target === 'global' ? value : undefined,
       workspaceValue: target === 'workspace' ? value : undefined,
-      effectiveValue: value,
     };
   }
 
@@ -260,7 +259,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
       workspaceFolderValue: this.workspaceFolderValues.has(key)
         ? (this.workspaceFolderValues.get(key) as T)
         : undefined,
-      effectiveValue: this.get<T>(key),
     };
   }
 

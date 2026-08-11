@@ -27,7 +27,7 @@ import {
   firstChangedLine,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';

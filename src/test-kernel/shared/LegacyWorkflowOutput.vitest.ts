@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { runCleanSingle } from '@housekeeping/clean';
-import { runPack } from '@housekeeping/pack';
+import { runPackMultiple } from '@housekeeping/pack';
 import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
@@ -145,9 +145,12 @@ describe('filename-era workflow output grammar', () => {
     await writeFile(path.join(workspacePath, 'paper2.tex'), 'source');
     await writeFile(path.join(workspacePath, xmlRelativePath), '<xml/>');
 
-    const result = await runPack('gpt-4.5', 'paper.tex', 'custom:polish_long', [
-      'paper2.tex',
-    ]);
+    const result = await runPackMultiple(
+      'gpt-4.5',
+      'paper.tex',
+      'custom:polish_long',
+      ['paper2.tex'],
+    );
 
     if (result.status !== 'success' || result.outputFolder === undefined) {
       throw new Error(`Expected a successful pack, got ${result.status}`);

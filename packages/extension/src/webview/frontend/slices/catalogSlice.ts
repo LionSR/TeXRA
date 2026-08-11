@@ -10,11 +10,9 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 // Constants-only module: safe for the webview bundle (no platform imports).
 
 // Local imports - main view
-import { SESSION_TYPES } from '../constants';
 import {
   agent$,
   agentOptions$,
-  modelOptions$,
   sessionModelOptions$,
   teamOptions$,
   workingDirectory$,
@@ -68,25 +66,10 @@ function findAgentSelection(
 // exhaustive, messageDispatcher.ts is the real coverage checkpoint).
 export const catalogHandlers = {
   [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) => {
-    const optionsDataByCategory = message.optionsDataByCategory;
-    const fallbackOptions =
-      message.optionsData ??
-      optionsDataByCategory?.workflow ??
-      optionsDataByCategory?.toolUse;
-    if (!fallbackOptions) return;
-
-    modelOptions$.set(fallbackOptions);
-    if (optionsDataByCategory) {
-      const current = sessionModelOptions$.get();
-      sessionModelOptions$.set({
-        workflow: Object.hasOwn(optionsDataByCategory, SESSION_TYPES.WORKFLOW)
-          ? optionsDataByCategory.workflow
-          : current.workflow,
-        toolUse: Object.hasOwn(optionsDataByCategory, SESSION_TYPES.TOOL_USE)
-          ? optionsDataByCategory.toolUse
-          : current.toolUse,
-      });
-    }
+    sessionModelOptions$.set({
+      workflow: message.optionsDataByCategory.workflow,
+      toolUse: message.optionsDataByCategory.toolUse,
+    });
     refreshModelSelectionForActiveSession();
   },
 

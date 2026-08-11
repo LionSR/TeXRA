@@ -11,6 +11,7 @@ import {
   type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
   type StreamLogTextDelta,
+  type StreamState,
 } from '@shared/schemas';
 import {
   applyCompactionActivityEntries,
@@ -20,7 +21,7 @@ import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 
 import { appState } from '../progressState';
-import { ensureStreamState, type StreamLogs, type StreamState } from '../store';
+import { ensureStreamState, type StreamLogs } from '../store';
 
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
   return {

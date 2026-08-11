@@ -1,9 +1,9 @@
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
+import { AgentCategory } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {

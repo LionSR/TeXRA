@@ -5,6 +5,7 @@ import type {
   ClaudeAgentEffort,
   TokenUsageStats,
   ToolUseLog,
+  ToolUseStatus,
 } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -50,7 +51,6 @@ export function modelSupportsAdaptiveThinking(model: string): boolean {
 }
 
 const SUMMARY_MAX_LENGTH = 60;
-type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 /**
  * Subset of the SDK's `SDKAssistantMessage.message` content blocks we need to

@@ -6,7 +6,6 @@ import {
   type ResolvedAgent,
 } from '@agent/index';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentDefinitionSchema,
   AgentSettingSchema,
@@ -19,8 +18,8 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
-import { agentKey } from '@shared/schemas/agent';
-import { AbsoluteFS } from '@utils/files';
+import { agentKey, AgentCategory } from '@shared/schemas/agent';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import { resolveAgentSettingTools } from './agentSettingTools';
 
@@ -112,8 +111,7 @@ export async function loadAgentSettingAndPrompts(
     // have replaced (Fix #9). Fall back to the live lookup for callers that
     // construct a ResolvedAgent without the field.
     const definition =
-      resolution.inlineDefinition ??
-      inlineAgentDefinition(resolution.resolvedName);
+      resolution.inlineDefinition ?? inlineAgentDefinition(entry.name);
     const settings =
       entry.category === AgentCategory.ToolUse
         ? toToolUseSettings(definition.settings)
@@ -129,7 +127,7 @@ export async function loadAgentSettingAndPrompts(
 
   // Handle remote agents
   if (entry.source === 'remote') {
-    const remoteConfig = await loadRemoteAgent(resolution.resolvedName);
+    const remoteConfig = await loadRemoteAgent(entry.name);
 
     // Remote agents are already fully processed (tools resolved, validated)
     return [remoteConfig.settings, remoteConfig.prompts];
@@ -146,7 +144,7 @@ export async function loadAgentSettingAndPrompts(
   }
   const nextSeen = new Set([...seen, entryKey]);
 
-  const rawConfig = await loadYaml(resolution.definitionPath);
+  const rawConfig = await loadYaml(entry.path);
   const config = AgentDefinitionSchema.parse(rawConfig);
 
   // Initialize with own settings/prompts (spread creates a mutable copy).

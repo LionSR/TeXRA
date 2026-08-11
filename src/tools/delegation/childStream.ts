@@ -1,7 +1,6 @@
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { captureOwnedExecutionLeaseIfPresent } from '@agent/storage/executionLease';
 import {
   finalizeRunTerminal,
@@ -13,7 +12,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE, type AgentCategory } from '@shared/schemas';
 import type {
   ExecutionId,
   RunIdentity,

@@ -6,9 +6,10 @@ import {
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
-import { WorkspaceFS, StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { ensureRunDir } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 interface DebugContext {

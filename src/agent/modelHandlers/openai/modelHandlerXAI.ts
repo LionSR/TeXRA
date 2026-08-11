@@ -10,7 +10,7 @@ import {
   XaiAuthError,
   xaiCoordinator,
 } from '@auth/xai';
-import { resolveXaiSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
+import { resolveXaiSubscriptionCapabilities } from '@model/providerCapabilities';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -62,10 +62,8 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   ): boolean {
     if (selection !== 'configured') return false;
     return (
-      resolveXaiSubscriptionCapabilitiesForAgentCategory(
-        this.config,
-        getUseOpenRouter(),
-      )?.authMode === 'xai-subscription'
+      resolveXaiSubscriptionCapabilities(this.config, getUseOpenRouter())
+        ?.authMode === 'xai-subscription'
     );
   }
 

@@ -26,23 +26,6 @@ function isCommandMessage(
 }
 
 /**
- * Configuration options for BaseViewMessageHandler.
- */
-interface MessageHandlerOptions {
-  /**
-   * When true, the handler automatically tracks the active webview reference
-   * and provides getActiveView() for handlers that need webview access outside
-   * the handler callback context.
-   *
-   * Enable this when handlers need to post messages to the webview from methods
-   * that don't receive the webview as a parameter.
-   *
-   * @default false
-   */
-  trackActiveView?: boolean;
-}
-
-/**
  * Base class for all webview message handlers.
  * Provides consistent error handling, logging, and common patterns.
  * @template T - The webview type (WebviewView or WebviewPanel)
@@ -52,55 +35,38 @@ export abstract class BaseViewMessageHandler<
 > {
   protected readonly logger: typeof logger;
   protected readonly channel: string;
-  private readonly _options: MessageHandlerOptions;
 
   /**
-   * Active webview reference, tracked when trackActiveView option is enabled.
-   * Subclasses can access via getActiveView().
+   * Active webview reference, tracked on every dispatch. Subclasses access it
+   * via getActiveView().
    */
   private _activeView: T | undefined;
 
-  constructor(
-    protected readonly viewName: string,
-    options?: MessageHandlerOptions,
-  ) {
+  constructor(protected readonly viewName: string) {
     this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
-    this._options = options ?? {};
   }
 
   /**
    * Get the currently active webview.
-   * Only available when trackActiveView option is enabled.
-   * @returns The active webview or undefined if not available/not tracking
+   * @returns The active webview or undefined if no message has been dispatched yet
    */
   protected getActiveView(): T | undefined {
-    if (!this._options.trackActiveView) {
-      this.logger.warn(
-        this.channel,
-        'getActiveView called but trackActiveView is not enabled',
-      );
-    }
     return this._activeView;
   }
 
   /**
-   * Clear the tracked active view (when tracking is enabled).
+   * Clear the tracked active view.
    */
   public clearActiveView(): void {
-    if (this._options.trackActiveView) {
-      this._activeView = undefined;
-    }
+    this._activeView = undefined;
   }
 
   /**
-   * Record the active webview reference when tracking is enabled. No-op
-   * otherwise, mirroring {@link clearActiveView}.
+   * Record the active webview reference.
    */
   private setActiveView(webviewView: T): void {
-    if (this._options.trackActiveView) {
-      this._activeView = webviewView;
-    }
+    this._activeView = webviewView;
   }
 
   /** Post a message to the tracked active view, if one is available. */

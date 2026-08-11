@@ -12,6 +12,10 @@ import {
   type FollowUpQueueInput,
 } from './FollowUpQueue';
 
+// Hosts reach the queue input shape through this module (ratchet-baselined
+// import specifier); FollowUpQueue.ts stays agent-internal.
+export type { FollowUpQueueInput } from './FollowUpQueue';
+
 const logger = createChannelTrace('ToolUseFollowUpQueue');
 
 type QueueLifecycle = 'live' | 'recoverable' | 'recovering';

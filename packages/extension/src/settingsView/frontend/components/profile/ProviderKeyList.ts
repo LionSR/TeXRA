@@ -7,6 +7,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
@@ -47,7 +48,8 @@ export class ProviderKeyList extends LitElement {
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
-  @property({ attribute: false }) globalStreamingDefault = true;
+  @property({ attribute: false }) globalStreamingDefault =
+    DEFAULT_GLOBAL_STREAMING;
 
   @state() private expandedProvider: string | null = null;
 

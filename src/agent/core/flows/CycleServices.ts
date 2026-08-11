@@ -9,7 +9,7 @@ import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
-import type { TaskRunFileService } from '@utils/files';
+import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 /**
  * Shared services for the cycle/round flows: the run-scoped file service and

@@ -2,8 +2,7 @@ import { xaiAccountLabel, xaiCoordinator } from '@auth/xai';
 import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 
 import {
-  grokSignOutPreferenceMessage,
-  shouldUseGrokDeviceCode,
+  grokSignOutOutcomeMessage,
   signInCliGrok,
   signOutCliGrok,
 } from '../runtime/grokLogin';
@@ -22,9 +21,8 @@ export const grokAuthCommand = defineSubscriptionAuthCommand({
   ndjsonKind: 'grok-auth',
   accountLabel: xaiAccountLabel,
   signIn: signInCliGrok,
-  shouldUseDeviceCode: shouldUseGrokDeviceCode,
   signOut: signOutCliGrok,
-  signOutPreferenceMessage: grokSignOutPreferenceMessage,
+  signOutOutcomeMessage: grokSignOutOutcomeMessage,
   setPreferSubscription: setPreferXaiSubscription,
   getStatus: () => xaiCoordinator().getStatus(),
 });

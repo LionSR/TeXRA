@@ -42,21 +42,12 @@ const snapshots: SubscriptionUsageSnapshots = {
   chatgpt: snapshot('chatgpt', 'ChatGPT'),
   kimiCode: snapshot('kimiCode', 'Kimi Code'),
   glmCodingPlan: snapshot('glmCodingPlan', 'GLM'),
-  grok: {
-    state: 'unavailable',
-    provider: 'grok',
-    providerName: 'Grok',
-    planName: 'Grok subscription',
-    fetchedAt: NOW,
-    windows: [],
-    reason: 'unsupported',
-  },
 };
 
 describe('subscription usage settings IPC', () => {
   beforeEach(() => resetSettingsState());
 
-  it('validates refresh IPC and stores all four sanitized snapshots', () => {
+  it('validates refresh IPC and stores all three sanitized snapshots', () => {
     expect(
       SettingsViewInboundMessageSchema.safeParse({
         command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
@@ -99,7 +90,6 @@ describe('subscription usage settings IPC', () => {
       ['chatgpt', { forceRefresh: true }],
       ['kimiCode', { forceRefresh: true }],
       ['glmCodingPlan', { forceRefresh: true }],
-      ['grok', { forceRefresh: true }],
     ]);
     expect(postMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,

@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'dialogs';
 

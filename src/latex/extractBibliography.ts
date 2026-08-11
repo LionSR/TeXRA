@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
 import {

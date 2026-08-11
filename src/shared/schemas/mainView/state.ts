@@ -20,7 +20,14 @@ import { ToolConfigFieldsSchema } from '../toolConfig';
 // Session Schemas
 // ============================================================
 
-export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
+/**
+ * The main view's surface name for the {@link AgentCategory} a session runs
+ * as. The value set is identical by construction (`'toolUse' | 'workflow'`),
+ * so the schema is derived from the canonical one rather than redeclared —
+ * the two vocabularies cannot drift. Persisted and wire values are
+ * byte-identical to the historical standalone enum.
+ */
+export const SessionTypeSchema = AgentCategorySchema;
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
 /** Who runs a main-view request: a single agent or a multi-agent team. */

@@ -4,9 +4,10 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { writeErrorStderr } from '@cli/runtime/logSinks';
-import type {
-  CliSubscriptionLoginTransportInit,
-  CliSubscriptionSignOutResult,
+import {
+  shouldUseSubscriptionDeviceCode,
+  type CliSubscriptionLoginTransportInit,
+  type CliSubscriptionSignOutResult,
 } from '@cli/runtime/subscriptionLogin';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
@@ -60,12 +61,13 @@ export interface DefineSubscriptionAuthCommandOptions<
     init: CliSubscriptionLoginTransportInit,
     options: { readonly writeProgress: (message: string) => void },
   ) => Promise<Session>;
-  readonly shouldUseDeviceCode: (
-    context: CliContext,
-    init: CliSubscriptionLoginTransportInit,
-  ) => boolean;
   readonly signOut: () => Promise<CliSubscriptionSignOutResult>;
-  readonly signOutPreferenceMessage: (
+  /**
+   * Full sign-out outcome text (`Signed out of …` plus the preference
+   * caveat), owned by the provider's runtime login module so the launcher
+   * account action reports the same lines.
+   */
+  readonly signOutOutcomeMessage: (
     result: CliSubscriptionSignOutResult,
   ) => string;
   readonly setPreferSubscription: (
@@ -118,7 +120,7 @@ export function defineSubscriptionAuthCommand<
       session = await options.signIn(
         {
           ...init,
-          device: options.shouldUseDeviceCode(context, init),
+          device: shouldUseSubscriptionDeviceCode(context, init),
         },
         { writeProgress },
       );
@@ -184,7 +186,7 @@ export function defineSubscriptionAuthCommand<
       emitCliResult(context, {
         json: payload,
         ndjson: { kind: options.ndjsonKind, ...payload },
-        text: `Signed out of ${options.displayName}.\n${options.signOutPreferenceMessage(update)}`,
+        text: options.signOutOutcomeMessage(update),
       });
       return CliExitCode.Success;
     },

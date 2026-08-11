@@ -11,10 +11,11 @@
 import { html, type TemplateResult } from 'lit';
 
 // Local imports - shared schemas
-import type { StreamTabInfo } from '@shared/schemas';
-
-// Local imports - progress view
-import { isToolUseState, type StreamState } from '../store';
+import {
+  isToolUseState,
+  type StreamState,
+  type StreamTabInfo,
+} from '@shared/schemas';
 
 // Side-effect import - register the <stream-header> element
 import './StreamHeader';

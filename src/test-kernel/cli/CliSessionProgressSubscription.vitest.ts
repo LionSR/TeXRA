@@ -6,7 +6,6 @@ import {
   type AgentEvent,
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   SessionEventHub,
   type SessionEvent,
@@ -27,6 +26,7 @@ import {
   type StorageKey,
   type StreamTabId,
   type UpdateStreamStatusPayload,
+  AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import {

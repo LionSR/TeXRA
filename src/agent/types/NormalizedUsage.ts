@@ -9,6 +9,7 @@ import {
   TokenUsageStatsBaseSchema,
   UsageProviderSchema,
   UsageRouteSchema,
+  resolveLegacyUsageRoute,
 } from '@shared/schemas';
 
 /**
@@ -54,11 +55,8 @@ const NormalizedUsageBaseSchema = TokenUsageStatsBaseSchema.pick({
 
 export const NormalizedUsageSchema = NormalizedUsageBaseSchema.extend({
   viaChatGptSubscription: z.boolean().optional(),
-}).transform(({ viaChatGptSubscription, ...usage }) => {
-  const usageRoute =
-    usage.usageRoute ??
-    (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
-  return usageRoute == null ? usage : { ...usage, usageRoute };
-});
+}).transform(({ viaChatGptSubscription, ...usage }) =>
+  resolveLegacyUsageRoute(usage, viaChatGptSubscription),
+);
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

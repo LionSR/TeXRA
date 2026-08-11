@@ -4,16 +4,16 @@ import {
   clearStoreCache,
   getExecutionStore,
   isUserVisibleExecution,
-  listExecutionStreamReferences,
   listExecutions,
 } from '@agent/storage';
+import { listExecutionStreamReferences } from '@agent/storage/executionListing';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function config(agent: string): AgentConfig {

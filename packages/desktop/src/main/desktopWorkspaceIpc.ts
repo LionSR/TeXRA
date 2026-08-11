@@ -18,7 +18,7 @@ import {
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
 import { normalizeFilePath } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
@@ -149,15 +149,23 @@ export function createDesktopWorkspaceIpc(
 ): DesktopWorkspaceIpc {
   const reportError = (error: unknown) => options.onAsyncError?.(error);
 
-  function postFileError(path: string, error: unknown): void {
+  function postFileError(
+    requestId: string,
+    path: string,
+    error: unknown,
+  ): void {
     renderer.postToRenderer({
       command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+      requestId,
       path,
       message: toErrorMessage(error),
     });
   }
 
-  async function listFiles(directory: string): Promise<void> {
+  async function listFiles(
+    requestId: string,
+    directory: string,
+  ): Promise<void> {
     const normalizedDirectory = normalizeFilePath(directory)
       .replace(/^\.\//, '')
       .replace(/\/$/, '');
@@ -166,6 +174,7 @@ export function createDesktopWorkspaceIpc(
       if (!root) {
         renderer.postToRenderer({
           command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+          requestId,
           directory: normalizedDirectory,
           files: [],
         });
@@ -217,6 +226,7 @@ export function createDesktopWorkspaceIpc(
         });
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+        requestId,
         directory: normalizedDirectory,
         files,
       });
@@ -224,36 +234,43 @@ export function createDesktopWorkspaceIpc(
       reportError(error);
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR,
+        requestId,
         directory: normalizedDirectory,
         message: toErrorMessage(error),
       });
     }
   }
 
-  async function readFile(path: string): Promise<void> {
+  async function readFile(requestId: string, path: string): Promise<void> {
     try {
       const contents = await WorkspaceFS.read(await resolveWorkspacePath(path));
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
+        requestId,
         path,
         contents,
       });
     } catch (error) {
       reportError(error);
-      postFileError(path, error);
+      postFileError(requestId, path, error);
     }
   }
 
-  async function writeFile(path: string, contents: string): Promise<void> {
+  async function writeFile(
+    requestId: string,
+    path: string,
+    contents: string,
+  ): Promise<void> {
     try {
       await WorkspaceFS.write(await resolveWorkspaceWritePath(path), contents);
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
+        requestId,
         path,
       });
     } catch (error) {
       reportError(error);
-      postFileError(path, error);
+      postFileError(requestId, path, error);
     }
   }
 
@@ -298,13 +315,13 @@ export function createDesktopWorkspaceIpc(
 
       switch (data.command) {
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
-          void listFiles(data.directory);
+          void listFiles(data.requestId, data.directory);
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.READ_FILE:
-          void readFile(data.path);
+          void readFile(data.requestId, data.path);
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE:
-          void writeFile(data.path, data.contents);
+          void writeFile(data.requestId, data.path, data.contents);
           return true;
 
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START:

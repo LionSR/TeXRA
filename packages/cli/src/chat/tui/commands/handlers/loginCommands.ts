@@ -8,16 +8,15 @@ import { setCliXaiSubscription } from '@cli/chat/tui/state/xaiSubscription';
 import { sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   chatGptSignOutPreferenceMessage,
-  shouldUseChatGptDeviceCode,
   signInCliChatGpt,
   signOutCliChatGpt,
 } from '@cli/runtime/chatgptLogin';
 import {
   grokSignOutPreferenceMessage,
-  shouldUseGrokDeviceCode,
   signInCliGrok,
   signOutCliGrok,
 } from '@cli/runtime/grokLogin';
+import { shouldUseSubscriptionDeviceCode } from '@cli/runtime/subscriptionLogin';
 import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
@@ -181,12 +180,12 @@ export function loginFromChat(
       if (args.target === 'chatgpt') {
         loginArgs = {
           ...args,
-          device: shouldUseChatGptDeviceCode(context, args),
+          device: shouldUseSubscriptionDeviceCode(context, args),
         };
       } else if (args.target === 'grok') {
         loginArgs = {
           ...args,
-          device: shouldUseGrokDeviceCode(context, args),
+          device: shouldUseSubscriptionDeviceCode(context, args),
         };
       }
     }

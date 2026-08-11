@@ -6,9 +6,9 @@ import { describe, it } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { AgentCategory } from '@shared/schemas';
 
 describe('agentConfigToTaskState', () => {
   it('derives workflow active files from normalized file lists', () => {
