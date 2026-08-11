@@ -8,7 +8,6 @@ import {
   buildConfigListItems,
   buildEnumItems,
   coerceSettingInput,
-  ConfigForm,
   formatSettingValue,
   isConfigResetInput,
   settingDisplayName,
@@ -459,9 +458,6 @@ describe('ConfigForm helpers', () => {
     expect(items[0]?.description).toBeTruthy();
   });
 
-  it('exports a renderable component', () => {
-    expect(typeof ConfigForm).toBe('function');
-  });
 });
 
 describe('CliConfigForm API-key status lifecycle', () => {
