@@ -346,11 +346,18 @@ class MirroredOps {
 function syncBothAndCompare(
   step: number,
   extra = '',
-  options: { readonly forceFull?: boolean; readonly forceFinal?: boolean } = {},
+  options: { readonly forceFinal?: boolean } = {},
 ): void {
+  // Both mirrored streams must project under the same focus state, but the
+  // trailing focusStream(onlyIfUnset) inside sync would otherwise focus
+  // whichever mirrored stream synced first — restore the entering focus
+  // around each sync (unset ⇒ both project the full transcript).
+  const active = activeStreamId.get();
   syncStreamLog(FOLD_STREAM, options);
+  activeStreamId.set(active);
   invalidateTranscriptFoldForTest(ORACLE_STREAM);
   syncStreamLog(ORACLE_STREAM, options);
+  activeStreamId.set(active);
   const fold = projectedView(streams.get().get(FOLD_STREAM));
   const oracle = projectedView(streams.get().get(ORACLE_STREAM));
   expect(fold, `step ${step}${extra}`).toEqual(oracle);
@@ -417,10 +424,7 @@ describe('transcript fold vs from-scratch oracle', () => {
               });
             }
           }
-          // forceFull keeps both streams on the full-transcript projection:
-          // the trailing focusStream(onlyIfUnset) inside sync would otherwise
-          // focus whichever mirrored stream synced first.
-          syncBothAndCompare(step, ` (seed ${seed})`, { forceFull: true });
+          syncBothAndCompare(step, ` (seed ${seed})`);
         }
 
         // The property is only meaningful if the fold path actually ran:
@@ -456,7 +460,7 @@ describe('transcript fold vs from-scratch oracle', () => {
   });
 
   it('does not settle a running compaction on a turn-boundary forceFinal', () => {
-    // Regression: `forceFinal` (projectStreamTranscript at turn boundaries)
+    // Regression: `forceFinal` (turn-boundary syncStreamLog callers)
     // must only drive settled-prefix promotion. Compaction settlement derives
     // from the real lifecycle phase — a forceFinal while a compaction is
     // still running must not record it as interrupted, or the later
@@ -490,14 +494,11 @@ describe('transcript fold vs from-scratch oracle', () => {
           },
         });
       }
-      syncBothAndCompare(0, ' (running compaction)', { forceFull: true });
+      syncBothAndCompare(0, ' (running compaction)');
 
       // Turn-boundary finalize while the compaction is still running.
       const before = transcriptFoldCountersForTest();
-      syncBothAndCompare(1, ' (forceFinal)', {
-        forceFull: true,
-        forceFinal: true,
-      });
+      syncBothAndCompare(1, ' (forceFinal)', { forceFinal: true });
       expect(transcriptFoldCountersForTest().folds).toBeGreaterThan(
         before.folds,
       );
@@ -525,7 +526,7 @@ describe('transcript fold vs from-scratch oracle', () => {
           },
         });
       }
-      syncBothAndCompare(2, ' (completion)', { forceFull: true });
+      syncBothAndCompare(2, ' (completion)');
       const done = streams
         .get()
         .get(FOLD_STREAM)

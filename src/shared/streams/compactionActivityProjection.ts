@@ -175,23 +175,3 @@ export function settleCompactionActivities(
   }
   return changedIndices;
 }
-
-/** Full-replay convenience with the same reducer used by incremental clients. */
-export function projectCompactionActivities(
-  entries: readonly StreamLogEntry[],
-  options: {
-    readonly streamTerminal?: boolean;
-    readonly settledThroughSeqNo?: number;
-    readonly finishedAt?: number;
-  } = {},
-): CompactionActivityProjection {
-  const projection = createCompactionActivityProjection();
-  applyCompactionActivityEntries(projection, entries);
-  if (options.streamTerminal) {
-    settleCompactionActivities(projection, {
-      throughSeqNo: options.settledThroughSeqNo,
-      finishedAt: options.finishedAt,
-    });
-  }
-  return projection;
-}
