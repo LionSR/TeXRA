@@ -12,5 +12,28 @@
   // Use the workspace TypeScript (6.0.3) so the editor matches the build; the
   // bundled VS Code TS server is older and rejects `ignoreDeprecations: "6.0"`.
   "typescript.tsdk": "node_modules/typescript/lib",
-  "texra.ui.showLoginBanner": false
+  "texra.ui.showLoginBanner": false,
+
+  // Format on save so `format:check` never fails on work that went through the
+  // editor. The pre-commit hook stays the safety net for anything that did not
+  // (agent sessions, github.dev, `git commit` from a script) -- it deliberately
+  // aborts rather than re-staging, because staging inside pre-commit's stash
+  // lifecycle can destroy unstaged hunks on a rewrite conflict.
+  //
+  // The formatter is set per language rather than globally: a global
+  // `editor.defaultFormatter` of Prettier would also claim languages Prettier
+  // cannot parse, turning save into an error toast for those files. Prettier
+  // reads `.prettierrc` and honours `.prettierignore`, so `.github/workflows/`
+  // stays excluded here exactly as it is on the command line.
+  "editor.formatOnSave": true,
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[markdown]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[yaml]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[html]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
 }

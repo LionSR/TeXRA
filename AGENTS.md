@@ -21,20 +21,30 @@ When updating CHANGELOG.md:
 ## Development workflow
 
 1. **Install dependencies**: run `corepack pnpm install` if needed.
-2. **Install the local hooks (recommended)**: install `pre-commit` with
+2. **Let the editor format (recommended)**: `.vscode/settings.json` enables
+   format-on-save for the languages Prettier handles, backed by the
+   `esbenp.prettier-vscode` recommendation in `.vscode/extensions.json`. With it
+   installed, code you edit in VS Code is already formatted by the time you
+   stage it and `format:check` never fails on it. Everywhere the editor is not
+   in the loop -- agent sessions, github.dev, scripted commits -- run
+   `npm run format` yourself.
+3. **Install the local hooks (recommended)**: install `pre-commit` with
    `python -m pip install pre-commit`, then run `pre-commit install`. The
    formatting hook rewrites supported staged files; if it changes a file,
    review the diff and stage only the intended hunks before retrying. For a
    partially staged file, use `git add -p` so unrelated unstaged edits stay
    out. If the retry aborts again with nothing new to stage, the rewrite
    conflicted with your unstaged edits and pre-commit discarded it -- commit
-   or stash those edits separately first, then retry.
-3. **Run checks before committing**:
-   - Format code using `npm run format`.
+   or stash those edits separately first, then retry. The hook deliberately
+   aborts instead of re-staging its own output: `git add` inside pre-commit's
+   stash lifecycle defeats its rollback, and a rewrite that conflicts with your
+   unstaged hunks then loses them (verified in #9953).
+4. **Run checks before committing**:
+   - Format code using `npm run format` (a no-op if format-on-save handled it).
    - Build the extension bundle with `npm run compile:fast`.
    - Lint TypeScript sources with `npm run lint`.
    - Run the Vitest suite with `npm test`.
-4. Commit only when `npm run lint` completes without errors.
+5. Commit only when `npm run lint` completes without errors.
 
 ### Build system: esbuild + Vite
 

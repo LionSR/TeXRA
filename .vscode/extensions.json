@@ -2,6 +2,10 @@
   // See http://go.microsoft.com/fwlink/?LinkId=827846
   // for the documentation about the extensions.json format
   "recommendations": [
+    // Backs the format-on-save settings in settings.json. It resolves the
+    // workspace Prettier from node_modules, so the editor and `npm run format`
+    // agree on version and config.
+    "esbenp.prettier-vscode",
     "dbaeumer.vscode-eslint",
     "amodio.tsl-problem-matcher",
     "ms-vscode.extension-test-runner",

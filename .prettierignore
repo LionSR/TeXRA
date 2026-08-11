@@ -19,8 +19,9 @@ packages/extension/resources/templates/
 # Local git worktrees (contain unstaged template files prettier cannot parse)
 .worktrees/
 
-# GitHub Actions workflows — the format-pr workflow's GITHUB_TOKEN lacks
-# `workflows: write` permission, so any auto-formatting of workflow YAML
-# triggers a "refusing to update workflow" push rejection. Skip them
-# entirely from format runs.
+# GitHub Actions workflows. Originally excluded because the (since removed)
+# format-pr workflow's GITHUB_TOKEN lacked `workflows: write`, so auto-
+# formatting workflow YAML triggered a "refusing to update workflow" push
+# rejection. The exclusion is kept deliberately: `ci.yml` relies on hand-laid
+# comment blocks and long `${{ }}` expressions that Prettier rewraps.
 .github/workflows/
