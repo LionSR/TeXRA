@@ -78,9 +78,11 @@ import {
   registerCliStateResetHook,
   setTransientNotice,
   streams,
+  type CompactionProjectionState,
   type ConversationEntry,
   type LoadedImage,
   type StreamSlice,
+  type TaskGroupProjectionState,
   type TranscriptFoldItem,
   type TranscriptFoldState,
 } from './cliState';
@@ -458,15 +460,30 @@ function isSettledEntry(
   }
 }
 
+// Whether an unfinalized entry blocks the contiguous settled-prefix
+// promotion at its position: it is not settled, and a final stream status
+// cannot promote it either — activity and workflow-call rows never promote
+// on `streamFinal` alone, because bridge cleanup may still replace their
+// planned/running state after cancellation.
+function blocksSettledPrefix(
+  entry: ConversationEntry,
+  index: number,
+  total: number,
+  streamFinal: boolean,
+): boolean {
+  return (
+    !isSettledEntry(entry, index, total) &&
+    (entry.role === 'activity' || entry.role === 'workflowTask' || !streamFinal)
+  );
+}
+
 // Promote the contiguous leading run of settled entries to `finalized`, so
 // completed parts of a round flow into `<Static>` scrollback as the round
 // progresses instead of piling up in the bounded live pane (where the
 // viewport would clip the round's earlier content). Only a contiguous
 // prefix is promoted: `<Static>` is append-only, so an entry must not
 // finalize while any earlier entry is still pending, or insertion order
-// would reverse. A final stream status settles trailing assistant/tool rows,
-// but not a workflow call: bridge cleanup may still replace its
-// planned/running state after cancellation.
+// would reverse.
 export function finalizeSettledPrefix(
   entries: readonly ConversationEntry[],
   streamFinal: boolean,
@@ -475,12 +492,9 @@ export function finalizeSettledPrefix(
   let sealed = false; // hit the first still-pending entry in this round
   for (const [index, entry] of entries.entries()) {
     if (entry.finalized) continue;
-    const settled = isSettledEntry(entry, index, entries.length);
     if (
       sealed ||
-      ((entry.role === 'activity' || entry.role === 'workflowTask') &&
-        !settled) ||
-      (!streamFinal && !settled)
+      blocksSettledPrefix(entry, index, entries.length, streamFinal)
     ) {
       sealed = true;
       continue;
@@ -500,35 +514,6 @@ export function finalizeSettledPrefix(
 const STREAM_SYNC_THROTTLE_MS = 16;
 
 /**
- * Incremental task-group projection state, kept beside the slice: the
- * upsert engine's mutable working set plus the immutable `snapshot` the
- * slice holds. `applied` remembers the last log-entry object applied per
- * group row — `StreamLog` replaces the entry object on every update
- * (including the in-place GROUP_START → GROUP_END upsert at stage end), so
- * a reference change is exactly a content change and only new/changed rows
- * are fed to `upsertTaskGroupFromStreamLog`, never a full re-projection.
- */
-interface TaskGroupProjectionState {
-  readonly working: TaskGroup[];
-  readonly index: Map<string, number>;
-  readonly applied: Map<string, StreamLogEntry>;
-  snapshot: readonly TaskGroup[];
-}
-
-const TASK_GROUP_PROJECTIONS = new Map<StreamTabId, TaskGroupProjectionState>();
-
-interface CompactionProjectionState {
-  readonly projection: CompactionActivityProjection;
-  appliedHead: number;
-  terminal: boolean;
-}
-
-const COMPACTION_PROJECTIONS = new Map<
-  StreamTabId,
-  CompactionProjectionState
->();
-
-/**
  * Store-emitted deltas awaiting the next batched sync, coalesced per stream.
  * Written by the `onChange` subscriber; drained by `syncStreamLog`, so an
  * out-of-band sync (status transition, focus switch, tests) folds the same
@@ -542,8 +527,6 @@ interface PendingStreamDeltas {
 const PENDING_DELTAS = new Map<StreamTabId, PendingStreamDeltas>();
 
 registerCliStateResetHook(() => {
-  TASK_GROUP_PROJECTIONS.clear();
-  COMPACTION_PROJECTIONS.clear();
   PENDING_DELTAS.clear();
 });
 
@@ -575,25 +558,26 @@ export function streamRenderCacheSizesForTest(): {
   readonly compaction: number;
   readonly render: number;
 } {
+  let taskGroups = 0;
+  let compaction = 0;
   let render = 0;
   for (const slice of streams.get().values()) {
-    if (slice.transcriptFold?.hydrated) render += 1;
+    const fold = slice.transcriptFold;
+    if (fold?.taskGroupProjection) taskGroups += 1;
+    if (fold?.compactionProjection) compaction += 1;
+    if (fold?.hydrated) render += 1;
   }
-  return {
-    taskGroups: TASK_GROUP_PROJECTIONS.size,
-    compaction: COMPACTION_PROJECTIONS.size,
-    render,
-  };
+  return { taskGroups, compaction, render };
 }
 
 function projectTaskGroupsIncrementally(
-  streamId: StreamTabId,
+  fold: TranscriptFoldState,
   entries: readonly StreamLogEntry[],
 ): readonly TaskGroup[] {
-  let state = TASK_GROUP_PROJECTIONS.get(streamId);
+  let state = fold.taskGroupProjection;
   if (!state) {
     state = { working: [], index: new Map(), applied: new Map(), snapshot: [] };
-    TASK_GROUP_PROJECTIONS.set(streamId, state);
+    fold.taskGroupProjection = state;
   }
   let changed = false;
   for (const entry of entries) {
@@ -615,18 +599,18 @@ function projectTaskGroupsIncrementally(
 }
 
 function projectCompactionIncrementally(
-  streamId: StreamTabId,
+  fold: TranscriptFoldState,
   log: StreamLog,
   streamTerminal: boolean,
 ): CompactionActivityProjection {
-  let state = COMPACTION_PROJECTIONS.get(streamId);
+  let state = fold.compactionProjection;
   if (!state || state.appliedHead > log.size) {
     state = {
       projection: createCompactionActivityProjection(),
       appliedHead: 0,
       terminal: false,
     };
-    COMPACTION_PROJECTIONS.set(streamId, state);
+    fold.compactionProjection = state;
   }
 
   // Only the appended tail is read (O(delta)); in-place mutations behind the
@@ -860,7 +844,6 @@ function recomputeFoldCursors(state: TranscriptFoldState): void {
 // ---------------------------------------------------------------------------
 
 interface FoldContext {
-  readonly streamId: StreamTabId;
   readonly log: StreamLog;
   /** Current slice entries, consulted only for CLI-synthetic rows. */
   readonly sliceEntries: readonly ConversationEntry[];
@@ -1111,15 +1094,7 @@ function advanceSettledPrefix(
       index += 1;
       continue;
     }
-    const settled = isSettledEntry(entry, index, items.length);
-    if (
-      !settled &&
-      (entry.role === 'activity' ||
-        entry.role === 'workflowTask' ||
-        !streamFinal)
-    ) {
-      break;
-    }
+    if (blocksSettledPrefix(entry, index, items.length, streamFinal)) break;
     replaceFoldRendered(state, index, { ...entry, finalized: true }, flags);
     index += 1;
   }
@@ -1166,9 +1141,9 @@ function applyStreamChanges(
   }
   if (retrack) retrackFoldSingletons(state, ctx.log);
 
-  const taskGroups = projectTaskGroupsIncrementally(ctx.streamId, changed);
+  const taskGroups = projectTaskGroupsIncrementally(state, changed);
   const compaction = projectCompactionIncrementally(
-    ctx.streamId,
+    state,
     ctx.log,
     ctx.streamSettled,
   );
@@ -1287,6 +1262,10 @@ export function subscribeStreamLog(): () => void {
 
     if (previous && previous !== nextActiveStreamId) {
       trySyncStreamLog(previous);
+      // Focus is a lifecycle boundary: a stream that finished while it was
+      // focused (and so was never released at its status transition) is
+      // released the moment focus moves off it.
+      releaseInactiveStreamTranscript(previous);
     }
     if (!nextActiveStreamId || nextActiveStreamId === previous) return;
 
@@ -1322,16 +1301,15 @@ export function subscribeStreamLog(): () => void {
 export function syncStreamLog(
   streamId: StreamTabId,
   options: {
-    readonly forceFull?: boolean;
     /** Treat the stream as final for settled-prefix promotion, even when its
      *  status has not reached a settlement phase (turn-boundary callers). */
     readonly forceFinal?: boolean;
   } = {},
 ): void {
   if (isChildStreamRemoved(streamId)) {
+    // Projection state died with the slice (`removeStream`); only the
+    // store-delta buffer is keyed outside it.
     PENDING_DELTAS.delete(streamId);
-    TASK_GROUP_PROJECTIONS.delete(streamId);
-    COMPACTION_PROJECTIONS.delete(streamId);
     return;
   }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
@@ -1365,10 +1343,7 @@ export function syncStreamLog(
 
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
-    options.forceFull === true ||
-    currentActiveStreamId === undefined ||
-    currentActiveStreamId === streamId;
-  let releaseAfterSync = false;
+    currentActiveStreamId === undefined || currentActiveStreamId === streamId;
 
   patchStream(streamId, (slice, lifecycle) => {
     const workflowStream = slice.category === AgentCategory.Workflow;
@@ -1398,7 +1373,6 @@ export function syncStreamLog(
         : state.emissionSeq === log.emissionHead);
 
     const ctx: FoldContext = {
-      streamId,
       log,
       sliceEntries: slice.entries,
       streamFinal,
@@ -1425,8 +1399,9 @@ export function syncStreamLog(
           dirtied.map((entry) => [entry.id, entry] as const),
         );
         for (const chunk of changes.textChunks) {
-          const current = log.getById(chunk.id);
-          if (!current) continue;
+          // `canFold` pinned the log instance and emission head, so a chunk's
+          // id always resolves to a live entry — `getById` cannot miss here.
+          const current = log.getById(chunk.id)!;
           const appendedIndex = appendedIndexById.get(chunk.id);
           if (appendedIndex !== undefined) {
             appended[appendedIndex] = current;
@@ -1498,11 +1473,6 @@ export function syncStreamLog(
         latestInstruction ??
         slice.latestLine);
 
-    releaseAfterSync =
-      !projectFullTranscript &&
-      lifecycle.status !== undefined &&
-      !isActivePhase(lifecycle.status);
-
     // A compact workflow keeps only its bounded canonical dashboard rows plus
     // synthetic operational rows; ordinary inactive streams keep synthetic
     // rows only. Each selection is rebuilt only when a change touched it —
@@ -1549,20 +1519,43 @@ export function syncStreamLog(
     };
   });
 
-  if (releaseAfterSync) {
-    store.requestEviction(streamId);
-    // The store dropped its resident log; these incremental caches would
-    // otherwise keep every entry (and rendered row) of a completed stream
-    // alive for the rest of the session. Safe to drop: each projection
-    // rebuilds from scratch — through the shared resync path — the next
-    // time this stream syncs (e.g. if it's reactivated).
-    TASK_GROUP_PROJECTIONS.delete(streamId);
-    COMPACTION_PROJECTIONS.delete(streamId);
-    const fold = streams.get().get(streamId)?.transcriptFold;
-    if (fold) resetTranscriptFoldState(fold);
-  }
-
   // Surface stream as active if we don't already have one — handles bare
   // `texra chat` where setActiveStream is the first signal the runtime emits.
   focusStream(streamId, { onlyIfUnset: true });
+}
+
+/**
+ * Release a background stream's transcript residency at a lifecycle
+ * boundary. Two owners call this — the status subscriber when a stream
+ * leaves its active phase, and the focus subscriber when focus moves off a
+ * stream — never the render/sync path, so a terminal stream always
+ * releases rather than only when a sync happens to run for it. A no-op for
+ * the active stream, for a stream whose status is unknown or active, and
+ * while no stream is focused (every stream then projects the full
+ * transcript, exactly the states the old in-sync release also skipped).
+ *
+ * Alongside the store eviction this drops the stream's projection state:
+ * the fold items and the incremental task-group/compaction memos would
+ * otherwise keep every entry (and rendered row) of a completed stream
+ * alive for the rest of the session. Safe to drop: each projection rebuilds
+ * from scratch — through the shared resync path — the next time this
+ * stream syncs (e.g. if it's reactivated).
+ */
+export function releaseInactiveStreamTranscript(streamId: StreamTabId): void {
+  const currentActiveStreamId = activeStreamId.get();
+  if (
+    currentActiveStreamId === undefined ||
+    currentActiveStreamId === streamId
+  ) {
+    return;
+  }
+  const slice = streams.get().get(streamId);
+  if (slice?.status === undefined || isActivePhase(slice.status)) return;
+  defaultSession().transcripts.requestEviction(streamId);
+  const fold = slice.transcriptFold;
+  if (fold) {
+    resetTranscriptFoldState(fold);
+    fold.taskGroupProjection = undefined;
+    fold.compactionProjection = undefined;
+  }
 }

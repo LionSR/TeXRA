@@ -54,7 +54,6 @@ import {
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
-import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
@@ -2692,8 +2691,8 @@ describe('CLI transcript state', () => {
     expect(entryTexts(root)).toEqual(['Why?', '  The answer starts here.']);
   });
 
-  // Regression: a sync tick that fires after the turn-boundary promotion in
-  // `projectStreamTranscript` must not roll the entry back to
+  // Regression: a sync tick that fires after the turn-boundary `forceFinal`
+  // promotion must not roll the entry back to
   // `finalized: false`. Without this guard,
   // the de-finalized entry lands in neither bucket of
   // `splitTranscriptEntries` once status flips to WAITING, and silently
@@ -2787,7 +2786,10 @@ describe('CLI transcript state', () => {
     setStatus(child1, STREAM_PHASE.WAITING);
     syncStreamLog(child1);
 
-    syncStreamLog(child1, { forceFull: true });
+    // Focusing the dormant stream is what requests the exact transcript:
+    // the sync projects the full transcript for the active stream.
+    activeStreamId.set(child1);
+    syncStreamLog(child1);
 
     expect(
       streamEntries(child1).map((entry) => [entry.role, entry.text]),
@@ -2826,7 +2828,7 @@ describe('CLI transcript state', () => {
     logUserMessage(logger, 'What is 1 + 1?');
     logModelResponse(logger, '2');
 
-    projectStreamTranscript(root, { finalize: true });
+    syncStreamLog(root, { forceFinal: true });
 
     const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual(['What is 1 + 1?', '2']);

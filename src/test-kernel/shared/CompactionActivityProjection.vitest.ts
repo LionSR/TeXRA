@@ -9,9 +9,18 @@ import {
 import {
   applyCompactionActivityEntries,
   createCompactionActivityProjection,
-  projectCompactionActivities,
   settleCompactionActivities,
+  type CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
+
+/** Test-local full replay through the production reducer (the resync path). */
+function projectCompactionActivities(
+  entries: readonly StreamLogEntry[],
+): CompactionActivityProjection {
+  const projection = createCompactionActivityProjection();
+  applyCompactionActivityEntries(projection, entries);
+  return projection;
+}
 
 function activityEntry(
   seqNo: number,
