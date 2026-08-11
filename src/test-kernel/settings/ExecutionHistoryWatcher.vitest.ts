@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
+import { HistoryHandlers } from '@settingsView/handlers/historyHandlers';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -30,6 +31,7 @@ vi.mock('vscode', async (importOriginal) => {
 });
 
 type HandlerFixture = {
+  handler: SettingsViewMessageHandler;
   /** Fires the workspace-folders-changed event the handler subscribes to. */
   fireWorkspaceFoldersChanged(): void;
   /** Disposes every subscription the constructor registered (view teardown). */
@@ -37,17 +39,19 @@ type HandlerFixture = {
 };
 
 /**
- * The real constructor kicks off the initial watcher registration and wires
- * re-registration to folder changes and teardown to context subscriptions, so
- * every scenario below is driven through those public triggers.
+ * The watcher registers only while a settings webview is visible (#9959), so
+ * every scenario below drives registration through a dispatch from a fake
+ * panel plus its visibility events, and teardown through the context
+ * subscriptions the constructor registered.
  */
 function createHandler(): HandlerFixture {
   const subscriptions: Array<{ dispose(): void }> = [];
-  new SettingsViewMessageHandler({
+  const handler = new SettingsViewMessageHandler({
     subscriptions,
     extensionPath: '/ext',
   } as unknown as vscode.ExtensionContext);
   return {
+    handler,
     fireWorkspaceFoldersChanged: () => {
       for (const listener of mocks.workspaceFoldersListeners) listener();
     },
@@ -57,6 +61,42 @@ function createHandler(): HandlerFixture {
       }
     },
   };
+}
+
+type ViewFixture = {
+  view: vscode.WebviewPanel;
+  setVisible(visible: boolean): void;
+};
+
+function createView(visible = true): ViewFixture {
+  const listeners: Array<() => void> = [];
+  const view = {
+    visible,
+    viewColumn: 1,
+    onDidChangeViewState: (listener: () => void) => {
+      listeners.push(listener);
+      return { dispose: vi.fn() };
+    },
+    webview: { postMessage: vi.fn(async () => true) },
+  };
+  return {
+    view: view as unknown as vscode.WebviewPanel,
+    setVisible: (next: boolean) => {
+      view.visible = next;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+/**
+ * Any dispatch attaches visibility tracking (`onDispatch` runs before the
+ * command is resolved), so an unknown command exercises nothing else.
+ */
+function attach(
+  handler: SettingsViewMessageHandler,
+  view: vscode.WebviewPanel,
+): Promise<void> {
+  return handler.handleMessage({ command: 'visibility-probe' }, view);
 }
 
 /** Let queued registration continuations (microtasks) run to completion. */
@@ -77,18 +117,99 @@ function watcher(): vscode.FileSystemWatcher {
 }
 
 describe('settings execution history watcher', () => {
+  let sendHistoryData: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     mocks.workspaceFoldersListeners.length = 0;
+    // The on-show refresh lists executions from storage; the lifecycle under
+    // test only cares that the refresh was requested.
+    sendHistoryData = vi
+      .spyOn(HistoryHandlers.prototype, 'sendHistoryData')
+      .mockResolvedValue(undefined) as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it('registers only once a visible view dispatches, not on construction', async () => {
+    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
+    const createWatcher = vi
+      .spyOn(vscode.workspace, 'createFileSystemWatcher')
+      .mockReturnValue(watcher());
+
+    const fixture = createHandler();
+    fixture.fireWorkspaceFoldersChanged();
+    await flushRegistrations();
+    expect(createWatcher).not.toHaveBeenCalled();
+
+    await attach(fixture.handler, createView().view);
+    await vi.waitFor(() => expect(createWatcher).toHaveBeenCalledOnce());
+  });
+
+  it('does not register while the view is hidden', async () => {
+    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
+    const createWatcher = vi
+      .spyOn(vscode.workspace, 'createFileSystemWatcher')
+      .mockReturnValue(watcher());
+
+    const fixture = createHandler();
+    const { view, setVisible } = createView(false);
+    await attach(fixture.handler, view);
+    await flushRegistrations();
+    expect(createWatcher).not.toHaveBeenCalled();
+
+    setVisible(true);
+    await vi.waitFor(() => expect(createWatcher).toHaveBeenCalledOnce());
+  });
+
+  it('disposes the watcher on hide and re-registers with one refresh on show', async () => {
+    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
+    const firstWatcher = watcher();
+    const secondWatcher = watcher();
+    const createWatcher = vi
+      .spyOn(vscode.workspace, 'createFileSystemWatcher')
+      .mockReturnValueOnce(firstWatcher)
+      .mockReturnValue(secondWatcher);
+
+    const fixture = createHandler();
+    const { view, setVisible } = createView();
+    await attach(fixture.handler, view);
+    await vi.waitFor(() => expect(createWatcher).toHaveBeenCalledOnce());
+    // The attach dispatch produces its own data; no extra refresh on it.
+    expect(sendHistoryData).not.toHaveBeenCalled();
+
+    setVisible(false);
+    expect(firstWatcher.dispose).toHaveBeenCalledOnce();
+
+    setVisible(true);
+    await vi.waitFor(() => expect(createWatcher).toHaveBeenCalledTimes(2));
+    expect(sendHistoryData).toHaveBeenCalledOnce();
+    expect(secondWatcher.dispose).not.toHaveBeenCalled();
+  });
+
+  it('tears the watcher down when the view is cleared', async () => {
+    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
+    const currentWatcher = watcher();
+    vi.spyOn(vscode.workspace, 'createFileSystemWatcher').mockReturnValue(
+      currentWatcher,
+    );
+
+    const fixture = createHandler();
+    await attach(fixture.handler, createView().view);
+    await vi.waitFor(() =>
+      expect(currentWatcher.onDidCreate).toHaveBeenCalled(),
+    );
+
+    fixture.handler.clearActiveView();
+    expect(currentWatcher.dispose).toHaveBeenCalledOnce();
+  });
 
   it('logs and absorbs directory setup failures', async () => {
     const failure = new Error('permission denied');
     vi.spyOn(StorageFS, 'ensureDir').mockRejectedValue(failure);
     const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
-    createHandler();
+    const fixture = createHandler();
+    await attach(fixture.handler, createView().view);
 
     await vi.waitFor(() => {
       expect(errorSpy).toHaveBeenCalledWith(
@@ -110,9 +231,10 @@ describe('settings execution history watcher', () => {
       .spyOn(vscode.workspace, 'createFileSystemWatcher')
       .mockReturnValue(currentWatcher);
 
-    // The constructor's registration pends on firstSetup; the folder-change
+    // The attach registration pends on firstSetup; the folder-change
     // re-registration pends on secondSetup and wins the generation race.
     const fixture = createHandler();
+    await attach(fixture.handler, createView().view);
     fixture.fireWorkspaceFoldersChanged();
     secondSetup.resolve();
     await vi.waitFor(() => expect(createWatcher).toHaveBeenCalledOnce());
@@ -135,13 +257,14 @@ describe('settings execution history watcher', () => {
     const createWatcher = vi
       .spyOn(vscode.workspace, 'createFileSystemWatcher')
       .mockImplementationOnce(() => {
-        // A folder change lands while the constructor's registration is
-        // mid-setup: its candidate is stale the moment it returns.
+        // A folder change lands while the attach registration is mid-setup:
+        // its candidate is stale the moment it returns.
         fixture.fireWorkspaceFoldersChanged();
         return staleWatcher;
       })
       .mockReturnValue(currentWatcher);
     const fixture = createHandler();
+    await attach(fixture.handler, createView().view);
 
     await vi.waitFor(() => expect(createWatcher).toHaveBeenCalledTimes(2));
     await flushRegistrations();
@@ -158,6 +281,7 @@ describe('settings execution history watcher', () => {
     vi.spyOn(StorageFS, 'ensureDir').mockReturnValue(setup.promise);
     const createWatcher = vi.spyOn(vscode.workspace, 'createFileSystemWatcher');
     const fixture = createHandler();
+    await attach(fixture.handler, createView().view);
 
     fixture.disposeSubscriptions();
     setup.resolve();

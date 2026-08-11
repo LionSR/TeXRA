@@ -202,6 +202,14 @@ export class WebviewUpdater {
     });
   }
 
+  /** Push the host theme alone — theme flips need no metadata rebuild. */
+  setTheme(theme: 'dark' | 'light'): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
+      theme,
+    });
+  }
+
   /**
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
@@ -342,12 +350,7 @@ export class WebviewUpdater {
       return activeStream;
     }
 
-    if (theme) {
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.THEME_SET,
-        theme,
-      });
-    }
+    if (theme) this.setTheme(theme);
 
     // Send lightweight metadata — only backend-owned fields the frontend merges.
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
