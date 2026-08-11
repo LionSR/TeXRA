@@ -14,9 +14,7 @@ import {
 import { persistTerminalExecution } from '@agent/runtime/persistTerminalExecution';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
-import {
-  StreamStatusMachine,
-} from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -268,11 +266,7 @@ export class ExecutionRegistry {
         isTerminalOutcomePhase(previousStatus)
           ? 'resume'
           : 'lifecycle';
-      this.streamStatus.transition(
-        handle.childStreamId,
-        options.status,
-        cause,
-      );
+      this.streamStatus.transition(handle.childStreamId, options.status, cause);
     }
     this.track(handle);
   }

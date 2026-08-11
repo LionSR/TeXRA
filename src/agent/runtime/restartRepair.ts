@@ -9,9 +9,7 @@ import {
 } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { deriveResumability } from '@agent/storage/resumability';
-import type {
-  StreamStatusMachine,
-} from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
