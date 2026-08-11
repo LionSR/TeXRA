@@ -171,6 +171,13 @@ class MirroredOps {
         appendTranscriptText(store, streamId, id, ` chunk${this.nextId}`);
       }
       this.nextId += 1;
+    } else if (roll < 0.45 && this.openText.length > 0) {
+      // Non-terminal in-place update on a row that keeps streaming: emits a
+      // dirtied entry by value while the row stays open, so later appendText
+      // chunks land on top of a buffered value (the delta feed's
+      // value-supersedes-chunks precedence, exercised in both directions).
+      const id = pick(this.rng, this.openText);
+      this.update(id, { data: { status: 'running', tick: this.nextId++ } });
     } else if (roll < 0.5 && this.openText.length > 0) {
       const id = this.openText.shift() as string;
       this.update(id, { data: { status: 'completed' } }, true);

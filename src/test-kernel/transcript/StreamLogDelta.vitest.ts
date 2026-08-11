@@ -1,8 +1,9 @@
 // The store-emitted entry-level change feed (#9946): every onChange
 // notification carries an immutable StreamLogDelta, drained once and
-// multicast — nothing is acked and nothing is destroyed, unlike the webview
-// dirty-update machinery. Consumers coalesce bursts with
-// StreamLogDeltaBuffer and rebuild from getRange(0) on any discontinuity.
+// multicast — nothing is acked and nothing is destroyed; this is the single
+// change-feed surface (#9969 deleted the webview ack/dirty protocol).
+// Consumers coalesce bursts with StreamLogDeltaBuffer and rebuild from
+// getRange(0) on any discontinuity.
 
 import { describe, expect, it } from 'vitest';
 
@@ -48,7 +49,7 @@ function captureDeltas(store: StreamLogStore): StreamLogDelta[] {
 }
 
 describe('StreamLogStore delta emission', () => {
-  it('emits appended entries, then dirtied entries by value, with a monotonic seq', () => {
+  it('emits appends by value, text appends as chunks, updates by value, with a monotonic seq', () => {
     const store = StreamLogStore.ephemeral('delta test');
     const deltas = captureDeltas(store);
 
@@ -61,16 +62,19 @@ describe('StreamLogStore delta emission', () => {
 
     expect(deltas[0].appended.map((entry) => entry.text)).toEqual(['hel']);
     expect(deltas[0].dirtied).toEqual([]);
+    expect(deltas[0].textChunks).toEqual([]);
 
+    // appendText emits a chunk instead of a dirtied entry by value.
     expect(deltas[1].appended).toEqual([]);
-    expect(deltas[1].dirtied.map((entry) => entry.text)).toEqual(['hello']);
+    expect(deltas[1].dirtied).toEqual([]);
+    expect(deltas[1].textChunks).toEqual([{ id: 'm1', appendText: 'lo' }]);
 
     expect(deltas[2].dirtied.map((entry) => entry.text)).toEqual(['hello!']);
+    expect(deltas[2].textChunks).toEqual([]);
 
     // By value: the captured payloads are the immutable post-mutation entry
     // objects, so later mutations must not rewrite an already-emitted delta.
     expect(deltas[0].appended[0].text).toBe('hel');
-    expect(deltas[1].dirtied[0].text).toBe('hello');
   });
 
   it('coalesces one commit covering several mutations into one delta', () => {
@@ -148,8 +152,16 @@ describe('StreamLogDeltaBuffer', () => {
     appended: StreamLogEntry[],
     dirtied: StreamLogEntry[] = [],
     reset = false,
+    textChunks: StreamLogDelta['textChunks'] = [],
   ): StreamLogDelta {
-    return { emissionSeq, appended, dirtied, reset };
+    return { emissionSeq, appended, dirtied, textChunks, reset };
+  }
+
+  function chunkDelta(
+    emissionSeq: number,
+    textChunks: StreamLogDelta['textChunks'],
+  ): StreamLogDelta {
+    return delta(emissionSeq, [], [], false, textChunks);
   }
 
   it('coalesces a contiguous burst, letting a dirtied value supersede its appended one', () => {
@@ -166,6 +178,50 @@ describe('StreamLogDeltaBuffer', () => {
     const drained = buffer.drain();
     expect(drained.appended).toEqual([superseded]);
     expect(drained.dirtied).toEqual([other]);
+    expect(drained.textChunks).toEqual([]);
+  });
+
+  it('merges buffered chunks per id and drains them alongside values', () => {
+    const buffer = new StreamLogDeltaBuffer(4);
+    buffer.push(delta(5, [entryAt(1, 'a', '')]));
+    buffer.push(chunkDelta(6, [{ id: 'a', appendText: 'hel' }]));
+    buffer.push(
+      chunkDelta(7, [
+        { id: 'a', appendText: 'lo' },
+        { id: 'b', appendText: '!' },
+      ]),
+    );
+
+    const drained = buffer.drain();
+    // Chunks postdate their id's buffered value: consumers apply
+    // appended/dirtied first, then append the chunks on top.
+    expect(drained.appended).toEqual([entryAt(1, 'a', '')]);
+    expect(drained.textChunks).toEqual([
+      { id: 'a', appendText: 'hello' },
+      { id: 'b', appendText: '!' },
+    ]);
+  });
+
+  it('drops buffered chunks when a later dirtied value supersedes them', () => {
+    const buffer = new StreamLogDeltaBuffer(4);
+    buffer.push(chunkDelta(5, [{ id: 'a', appendText: 'hel' }]));
+    const full = entryAt(1, 'a', 'rewritten');
+    buffer.push(delta(6, [], [full]));
+
+    const drained = buffer.drain();
+    expect(drained.dirtied).toEqual([full]);
+    expect(drained.textChunks).toEqual([]);
+  });
+
+  it('keeps chunks that arrive after a dirtied value', () => {
+    const buffer = new StreamLogDeltaBuffer(4);
+    const full = entryAt(1, 'a', 'rewritten');
+    buffer.push(delta(5, [], [full]));
+    buffer.push(chunkDelta(6, [{ id: 'a', appendText: ' plus' }]));
+
+    const drained = buffer.drain();
+    expect(drained.dirtied).toEqual([full]);
+    expect(drained.textChunks).toEqual([{ id: 'a', appendText: ' plus' }]);
   });
 
   it('marks a gap as requiring resync while still tracking the newest seq', () => {
@@ -183,7 +239,11 @@ describe('StreamLogDeltaBuffer', () => {
     buffer.push(delta(4, [entryAt(2, 'b', 'y')]));
 
     expect(buffer.resyncRequired).toBe(false);
-    expect(buffer.drain()).toEqual({ appended: [], dirtied: [] });
+    expect(buffer.drain()).toEqual({
+      appended: [],
+      dirtied: [],
+      textChunks: [],
+    });
   });
 
   it('treats a reset emission as requiring resync', () => {
