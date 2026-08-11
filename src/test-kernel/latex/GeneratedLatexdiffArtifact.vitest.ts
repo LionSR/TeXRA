@@ -8,7 +8,8 @@ import {
   detectGeneratedLatexdiffArtifact,
   parseVersionControlDiffFilename,
 } from '@latex/latexdiff/diffFileNameManager';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 describe('detectGeneratedLatexdiffArtifact', () => {
   it.each([

@@ -1,5 +1,7 @@
-import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
-import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
+import type {
+  MainViewAuthStatus,
+  MainViewStartupOptions,
+} from '@controllers/mainView/MainViewStartupController';
 import type { DesktopThemeKind } from '@shared/schemas';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { installDesktopHostBridge } from './hostBridge.js';

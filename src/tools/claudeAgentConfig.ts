@@ -11,10 +11,10 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,

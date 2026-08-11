@@ -73,7 +73,6 @@ export class JsonConfigProvider implements ConfigProvider {
       ...(defaultValue !== undefined && { defaultValue }),
       globalValue: this.globalStore.get<T>(storedKey),
       workspaceValue: this.workspaceStore.get<T>(storedKey),
-      effectiveValue: this.get<T>(key),
     };
   }
 

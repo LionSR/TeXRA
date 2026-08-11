@@ -1,7 +1,7 @@
 import { getExecutionStore } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { executeCliWorkflowConfig } from './workflow';

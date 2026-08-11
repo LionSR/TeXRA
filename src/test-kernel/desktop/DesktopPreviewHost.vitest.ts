@@ -8,7 +8,7 @@ import {
   cleanupTempDirs,
   makeTempDir as makeSharedTempDir,
 } from '@test/support/tempDirPlatform';
-import { createExternalLocation } from '@utils/files';
+import { createExternalLocation } from '@utils/files/fileLocation';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 

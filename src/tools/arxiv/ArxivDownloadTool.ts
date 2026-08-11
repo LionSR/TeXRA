@@ -9,7 +9,7 @@ import { formatToolOutput } from '@tools/formatting';
 import { wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import { toPosixPath } from '@utils/core/pathCore';

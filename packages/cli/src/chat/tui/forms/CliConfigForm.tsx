@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
+import { setKimiCodePreference } from '@cli/runtime/kimiCodePreference';
 import {
   loadProviderApiKeyStatuses,
   saveProviderApiKey,
@@ -13,10 +14,7 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import {
-  CLI_STATE_SETTINGS,
-  stateSettingByKey,
-} from '@shared/schemas/stateSettings';
+import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { refreshSubscriptionPreferenceViews } from '../state/codexSubscription';
@@ -77,15 +75,15 @@ export function createCliConfigFormProps(
     entries: CLI_STATE_SETTINGS,
     readValue: (entry) => readSetting(entry, stores, 'cli'),
     writeValue: async (entry, value) => {
-      await writeSetting(entry, value, stores, 'cli');
+      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
+        // The runtime owner carries the OpenRouter mutual exclusion, so the
+        // form and `/api kimi-code` cannot drift.
+        await setKimiCodePreference(value === true, stores);
+      } else {
+        await writeSetting(entry, value, stores, 'cli');
+      }
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
-        if (entry.key === GlobalStateKey.KIMI_CODE_PREFER && value === true) {
-          // Dual-backend Kimi routing refuses the OpenRouter toggle, so enabling
-          // the preference here turns that toggle off like `/api kimi-code`.
-          const openRouter = stateSettingByKey(GlobalStateKey.USE_OPENROUTER);
-          if (openRouter) await writeSetting(openRouter, false, stores, 'cli');
-        }
         refreshSubscriptionPreferenceViews();
         if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
           await props.onApiModePersonal?.();

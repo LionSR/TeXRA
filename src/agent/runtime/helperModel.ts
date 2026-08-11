@@ -51,7 +51,6 @@ export async function createHelperModelKit(
 
   const handler = await createModelHandler(
     modelConfig,
-    undefined,
     session.responseTextProcessing,
   );
   handler.setOutputStreaming(false);

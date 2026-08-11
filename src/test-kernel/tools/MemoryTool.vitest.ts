@@ -11,7 +11,7 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
 const TEST_FRONTMATTER = [

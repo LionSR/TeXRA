@@ -3,14 +3,17 @@ import * as path from 'node:path';
 
 import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
+import {
+  finalWorkflowOutput,
+  RUN_OUTCOME,
+  AgentCategory,
+} from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
-import { getRunDir } from '@utils/files';
+import { getRunDir } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.

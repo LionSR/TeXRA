@@ -1,6 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
-import { takeTail } from '@common/errors/sdkErrorUtils';
+import { takeTail } from '@common/errors/sdkError/errorPatterns';
 import {
   resolveDirectModelApiKeyProvider,
   type ResolvedModelConfig,

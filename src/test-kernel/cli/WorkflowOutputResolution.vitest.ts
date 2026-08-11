@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
@@ -12,7 +11,7 @@ import {
   type CliWorkflowRunResult,
 } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];

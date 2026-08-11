@@ -16,8 +16,7 @@ import { keyed } from 'lit/directives/keyed.js';
 import type { LaunchTarget } from '@shared/schemas';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
-import { selectStyles } from '@shared/styles/selectStyles';
+import { commonViewStyles, designTokens, selectStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared utils

@@ -1,9 +1,13 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
 
-import { getAgentsByCategory, loadAgents, type AgentEntry } from '@agent/index';
 import {
-  cliAgentRosterController,
+  createWorkspaceAgentRosterController,
+  getAgentsByCategory,
+  loadAgents,
+  type AgentEntry,
+} from '@agent/index';
+import {
   readCliAgentRoster,
   type CliAgentRosterRecord,
 } from '@cli/runtime/agentRoster';
@@ -113,7 +117,7 @@ async function loadRosterData(): Promise<AgentRosterData> {
   await loadAgents({ includeRemote: false });
   return {
     record: await readCliAgentRoster(),
-    presets: cliAgentRosterController().allPresets(),
+    presets: createWorkspaceAgentRosterController().allPresets(),
     agents: byCategory((category) => getAgentsByCategory(category)),
   };
 }
@@ -249,7 +253,7 @@ export function AgentRosterForm(
     return frame(
       items,
       (value) => {
-        const roster = cliAgentRosterController();
+        const roster = createWorkspaceAgentRosterController();
         if (value === 'inherit') write(() => roster.setInherited(), 'overview');
         else if (value === 'all') write(() => roster.setAll(), 'overview');
         else
@@ -274,7 +278,7 @@ export function AgentRosterForm(
         })),
       ],
       (value) => {
-        const roster = cliAgentRosterController();
+        const roster = createWorkspaceAgentRosterController();
         write(
           () =>
             value ? roster.setDefaultTeam(value) : roster.clearDefaultTeam(),
@@ -335,7 +339,7 @@ export function AgentRosterForm(
       const agent = agents.find((candidate) => agentKeyOf(candidate) === value);
       if (!agent) return;
       write(() =>
-        cliAgentRosterController().setAgentEnabled({
+        createWorkspaceAgentRosterController().setAgentEnabled({
           category: mode,
           source: agent.source,
           name: agent.name,

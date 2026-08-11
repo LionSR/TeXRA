@@ -28,7 +28,7 @@ import {
   snapshotFacts,
 } from '@test/support/storeTestDrivers';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/session-restart-repair' });
 

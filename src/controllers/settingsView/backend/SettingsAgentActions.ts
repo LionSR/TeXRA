@@ -7,7 +7,7 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentSource, SettingsMessageFor } from '@shared/schemas';
 // Local imports - utilities
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 
 interface AgentFileHandlers {

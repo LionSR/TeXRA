@@ -16,8 +16,8 @@ import {
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';

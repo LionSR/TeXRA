@@ -185,7 +185,6 @@ export class SubscriptionsTab extends LitElement {
         <subscription-section
           .provider=${GROK_SUBSCRIPTION_SECTION}
           .auth=${this.grokAuth}
-          .usage=${this.usage?.grok ?? null}
           .now=${this.now}
         ></subscription-section>
         ${CODING_PLAN_SECTIONS.map((section) =>

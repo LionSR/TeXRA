@@ -490,7 +490,7 @@ function announceApproval(payload: ApprovalPayload): void {
       },
     });
   }
-  notify({ kind: 'approvalNeeded' });
+  notify('approvalNeeded');
 }
 
 function setTuiApprovalBypassState({

@@ -4,7 +4,7 @@ export {
   runCleanBuild,
   runCleanOutput,
 } from './clean';
-export { runPack, runPackSingle, runPackMultiple } from './pack';
+export { runPackSingle, runPackMultiple } from './pack';
 export { runPackRunDir, runCleanRunDir } from './runDirOps';
 export {
   runPackLatexdiffvc,

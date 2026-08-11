@@ -17,13 +17,10 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-import {
-  AbsoluteFS,
-  createWorkspaceLocation,
-  getOriginalSnapshotPath,
-  getRunDir,
-  TaskRunFileService,
-} from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { createWorkspaceLocation } from '@utils/files/fileLocation';
+import { getOriginalSnapshotPath, getRunDir } from '@utils/files/runStorageFs';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 const tempDirs: string[] = [];
 

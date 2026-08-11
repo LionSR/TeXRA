@@ -4,7 +4,6 @@ const SubscriptionUsageProviderSchema = z.enum([
   'chatgpt',
   'kimiCode',
   'glmCodingPlan',
-  'grok',
 ]);
 export type SubscriptionUsageProvider = z.infer<
   typeof SubscriptionUsageProviderSchema
@@ -39,7 +38,6 @@ export const SubscriptionUsageSnapshotSchema = z.discriminatedUnion('state', [
     reason: z.enum([
       'missing_credentials',
       'invalid_credentials',
-      'unsupported',
       'request_failed',
       'malformed_response',
     ]),
@@ -53,7 +51,6 @@ export const SubscriptionUsageSnapshotsSchema = z.object({
   chatgpt: SubscriptionUsageSnapshotSchema,
   kimiCode: SubscriptionUsageSnapshotSchema,
   glmCodingPlan: SubscriptionUsageSnapshotSchema,
-  grok: SubscriptionUsageSnapshotSchema,
 });
 export type SubscriptionUsageSnapshots = z.infer<
   typeof SubscriptionUsageSnapshotsSchema

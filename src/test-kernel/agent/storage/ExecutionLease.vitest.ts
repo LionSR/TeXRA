@@ -39,7 +39,7 @@ import {
   executionLeasePath,
   writeForeignLease,
 } from '@test/support/executionLeaseFixtures';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const ownedExecutionIds = new Set<ExecutionId>();
 

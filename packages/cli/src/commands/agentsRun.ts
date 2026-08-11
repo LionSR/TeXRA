@@ -1,6 +1,6 @@
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
+import { AgentCategory } from '@shared/schemas';
 import {
   CliUsageError,
   readCliStdinText,

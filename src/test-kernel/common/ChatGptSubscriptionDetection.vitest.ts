@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeChatGptSubscriptionLimit,
-  formatProviderHttpError,
   parseChatGptSubscriptionLimit,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/chatgptSubscriptionDetection';
+import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
 
 const USAGE_LIMIT_BODY = {
   type: 'usage_limit_reached',

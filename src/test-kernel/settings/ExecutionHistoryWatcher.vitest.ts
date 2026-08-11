@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const mocks = vi.hoisted(() => ({
   workspaceFoldersListeners: [] as Array<() => void>,

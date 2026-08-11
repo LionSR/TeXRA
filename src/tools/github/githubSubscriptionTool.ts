@@ -38,17 +38,16 @@ import {
 import { issueRef, prRef } from './formatUtils';
 import { getGitHubToken } from './githubAuth';
 import { ghGet } from './githubClient';
-import { MAX_CONCURRENT_PR_SUBSCRIPTIONS } from './prSubscriptionConstants';
 import {
-  bindIssueSubscription,
-  bindPRSubscription,
-  bindRepoSubscription,
-  listIssueSubscriptionBindings,
-  listPRSubscriptionBindings,
-  listRepoSubscriptionBindings,
-  unbindIssueSubscription,
-  unbindPRSubscription,
-  unbindRepoSubscription,
+  MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
+import {
+  issueSubscriptionRegistry,
+  prSubscriptionRegistry,
+  repoSubscriptionRegistry,
 } from './subscriptionBindings';
 import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
@@ -174,7 +173,7 @@ async function execSubscribe(
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
-    const created = bindRepoSubscription(streamId, target);
+    const created = repoSubscriptionRegistry.bind(streamId, target);
     const slug = slugOf(target);
     return executed(
       created
@@ -186,7 +185,7 @@ async function execSubscribe(
     );
   }
   if (target.kind === 'pr') {
-    const created = bindPRSubscription(streamId, {
+    const created = prSubscriptionRegistry.bind(streamId, {
       ...target,
       minAnnotationLevel,
     });
@@ -218,7 +217,7 @@ async function execSubscribe(
       (await resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
 
   if (isPR) {
-    const created = bindPRSubscription(streamId, {
+    const created = prSubscriptionRegistry.bind(streamId, {
       owner: target.owner,
       repo: target.repo,
       pullNumber: target.issueNumber,
@@ -239,7 +238,7 @@ async function execSubscribe(
       summary,
     );
   }
-  const created = bindIssueSubscription(streamId, target);
+  const created = issueSubscriptionRegistry.bind(streamId, target);
   return executed(
     created
       ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
@@ -277,16 +276,16 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
   let removed: boolean;
   let label: string;
   if (target.kind === 'repo') {
-    removed = unbindRepoSubscription(streamId, target);
+    removed = repoSubscriptionRegistry.unbind(streamId, target);
     label = `repo ${slug}`;
   } else if (target.kind === 'pr') {
-    removed = unbindPRSubscription(streamId, target);
+    removed = prSubscriptionRegistry.unbind(streamId, target);
     label = prRef(slug, target.pullNumber);
   } else {
     // Symmetric to subscribe: a /issues/N path may have been re-routed to a
     // PR subscription. Try both — whichever owns it wins.
-    const issueRemoved = unbindIssueSubscription(streamId, target);
-    const prRemoved = unbindPRSubscription(streamId, {
+    const issueRemoved = issueSubscriptionRegistry.unbind(streamId, target);
+    const prRemoved = prSubscriptionRegistry.unbind(streamId, {
       owner: target.owner,
       repo: target.repo,
       pullNumber: target.issueNumber,
@@ -309,9 +308,9 @@ function execList(): ToolResult {
   ): string[] =>
     bindings.filter((b) => b.streamIds.includes(streamId)).map((b) => b.key);
   const all = [
-    ...keysBoundToStream(listRepoSubscriptionBindings()),
-    ...keysBoundToStream(listPRSubscriptionBindings()),
-    ...keysBoundToStream(listIssueSubscriptionBindings()),
+    ...keysBoundToStream(repoSubscriptionRegistry.list()),
+    ...keysBoundToStream(prSubscriptionRegistry.list()),
+    ...keysBoundToStream(issueSubscriptionRegistry.list()),
   ];
   if (all.length === 0) {
     return executed(
@@ -502,7 +501,7 @@ export class GitHubSubscriptionTool extends defineTool({
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
     'Bot-authored events are dropped end-to-end by policy.',
-    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, 10 concurrent issue subscriptions, 3 concurrent repo subscriptions per process. Poll interval ≈ 30s. Requires a GitHub token: set it in host settings, or via GITHUB_TOKEN or GH_TOKEN.`,
+    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${PR_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it in host settings, or via GITHUB_TOKEN or GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
 }) {

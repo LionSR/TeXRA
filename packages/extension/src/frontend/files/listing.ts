@@ -11,7 +11,7 @@ import {
   type FileListConfig,
 } from '@common/files/fileListingRules';
 import { normalizeFilePath } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /**
  * Get path relative to root, preserving symlink structure within workspace.

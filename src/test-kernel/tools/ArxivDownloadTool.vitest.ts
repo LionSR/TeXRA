@@ -15,7 +15,7 @@ vi.mock('@tools/gitignore', () => ({
 import * as arxivModule from '@latex/arxivProcessor';
 import { FileType } from '@platform/interfaces';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 declare module '@latex/arxivProcessor' {
   interface ArxivSourceProcessor {

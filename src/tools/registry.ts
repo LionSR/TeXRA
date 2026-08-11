@@ -151,8 +151,7 @@ export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
 /**
  * Compile-time guard: every canonical tool with specialized display treatment
- * must remain registered. The shared module excludes its documented native
- * text-editor alias before exporting `CanonicalToolDisplayName`.
+ * must remain registered.
  */
 type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreRegistered = AssertNever<

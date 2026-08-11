@@ -24,35 +24,11 @@ import {
   getRunDir,
   getOriginalSnapshotPath,
   getRunStorageAbsolutePath,
-  inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
   shouldSkipRelocation,
   snapshotExists,
 } from './runStorageFs';
 import { WorkspaceFS } from './workspaceFS';
-
-// Public entry point: external consumers import these value-object helpers and
-// run-storage path utilities through `@utils/files/taskRunStorage` (and the
-// `@utils/files` barrel). Implementation lives in the focused modules above.
-export {
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-  getComparablePath,
-  getFileDirectory,
-  getShortDisplayPath,
-  pathToLocation,
-} from './fileLocation';
-export {
-  ensureRunDir,
-  getOriginalSnapshotPath,
-  getRunDir,
-  findRunDir,
-  findExistingRunStoragePath,
-  inspectRunStorageEntry,
-  runStorageLocationFromAnyAbsolutePath,
-  runStorageLocationFromAbsolutePath,
-} from './runStorageFs';
 
 export class TaskRunFileService {
   public readonly runDirectory: string;

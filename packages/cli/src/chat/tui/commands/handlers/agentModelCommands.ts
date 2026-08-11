@@ -1,4 +1,3 @@
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   assertCliAgentLaunch,
@@ -19,6 +18,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { AgentCategory } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -91,7 +91,6 @@ export async function applyCliModelSelection(
         apiMode,
         CHAT_API_MODE_MODEL_RECOVERY,
       ),
-      agentCategory: AgentCategory.ToolUse,
     });
     await setCliHelperModel(selection.model);
     setCliSessionModelOverride(selection.model);

@@ -30,6 +30,10 @@ let workspacePath = '';
 let externalPath = '';
 let missingExternalPath = '';
 
+// Editor file I/O is request/response RPC correlated by request id; the main
+// process echoes the renderer-supplied id in its reply.
+const REQUEST_ID = '123e4567-e89b-42d3-a456-426614174000';
+
 function createPtyHost(): DesktopPtyHost {
   return {
     create: vi.fn(async () => {
@@ -115,10 +119,12 @@ describe('desktop workspace IPC', () => {
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
+      requestId: REQUEST_ID,
     });
     await vi.waitFor(() =>
       expect(postToRenderer).toHaveBeenCalledWith({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+        requestId: REQUEST_ID,
         directory: '',
         files: [
           { path: 'paper.tex', isDirectory: false },
@@ -129,11 +135,13 @@ describe('desktop workspace IPC', () => {
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
+      requestId: REQUEST_ID,
       directory: 'src',
     });
     await vi.waitFor(() =>
       expect(postToRenderer).toHaveBeenCalledWith({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+        requestId: REQUEST_ID,
         directory: 'src',
         files: [
           { path: 'src/deep', isDirectory: true },
@@ -157,11 +165,13 @@ describe('desktop workspace IPC', () => {
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
+      requestId: REQUEST_ID,
       path: 'paper.tex',
     });
     await vi.waitFor(() =>
       expect(postToRenderer).toHaveBeenCalledWith({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
+        requestId: REQUEST_ID,
         path: 'paper.tex',
         contents: 'inside',
       }),
@@ -169,15 +179,18 @@ describe('desktop workspace IPC', () => {
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
+      requestId: REQUEST_ID,
       path: 'linked.tex',
     });
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      requestId: REQUEST_ID,
       path: 'linked.tex',
       contents: 'overwritten',
     });
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      requestId: REQUEST_ID,
       path: 'dangling-linked.tex',
       contents: 'created outside',
     });
@@ -206,6 +219,7 @@ describe('desktop workspace IPC', () => {
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      requestId: REQUEST_ID,
       path: 'paper.tex',
       contents: 'recovered buffer',
     });
@@ -213,6 +227,7 @@ describe('desktop workspace IPC', () => {
     await vi.waitFor(() =>
       expect(postToRenderer).toHaveBeenCalledWith({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
+        requestId: REQUEST_ID,
         path: 'paper.tex',
       }),
     );
@@ -228,6 +243,7 @@ describe('desktop workspace IPC', () => {
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      requestId: REQUEST_ID,
       path: 'src/index.ts',
       contents: 'unrecoverable buffer',
     });
@@ -235,6 +251,7 @@ describe('desktop workspace IPC', () => {
     await vi.waitFor(() =>
       expect(postToRenderer).toHaveBeenCalledWith({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+        requestId: REQUEST_ID,
         path: 'src/index.ts',
         message:
           'The file cannot be recreated because its parent folder no longer exists.',

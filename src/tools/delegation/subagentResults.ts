@@ -19,13 +19,11 @@ import {
   type AgentFinalResult,
   type ResultDiffSummary,
 } from '@agent/runtime/AgentFinalResult';
-import { normalizeProviderError } from '@common/errors';
-import type { ExecutionId, SubagentProgressUpdate } from '@shared/schemas';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import type { ExecutionId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import type { ExecResult } from '@shared/schemas/opResults';
-import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
-import { planSummaryLine } from '@shared/schemas/workPlan';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -251,64 +249,6 @@ export function formatSubagentError(
       message: formatted.message,
     },
   );
-}
-
-// ============================================================================
-// Subagent progress formatting (typed → XML at boundary)
-// ============================================================================
-
-/** Format a typed progress update as XML for injection into orchestrator context. */
-export function formatSubagentProgress(
-  executionId: string,
-  agentName: string,
-  update: SubagentProgressUpdate,
-): string {
-  const tag = DELIVERY_TAG.subagentProgress;
-  const idAttr = `id="${escapeAttr(executionId)}"`;
-  const agentAttr = `agent="${escapeAttr(agentName)}"`;
-
-  switch (update.kind) {
-    case 'todos': {
-      const { completed, inProgress, pending } = countByStatus(update.todos);
-      const items = update.todos
-        .map((t) => {
-          const icon = STATUS_DISPLAY[t.status].icon;
-          return `  ${icon} ${escapeText(t.content)}`;
-        })
-        .join('\n');
-      return [
-        `<${tag} ${idAttr} ${agentAttr} type="todos" completed="${completed}" active="${inProgress}" pending="${pending}">`,
-        items,
-        `</${tag}>`,
-      ].join('\n');
-    }
-
-    case 'overview': {
-      const fileList =
-        update.filesChanged.length > 0
-          ? update.filesChanged.map((f) => escapeAttr(f)).join(', ')
-          : 'none';
-      const attrs = [
-        `type="overview"`,
-        `tool-calls="${update.toolCallCount}"`,
-        `files-changed="${fileList}"`,
-      ];
-      if (update.cost !== undefined) {
-        attrs.push(`cost="${update.cost.toFixed(4)}"`);
-      }
-      return `<${tag} ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
-    }
-
-    case 'plan': {
-      if (!update.plan) {
-        return `<${tag} ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
-      }
-      return `<${tag} ${idAttr} ${agentAttr} type="plan" status="updated" summary="${escapeAttr(planSummaryLine(update.plan.objective))}" />`;
-    }
-
-    case 'started':
-      return `<${tag} ${idAttr} ${agentAttr} type="started" />`;
-  }
 }
 
 // ============================================================================

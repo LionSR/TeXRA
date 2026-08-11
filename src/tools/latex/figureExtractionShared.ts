@@ -7,7 +7,7 @@ import {
   resolveAndFormat,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {

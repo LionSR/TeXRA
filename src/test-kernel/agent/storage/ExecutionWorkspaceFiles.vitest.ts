@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listExecutionWorkspaceFiles } from '@agent/storage';
 import { platform } from '@platform/platform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
 const CONFIG = { workingDirectory: WORKSPACE_PATH };

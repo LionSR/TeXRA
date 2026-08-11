@@ -8,7 +8,6 @@ import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
-import type { AgentCategory } from '@shared/schemas/agent';
 import {
   getPreferKimiCode,
   getUseOpenRouter,
@@ -162,10 +161,9 @@ export function resolveProviderCapabilities({
  * Resolve ChatGPT-subscription capabilities for a model, or null when the
  * subscription preference is off or the model is not Codex-eligible.
  */
-export function resolveCodexSubscriptionCapabilitiesForAgentCategory(
+export function resolveCodexSubscriptionCapabilities(
   config: ModelConfig,
   useOpenRouter: boolean,
-  agentCategory: AgentCategory | undefined,
 ): ProviderCapabilityProfile | null {
   if (!isPreferCodexSubscription()) return null;
   return resolveProviderCapabilities({ model: config, useOpenRouter });
@@ -174,14 +172,12 @@ export function resolveCodexSubscriptionCapabilitiesForAgentCategory(
 /** Whether the model currently routes through a signed-in ChatGPT subscription. */
 export async function isCodexSubscriptionActive(
   modelId: string,
-  agentCategory: AgentCategory,
 ): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (!config) return false;
-  const capabilities = resolveCodexSubscriptionCapabilitiesForAgentCategory(
+  const capabilities = resolveCodexSubscriptionCapabilities(
     config,
     getUseOpenRouter(),
-    agentCategory,
   );
   if (!capabilities) return false;
   return isCodexSignedIn();
@@ -193,7 +189,7 @@ export async function isCodexSubscriptionActive(
  * xAI-eligible. All non-OpenRouter-only xAI registry models qualify; the OAuth
  * token hits the same `api.x.ai` surface as an API key.
  */
-export function resolveXaiSubscriptionCapabilitiesForAgentCategory(
+export function resolveXaiSubscriptionCapabilities(
   config: ModelConfig,
   useOpenRouter: boolean,
 ): ProviderCapabilityProfile | null {
@@ -214,7 +210,7 @@ export async function isXaiSubscriptionActive(
 ): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (!config) return false;
-  const capabilities = resolveXaiSubscriptionCapabilitiesForAgentCategory(
+  const capabilities = resolveXaiSubscriptionCapabilities(
     config,
     getUseOpenRouter(),
   );

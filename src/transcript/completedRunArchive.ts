@@ -5,7 +5,6 @@
  * execution→stream mapping.
  */
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
-import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import {
@@ -16,6 +15,7 @@ import {
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
   type ExecutionId,
+  type ExecutionMeta,
   type StreamLogEntry,
   type StreamTabId,
   type ToolUseLog,
@@ -25,6 +25,35 @@ import { assertNever, isObject } from '@utils/core';
 
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
+
+/**
+ * The execution→stream foreign key: the `streamId` stamped on execution
+ * metadata at registration. A row without one has no persisted stream, so
+ * archive readers never fall back to re-deriving a stream from names or
+ * sidecar scans. This is the ONE resolution site — completed-run readers
+ * and the trace assembler share it instead of each re-deriving
+ * `readMeta() → meta.streamId`.
+ *
+ * The resolved branch carries the already-read `meta` so a caller that also
+ * needs other metadata fields (the trace assembler) does not pay a second
+ * `readMeta()`. The absence reason is typed so callers can distinguish "no
+ * execution metadata at all" from "metadata that predates stamped streams".
+ */
+export type ExecutionStreamResolution =
+  | {
+      readonly streamId: StreamTabId;
+      readonly meta: ExecutionMeta;
+    }
+  | { readonly reason: 'no-meta' | 'no-stream' };
+
+export async function resolveStreamForExecution(
+  executionId: ExecutionId,
+): Promise<ExecutionStreamResolution> {
+  const meta = await getExecutionStore(executionId).readMeta();
+  if (!meta) return { reason: 'no-meta' };
+  if (!meta.streamId) return { reason: 'no-stream' };
+  return { streamId: meta.streamId, meta };
+}
 
 type CompletedRunTodosSource = 'streamData' | 'none';
 
@@ -36,25 +65,27 @@ export interface CompletedRunTodosReadResult {
 
 /**
  * Read the archived task list for a completed run from the durable stream
- * sidecar (`streamData/{stream}/workPlan.json`). The execution→stream
- * mapping is the `streamId` stamped on execution metadata at registration —
- * a row without one has no persisted stream.
+ * sidecar (`streamData/{stream}/workPlan.json`), keyed through
+ * {@link resolveStreamForExecution}.
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
 ): Promise<CompletedRunTodosReadResult> {
   const snapshotStore = new StreamSnapshotStore();
-  const streamId = (await getExecutionStore(executionId).readMeta())?.streamId;
+  const resolution = await resolveStreamForExecution(executionId);
 
-  if (streamId && (await snapshotStore.hasPersistedWorkPlan(streamId))) {
-    const snapshot = await snapshotStore.read(streamId);
+  if (
+    !('reason' in resolution) &&
+    (await snapshotStore.hasPersistedWorkPlan(resolution.streamId))
+  ) {
+    const snapshot = await snapshotStore.read(resolution.streamId);
     return {
       todos: snapshot.todos.map((todo): TodoEntry => ({
         content: todo.content,
         status: todo.status,
       })),
       source: 'streamData',
-      streamId,
+      streamId: resolution.streamId,
     };
   }
   return { todos: [], source: 'none' };
@@ -111,11 +142,10 @@ function toolResultText(tool: ToolUseLog): string | undefined {
  * `userMessage` rows may carry an attachment-kind/count payload (#7508) —
  * media that was sent to the model but only ever lived in the provider
  * message. When present, render `content` as Anthropic-shaped blocks (no
- * bytes) via the attachment-marker vocabulary constructor, so
+ * bytes) — one `{ type: kind }` marker per attachment — so
  * `normalizeConversationForExport` renders them as `[image attachment]` or
  * `[document attachment]`; otherwise keep the plain-string
- * `content` shape every other conversation consumer already expects. This
- * module holds no independent opinion on what those blocks look like.
+ * `content` shape every other conversation consumer already expects.
  */
 function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text) return [];
@@ -130,7 +160,7 @@ function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
       role,
       content: [
         { type: 'text', text: entry.text },
-        ...attachments.map(mediaAttachmentKindToContentBlock),
+        ...attachments.map((kind) => ({ type: kind })),
       ],
     },
   ];
@@ -325,12 +355,14 @@ async function conversationFromStream(
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
 ): Promise<CompletedRunConversationReadResult> {
-  // A call-scoped read-only store, so this reader neither reloads a live store
-  // nor mutates persistence.
-  const streamLogStore = await StreamLogStore.openReadOnly();
-  const streamId = (await getExecutionStore(executionId).readMeta())?.streamId;
-  if (!streamId) return { conversation: null, source: 'none' };
+  const resolution = await resolveStreamForExecution(executionId);
+  if ('reason' in resolution) return { conversation: null, source: 'none' };
+  const { streamId } = resolution;
 
+  // A call-scoped read-only store seeded with just this stream, so this
+  // reader neither reloads a live store nor scans the whole streamLogs
+  // directory, and never mutates persistence.
+  const streamLogStore = await StreamLogStore.openReadOnlyForStream(streamId);
   const conversation = await conversationFromStream(streamLogStore, streamId);
   return conversation.length > 0
     ? { conversation, source: 'streamLog', streamId }

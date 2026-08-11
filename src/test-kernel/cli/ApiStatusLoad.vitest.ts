@@ -65,7 +65,6 @@ vi.mock('@platform/platform', () => ({
 
 const {
   loadCliApiStatus,
-  loadCliApiStatusLines,
   loadCliDetailedAccountStatusLines,
   loadCliModelAccessOverview,
 } = await import('@cli/runtime/apiStatus');
@@ -106,7 +105,7 @@ function accountStatusLines(
   return loadCliDetailedAccountStatusLines({ apiMode });
 }
 
-describe('loadCliApiStatusLines', () => {
+describe('loadCliApiStatus', () => {
   beforeEach(() => {
     mocks.fetchRelayUsageSummary.mockReset();
     mocks.getCliApiMode.mockReset().mockReturnValue('personal');
@@ -167,13 +166,13 @@ describe('loadCliApiStatusLines', () => {
     async ({ profile, lines }) => {
       mocks.getCliAuthProfile.mockResolvedValue(profile);
 
-      await expect(loadCliApiStatus()).resolves.toEqual({ lines });
+      await expect(loadCliApiStatus()).resolves.toEqual(lines);
     },
   );
 
   it('uses an invocation API mode override for launcher status text', async () => {
     await expect(
-      loadCliApiStatusLines({
+      loadCliApiStatus({
         apiMode: 'included',
         includeActionHint: true,
       }),
@@ -195,12 +194,10 @@ describe('loadCliApiStatusLines', () => {
     mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
     mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 100.3 });
 
-    await expect(loadCliApiStatus({ apiMode: 'included' })).resolves.toEqual({
-      lines: [
-        'api: included access',
-        'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
-      ],
-    });
+    await expect(loadCliApiStatus({ apiMode: 'included' })).resolves.toEqual([
+      'api: included access',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
+    ]);
   });
 
   it('groups personal keys with their route and omits unused included quota', async () => {
@@ -215,14 +212,12 @@ describe('loadCliApiStatusLines', () => {
     mocks.resolveCliUsageTier.mockResolvedValue('Researcher');
     mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 25 });
 
-    await expect(loadCliApiStatus()).resolves.toEqual({
-      lines: [
-        'api: your own API keys',
-        'your own API keys: DeepSeek',
-        'auth: signed in as researcher@example.com · tier: Researcher',
-        'Account metadata may be stale.',
-      ],
-    });
+    await expect(loadCliApiStatus()).resolves.toEqual([
+      'api: your own API keys',
+      'your own API keys: DeepSeek',
+      'auth: signed in as researcher@example.com · tier: Researcher',
+      'Account metadata may be stale.',
+    ]);
     expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
 
@@ -231,9 +226,10 @@ describe('loadCliApiStatusLines', () => {
       new Error('preference store offline'),
     );
 
-    await expect(loadCliApiStatus()).resolves.toEqual({
-      lines: ['api: your own API keys', 'auth: signed out'],
-    });
+    await expect(loadCliApiStatus()).resolves.toEqual([
+      'api: your own API keys',
+      'auth: signed out',
+    ]);
     expect(mocks.readCliModelAccessStatus).not.toHaveBeenCalled();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(2);
@@ -670,7 +666,7 @@ describe('loadCliApiStatusLines', () => {
     setPersonalKeys('deepseek');
 
     await expect(
-      loadCliApiStatusLines({ includeActionHint: true }),
+      loadCliApiStatus({ includeActionHint: true }),
     ).resolves.toEqual([
       'api: your own API keys',
       'your own API keys: DeepSeek',
@@ -689,12 +685,10 @@ describe('loadCliApiStatusLines', () => {
         Promise.resolve(originsByProvider[provider] ?? 'none'),
     );
 
-    await expect(loadCliApiStatus()).resolves.toEqual({
-      lines: [
-        'api: your own API keys',
-        'your own API keys: DeepSeek, Kimi Code',
-        'auth: signed out',
-      ],
-    });
+    await expect(loadCliApiStatus()).resolves.toEqual([
+      'api: your own API keys',
+      'your own API keys: DeepSeek, Kimi Code',
+      'auth: signed out',
+    ]);
   });
 });

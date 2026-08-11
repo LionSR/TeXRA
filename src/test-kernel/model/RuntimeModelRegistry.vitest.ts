@@ -408,7 +408,7 @@ describe('runtime model registry', () => {
     );
     expect(getRuntimeModelConfig('copilot:gemini36f')?.provider).toBe('google');
     expect(
-      inferPersistedModelHandlerCompatibilityKey('copilot:gemini36f', []),
+      inferPersistedModelHandlerCompatibilityKey('copilot:gemini36f'),
     ).toBe('ModelHandlerVscodeLm');
   });
 

@@ -8,7 +8,6 @@ import { ModelProvider } from 'llm-zoo';
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
-  AgentCategory,
   AgentSettingSchema,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
@@ -20,6 +19,7 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerVscodeLm } from '@agent/modelHandlers/vscodelm/modelHandlerVscodeLm';
 import type { LanguageModelMessage } from '@platform/languageModel';
+import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Provider SDK message types

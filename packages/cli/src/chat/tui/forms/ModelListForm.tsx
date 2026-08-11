@@ -19,7 +19,6 @@ import {
   isCompactFormRows,
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
-import type { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
   CompactPickerKeyHints,
@@ -32,7 +31,6 @@ import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext'
 export interface ModelListFormProps {
   readonly currentModel: string;
   readonly apiMode: ApiAccessMode;
-  readonly agentCategory?: AgentCategory;
   readonly availableRows?: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -68,7 +66,6 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     load: () =>
       getCliModelAccessList({
         apiMode: props.apiMode,
-        agentCategory: props.agentCategory,
       }),
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,

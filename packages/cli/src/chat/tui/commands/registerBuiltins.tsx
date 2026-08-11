@@ -12,7 +12,7 @@ import {
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { AgentCategory, type ExecutionId } from '@shared/schemas';
+import { type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -454,7 +454,6 @@ export function registerBuiltinSlashCommands(options?: {
       <ModelListForm
         currentModel={current}
         apiMode={sessionMeta.get().apiMode}
-        agentCategory={AgentCategory.ToolUse}
         availableRows={props.availableRows}
         selectable={selectable}
         getModelSwitchDisabledReason={options?.getModelSwitchDisabledReason}

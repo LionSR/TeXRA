@@ -22,7 +22,7 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Test stream ID for the per-stream approval-bypass cases
 const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;

@@ -1,5 +1,4 @@
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   findTeamPreset,
@@ -8,7 +7,7 @@ import {
   refreshRemoteCatalogForGaps,
   teamPlanHasGaps,
 } from '@common/teams/TeamPlan';
-import { byCategory } from '@shared/schemas';
+import { byCategory, AgentCategory } from '@shared/schemas';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -27,12 +26,12 @@ interface MultiAgentRunPlanInit {
 
 export interface MultiAgentRunPlanLoadResult {
   readonly plan: CliMultiAgentPresetRunPlan;
-  readonly remoteAgentLoadAttempted: boolean;
+  readonly remoteCatalogRefreshAttempted: boolean;
 }
 
 export interface MultiAgentPresetPlansLoadResult {
   readonly plans: readonly CliMultiAgentPresetRunPlan[];
-  readonly remoteAgentLoadAttempted: boolean;
+  readonly remoteCatalogRefreshAttempted: boolean;
 }
 
 function planCurrentMultiAgentRun(
@@ -72,7 +71,7 @@ export async function loadCliMultiAgentRunPlan(
   if (options.reloadRemoteAgents === false) {
     return {
       plan: localPlan,
-      remoteAgentLoadAttempted: false,
+      remoteCatalogRefreshAttempted: false,
     };
   }
   const result = await reloadRemoteAgentsForGaps(
@@ -82,7 +81,7 @@ export async function loadCliMultiAgentRunPlan(
   );
   return {
     plan: result.value,
-    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
+    remoteCatalogRefreshAttempted: result.remoteCatalogRefreshAttempted,
   };
 }
 
@@ -97,7 +96,7 @@ export async function loadCliMultiAgentPresetPlanSet(
   );
   return {
     plans: result.value,
-    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
+    remoteCatalogRefreshAttempted: result.remoteCatalogRefreshAttempted,
   };
 }
 
@@ -105,15 +104,14 @@ async function reloadRemoteAgentsForGaps<T>(
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
-): Promise<{ readonly value: T; readonly remoteAgentLoadAttempted: boolean }> {
-  const result = await refreshRemoteCatalogForGaps(value, hasGaps, replan, {
+): Promise<{
+  readonly value: T;
+  readonly remoteCatalogRefreshAttempted: boolean;
+}> {
+  return refreshRemoteCatalogForGaps(value, hasGaps, replan, {
     canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
     refreshRemote: () => refresh({ includeRemote: true }),
   });
-  return {
-    value: result.value,
-    remoteAgentLoadAttempted: result.remoteCatalogRefreshAttempted,
-  };
 }
 
 export function writeMissingPresetAgents(

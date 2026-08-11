@@ -13,7 +13,7 @@ import {
   requestAndWriteApprovedEdit,
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.

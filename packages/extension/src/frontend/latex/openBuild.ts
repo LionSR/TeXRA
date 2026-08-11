@@ -15,7 +15,8 @@ import {
 
 // Local imports - utilities
 import { getFileStem } from '@utils/core';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';

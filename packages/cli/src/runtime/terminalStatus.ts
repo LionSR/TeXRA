@@ -33,6 +33,10 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
   );
 }
 
+/** Terminal state of a CLI turn: a run outcome, or a resumed subagent parked
+ *  back to WAITING (a successfully completed turn, not a finished agent). */
+export type TurnOutcome = RunOutcome | typeof STREAM_PHASE.WAITING;
+
 /** Map a run outcome to the CLI process exit code. A resumed subagent that
  *  parks back to WAITING is a successfully completed turn.
  *
@@ -41,9 +45,7 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
  *  all — it has no dedicated exit code. An earlier design gave it one, which
  *  made callers that treat a nonzero exit as "did not produce a result" discard
  *  perfectly good runs; TeXRA's own PR review workflow was among them. */
-export function runOutcomeExitCode(
-  outcome: RunOutcome | typeof STREAM_PHASE.WAITING,
-): CliExitCode {
+export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
   if (outcome === RUN_OUTCOME.CANCELLED) {
     return CliExitCode.Interrupted;
   }

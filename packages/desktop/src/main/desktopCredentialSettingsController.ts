@@ -45,7 +45,6 @@ import type {
   SpendingStatus,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
@@ -236,34 +235,25 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async postSubscriptionUsage(forceRefresh = false): Promise<void> {
-    const [chatgpt, kimiCode, glmCodingPlan, grok] = await Promise.all([
+    const [chatgpt, kimiCode, glmCodingPlan] = await Promise.all([
       this.subscriptionUsage.getUsage('chatgpt', { forceRefresh }),
       this.subscriptionUsage.getUsage('kimiCode', { forceRefresh }),
       this.subscriptionUsage.getUsage('glmCodingPlan', { forceRefresh }),
-      this.subscriptionUsage.getUsage('grok', { forceRefresh }),
     ]);
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots: { chatgpt, kimiCode, glmCodingPlan, grok },
+      snapshots: { chatgpt, kimiCode, glmCodingPlan },
     });
   }
 
   async postMainModelOptionsData(): Promise<void> {
     const visibleModels = this.modelSelectionController.getVisibleModels();
-    const [workflowModelOptions, toolUseModelOptions] = await Promise.all([
-      computeModelOptionsData(visibleModels, undefined, {
-        agentCategory: AgentCategory.Workflow,
-      }),
-      computeModelOptionsData(visibleModels, undefined, {
-        agentCategory: AgentCategory.ToolUse,
-      }),
-    ]);
+    const modelOptions = await computeModelOptionsData(visibleModels);
     this.options.renderer.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: workflowModelOptions,
       optionsDataByCategory: {
-        workflow: workflowModelOptions,
-        toolUse: toolUseModelOptions,
+        workflow: modelOptions,
+        toolUse: modelOptions,
       },
     });
   }

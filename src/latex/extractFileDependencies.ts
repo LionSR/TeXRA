@@ -13,7 +13,7 @@ import pMap from 'p-map';
 // Local imports
 import type { FileLocation } from '@shared/schemas';
 import { filterNotNull, unique } from '@utils/core';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports

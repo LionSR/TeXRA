@@ -2,10 +2,6 @@ import { ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import {
-  ProviderMessageArraySchema,
-  type ProviderMessage,
-} from '@agent/types/ProviderMessage';
-import {
   COPILOT_MODEL_PREFIX,
   getRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
@@ -29,7 +25,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
-  _messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
   // Compatibility reader for transcripts persisted while Copilot models were
   // synthetic `copilot:<baseModel>` ids (#9635, introduced 2026-08-03; retire
@@ -57,13 +52,9 @@ export function inferPersistedModelHandlerCompatibilityKey(
 
 export function inferAndLogPersistedModelHandlerCompatibilityKey(
   model: string,
-  messages: readonly ProviderMessage[],
   logger: Pick<AgentTrace, 'info'>,
 ): ModelHandlerCompatibilityKey | undefined {
-  const compatibilityKey = inferPersistedModelHandlerCompatibilityKey(
-    model,
-    messages,
-  );
+  const compatibilityKey = inferPersistedModelHandlerCompatibilityKey(model);
   if (compatibilityKey) {
     logger.info(
       'Inferred model-handler compatibility for keyless persisted run',
@@ -107,11 +98,9 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   );
   if (parsedKey.success && parsedKey.data) return parsedKey.data;
 
-  const messages = ProviderMessageArraySchema.safeParse(record.messages);
-  if (!messages.success) return undefined;
-
+  // Inference reads model identity only; the persisted messages never fed the
+  // decision, so they are not parsed here.
   return inferPersistedModelHandlerCompatibilityKey(
     currentModelFromRawSharedState(record) ?? model,
-    messages.data,
   );
 }

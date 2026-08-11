@@ -4,6 +4,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
+  isToolUseState,
   type GettingStartedActionDetail,
   type ProgressViewInboundMessage,
   type StreamTabId,
@@ -15,7 +16,6 @@ import {
   deleteStreamState,
   detachChildStreamTabs,
   firstStreamId,
-  isToolUseState,
 } from './store';
 import { deleteFollowUpInputTransientState } from './followUpInputState';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';

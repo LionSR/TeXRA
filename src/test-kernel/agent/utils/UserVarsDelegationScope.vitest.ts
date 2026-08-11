@@ -60,11 +60,11 @@ vi.mock('@agent/index/agentRegistry', () => ({
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { buildUserVars } from '@agent/utils/userVars';
+import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });

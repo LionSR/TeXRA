@@ -7,9 +7,9 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import type { ToolDefinition } from '@model/ToolDefinition';
+import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 type ConfigOverrides = Parameters<typeof buildTestModelConfig>[1];

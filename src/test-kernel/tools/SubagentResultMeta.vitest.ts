@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ResultMetaSchema } from '@agent/storage';
+import { ResultMetaSchema } from '@agent/storage/resultMeta';
 import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

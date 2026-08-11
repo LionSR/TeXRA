@@ -85,7 +85,7 @@ vi.mock('@shared/settingsView/handlers/agentSelectionHandlers', () => ({
   buildAgentSelectionMessage: vi.fn(),
   buildCustomAgentDirMessage: vi.fn(),
 }));
-vi.mock('@utils/files', () => ({
+vi.mock('@utils/files/absoluteFS', () => ({
   AbsoluteFS: {
     copy: mocks.copyFile,
     delete: mocks.deleteFile,

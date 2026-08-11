@@ -40,22 +40,21 @@ import type {
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
+import {
+  persistChildRunReport,
+  persistChildRunResultMeta,
+} from '@agent/storage/childRunPersistence';
 import { classifyAgentError } from '@common/errors';
-import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-
-import {
-  deliverChildRunFollowUp,
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@tools/delegation/childRunDelivery';
-import { formatSubagentProgress } from '@tools/delegation/subagentResults';
 import type {
   ChildStream,
   ChildStreamOutcome,

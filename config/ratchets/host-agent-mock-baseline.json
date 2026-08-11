@@ -72,6 +72,11 @@
       "specifier": "@agent/index"
     },
     {
+      "file": "src/test-kernel/cli/ConfigCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
       "file": "src/test-kernel/cli/History.vitest.ts",
       "form": "mock",
       "specifier": "@agent/storage"

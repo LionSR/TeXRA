@@ -57,7 +57,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     private readonly context: vscode.ExtensionContext,
     private readonly onboarding?: MainViewOnboardingHooks,
   ) {
-    super('MainView', { trackActiveView: true });
+    super('MainView');
     this.recordingManager = new RecordingManager({
       buildRecordingMessage: (message) => {
         const command = {
@@ -192,13 +192,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleRequestEditedFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
         this.fileManager.handleRequestBaseFile(m),
-
-      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
 
       [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
         this.fileManager.handleGetCurrentFile(m),

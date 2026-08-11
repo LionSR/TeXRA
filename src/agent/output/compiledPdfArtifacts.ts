@@ -10,7 +10,10 @@ import type {
   RunStorageFileLocation,
 } from '@shared/schemas';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
-import { createRunStorageLocation, getComparablePath } from '@utils/files';
+import {
+  createRunStorageLocation,
+  getComparablePath,
+} from '@utils/files/fileLocation';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 

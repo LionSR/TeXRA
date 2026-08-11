@@ -3,13 +3,13 @@ import {
   listExecutions,
   type ExecutionListingEntry,
 } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { isFileNotFoundError } from '@common/errors';
 import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
+import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

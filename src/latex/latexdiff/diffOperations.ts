@@ -22,7 +22,9 @@ import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
-import { WorkspaceFS, AbsoluteFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 

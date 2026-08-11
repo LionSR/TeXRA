@@ -134,12 +134,6 @@ const RequestFileMessages = [
   }),
 ] as const;
 
-const SetFilesMessages = [
-  withFilesArray(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
-  withFilesArray(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
-  withFilesArray(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
-] as const;
-
 const FileOperationMessages = [
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE),
@@ -357,7 +351,6 @@ export const MainViewInboundMessageSchema = z.discriminatedUnion('command', [
   ...ExecutionMessages,
   ...FileSelectionMessages,
   ...RequestFileMessages,
-  ...SetFilesMessages,
   ...FileOperationMessages,
   ...InstructionMessages,
   ...RecordingMessages,

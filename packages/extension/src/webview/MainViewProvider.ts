@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { consumePendingState } from '@common/state';
 import {
@@ -33,7 +32,7 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { agentKeyOf } from '@shared/schemas/agent';
+import { agentKeyOf, AgentCategory } from '@shared/schemas/agent';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
@@ -240,7 +239,6 @@ export class MainViewProvider
     const optionsDataByCategory = await loadMainViewModelOptions();
     view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: optionsDataByCategory.workflow,
       optionsDataByCategory,
     });
   }

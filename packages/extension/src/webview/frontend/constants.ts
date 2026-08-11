@@ -1,17 +1,18 @@
 // Local imports - shared schemas
 import {
+  AgentCategory,
   SessionTypeSchema,
   type DocumentFileType,
   type MultipleDocumentFileType,
   type SessionType,
 } from '@shared/schemas';
 
-const [toolUseSessionType, workflowSessionType] = SessionTypeSchema.options;
-
-// Local constants - session types
+// Local constants - session types. SessionTypeSchema aliases
+// AgentCategorySchema, so name the members directly — positional
+// destructuring of `.options` would silently swap on enum-order changes.
 export const SESSION_TYPES = {
-  TOOL_USE: toolUseSessionType,
-  WORKFLOW: workflowSessionType,
+  TOOL_USE: AgentCategory.ToolUse,
+  WORKFLOW: AgentCategory.Workflow,
 } as const;
 
 export type { SessionType, DocumentFileType, MultipleDocumentFileType };

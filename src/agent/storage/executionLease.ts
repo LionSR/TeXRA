@@ -11,7 +11,7 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecutionLease';
@@ -742,6 +742,25 @@ export async function releaseOwnedExecutionLeaseAfterFailure(
       [primaryError, releaseError],
       `Execution ${executionId} failed and its lease could not be released`,
     );
+  }
+}
+
+/**
+ * Run pre-handoff launch work under one failure policy: if the operation
+ * throws before the child run loop has taken over the execution, release the
+ * fresh lease before the error propagates — a failed launch must not strand
+ * the lease until its stale horizon and refuse a prompt relaunch. Post-handoff
+ * work must stay outside this guard: once the run loop owns the lease,
+ * releasing it would yank ownership from a live child.
+ */
+export async function runWithOwnedExecutionLeaseLaunchGuard<T>(
+  executionId: ExecutionId,
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
   }
 }
 

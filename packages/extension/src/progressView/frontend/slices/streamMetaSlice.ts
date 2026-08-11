@@ -7,6 +7,7 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  isToolUseState,
   STREAM_PHASE,
   type ProgressViewOutboundHandlerRegistry,
   type StreamTabId,
@@ -15,7 +16,6 @@ import {
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 
-import { isToolUseState } from '../store';
 import { settleCompactionActivityLogs } from './logSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';

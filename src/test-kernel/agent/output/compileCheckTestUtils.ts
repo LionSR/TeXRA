@@ -12,7 +12,8 @@ import type {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { TaskRunFileService, createRunStorageLocation } from '@utils/files';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export const storagePath = '/storage';
 export const workspacePath = '/workspace';

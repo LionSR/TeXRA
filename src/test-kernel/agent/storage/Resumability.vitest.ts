@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearStoreCache,
   deriveResumability,
-  EXECUTION_META_SCHEMA_VERSION,
   finalizeExecution,
   getExecutionStore,
   RESUMABILITY_CAUSE,
@@ -15,6 +14,7 @@ import {
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import {
+  EXECUTION_META_SCHEMA_VERSION,
   RUN_OUTCOME,
   type ExecutionId,
   type RunOutcome,

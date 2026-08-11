@@ -22,25 +22,28 @@ const fsState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@utils/files', () => {
-  async function readFrom(
-    files: Map<string, string>,
-    errors: Map<string, Error>,
-    filePath: string,
-  ): Promise<string> {
-    const readError = errors.get(filePath);
-    if (readError) {
-      throw readError;
-    }
-    const content = files.get(filePath);
-    if (content === undefined) {
-      throw Object.assign(new Error(`File not found: ${filePath}`), {
-        code: 'ENOENT',
-      });
-    }
-    return content;
-  }
+const readFrom = vi.hoisted(
+  () =>
+    async (
+      files: Map<string, string>,
+      errors: Map<string, Error>,
+      filePath: string,
+    ): Promise<string> => {
+      const readError = errors.get(filePath);
+      if (readError) {
+        throw readError;
+      }
+      const content = files.get(filePath);
+      if (content === undefined) {
+        throw Object.assign(new Error(`File not found: ${filePath}`), {
+          code: 'ENOENT',
+        });
+      }
+      return content;
+    },
+);
 
+vi.mock('@utils/files/workspaceFS', () => {
   return {
     WorkspaceFS: {
       getPath: () => fsState.workspacePath,
@@ -59,6 +62,11 @@ vi.mock('@utils/files', () => {
         );
       },
     },
+  };
+});
+
+vi.mock('@utils/files/absoluteFS', () => {
+  return {
     AbsoluteFS: {
       exists: async (absolutePath: string) =>
         fsState.absoluteFiles.has(absolutePath),

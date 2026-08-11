@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   StreamSnapshotSchema,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { injectStandaloneTrace, type TraceDocument } from '@transcript';
 

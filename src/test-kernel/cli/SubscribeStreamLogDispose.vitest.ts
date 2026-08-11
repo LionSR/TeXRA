@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  streamRenderCacheSizesForTest,
   subscribeStreamLog,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
@@ -192,5 +193,35 @@ describe('subscribeStreamLog batching and dispose', () => {
     syncStreamLog(streamB);
 
     expect(requestEviction).toHaveBeenCalledWith(streamB);
+  });
+
+  it('drops per-stream render caches when a completed transcript is released', () => {
+    const store = defaultSession().transcripts;
+    appendUserMessage(store, streamB, 'b-1', 'hello');
+    activeStreamId.set(streamA);
+
+    // No status yet, so the release condition can't fire — this sync is
+    // what actually seeds streamB's per-stream caches.
+    syncStreamLog(streamB);
+    expect(streamRenderCacheSizesForTest()).toEqual({
+      taskGroups: 1,
+      compaction: 1,
+      render: 1,
+    });
+
+    // Completed and not focused: the next sync both requests store
+    // eviction and must drop these caches too, or they outlive the store's
+    // own retention and keep the whole transcript reachable indefinitely.
+    setStreamStatusInCliState({
+      streamId: streamB,
+      status: STREAM_PHASE.COMPLETED,
+    });
+    syncStreamLog(streamB);
+
+    expect(streamRenderCacheSizesForTest()).toEqual({
+      taskGroups: 0,
+      compaction: 0,
+      render: 0,
+    });
   });
 });

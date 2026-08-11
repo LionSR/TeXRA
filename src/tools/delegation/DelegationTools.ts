@@ -23,6 +23,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import * as logger from '@logger/logUtils';
 import {
   AgentCategory,
@@ -37,7 +38,6 @@ import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { deliverChildRunFollowUp } from './childRunDelivery';
 import {
   formatFollowUpInstruction,
   formatSubagentError,
@@ -128,7 +128,6 @@ Optional auto-attach from the input LaTeX:
     const model = await selectAvailableDelegationModel({
       requestedModel: input.model,
       parentModel: context.model,
-      agentCategory: AgentCategory.Workflow,
     });
 
     await assertWorkflowFilesExist([
@@ -251,7 +250,6 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const model = await selectAvailableDelegationModel({
       requestedModel: input.model,
       parentModel: context.model,
-      agentCategory: AgentCategory.ToolUse,
     });
     const rootUserInstruction = getCurrentToolCallContext()?.userInstruction;
 
