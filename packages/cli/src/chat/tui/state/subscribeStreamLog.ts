@@ -723,6 +723,19 @@ registerCliStateResetHook(() => {
   STREAM_RENDER_STATES.clear();
 });
 
+/** Test-only: per-stream render-cache occupancy, for eviction-path regression coverage. */
+export function streamRenderCacheSizesForTest(): {
+  readonly taskGroups: number;
+  readonly compaction: number;
+  readonly render: number;
+} {
+  return {
+    taskGroups: TASK_GROUP_PROJECTIONS.size,
+    compaction: COMPACTION_PROJECTIONS.size,
+    render: STREAM_RENDER_STATES.size,
+  };
+}
+
 function projectTaskGroupsIncrementally(
   streamId: StreamTabId,
   entries: readonly StreamLogEntry[],
@@ -1102,7 +1115,17 @@ export function syncStreamLog(
     };
   });
 
-  if (releaseAfterSync) store.requestEviction(streamId);
+  if (releaseAfterSync) {
+    store.requestEviction(streamId);
+    // The store dropped its resident log; these incremental caches would
+    // otherwise keep every entry (and rendered row) of a completed stream
+    // alive for the rest of the session. Safe to drop: each projection
+    // rebuilds from scratch — cheaply, from the store's own summary — the
+    // next time this stream syncs (e.g. if it's reactivated).
+    TASK_GROUP_PROJECTIONS.delete(streamId);
+    COMPACTION_PROJECTIONS.delete(streamId);
+    STREAM_RENDER_STATES.delete(streamId);
+  }
 
   // Surface stream as active if we don't already have one — handles bare
   // `texra chat` where setActiveStream is the first signal the runtime emits.
