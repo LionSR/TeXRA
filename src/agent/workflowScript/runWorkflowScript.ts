@@ -260,7 +260,7 @@ class CoalescedSnapshotWriter {
       while (this.#pending) {
         // The publisher hands over a live reference; snapshot it here, at
         // drain time, so publications coalesced away never pay the clone and
-        // each onSnapshot consumer still gets its own frozen copy.
+        // each onSnapshot consumer still gets its own isolated copy.
         const snapshot = structuredClone(this.#pending);
         this.#pending = undefined;
         await this.#write?.(snapshot);
