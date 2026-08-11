@@ -31,8 +31,31 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { projectCompactionActivities } from '@shared/streams/compactionActivityProjection';
+import {
+  applyCompactionActivityEntries,
+  createCompactionActivityProjection,
+  settleCompactionActivities,
+  type CompactionActivityProjection,
+} from '@shared/streams/compactionActivityProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
+
+/** Test-local full replay through the production reducer (the resync path). */
+function projectCompactionActivities(
+  entries: readonly StreamLogEntry[],
+  options: {
+    readonly streamTerminal?: boolean;
+    readonly settledThroughSeqNo?: number;
+  } = {},
+): CompactionActivityProjection {
+  const projection = createCompactionActivityProjection();
+  applyCompactionActivityEntries(projection, entries);
+  if (options.streamTerminal) {
+    settleCompactionActivities(projection, {
+      throughSeqNo: options.settledThroughSeqNo,
+    });
+  }
+  return projection;
+}
 
 /** Seed the shared appState singleton and return a live reader over it. */
 function seedState(initialState: ProgressState): () => ProgressState {

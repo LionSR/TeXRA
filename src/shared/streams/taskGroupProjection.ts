@@ -65,8 +65,8 @@ function taskGroupStageMetadata(
  *
  * Returns `true` exactly when the entry is a task-group lifecycle row. The
  * array and index are mutated together so incremental consumers retain O(1)
- * replacement while callers rebuilding from a complete log obtain the same
- * result through `projectTaskGroupsFromStreamLog`.
+ * replacement, and a from-scratch replay over a complete log through this
+ * same reducer yields the identical result (the resync path).
  */
 export function upsertTaskGroupFromStreamLog(
   taskGroups: TaskGroup[],
@@ -141,21 +141,4 @@ export function upsertTaskGroupFromStreamLog(
   }
 
   return true;
-}
-
-/**
- * Project canonical task groups from a complete or partial StreamLog.
- *
- * Entries are applied in iteration order. Later rows with the same group ID
- * replace or complete earlier rows, matching the extension's live reducer.
- */
-export function projectTaskGroupsFromStreamLog(
-  entries: Iterable<StreamLogEntry>,
-): TaskGroup[] {
-  const taskGroups: TaskGroup[] = [];
-  const taskGroupIndex = new Map<string, number>();
-  for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
-  }
-  return taskGroups;
 }
