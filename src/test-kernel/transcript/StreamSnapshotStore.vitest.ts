@@ -517,6 +517,95 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('merges a mutation with on-disk sidecars for a stream outside the load() id set instead of clobbering them (#9956)', async () => {
+    // A prior session persisted usage and a plan for STREAM.
+    const previous = new StreamSnapshotStore();
+    const previousFacts = snapshotFacts(previous);
+    void previousFacts.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    previousFacts.setPlan(STREAM, PLAN);
+    await previous.flush();
+
+    // An authoritative load whose id set does NOT contain STREAM (its
+    // transcript is gone; the sidecar survives). A mutation for STREAM must
+    // still seed from disk first; no global "I know the full stream set"
+    // fact may stand in for this record's provenance.
+    const store = new StreamSnapshotStore();
+    await store.load([OTHER_STREAM]);
+    void snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    await store.flush();
+
+    const raw = await readStreamFile(STREAM, 'usageStats.json');
+    expect(raw).toMatchObject({
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
+    });
+    expect((await reloadWorkPlan()).plan).toEqual(PLAN);
+  });
+
+  it('queues a mutation on a provenance-unknown stream behind its seed', async () => {
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+
+    // Hold the seed's existence probe so the mutation cannot have persisted
+    // before the seed resolved this record's disk state.
+    const gate = pDefer<void>();
+    const originalReadDir = StorageFS.readDir.bind(StorageFS);
+    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
+      if (target === streamDataDir(STREAM)) await gate.promise;
+      return originalReadDir(target);
+    });
+
+    void snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    // Eagerly readable from memory while the seed is still gated...
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
+    // ...but nothing has touched the on-disk sidecar yet.
+    expect(await readStreamFile(STREAM, 'usageStats.json')).toEqual({
+      [RUN]: usage(100, 20, 0.5),
+    });
+
+    gate.resolve();
+    await store.flush();
+
+    expect(await readStreamFile(STREAM, 'usageStats.json')).toMatchObject({
+      [RUN]: usage(100, 20, 0.5),
+      [RUN_2]: usage(50, 10, 0.25),
+    });
+  });
+
+  it('resolves a freshly minted stream to verified-absent and then mutates without consulting disk', async () => {
+    const store = new StreamSnapshotStore();
+    const facts = snapshotFacts(store);
+
+    // First mutation: the seed's existence probe finds no sidecar directory,
+    // so the record settles as 'verified-absent'.
+    facts.setTodos(STREAM, [TODO]);
+    await store.flush();
+    expect(
+      (await readStreamFile(STREAM, 'workPlan.json')) as object,
+    ).toMatchObject({ todos: [TODO] });
+
+    // Later mutations persist immediately from memory: no re-probe, no
+    // sidecar re-read for this stream.
+    const probeSpy = vi.spyOn(StorageFS, 'readDir');
+    const readSpy = vi.spyOn(StorageFS, 'read');
+    facts.setPlan(STREAM, PLAN);
+    await store.flush();
+
+    const streamDir = streamDataDir(STREAM);
+    const touched = [...probeSpy.mock.calls, ...readSpy.mock.calls].filter(
+      ([target]) => typeof target === 'string' && target.startsWith(streamDir),
+    );
+    expect(touched).toEqual([]);
+    expect((await reloadWorkPlan()).plan).toEqual(PLAN);
+    expect((await reloadWorkPlan()).todos).toEqual([TODO]);
+  });
+
   it('preserves an unparseable persisted usage entry across a save instead of deleting it', async () => {
     // Regression test for #7464: a run entry that fails to parse (e.g. a
     // corrupted or future-shaped value) must be logged loudly and carried
@@ -2464,7 +2553,9 @@ describe('StreamSnapshotStore', () => {
 
   it('serializes same-key writes so a slow first write finishes before a queued second write starts', async () => {
     const store = new StreamSnapshotStore();
-    await store.load([]);
+    // Seed STREAM so its provenance is settled ('verified-absent') and each
+    // mutation below persists synchronously as its own same-key write.
+    await store.load([STREAM]);
 
     const order: string[] = [];
     let releaseFirstWrite: () => void = () => {};
