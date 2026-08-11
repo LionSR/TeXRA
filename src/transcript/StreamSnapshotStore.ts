@@ -74,6 +74,7 @@ import {
 import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,
+  emptyStreamData,
   readMeta,
   readStreamData,
   type StreamData,
@@ -262,9 +263,21 @@ function mergeUsagePatch(
 }
 
 /**
+ * Disk provenance for one stream record, a strictly per-record fact.
+ * 'unknown': this record's on-disk sidecar state has not been established, so
+ * a mutation must queue behind the per-stream seed chain (an accumulate/merge
+ * onto an unloaded base would persist empty+delta over the real sidecar).
+ * 'loaded': a seed/refresh read the sidecar files into memory.
+ * 'verified-absent': an existence probe found no sidecar directory, so the
+ * stream is new, memory is its full history, and mutations may persist
+ * without a disk read. Never inferred from any global fact (#9956).
+ */
+type DiskState = 'unknown' | 'verified-absent' | 'loaded';
+
+/**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
- * (`records`): the accumulators, the `seeded`/`seedChain` seeding bookkeeping,
- * the overlay patches, and the cached `KVStore` handles. Because every field
+ * (`records`): the accumulators, the `diskState`/`seedChain` seeding
+ * bookkeeping, the overlay patches, and the cached `KVStore` handles. Because every field
  * for a stream lives on the same object, dropping a stream's memory is one
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
  * so `evict()`/`evictAll()` cannot drift from the field list.
@@ -317,14 +330,14 @@ interface StreamRecord {
 
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
   // the first mutation so an accumulate/merge can't overwrite unloaded disk
-  // data. `seeded` = this stream's memory is current; `seedChain` serializes
+  // data. `diskState` = this record's disk provenance; `seedChain` serializes
   // refresh/seed/mutate for it.
-  seeded: boolean;
+  diskState: DiskState;
   seedChain: Promise<void> | undefined;
   /** Incremented for each refresh attempt; seed-gated mutations do not change it. */
   seedRefreshGeneration: number;
-  /** Authoritative seeded state captured before the current refresh chain began. */
-  seedRefreshBaseline: boolean | undefined;
+  /** Authoritative disk provenance captured before the current refresh chain began. */
+  seedRefreshBaseline: DiskState | undefined;
 
   // -- Overlays: patches applied eagerly to memory while a seed is in flight,
   // so `applyStreamData`'s post-seed reconciliation can replay them on top of
@@ -361,7 +374,7 @@ export class StreamSnapshotStore {
     userFollowUpSupport: undefined,
     runConfig: undefined,
     description: undefined,
-    seeded: false,
+    diskState: 'unknown',
     seedChain: undefined,
     seedRefreshGeneration: 0,
     seedRefreshBaseline: undefined,
@@ -390,8 +403,6 @@ export class StreamSnapshotStore {
   private readonly writeMutexes = new Map<string, Mutex>();
   /** Latest ordinary sidecar value not yet confirmed durable, by write lock. */
   private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
-
-  private hasAuthoritativeStreamSet = false;
 
   /** Streams already warned about a pre-identity execution row (#9590 Stage
    *  7), so repeated hydrations of the same old row stay one warning each. */
@@ -446,16 +457,16 @@ export class StreamSnapshotStore {
     return this.records.version(stream);
   }
 
-  private canMutateSynchronously(stream: StreamTabId): boolean {
-    const record = this.records.get(stream);
-    if (record?.seeded) return true;
-
-    if (this.hasAuthoritativeStreamSet && !record?.seedChain) {
-      this.getOrCreateRecord(stream).seeded = true;
-      return true;
-    }
-
-    return false;
+  /**
+   * Whether this record's disk provenance is established ('loaded' or
+   * 'verified-absent'), so a mutation may apply and persist without first
+   * consulting disk. Strictly per record: a record starts 'unknown' and only
+   * its own seed chain resolves that; no global fact ever stands in for
+   * "this record's disk state is in memory" (#9956).
+   */
+  private hasDiskProvenance(stream: StreamTabId): boolean {
+    const state = this.records.get(stream)?.diskState;
+    return state !== undefined && state !== 'unknown';
   }
 
   /**
@@ -558,15 +569,14 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Run a mutation only after existing disk state has been loaded. After an
-   * authoritative full load, streams outside that loaded set are treated as new
-   * and mutate synchronously so UI callers can read back their own writes.
-   * Partial preloads intentionally do not enable this fast path because other
-   * streams may still have sidecars on disk.
+   * Run a mutation only once the stream's disk provenance is established;
+   * otherwise queue it behind the per-stream seed chain so it merges onto the
+   * real sidecar state instead of an empty base. Eager memory application in
+   * the overlay mutators keeps read-back immediate either way.
    */
   private mutate<T>(stream: StreamTabId, apply: () => T): T | undefined {
     const version = this.streamVersion(stream);
-    if (this.canMutateSynchronously(stream)) return apply();
+    if (this.hasDiskProvenance(stream)) return apply();
 
     this.queueAfterSeed(stream, version, apply);
     return undefined;
@@ -579,12 +589,12 @@ export class StreamSnapshotStore {
   ): Promise<void> {
     const next: Promise<void> = this.ensureSeeded(stream, version)
       .catch((err: unknown) => {
-        if (!this.records.get(stream)?.seeded) throw err;
+        if (!this.hasDiskProvenance(stream)) throw err;
       })
       .then(() => {
         if (this.streamVersion(stream) !== version) return;
         const record = this.records.get(stream);
-        if (!record?.seeded) {
+        if (!record || record.diskState === 'unknown') {
           if (record?.seedChain === next) record.seedChain = undefined;
           return;
         }
@@ -592,7 +602,7 @@ export class StreamSnapshotStore {
       })
       .catch((err: unknown) => {
         const record = this.records.get(stream);
-        if (!record?.seeded && record?.seedChain === next) {
+        if (record?.diskState === 'unknown' && record.seedChain === next) {
           record.seedChain = undefined;
         }
         logger.warn(CHANNEL, `Deferred update failed for stream ${stream}`, {
@@ -614,12 +624,48 @@ export class StreamSnapshotStore {
 
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
     if (this.streamVersion(stream) !== version) return;
-    if (this.records.get(stream)?.seeded) return;
+    if (this.hasDiskProvenance(stream)) return;
     await this.retryDirtyWrites(stream);
     if (this.streamVersion(stream) !== version) return;
-    const data = await readStreamData(this.kv(stream));
+    await this.seedFromDisk(stream, version);
+  }
+
+  /**
+   * Establish a stream's disk provenance: one existence probe of the sidecar
+   * directory (a single `listKeys` through the same KVStore handle every
+   * other sidecar access uses), then the full read only when sidecar files
+   * exist. A freshly minted stream resolves to 'verified-absent' from the
+   * probe alone, so its first mutation costs one directory listing instead
+   * of a six-file read and every later mutation applies synchronously.
+   */
+  private async seedFromDisk(
+    stream: StreamTabId,
+    version: number,
+  ): Promise<void> {
+    let exists: boolean;
+    try {
+      exists = (await this.kv(stream).listKeys()).length > 0;
+    } catch (error) {
+      // The probe only ever shortcuts the read; a failed listing must not
+      // fail the seed and must NEVER claim absence. Fall back to the full
+      // read, whose own fallback policy governs unreadable storage.
+      logger.warn(
+        CHANNEL,
+        `Sidecar existence probe failed for stream ${stream}; falling back to a full read.`,
+        { data: error },
+      );
+      exists = true;
+    }
     if (this.streamVersion(stream) !== version) return;
-    await this.applyStreamData(stream, data);
+    const data = exists
+      ? await readStreamData(this.kv(stream))
+      : emptyStreamData();
+    if (this.streamVersion(stream) !== version) return;
+    await this.applyStreamData(
+      stream,
+      data,
+      exists ? 'loaded' : 'verified-absent',
+    );
   }
 
   // ==========================================================================
@@ -735,7 +781,7 @@ export class StreamSnapshotStore {
   ): { result: T; pending: Promise<void> | undefined } {
     const result = applyToMemory();
 
-    if (this.canMutateSynchronously(stream)) {
+    if (this.hasDiskProvenance(stream)) {
       persist();
       return { result, pending: undefined };
     }
@@ -883,7 +929,7 @@ export class StreamSnapshotStore {
     return pending.then(() => {
       if (
         this.streamVersion(stream) !== version ||
-        !this.records.get(stream)?.seeded
+        !this.hasDiskProvenance(stream)
       ) {
         return undefined;
       }
@@ -1540,7 +1586,7 @@ export class StreamSnapshotStore {
   private async awaitSeeded(streamId: StreamTabId): Promise<boolean> {
     // Awaiting `undefined` (no in-flight seed) resolves immediately.
     await this.records.get(streamId)?.seedChain;
-    return this.records.get(streamId)?.seeded ?? false;
+    return this.hasDiskProvenance(streamId);
   }
 
   /**
@@ -1589,10 +1635,8 @@ export class StreamSnapshotStore {
    * per-stream chain and apply after the disk snapshot.
    */
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
-    this.hasAuthoritativeStreamSet = false;
     this.evictStreamsExcept(new Set(streamIds));
     await this.seedStreams(streamIds);
-    this.hasAuthoritativeStreamSet = true;
   }
 
   /**
@@ -1620,19 +1664,17 @@ export class StreamSnapshotStore {
   private refreshSeed(stream: StreamTabId): Promise<void> {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
-    const refreshBaseline = record.seedRefreshBaseline ?? record.seeded;
+    const refreshBaseline = record.seedRefreshBaseline ?? record.diskState;
     record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
-    record.seeded = false;
+    record.diskState = 'unknown';
     const prev = record.seedChain?.catch(() => undefined) ?? Promise.resolve();
     const work = prev.then(async () => {
       if (this.streamVersion(stream) !== version) return;
       await this.retryDirtyWrites(stream);
       if (this.streamVersion(stream) !== version) return;
       this.invalidateKvHandles(stream);
-      const data = await readStreamData(this.kv(stream));
-      if (this.streamVersion(stream) !== version) return;
-      await this.applyStreamData(stream, data);
+      await this.seedFromDisk(stream, version);
     });
     const next = work.then(
       () => {
@@ -1650,9 +1692,9 @@ export class StreamSnapshotStore {
           current?.seedRefreshGeneration === refreshGeneration &&
           this.streamVersion(stream) === version
         ) {
-          current.seeded = refreshBaseline;
+          current.diskState = refreshBaseline;
           current.seedRefreshBaseline = undefined;
-          if (refreshBaseline) {
+          if (refreshBaseline !== 'unknown') {
             this.persistEagerOverlays(stream, current);
           }
           if (current.seedChain === next) current.seedChain = undefined;
@@ -1715,6 +1757,7 @@ export class StreamSnapshotStore {
   private async applyStreamData(
     stream: StreamTabId,
     data: StreamData,
+    provenance: Exclude<DiskState, 'unknown'>,
   ): Promise<void> {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
@@ -1841,7 +1884,7 @@ export class StreamSnapshotStore {
       sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.workPlan);
       overlays.workPlan = undefined;
     }
-    record.seeded = true;
+    record.diskState = provenance;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
   }
 
