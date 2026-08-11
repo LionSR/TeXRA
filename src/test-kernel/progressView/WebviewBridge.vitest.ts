@@ -27,6 +27,7 @@ import {
   appendTranscriptEntry,
   appendTranscriptText,
   updateTranscriptEntry,
+  withTranscriptWriter,
 } from '@test/support/storeTestDrivers';
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
 
@@ -228,7 +229,7 @@ describe('WebviewBridge', () => {
     );
   });
 
-  it('keeps the cursor and dirty updates when no target accepts a log delta', async () => {
+  it('resyncs from scratch when no target accepts a log delta', async () => {
     const { store, sendMessage, bridge } = setupBridge({
       sendMessage: vi
         .fn()
@@ -254,6 +255,9 @@ describe('WebviewBridge', () => {
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
 
+    // The rejected frame is gone — nothing store-side retains it. The next
+    // flush must replay the whole log through the oracle path so the
+    // disposed-and-restored webview cannot stay stale.
     appendTranscriptEntry(
       store,
       ACTIVE,
@@ -263,10 +267,61 @@ describe('WebviewBridge', () => {
 
     expect(sendMessage).toHaveBeenLastCalledWith(
       logDeltaMessage(ACTIVE, {
-        entries: [entryContaining('active-2', 'retry trigger')],
-        updates: [entryContaining('active-1', 'edited log')],
+        entries: [
+          entryContaining('active-1', 'edited log'),
+          entryContaining('active-2', 'retry trigger'),
+        ],
       }),
     );
+  });
+
+  it('re-registers and replays from scratch on a mid-stream reconnect', async () => {
+    const { store, sendMessage, bridge } = setupBridge();
+
+    bridge.syncStream(ACTIVE);
+    appendTranscriptEntry(store, ACTIVE, logEntry('active-1', '', 100));
+    appendTranscriptText(store, ACTIVE, 'active-1', 'hello');
+    await vi.advanceTimersByTimeAsync(20);
+    sendMessage.mockClear();
+
+    // Webview disposed and restored: the provider re-runs the registration
+    // handshake, which must resync instead of resuming the chunk feed.
+    bridge.syncStream(ACTIVE);
+    appendTranscriptText(store, ACTIVE, 'active-1', ' world');
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [entryContaining('active-1', 'hello world')],
+      }),
+    );
+  });
+
+  it('delivers a stream lifecycle as append, chunk, and settle frames', async () => {
+    const { store, sendMessage, bridge } = setupBridge();
+
+    bridge.syncStream(ACTIVE);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    appendTranscriptEntry(store, ACTIVE, logEntry('m1', '', 100));
+    await vi.advanceTimersByTimeAsync(20);
+    appendTranscriptText(store, ACTIVE, 'm1', 'hel');
+    appendTranscriptText(store, ACTIVE, 'm1', 'lo');
+    await vi.advanceTimersByTimeAsync(20);
+    withTranscriptWriter(store, ACTIVE, (writer) =>
+      writer.settle('m1', { text: 'hello!' }),
+    );
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage.mock.calls.map(([message]) => message)).toEqual([
+      logDeltaMessage(ACTIVE, { entries: [entryContaining('m1', '')] }),
+      logDeltaMessage(ACTIVE, {
+        textDeltas: [{ id: 'm1', appendText: 'hello' }],
+      }),
+      logDeltaMessage(ACTIVE, { updates: [entryContaining('m1', 'hello!')] }),
+    ]);
   });
 
   it('serializes async flushes and preserves updates made during delivery', async () => {
