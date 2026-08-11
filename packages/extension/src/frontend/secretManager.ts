@@ -2,7 +2,6 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   API_PROVIDERS,
-  apiKeyExists as resolvedApiKeyExists,
   apiKeySecretName,
   hasUsableApiKey as resolvedHasUsableApiKey,
   type ApiProvider,
@@ -61,14 +60,13 @@ export class SecretManager {
   }
 
   private static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
-    return resolvedApiKeyExists(platform().secrets, provider);
+    return resolvedHasUsableApiKey(platform().secrets, provider);
   }
 
   /**
-   * Like `apiKeyExists` but also rejects whitespace-only values from any
-   * resolved credential. The canonical resolver already treats empty env vars
-   * as missing; this helper is for launch checks that need an actually usable
-   * authentication value.
+   * Same check as the private `apiKeyExists` above (both delegate to
+   * `@model/apiProviders`'s `hasUsableApiKey`); exposed publicly under this
+   * name for launch-readiness call sites that want the "usable" framing.
    */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     return resolvedHasUsableApiKey(platform().secrets, provider);
