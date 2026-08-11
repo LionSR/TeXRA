@@ -18,11 +18,11 @@ import {
   type SelectItem,
 } from '@cli/tui/ui/Select';
 import {
-  AgentCategory,
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
   type StreamTabId,
   type WorkflowCallProgress,
+  type WorkflowControlAction,
 } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
@@ -47,7 +47,6 @@ import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 import { childElapsed } from '../state/childControls';
 import {
   childListStreamId,
-  childPhaseListValue,
   childStreamListValue,
   workflowTaskListValue,
   type ChildListValue,
@@ -55,7 +54,6 @@ import {
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import {
   uniqueWorkflowChildStreamId,
-  workflowDashboardModel,
   workflowDashboardSelection,
   type WorkflowDashboardModel,
   type WorkflowPhaseGroup,
@@ -72,37 +70,6 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
-function HiddenRowSummary({
-  text,
-}: {
-  readonly text: string | undefined;
-}): React.JSX.Element | null {
-  return text ? (
-    <Box flexShrink={0}>
-      <Text dimColor>{` · ${text}`}</Text>
-    </Box>
-  ) : null;
-}
-
-/** Right-aligned `elapsed · ↓tokens` column, pushed to the terminal edge so
- *  the figures line up across rows. Non-shrinking: the summary segment yields
- *  first; rows drop the column entirely on narrow terminals (see
- *  `CHILD_ROW_METADATA_MIN_COLUMNS`). */
-function RowMetadata({
-  text,
-}: {
-  readonly text: string | undefined;
-}): React.JSX.Element | null {
-  return text ? (
-    <>
-      <Box flexGrow={1} />
-      <Box flexShrink={0}>
-        <Text dimColor>{`  ${text}`}</Text>
-      </Box>
-    </>
-  ) : null;
-}
-
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
 interface PhaseHeaderDetails extends WorkflowPhaseHeading {
@@ -111,13 +78,10 @@ interface PhaseHeaderDetails extends WorkflowPhaseHeading {
 
 function PhaseHeader({
   details,
-  metadataColumn,
 }: {
   readonly details: PhaseHeaderDetails;
-  readonly metadataColumn: boolean;
 }): React.JSX.Element {
-  const inlineProgress =
-    !metadataColumn && details.progress ? ` · ${details.progress}` : '';
+  const inlineProgress = details.progress ? ` · ${details.progress}` : '';
   return (
     <Box flexDirection="row" flexGrow={1} minWidth={0}>
       <Box minWidth={0} flexShrink={1}>
@@ -127,14 +91,6 @@ function PhaseHeader({
           {`${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
         </Text>
       </Box>
-      {metadataColumn && details.progress ? (
-        <>
-          <Box flexGrow={1} />
-          <Box flexShrink={0}>
-            <Text dimColor>{`  ${details.progress}`}</Text>
-          </Box>
-        </>
-      ) : null}
     </Box>
   );
 }
@@ -185,6 +141,10 @@ function SessionRow({
     !isListRoot && session.slice?.identity?.kind !== 'process'
       ? session.slice?.model
       : undefined;
+  // The right-aligned `elapsed · ↓tokens` column is pushed to the terminal edge
+  // so the figures line up across rows. Non-shrinking: the summary segment
+  // yields first; rows drop the column entirely on narrow terminals (see
+  // `CHILD_ROW_METADATA_MIN_COLUMNS`).
   const metadata = metadataColumn
     ? childRowMetadataText({
         elapsed,
@@ -236,25 +196,21 @@ function SessionRow({
           </Text>
         </Box>
       ) : null}
-      {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
-      <RowMetadata text={metadata} />
+      {focused && hiddenRowSummary ? (
+        <Box flexShrink={0}>
+          <Text dimColor>{` · ${hiddenRowSummary}`}</Text>
+        </Box>
+      ) : null}
+      {metadata ? (
+        <>
+          <Box flexGrow={1} />
+          <Box flexShrink={0}>
+            <Text dimColor>{`  ${metadata}`}</Text>
+          </Box>
+        </>
+      ) : null}
     </Box>
   );
-}
-
-/** Number of content rows the dashboard can display at the current width. */
-export function workflowDashboardPanelItemCount(
-  root: StreamSlice,
-  selectedValue: ChildListValue | undefined,
-  columns: number,
-): number {
-  const model = workflowDashboardModel(root, columns);
-  if (model.tasks.length === 0) return 0;
-  if (!model.wide) {
-    return 1 + model.groups.length + model.tasks.length;
-  }
-  const { activeGroup } = workflowDashboardSelection(model, selectedValue);
-  return 1 + Math.max(model.groups.length, activeGroup?.tasks.length ?? 0);
 }
 
 function workflowTaskMetadata(
@@ -514,10 +470,7 @@ function WorkflowDashboard({
           renderItem={(item, state) => {
             const group = groupByValue.get(item.value);
             return group ? (
-              <PhaseHeader
-                details={groupDetails(group)}
-                metadataColumn={false}
-              />
+              <PhaseHeader details={groupDetails(group)} />
             ) : (
               renderTask(item, state)
             );
@@ -528,16 +481,23 @@ function WorkflowDashboard({
   );
 }
 
+/** The workflow control each key press requests, so the handler holds no ladder. */
+const WORKFLOW_CONTROL_KEYS = {
+  s: 'skip',
+  r: 'retry',
+} as const satisfies Record<string, WorkflowControlAction>;
+
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
   readonly onFocusStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution?: (executionId: string) => void;
-  /** Skip the focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onSkipExecution?: (executionId: string) => void;
-  /** Retry the focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onRetryExecution?: (executionId: string) => void;
+  /** Skip or retry the focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onWorkflowControl?: (
+    executionId: string,
+    action: WorkflowControlAction,
+  ) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
    *  root bucket already folded onto the root stream id by the caller). */
@@ -548,7 +508,13 @@ export interface SubagentListProps {
   readonly selectedValue?: ChildListValue;
   readonly sessions?: readonly StreamView[];
   readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly listRootSlice?: StreamSlice;
+  /** Dashboard rows for a workflow-script list root, derived once by `App`
+   *  (see `state/workflowDashboardModel`). Present iff the dashboard replaces
+   *  the plain session list. */
+  readonly dashboard?: WorkflowDashboardModel;
+  /** Stream `selectedValue` points at, resolved once by `App` — the same
+   *  stream the status bar advertises as killable. */
+  readonly selectedChildStreamId?: StreamTabId;
   /** Stream the list is rooted on — its row never shows a summary. */
   readonly listRootStreamId?: StreamTabId;
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
@@ -566,90 +532,23 @@ export function SubagentList(
         .join(':') || undefined,
     [sessions],
   );
-  const { items, phaseHeadersByValue } = useMemo(() => {
-    const entries =
-      props.listRootSlice?.category === AgentCategory.Workflow
-        ? props.listRootSlice.entries
-        : [];
-    const phaseHeadings = new Map<string, WorkflowPhaseHeading>();
-    const callsByPhase = new Map<string, WorkflowCallProgress[]>();
-    for (const entry of entries) {
-      if (entry.role === 'phase') {
-        phaseHeadings.set(entry.phaseLabel, {
-          phaseLabel: entry.phaseLabel,
-          phaseIndex: entry.phaseIndex,
-          phaseTotal: entry.phaseTotal,
-        });
-      } else if (
-        entry.role === 'workflowTask' &&
-        entry.task.phase !== undefined
-      ) {
-        const calls = callsByPhase.get(entry.task.phase);
-        if (calls) calls.push(entry.task);
-        else callsByPhase.set(entry.task.phase, [entry.task]);
-      }
-    }
-
+  const { items, sessionsByValue } = useMemo(() => {
     const nextItems: SelectItem<ChildListValue>[] = [];
-    const nextHeaders = new Map<ChildListValue, PhaseHeaderDetails>();
-    // A header only ever *opens* a group; nothing closes one. That is sound
-    // only because `sessions` arrives from `streamTreeViews`, whose
-    // `groupWorkflowPhaseEntries` makes same-phase rows contiguous and puts
-    // every phase-less row ahead of the first group — so no row can land under
-    // a header it does not belong to, and no phase can open a second header.
-    // Order has one owner: do not re-sort here, it would desynchronise the
-    // Alt+1..9 numbers `streamTreeEntries` assigns from the rows on screen.
-    let previousPhase: string | undefined;
-    let headerOrdinal = 0;
+    const byValue = new Map<ChildListValue, StreamView>();
+    // Row order has one owner, `streamTreeEntries`: do not re-sort here, it
+    // would desynchronise the Alt+1..9 numbers it assigns from the rows on
+    // screen.
     for (const session of sessions) {
-      const item = {
-        label: session.label,
-        value: childStreamListValue(session.id),
-      };
-      // The list root is context, not a grouped attempt. Every other row
-      // already belongs to this root's visible current/retained descendant
-      // set, including historical children promoted away from the root.
-      if (session.id === props.listRootStreamId) {
-        nextItems.push(item);
-        continue;
-      }
-      const phase = session.workflowPhase;
-      if (phase !== undefined && phase !== previousPhase) {
-        const value = childPhaseListValue(headerOrdinal++);
-        const calls = callsByPhase.get(phase) ?? [];
-        const { done, total } = workflowPhaseCallProgress(calls);
-        nextItems.push({ label: phase, value, disabled: true });
-        nextHeaders.set(value, {
-          ...(phaseHeadings.get(phase) ?? { phaseLabel: phase }),
-          ...(total > 0 ? { progress: `${done}/${total}` } : {}),
-        });
-      }
-      nextItems.push(item);
-      previousPhase = phase;
+      const value = childStreamListValue(session.id);
+      nextItems.push({ label: session.label, value });
+      byValue.set(value, session);
     }
-    return { items: nextItems, phaseHeadersByValue: nextHeaders };
-  }, [props.listRootSlice, props.listRootStreamId, sessions]);
-  const sessionsByValue = useMemo(
-    () =>
-      new Map(
-        sessions.map((session) => [childStreamListValue(session.id), session]),
-      ),
-    [sessions],
-  );
+    return { items: nextItems, sessionsByValue: byValue };
+  }, [sessions]);
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
-  const workflowRoot =
-    props.listRootSlice?.identity?.kind === 'multiAgentWorkflow'
-      ? props.listRootSlice
-      : undefined;
-  // Same derivation `App` reads for selection and focus — see
-  // `state/workflowDashboardModel`.
-  const dashboard = useMemo(
-    () =>
-      workflowRoot ? workflowDashboardModel(workflowRoot, columns) : undefined,
-    [columns, workflowRoot],
-  );
+  const dashboard = props.dashboard;
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
   const selectedIndex = Math.max(
@@ -675,20 +574,7 @@ export function SubagentList(
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta) return;
-      const selectedWorkflowTask =
-        props.selectedValue && dashboard
-          ? dashboard.taskByValue.get(props.selectedValue)
-          : undefined;
-      const workflowChildStreamId =
-        selectedWorkflowTask && dashboard
-          ? uniqueWorkflowChildStreamId(
-              selectedWorkflowTask,
-              dashboard.childTaskIndex,
-              props.streams ?? new Map(),
-            )
-          : undefined;
-      const streamId =
-        childListStreamId(props.selectedValue) ?? workflowChildStreamId;
+      const streamId = props.selectedChildStreamId;
       if (!streamId) return;
       const pressed = input.toLowerCase();
       // Kill/skip/retry target only a focused subagent stream (a
@@ -699,8 +585,8 @@ export function SubagentList(
       const executionId = props.activeSubagentExecutionIds?.get(streamId);
       if (!executionId) return;
       if (pressed === 'k') props.onKillExecution?.(executionId);
-      else if (pressed === 's') props.onSkipExecution?.(executionId);
-      else props.onRetryExecution?.(executionId);
+      else
+        props.onWorkflowControl?.(executionId, WORKFLOW_CONTROL_KEYS[pressed]);
     },
     { isActive: props.keyboardActive ?? false },
   );
@@ -758,15 +644,6 @@ export function SubagentList(
           if (streamId) props.onFocusStream?.(streamId);
         }}
         renderItem={(item, state) => {
-          const phaseHeader = phaseHeadersByValue.get(item.value);
-          if (phaseHeader) {
-            return (
-              <PhaseHeader
-                details={phaseHeader}
-                metadataColumn={metadataColumn}
-              />
-            );
-          }
           const session = sessionsByValue.get(item.value);
           return session ? (
             <SessionRow

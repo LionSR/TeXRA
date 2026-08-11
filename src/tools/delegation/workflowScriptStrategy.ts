@@ -12,10 +12,7 @@
  */
 
 // Local imports
-import {
-  parseWorkflowScript,
-  readWorkflowScriptCheckpoint,
-} from '@agent/workflowScript';
+import { readWorkflowScriptCheckpoint } from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
@@ -24,14 +21,18 @@ import type {
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import type {
-  WorkflowControlRegistry,
-  WorkflowRunControl,
-} from '@agent/runtime/workflowControlRegistry';
+import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
+import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId, WorkflowExecutionSnapshot } from '@shared/schemas';
+import {
+  deriveWorkflowCounts,
+  type WorkflowScriptDeliverySummary,
+} from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
+import { escapeText } from '@shared/utils/xmlEscape';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -45,10 +46,20 @@ import {
   runPersistedWorkflowScriptWithProgress,
 } from './workflowScriptRun';
 import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
-import { createWorkflowDeliverySummaryCollector } from './workflowScriptDeliverySummary';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
+const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
+
+/**
+ * What the delivery line needs from a settled run: the canonical execution
+ * snapshot the engine terminalizes (phase and task tallies) and the durable
+ * journal (delivered files). A run that died before the engine published any
+ * snapshot has none, and reports zero work.
+ */
+type SettledWorkflowRun = Pick<WorkflowScriptRunResult, 'journal'> & {
+  readonly snapshot: WorkflowScriptRunResult['snapshot'] | undefined;
+};
 
 /** One model-facing reference for editing and rerunning a persisted script. */
 export function formatWorkflowScriptReference(scriptPath: string): string {
@@ -122,18 +133,12 @@ export interface WorkflowScriptStrategyParams {
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
-   * run, plus the child-active hook that maps a live grandchild's execution id
-   * to its engine call index.
+   * run.
    */
   readonly createRunAgent: (hooks: {
     readonly onCost: (
       invocation: WorkflowAgentInvocation,
       totalCostUsd: number | undefined,
-    ) => void;
-    readonly onChildActive: (
-      grandchildExecutionId: ExecutionId,
-      invocation: WorkflowAgentInvocation,
-      active: boolean,
     ) => void;
   }) => WorkflowAgentRunner;
 }
@@ -148,38 +153,107 @@ export function createWorkflowScriptStrategy(
   params: WorkflowScriptStrategyParams,
 ): ChildRunStrategy<WorkflowScriptRunResult> {
   const runLog = createRunLogCollector();
-  const summary = createWorkflowDeliverySummaryCollector(
-    params.name,
-    params.scriptPath,
-  );
+
+  /**
+   * Delivery-summary facts, collected without changing the model-facing run
+   * report.
+   *
+   * `taskDone` counts the tasks that produced a result (completed or cached),
+   * which is deliberately narrower than the phase header's `done/total`
+   * (workflowPhaseCallProgress), where every settled call counts, failures and
+   * skips included. The two answer different questions, so the delivery line
+   * labels its count "succeeded".
+   *
+   * Every task and phase number is read off the engine's own terminal snapshot —
+   * the canonical record of what ran — so this line can never disagree with
+   * `/executions/{id}` about the same run.
+   */
+  const summaryFiles = new Map<
+    string,
+    WorkflowScriptDeliverySummary['files'][number]
+  >();
+  let startedAt = Date.now();
+  let phaseCount = 0;
+  let taskDone = 0;
+  let taskTotal = 0;
+  let settledCostUsd = 0;
+
+  const settleSummary = (run: SettledWorkflowRun, costUsd: number) => {
+    settledCostUsd = costUsd;
+    const counts = deriveWorkflowCounts(run.snapshot?.calls ?? []);
+    phaseCount = run.snapshot?.stages.length ?? 0;
+    taskDone = counts.completed + counts.cached;
+    taskTotal = counts.total;
+    for (const entry of run.journal) {
+      const parsed = AgentFinalResultSchema.safeParse(entry.result);
+      if (!parsed.success) {
+        // Presentation tolerates what accounting does not: the cost path
+        // (`workflowJournalEntryCost`) throws on this same corruption because
+        // a mis-billed run is a correctness fault, while a delivery line that
+        // omits one entry's files is merely incomplete. Loud either way — a
+        // silently short file list is how corruption goes unreported.
+        logger.warn(
+          SUMMARY_CHANNEL,
+          `Workflow '${params.name}' journal entry ${entry.index} is not an agent final result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
+          { data: parsed.error },
+        );
+        continue;
+      }
+      if (parsed.data.category === 'workflow') {
+        for (const output of parsed.data.outputs) {
+          summaryFiles.set(output.relativePath, {
+            path: output.relativePath,
+            added: output.added,
+            removed: output.removed,
+          });
+        }
+      } else {
+        for (const path of parsed.data.files) {
+          summaryFiles.set(path, { path, added: null, removed: null });
+        }
+      }
+    }
+  };
+
+  const formatSummaryLine = (
+    outcome: 'completed' | 'failed',
+    errorCause?: string,
+  ): string => {
+    const summary: WorkflowScriptDeliverySummary = {
+      name: params.name,
+      outcome,
+      phaseCount,
+      taskDone,
+      taskTotal,
+      costUsd: settledCostUsd,
+      durationMs: Date.now() - startedAt,
+      files: [...summaryFiles.values()],
+      scriptPath: params.scriptPath,
+      errorCause: errorCause ?? null,
+    };
+    return `<workflow-summary>${escapeText(JSON.stringify(summary))}</workflow-summary>`;
+  };
 
   return {
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {
-      summary.start();
+      startedAt = Date.now();
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
       const attemptCost = createWorkflowAttemptCostTracker();
-      // Live grandchild execution id → engine call index, maintained by the
-      // runner's child-active hook. The identity bridge that lets an
-      // execution-id-keyed host action reach the engine's index-keyed control.
-      const liveCallIndexByChild = new Map<ExecutionId, number>();
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
         },
-        onChildActive: (grandchildExecutionId, invocation, active) => {
-          if (active) {
-            liveCallIndexByChild.set(grandchildExecutionId, invocation.index);
-          } else {
-            liveCallIndexByChild.delete(grandchildExecutionId);
-          }
-        },
       });
 
       let unregisterControls: (() => void) | undefined;
+      // The engine flushes its terminal snapshot before it rethrows, so the
+      // last one published is the run's own final account of what ran — the
+      // only source the failure path has for phase and task tallies.
+      let lastSnapshot: WorkflowExecutionSnapshot | undefined;
       let run: WorkflowScriptRunResult;
       try {
         run = await runPersistedWorkflowScriptWithProgress(params.logger, {
@@ -197,28 +271,15 @@ export function createWorkflowScriptStrategy(
           runAgent,
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
-          getCallCostUsd: (index) => attemptCost.costForCall(index),
           onActivity: runLog.add,
-          onEvent: summary.onEvent,
-          ...(params.onSnapshot && { onSnapshot: params.onSnapshot }),
+          onSnapshot: async (snapshot) => {
+            lastSnapshot = snapshot;
+            await params.onSnapshot?.(snapshot);
+          },
+          // The engine's control is already keyed by the grandchild execution
+          // id a host targets, so the run registers it as-is.
           onControl: (control) => {
-            // Translate an execution-id-keyed host request into an
-            // index-keyed engine action; unknown/settled children no-op,
-            // matching the engine's own not-in-flight semantics.
-            const runControl: WorkflowRunControl = {
-              skip: (grandchildId) => {
-                const index = liveCallIndexByChild.get(grandchildId);
-                if (index !== undefined) control.skip(index);
-              },
-              retry: (grandchildId) => {
-                const index = liveCallIndexByChild.get(grandchildId);
-                if (index !== undefined) control.retry(index);
-              },
-            };
-            unregisterControls = params.workflowControls.register(
-              params.executionId,
-              runControl,
-            );
+            unregisterControls = params.workflowControls.register(control);
           },
         });
       } catch (runError) {
@@ -232,17 +293,18 @@ export function createWorkflowScriptStrategy(
           );
           const costUsd = attemptCost.total(checkpoint?.journal ?? []);
           ports.recordCost(costUsd);
-          summary.settle(
-            checkpoint
-              ? {
-                  meta: parseWorkflowScript(checkpoint.script).meta,
-                  journal: checkpoint.journal,
-                }
-              : undefined,
+          settleSummary(
+            { journal: checkpoint?.journal ?? [], snapshot: lastSnapshot },
             costUsd,
           );
-        } catch {
-          // Cost settlement is best-effort on the failure path.
+        } catch (settlementError) {
+          // The run error is what the caller must see, so settlement cannot
+          // rethrow — but dropping it silently loses this invocation's spend
+          // from the parent's accounting. Say so.
+          params.logger.warn(
+            `Workflow script '${params.name}' failed and its cost could not be settled from the checkpoint; this run's spend is unbilled: ${toErrorMessage(settlementError)}`,
+            { data: settlementError },
+          );
         }
         throw runError;
       } finally {
@@ -256,7 +318,7 @@ export function createWorkflowScriptStrategy(
       // completed-call fallback; baseline history contributes zero.
       const costUsd = attemptCost.total(run.journal);
       ports.recordCost(costUsd);
-      summary.settle(run, costUsd);
+      settleSummary(run, costUsd);
       return run;
     },
 
@@ -273,7 +335,7 @@ export function createWorkflowScriptStrategy(
         },
         {
           response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
-          lines: [summary.formatLine('completed')],
+          lines: [formatSummaryLine('completed')],
         },
       ),
 
@@ -286,7 +348,7 @@ export function createWorkflowScriptStrategy(
         },
         {
           message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
-          lines: [summary.formatLine('failed', errorCause)],
+          lines: [formatSummaryLine('failed', errorCause)],
         },
       );
     },

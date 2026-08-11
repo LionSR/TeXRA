@@ -2,13 +2,16 @@ import {
   TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
-  type ExecutionId,
-  type StreamTabId,
+  type WorkflowCallIdentity,
   type WorkflowExecutionCall,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
+import {
+  WORKFLOW_CALL_NOT_REACHED_NOTE,
+  WORKFLOW_CALL_UNFINISHED_NOTE,
+} from '@shared/copy/workflowCall';
 
-import type { WorkflowScriptTask } from './types';
+import type { WorkflowAttemptFacts } from './types';
 
 interface WorkflowCallDefinition {
   readonly id: string;
@@ -28,7 +31,7 @@ export class WorkflowExecutionState {
 
   constructor(options: {
     readonly phases: readonly { readonly title: string }[];
-    readonly tasks: readonly WorkflowScriptTask[];
+    readonly tasks: readonly WorkflowCallIdentity[];
     readonly initialSnapshot?: WorkflowExecutionSnapshot;
     readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
   }) {
@@ -67,7 +70,6 @@ export class WorkflowExecutionState {
           timestamps: { createdAt: timestamp, updatedAt: timestamp },
         };
       }),
-      counts: emptyCounts(),
       timestamps: { createdAt, updatedAt: createdAt },
     };
     this.#snapshot = hydrate(fresh, options.initialSnapshot, createdAt);
@@ -88,7 +90,17 @@ export class WorkflowExecutionState {
     return structuredClone(this.#snapshot);
   }
 
-  enterStage(title: string): number {
+  /**
+   * Spend recorded for one call across every physical attempt it made. This
+   * class already owns per-call cost (see {@link reportAttempt}); progress
+   * events read it here rather than accumulating a second total from the same
+   * runner callbacks.
+   */
+  callCostUsd(id: string): number | undefined {
+    return this.#call(id).costUsd;
+  }
+
+  enterStage(title: string): void {
     if (this.#sealed) throw new Error('Workflow execution state is sealed.');
     let nextIndex = this.#snapshot.stages.findIndex(
       (stage) => stage.title === title,
@@ -111,7 +123,7 @@ export class WorkflowExecutionState {
         `Workflow stages must advance monotonically; cannot enter "${title}" after ${this.currentPhase ?? 'the same stage'}.`,
       );
     }
-    if (nextIndex === currentStageIndex) return nextIndex;
+    if (nextIndex === currentStageIndex) return;
 
     const transitionAt = now();
     const prior = this.#snapshot.stages[currentStageIndex];
@@ -142,7 +154,6 @@ export class WorkflowExecutionState {
       }
     }
     this.#emit();
-    return nextIndex;
   }
 
   issueCall(definition: WorkflowCallDefinition): void {
@@ -177,7 +188,7 @@ export class WorkflowExecutionState {
     }
     const timestamp = now();
     // Only assign agent when the call definition supplies one. Engine issue
-    // often omits agentName; reportAgent later fills the host-resolved name.
+    // often omits agentName; a later report fills the host-resolved name.
     // Re-issuing on resume must not wipe a hydrated agent with undefined —
     // the journal-cache path only patches status/timestamps and would leave
     // /executions without the resolved agent after a cached replay.
@@ -204,18 +215,15 @@ export class WorkflowExecutionState {
     this.#emit();
   }
 
-  call(id: string): WorkflowExecutionCall {
+  #call(id: string): WorkflowExecutionCall {
     const call = this.#snapshot.calls.find((candidate) => candidate.id === id);
     if (!call) throw new Error(`Workflow snapshot call ${id} is missing.`);
     return call;
   }
 
-  updateCall(
-    id: string,
-    patch: Partial<WorkflowExecutionCall>,
-  ): WorkflowExecutionCall {
-    const call = this.call(id);
-    if (this.#sealed) return call;
+  updateCall(id: string, patch: Partial<WorkflowExecutionCall>): void {
+    const call = this.#call(id);
+    if (this.#sealed) return;
     Object.assign(call, patch);
     call.timestamps.updatedAt = now();
     if (
@@ -227,11 +235,27 @@ export class WorkflowExecutionState {
     }
     this.#refreshExitedStage(call.stageId);
     this.#emit();
-    return call;
+  }
+
+  /**
+   * Terminalize one call: the caller owns the status (and error); the
+   * completion stamp is this owner's, so no caller re-reads and re-writes the
+   * timestamps it does not own.
+   */
+  settleCall(
+    id: string,
+    patch: Pick<WorkflowExecutionCall, 'status'> &
+      Partial<Pick<WorkflowExecutionCall, 'error'>>,
+  ): void {
+    const call = this.#call(id);
+    this.updateCall(id, {
+      ...patch,
+      timestamps: { ...call.timestamps, completedAt: now() },
+    });
   }
 
   queueCall(id: string): void {
-    const call = this.call(id);
+    const call = this.#call(id);
     const queuedAt = now();
     // Interactive retry re-queues a still-live call: keep the logical start so
     // duration covers every physical attempt. A terminal call re-queued after
@@ -257,7 +281,7 @@ export class WorkflowExecutionState {
 
   beginAttempt(id: string): void {
     if (this.#sealed) return;
-    const call = this.call(id);
+    const call = this.#call(id);
     const startedAt = now();
     call.attempts.push({ number: call.attempts.length + 1, startedAt });
     call.status = WORKFLOW_CALL_STATUS.STARTING;
@@ -267,49 +291,39 @@ export class WorkflowExecutionState {
     this.#emit();
   }
 
-  reportChildExecution(id: string, executionId: ExecutionId): void {
+  /**
+   * Stamp host-resolved facts onto the call and its latest attempt. Each fact
+   * is independent — an omitted one leaves the current value in place — and the
+   * whole patch lands in one transition, so no observer sees a half-applied
+   * report.
+   */
+  reportAttempt(id: string, facts: Omit<WorkflowAttemptFacts, 'agent'>): void {
     if (this.#sealed) return;
-    const call = this.call(id);
-    call.childExecutionId = executionId;
+    const call = this.#call(id);
     const attempt = call.attempts.at(-1);
-    if (attempt) attempt.id = executionId;
-    call.timestamps.updatedAt = now();
-    this.#emit();
-  }
-
-  reportChildStream(id: string, streamId: StreamTabId): void {
-    if (this.#sealed) return;
-    const call = this.call(id);
-    call.childStreamId = streamId;
-    const attempt = call.attempts.at(-1);
-    if (attempt) attempt.childStreamId = streamId;
-    call.timestamps.updatedAt = now();
-    this.#emit();
-  }
-
-  reportModel(id: string, model: string): void {
-    if (this.#sealed) return;
-    const call = this.call(id);
-    call.model = model;
-    const attempt = call.attempts.at(-1);
-    if (attempt) attempt.model = model;
-    call.timestamps.updatedAt = now();
-    this.#emit();
-  }
-
-  reportCostUsd(id: string, costUsd: number): void {
-    if (this.#sealed) return;
-    const call = this.call(id);
-    const attempt = call.attempts.at(-1);
-    if (attempt) attempt.costUsd = costUsd;
-    call.costUsd = totalAttemptCost(call.attempts);
+    if (facts.childExecutionId !== undefined) {
+      call.childExecutionId = facts.childExecutionId;
+      if (attempt) attempt.id = facts.childExecutionId;
+    }
+    if (facts.childStreamId !== undefined) {
+      call.childStreamId = facts.childStreamId;
+      if (attempt) attempt.childStreamId = facts.childStreamId;
+    }
+    if (facts.model !== undefined) {
+      call.model = facts.model;
+      if (attempt) attempt.model = facts.model;
+    }
+    if (facts.costUsd !== undefined) {
+      if (attempt) attempt.costUsd = facts.costUsd;
+      call.costUsd = totalAttemptCost(call.attempts);
+    }
     call.timestamps.updatedAt = now();
     this.#emit();
   }
 
   settleAttempt(id: string): boolean {
     if (this.#sealed) return false;
-    const call = this.call(id);
+    const call = this.#call(id);
     const attempt = call.attempts.at(-1);
     if (attempt && attempt.completedAt === undefined) {
       attempt.completedAt = now();
@@ -342,7 +356,7 @@ export class WorkflowExecutionState {
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
-        call.blockedReason = 'Workflow ended before this call was reached';
+        call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
       } else if (
@@ -354,7 +368,7 @@ export class WorkflowExecutionState {
           lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
-        call.error ??= 'Workflow ended before this call completed';
+        call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
       }
@@ -432,11 +446,6 @@ export class WorkflowExecutionState {
   }
 
   #emit(): void {
-    const counts = emptyCounts();
-    for (const call of this.#snapshot.calls) counts[call.status] += 1;
-    counts.total = this.#snapshot.calls.length;
-    counts.waiting = counts.planned + counts.stageBlocked;
-    this.#snapshot.counts = counts;
     this.#snapshot.timestamps.updatedAt = now();
     this.#publish(structuredClone(this.#snapshot));
   }
@@ -448,23 +457,6 @@ function now(): string {
 
 function stageIdFor(index: number): string {
   return `stage-${index + 1}`;
-}
-
-function emptyCounts(): WorkflowExecutionSnapshot['counts'] {
-  return {
-    total: 0,
-    waiting: 0,
-    planned: 0,
-    stageBlocked: 0,
-    queued: 0,
-    starting: 0,
-    running: 0,
-    completed: 0,
-    failed: 0,
-    cancelled: 0,
-    skipped: 0,
-    cached: 0,
-  };
 }
 
 function totalAttemptCost(

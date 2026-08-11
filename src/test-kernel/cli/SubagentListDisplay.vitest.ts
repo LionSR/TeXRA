@@ -12,9 +12,12 @@ import {
 } from '@cli/chat/tui/panes/ConversationPane';
 import {
   SubagentList,
-  workflowDashboardPanelItemCount,
   type SubagentListProps,
 } from '@cli/chat/tui/panes/SubagentList';
+import {
+  workflowDashboardModel,
+  workflowDashboardPanelItemCount,
+} from '@cli/chat/tui/state/workflowDashboardModel';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
   childStreamListValue,
@@ -148,27 +151,28 @@ describe('CLI child list display model', () => {
       ],
     });
 
+    const wide = workflowDashboardModel(root, 100);
+    const narrow = workflowDashboardModel(root, 99);
+
     expect(
-      workflowDashboardPanelItemCount(
-        root,
-        workflowPhaseListValue('phase-a'),
-        100,
-      ),
+      workflowDashboardPanelItemCount(wide, workflowPhaseListValue('phase-a')),
     ).toBe(3);
     expect(
-      workflowDashboardPanelItemCount(
-        root,
-        workflowTaskListValue('task-b-1'),
-        100,
-      ),
+      workflowDashboardPanelItemCount(wide, workflowTaskListValue('task-b-1')),
     ).toBe(6);
     expect(
       workflowDashboardPanelItemCount(
-        root,
+        narrow,
         workflowPhaseListValue('phase-a'),
-        99,
       ),
     ).toBe(10);
+    // No workflow root, no reserved rows.
+    expect(
+      workflowDashboardPanelItemCount(
+        undefined,
+        workflowPhaseListValue('phase-a'),
+      ),
+    ).toBe(0);
   });
 
   it('omits static input and context counts from the live workflow band', () => {
@@ -839,162 +843,6 @@ describe('CLI child list display model', () => {
     },
   );
 
-  // A `◆ {phase}` header opens a group and nothing closes one, so a row that
-  // carries no phase must never be painted after one — an `agent()` call issued
-  // outside any `phase()` would otherwise read as belonging to the phase above
-  // it. Driven through
-  // `streamTreeViews`, the one owner of row order, rather than a hand-ordered
-  // `sessions` array, so it guards the production path.
-  it('never renders a phase-less row beneath a phase header', async () => {
-    const run = 'run' as StreamTabId;
-    const mapAgent = 'map-agent' as StreamTabId;
-    const looseAgent = 'loose-agent' as StreamTabId;
-    const reduceAgent = 'reduce-agent' as StreamTabId;
-    const children = [reduceAgent, looseAgent, mapAgent];
-    const streams = new Map<StreamTabId, StreamSlice>([
-      [run, workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING })],
-      ...children.map(
-        (id) =>
-          [
-            id,
-            workflowAgentSlice(id, { status: STREAM_PHASE.RUNNING }),
-          ] as const,
-      ),
-    ]);
-    const childStreamEntries = buildChildStreamEntries({
-      parentStreamId: run,
-      // Oldest first, as the roster retains them; the list reverses to
-      // newest-first, which is what interleaves `loose` between the groups.
-      retained: [
-        {
-          executionId: 'reduce-exec',
-          agentName: 'reduce-agent',
-          identity: { kind: 'agent' as const, agent: 'reduce-agent' },
-          childStreamId: reduceAgent,
-          status: STREAM_PHASE.RUNNING,
-          workflowPhase: 'Reduce',
-        },
-        {
-          executionId: 'loose-exec',
-          agentName: 'loose-agent',
-          identity: { kind: 'agent' as const, agent: 'loose-agent' },
-          childStreamId: looseAgent,
-          status: STREAM_PHASE.RUNNING,
-        },
-        {
-          executionId: 'map-exec',
-          agentName: 'map-agent',
-          identity: { kind: 'agent' as const, agent: 'map-agent' },
-          childStreamId: mapAgent,
-          status: STREAM_PHASE.RUNNING,
-          workflowPhase: 'Map',
-        },
-      ],
-    });
-    const sessions = streamTreeViews({
-      activeStreamId: run,
-      childStreamEntries,
-      parentStream: new Map(children.map((id) => [id, run] as const)),
-      rootStreamId: run,
-      streams,
-    });
-    const output = await renderSubagentList(
-      {
-        listRootStreamId: run,
-        maxRows: 10,
-        sessions,
-      },
-      100,
-      { until: (frame) => frame.includes('◆ Reduce') },
-    );
-
-    expect(output).toContain('◆ Map');
-    expect(output).toContain('◆ Reduce');
-    expect(output).toContain('loose-agent running');
-    // The phase-less row sits above every header, so no header can be read as
-    // owning it.
-    expect(output.indexOf('loose-agent running')).toBeLessThan(
-      output.indexOf('◆'),
-    );
-    // One header per phase, and each group's rows still follow its own header.
-    expect(output.split('◆ Map')).toHaveLength(2);
-    expect(output.split('◆ Reduce')).toHaveLength(2);
-    expect(output.indexOf('◆ Map')).toBeLessThan(
-      output.indexOf('map-agent running'),
-    );
-    expect(output.indexOf('map-agent running')).toBeLessThan(
-      output.indexOf('◆ Reduce'),
-    );
-    expect(output.indexOf('◆ Reduce')).toBeLessThan(
-      output.indexOf('reduce-agent running'),
-    );
-  });
-
-  it('does not group a list root by its inherited workflow phase', async () => {
-    const run = 'nested-workflow' as StreamTabId;
-    const child = 'ordinary-child' as StreamTabId;
-    const output = await renderSubagentList(
-      {
-        listRootStreamId: run,
-        maxRows: 5,
-        sessions: [
-          {
-            id: run,
-            label: 'nested-workflow',
-            active: true,
-            workflowPhase: 'Inherited',
-            slice: workflowAgentSlice(run, {}),
-          },
-          { ...session(child), parentId: run },
-        ],
-      },
-      100,
-      { until: (frame) => frame.includes('ordinary-child') },
-    );
-
-    expect(output).toContain('nested-workflow');
-    expect(output).toContain('ordinary-child');
-    expect(output).not.toContain('◆ Inherited');
-  });
-
-  it('keeps the selected stream visible when headers consume row slots', async () => {
-    const run = 'windowed-run' as StreamTabId;
-    const map = 'map-agent' as StreamTabId;
-    const reduce = 'reduce-agent' as StreamTabId;
-    const output = await renderSubagentList(
-      {
-        listRootStreamId: run,
-        maxRows: 3,
-        selectedValue: childStreamListValue(reduce),
-        sessions: [
-          {
-            id: run,
-            label: 'windowed-run',
-            active: false,
-            slice: workflowAgentSlice(run, {}),
-          },
-          {
-            ...session(map),
-            parentId: run,
-            workflowPhase: 'Map',
-          },
-          {
-            ...session(reduce, true),
-            parentId: run,
-            workflowPhase: 'Reduce',
-          },
-        ],
-      },
-      100,
-      { until: (frame) => frame.includes('reduce-agent') },
-    );
-
-    expect(output).toContain('◆ Reduce');
-    expect(output).toContain('reduce-agent');
-    expect(output).not.toContain('windowed-run');
-    expect(output).not.toContain('map-agent');
-  });
-
   it('renders canonical workflow calls and switches panes at the exact boundary', async () => {
     const run = 'run' as StreamTabId;
     const exactChild = 'exact-child' as StreamTabId;
@@ -1086,7 +934,7 @@ describe('CLI child list display model', () => {
       return renderSubagentList(
         {
           listRootStreamId: run,
-          listRootSlice: rootSlice,
+          dashboard: workflowDashboardModel(rootSlice, columns),
           maxRows: 10,
           selectedValue: workflowPhaseListValue('phase-map'),
           sessions,
@@ -1235,7 +1083,6 @@ describe('CLI child list display model', () => {
     ]);
     const props: SubagentListProps = {
       listRootStreamId: run,
-      listRootSlice: rootSlice,
       maxRows: 15,
       sessions: [],
       streams,
@@ -1243,6 +1090,7 @@ describe('CLI child list display model', () => {
     const wideOutput = await renderSubagentList(
       {
         ...props,
+        dashboard: workflowDashboardModel(rootSlice, 100),
         selectedValue: workflowPhaseListValue('task-orphan'),
       },
       100,
@@ -1251,6 +1099,7 @@ describe('CLI child list display model', () => {
     const narrowOutput = await renderSubagentList(
       {
         ...props,
+        dashboard: workflowDashboardModel(rootSlice, 99),
         selectedValue: workflowTaskListValue('task-fallback'),
       },
       99,

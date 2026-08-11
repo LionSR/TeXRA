@@ -32,6 +32,18 @@ export type WorkflowExecutionCallStatus = z.infer<
   typeof WorkflowExecutionCallStatusSchema
 >;
 
+/**
+ * What an interactive control request does to the workflow-script `agent()`
+ * attempt it targets: `skip` resolves the call without journaling it (its
+ * result is the engine's skipped sentinel), `retry` discards the attempt and
+ * re-runs the call as a fresh one whose result the call resolves with.
+ *
+ * One vocabulary for both sides — the engine that acts on a request and the
+ * host UI that offers it — so a control a host can name is always a control
+ * the engine implements.
+ */
+export type WorkflowControlAction = 'skip' | 'retry';
+
 const WorkflowExecutionTimestampsSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   queuedAt: z.iso.datetime().optional(),
@@ -79,20 +91,31 @@ const WorkflowExecutionCallSchema = z.strictObject({
 });
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
-const WorkflowExecutionCountsSchema = z.strictObject({
-  total: z.int().nonnegative(),
-  waiting: z.int().nonnegative(),
-  planned: z.int().nonnegative(),
-  stageBlocked: z.int().nonnegative(),
-  queued: z.int().nonnegative(),
-  starting: z.int().nonnegative(),
-  running: z.int().nonnegative(),
-  completed: z.int().nonnegative(),
-  failed: z.int().nonnegative(),
-  cancelled: z.int().nonnegative(),
-  skipped: z.int().nonnegative(),
-  cached: z.int().nonnegative(),
-});
+type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
+  readonly total: number;
+  readonly waiting: number;
+};
+
+/**
+ * The one owner of "how many calls are in each state". Derived from the calls
+ * themselves at the read boundary rather than stored beside them, so a tally
+ * can never disagree with the array it summarizes. `waiting` is the composite
+ * every consumer asks for: planned plus stage-blocked.
+ */
+export function deriveWorkflowCounts(
+  calls: readonly Pick<WorkflowExecutionCall, 'status'>[],
+): WorkflowExecutionCounts {
+  const byStatus = Object.fromEntries(
+    Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
+  ) as Record<WorkflowExecutionCallStatus, number>;
+  for (const call of calls) byStatus[call.status] += 1;
+  return {
+    total: calls.length,
+    waiting: byStatus.planned + byStatus.stageBlocked,
+    ...byStatus,
+  };
+}
+
 export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowExecutionCallStatus> =
   new Set([
     WORKFLOW_CALL_STATUS.COMPLETED,
@@ -114,7 +137,6 @@ export const WorkflowExecutionSnapshotSchema = z
     currentStageId: z.string().min(1).optional(),
     stages: z.array(WorkflowExecutionStageSchema),
     calls: z.array(WorkflowExecutionCallSchema),
-    counts: WorkflowExecutionCountsSchema,
     error: z.string().optional(),
     timestamps: z.strictObject({
       createdAt: z.iso.datetime(),
@@ -171,9 +193,6 @@ export const WorkflowExecutionSnapshotSchema = z
     }
 
     const callIds = new Set<string>();
-    const actualCounts = Object.fromEntries(
-      Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
-    ) as Record<WorkflowExecutionCallStatus, number>;
     for (const [index, call] of snapshot.calls.entries()) {
       if (callIds.has(call.id))
         context.addIssue({
@@ -182,7 +201,6 @@ export const WorkflowExecutionSnapshotSchema = z
           message: `Duplicate workflow call id "${call.id}".`,
         });
       callIds.add(call.id);
-      actualCounts[call.status] += 1;
       if (call.stageId !== undefined) {
         const stage = snapshot.stages.find(
           (candidate) => candidate.id === call.stageId,
@@ -236,30 +254,6 @@ export const WorkflowExecutionSnapshotSchema = z
           message: 'A terminal workflow call cannot have an open attempt.',
         });
     }
-    for (const status of Object.values(WORKFLOW_CALL_STATUS)) {
-      if (snapshot.counts[status] !== actualCounts[status])
-        context.addIssue({
-          code: 'custom',
-          path: ['counts', status],
-          message: `Workflow ${status} count must equal direct calls.`,
-        });
-    }
-    if (snapshot.counts.total !== snapshot.calls.length)
-      context.addIssue({
-        code: 'custom',
-        path: ['counts', 'total'],
-        message: 'Workflow total count must equal direct calls.',
-      });
-    if (
-      snapshot.counts.waiting !==
-      actualCounts.planned + actualCounts.stageBlocked
-    )
-      context.addIssue({
-        code: 'custom',
-        path: ['counts', 'waiting'],
-        message:
-          'Workflow waiting count must equal planned plus stage-blocked calls.',
-      });
     if (TERMINAL_LIFECYCLES.has(snapshot.lifecycle)) {
       if (snapshot.timestamps.completedAt === undefined)
         context.addIssue({

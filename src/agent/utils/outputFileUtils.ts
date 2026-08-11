@@ -1,28 +1,7 @@
 import * as path from 'node:path';
 
-import {
-  WORKFLOW_OUTPUT_BASENAME,
-  workflowOutputPath,
-} from '@shared/constants/workflowOutput';
+import { WORKFLOW_OUTPUT_BASENAME } from '@shared/constants/workflowOutput';
 import { normalizeFilePath } from '@utils/core';
-
-/**
- * Generates a runDir-relative output path under a round subfolder:
- *
- *   `r{round}/output.{ext}`
- *
- * Per-execution isolation (`executions/{id}/...`) gives each run its own
- * directory, so no agent/model/input tokens are needed in the filename.
- *
- * IMPORTANT: callers MUST resolve this through a TaskRunFileService bound
- * to an executionId. The fixed-stem filename is only collision-safe when
- * combined with per-execution run storage; a workspace-scoped resolution
- * would route every round to the same `<workspace>/r{round}/output.{ext}`
- * and clobber outputs across runs.
- */
-export function getOutputFileName(extension: string, round: number): string {
-  return workflowOutputPath({ ext: extension, round });
-}
 
 function getSafeDocumentPathParts(source: string): {
   dir: string;

@@ -8,7 +8,7 @@ import { globIterate } from 'glob';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import {
-  legacyWorkflowOutputStem,
+  workflowOutputCopyStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
 } from '@shared/constants/workflowOutput';
@@ -64,7 +64,7 @@ function getFilePatterns(
 
   for (let round = 0; round < numRounds; round++) {
     // Legacy flat layout: `<base>_<chunk>_r{round}_<normalizedModel>.*`
-    const legacyStem = legacyWorkflowOutputStem({ base, agent, model, round });
+    const legacyStem = workflowOutputCopyStem({ base, agent, model, round });
     // Legacy stem already includes `_<normalizedModel>`; for suffix variants
     // we reconstruct the prefix (everything up to the model token).
     const legacyPrefix = legacyStem.slice(0, -(legacyModel.length + 1));
