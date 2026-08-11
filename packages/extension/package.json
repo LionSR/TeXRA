@@ -1187,7 +1187,6 @@
     "vite:webviews": "corepack pnpm run clean:webview-dist && for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build; done",
     "vite:webviews:dev": "corepack pnpm run clean:webview-dist && for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build --mode development; done",
     "vite:webviews:watch": "concurrently \"VITE_WEBVIEW=progressView vite build --watch --mode development\" \"VITE_WEBVIEW=settingsView vite build --watch --mode development\" \"VITE_WEBVIEW=webview vite build --watch --mode development\"",
-    "typecheck": "tsc --noEmit --checkers 8",
     "compile:fast": "corepack pnpm run prepare:skills && corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext\" \"corepack pnpm run vite:webviews:dev\"",
     "watch:fast": "echo \"[texra-watch] starting\" && corepack pnpm run compile:fast && echo \"[texra-watch] initial build complete\" && concurrently \"corepack pnpm run esbuild:ext:watch\" \"corepack pnpm run vite:webviews:watch\"",
     "package:fast": "corepack pnpm run prepare:skills && corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext:prod\" \"corepack pnpm run vite:webviews\"",
