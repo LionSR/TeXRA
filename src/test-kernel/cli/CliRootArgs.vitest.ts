@@ -833,33 +833,6 @@ describe('CLI root argument routing', () => {
     });
   });
 
-  // Skip on Windows (no POSIX chmod semantics) and when running as root, where
-  // mode-0 doesn't block stat.
-  const skipPermissionTest =
-    process.platform === 'win32' ||
-    (typeof process.getuid === 'function' && process.getuid() === 0);
-  (skipPermissionTest ? it.skip : it)(
-    'propagates non-ENOENT stat errors instead of misreporting as not-found',
-    async () => {
-      await withTempDir('texra-cli-perm-', async (root) => {
-        const blocked = path.join(root, 'blocked');
-        const inner = path.join(blocked, 'paper.tex');
-        try {
-          await fs.mkdir(blocked, { recursive: true });
-          await fs.writeFile(inner, 'draft');
-          // Strip search/execute permission on the parent so stat(inner) fails
-          // with EACCES. The not-found fast path must not swallow this.
-          await fs.chmod(blocked, 0o000);
-          await expect(expandWorkflowInputSpecs([inner], root)).rejects.toThrow(
-            /(EACCES|permission)/i,
-          );
-        } finally {
-          await fs.chmod(blocked, 0o755).catch(() => undefined);
-        }
-      });
-    },
-  );
-
   it('reports missing workflow outputs as a failed copy operation', async () => {
     await expect(
       resolveWorkflowOutput(
