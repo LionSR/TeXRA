@@ -217,6 +217,14 @@ export class PersistedFlow<
    * stepWithResult that immediately follows the previous step's write).
    */
   private cachedRecord: FlowRecord | null = null;
+
+  /**
+   * Whether `cachedRecord.shared` is already a validated `S`. Records this
+   * instance wrote itself are trusted; only a record deserialized from the
+   * KV store is parsed through `sharedSchema` (boundary-only validation), so
+   * steps served from the self-cache skip the per-transition re-parse.
+   */
+  private cachedSharedTrusted = false;
   private nodeIds: Map<BaseNode, string> | null = null;
   private nodesById: Map<string, BaseNode> | null = null;
 
@@ -250,16 +258,33 @@ export class PersistedFlow<
   }
 
   /** Single canonical cast site for trusting a persisted `shared` blob as `S`. */
-  private readShared(raw: unknown): S {
-    if (!this.sharedSchema) return raw as S;
-    const result = this.sharedSchema.safeParse(raw);
+  private readShared(flow: FlowRecord): S {
+    if (!this.sharedSchema || this.cachedSharedTrusted) {
+      return flow.shared as S;
+    }
+    const result = this.sharedSchema.safeParse(flow.shared);
     if (!result.success) {
       throw new Error(
         `Persisted shared state for flow run "${this.runId}" failed schema validation`,
         { cause: result.error },
       );
     }
+    // Keep the normalized value on the record so later reads reuse it.
+    flow.shared = result.data;
+    this.cachedSharedTrusted = true;
     return result.data;
+  }
+
+  /**
+   * Read the flow record, serving from this instance's cache when present. A
+   * true KV read marks the shared blob untrusted so the next `readShared`
+   * re-validates at the deserialization boundary.
+   */
+  private async loadRecord(): Promise<FlowRecord | undefined> {
+    if (this.cachedRecord) return this.cachedRecord;
+    const flow = await this.kv.read<FlowRecord>(flowKey(this.runId));
+    this.cachedSharedTrusted = false;
+    return flow;
   }
 
   /** Register a write-through projection that fires after each persist. */
@@ -310,7 +335,7 @@ export class PersistedFlow<
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
     const key = flowKey(this.runId);
-    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key));
+    const flow = await this.loadRecord();
 
     if (!flow || !Array.isArray(flow.nodes)) {
       throw new Error('Invalid or corrupted flow record');
@@ -324,11 +349,11 @@ export class PersistedFlow<
       return {
         hasMore: false,
         action: flow.cursor?.lastAction ?? flow.nodes.at(-1)?.action,
-        shared: this.readShared(flow.shared),
+        shared: this.readShared(flow),
       };
     }
 
-    const shared = this.readShared(flow.shared);
+    const shared = this.readShared(flow);
 
     if (!shared) {
       throw new Error('Missing shared state in flow record');
@@ -352,6 +377,7 @@ export class PersistedFlow<
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
     this.cachedRecord = flow;
+    this.cachedSharedTrusted = true;
     await this.fireProjection(shared);
 
     return {
@@ -361,14 +387,15 @@ export class PersistedFlow<
     };
   }
 
+  /**
+   * The flow's current shared state. Returns the record's live object rather
+   * than a copy; the caller owns reads directly, and mutations become
+   * durable only through setShared().
+   */
   async getShared(): Promise<S | undefined> {
-    const flow =
-      this.cachedRecord ??
-      (await this.kv.read<FlowRecord>(flowKey(this.runId)));
+    const flow = await this.loadRecord();
     if (flow) this.cachedRecord = flow;
-    return flow?.shared === undefined
-      ? undefined
-      : this.readShared(flow.shared);
+    return flow?.shared === undefined ? undefined : this.readShared(flow);
   }
 
   async setShared(newShared: S): Promise<void> {
@@ -470,7 +497,7 @@ export class PersistedFlow<
     mutate?: (flow: FlowRecord) => void,
   ): Promise<void> {
     const key = flowKey(this.runId);
-    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key));
+    const flow = await this.loadRecord();
     if (!flow) {
       throw new Error('Invalid or corrupted flow record');
     }
@@ -479,12 +506,12 @@ export class PersistedFlow<
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
     this.cachedRecord = flow;
+    this.cachedSharedTrusted = true;
     await this.fireProjection(shared);
   }
 
   protected async ensureRecord(shared: S): Promise<void> {
-    const key = flowKey(this.runId);
-    const existing = await this.kv.read<FlowRecord>(key);
+    const existing = await this.loadRecord();
     if (existing) {
       this.cachedRecord = existing;
       return;
@@ -498,7 +525,8 @@ export class PersistedFlow<
       cursor: { nextNodeId: this.idForNode(this.start) },
       nodes: [],
     };
-    await this.kv.write(key, record);
+    await this.kv.write(flowKey(this.runId), record);
     this.cachedRecord = record;
+    this.cachedSharedTrusted = true;
   }
 }
