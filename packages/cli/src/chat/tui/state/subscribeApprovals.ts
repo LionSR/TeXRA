@@ -250,21 +250,14 @@ function prepareRetryClient(
 
 // Retry carries its own policy lookup (`showRetryRequest`) and owns a queue
 // reservation, so it does not enter through this path.
-async function decidePresentedApproval<
+function decidePresentedApproval<
   K extends 'bash' | 'toolEdit' | 'planApproval' | 'proposal',
   P,
 >(kind: K, payload: P): Promise<ApprovalDecision> {
-  try {
-    return await enqueueTuiApproval({ kind, payload } as Extract<
-      ApprovalPayload,
-      { kind: K }
-    >);
-  } catch {
-    return {
-      accepted: false,
-      userMessage: 'CLI approval prompt failed.',
-    };
-  }
+  return enqueueTuiApproval({ kind, payload } as Extract<
+    ApprovalPayload,
+    { kind: K }
+  >);
 }
 
 async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
@@ -471,7 +464,7 @@ async function requestUserQuestionInteraction(
       };
 }
 
-export function enqueueTuiApproval(
+function enqueueTuiApproval(
   payload: ApprovalPayload,
 ): Promise<ApprovalDecision> {
   return enqueueApproval(payload, { onPresent: announceApproval });
