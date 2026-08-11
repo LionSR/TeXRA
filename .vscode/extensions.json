@@ -6,6 +6,11 @@
     // workspace Prettier from node_modules, so the editor and `npm run format`
     // agree on version and config.
     "esbenp.prettier-vscode",
+    // Required for the `[vue]` block in settings.json to do anything. VS Code
+    // ships no built-in `vue` language, so without this the 104 SFCs under
+    // docs/.vitepress/components/ never carry that language id and the
+    // format-on-save binding silently never matches.
+    "Vue.volar",
     "dbaeumer.vscode-eslint",
     "amodio.tsl-problem-matcher",
     "ms-vscode.extension-test-runner",

@@ -62,7 +62,10 @@
   },
   // The 104 VitePress doc components under docs/.vitepress/components/ are in
   // the repo-wide `format:check`, so omitting this would leave exactly the gap
-  // this change exists to close: save does nothing, CI fails.
+  // this change exists to close: save does nothing, CI fails. This block needs
+  // the `Vue.volar` recommendation in extensions.json to have any effect --
+  // VS Code ships no built-in `vue` language, so without it .vue files never
+  // carry the language id this key matches on.
   "[vue]": {
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode"
