@@ -73,7 +73,7 @@ import {
   clearLocalTranscript,
   moveLocalTranscriptToStream,
 } from './tui/state/transcript';
-import { projectStreamTranscript } from './tui/state/transcriptProjection';
+import { syncStreamLog } from './tui/state/subscribeStreamLog';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
@@ -412,7 +412,7 @@ export function createChatSessionController(
             },
             onIdle: () => {
               if (!session.streamId) return;
-              projectStreamTranscript(session.streamId, { finalize: true });
+              syncStreamLog(session.streamId, { forceFinal: true });
             },
           },
         ),
@@ -420,7 +420,7 @@ export function createChatSessionController(
       .then((result) => {
         session.runExitCode = runOutcomeExitCode(result.outcome);
         if (result.streamId) {
-          projectStreamTranscript(result.streamId, { finalize: true });
+          syncStreamLog(result.streamId, { forceFinal: true });
         }
         notify('agentFinished');
       })
@@ -515,7 +515,7 @@ export function createChatSessionController(
           plan: restored.plan,
         };
       });
-      projectStreamTranscript(resolution.streamId);
+      syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
@@ -576,7 +576,7 @@ export function createChatSessionController(
    */
   const settleResumedTurn = (outcome: TurnOutcome): void => {
     if (session.streamId) {
-      projectStreamTranscript(session.streamId, { finalize: true });
+      syncStreamLog(session.streamId, { forceFinal: true });
     }
     session.runExitCode = runOutcomeExitCode(outcome);
     if (outcome !== STREAM_PHASE.WAITING) {
