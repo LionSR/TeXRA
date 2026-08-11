@@ -25,9 +25,11 @@ When updating CHANGELOG.md:
    format-on-save for the languages Prettier handles, backed by the
    `esbenp.prettier-vscode` recommendation in `.vscode/extensions.json`. With it
    installed, code you edit in VS Code is already formatted by the time you
-   stage it and `format:check` never fails on it. Everywhere the editor is not
-   in the loop -- agent sessions, github.dev, scripted commits -- run
-   `npm run format` yourself.
+   stage it and `format:check` never fails on it. Where the editor is not in the
+   loop -- agent sessions, scripted commits -- run `npm run format` yourself.
+   github.dev has no terminal to run it in, so edit there only for changes
+   Prettier does not reformat; anything larger wants a Codespace or a local
+   checkout, where both the extension and `npm run format` are available.
 3. **Install the local hooks (recommended)**: install `pre-commit` with
    `python -m pip install pre-commit`, then run `pre-commit install`. The
    formatting hook rewrites supported staged files; if it changes a file,
