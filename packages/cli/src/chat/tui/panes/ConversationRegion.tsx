@@ -8,7 +8,7 @@ import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamTabId, WorkflowControlAction } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -31,10 +31,14 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
-import { SubagentList, workflowDashboardPanelItemCount } from './SubagentList';
+import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
 import { inputBarContentRows } from '../state/cliState';
+import {
+  workflowDashboardPanelItemCount,
+  type WorkflowDashboardModel,
+} from '../state/workflowDashboardModel';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
@@ -54,6 +58,10 @@ interface ConversationRegionSnapshot {
   readonly rootStreamId: StreamTabId | undefined;
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: ChildListValue | undefined;
+  /** Stream `selectedChildValue` points at, resolved once by `App`. */
+  readonly selectedChildStreamId: StreamTabId | undefined;
+  /** Dashboard rows for a workflow-script list root, derived once by `App`. */
+  readonly workflowDashboard: WorkflowDashboardModel | undefined;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -79,8 +87,10 @@ interface ConversationRegionProps {
   readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
-  readonly onSkipExecution: (executionId: string) => void;
-  readonly onRetryExecution: (executionId: string) => void;
+  readonly onWorkflowControl: (
+    executionId: string,
+    action: WorkflowControlAction,
+  ) => void;
 }
 
 export function ConversationRegion({
@@ -91,8 +101,7 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillExecution,
-  onSkipExecution,
-  onRetryExecution,
+  onWorkflowControl,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -169,13 +178,10 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
-  const workflowDashboardItemCount = snapshot.childListTarget.slice
-    ? workflowDashboardPanelItemCount(
-        snapshot.childListTarget.slice,
-        snapshot.selectedChildValue,
-        columns,
-      )
-    : 0;
+  const workflowDashboardItemCount = workflowDashboardPanelItemCount(
+    snapshot.workflowDashboard,
+    snapshot.selectedChildValue,
+  );
   const sessionPanelItemCount =
     workflowDashboardItemCount > 0
       ? workflowDashboardItemCount
@@ -262,12 +268,12 @@ export function ConversationRegion({
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
-              onSkipExecution={onSkipExecution}
-              onRetryExecution={onRetryExecution}
+              onWorkflowControl={onWorkflowControl}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
-              listRootSlice={snapshot.childListTarget.slice}
+              dashboard={snapshot.workflowDashboard}
+              selectedChildStreamId={snapshot.selectedChildStreamId}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               streams={snapshot.streams}

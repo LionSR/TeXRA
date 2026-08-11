@@ -13,7 +13,7 @@ import {
 
 // Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { type StreamTabId } from '@shared/schemas';
+import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
@@ -125,10 +125,11 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
-  /** Skip a focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onSkipExecution: (executionId: string) => void;
-  /** Retry a focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onRetryExecution: (executionId: string) => void;
+  /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onWorkflowControl: (
+    executionId: string,
+    action: WorkflowControlAction,
+  ) => void;
   /** Whether Ctrl-C may stop the current root run. */
   readonly canInterruptActiveRun: () => boolean;
   /** Whether bare Escape may stop the identified focused stream. */
@@ -300,8 +301,9 @@ export function App(props: AppProps): React.JSX.Element {
     childListTarget.slice?.identity?.kind === 'multiAgentWorkflow'
       ? childListTarget.slice
       : undefined;
-  // The same derivation `SubagentList` renders from: rows must not be grouped,
-  // ordered, or deduplicated twice or the keyboard drifts off the screen.
+  // The only derivation: `SubagentList` renders this instance and
+  // `ConversationRegion` budgets its rows from it, so rows cannot be grouped,
+  // ordered, or deduplicated twice and drift the keyboard off the screen.
   const workflowDashboard = useMemo(
     () =>
       workflowDashboardRoot
@@ -789,6 +791,8 @@ export function App(props: AppProps): React.JSX.Element {
           childListFocused,
           sessionViews,
           selectedChildValue,
+          selectedChildStreamId,
+          workflowDashboard,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,
@@ -798,8 +802,7 @@ export function App(props: AppProps): React.JSX.Element {
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillExecution={props.onKillExecution}
-        onSkipExecution={props.onSkipExecution}
-        onRetryExecution={props.onRetryExecution}
+        onWorkflowControl={props.onWorkflowControl}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

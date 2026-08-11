@@ -17,6 +17,7 @@ import {
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import {
   WorkflowExecutionSnapshotSchema,
+  deriveWorkflowCounts,
   type ExecutionId,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
@@ -77,7 +78,7 @@ describe('workflow-script persistence', () => {
     });
 
     expect(restarted.result).toEqual(['result:first', 'result:second']);
-    expect(restarted.snapshot.counts.cached).toBe(2);
+    expect(deriveWorkflowCounts(restarted.snapshot.calls).cached).toBe(2);
     await expect(
       readWorkflowScriptCheckpoint(getExecutionStore(executionId), 'call-1'),
     ).resolves.toMatchObject({
@@ -177,8 +178,6 @@ return [first, second]`;
       call.timestamps.completedAt = undefined;
       call.attempts[0]!.completedAt = undefined;
     }
-    interrupted.counts.completed = 0;
-    interrupted.counts.running = 2;
 
     await store.writeMeta({
       timestamp: new Date(0).toISOString(),
@@ -290,12 +289,17 @@ return await agent('run planned call', {
 return await agent('run planned call', { id: 'planned-call' })`;
       const skipped = await runWorkflowScript({
         script: resumeScript,
-        runAgent: async () => 'must be skipped',
+        // The attempt is skipped by the id it reports, and the control action
+        // wins over the result this signal-ignoring runner still returns.
+        runAgent: async (invocation) => {
+          invocation.report?.({
+            childExecutionId: 'skipskipskip' as ExecutionId,
+          });
+          control('skipskipskip' as ExecutionId, 'skip');
+          return 'must be skipped';
+        },
         onControl: (value) => {
           control = value;
-        },
-        onEvent: (event) => {
-          if (event.type === 'agent:start') control.skip(event.index);
         },
       });
       const prior = skipped.snapshot.calls[0]!;
@@ -364,10 +368,12 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
       const failed = await runWorkflowScript({
         script: resumeScript,
         runAgent: async (invocation) => {
-          invocation.reportChildExecution?.('bbbbbbbbbbbb');
-          invocation.reportChildStream?.('prior#bbbbbbbbbbbb');
-          invocation.reportModel?.('prior-model');
-          invocation.reportCostUsd?.(2.5);
+          invocation.report?.({
+            childExecutionId: 'bbbbbbbbbbbb',
+            childStreamId: 'prior#bbbbbbbbbbbb',
+            model: 'prior-model',
+            costUsd: 2.5,
+          });
           throw new Error('interrupted');
         },
       });
@@ -421,7 +427,7 @@ return await agent('cache me', { id: 'cached-call' })`;
     const completed = await runWorkflowScript({
       script: originalScript,
       runAgent: async (invocation) => {
-        invocation.reportAgent?.('resolved-writer');
+        invocation.report?.({ agent: 'resolved-writer' });
         return 'original result';
       },
     });
@@ -439,7 +445,7 @@ return await agent('cache me', { id: 'cached-call' })`;
     });
 
     // issueCall re-runs before the journal cache hit and typically has no
-    // agentName; it must not wipe the hydrated reportAgent value.
+    // agentName; it must not wipe the agent the host already reported.
     expect(snapshots[0]?.calls[0]?.agent).toBe('resolved-writer');
     expect(cached.snapshot.calls[0]?.status).toBe('cached');
     expect(cached.snapshot.calls[0]?.agent).toBe('resolved-writer');
@@ -457,10 +463,12 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       const completed = await runWorkflowScript({
         script: originalScript,
         runAgent: async (invocation) => {
-          invocation.reportChildExecution?.('cccccccccccc');
-          invocation.reportChildStream?.('prior#cccccccccccc');
-          invocation.reportModel?.('prior-model');
-          invocation.reportCostUsd?.(3.75);
+          invocation.report?.({
+            childExecutionId: 'cccccccccccc',
+            childStreamId: 'prior#cccccccccccc',
+            model: 'prior-model',
+            costUsd: 3.75,
+          });
           return 'original result';
         },
       });
@@ -480,7 +488,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       const runner = vi.fn(async (invocation) => {
         runnerStarted.resolve();
         await finishRunner.promise;
-        invocation.reportModel?.('replacement-model');
+        invocation.report?.({ model: 'replacement-model' });
         throw new Error('replacement failed before reporting cost');
       });
       const resumedRun = runWorkflowScript({
@@ -569,9 +577,12 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
 return await agent('retry metadata')`,
       runAgent: async (invocation) => {
         attempt += 1;
+        invocation.report?.({
+          childExecutionId: `attempt-${attempt}` as ExecutionId,
+        });
         if (attempt === 1) {
-          invocation.reportModel?.('abandoned-model');
-          invocation.reportChildStream?.('writer#aaaaaaaaaaaa');
+          invocation.report?.({ model: 'abandoned-model' });
+          invocation.report?.({ childStreamId: 'writer#aaaaaaaaaaaa' });
           await new Promise<void>((_resolve, reject) =>
             invocation.signal.addEventListener(
               'abort',
@@ -589,7 +600,7 @@ return await agent('retry metadata')`,
     });
 
     await vi.waitFor(() => expect(attempt).toBe(1));
-    control.retry(0);
+    control('attempt-1' as ExecutionId, 'retry');
     await vi.waitFor(() => expect(attempt).toBe(2));
     const result = await run;
     const end = events.findLast((event) => event.type === 'agent:end');

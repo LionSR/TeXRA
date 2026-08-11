@@ -137,6 +137,20 @@ export function workflowDashboardModel(
   };
 }
 
+/** Number of content rows the dashboard can display at the current width.
+ *  `undefined` (no workflow root) reserves no rows at all. */
+export function workflowDashboardPanelItemCount(
+  model: WorkflowDashboardModel | undefined,
+  selectedValue: ChildListValue | undefined,
+): number {
+  if (!model || model.tasks.length === 0) return 0;
+  if (!model.wide) {
+    return 1 + model.groups.length + model.tasks.length;
+  }
+  const { activeGroup } = workflowDashboardSelection(model, selectedValue);
+  return 1 + Math.max(model.groups.length, activeGroup?.tasks.length ?? 0);
+}
+
 interface WorkflowDashboardSelection {
   readonly selectedGroup: WorkflowPhaseGroup | undefined;
   readonly selectedTask: WorkflowTaskEntry | undefined;

@@ -23,8 +23,8 @@ const mocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
-  persistChildRunTurnState: vi.fn(),
   readConfig: vi.fn(),
+  writeTurnState: vi.fn(),
   resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
 }));
@@ -36,7 +36,10 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
-  getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
+  getExecutionStore: vi.fn(() => ({
+    readConfig: mocks.readConfig,
+    writeTurnState: mocks.writeTurnState,
+  })),
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
@@ -59,7 +62,6 @@ vi.mock('@tools/delegation/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
-  persistChildRunTurnState: mocks.persistChildRunTurnState,
 }));
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -155,7 +157,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
-    mocks.persistChildRunTurnState.mockResolvedValue({ kind: 'persisted' });
+    mocks.writeTurnState.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue({
       status: 'durable',
       terminalStatusPersisted: true,

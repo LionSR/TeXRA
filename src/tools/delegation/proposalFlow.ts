@@ -6,10 +6,7 @@
  */
 
 // Local imports
-import {
-  resolveDelegationScopeAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -27,14 +24,11 @@ import { generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  getDelegationAgent,
-  getDelegationAgentForScope,
-  getDelegationAgents,
-} from './delegationAgentAvailability';
-import {
   availableModelNamesFromOptions,
+  getDelegationAgent,
+  getDelegationAgents,
   selectDelegationModelFromAvailableNames,
-} from './delegationModelAvailability';
+} from './delegationAvailability';
 
 // Local file imports
 import { executeSubagent } from './subagentExecution';
@@ -69,15 +63,9 @@ export function requireVisibleAgent(
   name: string,
   scope?: AgentDelegationScope,
 ): AgentEntry {
-  const agent = scope
-    ? getDelegationAgentForScope(category, name, scope)
-    : getDelegationAgent(category, name);
+  const agent = getDelegationAgent(category, name, scope);
   if (agent) return agent;
-  const available = (
-    scope
-      ? resolveDelegationScopeAgents(scope, category)
-      : getDelegationAgents(category)
-  )
+  const available = getDelegationAgents(category, scope)
     .map((a) => a.name)
     .join(', ');
   throw new Error(

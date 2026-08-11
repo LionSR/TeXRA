@@ -169,7 +169,7 @@ accepts exactly one of newly submitted `script` source or an existing
 `scriptPath`. New source is saved immediately as a non-overwriting draft under
 `.texra/workflow-scripts/`; every result reports that path so a model can edit
 and rerun the file instead of reproducing the full script. Phase metadata
-accepts both title strings and `{ title, detail? }` objects and normalizes them
+accepts both title strings and `{ title }` objects and normalizes them
 to one internal representation. It ships in the built-in `orchestrator`
 agent's tool list
 (`prompts/agents/remote/orchestrator.yaml`); explicitly naming the tool in an

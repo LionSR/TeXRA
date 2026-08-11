@@ -1,8 +1,5 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import {
-  isTerminalWorkflowCallProgress,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import {
   activeStreamId,
   focusStream,
@@ -113,43 +110,6 @@ export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
 
 export function clearLocalTranscript(): void {
   removeStream(CLI_LOCAL_STREAM_ID);
-}
-
-/** Finalizes entries whose content is immutable at the end of a stream.
- *
- * Assistant and tool rows stop changing at that boundary. Workflow calls are
- * different: bridge cleanup may settle them after the stream status changes,
- * so a nonterminal call remains live and blocks every later row from entering
- * append-only `<Static>` scrollback until its terminal update arrives.
- */
-export function finalizeAssistantTranscriptEntries(
-  streamId: StreamTabId,
-): void {
-  patchStream(streamId, (slice) => {
-    let changed = false;
-    let blockedByWorkflowCall = false;
-    const entries = slice.entries.map((entry) => {
-      if (entry.finalized) return entry;
-      if (
-        entry.role === 'workflowTask' &&
-        !isTerminalWorkflowCallProgress(entry.task)
-      ) {
-        blockedByWorkflowCall = true;
-        return entry;
-      }
-      if (blockedByWorkflowCall) return entry;
-      if (
-        entry.role !== 'assistant' &&
-        entry.role !== 'tool' &&
-        entry.role !== 'workflowTask'
-      ) {
-        return entry;
-      }
-      changed = true;
-      return { ...entry, finalized: true };
-    });
-    return changed ? { ...slice, entries } : slice;
-  });
 }
 
 function resetTranscriptState(): void {

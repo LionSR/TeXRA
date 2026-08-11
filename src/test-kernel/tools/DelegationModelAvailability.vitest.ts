@@ -6,7 +6,7 @@ import {
   availableModelNamesFromOptions,
   selectDelegationModelFromAvailableNames,
   withDelegationModelAvailability,
-} from '@tools/delegation/delegationModelAvailability';
+} from '@tools/delegation/delegationAvailability';
 
 function model(
   value: string,

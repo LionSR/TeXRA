@@ -12,7 +12,6 @@ import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
@@ -34,6 +33,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
+  workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -153,7 +153,7 @@ export async function runReflectionFlow<C = unknown>(
     input.getOutputFileLocation ??
     (async (round: number): Promise<AgentFileLocation> => {
       const canonical = fileService.createLocation(
-        getOutputFileName(WORKFLOW_RAW_OUTPUT_EXT, round),
+        workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
       ) as AgentFileLocation;
       // Resume-from-pre-refactor compat: if a round was partially written on an
       // older build that used `.tex` for non-scratchpad agents, keep using that
@@ -161,7 +161,7 @@ export async function runReflectionFlow<C = unknown>(
       // instead of starting a fresh round at output.xml.
       if (!(await AbsoluteFS.exists(canonical.absolutePath))) {
         const legacy = fileService.createLocation(
-          getOutputFileName(WORKFLOW_DOCUMENT_OUTPUT_EXT, round),
+          workflowOutputPath({ ext: WORKFLOW_DOCUMENT_OUTPUT_EXT, round }),
         ) as AgentFileLocation;
         if (await AbsoluteFS.exists(legacy.absolutePath)) {
           return legacy;
