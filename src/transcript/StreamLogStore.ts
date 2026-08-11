@@ -38,17 +38,11 @@ const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 
 function createLogKv(): KVStore {
-  return new KVStore(STREAM_LOGS_DIR, {
-    compactJson: true,
-    throwOnErrors: true,
-  });
+  return new KVStore(STREAM_LOGS_DIR, { compactJson: true });
 }
 
 function createSummaryKv(): KVStore {
-  return new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-    compactJson: true,
-    throwOnErrors: true,
-  });
+  return new KVStore(STREAM_LOG_SUMMARIES_DIR, { compactJson: true });
 }
 
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;

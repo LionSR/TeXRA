@@ -348,7 +348,6 @@ interface StreamRecord {
 
   // -- Cached KVStore handle for this stream's sidecar directory. ----------
   kv: KVStore | undefined;
-  writeKv: KVStore | undefined;
 }
 
 interface DirtySidecarWrite {
@@ -381,7 +380,6 @@ export class StreamSnapshotStore {
     metaOverlay: false,
     overlays: {},
     kv: undefined,
-    writeKv: undefined,
   }));
   /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
@@ -420,23 +418,11 @@ export class StreamSnapshotStore {
     return record.kv;
   }
 
-  /** Strict write handle; read callers retain the KV store's fallback policy. */
-  private writeKv(streamId: StreamTabId): KVStore {
-    const record = this.getOrCreateRecord(streamId);
-    if (!record.writeKv) {
-      record.writeKv = new KVStore(streamDataDir(streamId), {
-        throwOnErrors: true,
-      });
-    }
-    return record.writeKv;
-  }
-
-  /** Drop cached KV handles so the next access re-resolves against the stream's current directory. */
+  /** Drop the cached KV handle so the next access re-resolves against the stream's current directory. */
   private invalidateKvHandles(stream: StreamTabId): void {
     const record = this.records.get(stream);
     if (record) {
       record.kv = undefined;
-      record.writeKv = undefined;
     }
   }
 
@@ -1434,7 +1420,7 @@ export class StreamSnapshotStore {
       // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
       if (!this.writeMutexes.has(chainKey)) return;
       if (this.streamVersion(stream) !== version) return;
-      return this.writeKv(stream).write(key, value);
+      return this.kv(stream).write(key, value);
     });
   }
 
