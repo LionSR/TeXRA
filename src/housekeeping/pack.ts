@@ -6,8 +6,9 @@ import * as logger from '@logger/logUtils';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import {
-  getAgentFirstNameChunk,
+  midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
+  workflowOutputCopyStem,
   workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
@@ -256,21 +257,27 @@ async function packAdditionalXmlFiles(
   commonOutputFolder: string,
   outputFolderExists: boolean,
 ): Promise<boolean> {
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const cleanAgent = getCleanAgentName(agent);
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
 
   let anyPacked = false;
   for (let i = 0; i < maxRounds; i++) {
-    // Both layouts: legacy flat `<base>_<chunk>_r{round}_<model>.xml` and
-    // new round-subfolder `r{round}/<base>_<cleanAgent>_<model>.xml`.
+    // Both layouts, named by the shared grammar helpers so this reader matches
+    // exactly what the writers produced: flat `<base>_<chunk>_r{round}_<model>`
+    // and round-subfolder `r{round}/<base>_<cleanAgent>_<model>`.
+    const flatStem = workflowOutputCopyStem({
+      base: baseName,
+      agent,
+      model,
+      round: i,
+    });
     const candidates = [
+      { rel: `${flatStem}.xml`, dest: `${flatStem}.xml` },
       {
-        rel: `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
-        dest: `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
-      },
-      {
-        rel: path.join(`r${i}`, `${baseName}_${cleanAgent}_${model}.xml`),
+        rel: path.join(
+          workflowOutputRoundDir(i),
+          `${midEraWorkflowOutputStem({ base: baseName, agent, model })}.xml`,
+        ),
         dest: `${baseName}_${cleanAgent}_r${i}_${model}.xml`,
       },
     ];
@@ -281,8 +288,8 @@ async function packAdditionalXmlFiles(
 
       const destPath = path.join(commonOutputFolder, dest);
       if (await WorkspaceFS.exists(destPath)) {
-        // Legacy and new layouts can yield identical destination names
-        // (when `agentFirstNameChunk === cleanAgent`). Skip the second
+        // The two layouts can yield identical destination names (when the
+        // agent's first-name chunk equals its clean name). Skip the second
         // candidate rather than failing the rename onto an existing file.
         logger.debug(
           CHANNEL,

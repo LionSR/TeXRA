@@ -25,19 +25,21 @@ vi.mock('@agent/runtime/RunContext', () => ({
 // `resolveDelegationScopeAgents` and `findAgentByIdentifier` are the single
 // sources of truth for scope resolution and identity matching (agentRegistry.ts)
 // — this test only exercises which candidate set and resolver
-// delegationAgentAvailability.ts feeds them, so the mock reproduces just this
+// delegationAvailability.ts feeds them, so the mock reproduces just this
 // scope's expected resolution rather than re-implementing priority/dedup logic
-// that belongs to agentRegistry's own tests.
+// that belongs to agentRegistry's own tests. A scopeless call resolves the
+// workspace-visible roster, exactly as agentRegistry does.
 vi.mock('@agent/index/agentRegistry', () => {
   return {
-    getVisibleAgent: () => customReview,
     resolveDelegationScopeAgents: (
       scope: { toolUse: readonly string[] } | undefined,
       category: string,
-    ) =>
-      scope && category === 'toolUse' && scope.toolUse.includes('remote:review')
+    ) => {
+      if (!scope) return [customReview];
+      return category === 'toolUse' && scope.toolUse.includes('remote:review')
         ? [remoteReview]
-        : [],
+        : [];
+    },
     findAgentByIdentifier: (
       entries: Array<{ source: string; name: string }>,
       identifier: string,
@@ -45,8 +47,8 @@ vi.mock('@agent/index/agentRegistry', () => {
   };
 });
 
-const { getDelegationAgent, getDelegationAgentForScope, getDelegationAgents } =
-  await import('@tools/delegation/delegationAgentAvailability');
+const { getDelegationAgent, getDelegationAgents } =
+  await import('@tools/delegation/delegationAvailability');
 
 describe('execution-scoped delegation agents', () => {
   beforeEach(() => {
@@ -74,11 +76,17 @@ describe('execution-scoped delegation agents', () => {
       toolUse: ['remote:review'],
     };
 
-    expect(getDelegationAgentForScope('toolUse', 'review', scope)).toBe(
-      remoteReview,
-    );
+    expect(getDelegationAgents('toolUse', scope)).toEqual([remoteReview]);
+    expect(getDelegationAgent('toolUse', 'review', scope)).toBe(remoteReview);
     expect(
-      getDelegationAgentForScope('toolUse', 'custom:review', scope),
+      getDelegationAgent('toolUse', 'custom:review', scope),
     ).toBeUndefined();
+  });
+
+  it('falls back to the workspace-visible roster with no scope at all', () => {
+    mocks.context = undefined;
+
+    expect(getDelegationAgents('toolUse')).toEqual([customReview]);
+    expect(getDelegationAgent('toolUse', 'review')).toBe(customReview);
   });
 });

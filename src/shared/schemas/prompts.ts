@@ -15,6 +15,7 @@ import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from './proposalFields';
+import { WorkflowCallIdentitySchema } from './workflowCallProgress';
 
 /** Optional stream ID - allows empty string when stream context is unavailable */
 const OptionalStreamIdSchema = z.union([StreamTabIdSchema, z.literal('')]);
@@ -56,19 +57,8 @@ const WorkflowScriptProposalDetailsSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().min(1),
   scriptPath: z.string().min(1),
-  phases: z.array(
-    z.strictObject({
-      title: z.string().min(1),
-      detail: z.string().optional(),
-    }),
-  ),
-  tasks: z.array(
-    z.strictObject({
-      id: z.string().min(1),
-      label: z.string(),
-      phase: z.string().optional(),
-    }),
-  ),
+  phases: z.array(z.strictObject({ title: z.string().min(1) })),
+  tasks: z.array(WorkflowCallIdentitySchema),
 });
 
 /** Workflow agent proposal - includes file fields for document processing */

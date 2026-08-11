@@ -139,8 +139,7 @@ function appProps(
   return {
     onSubmit: vi.fn(),
     onKillExecution: vi.fn(),
-    onSkipExecution: vi.fn(),
-    onRetryExecution: vi.fn(),
+    onWorkflowControl: vi.fn(),
     canInterruptActiveRun: () => true,
     canInterruptStream: () => true,
     onInterruptActive: vi.fn(),

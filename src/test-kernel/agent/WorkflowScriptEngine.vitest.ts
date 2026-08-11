@@ -12,6 +12,7 @@ import {
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
+import { deriveWorkflowCounts, type ExecutionId } from '@shared/schemas';
 import { delay } from '@utils/core';
 
 const META = `export const meta = {
@@ -47,6 +48,15 @@ function rejectOnAbort(
   );
 }
 
+/**
+ * The child execution id one attempt runs under. Interactive control is keyed
+ * by the id the runner reports, so a fake runner announces one per attempt
+ * exactly as the production runner does — and a retry announces a new one.
+ */
+function childExecutionIdFor(index: number, attempt = 1): ExecutionId {
+  return `child-${index}-${attempt}` as ExecutionId;
+}
+
 const EMPTY_FILES_JSON = '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}';
 
 type SandboxBridge = Parameters<typeof runScriptInSandbox>[1];
@@ -75,14 +85,11 @@ describe('parseWorkflowScript', () => {
     const { meta } = parseWorkflowScript(`export const meta = {
   name: 'phase-shorthand',
   description: 'accepts the natural phase-title form',
-  phases: ['Draft', { title: 'Merge', detail: 'Combine outputs' }],
+  phases: ['Draft', { title: 'Merge' }],
 }
 return null`);
 
-    expect(meta.phases).toEqual([
-      { title: 'Draft' },
-      { title: 'Merge', detail: 'Combine outputs' },
-    ]);
+    expect(meta.phases).toEqual([{ title: 'Draft' }, { title: 'Merge' }]);
   });
 
   it('validates the declarative task plan as part of workflow metadata', () => {
@@ -337,17 +344,17 @@ return await agent('inspect', {
   });
 
   it('runs a script end-to-end with agent calls and args', async () => {
+    const runner = vi.fn(echoRunner);
     const run = await runScript(
       `
 const a = await agent('alpha')
 const b = await agent('beta:' + args.suffix)
 return [a, b]`,
-      { args: { suffix: 'S' } },
+      { args: { suffix: 'S' }, runAgent: runner },
     );
     expect(run.result).toEqual(['result:alpha', 'result:beta:S']);
-    expect(run.agentCalls).toBe(2);
+    expect(runner).toHaveBeenCalledTimes(2);
     expect(run.journal).toHaveLength(2);
-    expect(run.meta.name).toBe('test-flow');
   });
 
   it('exposes launch files as immutable script context', async () => {
@@ -635,7 +642,7 @@ return await parallel([
       runWorkflowScript({
         script: `${META}agent('abandoned', { phase: 'Work' }); return 'guest success'`,
         runAgent: async (invocation) => {
-          invocation.reportModel?.('checkpoint-model');
+          invocation.report?.({ model: 'checkpoint-model' });
           await delay(5);
           return 'completed child';
         },
@@ -705,7 +712,6 @@ return out.length`,
     expect(maxInFlight).toBe(4);
     expect(completed).toBe(100);
     expect(run.result).toBe(100);
-    expect(run.agentCalls).toBe(100);
   });
 
   it('replays matching journal entries and re-runs edited calls', async () => {
@@ -873,6 +879,10 @@ return await agent('Inspect src', { id: 'inspect' })`,
   });
 
   it('refreshes file identity after waiting in the concurrency queue', async () => {
+    const script = `${META}return await parallel([
+  () => agent('blocker', { id: 'blocker' }),
+  () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
+])`;
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => {
       releaseFirst = resolve;
@@ -880,10 +890,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     let fingerprint = 'old-proof';
     const invocations: WorkflowAgentInvocation[] = [];
     const runPromise = runWorkflowScript({
-      script: `${META}return await parallel([
-  () => agent('blocker', { id: 'blocker' }),
-  () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
-])`,
+      script,
       concurrency: 1,
       fingerprintAgentDependencies: async () => fingerprint,
       runAgent: async (invocation) => {
@@ -896,9 +903,19 @@ return await agent('Inspect src', { id: 'inspect' })`,
     await vi.waitFor(() => expect(invocations).toHaveLength(1));
     fingerprint = 'new-proof';
     releaseFirst();
-    await runPromise;
+    const run = await runPromise;
 
-    expect(invocations[1]?.dependencyFingerprint).toBe('new-proof');
+    // The refresh is observable as the journal key it re-keys: against a
+    // baseline run whose bytes never changed, only the file-backed call's
+    // identity moves.
+    const baseline = await runWorkflowScript({
+      script,
+      concurrency: 1,
+      fingerprintAgentDependencies: async () => 'old-proof',
+      runAgent: async (invocation) => invocation.options.id,
+    });
+    expect(run.journal[0]?.key).toBe(baseline.journal[0]?.key);
+    expect(run.journal[1]?.key).not.toBe(baseline.journal[1]?.key);
   });
 
   it('refreshes file identity before an interactive retry', async () => {
@@ -908,6 +925,12 @@ return await agent('Inspect src', { id: 'inspect' })`,
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         invocations.push(invocation);
+        invocation.report?.({
+          childExecutionId: childExecutionIdFor(
+            invocation.index,
+            invocations.length,
+          ),
+        });
         if (invocations.length === 2) resolve('fresh result');
         rejectOnAbort(invocation, reject);
       });
@@ -925,10 +948,9 @@ return await agent('Inspect src', { id: 'inspect' })`,
     await vi.waitFor(() => expect(invocations).toHaveLength(1));
     const firstKey = invocations[0]?.key;
     fingerprint = 'new-proof';
-    control.retry(0);
+    control(childExecutionIdFor(0), 'retry');
     const run = await runPromise;
 
-    expect(invocations[1]?.dependencyFingerprint).toBe('new-proof');
     expect(invocations[1]?.key).not.toBe(firstKey);
     expect(run.journal[0]?.key).toBe(invocations[1]?.key);
   });
@@ -1170,6 +1192,59 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
         { runAgent: runner },
       ),
     ).rejects.toThrow(/option "outputSchema" is not recognized/);
+  });
+
+  it('normalizes agent() options without synthesizing journal-key fields', async () => {
+    // The journal key is a stable hash of the normalized options, so an option
+    // the guest omitted must stay omitted: a prefaulted empty file list (or any
+    // other synthesized key) would silently invalidate every completed call of
+    // an otherwise identical resumed run.
+    const seen: WorkflowAgentInvocation[] = [];
+    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
+      seen.push(invocation);
+      return echoRunner(invocation);
+    });
+    // Only defined values reach stableStringify, so this is exactly the key set
+    // the journal identity is computed over.
+    const journaledOptionKeys = (index: number): string[] =>
+      Object.entries(seen[index]?.options ?? {})
+        .filter(([, value]) => value !== undefined)
+        .map(([key]) => key)
+        .toSorted();
+
+    await runScript(
+      `
+await agent('bare')
+await agent('files', { inputFiles: ['  draft.tex  '], label: '  ' })
+return await agent('structured', {
+  id: '  audit  ',
+  model: '  sonnet  ',
+  agentName: ' assistant ',
+  schema: { type: 'object' },
+})`,
+      {
+        runAgent: runner,
+        fingerprintAgentDependencies: async () => 'draft-v1',
+      },
+    );
+
+    expect(journaledOptionKeys(0)).toEqual([]);
+    expect(journaledOptionKeys(1)).toEqual(['inputFiles', 'label']);
+    // Only the supplied file role travels; the other two stay absent.
+    expect(seen[1]?.options.inputFiles).toEqual(['draft.tex']);
+    expect(seen[1]?.options.label).toBe('');
+    expect(journaledOptionKeys(2)).toEqual([
+      'agentName',
+      'id',
+      'model',
+      'schema',
+    ]);
+    expect(seen[2]?.options.id).toBe('audit');
+    expect(seen[2]?.options.model).toBe('sonnet');
+    // agentName is the one string option taken verbatim: it names a host agent,
+    // so a stray space must fail visibly at resolution rather than be repaired
+    // into a different journal identity.
+    expect(seen[2]?.options.agentName).toBe(' assistant ');
   });
 
   it('blocks Function-constructor escapes through injected primitives', async () => {
@@ -1533,20 +1608,13 @@ while (true) {}`,
       runWorkflowScript({
         script: `${META}return await agent('function-result')`,
         runAgent: async (invocation) => {
-          invocation.reportModel?.('serialization-model');
+          invocation.report?.({ model: 'serialization-model' });
           return () => undefined;
         },
         onEvent: (event) => events.push(event),
       }),
     ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
     expect(events).toEqual([
-      {
-        type: 'agent:queued',
-        progressId: 'call-0',
-        index: 0,
-        label: 'function-result',
-        phase: undefined,
-      },
       {
         type: 'agent:start',
         progressId: 'call-0',
@@ -1689,7 +1757,7 @@ return 'done'`,
   it('stops the workflow when a runner surfaces the run abort', async () => {
     const events: WorkflowScriptEvent[] = [];
     const runner = (invocation: WorkflowAgentInvocation) => {
-      invocation.reportModel?.('abort-model');
+      invocation.report?.({ model: 'abort-model' });
       const abortError = new Error('runner observed abort');
       abortError.name = 'WorkflowRunAbortError';
       return Promise.reject(abortError);
@@ -1882,7 +1950,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(childSignal?.aborted).toBe(true);
   });
 
-  it('skip(index) skips only that call: SKIPPED result, no journal, siblings finish', async () => {
+  it('skip(childExecutionId) skips only that call: SKIPPED result, no journal, siblings finish', async () => {
     const started = new Set<number>();
     const release = new Map<number, () => void>();
     const events: WorkflowScriptEvent[] = [];
@@ -1890,7 +1958,10 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         started.add(invocation.index);
-        invocation.reportModel?.('skip-model');
+        invocation.report?.({
+          model: 'skip-model',
+          childExecutionId: childExecutionIdFor(invocation.index),
+        });
         release.set(invocation.index, () =>
           resolve(`done:${invocation.index}`),
         );
@@ -1912,7 +1983,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(started.size).toBe(3));
-    control.skip(1);
+    control(childExecutionIdFor(1), 'skip');
     // Siblings settle normally; only index 1 is cancelled.
     release.get(0)?.();
     release.get(2)?.();
@@ -1937,26 +2008,35 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
   });
 
-  it('makes a call controllable before emitting agent:start', async () => {
+  it('makes a call controllable the moment its child id is reported', async () => {
+    // Control is keyed by the child id the runner reports, so the earliest a
+    // host can target an attempt is the instant that id exists — which is
+    // still early enough to cancel the attempt before it produces a result.
     let control!: WorkflowScriptControl;
-    const runner = vi.fn(echoRunner);
+    const runner = vi.fn(
+      (invocation: WorkflowAgentInvocation) =>
+        new Promise<string>((_resolve, reject) => {
+          rejectOnAbort(invocation, reject);
+          invocation.report?.({
+            childExecutionId: childExecutionIdFor(invocation.index),
+          });
+          control(childExecutionIdFor(invocation.index), 'skip');
+        }),
+    );
     const run = await runWorkflowScript({
       script: `${META}return await agent('skip immediately')`,
       runAgent: runner,
       onControl: (handle) => {
         control = handle;
       },
-      onEvent: (event) => {
-        if (event.type === 'agent:start') control.skip(event.index);
-      },
     });
 
     expect(run.result).toBe(WORKFLOW_SKIPPED_RESULT);
     expect(run.journal).toEqual([]);
-    expect(runner).not.toHaveBeenCalled();
+    expect(runner).toHaveBeenCalledTimes(1);
   });
 
-  it('retry(index) re-runs a single in-flight call and yields the new result', async () => {
+  it('retry(childExecutionId) re-runs a single in-flight call and yields the new result', async () => {
     const attemptByIndex = new Map<number, number>();
     const releases: Array<() => void> = [];
     let control!: WorkflowScriptControl;
@@ -1964,6 +2044,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       new Promise<string>((resolve, reject) => {
         const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
         attemptByIndex.set(invocation.index, attempt);
+        invocation.report?.({
+          childExecutionId: childExecutionIdFor(invocation.index, attempt),
+        });
         releases.push(() => resolve(`attempt-${attempt}`));
         rejectOnAbort(invocation, reject);
       });
@@ -1977,7 +2060,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
-    control.retry(0);
+    control(childExecutionIdFor(0, 1), 'retry');
     // The aborted first attempt is discarded; a fresh attempt starts.
     await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
     releases.at(-1)?.();
@@ -1994,11 +2077,107 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     ]);
   });
 
+  it('forgets an abandoned attempt id so a stale request cannot skip its successor', async () => {
+    const attemptByIndex = new Map<number, number>();
+    const releases: Array<() => void> = [];
+    let control!: WorkflowScriptControl;
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve, reject) => {
+        rejectOnAbort(invocation, reject);
+        const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
+        attemptByIndex.set(invocation.index, attempt);
+        invocation.report?.({
+          childExecutionId: childExecutionIdFor(invocation.index, attempt),
+        });
+        releases.push(() => resolve(`attempt-${attempt}`));
+      });
+
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('go')`,
+      runAgent: runner,
+      onControl: (handle) => {
+        control = handle;
+      },
+    });
+
+    await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
+    control(childExecutionIdFor(0, 1), 'retry');
+    await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
+    // The retried attempt runs under a new id; the abandoned one is dead and
+    // must not reach the fresh attempt that now owns the call.
+    control(childExecutionIdFor(0, 1), 'skip');
+    releases.at(-1)?.();
+
+    const run = await runPromise;
+    expect(run.result).toBe('attempt-2');
+  });
+
+  it('never registers a recovered child id as a skip/retry target', async () => {
+    let control!: WorkflowScriptControl;
+    let releaseCall!: () => void;
+    const recoveredId = childExecutionIdFor(0, 1);
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve, reject) => {
+        rejectOnAbort(invocation, reject);
+        // A durable-recovery runner re-attaches the known child id for
+        // navigation, then keeps resolving asynchronously (readMeta gap).
+        invocation.report?.({
+          childExecutionId: recoveredId,
+          recovered: true,
+        });
+        releaseCall = () => resolve('recovered-result');
+      });
+
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('go')`,
+      runAgent: runner,
+      onControl: (handle) => {
+        control = handle;
+      },
+    });
+
+    await vi.waitFor(() => expect(releaseCall).toBeDefined());
+    // The skip lands inside the recovery window; a recovered result is
+    // authoritative, so the request must no-op instead of discarding it.
+    control(recoveredId, 'skip');
+    releaseCall();
+
+    const run = await runPromise;
+    expect(run.result).toBe('recovered-result');
+  });
+
+  it('keeps a journaled completed call completed when the completed emit throws', async () => {
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('go')`,
+      runAgent: async () => 'done',
+      onSnapshot: (snapshot) => {
+        snapshots.push(snapshot);
+      },
+      onEvent: (event) => {
+        // The call is already journaled and settled COMPLETED when this
+        // event fires; a throwing host handler must not rewrite it.
+        if (event.type === 'agent:end' && event.outcome === 'completed') {
+          throw new Error('host event handler exploded');
+        }
+      },
+    });
+
+    await expect(runPromise).rejects.toThrow('host event handler exploded');
+    const terminal = snapshots.at(-1);
+    expect(terminal?.calls[0]).toMatchObject({ status: 'completed' });
+  });
+
   it('charges every retry attempt against the live-call cap', async () => {
     let control!: WorkflowScriptControl;
     const events: WorkflowScriptEvent[] = [];
+    let attempts = 0;
     const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
-      invocation.reportModel?.('retry-model');
+      attempts += 1;
+      invocation.report?.({
+        model: 'retry-model',
+        childExecutionId: childExecutionIdFor(invocation.index, attempts),
+      });
       return new Promise<never>((_resolve, reject) => {
         rejectOnAbort(invocation, reject);
       });
@@ -2014,9 +2193,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
-    control.retry(0);
+    control(childExecutionIdFor(0, 1), 'retry');
     await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(2));
-    control.retry(0);
+    control(childExecutionIdFor(0, 2), 'retry');
 
     await expect(run).rejects.toThrow(/agent-call cap/);
     expect(runner).toHaveBeenCalledTimes(2);
@@ -2084,10 +2263,13 @@ phase('Draft')
 await agent('draft instruction', { id: 'draft' })
 return 'done'`,
       runAgent: async (invocation) => {
-        invocation.reportAgent?.('writer');
-        invocation.reportModel?.('model-a');
-        invocation.reportChildExecution?.('abcdef123456');
-        invocation.reportChildStream?.('writer#abcdef123456');
+        // One report carrying every fact the host resolved must land them all.
+        invocation.report?.({
+          agent: 'writer',
+          model: 'model-a',
+          childExecutionId: 'abcdef123456',
+          childStreamId: 'writer#abcdef123456',
+        });
         return 'drafted';
       },
       onSnapshot: (snapshot) => {
@@ -2099,7 +2281,6 @@ return 'done'`,
     expect(result.snapshot).toMatchObject({
       lifecycle: 'completed',
       currentStageId: undefined,
-      counts: { completed: 1, skipped: 1 },
       calls: [
         {
           id: 'draft',
@@ -2113,7 +2294,11 @@ return 'done'`,
         { id: 'review', status: 'skipped' },
       ],
     });
-    expect(result.snapshot.counts.total).toBe(result.snapshot.calls.length);
+    expect(deriveWorkflowCounts(result.snapshot.calls)).toMatchObject({
+      total: result.snapshot.calls.length,
+      completed: 1,
+      skipped: 1,
+    });
   });
 
   it('uses safe canonical labels for dynamic calls', async () => {

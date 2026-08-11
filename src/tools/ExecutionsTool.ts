@@ -44,6 +44,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
+  deriveWorkflowCounts,
   type ExecutionId,
   type StreamLogEntry,
   type WorkflowExecutionSnapshot,
@@ -75,13 +76,19 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
+  buildCompletedSummaryLines,
+  buildRunningSummaryLines,
+  buildSummaryTailLines,
+  formatChildLine,
   formatListingLine,
   formatStatusInfo,
   formatTodoHeader,
   formatTodoSection,
   getExecutionStatusInfo,
   executionDisplayCategory,
+  shouldSuppressAutoDeliveredSubagentReport,
   type ExecutionDisplayCategory,
+  type ExecutionSummaryOptions,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -97,15 +104,6 @@ import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
-import {
-  buildCompletedSummaryLines,
-  buildRunningSummaryLines,
-  buildSummaryTailLines,
-  formatChildLine,
-  formatListingHeader,
-  shouldSuppressAutoDeliveredSubagentReport,
-  type ExecutionSummaryOptions,
-} from './executions/summaryFormat';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
 
 const CHANNEL = 'ExecutionsTool';
@@ -346,7 +344,7 @@ function workflowExecutionView(snapshot: WorkflowExecutionSnapshot): unknown {
     aggregate: {
       lifecycle: snapshot.lifecycle,
       error: compactWorkflowText(snapshot.error),
-      counts: snapshot.counts,
+      counts: deriveWorkflowCounts(snapshot.calls),
       timestamps: snapshot.timestamps,
       responseBounds: {
         maxStages: WORKFLOW_SUMMARY_MAX_ENTRIES,
@@ -718,9 +716,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
     const lines = page.map(formatListingLine);
 
-    const header = formatListingHeader(start, end, total);
     return executed(
-      `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
+      `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
     );
   }
 
@@ -744,12 +741,25 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       ]);
 
       const info = session.executions.getStatus(handle);
-      const lines = buildRunningSummaryLines(executionId, handle, info, meta);
+      // `handle.category` is the live wire's execution mode, fabricated for a
+      // non-agent run (a background bash reports toolUse). The stamped
+      // identity is what the completed branch displays, so the running branch
+      // reads it too and the same run cannot change category as it settles;
+      // an agent run has no identity-derived category and keeps its mode.
+      const category =
+        executionDisplayCategory(meta?.identity, null) ?? handle.category;
+      const lines = buildRunningSummaryLines(
+        executionId,
+        handle,
+        category,
+        info,
+        meta,
+      );
 
       await this.appendSummaryTail(
         lines,
         executionId,
-        handle.category,
+        category,
         children,
         todos,
         report,
@@ -800,6 +810,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const lines = buildCompletedSummaryLines(
       executionId,
       record,
+      identity,
       category,
       info,
       meta,

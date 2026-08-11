@@ -16,6 +16,5 @@ export type {
   WorkflowJournalEntry,
   WorkflowScriptControl,
   WorkflowScriptEvent,
-  WorkflowScriptProgressId,
   WorkflowScriptRunResult,
 } from './types';

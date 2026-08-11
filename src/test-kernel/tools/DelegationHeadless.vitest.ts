@@ -20,6 +20,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { agentMatchesIdentifier } from '@shared/schemas/agent';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
@@ -34,7 +35,6 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
   getExecutionStore: vi.fn(),
-  getVisibleAgent: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
@@ -45,9 +45,17 @@ const mocks = vi.hoisted(() => ({
   computeModelOptionsData: vi.fn(),
 }));
 
+// Delegation resolves targets through the scope resolver; with no active run
+// scope that is the workspace-visible roster, and identity matching is
+// agentRegistry's own rule — mirrored here rather than re-implemented.
 vi.mock('@agent/index/agentRegistry', () => ({
-  getVisibleAgent: mocks.getVisibleAgent,
   getVisibleAgents: mocks.getVisibleAgents,
+  resolveDelegationScopeAgents: (scope: unknown, category: AgentCategory) =>
+    scope ? [] : mocks.getVisibleAgents(category),
+  findAgentByIdentifier: (
+    entries: readonly { source: string; name: string }[],
+    identifier: string,
+  ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -335,16 +343,11 @@ describe('headless delegation', () => {
     mocks.getVisibleAgents.mockReturnValue([
       {
         name: 'review',
+        source: 'builtInToolUse',
         description: 'Review work.',
         tools: [],
       },
     ]);
-    mocks.getVisibleAgent.mockImplementation(
-      (_category: AgentCategory, name: string) =>
-        name === 'review'
-          ? { name: 'review', source: 'builtInToolUse' }
-          : undefined,
-    );
     mocks.computeModelOptionsData.mockResolvedValue([
       {
         value: 'deepseekT',
@@ -921,8 +924,8 @@ describe('headless delegation', () => {
   });
 
   it('carries the validated agent source to executeAgent for source-pinned launch', async () => {
-    // The delegation validates via getVisibleAgent and must hand the resolved
-    // entry's source to executeAgent, so getAgentPath resolves the exact
+    // The delegation validates against the visible roster and must hand the
+    // resolved entry's source to executeAgent, so getAgentPath resolves the exact
     // (source, name) key instead of re-resolving the ambiguous bare name.
     await withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
       callDelegateReview(),

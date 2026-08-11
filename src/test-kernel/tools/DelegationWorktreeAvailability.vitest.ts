@@ -27,7 +27,7 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 const { withDelegationWorktreeAvailability } =
-  await import('@tools/delegation/delegationWorktreeAvailability');
+  await import('@tools/delegation/delegationAvailability');
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
 const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');

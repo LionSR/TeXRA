@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 // Local imports - storage
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
-import { WorkflowExecutionSnapshotSchema } from '@shared/schemas';
 import {
   WorkflowScriptFilesSchema,
   type WorkflowScriptFiles,
@@ -279,14 +278,10 @@ async function runPersistedWorkflowScriptLocked(
       args,
       files,
       journal: prior?.journal,
+      // `...runOptions` carries the caller's own `onSnapshot`: snapshots
+      // belong to the detached execution that owns their writes, while this
+      // checkpoint store may belong to its orchestrator.
       onJournalEntry: persistEntry,
-      // The caller supplies snapshots from the detached execution that owns
-      // their writes. The checkpoint store may belong to its orchestrator.
-      onSnapshot: async (snapshot) => {
-        await runOptions.onSnapshot?.(
-          WorkflowExecutionSnapshotSchema.parse(snapshot),
-        );
-      },
     });
     acceptingEntries = false;
     for (const entry of result.journal) journalByIndex.set(entry.index, entry);
