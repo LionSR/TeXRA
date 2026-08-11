@@ -19,6 +19,7 @@ import {
   type Plan,
   type RoundIndexed,
   type RunIdentity,
+  type StreamLogEntry,
   type StreamPhase,
   type StreamStage,
   type StreamSubstate,
@@ -130,6 +131,70 @@ export type ConversationEntry = ConversationEntryOrigin &
       })
   );
 
+/**
+ * One transcript-projection candidate: a rendered row plus the ordering key
+ * that places it in the final merged transcript order (log rows by seqNo,
+ * compaction rows by start position, CLI-synthetic rows by their insertion
+ * anchor). `rank` preserves the relative order of equal keys across the three
+ * sources. `rendered` is replaced in place when the source row changes or the
+ * settled-prefix promotion reaches it; the item object itself is stable.
+ */
+export interface TranscriptFoldItem {
+  rendered: ConversationEntry;
+  readonly sortSeq: number;
+  readonly tieBreak: number;
+  /** Equal-key source order: 0 = compaction row, 1 = log row, 2 = synthetic. */
+  readonly rank: 0 | 1 | 2;
+  /** Compaction rows: the block `rendered` was built from; reference equality
+   *  means the row is current. */
+  block?: CompactionActivityBlock;
+}
+
+/**
+ * Mutable per-stream transcript-projection working state. Carried on the
+ * stream's slice (never rendered) so its lifetime is exactly the stream's:
+ * it dies with stream removal and CLI-state reset, and is cleared when the
+ * stream's transcript is released. `subscribeStreamLog`'s fold over
+ * store-emitted `StreamLogDelta`s maintains it in O(delta); a fresh or gapped
+ * consumer rebuilds it from `getRange(0)` through the same application path.
+ */
+export interface TranscriptFoldState {
+  /** False until a rebuild has run; cleared again when the stream's transcript is released. */
+  hydrated: boolean;
+  /** The `StreamLog` instance + emission seq `items` reflects. A mismatch
+   *  with the store's current log means fold continuity is broken: rebuild. */
+  logInstanceId: number;
+  emissionSeq: number;
+  /** Final transcript order: log, compaction, and synthetic rows merged. */
+  readonly items: TranscriptFoldItem[];
+  readonly indexById: Map<string, number>;
+  /** First index the contiguous settled-prefix promotion has not covered. */
+  finalizedFrontier: number;
+  /** Index of the last user row with text, or -1 (latest-line fallback). */
+  latestUserPos: number;
+  /** Index of the last finalized model-response row with text, or -1. */
+  latestResponsePos: number;
+  /** Projection-mode bits `items` was built under; a flip forces a rebuild. */
+  fullLogChild: boolean;
+  workflowOperationalOnly: boolean;
+  projectLifecycleToTaskGroups: boolean;
+  /** Highest-seq ACTIVE_SKILLS entry, with its parse cached by reference. */
+  activeSkillsEntry?: StreamLogEntry;
+  activeSkillsParsedFor?: StreamLogEntry;
+  activeSkills: readonly ActiveSkillSummary[];
+  /** Highest-seq live-activity entry (drives the thinking indicator). */
+  liveActivityEntry?: StreamLogEntry;
+  /** Synthetic rows reconciled into `items`, in slice order, by identity. */
+  synthetics: readonly ConversationEntry[];
+  /** Whether the last emitted `entries` was the full transcript or compact;
+   *  undefined until the first emission. */
+  lastOutputFull?: boolean;
+  /** The exact `entries` array last emitted. A slice whose entries no longer
+   *  match was patched out of band (synthetic rows), so the next application
+   *  must rebuild its output instead of reusing `slice.entries`. */
+  lastEntriesOutput?: readonly ConversationEntry[];
+}
+
 export interface SessionMeta {
   readonly agent: string;
   readonly category: AgentCategory;
@@ -224,6 +289,9 @@ export interface StreamSlice {
    *  to fall back between. */
   readonly stage?: StreamStage | undefined;
   readonly entries: readonly ConversationEntry[];
+  /** Transcript-projection working state (see {@link TranscriptFoldState}).
+   *  A mutable box owned by `subscribeStreamLog`; renderers ignore it. */
+  readonly transcriptFold?: TranscriptFoldState;
   readonly queuedFollowUpMessages: readonly string[];
   readonly activeSkills: readonly ActiveSkillSummary[];
   readonly todos: readonly TodoItem[];

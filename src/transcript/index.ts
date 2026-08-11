@@ -15,7 +15,12 @@ export {
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
-export { StreamLog, type StreamLogAppendInput } from './StreamLog';
+export {
+  StreamLog,
+  StreamLogDeltaBuffer,
+  type StreamLogAppendInput,
+  type StreamLogDelta,
+} from './StreamLog';
 export { createRunTrace, type RunTrace } from './runTrace';
 export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';
