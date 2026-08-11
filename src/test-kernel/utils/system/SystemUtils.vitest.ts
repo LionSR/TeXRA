@@ -2,7 +2,7 @@
 
 // Node imports
 import { strict as assert } from 'node:assert';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -34,8 +34,16 @@ async function waitFor(
   throw new Error(`Timed out waiting for ${description}`);
 }
 
+// Waits for content, not just existence. Its one caller polls a pid file the
+// sleeper writes with `echo $! > "$PID_FILE"`, and the shell's `>` creates the
+// file before the bytes land. Testing `existsSync` alone lets a read land in
+// that window, returning '' -- `parseInt('')` is NaN and the caller's assertion
+// fails. Rare locally, reproducible on a saturated CI runner.
 function waitForFile(filePath: string): Promise<void> {
-  return waitFor(filePath, () => existsSync(filePath));
+  return waitFor(
+    filePath,
+    () => existsSync(filePath) && statSync(filePath).size > 0,
+  );
 }
 
 // Signal delivery to a whole process group, and the kernel reaping the members,
