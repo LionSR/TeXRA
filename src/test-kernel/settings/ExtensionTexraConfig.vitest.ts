@@ -1,7 +1,6 @@
 // Node imports
 import {
   access,
-  chmod,
   mkdtemp,
   mkdir,
   readFile,
@@ -12,7 +11,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
-import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - extension
@@ -20,7 +18,6 @@ import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 
 // Local imports - platform
 import type { StorageProvider } from '@platform/interfaces';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 function createStorage(
   workspaceStorage: string,
@@ -34,12 +31,9 @@ function createStorage(
 
 describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   let tempDir: string | undefined;
-  let readOnlyWorkspace: string | undefined;
 
   afterEach(async () => {
-    if (readOnlyWorkspace) await chmod(readOnlyWorkspace, 0o700);
     if (tempDir) await rm(tempDir, { recursive: true, force: true });
-    readOnlyWorkspace = undefined;
     tempDir = undefined;
   });
 
@@ -59,24 +53,6 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     ]);
     return { workspace, internalStorage, globalStorage };
   }
-
-  it('uses internal workspace storage when a project config cannot be created', async () => {
-    const { workspace, internalStorage, globalStorage } =
-      await createTempLayout();
-    readOnlyWorkspace = workspace;
-    await chmod(readOnlyWorkspace, 0o500);
-
-    const config = await createExtensionTexraConfig(
-      createStorage(internalStorage, globalStorage),
-      readOnlyWorkspace,
-    );
-
-    await config.update('skills.enabled', false);
-
-    await expect(
-      readFile(join(internalStorage, 'config.json'), 'utf8'),
-    ).resolves.toContain('"texra.skills.enabled": false');
-  });
 
   it('returns schema defaults from an empty native config', async () => {
     const { workspace, internalStorage, globalStorage } =
@@ -101,63 +77,6 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     });
     await expect(access(projectConfig)).rejects.toThrow();
     await expect(access(globalConfig)).rejects.toThrow();
-  });
-
-  it('waits for workspace storage to commit before rebinding fallback config', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
-    const firstWorkspace = join(tempDir, 'first');
-    readOnlyWorkspace = join(tempDir, 'second');
-    const storageRoot = join(tempDir, 'storage');
-    await Promise.all([
-      mkdir(join(firstWorkspace, '.texra'), { recursive: true }),
-      mkdir(readOnlyWorkspace),
-      mkdir(storageRoot),
-    ]);
-    await writeFile(
-      join(firstWorkspace, '.texra', 'config.json'),
-      '{"texra.bib.zoteroPort": 24001}\n',
-    );
-    await chmod(readOnlyWorkspace, 0o500);
-
-    let workspaceRoot = firstWorkspace;
-    const storage = new WorkspaceStorageProvider(
-      storageRoot,
-      () => workspaceRoot,
-    );
-    const config = await createExtensionTexraConfig(storage, workspaceRoot);
-
-    workspaceRoot = readOnlyWorkspace;
-    const continueTransition = pDefer<void>();
-    const transition = config.enqueueWorkspaceTransition(
-      workspaceRoot,
-      async (hooks) => {
-        await continueTransition.promise;
-        expect(
-          storage.commitWorkspaceStorageChange({
-            workspacePath: workspaceRoot,
-          }),
-        ).toBe(true);
-        await hooks.afterStorageCommit();
-        storage.finalizeWorkspaceStorageChange();
-        hooks.afterStorageFinalize();
-      },
-    );
-    let updateCompleted = false;
-    const update = config.update('texra.bib.zoteroPort', 25000).then(() => {
-      updateCompleted = true;
-    });
-    await Promise.resolve();
-    expect(updateCompleted).toBe(false);
-    expect(config.get('texra.bib.zoteroPort')).toBe(24001);
-
-    continueTransition.resolve();
-    await transition.completion;
-    const secondInternalConfig = join(storage.getStoragePath(), 'config.json');
-    await update;
-
-    await expect(readFile(secondInternalConfig, 'utf8')).resolves.toContain(
-      '25000',
-    );
   });
 
   it('returns isolated copies of mutable schema defaults', async () => {

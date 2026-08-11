@@ -174,21 +174,30 @@ jobs:
         run: node scripts/check-guidance-refs.mjs
 
   test:
-    name: kernel tests (${{ matrix.target.label }}, shard ${{ matrix.shard }}/2)
+    # Keep the pre-existing `linux` / `windows` labels rather than the raw
+    # runner image: these strings are the check names branch protection pins.
+    name: kernel tests (${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}, shard ${{ matrix.shard }}/2)
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
-    runs-on: ${{ matrix.target.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       # Run every shard on every OS to completion so a red run reports every
       # failure at once instead of hiding the other shard's results.
       fail-fast: false
       matrix:
-        target:
-          - os: ubuntu-latest
-            label: linux
-          - os: windows-latest
-            label: windows
+        # Windows is opt-in via `workflow_dispatch`, not part of PR or push
+        # validation. It re-ran assertions the Linux shards already cover —
+        # Windows-specific behaviour is exercised by suites that stub the
+        # platform (`platform: 'win32'`), and 17 assertions actively skip
+        # themselves when the runner really is Windows — while costing ~16 min
+        # per shard against ~10 on Linux (billed at 2x) and setting the
+        # wall-clock for the entire workflow. The inventory of genuine Windows
+        # defects the matrix did surface is in
+        # docs/proposals/2026-07-29-open-source-readiness.md §4.6; run CI
+        # manually from the Actions tab to re-check Windows before a release or
+        # after touching path handling.
+        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
         shard: [1, 2]
 
     steps:
