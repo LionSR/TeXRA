@@ -144,6 +144,27 @@ describe('StreamLog', () => {
     ]);
   });
 
+  it('builds text deltas across the joined prefix and chunk tail', () => {
+    const log = logWithMessage();
+
+    log.appendText('message', 'hello');
+    // Materialize the joined prefix, then keep streaming unjoined chunks:
+    // the delta must be assembled piecewise, not by re-joining the text.
+    expect(log.getRange(0, log.head)[0]?.text).toBe('hello');
+    log.appendText('message', ' wor');
+    log.appendText('message', 'ld');
+
+    expect(log.getDirtyTextDeltas()).toEqual([
+      { id: 'message', appendText: 'hello world' },
+    ]);
+
+    log.ackDirtyTextDeltas(log.getDirtyTextDeltas());
+    log.appendText('message', '!');
+    expect(log.getDirtyTextDeltas()).toEqual([
+      { id: 'message', appendText: '!' },
+    ]);
+  });
+
   it('keeps text appended while a delta frame is in flight', () => {
     const log = logWithMessage();
 

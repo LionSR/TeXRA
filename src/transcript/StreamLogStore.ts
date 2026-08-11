@@ -1096,6 +1096,13 @@ export class StreamLogStore {
   private async executeReload(discardPendingWrites: boolean): Promise<void> {
     if (discardPendingWrites) {
       this.saveThrottle.cancel();
+      // Invalidate and drain any in-flight batch before the adapters
+      // repoint: a write started before a storage-root rollback must not
+      // keep landing streams against the restored root. The generation
+      // bump makes the batch's remaining per-stream writes skip; the
+      // drain keeps a mid-write stream from straddling the repoint.
+      this.writeGeneration += 1;
+      await this.writeQueue.onIdle();
     } else if (this.mode.kind === 'persistent') {
       await this.flush();
     }

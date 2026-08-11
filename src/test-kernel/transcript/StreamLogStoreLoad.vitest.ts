@@ -1674,4 +1674,33 @@ describe('StreamLogStore save throttle', () => {
 
     expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe('first second');
   });
+
+  it('drains an in-flight write batch before a discarding reload', async () => {
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      pauseLogWriteKey: 'alpha',
+    });
+    const store = await StreamLogStore.open();
+    vi.useFakeTimers();
+
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+    writer.append(namedEntry('m1', 1, 'first'));
+    await vi.advanceTimersByTimeAsync(300);
+    await storage.waitForPausedWrite();
+
+    // A rollback reload must not resolve while a write batch is still
+    // running against the pre-rollback adapters.
+    let reloaded = false;
+    const reload = store.reload({ discardPendingWrites: true }).then(() => {
+      reloaded = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reloaded).toBe(false);
+
+    storage.releasePausedWrite();
+    await reload;
+    expect(reloaded).toBe(true);
+    writer.close();
+  });
 });

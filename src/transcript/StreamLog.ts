@@ -145,6 +145,35 @@ function materializeText(acc: StreamingTextAccumulator, end: number): string {
 }
 
 /**
+ * Read `[from, end)` from the accumulator without collapsing its chunk tail:
+ * the webview delta path calls this at render cadence during streaming, and
+ * materializing there would re-copy the whole joined prefix per frame. The
+ * chunk walk stays short because every throttled save materializes (via the
+ * persisted entries' `text` getters) and resets the tail.
+ */
+function sliceAccumulatedText(
+  acc: StreamingTextAccumulator,
+  from: number,
+  end: number,
+): string {
+  if (end <= acc.joined.length) return acc.joined.slice(from, end);
+  const parts: string[] = [];
+  if (from < acc.joined.length) parts.push(acc.joined.slice(from));
+  let pos = acc.joined.length;
+  for (const chunk of acc.chunks) {
+    if (pos >= end) break;
+    const next = pos + chunk.length;
+    if (next > from) {
+      parts.push(
+        chunk.slice(Math.max(0, from - pos), Math.min(chunk.length, end - pos)),
+      );
+    }
+    pos = next;
+  }
+  return parts.join('');
+}
+
+/**
  * The immutable post-mutation entry object for a text append: every field of
  * `current` is carried over by descriptor (never invoking `current`'s own
  * lazy getter), while `text` becomes a memoized getter that joins the
@@ -536,8 +565,14 @@ export class StreamLog {
       }
       const entry = this.entries[index];
       if (entry.seqNo <= maxSeqInclusive) {
+        const acc = this.streamingText.get(id);
         deltas.push({
-          delta: { id, appendText: (entry.text ?? '').slice(from) },
+          delta: {
+            id,
+            appendText: acc
+              ? sliceAccumulatedText(acc, from, acc.length)
+              : (entry.text ?? '').slice(from),
+          },
           seqNo: entry.seqNo,
         });
       }
