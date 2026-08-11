@@ -49,8 +49,23 @@ export function tryResumeFromResumeData(
           logger.warn(`No ProgressViewProvider found for stream: ${id}`);
           return undefined;
         }
-        const { config: runConfig, executionId } =
+        let { config: runConfig, executionId } =
           progressState.snapshots.getRunMetadata(id);
+        if (!runConfig || !executionId) {
+          // Preload-then-read (#9947), mirroring the desktop resume path: a
+          // stream whose sidecar record is not resident yet must be seeded
+          // from disk before the synchronous reads can be trusted.
+          try {
+            await progressState.snapshots.preload([id]);
+          } catch (error) {
+            logger.warn(`Failed to read persisted resume data for ${id}`, {
+              data: error,
+            });
+            return undefined;
+          }
+          ({ config: runConfig, executionId } =
+            progressState.snapshots.getRunMetadata(id));
+        }
         if (!executionId) {
           logger.warn(`No execution ID found for stream: ${id}`);
           return undefined;

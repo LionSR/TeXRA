@@ -402,8 +402,14 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     if (!this.canSendToWebview()) return;
 
     // Rehydrate entries released by the status-change eviction so the
-    // newly-active tab shows its full log instead of an empty view.
-    if (streamId) await this.state.streamLogs.ensureLoaded(streamId);
+    // newly-active tab shows its full log instead of an empty view, and
+    // seed the stream's sidecar record so every synchronous snapshot read
+    // the content sync below performs serves established disk state
+    // (#9947: the explicit preload-then-read model).
+    if (streamId) {
+      await this.state.streamLogs.ensureLoaded(streamId);
+      await this.state.snapshots.preload([streamId]);
+    }
 
     // Another setActiveStream may have run while we awaited rehydration;
     // let the newer call own the webview sync so we don't overwrite it.

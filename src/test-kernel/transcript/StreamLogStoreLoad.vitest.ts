@@ -1704,3 +1704,85 @@ describe('StreamLogStore save throttle', () => {
     writer.close();
   });
 });
+
+describe('StreamLogStore summary metadata mirror', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const META = {
+    identity: { kind: 'agent' as const, agent: 'polish' },
+    executionId: 'exec-1',
+    parentStreamId: 'parent-stream',
+    description: 'Polish the draft',
+    model: 'deepseekproT',
+  };
+
+  it('round-trips recorded summary metadata through the persisted cache', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: { alpha: summary(200, 200) },
+    });
+    const store = await StreamLogStore.open();
+
+    store.recordSummaryMeta('alpha', META);
+    expect(store.getSummaryMeta('alpha')).toEqual(META);
+    await waitForCondition(
+      () => writtenSummary(storage.writes, 'alpha') !== undefined,
+    );
+    const persisted = writtenSummary(storage.writes, 'alpha') as Record<
+      string,
+      unknown
+    >;
+    expect(persisted).toMatchObject({ firstTimestamp: 200, meta: META });
+
+    // A fresh open serves the widened fields from the persisted cache alone.
+    vi.restoreAllMocks();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: { alpha: persisted },
+    });
+    const reopened = await StreamLogStore.open();
+    expect(reopened.getSummaryMeta('alpha')).toEqual(META);
+  });
+
+  it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: { ...summary(200, 200), meta: 'not-an-object' },
+      },
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const store = await StreamLogStore.open();
+
+    // Rebuilt (full log read), never migrated in place.
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getSummaryMeta('alpha')).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('stale-shaped summary cache'),
+    );
+  });
+
+  it('holds metadata for an unregistered stream without minting a tab and lands it on registration', async () => {
+    mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+
+    store.recordSummaryMeta('gamma', META);
+    // Not registered: the antechamber never mints a phantom tab...
+    expect(store.has('gamma')).toBe(false);
+    expect(store.keys()).toEqual([]);
+    // ...but the metadata is already readable, because run facts can
+    // legitimately project before registration.
+    expect(store.getSummaryMeta('gamma')).toEqual(META);
+
+    store.ensureStream('gamma');
+    expect(store.has('gamma')).toBe(true);
+    expect(store.getSummaryMeta('gamma')).toEqual(META);
+    await store.flush();
+  });
+});

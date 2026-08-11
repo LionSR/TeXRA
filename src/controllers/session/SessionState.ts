@@ -37,12 +37,14 @@ import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 /**
  * Config-derived display fields: undefined until the stream's `RunConfig`
- * snapshot resolves (see `applySnapshotMetadata`), then always populated
- * together from that one `AgentConfig`. Display data only — what the run IS
- * travels as the parsed {@link RunIdentity} beside it.
+ * resolves in the summary mirror, then always populated together from that
+ * one `AgentConfig`. Display data only — what the run IS travels as the
+ * parsed {@link RunIdentity} beside it. `instruction` carries only a process
+ * run's command line (the one config field tab rendering consumes); agent
+ * runs' full instruction text stays on the sidecar/config authority.
  */
 interface SessionStreamConfigDetails {
-  instruction: string;
+  instruction?: string;
   model?: string;
   workingDirectory?: string;
 }
@@ -271,75 +273,55 @@ export class SessionState {
   }
 
   /**
-   * Build the snapshot-owned slice of a metadata patch: `identity` is set
-   * only once the snapshot store has one, while follow-up support is always
-   * replaced because absence must fail closed. `agentCategory`/`config` are
-   * set together from one resolved `AgentConfig` — never patched to
-   * `undefined` while still pending. `executionId`, `parentStreamId`, and
-   * `description` fall back to the current value when the snapshot store
-   * doesn't have one yet, so a patch built before that data loads can never
-   * clear a field the snapshot hasn't caught up to.
+   * Overlay the durable metadata authority — the snapshot-fed summary
+   * mirror, always resident for every known stream (#9947) — on top of this
+   * session's live-only patches. Applied at read time, so there is no stored
+   * copy of authority data to go stale and no refresh plumbing: `identity`
+   * overlays only once the mirror has one, follow-up support is always
+   * replaced because absence must fail closed, `agentCategory`/`config`
+   * overlay together from one resolved `AgentConfig`, and `executionId`/
+   * `parentStreamId`/`description` fall back to the stored value so a
+   * mirror that hasn't caught up can never clear a live field.
    */
-  private buildSnapshotMetadataPatch(
+  private applySummaryMetadata(
     stream: StreamTabId,
-    current: StoredStreamMetadata,
-  ): Partial<StoredStreamMetadata> {
-    const patch: Partial<StoredStreamMetadata> = {};
-    const runMetadata = this.snapshots.getRunMetadata(stream);
-    if (runMetadata.identity) patch.identity = runMetadata.identity;
-    patch.userFollowUpSupport = runMetadata.userFollowUpSupport;
-    const { config } = runMetadata;
-    if (config) {
-      patch.agentCategory = config.agentCategory;
-      patch.config = {
-        instruction: config.instruction,
-        model: config.model,
-        workingDirectory: config.workingDirectory ?? undefined,
+    stored: StoredStreamMetadata,
+  ): StoredStreamMetadata {
+    const meta = this.streamLogs.getSummaryMeta(stream);
+    const merged: StoredStreamMetadata = { ...stored };
+    if (meta?.identity) merged.identity = meta.identity;
+    merged.userFollowUpSupport = meta?.userFollowUpSupport;
+    if (meta?.agentCategory) {
+      merged.agentCategory = meta.agentCategory;
+      merged.config = {
+        instruction: meta.command,
+        model: meta.model,
+        workingDirectory: meta.workingDirectory,
       };
     }
-
-    patch.executionId = runMetadata.executionId ?? current.executionId;
-    patch.parentStreamId =
-      this.snapshots.getParentStreamId(stream) ?? current.parentStreamId;
-    patch.description = runMetadata.description ?? current.description;
-
-    return patch;
-  }
-
-  private applySnapshotMetadata(
-    stream: StreamTabId,
-    current: StoredStreamMetadata,
-  ): StoredStreamMetadata {
-    return this.applyMetadataPatch(
-      current,
-      this.buildSnapshotMetadataPatch(stream, current),
-    );
+    merged.executionId = meta?.executionId ?? stored.executionId;
+    merged.parentStreamId = meta?.parentStreamId ?? stored.parentStreamId;
+    merged.description = meta?.description ?? stored.description;
+    return merged;
   }
 
   /**
-   * Apply metadata known before durable task state catches up. Snapshot-owned
-   * fields are re-applied here so late events cannot override authoritative
-   * config, execution, hierarchy, or description data.
+   * Apply metadata known before durable task state catches up. The durable
+   * authority is overlaid at read time (`getStreamMetadata`), so late events
+   * cannot override authoritative config, execution, hierarchy, or
+   * description data.
    */
   updateStreamMetadata(
     stream: StreamTabId,
     patch: Partial<StoredStreamMetadata>,
   ): void {
     const state = this.getOrCreateSession(stream);
-    const merged = this.applyMetadataPatch(state.metadata, patch);
-    state.metadata = this.applySnapshotMetadata(stream, merged);
+    state.metadata = this.applyMetadataPatch(state.metadata, patch);
   }
 
-  /** Re-apply newly loaded snapshot authority without changing live-only data. */
-  refreshStreamMetadataFromSnapshot(stream: StreamTabId): void {
-    const state = this.getOrCreateSession(stream);
-    state.metadata = this.applySnapshotMetadata(stream, state.metadata);
-  }
-
-  /** Start a run from durable metadata, dropping this session's live-only data. */
+  /** Start a run fresh, dropping this session's live-only metadata. */
   resetStreamMetadataForRun(stream: StreamTabId): void {
-    const state = this.getOrCreateSession(stream);
-    state.metadata = this.applySnapshotMetadata(stream, {});
+    this.getOrCreateSession(stream).metadata = {};
   }
 
   /**
@@ -354,7 +336,7 @@ export class SessionState {
       session.provisionalCreationTimestamp = firstTimestamp;
     }
     return {
-      ...session.metadata,
+      ...this.applySummaryMetadata(stream, session.metadata),
       creationTimestamp: session.provisionalCreationTimestamp,
     };
   }
@@ -547,9 +529,9 @@ export class SessionState {
     if (stateOwnership === 'backend') {
       await this.stores.sweepLeftoverStreams();
     }
-    for (const stream of this.streamLogs.keys()) {
-      this.resetStreamMetadataForRun(stream);
-    }
+    // No all-streams metadata loop: stream metadata is assembled lazily in
+    // `getStreamMetadata` from the always-resident summary mirror, so a load
+    // has nothing to seed per stream (#9947).
 
     this.logger.info('[Persistence] Managers loaded');
 
