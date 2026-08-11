@@ -8,6 +8,7 @@
 // Local imports
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
@@ -152,6 +153,18 @@ export async function requestDelegationProposal(
 ): Promise<DelegationProposalDecision> {
   if (proposalApprovals().isBypassed(streamId)) {
     return { result: { action: 'approve' }, autoApproved: true };
+  }
+
+  // A run that can never present approval prompts withholds `requiresApproval`
+  // tools from the model up front (resolveAgentTools), so a delegation tool
+  // that still executes here was deliberately offered for unattended use —
+  // delegate_multi_agents in a headless CLI run. The proposal is the
+  // interactive review surface, not the security gate: proceed without one.
+  // `autoApproved: false` keeps the child on inherited per-kind approval
+  // state, so `--approval-policy never` still denies bash and edits
+  // downstream.
+  if (tryUseRunContext()?.approvalPromptsUnavailable === true) {
+    return { result: { action: 'approve' }, autoApproved: false };
   }
 
   const interaction = currentSession().interactions.requestAgentProposal({
