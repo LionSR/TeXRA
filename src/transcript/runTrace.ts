@@ -12,6 +12,7 @@ import {
   attachChannelSubscriber,
   TraceEmitter,
   type AgentTrace,
+  type StatusEvent,
 } from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
 import { aggregateError } from '@utils/core';
@@ -21,6 +22,14 @@ import type { StreamLogStore, TranscriptWriter } from './StreamLogStore';
 
 export interface RunTrace {
   readonly trace: AgentTrace;
+  /**
+   * The transcript recorder's status port. Status travels only as a canonical
+   * session fact (it is not an `AgentEvent`), so the launch path must bridge
+   * the owning session's status subscription into this — e.g.
+   * `session.events.subscribeStatus((e) => runTrace.handleStatus(e))` —
+   * and detach it alongside `dispose`.
+   */
+  readonly handleStatus: (event: StatusEvent) => void;
   readonly dispose: () => void;
 }
 
@@ -110,6 +119,7 @@ export function createRunTrace(
 
   return {
     trace,
+    handleStatus: (event) => transcript.handleStatus(event),
     dispose: () => {
       if (disposed) return;
       disposed = true;

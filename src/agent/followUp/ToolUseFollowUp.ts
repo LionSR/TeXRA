@@ -73,30 +73,11 @@ export function presentFollowUpResult(
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
-const followUpSentObservers = new Set<(streamId: StreamTabId) => void>();
-
-export function onFollowUpSent(
-  observer: (streamId: StreamTabId) => void,
-): () => void {
-  followUpSentObservers.add(observer);
-  return () => {
-    followUpSentObservers.delete(observer);
-  };
-}
 
 export function notifyFollowUpSent(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  for (const observer of followUpSentObservers) {
-    try {
-      observer(streamId);
-    } catch (err) {
-      logger.warn(`Follow-up sent observer threw for stream ${streamId}`, {
-        data: err,
-      });
-    }
-  }
   followUpSentSession(session).events.emit({
     scope: 'session',
     event: { type: 'followUpSent', payload: { streamId } },

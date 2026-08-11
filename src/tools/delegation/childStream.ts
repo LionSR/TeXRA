@@ -120,9 +120,14 @@ export function createChildStream(
     options.reservedWriter,
   );
   let detachSessionTrace: (() => void) | undefined;
+  let detachStatus: (() => void) | undefined;
   try {
     detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
+    // Status is a session fact, not an AgentEvent: bridge the hub's canonical
+    // status rail into the recorder's transcript-boundary port.
+    detachStatus = session.events.subscribeStatus(runTrace.handleStatus);
     const disposeTrace = () => {
+      detachStatus?.();
       detachSessionTrace?.();
       runTrace.dispose();
     };
@@ -228,6 +233,11 @@ export function createChildStream(
     };
   } catch (error) {
     const failures = [error];
+    try {
+      detachStatus?.();
+    } catch (cleanupError) {
+      failures.push(cleanupError);
+    }
     try {
       detachSessionTrace?.();
     } catch (cleanupError) {

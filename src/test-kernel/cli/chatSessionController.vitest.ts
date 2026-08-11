@@ -1188,7 +1188,13 @@ describe('createChatSessionController', () => {
       executionId: 'exec-resume',
       streamId: 'stream-resume',
     });
-    const ctrl = createChatSessionController(makeInit({ session }));
+    // A fake store, like every other resume test: the real store against
+    // this harness's storage-less platform now fails loudly (KVStore no
+    // longer converts I/O errors into misses), which resume() treats as a
+    // rehydration failure by contract.
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
+    );
 
     await ctrl.resume('exec-resume' as ExecutionId, makeResolvedResume());
     await session.runPromise;
@@ -1207,7 +1213,9 @@ describe('createChatSessionController', () => {
       runCompleted: true,
       stopRequested: true,
     });
-    const ctrl = createChatSessionController(makeInit({ session }));
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
+    );
 
     await ctrl.resume('aaaaaa' as ExecutionId, makeResolvedResume());
 

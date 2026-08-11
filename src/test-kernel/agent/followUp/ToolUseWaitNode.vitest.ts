@@ -40,6 +40,7 @@ import { GoalStore } from '@tools/goal';
 import {
   recordSessionEvents,
   runEventsOfType,
+  sessionFactsOfType,
   sessionWithInteractions,
   testRunScope,
   toolUseRunShared,
@@ -750,13 +751,15 @@ describe('ToolUseWaitNode', () => {
 
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
+    const statusHub = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(statusHub);
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
     const logger = Object.assign(new TraceEmitter(), {
       error: vi.fn(),
       info: vi.fn(),
     });
-    const recorded = recordRunEvents(logger, streamId);
+    // Status is a session fact on the machine's own hub — the single rail.
+    const recorded = recordSessionEvents(statusHub);
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
       isSubagent: false,
@@ -781,7 +784,7 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(runEventsOfType(recorded.events, 'status')).toEqual([
+      expect(sessionFactsOfType(recorded.events, 'status')).toEqual([
         expect.objectContaining({
           phase: STREAM_PHASE.RUNNING,
           previousPhase: STREAM_PHASE.CANCELLED,
@@ -818,10 +821,13 @@ describe('ToolUseWaitNode', () => {
       error: vi.fn(),
       info,
     });
-    const recorded = recordRunEvents(logger, streamId, (event) => {
-      if (event.type === 'status') sequence.push('status');
-    });
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
+    const statusHub = new SessionEventHub();
+    // Status is a session fact on the machine's own hub — the single rail.
+    const recorded = recordSessionEvents(statusHub);
+    const detachSequence = statusHub.subscribeStatus(() =>
+      sequence.push('status'),
+    );
+    const streamStatus = new StreamStatusMachine(statusHub);
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
     const services = createWaitNodeServices({
       logger,
@@ -864,11 +870,12 @@ describe('ToolUseWaitNode', () => {
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(runEventsOfType(recorded.events, 'status')).toContainEqual(
+      expect(sessionFactsOfType(recorded.events, 'status')).toContainEqual(
         expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
       );
       expect(sequence.indexOf('status')).toBeLessThan(sequence.indexOf('info'));
     } finally {
+      detachSequence();
       recorded.detach();
     }
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(

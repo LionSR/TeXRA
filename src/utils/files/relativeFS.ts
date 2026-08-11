@@ -24,11 +24,6 @@ export abstract class RelativeFS extends BaseFS {
       : path.join(this.getBasePath(), target);
   }
 
-  public static async writeJson<T>(target: string, value: T): Promise<void> {
-    const json = JSON.stringify(value, null, 2);
-    await this.write(target, json);
-  }
-
   /**
    * Read and parse a JSON file.
    *

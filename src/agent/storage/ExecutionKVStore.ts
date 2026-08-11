@@ -190,10 +190,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   constructor(private readonly executionId: ExecutionId) {
     // Compact JSON: flow records rewrite full shared state on every node
     // transition, so pretty-printing this machine-owned store is pure churn.
-    super(resolveRunStoragePath(executionId), {
-      compactJson: true,
-      throwOnErrors: true,
-    });
+    super(resolveRunStoragePath(executionId), { compactJson: true });
   }
 
   override async write<T = unknown>(key: string, value: T): Promise<void> {
