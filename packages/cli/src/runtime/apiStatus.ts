@@ -158,11 +158,6 @@ async function personalKeyProviders(): Promise<string[]> {
   return configuredApiKeyProviders(platform().secrets);
 }
 
-interface CliApiStatus {
-  /** Compact lines used by the launcher. */
-  readonly lines: readonly string[];
-}
-
 interface LoadCliApiStatusOptions {
   readonly apiMode?: ApiAccessMode;
   readonly includeActionHint?: boolean;
@@ -190,9 +185,10 @@ async function loadIncludedUsageLine(
   }
 }
 
+/** Compact status lines used by the launcher. */
 export async function loadCliApiStatus(
   options: LoadCliApiStatusOptions = {},
-): Promise<CliApiStatus> {
+): Promise<readonly string[]> {
   const mode = options.apiMode ?? getCliApiMode();
   const [profile, configuredPersonalKeyProviders] = await Promise.all([
     getCliAuthProfile(),
@@ -214,15 +210,13 @@ export async function loadCliApiStatus(
     }
   }
 
-  return {
-    lines: [
-      `api: ${formatCliModelAccessRouteInline(mode)}`,
-      ...(personalKeysLine ? [personalKeysLine] : []),
-      authLine,
-      ...(profile.note ? [profile.note] : []),
-      ...(actionHint ? [actionHint] : []),
-    ],
-  };
+  return [
+    `api: ${formatCliModelAccessRouteInline(mode)}`,
+    ...(personalKeysLine ? [personalKeysLine] : []),
+    authLine,
+    ...(profile.note ? [profile.note] : []),
+    ...(actionHint ? [actionHint] : []),
+  ];
 }
 
 /**
@@ -379,10 +373,4 @@ export async function loadCliDetailedAccountStatusLines(options: {
   if (otherPersonalKeys) lines.push(otherPersonalKeys);
   if (profile.note) lines.push(profile.note);
   return lines;
-}
-
-export async function loadCliApiStatusLines(
-  options: LoadCliApiStatusOptions = {},
-): Promise<string[]> {
-  return [...(await loadCliApiStatus(options)).lines];
 }

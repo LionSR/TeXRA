@@ -11,8 +11,6 @@ import {
   modelHandlersShareConversationFormat,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
-import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
@@ -24,10 +22,7 @@ import {
   readPersistedFlowRecord,
   stampFlowRecordSchemaVersion,
 } from '@agent/node/persistedFlow';
-import {
-  AgentCategory,
-  type AgentToolUseSetting,
-} from '@agent/core/definition/AgentDataclass';
+import { type AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -39,14 +34,19 @@ import {
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import type { RetryErrorInfo, SubagentProgressUpdate } from '@shared/schemas';
-import { RUN_OUTCOME, STREAM_PHASE, type RunOutcome } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  type RunOutcome,
+  AgentCategory,
+} from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   buildOverlayToolRegistry,
   buildTerminalTool,
 } from '@tools/structuredOutput';
-import { TaskRunFileService } from '@utils/files';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
@@ -311,7 +311,6 @@ export async function runToolUseFlow<C = unknown>(
 
     const nextHandler = (await createModelHandler(
       nextConfig,
-      setting.agentCategory,
       services.runScope.session.responseTextProcessing,
     )) as RunModelHandler<C>;
     if (
@@ -496,18 +495,13 @@ export async function runToolUseFlow<C = unknown>(
       // boundary above was never consulted for this call (e.g. a fresh
       // launch that happens to find a leftover record for its execution
       // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees
-      // a stale legacy shape.
+      // a stale legacy shape. Model-based compatibility inference for
+      // keyless records lives at the resume-retrieval boundary
+      // (SessionResumeRetrieval); this path stamps the active handler's key.
       let migratedData = migrationResult.data;
       let shouldWriteShared = migrationResult.migrated;
-      const sharedModel = migratedData.modelId ?? services.modelCell.modelId;
       const backfillCompatibilityKey =
-        migratedData.modelHandlerCompatibilityKey ??
-        inferAndLogPersistedModelHandlerCompatibilityKey(
-          sharedModel,
-          migratedData.messages,
-          logger,
-        ) ??
-        compatibilityKey;
+        migratedData.modelHandlerCompatibilityKey ?? compatibilityKey;
       if (
         !migratedData.modelHandlerCompatibilityKey &&
         backfillCompatibilityKey

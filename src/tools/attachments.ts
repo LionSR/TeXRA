@@ -7,7 +7,8 @@ import {
 } from '@tools/pathResolution';
 import { wrapApiCall } from '@tools/utils';
 import { isNonEmptyString } from '@utils/core';
-import { WorkspaceFS, getMimeType } from '@utils/files';
+import { getMimeType } from '@utils/files/mimeUtils';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
 
 export interface BuildFileAttachmentOptions {

@@ -4,7 +4,6 @@ import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
@@ -47,6 +46,7 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';

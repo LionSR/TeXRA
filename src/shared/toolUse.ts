@@ -52,7 +52,16 @@ function formatOutputText(content: unknown): string {
   }
 }
 
-function normalizedExitCode(data: unknown, input: unknown): number | undefined {
+/** Matches an exit code stated in prose, e.g. "Command failed (exit 7)" or
+ *  "Background bash failed with exit code 2." — the shape delegated
+ *  sub-agents and tool error messages use when no structured field exists. */
+const EXIT_CODE_PROSE = /\bexit(?: code)?\s+(\d+)\b/i;
+
+function normalizedExitCode(
+  data: unknown,
+  input: unknown,
+  proseText: string,
+): number | undefined {
   for (const candidate of [data, input]) {
     if (!isObject(candidate)) continue;
     const raw =
@@ -62,7 +71,11 @@ function normalizedExitCode(data: unknown, input: unknown): number | undefined {
     if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
     if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
   }
-  return undefined;
+  // Last resort: some emitters (delegated sub-agents, background bash
+  // delivery) state the exit code only in their error/summary prose. Derive
+  // it here, once, so renderers never scan output text themselves.
+  const match = EXIT_CODE_PROSE.exec(proseText);
+  return match ? Number(match[1]) : undefined;
 }
 
 export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
@@ -91,7 +104,12 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     errorText,
   );
 
-  const exitCode = normalizedExitCode(data, validated.input);
+  const headerSummary = summaryText || (isUserFeedback ? '' : errorText);
+  const exitCode = normalizedExitCode(
+    data,
+    validated.input,
+    [errorText, headerSummary, outputText].join('\n'),
+  );
 
   return {
     toolName,
@@ -102,7 +120,7 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     input: validated.input,
     isError,
     isUserFeedback,
-    headerSummary: summaryText || (isUserFeedback ? '' : errorText),
+    headerSummary,
     status:
       isError && validated.status === TOOL_USE_STATUS.COMPLETED
         ? TOOL_USE_STATUS.FAILED

@@ -12,7 +12,7 @@ import {
   TOOL_GROUPS,
 } from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),

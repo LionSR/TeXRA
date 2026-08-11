@@ -19,7 +19,7 @@ import {
   stagedStreamDataDir,
   streamDataDir,
 } from '@transcript/streamDataPaths';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 /**
  * The staged-deletion state machine seen through its port alone — the contract

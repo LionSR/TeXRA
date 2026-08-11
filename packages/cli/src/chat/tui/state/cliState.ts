@@ -234,26 +234,6 @@ export interface StreamSlice {
   readonly bypass: BypassState;
 }
 
-export interface StreamAccessTarget {
-  readonly model: string;
-  readonly category: AgentCategory | undefined;
-}
-
-/**
- * Use root-session access facts only before any stream exists. Once a stream
- * exists, preserve an unknown category rather than guessing across the
- * tool-use-only subscription boundary.
- */
-export function streamAccessTarget(
-  stream: Pick<StreamSlice, 'model' | 'category'> | undefined,
-  session: Pick<SessionMeta, 'model' | 'category'>,
-): StreamAccessTarget {
-  return {
-    model: stream?.model ?? session.model,
-    category: stream === undefined ? session.category : stream.category,
-  };
-}
-
 export const NO_BYPASS: BypassState = {
   bash: false,
   toolEdit: false,

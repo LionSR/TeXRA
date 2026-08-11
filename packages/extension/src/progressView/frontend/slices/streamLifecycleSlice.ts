@@ -11,6 +11,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   type ProgressViewOutboundHandlerRegistry,
   type StreamMetadata,
+  type StreamState,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -21,7 +22,6 @@ import {
   ensureStreamState,
   firstStreamId,
   type ProgressState,
-  type StreamState,
 } from '../store';
 import {
   appState,

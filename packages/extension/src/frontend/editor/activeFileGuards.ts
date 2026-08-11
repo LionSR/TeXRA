@@ -7,7 +7,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ActiveFileGuards';
 

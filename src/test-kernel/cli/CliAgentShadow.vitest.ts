@@ -8,7 +8,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   chatAgentSupportsDelegation,
   chatToolUseAgentUsageError,
@@ -18,6 +17,7 @@ import {
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { AgentCategory } from '@shared/schemas';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 

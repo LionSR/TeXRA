@@ -11,7 +11,6 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { normalizeConversationForExport } from '@agent/export/normalizeConversation';
 import type { ExportNode } from '@agent/export/schemas';
 import type { MediaAttachmentKind } from '@shared/schemas';
@@ -722,33 +721,23 @@ describe('Edge cases', () => {
 });
 
 // ---------------------------------------------------------------------------
-// mediaAttachmentKindToContentBlock — attachment-marker round trip
+// Attachment-marker blocks (`{ type: kind }`) — round trip through export
 // ---------------------------------------------------------------------------
 
-describe('mediaAttachmentKindToContentBlock', () => {
-  it('defines the marker block for every media attachment kind', () => {
-    for (const kind of MEDIA_ATTACHMENT_KINDS) {
-      expect(mediaAttachmentKindToContentBlock(kind)).toEqual({ type: kind });
-    }
-  });
-
+describe('attachment-marker blocks', () => {
   it('round-trips every MediaAttachmentKind through normalizeConversationForExport', () => {
     // Callers that only recorded the attachment *kind* (never the bytes —
     // see completedRunArchive's userMessageEntryToMessages) synthesize the
-    // marker block via this constructor rather than writing `{ type: kind }`
-    // themselves. Prove the round trip for every kind the schema defines, so
-    // the two stay in sync: the vocabulary map and this coverage record both
-    // require an explicit update if a kind is added or renamed.
+    // marker block as a bare `{ type: kind }`. Prove the round trip for every
+    // kind the schema defines, so the marker shape and this coverage record
+    // both require an explicit update if a kind is added or renamed.
     //
     // The coverage record above makes this exhaustive at typecheck time.
     for (const kind of MEDIA_ATTACHMENT_KINDS) {
       const nodes = normalize([
         {
           role: 'user',
-          content: [
-            { type: 'text', text: 'see attached' },
-            mediaAttachmentKindToContentBlock(kind),
-          ],
+          content: [{ type: 'text', text: 'see attached' }, { type: kind }],
         },
       ]);
 

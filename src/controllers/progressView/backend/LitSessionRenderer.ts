@@ -1,4 +1,3 @@
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
@@ -19,6 +18,7 @@ import type {
   StreamTabId,
   TodoItem,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import {
   createFlushableDebounce,
   mapToRecord,

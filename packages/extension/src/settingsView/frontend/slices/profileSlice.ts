@@ -51,7 +51,7 @@ export const profileHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
     authenticated.set(data.authenticated);
     userEmail.set(data.user?.email ?? 'N/A');
-    tier.set(data.tier ?? 'free');
+    tier.set(data.tier);
     const newSpend = data.spendingStatus ?? null;
     // Skip the signal update when the snapshot is value-equal so the Lit
     // re-render isn't triggered on every UPDATE_PROFILE just because the
@@ -59,14 +59,16 @@ export const profileHandlers = {
     if (!spendingStatusEqual(spendingStatus.get(), newSpend)) {
       spendingStatus.set(newSpend);
     }
-    sessionProblem.set(data.sessionProblem ?? null);
+    // Fields declared with `.prefault()` in UpdateProfileMessageSchema are
+    // guaranteed present by the validating dispatcher — no fallback needed.
+    sessionProblem.set(data.sessionProblem);
     const newSpendError = data.spendingStatusError ?? null;
     if (!spendingStatusErrorEqual(spendingStatusError.get(), newSpendError)) {
       spendingStatusError.set(newSpendError);
     }
-    quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
+    quotaAutoSwitched.set(data.quotaAutoSwitched);
     apiAccessMode.set(data.apiAccessMode);
-    providerKeyStatuses.set(data.providerKeyStatuses ?? []);
-    globalStreamingDefault.set(data.globalStreamingDefault ?? true);
+    providerKeyStatuses.set(data.providerKeyStatuses);
+    globalStreamingDefault.set(data.globalStreamingDefault);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;

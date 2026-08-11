@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({

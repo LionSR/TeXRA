@@ -36,13 +36,13 @@ import type {
   AnthropicToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
+import { attachStreamDiagnostics } from '@common/errors/sdkError/errorMetadata';
 import {
-  attachStreamDiagnostics,
-  handleStreamingFailure,
   isUserAbort,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorPatterns';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type {
   CompactionActivityOutcome,
   FileLocation,

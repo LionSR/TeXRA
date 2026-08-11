@@ -3,14 +3,14 @@ import * as path from 'node:path';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type { ExecutionId } from '@shared/schemas';
 import { isKVFile as isHistoryKvFile } from '@tools/executions/executionKvFiles';
-import { StorageFS } from '@utils/files';
 import { byStringProp } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since the input is a workspace-relative path produced by
 // the storage directory walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
+import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 
 import type { CliHistoryFile } from '../history';
 

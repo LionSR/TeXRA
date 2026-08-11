@@ -22,9 +22,9 @@ import {
 } from '@shared/subagentFollowup';
 import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
+import { designTokens } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { buttonStyles, focusRingStyles } from '@shared/styles/controlStyles';
-import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';

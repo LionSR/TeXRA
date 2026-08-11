@@ -1,17 +1,15 @@
 // Shared imports
 import { create } from 'mutative';
 import {
+  isToolUseState,
+  isWorkflowState,
   sumUsageStats,
   type OutputFileInfo,
   type StreamTabId,
   type TokenUsageStats,
-} from '@shared/schemas';
-import {
-  isToolUseState,
-  isWorkflowState,
   type ToolUseStreamState,
   type WorkflowStreamState,
-} from './store';
+} from '@shared/schemas';
 
 // Local imports
 import { appState, setStreamStateForId } from './progressState';

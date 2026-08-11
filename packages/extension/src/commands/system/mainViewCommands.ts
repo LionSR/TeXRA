@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
+import {
+  loadMainViewModelOptions,
+  type MainViewModelOptionsByCategory,
+} from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -12,9 +15,6 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 const CHANNEL = 'mainViewCommands';
 
-type ModelOptionsByCategory = Awaited<
-  ReturnType<typeof loadMainViewModelOptions>
->;
 type AgentOptionsData = Awaited<ReturnType<typeof computeAgentOptionsData>>;
 interface RefreshAllOptionsArgs {
   readonly selectedToolUseAgent?: string;
@@ -23,12 +23,11 @@ interface RefreshAllOptionsArgs {
 
 function postModelOptions(
   webview: vscode.WebviewView,
-  byCategory: ModelOptionsByCategory,
+  optionsDataByCategory: MainViewModelOptionsByCategory,
 ): void {
   webview.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-    optionsData: byCategory.workflow,
-    optionsDataByCategory: byCategory,
+    optionsDataByCategory,
   });
 }
 

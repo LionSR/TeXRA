@@ -732,15 +732,6 @@ describe('SubscriptionUsageService', () => {
     },
   );
 
-  it('represents Grok as unsupported without making a request', async () => {
-    const http = vi.fn<SubscriptionUsageHttp>();
-    await expect(serviceWith(http).getUsage('grok')).resolves.toMatchObject({
-      state: 'unavailable',
-      reason: 'unsupported',
-    });
-    expect(http).not.toHaveBeenCalled();
-  });
-
   it.each([
     ['chatgpt' as const, 401],
     ['kimiCode' as const, 403],

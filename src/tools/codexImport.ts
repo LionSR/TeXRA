@@ -17,7 +17,7 @@
 import * as path from 'node:path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
   createCachedBinaryResolver,

@@ -27,7 +27,7 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import {
   normalizeLineEndings,

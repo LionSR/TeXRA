@@ -3,17 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import {
-  runPack,
-  runPackSingle,
-  runPackMultiple,
-  runPackRunDir,
-} from '@housekeeping';
+import { runPackSingle, runPackMultiple, runPackRunDir } from '@housekeeping';
 import {
   mergeRunDirAndWorkspaceResult,
   type FileOpResult,
 } from '@shared/schemas/opResults';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { type PackConfig } from './fileOpSchemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
@@ -56,7 +51,9 @@ export async function handlePack(config: PackConfig): Promise<void> {
   const { agent, model, inputFile, outputFiles, executionId } = config;
 
   const runWorkspacePack = (): Promise<FileOpResult> =>
-    runPack(model, inputFile, agent, outputFiles);
+    outputFiles.length > 0
+      ? runPackMultiple(model, inputFile, agent, outputFiles)
+      : runPackSingle(model, inputFile, agent);
 
   // Toolbar-driven invocations pass an executionId: snapshot the runDir
   // AND the workspace. The workspace pass is a no-op for new runs (their

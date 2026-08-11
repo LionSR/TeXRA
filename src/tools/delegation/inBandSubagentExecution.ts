@@ -13,16 +13,17 @@
  */
 
 // Local imports
+import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import {
-  getExecutionStore,
-  registerExecution,
-  type ResultMeta,
-} from '@agent/storage';
+  persistChildRunReport,
+  persistChildRunResultMeta,
+} from '@agent/storage/childRunPersistence';
+import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
-  captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   ownsExecutionLease,
-  releaseOwnedExecutionLeaseAfterFailure,
+  type OwnedExecutionLeaseScope,
+  runWithOwnedExecutionLeaseLaunchGuard,
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
@@ -46,10 +47,6 @@ import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
 } from './subagentResults';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from './childRunDelivery';
 
 // Local file imports
 import {
@@ -436,13 +433,19 @@ async function executeInBand(
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;
 
+  let runWithOwnership: OwnedExecutionLeaseScope;
   try {
-    await registerExecution(executionId, config, options.agentName, {
-      streamId: getStreamTabId(config.agent, { executionId }),
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentExecutionId: options.parentExecutionId,
-    });
+    runWithOwnership = await registerOwnedExecution(
+      executionId,
+      config,
+      options.agentName,
+      {
+        streamId: getStreamTabId(config.agent, { executionId }),
+        identity: { kind: 'agent', agent: config.agent },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        parentExecutionId: options.parentExecutionId,
+      },
+    );
   } catch (cause) {
     if (mode === 'required-result') {
       throw new SubagentDurabilityError(
@@ -452,25 +455,23 @@ async function executeInBand(
     }
     throw cause;
   }
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
   return await runWithOwnership(async () => {
     let executionFailure: InBandExecutionFailure | undefined;
     try {
       if (stableAttempt) {
-        try {
-          await writeStableSubagentAttempt(getExecutionStore(executionId), {
-            ...stableAttempt,
-            phase: 'launched',
-          });
-        } catch (cause) {
-          throw await releaseOwnedExecutionLeaseAfterFailure(
-            executionId,
-            new SubagentDurabilityError(
+        await runWithOwnedExecutionLeaseLaunchGuard(executionId, async () => {
+          try {
+            await writeStableSubagentAttempt(getExecutionStore(executionId), {
+              ...stableAttempt,
+              phase: 'launched',
+            });
+          } catch (cause) {
+            throw new SubagentDurabilityError(
               `Failed to mark subagent ${executionId} as launched.`,
               { cause },
-            ),
-          );
-        }
+            );
+          }
+        });
       }
 
       const strategy = createNativeSubagentStrategy({

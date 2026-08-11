@@ -561,6 +561,20 @@ export const LATEX_FIELD_TO_KEY = {
 export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
 
 /**
+ * Replacement-related webview field name → core config key (`texra.latex.*`).
+ * Unlike {@link LATEX_FIELD_TO_KEY} these live in core config, not
+ * WorkspaceState. Shared by the settings-view frontend (LaTeXTab) and the
+ * backend persistence controller so the two sides of the wire can't drift.
+ */
+export const LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY = {
+  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
+  enabledReplacements: 'texra.latex.enabledReplacements',
+  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
+  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
+  customReplacements: 'texra.latex.customReplacements',
+} as const;
+
+/**
  * Workspace directories that bulk file operations (formatting, cleaning,
  * packing) skip — generated artifacts and TeXRA-managed bookkeeping dirs.
  * Compared case-insensitively (lowercase entries).

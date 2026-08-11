@@ -17,6 +17,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   runIdentityDisplayName,
+  type StreamState,
   type StreamSubstate,
   type StreamTabId,
   type StreamTabInfo,
@@ -57,7 +58,6 @@ import {
   computeStreamTreeProjection,
   type StreamTreeExpansionOverride,
 } from '../streamTree';
-import type { StreamState } from '../store';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';

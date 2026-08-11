@@ -13,12 +13,12 @@ import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
 } from '@shared/schemas/output';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  AbsoluteFS,
   createExternalLocation,
   getFileDirectory,
-  TaskRunFileService,
-} from '@utils/files';
+} from '@utils/files/fileLocation';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';

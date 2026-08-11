@@ -6,13 +6,15 @@ import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
-import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type {
+  FollowUpQueueInput,
+  FollowUpRecoveryLease,
+} from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
@@ -32,7 +34,10 @@ import {
   type CliRuntimeHost,
 } from '@cli/runtime/cliPresentationHost';
 import { readCliToolUseResumeData } from '@cli/runtime/toolUseResumeData';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
+import {
+  runOutcomeExitCode,
+  type TurnOutcome,
+} from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -41,6 +46,7 @@ import {
   type ExecutionId,
   type StreamTabId,
   sumUsageStats,
+  AgentCategory,
 } from '@shared/schemas';
 import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
@@ -69,11 +75,10 @@ import {
 } from './tui/state/transcript';
 import { projectStreamTranscript } from './tui/state/transcriptProjection';
 
-interface InterruptedFollowUp {
-  readonly text: string;
-  readonly mediaFiles?: readonly string[] | undefined;
-  readonly displayText?: string | undefined;
-}
+type InterruptedFollowUp = Pick<
+  FollowUpQueueInput,
+  'text' | 'mediaFiles' | 'displayText'
+>;
 
 type InterruptedFollowUpAdmission =
   | { readonly kind: 'not_interrupted' }
@@ -417,7 +422,7 @@ export function createChatSessionController(
         if (result.streamId) {
           projectStreamTranscript(result.streamId, { finalize: true });
         }
-        notify({ kind: 'agentFinished' });
+        notify('agentFinished');
       })
       .catch(reportRunFailure)
       .finally(finalize);
@@ -569,15 +574,13 @@ export function createChatSessionController(
    * completion. A subagent parking back to WAITING is a completed turn, not
    * a finished agent, so it never fires `agentFinished`.
    */
-  const settleResumedTurn = (
-    outcome: Parameters<typeof runOutcomeExitCode>[0],
-  ): void => {
+  const settleResumedTurn = (outcome: TurnOutcome): void => {
     if (session.streamId) {
       projectStreamTranscript(session.streamId, { finalize: true });
     }
     session.runExitCode = runOutcomeExitCode(outcome);
     if (outcome !== STREAM_PHASE.WAITING) {
-      notify({ kind: 'agentFinished' });
+      notify('agentFinished');
     }
   };
 
@@ -641,8 +644,7 @@ export function createChatSessionController(
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 
-        let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
-          RUN_OUTCOME.COMPLETED;
+        let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
         const resumed = await setCliHelperModel(config.model).then(() =>
           resolveAndResumeStream(
             streamId,

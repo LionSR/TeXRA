@@ -14,13 +14,13 @@ import {
   AGENT_ERROR_OUTCOME,
   AgentError,
   classifyAgentError,
-  normalizeProviderError,
 } from '@common/errors';
 import {
   attachContextWindowError,
   attachMissingApiKeyError,
   attachProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorMetadata';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { platform } from '@platform/platform';
 import {
   RUN_OUTCOME,

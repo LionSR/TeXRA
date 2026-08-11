@@ -11,7 +11,8 @@ import pTimeout from 'p-timeout';
 import * as tar from 'tar';
 
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';

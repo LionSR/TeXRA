@@ -88,18 +88,20 @@ async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
 }
 
 /**
- * True when `file` belongs to the collected change set. Prefix matches keep
- * issues inside changed submodules, whose diff entries name the submodule
- * directory rather than the inner file — this matcher lives next to the
- * diff collection so that knowledge stays in one module.
+ * True when `file` belongs to the collected change set. `changedFiles` must
+ * already be normalized with `normalizeReviewFilePath` — the collection
+ * normalizes the list once when the diff lands rather than re-normalizing
+ * the whole list per reported issue. Prefix matches keep issues inside
+ * changed submodules, whose diff entries name the submodule directory
+ * rather than the inner file — this matcher lives next to the diff
+ * collection so that knowledge stays in one module.
  */
 export function isPathInChangeSet(
   changedFiles: readonly string[],
   file: string,
 ): boolean {
-  const known = changedFiles.map(normalizeReviewFilePath);
   const candidate = normalizeReviewFilePath(file);
-  return known.some(
+  return changedFiles.some(
     (entry) => entry === candidate || candidate.startsWith(`${entry}/`),
   );
 }

@@ -584,7 +584,6 @@ describe('settingsAccess', () => {
     assert.deepEqual(config.inspect(entry.key), {
       globalValue: undefined,
       workspaceValue: false,
-      effectiveValue: false,
     });
     assert.equal(readSetting(entry, stores, 'cli'), false);
   });
@@ -599,7 +598,6 @@ describe('settingsAccess', () => {
     assert.deepEqual(config.inspect(entry.key), {
       globalValue: false,
       workspaceValue: undefined,
-      effectiveValue: false,
     });
   });
 

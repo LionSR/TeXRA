@@ -37,12 +37,7 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
   // Subscription and relay routes follow the global OpenRouter selection.
   // When it is enabled, only managed direct credentials can bypass it.
   if (!useOpenRouter) {
-    if (
-      await isCodexSubscriptionActive(
-        CHATGPT_SETUP_MODEL,
-        AgentCategory.ToolUse,
-      )
-    ) {
+    if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
       return CHATGPT_SETUP_MODEL;
     }
 

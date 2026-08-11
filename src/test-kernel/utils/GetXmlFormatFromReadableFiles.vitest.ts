@@ -4,9 +4,10 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
 }));
 
-vi.mock('@utils/files', async () => {
-  const actual =
-    await vi.importActual<typeof import('@utils/files')>('@utils/files');
+vi.mock('@utils/files/workspaceFS', async () => {
+  const actual = await vi.importActual<
+    typeof import('@utils/files/workspaceFS')
+  >('@utils/files/workspaceFS');
   return {
     ...actual,
     WorkspaceFS: {

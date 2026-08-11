@@ -1,9 +1,8 @@
 import { Text, useWindowSize } from 'ink';
 
 import {
+  cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
-  isCliChatGptSubscriptionRetry,
-  isCliCodingPlanRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -47,38 +46,15 @@ function retryGuidanceRows(
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const errorText = props.payload.errorMessage ?? props.payload.operation;
-  const isSubscriptionLimit = isCliChatGptSubscriptionRetry(props.payload);
-  const isGlmCodingPlanLimit = isCliCodingPlanRetry(props.payload);
   const isApiSwitchable = isCliApiSwitchableRetry(props.payload);
   const personalApiKeyAvailable = props.payload.personalApiKeyAvailable;
   const canSwitchToPersonalKey =
     isApiSwitchable && personalApiKeyAvailable === true;
-  // Both switches flip the api-mode to personal keys so the retry uses the
-  // user's own key (not the relay JWT); the subscription switches additionally
-  // turn off the "prefer ChatGPT subscription" / coding-plan preference.
-  const exhaustionReason = props.payload.errorDetails?.exhaustionReason;
-  let switchDecision: ApprovalDecision;
-  if (isSubscriptionLimit) {
-    switchDecision = {
-      accepted: true,
-      disableChatGptSubscription: true,
-      apiMode: 'personal',
-    };
-  } else if (exhaustionReason === 'glm-coding-plan') {
-    switchDecision = {
-      accepted: true,
-      disableGlmCodingPlan: true,
-      apiMode: 'personal',
-    };
-  } else if (isGlmCodingPlanLimit) {
-    switchDecision = {
-      accepted: true,
-      disableKimiCode: true,
-      apiMode: 'personal',
-    };
-  } else {
-    switchDecision = { accepted: true, apiMode: 'personal' };
-  }
+  // Which subscription/plan toggle the switch disables is decided next to the
+  // classifiers in approvalPrompts.ts; the modal only renders the action.
+  const switchDecision: ApprovalDecision = cliRetryApiSwitchDecision(
+    props.payload,
+  );
   let guidanceText: string | undefined;
   if (isApiSwitchable && personalApiKeyAvailable !== true) {
     const requestedProvider = props.payload.errorDetails?.provider;

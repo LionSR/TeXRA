@@ -113,12 +113,16 @@ function childStreamReferenceLabel(
 
 export function streamDisplayLabel(init: {
   readonly childStreamEntries: ChildStreamEntries;
+  /** Batch-resolved labels from {@link streamTreeViews}; single lookups compute on demand. */
+  readonly labels?: ReadonlyMap<StreamTabId, string>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): string {
   const parentStreamId = init.parentStream.get(init.streamId);
   if (!parentStreamId) return 'main';
+  const precomputed = init.labels?.get(init.streamId);
+  if (precomputed !== undefined) return precomputed;
   return childStreamReferenceLabel(
     parentStreamId,
     init.childStreamEntries,
@@ -130,6 +134,8 @@ export function streamDisplayLabel(init: {
 export function streamViewForId(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
+  /** Batch-resolved labels from {@link streamTreeViews}; single lookups compute on demand. */
+  readonly labels?: ReadonlyMap<StreamTabId, string>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -146,6 +152,7 @@ export function streamViewForId(init: {
     parentLabel: parentId
       ? streamDisplayLabel({
           childStreamEntries: init.childStreamEntries,
+          labels: init.labels,
           parentStream: init.parentStream,
           streamId: parentId,
           streams: init.streams,
@@ -189,15 +196,64 @@ export function streamTreeEntries(
   return out;
 }
 
+/**
+ * Display labels for a batch of stream ids in one pass: grouping ids by
+ * parent runs `visibleSubagentRows` once per parent rather than once per
+ * child, so a wide child list costs one roster scan per distinct parent per
+ * render instead of one per row. A parentless id gets no entry here —
+ * `streamDisplayLabel` answers 'main' for it without consulting the map.
+ */
+function childStreamLabels(
+  init: Pick<
+    StreamTreeViewInput,
+    'childStreamEntries' | 'parentStream' | 'streams'
+  >,
+  streamIds: readonly StreamTabId[],
+): ReadonlyMap<StreamTabId, string> {
+  const idsByParent = new Map<StreamTabId, StreamTabId[]>();
+  for (const streamId of streamIds) {
+    const parentStreamId = init.parentStream.get(streamId);
+    if (!parentStreamId) continue;
+    const bucket = idsByParent.get(parentStreamId);
+    if (bucket) bucket.push(streamId);
+    else idsByParent.set(parentStreamId, [streamId]);
+  }
+  const labels = new Map<StreamTabId, string>();
+  for (const [parentStreamId, ids] of idsByParent) {
+    const unresolved = new Set(ids);
+    for (const child of visibleSubagentRows(
+      parentStreamId,
+      init.childStreamEntries,
+      init.streams,
+    )) {
+      if (unresolved.delete(child.childStreamId)) {
+        labels.set(child.childStreamId, childExecutionLabel(child));
+      }
+    }
+    // Not on the parent's roster: the same fallback childStreamReferenceLabel
+    // uses when its find misses.
+    for (const streamId of unresolved) labels.set(streamId, streamId);
+  }
+  return labels;
+}
+
 export function streamTreeViews(
   init: StreamTreeViewInput,
 ): readonly StreamView[] {
   const ordered = streamTreeEntries(init);
   if (ordered.length < 2) return [];
+  // Resolve every row's label in one pass: `visibleSubagentRows` scans the
+  // full child-entry map, so looking it up per row (and again per parent
+  // label) costs one scan per child per render.
+  const labels = childStreamLabels(
+    init,
+    ordered.map((entry) => entry.id),
+  );
   return ordered.map((entry) =>
     streamViewForId({
       activeStreamId: init.activeStreamId,
       childStreamEntries: init.childStreamEntries,
+      labels,
       parentStream: init.parentStream,
       streamId: entry.id,
       streams: init.streams,

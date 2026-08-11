@@ -4,10 +4,11 @@ import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { getSdkErrorMessage } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS, StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { StorageFS } from '@utils/files/storageFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { getConfig } from '@utils/config/configUtils';
 import {

@@ -33,7 +33,7 @@ import {
   type ExtendedDocumentFileType,
 } from '@shared/schemas/fileTypes';
 import { getFileStem } from '@utils/core';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -50,12 +50,6 @@ type RequestEditedFileMessage = MessageFor<
 
 type RequestBaseFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE
->;
-
-type SetMultipleFilesMessage = MessageFor<
-  | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
 >;
 
 type SelectMultipleFilesMessage = MessageFor<
@@ -78,20 +72,6 @@ type UpdateFilesMessage = MessageFor<
 >;
 
 const CHANNEL = 'FileManager';
-
-type SetFilesCommand =
-  | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES;
-
-const UPDATE_TO_SET_COMMAND = {
-  [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-  [MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES]:
-    MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
-  [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-  [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
-} as const satisfies Record<UpdateFilesMessage['command'], SetFilesCommand>;
 
 export class FileManager extends BaseWebviewManager {
   async handleEditedFileSelection(): Promise<void> {
@@ -125,10 +105,6 @@ export class FileManager extends BaseWebviewManager {
       preserveBaseFile: message.preserveBaseFile,
     });
     this.postGettingStartedBanner(files.length === 0);
-  }
-
-  handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
-    this.postMessage({ command: message.command, files: message.files });
   }
 
   async handleSelectMultipleFiles(
@@ -332,13 +308,14 @@ export class FileManager extends BaseWebviewManager {
     this.showDroppedFilesResult(plan.attachedCount, plan.rejectedCount);
   }
 
+  // The webview owns these lists and has already applied the edit locally;
+  // the host only logs it. (This used to echo the list back as SET_*_FILES,
+  // which the webview re-applied as a no-op.)
   handleUpdateFiles(message: UpdateFilesMessage): void {
-    const setCommand = UPDATE_TO_SET_COMMAND[message.command];
     logger.debug(
       CHANNEL,
       `Updating ${message.fileType} with ${message.files?.length ?? 0} files`,
     );
-    this.postMessage({ command: setCommand, files: message.files ?? [] });
   }
 
   private postBaseFiles(

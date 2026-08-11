@@ -23,7 +23,7 @@ import * as logger from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';

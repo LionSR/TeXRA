@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -20,6 +19,7 @@ import {
 import * as logger from '@logger/logUtils';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';

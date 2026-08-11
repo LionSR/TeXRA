@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports - files
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 export interface AgentWorkspaceOptions {
   workingDirectory?: string;

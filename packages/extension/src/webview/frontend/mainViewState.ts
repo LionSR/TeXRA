@@ -135,10 +135,9 @@ export const latexdiffsVisible$ = trackedSignal(
 // Model / agent catalog data
 // ---------------------------------------------------------------------------
 
-export const modelOptions$ = trackedSignal<ModelOptionData[]>(() => []);
 export const sessionModelOptions$ = trackedSignal<
-  ByCategory<ModelOptionData[] | undefined>
->(() => byCategory(() => undefined));
+  ByCategory<ModelOptionData[]>
+>(() => byCategory(() => []));
 export const agentOptions$ = trackedSignal<ByCategory<AgentOptionData[]>>(() =>
   byCategory(() => []),
 );
@@ -200,7 +199,7 @@ export const debugMode$ = trackedSignal(() => false);
 export function getModelOptionsForSession(
   sessionType: SessionType,
 ): ModelOptionData[] {
-  return sessionModelOptions$.get()[sessionType] ?? modelOptions$.get();
+  return sessionModelOptions$.get()[sessionType];
 }
 
 export function primaryInputFile(): string {

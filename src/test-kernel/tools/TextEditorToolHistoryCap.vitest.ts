@@ -18,7 +18,7 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { TextEditorTool } from '@tools/TextEditorTool';
 import { cleanupAllApprovals } from '@tools/approval';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const EXECUTION_ID = 'history-cap-exec';
 

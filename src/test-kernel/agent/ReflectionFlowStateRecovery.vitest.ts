@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getExecutionStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
 import {
-  AgentCategory,
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
@@ -29,6 +28,7 @@ import {
   type ExecutionId,
   type StorageKey,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';

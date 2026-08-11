@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type { FileStat } from '@platform/interfaces';
-import { AbsoluteFS } from '@utils/files';
 import { byStringProp, normalizeFilePath } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
 

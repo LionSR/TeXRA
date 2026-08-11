@@ -8,11 +8,9 @@ import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { OutputFileInfo, RoundOutput } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
-import {
-  AbsoluteFS,
-  TaskRunFileService,
-  createExternalLocation,
-} from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { createExternalLocation } from '@utils/files/fileLocation';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 const formatterMocks = vi.hoisted(() => ({
   runLatexFormatter: vi.fn(),

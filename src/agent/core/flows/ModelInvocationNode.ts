@@ -16,7 +16,7 @@ import {
   isRelayProviderUnobservedFailure,
   isRelayRequestGateReachableFailure,
   isRelayRequestGateUnobservedFailure,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
 import type { ToolDefinition } from '@model/ToolDefinition';
 
 import { FlowTransition } from './FlowTransitions';

@@ -20,6 +20,14 @@ import {
 // Data schemas
 // ============================================================
 
+/**
+ * Defaults for prefaulted UPDATE_PROFILE fields, exported so the settings
+ * frontend's pre-hydration state can share them instead of restating the
+ * literals.
+ */
+export const DEFAULT_QUOTA_AUTO_SWITCHED = false;
+export const DEFAULT_GLOBAL_STREAMING = true;
+
 const ProfileUserSchema = z.object({
   email: z.string(),
   id: z.string(),
@@ -109,9 +117,9 @@ export const UpdateProfileMessageSchema = z.object({
   sessionProblem: SessionProblemSchema.nullable().prefault(null),
   spendingStatus: SpendingStatusSchema.nullish(),
   spendingStatusError: SpendingStatusErrorSchema.nullish(),
-  quotaAutoSwitched: z.boolean().prefault(false),
+  quotaAutoSwitched: z.boolean().prefault(DEFAULT_QUOTA_AUTO_SWITCHED),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
-  globalStreamingDefault: z.boolean().prefault(true),
+  globalStreamingDefault: z.boolean().prefault(DEFAULT_GLOBAL_STREAMING),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 

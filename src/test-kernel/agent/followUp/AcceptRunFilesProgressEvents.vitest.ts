@@ -24,7 +24,9 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
-import { AbsoluteFS, StorageFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { StorageFS } from '@utils/files/storageFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';

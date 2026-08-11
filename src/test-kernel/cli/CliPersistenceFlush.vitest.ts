@@ -18,7 +18,7 @@ import {
   STREAM_LOGS_DIR,
   type StreamLogAppendInput,
 } from '@transcript';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 function storageFile(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);

@@ -11,7 +11,7 @@ import {
   reportMissingOutputs,
 } from '@agent/runtime/runFactEvents';
 import type { FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import {
   getStorageKey,

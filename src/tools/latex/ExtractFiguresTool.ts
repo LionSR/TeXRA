@@ -7,8 +7,8 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
-import { pathToLocation } from '@utils/files';
 import { unique } from '@utils/core';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,

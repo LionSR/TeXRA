@@ -39,7 +39,7 @@ import {
   STREAM_DATA_DIR,
   STREAM_DATA_DELETION_DIR,
 } from '@transcript/streamDataPaths';
-import { StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files/storageFS';
 
 const tempDirs: string[] = [];
 

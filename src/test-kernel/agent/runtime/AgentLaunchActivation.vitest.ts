@@ -53,7 +53,6 @@ vi.mock('@agent/storage/executionLease', () => ({
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -63,6 +62,7 @@ import {
   type ExecutionId,
   type SetActiveStreamPayload,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 
 // Test support imports
@@ -96,7 +96,9 @@ async function captureActivation(
     dispose: vi.fn(),
   };
 
-  mocks.resolve.mockReturnValueOnce({ definitionPath: '/agents/chat.yaml' });
+  mocks.resolve.mockReturnValueOnce({
+    entry: { path: '/agents/chat.yaml' },
+  });
   mocks.load.mockResolvedValueOnce([
     { agentCategory: AgentCategory.ToolUse },
     {},

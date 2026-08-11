@@ -22,7 +22,6 @@ import {
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
-  AgentCategory,
   type AgentSetting,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
@@ -38,10 +37,11 @@ import {
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 import * as serverKeysModule from '@auth/serverKeys';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { AgentCategory } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 import * as configUtils from '@utils/config/configUtils';
 
 // Anthropic SDK message types

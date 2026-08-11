@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
@@ -19,6 +18,7 @@ import {
   type DesktopOAuthClient,
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
+import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 

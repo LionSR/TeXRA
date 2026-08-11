@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  detectPartialText,
-  handleStreamingFailure,
-} from '@common/errors/sdkErrorUtils';
+import { detectPartialText } from '@common/errors/sdkError/errorMetadata';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 
 describe('handleStreamingFailure', () => {
   it.each([

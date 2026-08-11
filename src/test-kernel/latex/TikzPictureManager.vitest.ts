@@ -7,7 +7,7 @@ import { describe, it } from 'vitest';
 // Local imports
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 async function extractFromPaper(content: string) {
   await installFakePlatform({

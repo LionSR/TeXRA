@@ -10,7 +10,8 @@ import {
 } from '@latex/texTools';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { installPlatform } from '@test/support/setupPlatform';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 // ---------------------------------------------------------------------------
 // TexTools

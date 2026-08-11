@@ -10,7 +10,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
-import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
+import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface ProgressWorkflowFileActionsState {

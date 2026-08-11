@@ -115,7 +115,7 @@ describe('installTerminalTitleUpdates', () => {
 
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
     updates.dispose();
   });
 
@@ -126,7 +126,7 @@ describe('installTerminalTitleUpdates', () => {
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
     updates.dispose();
   });
 
@@ -144,7 +144,7 @@ describe('installTerminalTitleUpdates', () => {
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
 
     queueTitleApproval('title-transition');
     await flushTitleUpdate();
@@ -152,7 +152,7 @@ describe('installTerminalTitleUpdates', () => {
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
 
     setStreamStatusInCliState({
       streamId: 'transition-child',
@@ -173,11 +173,11 @@ describe('installTerminalTitleUpdates', () => {
     });
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
     vi.advanceTimersByTime(500);
-    expectLastTitle('TeXRA — Running / — coauthor');
+    expectLastTitle('TeXRA — / — coauthor');
     vi.advanceTimersByTime(500);
-    expectLastTitle('TeXRA — Running \\ — coauthor');
+    expectLastTitle('TeXRA — \\ — coauthor');
 
     queueTitleApproval('animated-root');
     await flushTitleUpdate();
@@ -188,7 +188,7 @@ describe('installTerminalTitleUpdates', () => {
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
     updates.suspend();
     expectLastTitle('TeXRA — coauthor');
     const writesWhileSuspended = vi.mocked(writeSync).mock.calls.length;
@@ -196,7 +196,7 @@ describe('installTerminalTitleUpdates', () => {
     expect(writeSync).toHaveBeenCalledTimes(writesWhileSuspended);
 
     updates.resume();
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
     setStreamStatusInCliState({
       streamId: 'animated-root',
       status: STREAM_PHASE.WAITING,
@@ -212,7 +212,7 @@ describe('installTerminalTitleUpdates', () => {
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Running - — coauthor');
+    expectLastTitle('TeXRA — - — coauthor');
     updates.dispose();
     const writesAfterDispose = vi.mocked(writeSync).mock.calls.length;
     vi.advanceTimersByTime(1_500);

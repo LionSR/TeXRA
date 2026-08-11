@@ -1,9 +1,7 @@
 // Local imports
-import {
-  attachManualRetryOnlyError,
-  isRetryableStatusCode,
-  normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+import { attachManualRetryOnlyError } from '@common/errors/sdkError/errorMetadata';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { isRetryableStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import type { ProviderError } from '@shared/schemas';
 
 // Local file imports

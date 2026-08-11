@@ -7,7 +7,6 @@ import {
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 
 import {
-  shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
   signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
@@ -15,14 +14,6 @@ import {
   type CliSubscriptionLoginTransportInit,
   type CliSubscriptionSignOutResult,
 } from './subscriptionLogin';
-import type { CliContext } from './cliContext';
-
-export function shouldUseChatGptDeviceCode(
-  context: CliContext,
-  init: CliSubscriptionLoginTransportInit,
-): boolean {
-  return shouldUseSubscriptionDeviceCode(context, init);
-}
 
 export async function signInCliChatGpt(
   init: CliSubscriptionLoginTransportInit,
@@ -47,6 +38,16 @@ export function chatGptSignOutPreferenceMessage(
     disabledFor: 'Codex models',
     result,
   });
+}
+
+/**
+ * Full ChatGPT sign-out outcome text, owned here so the auth command and the
+ * launcher account action report the same lines.
+ */
+export function chatGptSignOutOutcomeMessage(
+  result: CliSubscriptionSignOutResult,
+): string {
+  return `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(result)}`;
 }
 
 export async function signOutCliChatGpt(): Promise<CliSubscriptionSignOutResult> {

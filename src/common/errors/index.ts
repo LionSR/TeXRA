@@ -5,8 +5,8 @@
  * `toErrorMessage`/`ensureError`/`extractErrorMessage` live in
  * @utils/errors/errorMessage (shared with browser/webview code).
  * SDK-specific utilities (isContextWindowError, attachStreamDiagnostics,
- * buildErrorLogData, etc.) should be imported directly from
- * @common/errors/sdkErrorUtils - they are not part of the public barrel.
+ * buildErrorLogData, etc.) live under @common/errors/sdkError/* - import them
+ * directly from the defining module; they are not part of the public barrel.
  */
 export { formatError } from './errorFormatUtils';
 export {
@@ -19,15 +19,5 @@ export {
   classifyAgentError,
   type AgentErrorKind,
 } from './agentErrorClassification';
-
-// These SDK utilities are exposed in the barrel because they have broad usage
-// across the codebase (model handlers, runtime, UI layers).
-// normalizeProviderError is the single public normalization entry; the
-// non-caching formatProviderHttpError stays internal to sdkErrorUtils.
-export {
-  getSdkErrorMessage,
-  normalizeProviderError,
-  buildFailedRetryInfo,
-} from './sdkErrorUtils';
 
 export { AgentError } from './agentErrors';

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 import type { FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 import {

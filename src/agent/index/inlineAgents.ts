@@ -18,13 +18,13 @@
  */
 
 import {
-  AgentCategory,
   AgentDefinitionSchema,
   AgentPromptSchema,
   AgentRootSettingInputSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
+import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractToolNames, userRequestTemplateCount } from './agentYamlScanner';
 import type { AgentEntry } from './agentEntry';

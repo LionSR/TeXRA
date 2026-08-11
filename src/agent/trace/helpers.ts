@@ -12,7 +12,7 @@
  * every domain `key` here onto a TeXRA `MessageType`, and `level=error`
  * with `messageType: ERROR` renders the same way it always did.
  */
-import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
+import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,

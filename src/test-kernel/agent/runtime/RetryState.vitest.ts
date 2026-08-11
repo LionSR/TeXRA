@@ -49,7 +49,7 @@ import {
   attachContextWindowError,
   attachManualRetryOnlyError,
   attachSdkErrorMetadata,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/errorMetadata';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { setIncludedModelAccess } from '@model/includedModelAccess';
 import {

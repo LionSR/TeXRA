@@ -18,7 +18,7 @@ import { buildUserVarPassthrough } from '@agent/utils/userVars';
 import * as logger from '@logger/logUtils';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
@@ -26,8 +26,6 @@ import { extractTextFromTag } from '@utils/text/xmlExtraction';
 const CHANNEL = 'AgentCreator';
 
 // ── Types ───────────────────────────────────────────────────
-
-export type { AgentCategory };
 
 interface AgentPromptPair {
   systemPrompt: string;

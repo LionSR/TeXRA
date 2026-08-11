@@ -309,7 +309,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
         usageProvider,
       );
-      expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(4);
+      expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(3);
       expect(fixture.posted).toContainEqual(
         expect.objectContaining({
           command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
@@ -419,7 +419,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
     expect(fixture.globalState.get(GlobalStateKey.GLM_USE_CHINA)).toBe(false);
     expect(fixture.subscriptionUsage.invalidate).not.toHaveBeenCalled();
-    expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(4);
+    expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(3);
     expect(fixture.posted).toContainEqual(
       expect.objectContaining({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,

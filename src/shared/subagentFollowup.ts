@@ -19,9 +19,13 @@ import {
   type DeliveryTagName,
 } from '@shared/deliveryTags';
 import {
+  type SubagentProgressUpdate,
   WorkflowScriptDeliverySummarySchema,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
+import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
+import { planSummaryLine } from '@shared/schemas/workPlan';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { isObject } from '@utils/core';
 import {
   formatCompactDuration,
@@ -252,6 +256,60 @@ export function formatWorkflowScriptDeliverySummary(
     `  script: ${summary.scriptPath}`,
     `  rerun: edit the script, then call delegate_multi_agents with scriptPath`,
   ].join('\n');
+}
+
+/** Format a typed progress update as XML for injection into orchestrator context. */
+export function formatSubagentProgress(
+  executionId: string,
+  agentName: string,
+  update: SubagentProgressUpdate,
+): string {
+  const tag = DELIVERY_TAG.subagentProgress;
+  const idAttr = `id="${escapeAttr(executionId)}"`;
+  const agentAttr = `agent="${escapeAttr(agentName)}"`;
+
+  switch (update.kind) {
+    case 'todos': {
+      const { completed, inProgress, pending } = countByStatus(update.todos);
+      const items = update.todos
+        .map((t) => {
+          const icon = STATUS_DISPLAY[t.status].icon;
+          return `  ${icon} ${escapeText(t.content)}`;
+        })
+        .join('\n');
+      return [
+        `<${tag} ${idAttr} ${agentAttr} type="todos" completed="${completed}" active="${inProgress}" pending="${pending}">`,
+        items,
+        `</${tag}>`,
+      ].join('\n');
+    }
+
+    case 'overview': {
+      const fileList =
+        update.filesChanged.length > 0
+          ? update.filesChanged.map((f) => escapeAttr(f)).join(', ')
+          : 'none';
+      const attrs = [
+        `type="overview"`,
+        `tool-calls="${update.toolCallCount}"`,
+        `files-changed="${fileList}"`,
+      ];
+      if (update.cost !== undefined) {
+        attrs.push(`cost="${update.cost.toFixed(4)}"`);
+      }
+      return `<${tag} ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
+    }
+
+    case 'plan': {
+      if (!update.plan) {
+        return `<${tag} ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
+      }
+      return `<${tag} ${idAttr} ${agentAttr} type="plan" status="updated" summary="${escapeAttr(planSummaryLine(update.plan.objective))}" />`;
+    }
+
+    case 'started':
+      return `<${tag} ${idAttr} ${agentAttr} type="started" />`;
+  }
 }
 
 /**

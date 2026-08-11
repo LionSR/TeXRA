@@ -5,7 +5,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -13,6 +12,7 @@ import {
 import type { FileContext } from '@agent/runtime/textEnhancement';
 import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { AgentCategory } from '@shared/schemas';
 
 function createWorkflowConfig(): AgentConfig {
   return AgentConfigSchema.parse({

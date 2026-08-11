@@ -11,8 +11,7 @@ import {
   ToolUseAgentConfigSchema,
   WorkflowAgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AGENT_SOURCE } from '@shared/schemas';
+import { AGENT_SOURCE, AgentCategory } from '@shared/schemas';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 
 describe('ToolConfigSchema', () => {

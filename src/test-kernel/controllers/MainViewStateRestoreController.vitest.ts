@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { RestoreRunConfigInputSchema } from '@controllers/mainView/MainViewStateRestoreController';
+import { AgentCategory } from '@shared/schemas';
 
 const WORKFLOW_CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.Workflow,

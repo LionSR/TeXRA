@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getExecutionStore } from '@agent/storage';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -17,6 +16,7 @@ import {
   type ExecutionId,
   type RunOutcome,
   type StreamTabId,
+  AgentCategory,
 } from '@shared/schemas';
 import {
   cleanupTempDirs,

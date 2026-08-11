@@ -27,7 +27,6 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import type { AgentCategory } from '@shared/schemas/agent';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
@@ -79,26 +78,14 @@ export interface ResolvedAgentTools {
  */
 async function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
-): Promise<ReadonlyMap<AgentCategory, readonly string[]> | null | undefined> {
+): Promise<readonly string[] | null | undefined> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return undefined;
   }
-  const categories = new Set(
-    tools
-      .map((tool) => tool.availabilityCategory)
-      .filter((category): category is AgentCategory => category !== undefined),
-  );
 
   try {
-    const entries = await Promise.all(
-      [...categories].map(async (category) => {
-        const models = await computeModelOptionsData(undefined, undefined, {
-          agentCategory: category,
-        });
-        return [category, availableModelNamesFromOptions(models)] as const;
-      }),
-    );
-    return new Map(entries);
+    const models = await computeModelOptionsData();
+    return availableModelNamesFromOptions(models);
   } catch (err) {
     // Couldn't load model options — skip the delegation annotation rather than
     // fail the run, but log so the missing "Available models:" line is traceable.
@@ -203,19 +190,14 @@ function runtimeNarrowToolDefinition(
  */
 function annotateDelegationTool(
   tool: ToolDefinition,
-  availableModelNames:
-    ReadonlyMap<AgentCategory, readonly string[]> | null | undefined,
+  availableModelNames: readonly string[] | null | undefined,
 ): ToolDefinition {
   const category = tool.availabilityCategory;
   if (!category) return tool;
-  const categoryModelNames =
-    availableModelNames instanceof Map
-      ? (availableModelNames.get(category) ?? [])
-      : availableModelNames;
   const withModels =
     availableModelNames === undefined
       ? tool
-      : withDelegationModelAvailability(tool, categoryModelNames);
+      : withDelegationModelAvailability(tool, availableModelNames);
   // The annotators no-op without a description, and resolving the roster /
   // worktree state reaches platform state — skip those lookups when there is
   // nothing to annotate (e.g. a tool config that carries only a name).

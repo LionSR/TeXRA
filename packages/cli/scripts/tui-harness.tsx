@@ -1116,7 +1116,7 @@ function enqueueHarnessApproval(
   onDecision: (decision: ApprovalDecision) => void | Promise<void>,
 ): void {
   void enqueueApproval(payload, {
-    onPresent: () => notify({ kind: 'approvalNeeded' }),
+    onPresent: () => notify('approvalNeeded'),
   }).then(onDecision);
 }
 
@@ -1922,7 +1922,7 @@ if (SHOW_BASH_APPROVAL) {
         kind: 'bash',
         payload: makeBashApprovalPayload(index),
       },
-      { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+      { onPresent: () => notify('approvalNeeded') },
     );
   const showRepeatedApprovals = async (): Promise<void> => {
     const decision = await showApproval(1);

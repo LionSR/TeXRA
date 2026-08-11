@@ -29,6 +29,7 @@ import { hasClaudeCodeOauthToken } from '@tools/claudeAgentConfig';
 import { getGitHubToken } from '@tools/github/githubAuth';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
   PR_POLL_INTERVAL_MS,
 } from '@tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
@@ -478,7 +479,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  3. Scopes: "repo" for private repositories, "public_repo" for public only.\n' +
       '  4. Store the token in host secret storage, or export GITHUB_TOKEN/GH_TOKEN for CLI and automation.',
     installUrl: 'https://github.com/settings/tokens',
-    configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. In VS Code, the Git tab manages the stored token. Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and 3 concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
+    configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. In VS Code, the Git tab manages the stored token. Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
     authNote: 'Uses personal access token',
     toggleable: true,
     installActionCommand: 'texra.showGitSettings',

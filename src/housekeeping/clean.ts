@@ -6,8 +6,8 @@ import { MODELS } from 'llm-zoo';
 import * as logger from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { EXCLUDED_DIRS } from '@shared/constants/latex';
-import { WorkspaceFS } from '@utils/files';
 import { unique } from '@utils/core';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

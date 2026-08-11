@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { hasManualRetryOnlyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
-} from '@common/errors/sdkErrorUtils';
+} from '@common/errors/sdkError/providerErrorFormat';
+import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
