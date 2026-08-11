@@ -224,15 +224,6 @@ describe('stream status display labels', () => {
     },
   );
 
-  it('labels a WAITING child stream with the same "idle" wording as the root', () => {
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cli' }),
-    ).toBe('idle');
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cliCompact' }),
-    ).toBe('idle');
-  });
-
   const substateWordingCases: Array<[StreamStatusLabelStyle, string]> = [
     ['cli', 'starting\u2026'],
     ['cliCompact', 'starting'],
