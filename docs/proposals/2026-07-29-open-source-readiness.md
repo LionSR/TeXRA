@@ -289,7 +289,9 @@ review. The comment now says that.
 
 ### 4.6 CI only ever runs on Linux
 
-Not done — attempted and reverted, with the findings below.
+Superseded — the matrix landed in #9903, then became opt-in. See "Where this
+ended up" at the end of this section; the findings below are the original
+attempt-and-revert record that #9903 worked from.
 
 Every `ci.yml` job is `ubuntu-latest` except the macOS webview smoke, so none of
 the platform-specific code is exercised: tool discovery under `Program Files`,
@@ -313,11 +315,20 @@ change with someone who can iterate against a Windows runner. Landing a gating
 job that cannot pass would have wedged every PR; making it non-gating would have
 been the silent-degradation antipattern.
 
-The matrix change is recorded as a `TODO(windows-ci)` comment above the `test`
-job in `ci.yml`, carrying this inventory so the next attempt starts from it.
-
 Still Linux-only regardless: build, lint, typecheck, and the docs build. Those
 are platform-independent enough not to need duplicating.
+
+**Where this ended up.** #9903 (2026-08-09) fixed all three buckets — including
+the duplicated-run-segment defect — and restored `windows-latest` as a gating
+leg of the kernel-test matrix. It gated for one day. On a representative PR run
+the Windows shards took ~16 min each against ~10 min for Linux, making them the
+wall-clock for the entire workflow (~16.5 min end to end) at 2x the per-minute
+rate, while `static checks`, `build`, and the macOS smoke all finished inside
+6 min. Windows is now **opt-in via `workflow_dispatch`** rather than gating: the
+matrix expression in the `test` job adds `windows-latest` only for manual runs,
+so the leg is one Actions-tab dispatch away when touching path handling or
+cutting a release, and costs nothing per PR. The path fixes from #9903 remain in
+the product; what lapsed is the per-PR regression signal guarding them.
 
 ### 4.7 Windows tool discovery was frozen to specific versions
 
