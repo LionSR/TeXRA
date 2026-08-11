@@ -117,9 +117,7 @@ export class ToolUseWaitNode<C> extends Node<
     // after suspension, then owns the next queue wait. This keeps every
     // ordinary suspension symmetric and leaves one delivery site.
     if (isSubagent) {
-      ownerSession.status.transitionToWaiting(streamId, 'wait', {
-        trace: this.services.logger,
-      });
+      ownerSession.status.transitionToWaiting(streamId, 'wait');
       return { kind: 'waiting' };
     }
 
@@ -140,9 +138,7 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     if (!session.hasQueuedFollowUp()) {
-      ownerSession.status.transitionToWaiting(streamId, 'wait', {
-        trace: this.services.logger,
-      });
+      ownerSession.status.transitionToWaiting(streamId, 'wait');
     }
 
     const batch = await session.waitForFollowUp(signal);
@@ -182,9 +178,7 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     await session.transcripts.ensureLoaded(streamId);
-    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-      trace: logger,
-    });
+    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
 
     // Synthesized continuations don't come from the user queue, so they
     // must not emit updateQueuedFollowUps via the consume callback. They

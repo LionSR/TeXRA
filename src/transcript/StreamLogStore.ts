@@ -15,6 +15,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createFlushableDebounce, filterNotNull, isObject } from '@utils/core';
+import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -38,17 +39,11 @@ const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 
 function createLogKv(): KVStore {
-  return new KVStore(STREAM_LOGS_DIR, {
-    compactJson: true,
-    throwOnErrors: true,
-  });
+  return new KVStore(STREAM_LOGS_DIR, { compactJson: true });
 }
 
 function createSummaryKv(): KVStore {
-  return new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-    compactJson: true,
-    throwOnErrors: true,
-  });
+  return new KVStore(STREAM_LOG_SUMMARIES_DIR, { compactJson: true });
 }
 
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
@@ -263,7 +258,7 @@ export class StreamLogStore {
    * still listed here — see `pruneStreamState`.
    */
   private readonly dirtyIds = new Set<StreamTabId>();
-  private readonly listeners = new Set<StreamLogListener>();
+  private readonly listeners = createListenerSet<StreamLogListener>();
   private kv = createLogKv();
   private summaryKv = createSummaryKv();
 
@@ -426,8 +421,7 @@ export class StreamLogStore {
   }
 
   onChange(listener: StreamLogListener): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.add(listener);
   }
 
   get(streamId: StreamTabId): StreamLog | undefined {

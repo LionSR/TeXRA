@@ -31,6 +31,7 @@ import type {
   AgentEvent,
   AgentTrace,
   AgentTraceSubscriber,
+  StatusEvent,
 } from '@agent/trace';
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
@@ -163,6 +164,13 @@ type StageMetadata = Pick<
 export interface TranscriptRecorderHandle {
   unsubscribe(): void;
   flushPending(): void;
+  /**
+   * Consume one canonical `status` session fact for this recorder's stream.
+   * Status travels only on the session-fact rail (it is not an `AgentEvent`),
+   * so the launch path bridges the session hub's status subscription into
+   * this port — see `RunTrace.handleStatus`.
+   */
+  handleStatus(event: StatusEvent): void;
 }
 
 export function attachTranscriptRecorder(
@@ -462,45 +470,6 @@ export function attachTranscriptRecorder(
           });
           return;
 
-        case 'status': {
-          if (event.streamId !== streamId) return;
-          if (event.phase === STREAM_PHASE.RUNNING) {
-            transcriptBoundaryClosed = false;
-            return;
-          }
-          if (
-            event.phase !== STREAM_PHASE.WAITING &&
-            !isTerminalOutcomePhase(event.phase)
-          ) {
-            return;
-          }
-          // Status is emitted through AgentTrace before StreamStatusMachine
-          // publishes to synchronous session subscribers. Settle recorder-owned source rows here,
-          // so every row the CLI may promote at the boundary already has one
-          // durable settlement coordinate. Workflow calls are deliberately
-          // absent: their typed bridge cleanup owns planned/running terminal
-          // transitions and settles them afterward.
-          transcriptBoundaryClosed = true;
-          pendingModelResponseId = undefined;
-          for (const [id, state] of streams) {
-            state.ended = true;
-            flushStream(state, id);
-            streams.delete(id);
-          }
-          for (const [id, data] of activeToolEntries) {
-            writer.settle(id, {
-              data: {
-                ...data,
-                status: TOOL_USE_STATUS.FAILED,
-                error: 'The stream ended before this tool completed.',
-                isError: true,
-              } satisfies ToolUseLog,
-            });
-          }
-          activeToolEntries.clear();
-          return;
-        }
-
         case 'context.state': {
           const utilizationPercent = computeUtilizationPercent(
             event.inputTokens,
@@ -680,6 +649,50 @@ export function attachTranscriptRecorder(
     }
   };
 
+  const handleStatus = (event: StatusEvent): void => {
+    // The hub swallows subscriber throws, so a failed recorder disables
+    // itself via recordFailure and surfaces the error at flushPending time
+    // (run teardown) instead of throwing into the status emit loop.
+    if (pendingFailure !== undefined) return;
+    try {
+      if (event.streamId !== streamId) return;
+      if (event.phase === STREAM_PHASE.RUNNING) {
+        transcriptBoundaryClosed = false;
+        return;
+      }
+      if (
+        event.phase !== STREAM_PHASE.WAITING &&
+        !isTerminalOutcomePhase(event.phase)
+      ) {
+        return;
+      }
+      // Settle recorder-owned source rows at the boundary, so every row the
+      // CLI may promote already has one durable settlement coordinate.
+      // Workflow calls are deliberately absent: their typed bridge cleanup
+      // owns planned/running terminal transitions and settles them afterward.
+      transcriptBoundaryClosed = true;
+      pendingModelResponseId = undefined;
+      for (const [id, state] of streams) {
+        state.ended = true;
+        flushStream(state, id);
+        streams.delete(id);
+      }
+      for (const [id, data] of activeToolEntries) {
+        writer.settle(id, {
+          data: {
+            ...data,
+            status: TOOL_USE_STATUS.FAILED,
+            error: 'The stream ended before this tool completed.',
+            isError: true,
+          } satisfies ToolUseLog,
+        });
+      }
+      activeToolEntries.clear();
+    } catch (error) {
+      recordFailure(error);
+    }
+  };
+
   const unsubscribe = trace.subscribe(subscriber);
   return {
     unsubscribe: () => {
@@ -690,6 +703,7 @@ export function attachTranscriptRecorder(
       }
     },
     flushPending,
+    handleStatus,
   };
 }
 

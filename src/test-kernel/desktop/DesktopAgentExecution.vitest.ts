@@ -3546,9 +3546,7 @@ describe('DesktopProgressBridge', () => {
 
         // Window presentation does not split canonical lifecycle state.
         expect(
-          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
-            trace: owner.trace as unknown as AgentTrace,
-          }),
+          owner.processSession.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
         expect(owner.processSession.status.get(streamId)).toBe(
           STREAM_PHASE.WAITING,
@@ -3558,7 +3556,6 @@ describe('DesktopProgressBridge', () => {
             streamId,
             STREAM_PHASE.RUNNING,
             'resume',
-            { trace: owner.trace as unknown as AgentTrace },
           ),
         ).toBe(true);
         expect(owner.processSession.status.get(streamId)).toBe(
@@ -3572,9 +3569,7 @@ describe('DesktopProgressBridge', () => {
           freshHandle,
         );
         expect(
-          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
-            trace: freshTrace as unknown as AgentTrace,
-          }),
+          owner.processSession.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
         expect(owner.processSession.status.get(streamId)).toBe(
           STREAM_PHASE.WAITING,
@@ -3599,7 +3594,6 @@ describe('DesktopProgressBridge', () => {
             streamId,
             STREAM_PHASE.FAILED,
             STREAM_TRANSITION_CAUSE.LIFECYCLE,
-            { trace: freshTrace as unknown as AgentTrace },
           ),
         ).toBe(true);
         expect(resultsSeenByB).toContainEqual(resultEvent);
@@ -3673,9 +3667,7 @@ describe('DesktopProgressBridge', () => {
       owner.close();
       // Suspend while headless before reopening.
       expect(
-        owner.processSession.status.transitionToWaiting(streamId, 'wait', {
-          trace: owner.trace as unknown as AgentTrace,
-        }),
+        owner.processSession.status.transitionToWaiting(streamId, 'wait'),
       ).toBe(true);
       const { bridgeB } = await owner.reopen();
 

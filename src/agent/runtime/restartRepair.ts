@@ -9,10 +9,7 @@ import {
 } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { deriveResumability } from '@agent/storage/resumability';
-import type {
-  StreamStatusEmitOptions,
-  StreamStatusMachine,
-} from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -40,7 +37,6 @@ export interface RestartRepairOptions {
   repairStreams?: Iterable<StreamTabId>;
   /** Retry terminal metadata after an earlier repair already moved a stream to FAILED. */
   retryFailedStreams?: boolean;
-  statusEmitOptions?: StreamStatusEmitOptions;
   finalizeExecution?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
@@ -141,7 +137,6 @@ function synchronizeSettledPhase(
   streamStatus: StreamStatusMachine,
   streamId: StreamTabId,
   outcome: RunOutcome,
-  statusEmitOptions: StreamStatusEmitOptions | undefined,
 ): void {
   const current = streamStatus.get(streamId);
   if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
@@ -151,7 +146,6 @@ function synchronizeSettledPhase(
     streamId,
     outcome,
     STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    statusEmitOptions,
   );
 }
 
@@ -159,7 +153,6 @@ function synchronizeSettledPhase(
 function repairToWaiting(
   streamStatus: StreamStatusMachine,
   streamId: StreamTabId,
-  statusEmitOptions: StreamStatusEmitOptions | undefined,
   logger: RestartRepairLogger | undefined,
 ): void {
   if (
@@ -167,7 +160,6 @@ function repairToWaiting(
       streamId,
       STREAM_PHASE.WAITING,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      statusEmitOptions,
     )
   ) {
     logger?.debug(`Stream ${streamId} restored to WAITING after restart`);
@@ -251,7 +243,6 @@ export async function repairRestartedStreams(
               options.streamStatus,
               streamId,
               settlement.outcome,
-              options.statusEmitOptions,
             );
             await options.closeRunningGroups(
               [streamId],
@@ -319,12 +310,7 @@ async function repairRestartedStream(
   if (currentStatus == null) {
     if (isWaitingStream) {
       closeWaitingGroup = true;
-      repairToWaiting(
-        options.streamStatus,
-        streamId,
-        options.statusEmitOptions,
-        options.logger,
-      );
+      repairToWaiting(options.streamStatus, streamId, options.logger);
     } else {
       closeFailedGroup = true;
     }
@@ -339,18 +325,12 @@ async function repairRestartedStream(
     if (isWaitingStream) closeWaitingGroup = true;
   } else if (isWaitingStream) {
     closeWaitingGroup = true;
-    repairToWaiting(
-      options.streamStatus,
-      streamId,
-      options.statusEmitOptions,
-      options.logger,
-    );
+    repairToWaiting(options.streamStatus, streamId, options.logger);
   } else if (
     options.streamStatus.transitionToTerminal(
       streamId,
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      options.statusEmitOptions,
     )
   ) {
     markedFailed = true;

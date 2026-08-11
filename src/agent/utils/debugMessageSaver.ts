@@ -78,7 +78,7 @@ export async function maybeSaveDebugObject({
     const fs = executionId ? StorageFS : WorkspaceFS;
 
     if (executionId) await ensureRunDir(executionId);
-    await fs.writeJson(filePath, object);
+    await fs.write(filePath, JSON.stringify(object, null, 2));
 
     const debugFilePath = fs.fullPath(filePath);
     logger.info(`Saved ${objectType} object to ${debugFilePath}`);

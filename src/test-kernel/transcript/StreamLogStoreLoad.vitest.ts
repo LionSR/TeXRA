@@ -239,7 +239,7 @@ function mockStorage({
     ]);
   });
 
-  // KVStore reads raw strings through the Keyv adapter, so hand back JSON
+  // KVStore reads raw strings through StorageFS, so hand back JSON
   // text for its deserializer to parse.
   vi.spyOn(StorageFS, 'read').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);

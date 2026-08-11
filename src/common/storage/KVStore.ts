@@ -1,15 +1,13 @@
 /**
  * Generic StorageFS-backed key-value store.
  *
- * Keyv owns the key-value semantics; this module owns the StorageFS file layout.
- * Each key is stored as one JSON file, and custom Keyv serialization preserves
- * the existing plain-JSON on-disk format rather than Keyv's `{value, expires}`
- * envelope.
+ * Each key is one plain-JSON file, `encodeURIComponent(key).json`, in the
+ * store's directory; the directory listing is the index. Failures are never
+ * swallowed: a missing file reads as `undefined`, every other error throws to
+ * the caller, so a genuine I/O failure can never masquerade as absent data.
  */
 
 import * as path from 'node:path';
-
-import Keyv, { type KeyvStoreAdapter, type StoredData } from 'keyv';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { isFile } from '@utils/files/fsEntryType';
@@ -36,102 +34,56 @@ async function withMissingFallback<T>(
   }
 }
 
-function createStorageStore(dir: string): KeyvStoreAdapter {
-  return {
-    opts: {},
-    namespace: undefined,
-
-    // Keyv subscribes to store error events when present. StorageFS surfaces
-    // failures by rejecting the operation promise, so there is no event source.
-    on(): KeyvStoreAdapter {
-      return this;
-    },
-
-    async get<Value>(key: string): Promise<StoredData<Value> | undefined> {
-      const raw = await withMissingFallback(
-        () => StorageFS.read(keyToPath(dir, key)),
-        undefined,
-      );
-      // Keyv expects the serialized store value here and applies our
-      // `deserialize` hook before returning from KVStore.read().
-      return raw as StoredData<Value> | undefined;
-    },
-
-    async set(key: string, value: unknown): Promise<void> {
-      // Ensured on every write, not latched once: `dir` is storage-root
-      // relative, so a cached store outlives the root it first saw (workspace
-      // switch, test temp platform) and a latch would write into a directory
-      // that no longer exists. mkdir on an existing directory is cheap.
-      await StorageFS.ensureDir(dir);
-      // Keyv has already run the serializer, so StorageFS receives raw JSON.
-      // Atomic: a torn flow_{id}.json on an unclean exit makes the run fail to
-      // parse on resume and silently restart from scratch (losing applied edits).
-      await StorageFS.writeAtomic(keyToPath(dir, key), value as string);
-    },
-
-    async delete(key: string): Promise<boolean> {
-      return withMissingFallback(async () => {
-        await StorageFS.delete(keyToPath(dir, key));
-        return true;
-      }, false);
-    },
-
-    async clear(): Promise<void> {
-      await withMissingFallback(
-        () => StorageFS.delete(dir, { recursive: true }),
-        undefined,
-      );
-    },
-
-    async has(key: string): Promise<boolean> {
-      return StorageFS.exists(keyToPath(dir, key));
-    },
-  };
-}
-
 export interface KVStoreOptions {
   /**
    * Write JSON without indentation. Use this for high-churn machine-owned
    * stores where repeated pretty-printing adds avoidable CPU and disk I/O.
    */
   compactJson?: boolean;
-  /** Propagate adapter failures instead of converting them to false/missing. */
-  throwOnErrors?: boolean;
 }
 
 export class KVStore {
-  private readonly keyv: Keyv;
+  private readonly indent: number | undefined;
 
   constructor(
     private readonly dir: string,
     options: KVStoreOptions = {},
   ) {
-    const indent = options.compactJson ? undefined : 2;
-    this.keyv = new Keyv({
-      store: createStorageStore(dir),
-      // The directory is the namespace; keys are stored literally.
-      namespace: undefined,
-      useKeyPrefix: false,
-      throwOnErrors: options.throwOnErrors,
-      serialize: (data) => JSON.stringify(data.value, null, indent),
-      deserialize: (raw) => ({ value: JSON.parse(raw) }),
-    });
+    this.indent = options.compactJson ? undefined : 2;
   }
 
   async read<T = unknown>(key: string): Promise<T | undefined> {
-    return this.keyv.get<T>(key);
+    const raw = await withMissingFallback(
+      () => StorageFS.read(keyToPath(this.dir, key)),
+      undefined,
+    );
+    if (raw === undefined) return undefined;
+    return JSON.parse(raw) as T;
   }
 
   async write<T = unknown>(key: string, value: T): Promise<void> {
-    await this.keyv.set(key, value);
+    // Ensured on every write, not latched once: `dir` is storage-root
+    // relative, so a cached store outlives the root it first saw (workspace
+    // switch, test temp platform) and a latch would write into a directory
+    // that no longer exists. mkdir on an existing directory is cheap.
+    await StorageFS.ensureDir(this.dir);
+    // Atomic: a torn flow_{id}.json on an unclean exit makes the run fail to
+    // parse on resume and silently restart from scratch (losing applied edits).
+    await StorageFS.writeAtomic(
+      keyToPath(this.dir, key),
+      JSON.stringify(value, null, this.indent),
+    );
   }
 
   async delete(key: string): Promise<void> {
-    await this.keyv.delete(key);
+    await withMissingFallback(
+      () => StorageFS.delete(keyToPath(this.dir, key)),
+      undefined,
+    );
   }
 
   async exists(key: string): Promise<boolean> {
-    return this.keyv.has(key);
+    return StorageFS.exists(keyToPath(this.dir, key));
   }
 
   async modifiedAt(key: string): Promise<number | undefined> {
@@ -153,6 +105,9 @@ export class KVStore {
   }
 
   async deleteDir(): Promise<void> {
-    await this.keyv.clear();
+    await withMissingFallback(
+      () => StorageFS.delete(this.dir, { recursive: true }),
+      undefined,
+    );
   }
 }
