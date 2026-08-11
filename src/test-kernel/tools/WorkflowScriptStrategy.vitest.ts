@@ -379,11 +379,17 @@ function controllableRunAgent(config: {
       attemptCount += 1;
       const thisAttempt = attemptCount;
       const execId = execIdForAttempt(thisAttempt);
-      reportCost = (cost) => hooks.onCost(invocation, cost);
+      // The production runner charges both channels from one callback: the
+      // strategy's tracker (parent billing) and the engine's snapshot (per-call
+      // spend on progress surfaces). The fake mirrors that pairing.
+      reportCost = (cost) => {
+        hooks.onCost(invocation, cost);
+        invocation.report?.({ costUsd: cost });
+      };
       invocation.report?.({ childExecutionId: execId });
       gateFor(thisAttempt).resolve();
       const attemptCost = config.attemptCosts?.[thisAttempt - 1];
-      if (attemptCost !== undefined) hooks.onCost(invocation, attemptCost);
+      if (attemptCost !== undefined) reportCost(attemptCost);
       if (config.succeedAtAttempt !== thisAttempt) {
         // Hang until a control action aborts this attempt (skip/retry).
         await new Promise<never>((_, reject) => {

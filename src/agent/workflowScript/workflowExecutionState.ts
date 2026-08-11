@@ -90,6 +90,16 @@ export class WorkflowExecutionState {
     return structuredClone(this.#snapshot);
   }
 
+  /**
+   * Spend recorded for one call across every physical attempt it made. This
+   * class already owns per-call cost (see {@link reportAttempt}); progress
+   * events read it here rather than accumulating a second total from the same
+   * runner callbacks.
+   */
+  callCostUsd(id: string): number | undefined {
+    return this.#call(id).costUsd;
+  }
+
   enterStage(title: string): void {
     if (this.#sealed) throw new Error('Workflow execution state is sealed.');
     let nextIndex = this.#snapshot.stages.findIndex(

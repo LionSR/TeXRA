@@ -12,11 +12,7 @@ import {
   type WorkflowCallIdentity,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
-import {
-  WorkflowScriptFilesSchema,
-  type WorkflowScriptFiles,
-} from '@shared/schemas/workflowScriptFiles';
-import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
+import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { isNonEmptyString, onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -25,6 +21,7 @@ import { runScriptInSandbox } from './sandbox';
 import { WorkflowExecutionState } from './workflowExecutionState';
 import {
   WORKFLOW_SKIPPED_RESULT,
+  WorkflowAgentCallOptionsSchema,
   normalizeWorkflowScriptPhaseTitle,
   type WorkflowAgentCallOptions,
   type WorkflowControlAction,
@@ -70,28 +67,11 @@ const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 80;
-const STRING_AGENT_OPTION_FIELDS = [
-  'id',
-  'label',
-  'phase',
-  'agentName',
-  'model',
-] as const;
-const FILE_AGENT_OPTION_FIELDS = [
-  'inputFiles',
-  'contextFiles',
-  'mediaFiles',
-] as const;
-const WORKFLOW_AGENT_OPTION_FIELDS = new Set<string>([
-  ...STRING_AGENT_OPTION_FIELDS,
-  'schema',
-  ...FILE_AGENT_OPTION_FIELDS,
-]);
 
 /** Progress-only attempt facts shared by every settled `agent:end` outcome. */
 type WorkflowScriptAttemptMetadata = Pick<
   Extract<WorkflowScriptEvent, { type: 'agent:end'; outcome: 'completed' }>,
-  'durationMs' | 'model' | 'childStreamId'
+  'durationMs' | 'model' | 'childStreamId' | 'costUsd'
 >;
 
 /** The two snapshot statuses an `agent:end` failure can terminalize a call with. */
@@ -456,12 +436,19 @@ export async function runWorkflowScript(
         'agent(prompt, options?) requires a non-empty string prompt.',
       );
     }
-    let callOptions: WorkflowAgentCallOptions;
-    try {
-      callOptions = normalizeAgentOptions(rawOptions);
-    } catch (error) {
-      throw contractFault(error);
+    // Arguments crossed the bridge as JSON text (see sandbox.ts marshalArgs),
+    // so `rawOptions` is already plain, accessor-free host data, and the parse
+    // below builds the fresh object the call carries onward. Only the fields
+    // the call actually supplied travel with it: an option the guest omitted
+    // stays absent, so a spurious empty list can never change the journal key
+    // of an otherwise identical call.
+    const parsedOptions = WorkflowAgentCallOptionsSchema.safeParse(
+      rawOptions ?? {},
+    );
+    if (!parsedOptions.success) {
+      throw contractFault(new Error(parsedOptions.error.issues[0].message));
     }
+    const callOptions: WorkflowAgentCallOptions = parsedOptions.data;
     const index = callCounter;
     callCounter += 1;
 
@@ -700,11 +687,18 @@ export async function runWorkflowScript(
     let resolvedModel: string | undefined;
     let childStreamId: StreamTabId | undefined;
     let startEmitted = false;
-    const attemptMetadata = (): WorkflowScriptAttemptMetadata => ({
-      ...(resolvedModel !== undefined && { model: resolvedModel }),
-      ...(childStreamId !== undefined && { childStreamId }),
-      durationMs: Date.now() - startedAt,
-    });
+    const attemptMetadata = (): WorkflowScriptAttemptMetadata => {
+      // Cost is read from the snapshot rather than re-accumulated here: the
+      // runner reports it through `report()`, which the execution state already
+      // folds into one per-call total across attempts.
+      const costUsd = executionState.callCostUsd(progressId);
+      return {
+        ...(resolvedModel !== undefined && { model: resolvedModel }),
+        ...(childStreamId !== undefined && { childStreamId }),
+        ...(costUsd !== undefined && { costUsd }),
+        durationMs: Date.now() - startedAt,
+      };
+    };
     // The execution snapshot solely owns the queued fact (QUEUED status); no
     // event duplicates it.
     executionState.queueCall(progressId);
@@ -934,125 +928,139 @@ export async function runWorkflowScript(
     }
   }
 
-  const argsJson = serializeBridgeValue(options.args, 'Workflow args');
-  const files = WorkflowScriptFilesSchema.parse(options.files ?? {});
-  const filesJson = stableStringify(files);
-  const abortFromParent = () => runAbort.abort(options.signal?.reason);
-  const detachAbortFromParent = onAbort(options.signal, abortFromParent);
-
   let result: unknown;
   let scriptFailure: { readonly error: unknown } | undefined;
+  // Everything from launch preparation onward runs inside one try so the
+  // terminal snapshot is always written: an unserializable `args` value, an
+  // invalid `files` option, or a bridge-serialization fault used to escape
+  // before `finish()` and leave the persisted snapshot permanently non-terminal
+  // — the state a host reads back as a run still in flight.
   try {
-    result = await runScriptInSandbox(
-      body,
-      {
-        asyncFns: {
-          agent: async (args) => {
-            const invocation = agentPrimitive(args[0], args[1]);
-            pendingAgentCalls.add(invocation);
-            try {
-              return await invocation;
-            } finally {
-              pendingAgentCalls.delete(invocation);
-            }
+    const argsJson = serializeBridgeValue(options.args, 'Workflow args');
+    const files = WorkflowScriptFilesSchema.parse(options.files ?? {});
+    const filesJson = stableStringify(files);
+    const abortFromParent = () => runAbort.abort(options.signal?.reason);
+    const detachAbortFromParent = onAbort(options.signal, abortFromParent);
+
+    try {
+      result = await runScriptInSandbox(
+        body,
+        {
+          asyncFns: {
+            agent: async (args) => {
+              const invocation = agentPrimitive(args[0], args[1]);
+              pendingAgentCalls.add(invocation);
+              try {
+                return await invocation;
+              } finally {
+                pendingAgentCalls.delete(invocation);
+              }
+            },
           },
+          syncFns: {
+            log: (args) => {
+              emit({ type: 'log', message: String(args[0]) });
+              return undefined;
+            },
+            phase: (args) => {
+              const nextPhase = normalizeWorkflowScriptPhaseTitle(
+                String(args[0]),
+              );
+              try {
+                executionState.enterStage(nextPhase);
+              } catch (error) {
+                throw contractFault(error);
+              }
+              const { phaseIndex, phaseTotal } = phaseContextFor(nextPhase);
+              emit({
+                type: 'phase',
+                title: nextPhase,
+                ...(phaseIndex !== undefined && {
+                  index: phaseIndex,
+                  total: phaseTotal,
+                }),
+              });
+              return undefined;
+            },
+          },
+          argsJson,
+          filesJson,
+          realmPreludes: [ORCHESTRATION_PRELUDE],
         },
-        syncFns: {
-          log: (args) => {
-            emit({ type: 'log', message: String(args[0]) });
-            return undefined;
-          },
-          phase: (args) => {
-            const nextPhase = normalizeWorkflowScriptPhaseTitle(
-              String(args[0]),
-            );
-            try {
-              executionState.enterStage(nextPhase);
-            } catch (error) {
-              throw contractFault(error);
-            }
-            const { phaseIndex, phaseTotal } = phaseContextFor(nextPhase);
-            emit({
-              type: 'phase',
-              title: nextPhase,
-              ...(phaseIndex !== undefined && {
-                index: phaseIndex,
-                total: phaseTotal,
-              }),
-            });
-            return undefined;
-          },
-        },
-        argsJson,
-        filesJson,
-        realmPreludes: [ORCHESTRATION_PRELUDE],
-      },
-      {
-        timeoutMs,
-        filename: `${meta.name}.workflow.js`,
-        signal: options.signal,
-        // The sandbox reports the timeout to the caller with the precise
-        // error; this reason only tells in-flight calls why they stopped.
-        onTimeout: () =>
-          runAbort.abort(
-            new WorkflowRunAbortError(
-              `Workflow run aborted: the script exceeded its ${timeoutMs}ms wall clock.`,
-              { kind: 'timeout' },
+        {
+          timeoutMs,
+          filename: `${meta.name}.workflow.js`,
+          signal: options.signal,
+          // The sandbox reports the timeout to the caller with the precise
+          // error; this reason only tells in-flight calls why they stopped.
+          onTimeout: () =>
+            runAbort.abort(
+              new WorkflowRunAbortError(
+                `Workflow run aborted: the script exceeded its ${timeoutMs}ms wall clock.`,
+                { kind: 'timeout' },
+              ),
             ),
-          ),
-      },
-    );
-  } catch (error) {
-    scriptFailure = { error };
-  } finally {
-    detachAbortFromParent();
-    // Abort unconditionally once the sandbox returns. This stops in-flight
-    // work the script abandoned and makes agentPrimitive reject any late call.
-    // A fault that already aborted the run keeps its reason: the controller
-    // holds the first one.
-    runAbort.abort(
-      new WorkflowRunAbortError(
-        'Workflow script settled; agent() calls it left in flight were cancelled.',
-        { kind: 'settlement-cleanup' },
-      ),
-    );
-    if (pendingAgentCalls.size > 0) {
-      // The script finished (or threw) with agent() calls still in flight
-      // that it never awaited: wait for settlement so the returned journal
-      // is final and nothing runs on after the workflow. The drain is
-      // bounded — a runner that ignores the abort must not extend the run
-      // past its timeout by more than the grace period; stragglers beyond
-      // it are orphaned (their journal entries may be lost, which resume
-      // treats as a retry).
-      await pTimeout(Promise.allSettled([...pendingAgentCalls]), {
-        milliseconds: DRAIN_GRACE_MS,
-        fallback: () => [],
-      });
+        },
+      );
+    } catch (error) {
+      scriptFailure = { error };
+    } finally {
+      detachAbortFromParent();
+      // Abort unconditionally once the sandbox returns. This stops in-flight
+      // work the script abandoned and makes agentPrimitive reject any late call.
+      // A fault that already aborted the run keeps its reason: the controller
+      // holds the first one.
+      runAbort.abort(
+        new WorkflowRunAbortError(
+          'Workflow script settled; agent() calls it left in flight were cancelled.',
+          { kind: 'settlement-cleanup' },
+        ),
+      );
+      if (pendingAgentCalls.size > 0) {
+        // The script finished (or threw) with agent() calls still in flight
+        // that it never awaited: wait for settlement so the returned journal
+        // is final and nothing runs on after the workflow. The drain is
+        // bounded — a runner that ignores the abort must not extend the run
+        // past its timeout by more than the grace period; stragglers beyond
+        // it are orphaned (their journal entries may be lost, which resume
+        // treats as a retry).
+        await pTimeout(Promise.allSettled([...pendingAgentCalls]), {
+          milliseconds: DRAIN_GRACE_MS,
+          fallback: () => [],
+        });
+      }
     }
+  } catch (error) {
+    // A launch-time fault never reaches the sandbox, so it is this run's
+    // outcome; an inner rejection already recorded its own.
+    scriptFailure ??= { error };
+  } finally {
+    // Stop admitting journal commits before writing the terminal snapshot. An
+    // admitted persistence callback is opaque and cannot be cancelled safely,
+    // so it must settle even after the runner drain grace expires. If it never
+    // settles, the run deliberately remains unsealed rather than persisting a
+    // terminal snapshot that the callback could later invalidate.
+    await journalCommitFence.sealAndFlush();
+
+    const succeeded =
+      scriptFailure === undefined && firstFatalFault === undefined;
+    let terminalLifecycle: 'completed' | 'failed' | 'cancelled' =
+      WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
+    if (succeeded) {
+      terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.COMPLETED;
+    } else if (firstFatalFault === undefined && options.signal?.aborted) {
+      terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED;
+    }
+    const terminalError = firstFatalFault ?? scriptFailure?.error;
+    // Neither call below can throw, so this block never masks the outcome the
+    // caller must see.
+    executionState.finish(
+      terminalLifecycle,
+      terminalError === undefined ? undefined : toErrorMessage(terminalError),
+    );
+    await snapshotWriter.flush();
   }
 
-  // Stop admitting journal commits before writing the terminal snapshot. An
-  // admitted persistence callback is opaque and cannot be cancelled safely, so
-  // it must settle even after the runner drain grace expires. If it never
-  // settles, the run deliberately remains unsealed rather than persisting a
-  // terminal snapshot that the callback could later invalidate.
-  await journalCommitFence.sealAndFlush();
-
-  const succeeded =
-    scriptFailure === undefined && firstFatalFault === undefined;
-  let terminalLifecycle: 'completed' | 'failed' | 'cancelled' =
-    WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
-  if (succeeded) {
-    terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.COMPLETED;
-  } else if (firstFatalFault === undefined && options.signal?.aborted) {
-    terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED;
-  }
-  const terminalError = firstFatalFault ?? scriptFailure?.error;
-  executionState.finish(
-    terminalLifecycle,
-    terminalError === undefined ? undefined : toErrorMessage(terminalError),
-  );
-  await snapshotWriter.flush();
   snapshotWriter.throwIfFailed();
   snapshotWriter.seal();
 
@@ -1064,10 +1072,8 @@ export async function runWorkflowScript(
   if (scriptFailure) throw scriptFailure.error;
 
   return {
-    meta,
     result,
     journal: [...journal.values()].toSorted((a, b) => a.index - b.index),
-    agentCalls: callCounter,
     snapshot: executionState.snapshot(),
   };
 }
@@ -1091,108 +1097,4 @@ function serializeBridgeValue(
     );
   }
   return payload;
-}
-
-function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
-  if (raw != null && (typeof raw !== 'object' || Array.isArray(raw))) {
-    throw new Error('agent() options must be a plain object.');
-  }
-  // Arguments crossed the bridge as JSON text (see sandbox.ts marshalArgs),
-  // so `raw` is already plain, accessor-free host data; the clone here is a
-  // cheap defensive copy that also keeps this function safe if it is ever
-  // called with a value that did not come through the bridge.
-  const source = structuredClone(raw ?? {}) as Record<string, unknown>;
-  const unknownField = Object.keys(source).find(
-    (field) => !WORKFLOW_AGENT_OPTION_FIELDS.has(field),
-  );
-  if (unknownField !== undefined) {
-    throw new Error(
-      `agent() option "${unknownField}" is not recognized. Allowed options: ${[...WORKFLOW_AGENT_OPTION_FIELDS].join(', ')}.`,
-    );
-  }
-  const common: {
-    id?: string;
-    label?: string;
-    phase?: string;
-    agentName?: string;
-    model?: string;
-  } = {};
-  for (const field of STRING_AGENT_OPTION_FIELDS) {
-    const value = source[field];
-    if (value === undefined) continue;
-    const requiresContent =
-      field === 'id' || field === 'model' || field === 'phase';
-    if (typeof value !== 'string' || (requiresContent && !value.trim())) {
-      const requirement = requiresContent ? 'a non-empty string' : 'a string';
-      throw new Error(`agent() option "${field}" must be ${requirement}.`);
-    }
-    const normalized =
-      requiresContent || field === 'label' ? value.trim() : value;
-    common[field] =
-      field === 'phase'
-        ? normalizeWorkflowScriptPhaseTitle(normalized)
-        : normalized;
-  }
-  let schema: Record<string, unknown> | undefined;
-  if (Object.hasOwn(source, 'schema')) {
-    const rawSchema = source.schema;
-    if (
-      rawSchema === null ||
-      typeof rawSchema !== 'object' ||
-      Array.isArray(rawSchema)
-    ) {
-      throw new Error(
-        'agent() option "schema" must be a plain JSON Schema object.',
-      );
-    }
-    try {
-      schema = normalizeStructuredOutputSchema(
-        rawSchema as Record<string, unknown>,
-      ).jsonSchema;
-    } catch (error) {
-      throw new Error(
-        `agent() option "schema" is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-
-  // Only the fields the call actually supplied travel onward: the schema
-  // prefaults the other lists to [], and a spurious empty list would change
-  // the journal key of an otherwise identical call.
-  const presentFileFields = FILE_AGENT_OPTION_FIELDS.filter(
-    (field) => source[field] !== undefined,
-  );
-  const requestedFiles: Record<string, unknown> = {};
-  for (const field of presentFileFields) requestedFiles[field] = source[field];
-  let files: WorkflowScriptFiles;
-  try {
-    files = WorkflowScriptFilesSchema.parse(requestedFiles);
-  } catch (error) {
-    throw new Error(
-      `agent() options "inputFiles", "contextFiles", and "mediaFiles" must be arrays of non-empty strings: ${toErrorMessage(error)}`,
-    );
-  }
-
-  if (schema !== undefined) {
-    if (presentFileFields.length > 0) {
-      throw new Error(
-        'agent() structured-output calls cannot use file options; inputFiles, contextFiles, and mediaFiles belong to workflow-agent calls.',
-      );
-    }
-    if (common.agentName === undefined) {
-      throw new Error(
-        'agent() structured-output calls must name a tool-use agent with "agentName".',
-      );
-    }
-    return {
-      ...common,
-      agentName: common.agentName,
-      schema,
-    };
-  }
-  const fileOptions: {
-    [K in (typeof FILE_AGENT_OPTION_FIELDS)[number]]?: WorkflowScriptFiles[K];
-  } = {};
-  for (const field of presentFileFields) fileOptions[field] = files[field];
-  return { ...common, ...fileOptions };
 }

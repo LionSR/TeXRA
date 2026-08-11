@@ -8,6 +8,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
+import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const WorkflowScriptPhaseTitleSchema = z
   .string()
@@ -20,10 +22,7 @@ export function normalizeWorkflowScriptPhaseTitle(title: string): string {
 }
 
 const WorkflowScriptPhaseSchema = z.union([
-  z.strictObject({
-    title: WorkflowScriptPhaseTitleSchema,
-    detail: z.string().optional(),
-  }),
+  z.strictObject({ title: WorkflowScriptPhaseTitleSchema }),
   WorkflowScriptPhaseTitleSchema.transform((title) => ({ title })),
 ]);
 
@@ -36,7 +35,6 @@ export const WorkflowScriptMetaSchema = z
   .strictObject({
     name: z.string().min(1),
     description: z.string().min(1),
-    whenToUse: z.string().optional(),
     phases: z.array(WorkflowScriptPhaseSchema).optional(),
     /**
      * Declarative task plan. When present, every agent() call references one
@@ -86,52 +84,165 @@ export const WorkflowScriptMetaSchema = z
 
 export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
-interface WorkflowAgentCallBaseOptions {
+/**
+ * One string `agent()` option and the copy it rejects with. `content` fields
+ * (`id`, `phase`, `model`) are trimmed and must carry text, `trimmed` fields
+ * (`label`) may end up blank, and `verbatim` fields (`agentName`) are taken as
+ * written — the three forms the journal key has always recorded.
+ */
+function agentOptionString(
+  field: string,
+  form: 'content' | 'trimmed' | 'verbatim',
+): z.ZodString {
+  const message = `agent() option "${field}" must be ${form === 'content' ? 'a non-empty string' : 'a string'}.`;
+  const text = z.string({ error: message });
+  if (form === 'verbatim') return text;
+  return form === 'content' ? text.trim().min(1, message) : text.trim();
+}
+
+const AGENT_FILE_OPTIONS_ERROR =
+  'agent() options "inputFiles", "contextFiles", and "mediaFiles" must be arrays of non-empty strings.';
+
+/**
+ * File option list. Deliberately NOT
+ * {@link @shared/schemas/workflowScriptFiles.WorkflowScriptFilesSchema}: that
+ * one prefaults the absent lists to `[]`, and a spurious empty list would
+ * change the journal key of an otherwise identical call.
+ */
+const AgentCallFileListSchema = z
+  .array(
+    z
+      .string({ error: AGENT_FILE_OPTIONS_ERROR })
+      .trim()
+      .min(1, AGENT_FILE_OPTIONS_ERROR),
+    { error: AGENT_FILE_OPTIONS_ERROR },
+  )
+  .readonly();
+
+/**
+ * Plain JSON Schema object describing the structured result a call must
+ * produce, normalized to the same canonical form the tool-use terminal tool is
+ * built from. Its presence routes the call to a tool-use agent that finishes by
+ * submitting a validated value, surfaced on the result's `.structured`.
+ * Participates in the journal key, so resume stays correct.
+ */
+const AgentCallStructuredSchemaSchema = z
+  .record(z.string(), z.unknown(), {
+    error: 'agent() option "schema" must be a plain JSON Schema object.',
+  })
+  .transform((jsonSchema, context) => {
+    try {
+      return normalizeStructuredOutputSchema(jsonSchema).jsonSchema;
+    } catch (error) {
+      context.addIssue({
+        code: 'custom',
+        message: `agent() option "schema" is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
+      });
+      return z.NEVER;
+    }
+  });
+
+/**
+ * Every option the script-facing `agent()` primitive accepts. This shape is the
+ * single source of truth: the allowed-field list in the rejection copy, the
+ * per-field rules, and {@link WorkflowAgentCallOptions} all derive from it.
+ */
+const workflowAgentCallOptionShape = {
   /**
    * Stable logical call id and journal disambiguator. Dynamic calls use it as
    * their persisted progress id; when omitted they fall back to call order.
    */
-  id?: string;
+  id: agentOptionString('id', 'content').optional(),
   /** Display label for progress UIs. */
-  label?: string;
+  label: agentOptionString('label', 'trimmed').optional(),
   /** Progress group; defaults to the `phase()` active at call time. */
-  phase?: string;
-  /** Available model short name for this call; otherwise follows delegation policy. */
-  model?: string;
-}
-
-/** A script call to a file-editing workflow agent. */
-interface WorkflowEditAgentCallOptions extends WorkflowAgentCallBaseOptions {
+  phase: agentOptionString('phase', 'content').optional(),
   /** Named TeXRA agent to run; defaults to the host runner's choice. */
-  agentName?: string;
-  schema?: never;
+  agentName: agentOptionString('agentName', 'verbatim').optional(),
+  /** Available model short name for this call; otherwise follows delegation policy. */
+  model: agentOptionString('model', 'content').optional(),
+  schema: AgentCallStructuredSchemaSchema.optional(),
   /** Workspace or run-storage files the workflow agent may rewrite. */
-  inputFiles?: WorkflowScriptFiles['inputFiles'];
+  inputFiles: AgentCallFileListSchema.optional(),
   /** Read-only supporting documents for the workflow agent. */
-  contextFiles?: WorkflowScriptFiles['contextFiles'];
+  contextFiles: AgentCallFileListSchema.optional(),
   /** Read-only visual or audio inputs for the workflow agent. */
-  mediaFiles?: WorkflowScriptFiles['mediaFiles'];
-}
+  mediaFiles: AgentCallFileListSchema.optional(),
+};
+
+const WORKFLOW_AGENT_OPTION_FIELDS = Object.keys(workflowAgentCallOptionShape);
+
+/**
+ * Field rules plus the two cross-field rules that separate a structured
+ * tool-use call from a file-editing workflow call. Reported as a flat issue
+ * list so the guest sees one precise sentence; the union below only re-states
+ * the outcome as a type.
+ */
+const WorkflowAgentCallOptionsInputSchema = z
+  .strictObject(workflowAgentCallOptionShape, {
+    error: (issue) =>
+      issue.code === 'unrecognized_keys'
+        ? `agent() option "${issue.keys[0]}" is not recognized. Allowed options: ${WORKFLOW_AGENT_OPTION_FIELDS.join(', ')}.`
+        : 'agent() options must be a plain object.',
+  })
+  .superRefine((options, context) => {
+    if (options.schema === undefined) return;
+    if (
+      options.inputFiles !== undefined ||
+      options.contextFiles !== undefined ||
+      options.mediaFiles !== undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'agent() structured-output calls cannot use file options; inputFiles, contextFiles, and mediaFiles belong to workflow-agent calls.',
+      });
+    }
+    if (options.agentName === undefined) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'agent() structured-output calls must name a tool-use agent with "agentName".',
+      });
+    }
+  });
 
 /** A script call to a tool-use agent that returns a structured value. */
-interface WorkflowStructuredAgentCallOptions extends WorkflowAgentCallBaseOptions {
+const WorkflowStructuredAgentCallOptionsSchema = z.strictObject({
+  ...workflowAgentCallOptionShape,
   /** Structured calls must name a tool-use agent explicitly. */
-  agentName: string;
-  inputFiles?: never;
-  contextFiles?: never;
-  mediaFiles?: never;
-  /**
-   * Plain JSON Schema object describing the structured result the call must
-   * produce. Its presence routes the call to a tool-use agent that finishes by
-   * submitting a validated value, surfaced on the result's `.structured`.
-   * Participates in the journal key, so resume stays correct.
-   */
-  schema: Record<string, unknown>;
-}
+  agentName: z.string(),
+  schema: z.record(z.string(), z.unknown()),
+  inputFiles: z.never().optional(),
+  contextFiles: z.never().optional(),
+  mediaFiles: z.never().optional(),
+});
 
-/** Options accepted by the script-facing `agent()` primitive. */
-export type WorkflowAgentCallOptions =
-  WorkflowEditAgentCallOptions | WorkflowStructuredAgentCallOptions;
+/** A script call to a file-editing workflow agent. */
+const WorkflowEditAgentCallOptionsSchema = z.strictObject({
+  ...workflowAgentCallOptionShape,
+  schema: z.never().optional(),
+});
+
+/**
+ * Options accepted by the script-facing `agent()` primitive.
+ *
+ * The pipe target restates the validated result as the two mutually exclusive
+ * call kinds so `options.schema !== undefined` narrows `agentName` to a string
+ * at every consumer. The refinements above already decided which arm applies,
+ * so it never rejects and never reaches the guest as an error.
+ */
+export const WorkflowAgentCallOptionsSchema =
+  WorkflowAgentCallOptionsInputSchema.pipe(
+    z.union([
+      WorkflowStructuredAgentCallOptionsSchema,
+      WorkflowEditAgentCallOptionsSchema,
+    ]),
+  );
+
+export type WorkflowAgentCallOptions = z.infer<
+  typeof WorkflowAgentCallOptionsSchema
+>;
 
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number; also the journal key position. */
@@ -260,6 +371,13 @@ export type WorkflowScriptEvent =
       outcome: 'completed';
       /** Child model resolved by the runner (live calls only). */
       model?: string;
+      /**
+       * Spend the execution snapshot has recorded for this call across every
+       * physical attempt it made. The snapshot is the one owner of per-call
+       * cost; this restates it on the event so a progress projection never
+       * accumulates a second, divergent total.
+       */
+      costUsd?: number;
       /** Host-measured wall time of the agent() call (live calls only). */
       durationMs: number;
     })
@@ -269,6 +387,8 @@ export type WorkflowScriptEvent =
       error: string;
       /** Child model resolved by the runner, when resolution succeeded. */
       model?: string;
+      /** Snapshot-recorded spend for this call, when an attempt reported any. */
+      costUsd?: number;
       /** Host-measured wall time, when an agent attempt began. */
       durationMs?: number;
     })
@@ -278,6 +398,8 @@ export type WorkflowScriptEvent =
       reason: 'user';
       /** Child model resolved before the user stopped the attempt, if known. */
       model?: string;
+      /** Snapshot-recorded spend for the attempt the user stopped. */
+      costUsd?: number;
       /** Host-measured wall time before the user stopped the attempt. */
       durationMs: number;
     });
@@ -357,13 +479,10 @@ export interface WorkflowScriptRunOptions {
 }
 
 export interface WorkflowScriptRunResult {
-  meta: WorkflowScriptMeta;
   /** The script body's return value. */
   result: unknown;
   /** Completed calls in index order, for resume. Failed calls are omitted. */
   journal: WorkflowJournalEntry[];
-  /** Total agent() calls issued (cached and live). */
-  agentCalls: number;
   /** Final canonical execution snapshot. */
   snapshot: WorkflowExecutionSnapshot;
 }

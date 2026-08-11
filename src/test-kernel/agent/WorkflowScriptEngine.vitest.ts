@@ -85,14 +85,11 @@ describe('parseWorkflowScript', () => {
     const { meta } = parseWorkflowScript(`export const meta = {
   name: 'phase-shorthand',
   description: 'accepts the natural phase-title form',
-  phases: ['Draft', { title: 'Merge', detail: 'Combine outputs' }],
+  phases: ['Draft', { title: 'Merge' }],
 }
 return null`);
 
-    expect(meta.phases).toEqual([
-      { title: 'Draft' },
-      { title: 'Merge', detail: 'Combine outputs' },
-    ]);
+    expect(meta.phases).toEqual([{ title: 'Draft' }, { title: 'Merge' }]);
   });
 
   it('validates the declarative task plan as part of workflow metadata', () => {
@@ -347,17 +344,17 @@ return await agent('inspect', {
   });
 
   it('runs a script end-to-end with agent calls and args', async () => {
+    const runner = vi.fn(echoRunner);
     const run = await runScript(
       `
 const a = await agent('alpha')
 const b = await agent('beta:' + args.suffix)
 return [a, b]`,
-      { args: { suffix: 'S' } },
+      { args: { suffix: 'S' }, runAgent: runner },
     );
     expect(run.result).toEqual(['result:alpha', 'result:beta:S']);
-    expect(run.agentCalls).toBe(2);
+    expect(runner).toHaveBeenCalledTimes(2);
     expect(run.journal).toHaveLength(2);
-    expect(run.meta.name).toBe('test-flow');
   });
 
   it('exposes launch files as immutable script context', async () => {
@@ -715,7 +712,6 @@ return out.length`,
     expect(maxInFlight).toBe(4);
     expect(completed).toBe(100);
     expect(run.result).toBe(100);
-    expect(run.agentCalls).toBe(100);
   });
 
   it('replays matching journal entries and re-runs edited calls', async () => {
@@ -1186,6 +1182,59 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
         { runAgent: runner },
       ),
     ).rejects.toThrow(/option "outputSchema" is not recognized/);
+  });
+
+  it('normalizes agent() options without synthesizing journal-key fields', async () => {
+    // The journal key is a stable hash of the normalized options, so an option
+    // the guest omitted must stay omitted: a prefaulted empty file list (or any
+    // other synthesized key) would silently invalidate every completed call of
+    // an otherwise identical resumed run.
+    const seen: WorkflowAgentInvocation[] = [];
+    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
+      seen.push(invocation);
+      return echoRunner(invocation);
+    });
+    // Only defined values reach stableStringify, so this is exactly the key set
+    // the journal identity is computed over.
+    const journaledOptionKeys = (index: number): string[] =>
+      Object.entries(seen[index]?.options ?? {})
+        .filter(([, value]) => value !== undefined)
+        .map(([key]) => key)
+        .toSorted();
+
+    await runScript(
+      `
+await agent('bare')
+await agent('files', { inputFiles: ['  draft.tex  '], label: '  ' })
+return await agent('structured', {
+  id: '  audit  ',
+  model: '  sonnet  ',
+  agentName: ' assistant ',
+  schema: { type: 'object' },
+})`,
+      {
+        runAgent: runner,
+        fingerprintAgentDependencies: async () => 'draft-v1',
+      },
+    );
+
+    expect(journaledOptionKeys(0)).toEqual([]);
+    expect(journaledOptionKeys(1)).toEqual(['inputFiles', 'label']);
+    // Only the supplied file role travels; the other two stay absent.
+    expect(seen[1]?.options.inputFiles).toEqual(['draft.tex']);
+    expect(seen[1]?.options.label).toBe('');
+    expect(journaledOptionKeys(2)).toEqual([
+      'agentName',
+      'id',
+      'model',
+      'schema',
+    ]);
+    expect(seen[2]?.options.id).toBe('audit');
+    expect(seen[2]?.options.model).toBe('sonnet');
+    // agentName is the one string option taken verbatim: it names a host agent,
+    // so a stray space must fail visibly at resolution rather than be repaired
+    // into a different journal identity.
+    expect(seen[2]?.options.agentName).toBe(' assistant ');
   });
 
   it('blocks Function-constructor escapes through injected primitives', async () => {

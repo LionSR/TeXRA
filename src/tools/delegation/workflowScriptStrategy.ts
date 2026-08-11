@@ -178,7 +178,6 @@ export function createWorkflowScriptStrategy(
           runAgent,
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
-          getCallCostUsd: (index) => attemptCost.costForCall(index),
           onActivity: runLog.add,
           onSnapshot: async (snapshot) => {
             lastSnapshot = snapshot;

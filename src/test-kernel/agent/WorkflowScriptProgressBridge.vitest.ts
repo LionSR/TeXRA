@@ -466,13 +466,13 @@ return await agent('Review the argument', { id: 'review-task' })`;
 await agent('First')
 return await agent('Second')`;
     const { trace, events } = recordingTrace();
-    const callCosts = new Map<number, number>();
+    // The runner reports spend the way production does; the engine folds it
+    // into the execution snapshot and stamps it on the terminal event.
     await runScript(trace, 'live-cost', script, {
-      runAgent: async (invocation) => {
-        callCosts.set(invocation.index, 0.05);
+      runAgent: async (invocation: WorkflowAgentInvocation) => {
+        invocation.report?.({ costUsd: 0.05 });
         return 'done';
       },
-      getCallCostUsd: (index) => callCosts.get(index),
     });
 
     expect(workflowCallEvent(events, 'First', 'completed')?.call).toMatchObject(
@@ -490,7 +490,6 @@ return await agent('Second')`;
     const replay = recordingTrace();
     await runScript(replay.trace, 'live-cost', script, {
       runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
-      getCallCostUsd: () => 0,
     });
 
     expect(
@@ -512,9 +511,9 @@ return await agent('Draft')`,
           invocation.report?.({
             childStreamId: 'draft@deepseekT#abcdef' as StreamTabId,
           });
+          invocation.report?.({ costUsd: 0.02 });
           return 'done';
         },
-        getCallCostUsd: () => 0.02,
         onActivity: (line) => activities.push(line),
       },
     );
@@ -581,7 +580,8 @@ return await agent('Late skip')`,
         runAgent: async (invocation: WorkflowAgentInvocation) => {
           invocation.report?.({
             model: 'kimiK2',
-            childExecutionId: 'lateskipskip' as ExecutionId,
+            childExecutionId: 'da7e5c1b' as ExecutionId,
+            costUsd: 0.04,
           });
           markStarted?.();
           return await new Promise<never>((_resolve, reject) => {
@@ -595,13 +595,12 @@ return await agent('Late skip')`,
         onControl: (handle) => {
           control = handle;
         },
-        getCallCostUsd: () => 0.04,
         onActivity: (line) => activities.push(line),
       },
     );
 
     await started;
-    control('lateskipskip' as ExecutionId, 'skip');
+    control('da7e5c1b' as ExecutionId, 'skip');
     await run;
 
     expect(
@@ -712,10 +711,9 @@ return await pending`,
 return await agent('Abort', { phase: 'Execution' })`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.report?.({ model: 'abort-model' });
+            invocation.report?.({ model: 'abort-model', costUsd: 0.06 });
             throw new WorkflowRunAbortError('fatal runner error');
           },
-          getCallCostUsd: () => 0.06,
           onActivity: (line) => activities.push(line),
         },
       ),
@@ -748,9 +746,6 @@ return await agent('Abort', { phase: 'Execution' })`,
     try {
       const { trace, events } = recordingTrace();
       const activities: string[] = [];
-      const getCallCostUsd = vi.fn((index: number) =>
-        index === 0 ? 0.03 : undefined,
-      );
       let markStarted: (() => void) | undefined;
       const started = new Promise<void>((resolve) => {
         markStarted = resolve;
@@ -765,11 +760,11 @@ return 'guest success'`,
           runAgent: async (invocation: WorkflowAgentInvocation) => {
             invocation.report?.({
               childStreamId: 'orphaned@model#abcdef' as StreamTabId,
+              costUsd: 0.03,
             });
             markStarted?.();
             return await new Promise<never>(() => undefined);
           },
-          getCallCostUsd,
           onActivity: (line) => activities.push(line),
         },
       );
@@ -792,7 +787,6 @@ return 'guest success'`,
         id: phaseId,
         status: RUN_OUTCOME.FAILED,
       });
-      expect(getCallCostUsd).toHaveBeenCalledWith(0);
       expect(activities).toContain('Running: Orphaned');
       expect(activities).toContain(
         'Failed: Orphaned · $0.030 — The workflow ended before this call completed.',

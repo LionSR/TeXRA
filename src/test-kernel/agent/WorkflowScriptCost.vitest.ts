@@ -173,24 +173,6 @@ return await agent('retry cost')`,
     ).toBe(0);
   });
 
-  it('reports live per-call spend across retries and duplicate keys', () => {
-    const retried = entry(0, workflowResult(0.5), 'duplicate');
-    const other = entry(1, workflowResult(0.4), 'duplicate');
-    const tracker = createWorkflowAttemptCostTracker();
-
-    expect(tracker.costForCall(0)).toBeUndefined();
-
-    tracker.record(retried, 0.1);
-    tracker.record(other, 0.4);
-    tracker.record(retried, 0.2);
-
-    // Every attempt at an index counts toward that call's live spend, unlike
-    // `total`, which discards all but the best value for a completed key.
-    expect(tracker.costForCall(0)).toBeCloseTo(0.3);
-    expect(tracker.costForCall(1)).toBeCloseTo(0.4);
-    expect(tracker.costForCall(2)).toBeUndefined();
-  });
-
   it('retains live spend when the final journal is malformed', () => {
     const tracker = createWorkflowAttemptCostTracker();
 
