@@ -29,11 +29,11 @@ const BASH_PREFIXES = {
   continuationPrefix: '  ',
 } as const;
 
-function bashLines(width = 76) {
+function bashLines() {
   return modalTextDisplayLines({
     ...BASH_PREFIXES,
     text: HEREDOC_COMMAND,
-    width,
+    width: 76,
   });
 }
 

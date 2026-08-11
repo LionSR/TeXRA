@@ -241,11 +241,12 @@ const cases: ContinuationCase[] = [
 ];
 
 describe('model handler continuation contract', () => {
-  for (const testCase of cases) {
-    it(`appends resumed text to the previous assistant turn for ${testCase.name}`, () => {
-      testCase.run();
-    });
-  }
+  it.each(cases)(
+    'appends resumed text to the previous assistant turn for $name',
+    ({ run }) => {
+      run();
+    },
+  );
 
   it('preserves OpenAI-family system continuation messages after resumed output', () => {
     const capabilities = {

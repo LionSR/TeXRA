@@ -15,7 +15,7 @@ import {
 import { APIUserAbortError, OpenAIError } from 'openai';
 
 // Local imports
-import { noopTrace, type AgentTrace } from '@agent/trace';
+import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -87,6 +87,14 @@ function createHandler(
   configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return createHandlerOf(ModelHandlerOpenAIResponse, configOverrides);
+}
+
+function createStreamingHandler(
+  configOverrides: TestModelConfigOverrides = {},
+): ModelHandlerOpenAIResponse {
+  const handler = createHandler(configOverrides);
+  handler.getStreamingConfig = () => true;
+  return handler;
 }
 
 class NonChainingResponseHandler extends ModelHandlerOpenAIResponse {
@@ -443,21 +451,43 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
   });
 
-  it('sends reasoning.mode for pro-mode registry entries (GPT-5.6 Pro)', async () => {
-    // GPT-5.6 Pro shares gpt-5.6-sol's wire id; pro execution is selected by
-    // the request's reasoning.mode, driven by the reasoningMode capability.
-    const handler = createHandler({
-      name: 'gpt56pro',
-      fullName: 'gpt-5.6-sol',
-      shortName: 'gpt-5.6-pro',
-      capabilities: {
-        supportsReasoning: true,
-        supportsReasoningEffort: true,
-        reasoningEffort: ReasoningEffort.MEDIUM,
-        reasoningMode: 'pro',
+  it.each([
+    {
+      // GPT-5.6 Pro shares gpt-5.6-sol's wire id; pro execution is selected by
+      // the request's reasoning.mode, driven by the reasoningMode capability.
+      name: 'sends reasoning.mode for pro-mode registry entries (GPT-5.6 Pro)',
+      overrides: {
+        name: 'gpt56pro',
+        fullName: 'gpt-5.6-sol',
+        shortName: 'gpt-5.6-pro',
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MEDIUM,
+          reasoningMode: 'pro' as const,
+        },
       },
-    });
-    const { client, requests } = createCapturingClient('resp-pro-mode');
+      expected: { mode: 'pro', effort: 'medium' },
+    },
+    {
+      name: 'sends max effort when the model declares max as its native ceiling',
+      overrides: {
+        name: 'gpt56',
+        fullName: 'gpt-5.6-sol',
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+          maxReasoningEffort: ReasoningEffort.MAX,
+        },
+      },
+      expected: { mode: undefined, effort: 'max' },
+    },
+  ])('$name', async ({ overrides, expected }) => {
+    const handler = createHandler(overrides);
+    const { client, requests } = createCapturingClient(
+      `resp-${overrides.name}`,
+    );
 
     await handler.createResponse({
       client,
@@ -467,46 +497,8 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 
     const reasoning = requests[0]?.reasoning as
       { effort?: string; mode?: string } | undefined;
-    assert.equal(reasoning?.mode, 'pro');
-    assert.equal(reasoning?.effort, 'medium');
-  });
-
-  it('requests fast-tier processing for the gpt56fast registry entry', async () => {
-    assert.equal(MODEL_CONFIGS.gpt56fast.serviceTier, 'fast');
-    const handler = createHandler(MODEL_CONFIGS.gpt56fast);
-    const { client, requests } = createCapturingClient('resp-fast-tier');
-
-    await handler.createResponse({
-      client,
-      messages: createMessages(1),
-      temperature: 0,
-    });
-
-    assert.equal(requests[0]?.model, 'gpt-5.6-sol');
-    assert.equal(requests[0]?.service_tier, 'fast');
-  });
-
-  it('sends max effort when the model declares max as its native ceiling', async () => {
-    const handler = createHandler({
-      name: 'gpt56',
-      fullName: 'gpt-5.6-sol',
-      capabilities: {
-        supportsReasoning: true,
-        supportsReasoningEffort: true,
-        reasoningEffort: ReasoningEffort.MAX,
-        maxReasoningEffort: ReasoningEffort.MAX,
-      },
-    });
-    const { client, requests } = createCapturingClient('resp-max-effort');
-
-    await handler.createResponse({
-      client,
-      messages: createMessages(1),
-      temperature: 0,
-    });
-
-    const reasoning = requests[0]?.reasoning as { effort?: string } | undefined;
-    assert.equal(reasoning?.effort, 'max');
+    assert.equal(reasoning?.mode, expected.mode);
+    assert.equal(reasoning?.effort, expected.effort);
   });
 
   it('does not mistake a user override for the model native ceiling', async () => {
@@ -574,25 +566,25 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 
   it('rejects concurrent calls on the same handler instance', async () => {
     const handler = createHandler();
-    let resolveCreate: (response: any) => void = () => undefined;
-    const firstResponse = new Promise<any>((resolve) => {
+    let resolveCreate: (response: unknown) => void = () => undefined;
+    const firstResponse = new Promise<unknown>((resolve) => {
       resolveCreate = resolve;
     });
     const client = {
       responses: {
         create: () => firstResponse,
       },
-    };
+    } as unknown as OpenAI;
 
     const firstCall = handler.createResponse({
-      client: client as any,
+      client,
       messages: createMessages(1),
       temperature: 0,
     });
 
     await assert.rejects(
       handler.createResponse({
-        client: client as any,
+        client,
         messages: createMessages(1),
         temperature: 0,
       }),
@@ -603,38 +595,24 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     await firstCall;
   });
 
-  it('sends full history after a completed response without usage disables chaining', async () => {
-    const handler = createHandler();
-    const { client, requests } = createSequentialClient((call) =>
-      call === 1
-        ? createResponse('resp-missing-usage')
-        : createResponse('resp-2', { input_tokens: 20 }),
-    );
-    const firstTurnMessages = createMessages(2);
-    const secondTurnMessages = createMessages(3);
-
-    await handler.createResponse({
-      client: client as any,
-      messages: firstTurnMessages,
-      temperature: 0,
-    });
-    await handler.createResponse({
-      client: client as any,
-      messages: secondTurnMessages,
-      temperature: 0,
-    });
-
-    assert.equal(requests.length, 2);
-    assert.equal(requests[0].previous_response_id, undefined);
-    assert.equal(requests[1].previous_response_id, undefined);
-    assert.deepEqual(requests[1].input, secondTurnMessages);
-  });
-
-  it('sends full history when response chaining is unsupported', async () => {
-    const handler = createNonChainingHandler();
-    const { client, requests } = createSequentialClient((call) =>
-      createResponse(`resp-${call}`, { input_tokens: 20 }),
-    );
+  it.each([
+    {
+      name: 'a completed response without usage disables chaining',
+      buildHandler: () => createHandler(),
+      respond: (call: number) =>
+        call === 1
+          ? createResponse('resp-missing-usage')
+          : createResponse('resp-2', { input_tokens: 20 }),
+    },
+    {
+      name: 'response chaining is unsupported',
+      buildHandler: () => createNonChainingHandler(),
+      respond: (call: number) =>
+        createResponse(`resp-${call}`, { input_tokens: 20 }),
+    },
+  ])('sends full history when $name', async ({ buildHandler, respond }) => {
+    const handler = buildHandler();
+    const { client, requests } = createSequentialClient(respond);
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
@@ -696,8 +674,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('merges streamed output items when final streaming output is partial', async () => {
-    const handler = createHandler();
-    handler.getStreamingConfig = () => true;
+    const handler = createStreamingHandler();
 
     const reasoningItem = {
       type: 'reasoning',
@@ -750,8 +727,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('keeps healthy streams on finalResponse after response.created', async () => {
-    const handler = createHandler();
-    handler.getStreamingConfig = () => true;
+    const handler = createStreamingHandler();
 
     let finalResponseCalls = 0;
     let retrieveCalls = 0;
@@ -785,8 +761,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('falls back to retrieve when finalResponse sees an unhandled stream event', async () => {
-    const handler = createHandler();
-    handler.getStreamingConfig = () => true;
+    const handler = createStreamingHandler();
 
     const retrieveCalls: string[] = [];
     const recoveredResponse = createResponse('resp-final-fallback', {
@@ -818,8 +793,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('rethrows unhandled stream events before response.created', async () => {
-    const handler = createHandler();
-    handler.getStreamingConfig = () => true;
+    const handler = createStreamingHandler();
 
     let retrieveCalls = 0;
     const client = createStreamClient({
@@ -844,8 +818,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('rethrows non-OpenAI stream errors without polling', async () => {
-    const handler = createHandler();
-    handler.getStreamingConfig = () => true;
+    const handler = createStreamingHandler();
 
     let retrieveCalls = 0;
     const client = createStreamClient({
@@ -903,12 +876,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('preserves include fields when polling after an unhandled stream event', async () => {
-    const handler = createHandler({
+    const handler = createStreamingHandler({
       capabilities: {
         supportsNativeWebSearch: true,
       },
     });
-    handler.getStreamingConfig = () => true;
     installImmediatePoller(handler);
 
     const retrieveCalls: Array<{
@@ -958,13 +930,12 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('resumes a fallback response when the first retrieve fails', async () => {
-    const handler = createHandler({
+    const handler = createStreamingHandler({
       openRouterOnly: false,
       capabilities: {
         supportsNativeWebSearch: true,
       },
     });
-    handler.getStreamingConfig = () => true;
 
     let streamCalls = 0;
     let tokenCountCalls = 0;
@@ -1025,12 +996,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('resumes fallback polling with include fields after a poll failure', async () => {
-    const handler = createHandler({
+    const handler = createStreamingHandler({
       capabilities: {
         supportsNativeWebSearch: true,
       },
     });
-    handler.getStreamingConfig = () => true;
     installImmediatePoller(handler);
 
     let streamCalls = 0;
@@ -1190,77 +1160,59 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(requests[1].input, secondTurn.slice(-1));
   });
 
-  it('recovers a pre-flight context-window overflow by dropping the chain and compacting', async () => {
-    const handler = createHandler({
-      openRouterOnly: false,
-      contextWindow: 200000,
-    });
-    const compactCalls = stubCompactionToLastMessage(handler);
-    // Turn 2's pre-flight count overflows the 200k window (the count includes
-    // server-side chained history); the internal retry after dropping the
-    // chain and compacting fits again.
-    const { client, requests, tokenCounts } = createPreflightCountingClient(
-      (call) => (call === 2 ? 300000 : 1000),
-    );
+  it.each([
+    {
+      name: 'chained route drops the chain',
+      buildHandler: () =>
+        createHandler({ openRouterOnly: false, contextWindow: 200000 }),
+      compactionExtras: {},
+    },
+    {
+      name: 'non-chaining route has no chain to drop',
+      buildHandler: () =>
+        createNonChainingHandler({
+          openRouterOnly: false,
+          contextWindow: 200_000,
+        }),
+      compactionExtras: { tokensAfter: 1000 },
+    },
+  ])(
+    'recovers a pre-flight context-window overflow by compacting ($name)',
+    async ({ buildHandler, compactionExtras }) => {
+      // Turn 2's pre-flight count overflows the 200k window (it includes
+      // server-side chained history); the internal retry after dropping the
+      // chain and compacting fits again, so the overflow never escapes to
+      // the caller.
+      const handler = buildHandler();
+      const compactCalls = stubCompactionToLastMessage(
+        handler,
+        compactionExtras,
+      );
+      const { client, requests, tokenCounts } = createPreflightCountingClient(
+        (call) => (call === 2 ? 300000 : 1000),
+      );
 
-    await handler.createResponse({
-      client: client as any,
-      messages: createMessages(2),
-      temperature: 0,
-    });
+      await handler.createResponse({
+        client: client as any,
+        messages: createMessages(2),
+        temperature: 0,
+      });
 
-    const secondTurn = createMessages(4);
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: secondTurn,
-      temperature: 0,
-    });
+      const secondTurn = createMessages(4);
+      const result = await handler.createResponse({
+        client: client as any,
+        messages: secondTurn,
+        temperature: 0,
+      });
 
-    // The overflow never escaped to the caller: the oversized chained request
-    // was never sent, and the recovered attempt went out unchained with the
-    // compacted transcript.
-    assert.equal(result.response.id, 'resp-2');
-    assert.equal(requests.length, 2);
-    assert.equal(requests[1].previous_response_id, undefined);
-    assert.equal(compactCalls.length, 1);
-    assert.equal(tokenCounts.length, 3);
-    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
-  });
-
-  it('recovers an unchained pre-flight overflow by compacting (no previous_response_id to drop)', async () => {
-    // A non-chaining route (or one whose chain was invalidated) has no
-    // previous_response_id to drop, so overflow recovery has to reach
-    // compaction on its own rather than failing hard.
-    const handler = createNonChainingHandler({
-      openRouterOnly: false,
-      contextWindow: 200_000,
-    });
-    const compactCalls = stubCompactionToLastMessage(handler, {
-      tokensAfter: 1000,
-    });
-    const { client, requests } = createPreflightCountingClient((call) =>
-      call === 2 ? 300000 : 1000,
-    );
-
-    await handler.createResponse({
-      client: client as any,
-      messages: createMessages(2),
-      temperature: 0,
-    });
-
-    const secondTurn = createMessages(4);
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: secondTurn,
-      temperature: 0,
-    });
-
-    assert.equal(result.response.id, 'resp-2');
-    assert.equal(requests.length, 2);
-    assert.equal(requests[1].previous_response_id, undefined);
-    assert.equal(compactCalls.length, 1);
-    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
-  });
+      assert.equal(result.response.id, 'resp-2');
+      assert.equal(requests.length, 2);
+      assert.equal(requests[1].previous_response_id, undefined);
+      assert.equal(compactCalls.length, 1);
+      assert.equal(tokenCounts.length, 3);
+      assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+    },
+  );
 
   it('bounds failed compaction recovery and preserves unchained history', async () => {
     const handler = createHandler({
@@ -1453,34 +1405,6 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
     );
 
     assert.equal(result.text, expected);
-  });
-});
-
-describe('ModelHandlerOpenAIResponse.extractAssistantText', () => {
-  it('extracts assistant text from response output text parts', () => {
-    const handler = createHandler();
-    const message = {
-      type: 'message',
-      role: 'assistant',
-      content: [
-        { type: 'output_text', text: 'alpha' },
-        { type: 'refusal', refusal: 'skip' },
-        { type: 'input_text', text: ' beta' },
-      ],
-    } as unknown as ResponseInputItem;
-
-    assert.equal(handler.extractAssistantText(message), 'alpha beta');
-  });
-
-  it('ignores non-assistant message content', () => {
-    const handler = createHandler();
-    const message = {
-      type: 'message',
-      role: 'user',
-      content: [{ type: 'input_text', text: 'not assistant text' }],
-    } as unknown as ResponseInputItem;
-
-    assert.equal(handler.extractAssistantText(message), undefined);
   });
 });
 

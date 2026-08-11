@@ -110,7 +110,7 @@ describe('compaction activity projection', () => {
 
     applyCompactionActivityEntries(projection, [
       activityEntry(1, 'live', 'started'),
-      advancingEntry(2, MESSAGE_TYPES.MODEL_RESPONSE),
+      advancingEntry(2),
     ]);
     expect(projection.blocks[0]?.status).toBe('running');
 

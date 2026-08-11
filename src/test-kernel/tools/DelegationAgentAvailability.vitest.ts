@@ -90,17 +90,13 @@ function delegationRegistry(names: readonly string[]) {
   );
 }
 
-function resolveAgentToolsInput(tools: ToolInput[]) {
-  return {
+async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
+  const resolved = await resolveAgentTools({
     tools,
     registry: delegationRegistry(tools.map((t) => t.name)),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
-  };
-}
-
-async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
-  const resolved = await resolveAgentTools(resolveAgentToolsInput(tools));
+  });
   return resolved.tools;
 }
 

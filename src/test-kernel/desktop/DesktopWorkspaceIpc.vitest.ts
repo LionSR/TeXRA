@@ -1,4 +1,3 @@
-// Node imports
 import {
   existsSync,
   mkdtempSync,
@@ -11,10 +10,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - desktop workspace
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,

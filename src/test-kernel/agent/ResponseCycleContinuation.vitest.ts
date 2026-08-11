@@ -296,38 +296,36 @@ describe('response cycle continuation phases', () => {
     expect(action).toBe(FlowTransition.CONTINUE);
   });
 
-  it('stops instead of retrying a context-window overflow without compaction support', async () => {
-    const shared = createShared({
-      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
-      processedResponse: 'partial response',
-    });
-    const harness = createServices();
-
-    const { action } = await runContinuationNode(shared, harness.services);
-
-    expect(harness.requestCompaction).not.toHaveBeenCalled();
-    expect(harness.round.continuationCount).toBe(0);
-    expect(harness.addContinueMessage).not.toHaveBeenCalled();
-    expect(harness.services.logger.warn).toHaveBeenCalledOnce();
-    expect(action).toBe(FlowTransition.COMPLETE);
-  });
-
-  it('stops when forced compaction did not clear the context overflow', async () => {
-    const shared = createShared({
-      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
-      processedResponse: 'partial response',
+  it.each([
+    {
+      name: 'stops instead of retrying a context-window overflow without compaction support',
+      contextWindowRecoveryAttempted: false,
+      supportsManualCompaction: false,
+    },
+    {
+      name: 'stops when forced compaction did not clear the context overflow',
       contextWindowRecoveryAttempted: true,
-    });
-    const harness = createServices(false, true);
+      supportsManualCompaction: true,
+    },
+  ])(
+    '$name',
+    async ({ contextWindowRecoveryAttempted, supportsManualCompaction }) => {
+      const shared = createShared({
+        stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+        processedResponse: 'partial response',
+        contextWindowRecoveryAttempted,
+      });
+      const harness = createServices(false, supportsManualCompaction);
 
-    const { action } = await runContinuationNode(shared, harness.services);
+      const { action } = await runContinuationNode(shared, harness.services);
 
-    expect(harness.requestCompaction).not.toHaveBeenCalled();
-    expect(harness.round.continuationCount).toBe(0);
-    expect(harness.addContinueMessage).not.toHaveBeenCalled();
-    expect(harness.services.logger.warn).toHaveBeenCalledOnce();
-    expect(action).toBe(FlowTransition.COMPLETE);
-  });
+      expect(harness.requestCompaction).not.toHaveBeenCalled();
+      expect(harness.round.continuationCount).toBe(0);
+      expect(harness.addContinueMessage).not.toHaveBeenCalled();
+      expect(harness.services.logger.warn).toHaveBeenCalledOnce();
+      expect(action).toBe(FlowTransition.COMPLETE);
+    },
+  );
 
   it('turns a ready response into a completed stop when interrupted', async () => {
     const shared = createShared({

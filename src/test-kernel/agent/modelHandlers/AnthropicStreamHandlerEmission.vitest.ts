@@ -1,26 +1,20 @@
-// Third-party imports
-import { describe, it, expect, vi } from 'vitest';
+import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
+import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - class under test
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { AnthropicStreamHandler } from '@agent/modelHandlers/support/AnthropicStreamHandler';
-
-// Type imports
-import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 
 /**
  * Builds a handler wired to a captured event callback, so tests can push
  * synthetic stream events without a real Anthropic SDK stream.
  */
 function createHandlerHarness(progressViewEnabled: boolean) {
+  // Only `info` (compaction activity) and `domain` (server-tool results) are
+  // asserted; the remaining AgentTrace methods stay no-op via noopTrace.
   const logger = {
     ...noopTrace,
-    debug: vi.fn(),
     info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
     domain: vi.fn(),
-    openStream: vi.fn(),
   };
   const handler = new AnthropicStreamHandler(
     logger as unknown as AgentTrace,

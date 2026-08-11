@@ -39,20 +39,13 @@ import {
   type WorkbenchPlacement,
 } from '@desktop/shared/desktopTaskShell';
 
-function open(
-  state: DesktopTaskShellState,
+function shellWith(
   ...requests: readonly OpenWorkbenchTabRequest[]
 ): DesktopTaskShellState {
   return requests.reduce(
     (next, request) => openWorkbenchTab(next, request),
-    state,
+    initialDesktopTaskShellState(),
   );
-}
-
-function shellWith(
-  ...requests: readonly OpenWorkbenchTabRequest[]
-): DesktopTaskShellState {
-  return open(initialDesktopTaskShellState(), ...requests);
 }
 
 function active(

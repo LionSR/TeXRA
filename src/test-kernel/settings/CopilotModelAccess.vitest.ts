@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
@@ -69,10 +69,6 @@ describe('Copilot model access settings', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/SubscriptionsTab'),
   );
-
-  beforeEach(() => {
-    mocks.postMessage.mockClear();
-  });
 
   it('shows a keyless consent action only when VS Code discovers Copilot models', async () => {
     const tab = await renderSubscriptionsTab([consentRoute]);

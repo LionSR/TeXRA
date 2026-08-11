@@ -56,11 +56,6 @@ describe('extractHoverText', () => {
 // DefaultResolveWorkspaceRoot
 // ---------------------------------------------------------------------------
 
-/**
- * Vitests for `defaultResolveWorkspaceRoot` — walks up from a file looking
- * for `lakefile.lean` or `lakefile.toml`.
- */
-
 describe('defaultResolveWorkspaceRoot', () => {
   let scratch: string;
 

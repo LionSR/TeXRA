@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -20,10 +20,6 @@ vi.mock('llm-zoo', async (importActual) => ({
 const { runCleanOutput } = await import('@housekeeping/clean');
 
 describe('housekeeping streaming cleanup', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });

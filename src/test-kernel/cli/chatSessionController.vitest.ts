@@ -631,14 +631,11 @@ describe('createChatSessionController', () => {
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
-    // Fresh session — no run pending
     expect(ctrl.canStartRootRun()).toBe(true);
 
-    // Simulate a pending run
     session.markRunPending(new Promise(() => {}));
     expect(ctrl.canStartRootRun()).toBe(false);
 
-    // Complete the run
     session.markRunCompleted();
     expect(ctrl.canStartRootRun()).toBe(true);
   });

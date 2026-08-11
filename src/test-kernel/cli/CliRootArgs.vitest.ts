@@ -61,9 +61,11 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
+
 function storedConfig(
-  overrides: Partial<Parameters<typeof resumeWorkflowOutputFile>[0]> = {},
-): Parameters<typeof resumeWorkflowOutputFile>[0] {
+  overrides: Partial<StoredResumeConfig> = {},
+): StoredResumeConfig {
   return {
     agent: 'polish',
     model: 'deepseekT',

@@ -25,7 +25,6 @@ async function loadDialogModule(): Promise<WarningDialogModule> {
 }
 
 const focusedWindow: WindowLike = { isDestroyed: () => false };
-const otherWindow: WindowLike = { isDestroyed: () => false };
 const destroyedWindow: WindowLike = { isDestroyed: () => true };
 const liveWindow: WindowLike = { isDestroyed: () => false };
 
@@ -34,7 +33,7 @@ describe('desktop warning dialog', () => {
     {
       name: 'uses the focused BrowserWindow when one is active',
       focused: focusedWindow,
-      all: [otherWindow],
+      all: [liveWindow],
       expected: focusedWindow,
     },
     {

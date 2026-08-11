@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
@@ -18,8 +15,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
-
-// Local file imports
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({

@@ -15,7 +15,6 @@ import {
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import {
   activeStreamId,
-  patchStream,
   resetCliState,
   streams,
   setStreamStatusInCliState,

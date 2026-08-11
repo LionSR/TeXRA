@@ -62,9 +62,12 @@ export function ModelAccessForm(
           kind: 'pending',
           state: status?.state ?? 'loading',
         });
-  let detailLines: readonly string[] | undefined;
-  if (status?.state === 'loaded') detailLines = status.overview.lines;
-  if (status?.state === 'failed') detailLines = [status.message];
+  const detailLines =
+    status?.state === 'loaded'
+      ? status.overview.lines
+      : status?.state === 'failed'
+        ? [status.message]
+        : undefined;
 
   return (
     <ListForm

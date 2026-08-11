@@ -1,18 +1,14 @@
-// Third-party imports
-import { describe, it, expect } from 'vitest';
+import type {
+  BetaContentBlock,
+  BetaMessage,
+} from '@anthropic-ai/sdk/resources/beta/messages';
+import { describe, expect, it } from 'vitest';
 
-// Local imports - functions under test
 import {
   stripOrphanedServerToolUse,
   extractAnthropicServerToolData,
   buildAnthropicAssistantContent,
 } from '@agent/modelHandlers/anthropic/anthropicServerTools';
-
-// Type imports
-import type {
-  BetaContentBlock,
-  BetaMessage,
-} from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Minimal block fixtures. The production guards discriminate on `type`, so these
 // runtime shapes are sufficient; cast through unknown to satisfy the SDK types.

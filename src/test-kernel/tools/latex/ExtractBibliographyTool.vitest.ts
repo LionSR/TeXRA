@@ -1,10 +1,5 @@
-// Node imports
-import * as assert from 'node:assert';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Third-party imports
-import { describe, it, afterEach, vi } from 'vitest';
-
-// Local imports
 import * as bibliographyModule from '@latex/extractBibliography';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractBibliographyTool } from '@tools/latex/ExtractBibliographyTool';
@@ -65,17 +60,17 @@ describe('ExtractBibliographyTool', () => {
       summary: ['@article{alpha,...}', '@book{beta,...}'],
     });
 
-    const tool = new ExtractBibliographyTool();
-    const result = await tool.call({ texPath: 'main.tex' });
+    const result = await new ExtractBibliographyTool().call({
+      texPath: 'main.tex',
+    });
 
-    assert.strictEqual(
-      result.summary,
+    expect(result.summary).toBe(
       'Resolved 2 bibliography entries for 2 citation keys in main.tex.',
     );
-    assert.ok(result.output?.includes('BibTeX entries cited in main.tex'));
-    assert.ok(result.output?.includes('@article{alpha,...}'));
-    assert.ok(result.output?.includes('@book{beta,...}'));
-    assert.strictEqual(result.userInstruction, undefined);
+    expect(result.output).toContain('BibTeX entries cited in main.tex');
+    expect(result.output).toContain('@article{alpha,...}');
+    expect(result.output).toContain('@book{beta,...}');
+    expect(result.userInstruction).toBeUndefined();
   });
 
   it('reports missing bibliography files and keys', async () => {
@@ -90,27 +85,27 @@ describe('ExtractBibliographyTool', () => {
       entries: { missingKeys: ['alpha'] },
     });
 
-    const tool = new ExtractBibliographyTool();
-    const result = await tool.call({ texPath: 'paper.tex' });
+    const result = await new ExtractBibliographyTool().call({
+      texPath: 'paper.tex',
+    });
 
-    assert.ok(
-      result.summary?.includes(
-        'No matching bibliography entries found for 1 citation key in paper.tex.',
-      ),
+    expect(result.summary).toContain(
+      'No matching bibliography entries found for 1 citation key in paper.tex.',
     );
-    assert.ok(result.output?.includes('No matching entries found.'));
-    assert.ok(result.output?.includes('Missing bibliography files'));
-    assert.ok(result.output?.includes('Missing citation keys'));
+    expect(result.output).toContain('No matching entries found.');
+    expect(result.output).toContain('Missing bibliography files');
+    expect(result.output).toContain('Missing citation keys');
   });
 
   it('returns error when tex file is missing', async () => {
     await installPlatform({});
 
-    const tool = new ExtractBibliographyTool();
-    const result = await tool.call({ texPath: 'missing.tex' });
+    const result = await new ExtractBibliographyTool().call({
+      texPath: 'missing.tex',
+    });
 
-    assert.strictEqual(result.status, 'error');
-    assert.ok(result.error?.includes('LaTeX file not found'));
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('LaTeX file not found');
   });
 
   it('includes explicit bibliography path when provided', async () => {
@@ -134,16 +129,15 @@ describe('ExtractBibliographyTool', () => {
       },
     );
 
-    const tool = new ExtractBibliographyTool();
-    const result = await tool.call({
+    const result = await new ExtractBibliographyTool().call({
       texPath: 'thesis.tex',
       bibPath: 'extra.bib',
     });
 
-    assert.strictEqual(calls.length, 1);
-    assert.deepStrictEqual(calls[0].paths, ['extra.bib']);
-    assert.deepStrictEqual(calls[0].keys, ['alpha']);
-    assert.ok(result.summary?.includes('Resolved 1 bibliography entry'));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].paths).toEqual(['extra.bib']);
+    expect(calls[0].keys).toEqual(['alpha']);
+    expect(result.summary).toContain('Resolved 1 bibliography entry');
   });
 
   it('falls back to wildcard when only a bibliography path is supplied', async () => {
@@ -164,19 +158,16 @@ describe('ExtractBibliographyTool', () => {
       },
     );
 
-    const tool = new ExtractBibliographyTool();
-    const result = await tool.call({
+    const result = await new ExtractBibliographyTool().call({
       texPath: 'standalone.tex',
       bibPath: 'refs.bib',
     });
 
-    assert.strictEqual(calls.length, 1);
-    assert.deepStrictEqual(calls[0].paths, ['refs.bib']);
-    assert.deepStrictEqual(calls[0].keys, ['*']);
-    assert.ok(
-      result.summary?.includes(
-        'No matching bibliography entries found for 1 citation key in standalone.tex.',
-      ),
+    expect(calls).toHaveLength(1);
+    expect(calls[0].paths).toEqual(['refs.bib']);
+    expect(calls[0].keys).toEqual(['*']);
+    expect(result.summary).toContain(
+      'No matching bibliography entries found for 1 citation key in standalone.tex.',
     );
   });
 });

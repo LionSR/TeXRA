@@ -1,10 +1,5 @@
-// Node imports
-import { strict as assert } from 'node:assert';
+import { describe, expect, it } from 'vitest';
 
-// Third-party imports
-import { describe, it } from 'vitest';
-
-// Local imports
 import {
   MainViewStartupController,
   type MainViewStartupControllerDeps,
@@ -51,7 +46,7 @@ function createController(
 
 describe('MainViewStartupController', () => {
   it('uses config to choose the orchestrator banner message', () => {
-    assert.deepEqual(createController().getOrchestratorBannerMessage(), {
+    expect(createController().getOrchestratorBannerMessage()).toStrictEqual({
       command: MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
     });
   });
@@ -59,7 +54,7 @@ describe('MainViewStartupController', () => {
   it('hides the orchestrator banner when disabled', () => {
     const controller = createController({ getConfig: <T>() => false as T });
 
-    assert.deepEqual(controller.getOrchestratorBannerMessage(), {
+    expect(controller.getOrchestratorBannerMessage()).toStrictEqual({
       command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
     });
   });
@@ -69,7 +64,7 @@ describe('MainViewStartupController', () => {
       loadOptions: async () => STARTUP_OPTIONS,
     });
 
-    assert.deepEqual(await controller.getOptionsAndLoginMessages(), [
+    expect(await controller.getOptionsAndLoginMessages()).toStrictEqual([
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         optionsDataByCategory: STARTUP_OPTIONS.modelOptionsByCategory,
@@ -93,9 +88,6 @@ describe('MainViewStartupController', () => {
 
     const messages = await controller.getOptionsAndLoginMessages();
 
-    assert.equal(
-      messages.at(-1)?.command,
-      MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-    );
+    expect(messages.at(-1)?.command).toBe(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER);
   });
 });

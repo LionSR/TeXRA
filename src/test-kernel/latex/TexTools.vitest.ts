@@ -1,5 +1,3 @@
-// Suites for @latex/texTools (compile wrapper + TEXINPUTS env builders).
-
 import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -12,10 +10,6 @@ import type { ExecResult } from '@shared/schemas/opResults';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-
-// ---------------------------------------------------------------------------
-// TexTools
-// ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
@@ -134,10 +128,6 @@ describe('compileLatex2Pdf structured return', () => {
     expect(logTail).toContain('boom: pdflatex crashed');
   });
 });
-
-// ---------------------------------------------------------------------------
-// TexInputEnv
-// ---------------------------------------------------------------------------
 
 const D = path.delimiter;
 

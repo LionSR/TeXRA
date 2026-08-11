@@ -78,16 +78,14 @@ function registerStream(
 async function seedOwnedStream(
   backend: IsolatedBackend,
   ids: StreamExecution,
-  options: { load?: boolean; flush?: boolean } = {},
+  options: { load?: boolean } = {},
 ): Promise<void> {
   if (options.load) {
     await backend.state.snapshots.load([ids.stream]);
   }
   registerStream(backend, ids);
   await writeExecutionConfig(ids.executionId);
-  if (options.flush !== false) {
-    await backend.state.flush();
-  }
+  await backend.state.flush();
 }
 
 /** Persists sidecars and execution configs for orphaned streams on disk. */

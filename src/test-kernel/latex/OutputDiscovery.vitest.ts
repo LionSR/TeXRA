@@ -1,8 +1,6 @@
-// Standard library imports
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -73,8 +71,6 @@ describe('discoverLatestExecutionOutputs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await installPlatform({}, { fs: nodeFilesystem });
-    // Headless executions have no registered stream identity and no
-    // stream-tab snapshot.
     mocks.getExecutionStore.mockReturnValue({
       readMeta: async () => null,
     } as never);

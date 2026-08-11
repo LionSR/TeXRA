@@ -108,13 +108,12 @@ export async function pollForDeviceSession(
 ): Promise<GitHubTokenExchangeResponse> {
   const now = hooks.now ?? Date.now;
   let transientFailures = 0;
-  const sleepHook = hooks.sleep;
 
   return pollUntilDeviceAuthorized({
     intervalMs: authorization.interval * 1000,
     deadlineMs: now() + authorization.expires_in * 1000,
     signal: hooks.signal,
-    sleep: sleepHook ? (ms: number) => sleepHook(ms) : undefined,
+    sleep: hooks.sleep,
     now,
     // Sleep first, then check the deadline (historical CLI timing).
     checkDeadlineBeforeSleep: false,

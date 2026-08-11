@@ -7,7 +7,7 @@ import { ClaudeAgentTool } from '@tools/claudeAgent';
 describe('ClaudeAgentTool schema', () => {
   it('recommends current Claude Code models in the model field', () => {
     const parameters = new ClaudeAgentTool().definition.parameters as {
-      properties?: Record<string, { description?: string }>;
+      properties?: { model?: { description?: string } };
     };
     const modelDescription = parameters.properties?.model?.description ?? '';
 

@@ -240,14 +240,6 @@ function responseModelHandler(
   });
 }
 
-function partialFailureModelHandler(text: string) {
-  return responseModelHandler([{ text }], {
-    createAssistantMessageFromResponse: () => {
-      throw new Error('Provider stream failed after partial output');
-    },
-  });
-}
-
 function buildToolUseResumeData(
   executionId: ExecutionId,
   streamId: StreamTabId,
@@ -696,7 +688,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
 
     const result = await runPersistedFlow(executionId, streamId, resume, {
-      modelHandler: partialFailureModelHandler('A'),
+      modelHandler: responseModelHandler([{ text: 'A' }], {
+        createAssistantMessageFromResponse: () => {
+          throw new Error('Provider stream failed after partial output');
+        },
+      }),
       drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
     });
 

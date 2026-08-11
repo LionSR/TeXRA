@@ -1,6 +1,4 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   getExternalAuthCallbackInfo,
@@ -17,13 +15,13 @@ describe('auth config', () => {
       fullUrl: 'https://example.test/extension-auth-callback?state=state-value',
     }));
 
-    assert.deepEqual(await getExternalAuthCallbackInfo(), {
+    expect(await getExternalAuthCallbackInfo()).toEqual({
       fullUrl: 'https://example.test/extension-auth-callback?state=state-value',
     });
   });
 
   it('falls back without importing host APIs', async () => {
-    assert.deepEqual(await getExternalAuthCallbackInfo(), {
+    expect(await getExternalAuthCallbackInfo()).toEqual({
       fullUrl: 'vscode://texra-ai.texra/auth-callback',
     });
   });

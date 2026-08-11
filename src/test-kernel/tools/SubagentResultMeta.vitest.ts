@@ -9,19 +9,24 @@ import {
   buildSubagentResultMeta,
 } from '@tools/delegation/subagentResults';
 
+const baseResult: AgentFlowResult = {
+  category: 'toolUse',
+  outcome: 'completed',
+  executionId: 'abcdefabcdef' as ExecutionId,
+  streamId: 'stream:tu' as StreamTabId,
+};
+
 describe('subagent result metadata', () => {
   it('builds a schema-valid manifest from the canonical final result', () => {
-    const result: AgentFlowResult = {
-      category: 'toolUse',
-      outcome: 'completed',
-      response: 'All findings verified.',
-      files: ['notes.md'],
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:tu' as StreamTabId,
-    };
     const meta = buildSubagentResultMeta(
       'reviewer',
-      buildAgentFinalResult({ flowResult: result }),
+      buildAgentFinalResult({
+        flowResult: {
+          ...baseResult,
+          response: 'All findings verified.',
+          files: ['notes.md'],
+        },
+      }),
       99,
     );
 
@@ -30,11 +35,8 @@ describe('subagent result metadata', () => {
 
   it('failure manifest overwrites interim success and never claims success', () => {
     const interim: AgentFlowResult = {
-      category: 'toolUse',
-      outcome: 'completed',
+      ...baseResult,
       response: 'looked fine before the crash',
-      executionId: 'abcdefabcdef' as ExecutionId,
-      streamId: 'stream:tu' as StreamTabId,
     };
     const meta = buildSubagentFailureResultMeta(
       'reviewer',
@@ -47,7 +49,10 @@ describe('subagent result metadata', () => {
     const cancelled = buildSubagentFailureResultMeta(
       'reviewer',
       'toolUse',
-      { ...interim, outcome: 'cancelled' },
+      {
+        ...interim,
+        outcome: 'cancelled',
+      },
       50,
     );
     expect(cancelled.result.outcome).toBe('cancelled');

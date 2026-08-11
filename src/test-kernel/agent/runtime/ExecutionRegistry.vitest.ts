@@ -30,6 +30,7 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -197,11 +198,8 @@ describe('executionRegistry', () => {
       'stream-waiting-cleanup-completion' as StreamTabId,
       'stream-waiting-cleanup-completion' as StreamTabId,
     );
-    let finishCleanup: () => void = () => undefined;
-    const cleanupFinished = new Promise<void>((resolve) => {
-      finishCleanup = resolve;
-    });
-    handle.suspend(() => cleanupFinished);
+    const cleanupFinished = createDeferred();
+    handle.suspend(() => cleanupFinished.promise);
 
     const teardown = handle.beginSuspendedTermination();
     expect(teardown).toBeDefined();
@@ -216,7 +214,7 @@ describe('executionRegistry', () => {
     await Promise.resolve();
     expect(observedCompletion).toBe(false);
 
-    finishCleanup();
+    cleanupFinished.resolve();
     await observation;
     expect(observedCompletion).toBe(true);
   });

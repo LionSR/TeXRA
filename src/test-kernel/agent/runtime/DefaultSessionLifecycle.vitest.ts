@@ -56,7 +56,6 @@ describe('default session lifecycle', () => {
       });
       try {
         expect(defaultSession()).toBe(processDefault);
-        expect(defaultSession()).toBe(processDefault);
         expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
         expect(channelTraceMocks.warn).toHaveBeenCalledWith(
           'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
@@ -89,7 +88,6 @@ describe('default session lifecycle', () => {
     });
 
     try {
-      expect(defaultSession()).toBe(processDefault);
       expect(defaultSession()).toBe(processDefault);
       expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
     } finally {

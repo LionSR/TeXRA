@@ -1,4 +1,3 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -9,14 +8,12 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-// Local imports - component and schema types
 import type { ToolsTab } from '@settingsView/frontend/tabs/ToolsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
-// Local imports - test utilities
 import {
   mountComponent,
   useLitComponentTestDom,
@@ -76,9 +73,8 @@ async function expectTogglableSwitch(options: {
   ).toBe(options.label);
   expect(toggle?.checked).toBe(options.initialChecked);
 
-  if (!toggle) return;
-  toggle.checked = !options.initialChecked;
-  toggle.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+  toggle!.checked = !options.initialChecked;
+  toggle!.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
 
   expect(mocks.postMessage).toHaveBeenCalledWith(
     SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,

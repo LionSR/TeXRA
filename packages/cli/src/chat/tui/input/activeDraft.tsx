@@ -18,10 +18,7 @@ export function createActiveDraftRegistry(): ActiveDraftRegistry {
     register(discard) {
       const entry = { discard };
       entries.push(entry);
-      let registered = true;
       return () => {
-        if (!registered) return;
-        registered = false;
         const index = entries.indexOf(entry);
         if (index >= 0) entries.splice(index, 1);
       };

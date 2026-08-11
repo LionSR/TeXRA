@@ -128,10 +128,13 @@ export function handleFileOperation(message: FileOperationMessage): void {
       return;
     case MAIN_VIEW_COMMANDS.COMPARE:
     case MAIN_VIEW_COMMANDS.ACCEPT_EDITED:
+      // The base file is passed in both the "compare against" and "replace"
+      // slots; resolve it once.
+      const baseLocation = pathToLocation(message.baseFile);
       void vscode.commands.executeCommand(
         `texra.${message.command}`,
-        pathToLocation(message.baseFile),
-        pathToLocation(message.baseFile),
+        baseLocation,
+        baseLocation,
         pathToLocation(message.editedFile),
       );
       return;

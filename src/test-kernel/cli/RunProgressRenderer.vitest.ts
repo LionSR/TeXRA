@@ -372,7 +372,6 @@ describe('CLI run progress renderer', () => {
     const output = outputBuffer();
     const renderer = ansiRenderer(output, { nowMs: () => now });
 
-    expect(renderer).toBeDefined();
     handleRunConfig(renderer);
     expect(output.text).toBe('\r\x1b[2Kpolish paper.tex · 0s');
 

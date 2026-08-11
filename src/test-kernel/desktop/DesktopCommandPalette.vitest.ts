@@ -289,9 +289,7 @@ describe('desktop command palette', () => {
     // wa-input wraps a native <input> in shadow DOM. Look it up via the host
     // wa-input tag, then descend into its shadow root for the real input.
     expect(
-      paletteInput(
-        controller.element,
-      ).shadowRoot?.querySelector<HTMLInputElement>('input') ?? null,
-    ).not.toBeNull();
+      paletteInput(controller.element).shadowRoot?.querySelector('input'),
+    ).toBeTruthy();
   });
 });

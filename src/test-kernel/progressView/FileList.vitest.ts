@@ -36,19 +36,15 @@ function outputFile(): OutputFileInfo {
   };
 }
 
-function mountFileList(): Promise<FileList> {
-  return mountComponent<FileList>('file-list', {
-    filesByRound: { '1': [outputFile()] },
-  });
-}
-
 describe('file-list keyboard activation', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/FileList'),
   );
 
   it('opens file paths on Space without hijacking native action buttons', async () => {
-    const element = await mountFileList();
+    const element = await mountComponent<FileList>('file-list', {
+      filesByRound: { '1': [outputFile()] },
+    });
     const actions: ProgressFileActionDetail[] = [];
     element.addEventListener('file-action', (event) => {
       actions.push((event as CustomEvent<ProgressFileActionDetail>).detail);

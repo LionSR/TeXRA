@@ -1,11 +1,8 @@
-// Node imports
 import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   LatexMediaManager,
@@ -69,15 +66,11 @@ afterEach(async () => {
   await cleanupTempDirs(tempDirs);
 });
 
-function processLineByLine(content: string): string {
-  return (
-    new DiffFileProcessor() as unknown as DiffFileProcessorInternals
-  ).processLineByLine(content);
-}
-
 describe('DiffFileProcessor line formatting', () => {
   it('preserves package blank-line insertion order', () => {
-    const processed = processLineByLine(
+    const processed = (
+      new DiffFileProcessor() as unknown as DiffFileProcessorInternals
+    ).processLineByLine(
       [
         '% !TEX root = main.tex',
         'Here is preamble text from latexdiff',
@@ -172,8 +165,6 @@ type LatexMediaManagerFigureInternals = {
 
 describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
   async function writeFixture(): Promise<{
-    workspaceDir: string;
-    storageRoot: string;
     texPath: string;
     figurePath: string;
   }> {
@@ -212,7 +203,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
       },
     );
-    return { workspaceDir, storageRoot, texPath, figurePath };
+    return { texPath, figurePath };
   }
 
   /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage and

@@ -9,6 +9,7 @@ import {
   type XaiTokenResponse,
 } from '@auth/xai';
 import * as logger from '@logger/logUtils';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -124,11 +125,8 @@ describe('XaiSessionCoordinator', () => {
 
   it('refreshes when within the buffer and single-flights concurrent callers', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW + FIVE_MIN - 1 }));
-    let resolveRefresh!: (value: XaiTokenResponse) => void;
-    const refreshPromise = new Promise<XaiTokenResponse>((resolve) => {
-      resolveRefresh = resolve;
-    });
-    const refreshTokens = vi.fn(() => refreshPromise);
+    const refreshDeferred = createDeferred<XaiTokenResponse>();
+    const refreshTokens = vi.fn(() => refreshDeferred.promise);
     const coordinator = makeCoordinator({
       storage,
       client: {
@@ -143,7 +141,7 @@ describe('XaiSessionCoordinator', () => {
     await vi.waitFor(() => {
       expect(refreshTokens).toHaveBeenCalledTimes(1);
     });
-    resolveRefresh(tokens({ access_token: 'access-fresh' }));
+    refreshDeferred.resolve(tokens({ access_token: 'access-fresh' }));
     await expect(a).resolves.toBe('access-fresh');
     await expect(b).resolves.toBe('access-fresh');
   });

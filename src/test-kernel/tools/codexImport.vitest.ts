@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { afterEach, describe, it } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';

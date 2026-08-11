@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -19,8 +16,6 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
-
-// Local file imports
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -46,7 +41,7 @@ function lifecycleCase(): {
   streamId: StreamTabId;
 } {
   const n = caseCounter++;
-  const executionId = `c${n.toString(16).padStart(5, '0')}` as ExecutionId;
+  const executionId = `exec:run-cancel-${n}` as ExecutionId;
   const streamId = `stream:run-cancel-${n}` as StreamTabId;
   const session = createTestSession();
   return {

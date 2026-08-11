@@ -39,14 +39,11 @@ function publishLoopbackUrl(url: string): void {
   });
 }
 
-async function runSignIn(
-  url: string,
-  options: { device?: boolean; noBrowser?: boolean } = {},
-): Promise<string[]> {
+async function runSignIn(url: string, noBrowser = false): Promise<string[]> {
   publishLoopbackUrl(url);
   const progress: string[] = [];
   await signInCliChatGpt(
-    { device: options.device ?? false, noBrowser: options.noBrowser ?? false },
+    { device: false, noBrowser },
     { writeProgress: (message) => progress.push(message) },
   );
   return progress;
@@ -82,9 +79,10 @@ describe('signInCliChatGpt browser choice', () => {
   });
 
   it('skips the launch attempt and prints the URL with --no-browser', async () => {
-    const progress = await runSignIn('https://auth.openai.com/authorize?x=3', {
-      noBrowser: true,
-    });
+    const progress = await runSignIn(
+      'https://auth.openai.com/authorize?x=3',
+      true,
+    );
 
     expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
     expect(progress).toEqual([

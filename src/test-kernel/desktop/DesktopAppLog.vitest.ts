@@ -40,6 +40,18 @@ describe('desktop app log', () => {
     await cleanupTempDirs(tempDirs);
   });
 
+  /** Writes a fresh desktop log and points the Electron stub at its dir. */
+  async function writeDesktopLog(content: string): Promise<{ root: string }> {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    const userDataPath = join(root, 'userData');
+    const logsPath = join(userDataPath, 'logs');
+    const logPath = join(logsPath, 'texra-desktop.log');
+    await mkdir(logsPath, { recursive: true });
+    await writeFile(logPath, content);
+    configureElectronTestStub({ userDataPath });
+    return { root };
+  }
+
   it('does not abort startup when the logs directory cannot be created', async () => {
     const root = await makeTempDir('texra-electron-log-', tempDirs);
     const userDataFile = join(root, 'userData-file');
@@ -57,13 +69,7 @@ describe('desktop app log', () => {
   });
 
   it('truncates viewer snapshots by bytes and redacts log paths', async () => {
-    const root = await makeTempDir('texra-electron-log-', tempDirs);
-    const userDataPath = join(root, 'userData');
-    const logsPath = join(userDataPath, 'logs');
-    const logPath = join(logsPath, 'texra-desktop.log');
-    await mkdir(logsPath, { recursive: true });
-    await writeFile(logPath, `${'🙂'.repeat(8)}tail`);
-    configureElectronTestStub({ userDataPath });
+    const { root } = await writeDesktopLog(`${'🙂'.repeat(8)}tail`);
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({
@@ -78,17 +84,10 @@ describe('desktop app log', () => {
   });
 
   it('redacts native workspace paths in log text without redacting adjacent prefixes', async () => {
-    const root = await makeTempDir('texra-electron-log-', tempDirs);
-    const userDataPath = join(root, 'userData');
-    const logsPath = join(userDataPath, 'logs');
-    const logPath = join(logsPath, 'texra-desktop.log');
     const workspacePath = 'C:\\work\\project';
-    await mkdir(logsPath, { recursive: true });
-    await writeFile(
-      logPath,
+    await writeDesktopLog(
       `Opened ${workspacePath}\\paper.tex; queued ${workspacePath}, completed ${workspacePath} successfully; finished ${workspacePath}. retained ${workspacePath}-archive\\paper.tex and ${workspacePath}.archive\\paper.tex`,
     );
-    configureElectronTestStub({ userDataPath });
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({ workspacePath });
@@ -102,13 +101,7 @@ describe('desktop app log', () => {
   });
 
   it('redacts descendants of a separator-terminated workspace root', async () => {
-    const root = await makeTempDir('texra-electron-log-', tempDirs);
-    const userDataPath = join(root, 'userData');
-    const logsPath = join(userDataPath, 'logs');
-    const logPath = join(logsPath, 'texra-desktop.log');
-    await mkdir(logsPath, { recursive: true });
-    await writeFile(logPath, 'Opened C:\\Users\\alice\\paper.tex');
-    configureElectronTestStub({ userDataPath });
+    await writeDesktopLog('Opened C:\\Users\\alice\\paper.tex');
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({ workspacePath: 'C:\\' });
@@ -117,16 +110,9 @@ describe('desktop app log', () => {
   });
 
   it('redacts a POSIX-root path without rewriting URLs or relative separators', async () => {
-    const root = await makeTempDir('texra-electron-log-', tempDirs);
-    const userDataPath = join(root, 'userData');
-    const logsPath = join(userDataPath, 'logs');
-    const logPath = join(logsPath, 'texra-desktop.log');
-    await mkdir(logsPath, { recursive: true });
-    await writeFile(
-      logPath,
+    await writeDesktopLog(
       'Opened /Users/alice/paper.tex; fetched https://example.com; read src/file.ts',
     );
-    configureElectronTestStub({ userDataPath });
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({ workspacePath: '/' });
@@ -137,14 +123,8 @@ describe('desktop app log', () => {
   });
 
   it('redacts a workspace nested under the home directory before home redaction', async () => {
-    const root = await makeTempDir('texra-electron-log-', tempDirs);
-    const userDataPath = join(root, 'userData');
-    const logsPath = join(userDataPath, 'logs');
-    const logPath = join(logsPath, 'texra-desktop.log');
     const workspacePath = join(homedir(), 'texra-project');
-    await mkdir(logsPath, { recursive: true });
-    await writeFile(logPath, `Opened ${workspacePath}/paper.tex`);
-    configureElectronTestStub({ userDataPath });
+    await writeDesktopLog(`Opened ${workspacePath}/paper.tex`);
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({ workspacePath });

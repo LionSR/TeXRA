@@ -110,7 +110,7 @@ export async function signIn(): Promise<boolean> {
     // Each option names its own provider, so a second "sign in to…" line
     // would only repeat the title.
     const selected = await vscode.window.showQuickPick<SignInOption>(
-      [...SIGN_IN_OPTIONS],
+      SIGN_IN_OPTIONS,
       { title: 'Sign in to TeXRA', placeHolder: 'Choose a sign-in method' },
     );
     if (!selected) return false;

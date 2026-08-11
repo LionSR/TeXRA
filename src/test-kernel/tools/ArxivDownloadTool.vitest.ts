@@ -29,25 +29,20 @@ declare module '@latex/arxivProcessor' {
 
 describe('ArxivDownloadTool', () => {
   afterEach(() => {
-    // spyOn-registered stubs restore here even when a test body throws.
     vi.restoreAllMocks();
     gitignoreMock.ignoredPaths.clear();
   });
 
   it('returns download summary and a listing of the extracted files', async () => {
-    let receivedId: string | undefined;
-    let receivedAutoIndent: boolean | undefined;
     const validateId = vi
       .spyOn(arxivModule.ArxivProcessor, 'validateId')
       .mockReturnValue(null);
-
-    vi.spyOn(arxivModule.ArxivProcessor, 'downloadSource').mockImplementation(
-      async (id, options) => {
-        receivedId = id;
-        receivedAutoIndent = options?.autoIndent;
-        return { path: '/workspace/project/sample', alreadyExisted: false };
-      },
-    );
+    const downloadSource = vi
+      .spyOn(arxivModule.ArxivProcessor, 'downloadSource')
+      .mockResolvedValue({
+        path: '/workspace/project/sample',
+        alreadyExisted: false,
+      });
 
     vi.spyOn(WorkspaceFS, 'relativePath').mockReturnValue('sample');
 
@@ -64,9 +59,11 @@ describe('ArxivDownloadTool', () => {
     const tool = new ArxivDownloadTool();
     const result = await tool.call({ id: '2401.12345v2', autoIndent: false });
 
-    expect(validateId).toHaveBeenCalledTimes(1);
-    expect(receivedId).toBe('2401.12345v2');
-    expect(receivedAutoIndent).toBe(false);
+    expect(validateId).toHaveBeenCalledWith('2401.12345v2');
+    expect(downloadSource).toHaveBeenCalledWith(
+      '2401.12345v2',
+      expect.objectContaining({ autoIndent: false }),
+    );
     expect(result.summary).toBe('arXiv source downloaded to sample');
     expect(result.output).toContain('Directory listing for sample');
     expect(result.output).toContain('file main.tex');

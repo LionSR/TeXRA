@@ -46,18 +46,16 @@ describe('nodeFileLocks', () => {
   it('serializes independent callers using the same shared path', async () => {
     const root = await makeTempDir('texra-file-lock-', tempDirs);
     const lockPath = join(root, 'executionLocks', 'a8644a');
-    let releaseFirst: (() => void) | undefined;
-    const firstPaused = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    let firstEntered: (() => void) | undefined;
-    const entered = new Promise<void>((resolve) => {
-      firstEntered = resolve;
-    });
+    let releaseFirst!: () => void;
+    const firstPaused = new Promise<void>(
+      (resolve) => (releaseFirst = resolve),
+    );
+    let firstEntered!: () => void;
+    const entered = new Promise<void>((resolve) => (firstEntered = resolve));
     let secondEntered = false;
 
     const first = nodeFileLocks.runExclusive(lockPath, async () => {
-      firstEntered?.();
+      firstEntered();
       await firstPaused;
     });
     await entered;
@@ -72,7 +70,7 @@ describe('nodeFileLocks', () => {
     }
     expect(secondEntered).toBe(false);
 
-    releaseFirst?.();
+    releaseFirst();
     await Promise.all([first, second]);
     expect(secondEntered).toBe(true);
   });

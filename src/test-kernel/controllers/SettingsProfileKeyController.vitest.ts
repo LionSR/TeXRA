@@ -1,13 +1,9 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 
-// Local imports - test support
 import { createFakeUIHosts } from '../support/FakeHosts';
 
 function createController(options?: {

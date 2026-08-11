@@ -1,10 +1,7 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
 import {
   SettingsAgentDirectoryController,
   type SettingsAgentDirectoryEntry,

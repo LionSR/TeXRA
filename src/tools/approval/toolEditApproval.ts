@@ -16,7 +16,6 @@ import {
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';

@@ -1,4 +1,3 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Scripted state the mocked ResponseCycleFlow writes back onto the cycle shared
@@ -12,9 +11,8 @@ const flowState = vi.hoisted(() => ({
   contextWindowRecoveryRequestId: undefined as number | undefined,
 }));
 
-// Replace the inner cycle flow with a stub that just applies the scripted flags.
-// This isolates ResponseCycleNode's outcome *classification* from the full
-// model-invocation pipeline.
+// Stub the inner cycle flow to apply the scripted flags, isolating the node's
+// outcome classification from the model-invocation pipeline.
 vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
   createResponseCycleFlow: () => ({
     setServices() {},
@@ -36,7 +34,6 @@ vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
   }),
 }));
 
-// Local imports
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import type { AgentFileLocation } from '@shared/schemas';
@@ -80,13 +77,6 @@ async function runNode(options: NodeOptions = {}) {
   return { node, shared, prep, result };
 }
 
-async function runCycle(interrupted: boolean) {
-  const { result } = await runNode({
-    signal: interrupted ? AbortSignal.abort() : undefined,
-  });
-  return result;
-}
-
 describe('ResponseCycleNode outcome classification', () => {
   beforeEach(() => {
     Object.assign(flowState, {
@@ -98,100 +88,89 @@ describe('ResponseCycleNode outcome classification', () => {
     });
   });
 
-  it('does NOT cancel a stop-without-end-of-turn when the run is not interrupted', async () => {
-    // The regression: a round that stopped (e.g. a completed response whose
-    // terminal reason was not recognized as end-of-turn, or a token/continuation
-    // limit carrying real output) used to be discarded as `cancelled` via the
-    // `shouldStop && !endTurn` proxy. It must now complete so its output is kept.
+  // A round that stopped (e.g. a completed response whose terminal reason was
+  // not recognized as end-of-turn, or a token/continuation limit carrying real
+  // output) must keep its output unless the run was genuinely interrupted — it
+  // used to be discarded as `cancelled` via the `shouldStop && !endTurn` proxy.
+  it.each([
+    {
+      name: 'does NOT cancel a stop-without-end-of-turn when the run is not interrupted',
+      interrupted: false,
+      expected: 'completed',
+    },
+    {
+      name: 'cancels only when the run is genuinely interrupted',
+      interrupted: true,
+      expected: 'cancelled',
+    },
+  ])('$name', async ({ interrupted, expected }) => {
     flowState.shouldStop = true;
     flowState.endTurn = false;
 
-    const result = await runCycle(false);
+    const { result } = await runNode({
+      signal: interrupted ? AbortSignal.abort() : undefined,
+    });
 
-    expect(result.outcome).toBe('completed');
-  });
-
-  it('cancels only when the run is genuinely interrupted', async () => {
-    flowState.shouldStop = true;
-    flowState.endTurn = false;
-
-    const result = await runCycle(true);
-
-    expect(result.outcome).toBe('cancelled');
+    expect(result.outcome).toBe(expected);
   });
 
   it('keeps a cleanly completed round even if an interrupt races in at completion', async () => {
     flowState.shouldStop = true;
     flowState.endTurn = true;
 
-    const result = await runCycle(true);
+    const { result } = await runNode({ signal: AbortSignal.abort() });
 
-    expect(result.outcome).toBe('completed');
-    if (result.outcome === 'completed') {
-      expect(result.endTurn).toBe(true);
-    }
+    expect(result).toMatchObject({
+      outcome: 'completed',
+      endTurn: true,
+    });
   });
 
-  it('clears forced compaction when interruption abandons recovery', async () => {
+  it.each([
+    {
+      name: 'clears forced compaction when interruption abandons recovery',
+      interrupted: true,
+      lastError: undefined,
+      expected: 'cancelled',
+    },
+    {
+      name: 'clears forced compaction after invocation retries are exhausted',
+      interrupted: false,
+      lastError: {
+        message: 'HTTP 503 Service Unavailable',
+        userRetryable: true,
+      },
+      expected: 'failed',
+    },
+  ])('$name', async ({ interrupted, lastError, expected }) => {
     flowState.shouldStop = true;
     flowState.contextWindowRecoveryAttempted = true;
     flowState.contextWindowRecoveryRequestId = 7;
+    flowState.lastError = lastError;
     const clearCompactionRequest = vi.fn();
 
     const { result } = await runNode({
-      signal: AbortSignal.abort(),
+      signal: interrupted ? AbortSignal.abort() : undefined,
       clearCompactionRequest,
     });
 
-    expect(result.outcome).toBe('cancelled');
+    expect(result.outcome).toBe(expected);
     expect(clearCompactionRequest).toHaveBeenCalledWith(7);
   });
 
-  it('clears forced compaction after invocation retries are exhausted', async () => {
+  it.each([
+    { message: 'HTTP 503 Service Unavailable', userRetryable: true },
+    { message: 'Model response was empty', userRetryable: false },
+  ])('does not re-log an inner model failure: $message', async (lastError) => {
     flowState.shouldStop = true;
-    flowState.contextWindowRecoveryAttempted = true;
-    flowState.contextWindowRecoveryRequestId = 7;
-    flowState.lastError = {
-      message: 'HTTP 503 Service Unavailable',
-      userRetryable: true,
-    };
-    const clearCompactionRequest = vi.fn();
-
-    const { result } = await runNode({ clearCompactionRequest });
-
-    expect(result.outcome).toBe('failed');
-    expect(clearCompactionRequest).toHaveBeenCalledWith(7);
-  });
-
-  it('propagates an inner model failure without logging it again', async () => {
-    flowState.shouldStop = true;
-    flowState.lastError = {
-      message: 'HTTP 503 Service Unavailable',
-      userRetryable: true,
-    };
+    flowState.lastError = lastError;
     const logger = { error: vi.fn(), debug: vi.fn() };
     const { node, shared, prep, result } = await runNode({ logger });
 
     await node.post(shared, prep, result);
 
-    expect(result).toMatchObject({
-      outcome: 'failed',
-    });
-    expect(shared.lastError).toBe(flowState.lastError);
-    expect(logger.error).not.toHaveBeenCalled();
-  });
-
-  it('does not infer logging ownership from the error contents', async () => {
-    flowState.shouldStop = true;
-    flowState.lastError = {
-      message: 'Model response was empty',
-      userRetryable: false,
-    };
-    const logger = { error: vi.fn(), debug: vi.fn() };
-    const { node, shared, prep, result } = await runNode({ logger });
-
-    await node.post(shared, prep, result);
-
+    expect(result).toMatchObject({ outcome: 'failed' });
+    expect(shared.lastError).toBe(lastError);
     expect(logger.error).not.toHaveBeenCalled();
   });
 

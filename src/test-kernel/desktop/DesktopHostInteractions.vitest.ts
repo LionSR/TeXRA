@@ -1,9 +1,5 @@
-// Test support imports
-
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import type {
   BashSettlement,
   PlanApprovalResult,
@@ -28,7 +24,6 @@ import type {
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
-// Local file imports
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
 interface DesktopHostInteractions {
@@ -237,7 +232,6 @@ async function createInteractions(handlers = createHandlers()) {
     handlers,
     presentationSink,
     sessionEvents,
-    session,
     toolEditApprovals,
   };
 }

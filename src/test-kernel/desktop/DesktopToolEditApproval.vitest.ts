@@ -12,7 +12,6 @@ import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
 
 import type { ToolEditPermission } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type {
