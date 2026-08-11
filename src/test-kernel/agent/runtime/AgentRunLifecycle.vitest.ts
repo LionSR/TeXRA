@@ -391,9 +391,9 @@ describe('runFlowWithLifecycle', () => {
     );
     const trace = new TraceEmitter();
     const detachTrace = ctx.runScope.session.attachRunTrace(trace, streamId);
-    const recorded = recordSessionEvents(ctx.runScope.session.events, {
-      scope: 'run',
-    });
+    // Record both scopes: run.config travels on the run rail while status is
+    // a session fact — the ordering assertion spans the two.
+    const recorded = recordSessionEvents(ctx.runScope.session.events);
     ctx.logger = trace;
     ctx.disposeTrace = detachTrace;
 
@@ -406,7 +406,7 @@ describe('runFlowWithLifecycle', () => {
         (event) => event.scope === 'run' && event.event.type === 'run.config',
       );
       const runningIndex = recorded.events.findIndex((event) => {
-        if (event.scope !== 'run' || event.event.type !== 'status') {
+        if (event.scope !== 'session' || event.event.type !== 'status') {
           return false;
         }
         return (

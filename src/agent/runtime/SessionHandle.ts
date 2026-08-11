@@ -366,7 +366,6 @@ export class SessionHandle {
     const repaired = this.status.transitionToWaiting(
       streamId,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      { trace: logger },
     );
     if (repaired) {
       logger.debug(`Stream ${streamId} restored to WAITING before follow-up`);
@@ -620,7 +619,6 @@ export class SessionHandle {
         if (closed.length > 0) await this.transcripts.flush();
         return closed;
       },
-      statusEmitOptions: { trace: logger },
       logger,
       signal: this.restartRepairAbort.signal,
     });

@@ -264,7 +264,6 @@ export async function finalizeRunTerminal(
         handle.childStreamId,
         outcome,
         STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        { trace: handle.trace },
       )
     ) {
       logger.warn('Failed to set terminal stream status', {
@@ -310,21 +309,16 @@ function toFlowFailureError(error: RetryErrorInfo): Error {
 function transitionRunStart(ctx: AgentLaunchContext): void {
   const { streamId, session } = ctx.runScope;
   const streamStatus = session.status;
-  const options = {
-    trace: ctx.logger,
-  };
   const transitioned =
     streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      options,
     ) ||
     streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
       STREAM_TRANSITION_CAUSE.RESUME,
-      options,
     );
   if (transitioned || streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
     return;
@@ -378,19 +372,16 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
   if (phase === STREAM_PHASE.CANCELLED || !isTerminalOutcomePhase(phase)) {
     return;
   }
-  const options = { trace: ctx.logger };
   const recorded =
     streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
       STREAM_TRANSITION_CAUSE.RESUME,
-      options,
     ) &&
     streamStatus.transition(
       streamId,
       STREAM_PHASE.CANCELLED,
       STREAM_TRANSITION_CAUSE.USER_STOP,
-      options,
     );
   if (recorded) return;
   logger.warn('Failed to record a stop that landed before run start', {

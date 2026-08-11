@@ -450,9 +450,7 @@ export abstract class RetryableInvocationNode<
 
     logErrorData(logger, `${operationName} failed`, formatted);
 
-    streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
-      trace: logger,
-    });
+    streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait');
     logger.debug('Waiting for manual retry', {
       data: formatted.message ?? 'unknown error',
     });
@@ -492,9 +490,7 @@ export abstract class RetryableInvocationNode<
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
-      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        trace: logger,
-      });
+      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
       return {
         shouldRetry: true,
         userCancelled: false,
@@ -515,16 +511,12 @@ export abstract class RetryableInvocationNode<
         logger,
         result.reason ?? 'Retry denied (no human input available)',
       );
-      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-        trace: logger,
-      });
+      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
       return { shouldRetry: false, userCancelled: false };
     }
 
     logProgressStatus(logger, 'Retry cancelled by user');
-    streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop', {
-      trace: logger,
-    });
+    streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
     return { shouldRetry: false, userCancelled: true };
   }
 

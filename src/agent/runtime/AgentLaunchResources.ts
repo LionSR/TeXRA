@@ -25,6 +25,7 @@ export class AgentLaunchResources {
     const attachment: { detach?: () => void } = {};
     const runTrace: RunTrace = {
       trace: rawRunTrace.trace,
+      handleStatus: rawRunTrace.handleStatus,
       dispose: () => {
         try {
           attachment.detach?.();

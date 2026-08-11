@@ -16,7 +16,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
   StreamStatusMachine,
-  type StreamStatusEmitOptions,
 } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
@@ -273,7 +272,6 @@ export class ExecutionRegistry {
         handle.childStreamId,
         options.status,
         cause,
-        this.streamStatusEmitOptions(handle),
       );
     }
     this.track(handle);
@@ -307,12 +305,7 @@ export class ExecutionRegistry {
     } else {
       cause = 'lifecycle';
     }
-    return this.streamStatus.transition(
-      handle.childStreamId,
-      status,
-      cause,
-      this.streamStatusEmitOptions(handle),
-    );
+    return this.streamStatus.transition(handle.childStreamId, status, cause);
   }
 
   /** Remove an execution handle and notify waiters. */
@@ -746,7 +739,7 @@ export class ExecutionRegistry {
         this.interruptActiveChildren(handle.childStreamId, visited, options);
       }
       if (handle.interrupt()) {
-        this.cancelStreamStatus(handle.childStreamId, handle);
+        this.cancelStreamStatus(handle.childStreamId);
         return true;
       }
       // No live interrupt context: a native subagent suspended at WAITING has
@@ -843,7 +836,7 @@ export class ExecutionRegistry {
         try {
           const untracked = this.untrackIfCurrent(handle);
           if (untracked) {
-            this.cancelStreamStatus(handle.childStreamId, handle);
+            this.cancelStreamStatus(handle.childStreamId);
           }
         } catch (recoveryError) {
           recoveryFailures.push(recoveryError);
@@ -958,36 +951,22 @@ export class ExecutionRegistry {
     if (opts.untrackMode === 'ifCurrent') {
       const untracked = this.untrackIfCurrent(handle);
       if (untracked) {
-        this.cancelStreamStatus(handle.childStreamId, handle);
+        this.cancelStreamStatus(handle.childStreamId);
       }
       return untracked;
     }
     this.untrackHandle(handle);
-    this.cancelStreamStatus(handle.childStreamId, handle);
+    this.cancelStreamStatus(handle.childStreamId);
     return true;
   }
 
-  private streamStatusEmitOptions(
-    handle?: AgentExecutionHandle,
-  ): StreamStatusEmitOptions {
-    return handle?.trace ? { trace: handle.trace } : {};
-  }
-
   /**
-   * Mark a stream CANCELLED from a user stop. Passes the handle's trace when
-   * one is available; the session-fact rail is published by the status machine
-   * itself, so no caller has to route it (see {@link streamStatusEmitOptions}).
+   * Mark a stream CANCELLED from a user stop. The status machine publishes the
+   * canonical session fact itself — the single status rail every consumer,
+   * including the transcript recorder, subscribes to — so no caller routes it.
    */
-  private cancelStreamStatus(
-    streamId: StreamTabId,
-    handle?: AgentExecutionHandle,
-  ): void {
-    this.streamStatus.transition(
-      streamId,
-      STREAM_PHASE.CANCELLED,
-      'user-stop',
-      this.streamStatusEmitOptions(handle),
-    );
+  private cancelStreamStatus(streamId: StreamTabId): void {
+    this.streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
   }
 
   private addChangeCallback(executionId: string, cb: () => void): void {
