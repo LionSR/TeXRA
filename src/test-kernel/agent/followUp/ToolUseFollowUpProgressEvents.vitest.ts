@@ -12,7 +12,6 @@ import {
   notifyFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { listenForFollowUp } from '@tools/executions/waitCoordination';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -24,6 +23,7 @@ import {
 } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
 // Local file imports
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
@@ -183,10 +183,10 @@ describe('tool-use follow-up progress events', () => {
     const ac = new AbortController();
     const otherStream = 'stream:other' as StreamTabId;
 
-    const cleanup = withRunContext(
-      createRunContext({ session, streamId }),
-      () => listenForFollowUp(ac),
-    );
+    let cleanup: () => void = () => {};
+    withRunContext(createRunContext({ session, streamId }), () => {
+      cleanup = listenForFollowUp(ac);
+    });
     unsubscribeFollowUpObservers.push(cleanup);
 
     notifyFollowUpSent(otherStream, session);
@@ -200,10 +200,10 @@ describe('tool-use follow-up progress events', () => {
     const session = trackSession();
     const ac = new AbortController();
 
-    const cleanup = withRunContext(
-      createRunContext({ session, streamId }),
-      () => listenForFollowUp(ac),
-    );
+    let cleanup: () => void = () => {};
+    withRunContext(createRunContext({ session, streamId }), () => {
+      cleanup = listenForFollowUp(ac);
+    });
     cleanup();
 
     notifyFollowUpSent(streamId, session);

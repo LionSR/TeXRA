@@ -737,6 +737,12 @@ export class SessionHandle {
   /** Currently-subscribed `onResult` listeners that asked for missed replay. */
   private replayResultListenerCount = 0;
   private replayMissedResultsEnabled = false;
+  /**
+   * Disposers for active `onResult` hub subscriptions, so `dispose()` can
+   * drop them like the pre-hub listener set did — a late `publishRunEvent`
+   * after teardown must not reach host closures.
+   */
+  private readonly resultListenerDetachers = new Set<() => void>();
   private disposeStarted = false;
 
   /**
@@ -774,12 +780,15 @@ export class SessionHandle {
         }
       });
     }
-    return () => {
+    const dispose = (): void => {
       if (disposed) return;
       disposed = true;
+      this.resultListenerDetachers.delete(dispose);
       if (replayMissed) this.replayResultListenerCount -= 1;
       detach();
     };
+    this.resultListenerDetachers.add(dispose);
+    return dispose;
   }
 
   /**
@@ -857,6 +866,7 @@ export class SessionHandle {
     this.interactions.dispose();
     this.detachSnapshotEvents();
     this.artifactFlushers.clear();
+    for (const detach of [...this.resultListenerDetachers]) detach();
     this.missedTerminalResults.clear();
   }
 }

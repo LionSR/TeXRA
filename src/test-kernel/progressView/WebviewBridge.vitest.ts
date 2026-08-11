@@ -265,6 +265,8 @@ describe('WebviewBridge', () => {
     );
     await vi.advanceTimersByTimeAsync(20);
 
+    // The rejected frame's changes come back via a full replay — the same
+    // path used at registration — rather than a redelivery window.
     expect(sendMessage).toHaveBeenLastCalledWith(
       logDeltaMessage(ACTIVE, {
         entries: [

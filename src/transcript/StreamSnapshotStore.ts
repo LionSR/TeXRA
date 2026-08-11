@@ -1333,7 +1333,21 @@ export class StreamSnapshotStore {
     const children: StreamTabId[] = [];
     for (const stream of await this.listPersistedStreams()) {
       if (stream === parent) continue;
-      if ((await readMeta(this.kv(stream)))?.parentStreamId === parent) {
+      let meta;
+      try {
+        meta = await readMeta(this.kv(stream));
+      } catch (error) {
+        // An unreadable sidecar proves nothing about this stream's parent;
+        // treat it as unrelated so one bad file cannot block the detach
+        // sweep for every other child.
+        logger.warn(
+          CHANNEL,
+          `Skipping unreadable sidecar meta for stream ${stream} during child detach.`,
+          { data: error },
+        );
+        continue;
+      }
+      if (meta?.parentStreamId === parent) {
         children.push(stream);
       }
     }
