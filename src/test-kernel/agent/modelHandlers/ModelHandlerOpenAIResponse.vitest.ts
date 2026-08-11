@@ -501,6 +501,21 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(reasoning?.effort, expected.effort);
   });
 
+  it('requests fast-tier processing for the gpt56fast registry entry', async () => {
+    assert.equal(MODEL_CONFIGS.gpt56fast.serviceTier, 'fast');
+    const handler = createHandler(MODEL_CONFIGS.gpt56fast);
+    const { client, requests } = createCapturingClient('resp-fast-tier');
+
+    await handler.createResponse({
+      client,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    assert.equal(requests[0]?.model, 'gpt-5.6-sol');
+    assert.equal(requests[0]?.service_tier, 'fast');
+  });
+
   it('does not mistake a user override for the model native ceiling', async () => {
     const handler = createHandler({
       name: 'reasoning-model',
