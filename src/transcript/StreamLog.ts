@@ -123,6 +123,79 @@ export class StreamLogDeltaBuffer {
 
 let nextStreamLogInstanceId = 1;
 
+/**
+ * Chunked accumulation for one streaming entry's text. Provider chunks are
+ * collected in `chunks` and joined lazily, so a hot appendText path costs
+ * O(chunk) instead of re-copying the whole entry text per chunk. `joined` is
+ * the memoized join so far; `length` is the full text length including the
+ * unjoined tail.
+ */
+interface StreamingTextAccumulator {
+  joined: string;
+  chunks: string[];
+  length: number;
+}
+
+function materializeText(acc: StreamingTextAccumulator, end: number): string {
+  if (acc.joined.length < end) {
+    acc.joined += acc.chunks.join('');
+    acc.chunks.length = 0;
+  }
+  return end === acc.joined.length ? acc.joined : acc.joined.slice(0, end);
+}
+
+/**
+ * Read `[from, end)` from the accumulator without collapsing its chunk tail:
+ * the webview delta path calls this at render cadence during streaming, and
+ * materializing there would re-copy the whole joined prefix per frame. The
+ * chunk walk stays short because every throttled save materializes (via the
+ * persisted entries' `text` getters) and resets the tail.
+ */
+function sliceAccumulatedText(
+  acc: StreamingTextAccumulator,
+  from: number,
+  end: number,
+): string {
+  if (end <= acc.joined.length) return acc.joined.slice(from, end);
+  const parts: string[] = [];
+  if (from < acc.joined.length) parts.push(acc.joined.slice(from));
+  let pos = acc.joined.length;
+  for (const chunk of acc.chunks) {
+    if (pos >= end) break;
+    const next = pos + chunk.length;
+    if (next > from) {
+      parts.push(
+        chunk.slice(Math.max(0, from - pos), Math.min(chunk.length, end - pos)),
+      );
+    }
+    pos = next;
+  }
+  return parts.join('');
+}
+
+/**
+ * The immutable post-mutation entry object for a text append: every field of
+ * `current` is carried over by descriptor (never invoking `current`'s own
+ * lazy getter), while `text` becomes a memoized getter that joins the
+ * accumulator's chunks up to this entry's point-in-time length on first read.
+ * Readers that never touch `.text` (delta buffering, superseded emissions)
+ * pay nothing.
+ */
+function entryWithLazyText(
+  current: StreamLogEntry,
+  acc: StreamingTextAccumulator,
+  end: number,
+): StreamLogEntry {
+  const descriptors = Object.getOwnPropertyDescriptors(current);
+  let memo: string | undefined;
+  descriptors.text = {
+    get: () => (memo ??= materializeText(acc, end)),
+    enumerable: true,
+    configurable: true,
+  };
+  return Object.defineProperties({}, descriptors) as StreamLogEntry;
+}
+
 export interface StreamLogPreservedRawEntry {
   readonly beforeTypedIndex: number;
   readonly raw: unknown;
@@ -184,7 +257,19 @@ export class StreamLog {
   private seqCounter = 0;
   private readonly indexById = new Map<string, number>();
   private readonly dirtyUpdates = new Set<string>();
-  private readonly dirtyTextDeltas = new Map<string, StreamLogTextDelta>();
+  /**
+   * Per-entry chunk accumulators for in-flight streaming text. An entry whose
+   * id is present here carries a lazy `text` getter over the accumulator;
+   * settle/update materializes the join into a plain value and drops the
+   * accumulator, so persisted and settled entries are always plain.
+   */
+  private readonly streamingText = new Map<string, StreamingTextAccumulator>();
+  /**
+   * Offset into an entry's text where the webview's unacked text-delta window
+   * starts, keyed by id. The delta itself is a slice of the one canonical
+   * text, replacing the old second accumulated delta string per entry.
+   */
+  private readonly dirtyTextFrom = new Map<string, number>();
   private emissionSeqCounter = 0;
   private pendingAppendedIds: string[] = [];
   private readonly pendingDirtiedIds = new Set<string>();
@@ -388,6 +473,8 @@ export class StreamLog {
     // Direct merge — no Zod parse. update() is on the streaming hot path
     // (tool output chunks at ~200/sec) and receives trusted data from
     // AgentTrace. Persisted entries are parsed when loaded from storage.
+    // Spreading `current` reads its (possibly lazy) text getter, so this is
+    // where a streaming entry's chunks are joined into a plain value.
     const updated: StreamLogEntry = {
       ...current,
       ...patch,
@@ -403,8 +490,9 @@ export class StreamLog {
     this.countEntry(updated, 1);
 
     this.entries[index] = updated;
+    this.streamingText.delete(id);
     this.dirtyUpdates.add(id);
-    this.dirtyTextDeltas.delete(id);
+    this.dirtyTextFrom.delete(id);
     this.pendingDirtiedIds.add(id);
     return updated;
   }
@@ -418,18 +506,21 @@ export class StreamLog {
     const current = this.entries[index];
     if (current.type !== STREAM_LOG_ENTRY_TYPES.LOG) return undefined;
 
-    const updated: StreamLogEntry = {
-      ...current,
-      text: `${current.text ?? ''}${appendText}`,
-    };
+    let acc = this.streamingText.get(id);
+    if (!acc) {
+      // Reading `current.text` here materializes any lazy value left behind
+      // by a log merge; on the ordinary path it is already a plain value.
+      const base = current.text ?? '';
+      acc = { joined: base, chunks: [], length: base.length };
+      this.streamingText.set(id, acc);
+    }
+    acc.chunks.push(appendText);
+    acc.length += appendText.length;
 
+    const updated = entryWithLazyText(current, acc, acc.length);
     this.entries[index] = updated;
-    if (!this.dirtyUpdates.has(id)) {
-      const currentDelta = this.dirtyTextDeltas.get(id);
-      this.dirtyTextDeltas.set(id, {
-        id,
-        appendText: `${currentDelta?.appendText ?? ''}${appendText}`,
-      });
+    if (!this.dirtyUpdates.has(id) && !this.dirtyTextFrom.has(id)) {
+      this.dirtyTextFrom.set(id, acc.length - appendText.length);
     }
     this.pendingDirtiedIds.add(id);
     return updated;
@@ -466,15 +557,24 @@ export class StreamLog {
       delta: StreamLogTextDelta;
       seqNo: number;
     }> = [];
-    for (const [id, delta] of this.dirtyTextDeltas) {
+    for (const [id, from] of this.dirtyTextFrom) {
       const index = this.indexById.get(id);
       if (index === undefined) {
-        this.dirtyTextDeltas.delete(id);
+        this.dirtyTextFrom.delete(id);
         continue;
       }
       const entry = this.entries[index];
       if (entry.seqNo <= maxSeqInclusive) {
-        deltas.push({ delta, seqNo: entry.seqNo });
+        const acc = this.streamingText.get(id);
+        deltas.push({
+          delta: {
+            id,
+            appendText: acc
+              ? sliceAccumulatedText(acc, from, acc.length)
+              : (entry.text ?? '').slice(from),
+          },
+          seqNo: entry.seqNo,
+        });
       }
     }
     deltas.sort((a, b) => a.seqNo - b.seqNo);
@@ -482,7 +582,7 @@ export class StreamLog {
   }
 
   clearDirtyUpdates(maxSeqInclusive: number = this.seqCounter): void {
-    for (const dirty of [this.dirtyUpdates, this.dirtyTextDeltas] as const) {
+    for (const dirty of [this.dirtyUpdates, this.dirtyTextFrom] as const) {
       for (const id of dirty.keys()) {
         const index = this.indexById.get(id);
         if (
@@ -511,52 +611,50 @@ export class StreamLog {
     for (const entry of fullEntries) {
       const index = this.indexById.get(entry.id);
       if (index === undefined || this.entries[index] === entry) {
-        this.dirtyTextDeltas.delete(entry.id);
+        this.dirtyTextFrom.delete(entry.id);
         continue;
       }
 
-      const current = this.dirtyTextDeltas.get(entry.id);
-      if (!current) continue;
-      const currentEntry = this.entries[index];
-      const currentText =
-        typeof currentEntry.text === 'string' ? currentEntry.text : '';
+      const from = this.dirtyTextFrom.get(entry.id);
+      if (from === undefined) continue;
+      const currentText = this.entries[index].text ?? '';
       const deliveredText = typeof entry.text === 'string' ? entry.text : '';
-      // A full-entry frame covers all appended text between the stable base
-      // prefix and the delivered text, even if later appends replaced the row.
-      const baseLength = currentText.length - current.appendText.length;
-      const deliveredDeltaLength = deliveredText.length - baseLength;
-
+      // A full-entry frame covers all appended text up to the delivered
+      // text's length, even if later appends replaced the row.
       if (
-        baseLength >= 0 &&
-        deliveredDeltaLength > 0 &&
-        currentText.endsWith(current.appendText) &&
+        deliveredText.length > from &&
         currentText.startsWith(deliveredText)
       ) {
-        if (deliveredDeltaLength >= current.appendText.length) {
-          this.dirtyTextDeltas.delete(entry.id);
-          continue;
+        if (deliveredText.length >= currentText.length) {
+          this.dirtyTextFrom.delete(entry.id);
+        } else {
+          this.dirtyTextFrom.set(entry.id, deliveredText.length);
         }
-        this.dirtyTextDeltas.set(entry.id, {
-          id: entry.id,
-          appendText: current.appendText.slice(deliveredDeltaLength),
-        });
       }
     }
 
     for (const delta of deltas) {
-      const current = this.dirtyTextDeltas.get(delta.id);
-      if (!current) continue;
-
-      if (current.appendText === delta.appendText) {
-        this.dirtyTextDeltas.delete(delta.id);
+      const from = this.dirtyTextFrom.get(delta.id);
+      if (from === undefined) continue;
+      const index = this.indexById.get(delta.id);
+      if (index === undefined) {
+        this.dirtyTextFrom.delete(delta.id);
         continue;
       }
-
-      if (current.appendText.startsWith(delta.appendText)) {
-        this.dirtyTextDeltas.set(delta.id, {
-          id: delta.id,
-          appendText: current.appendText.slice(delta.appendText.length),
-        });
+      const currentText = this.entries[index].text ?? '';
+      const end = from + delta.appendText.length;
+      // Advance only when the delivered frame still matches the canonical
+      // text at the window start (an interleaved update() resets the window).
+      if (
+        end > currentText.length ||
+        !currentText.startsWith(delta.appendText, from)
+      ) {
+        continue;
+      }
+      if (end === currentText.length) {
+        this.dirtyTextFrom.delete(delta.id);
+      } else {
+        this.dirtyTextFrom.set(delta.id, end);
       }
     }
   }
