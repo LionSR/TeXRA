@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ToolDefinition } from '@model/ToolDefinition';
-import { replaceDelegationDescriptionBlock } from '@tools/delegation/delegationDescriptionBlock';
+import { replaceDelegationDescriptionBlock } from '@tools/delegation/delegationAvailability';
 
 const LINE = /^Anchor:.*$/m;
 

@@ -46,10 +46,8 @@ import {
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
-import {
-  CLI_LOCAL_STREAM_ID,
-  finalizeAssistantTranscriptEntries,
-} from '@cli/chat/tui/state/transcript';
+import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import {
   AgentCategory,
@@ -241,7 +239,7 @@ describe('CLI conversation transcript', () => {
       ],
     }));
 
-    finalizeAssistantTranscriptEntries(STREAM_ID);
+    projectStreamTranscript(STREAM_ID, { finalize: true });
 
     const slice = streams.get().get(STREAM_ID);
     expect(slice?.entries.map((item) => item.finalized)).toEqual([true, true]);
@@ -352,7 +350,7 @@ describe('CLI conversation transcript', () => {
     expect(split.finalized).toHaveLength(0);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
 
-    finalizeAssistantTranscriptEntries(STREAM_ID);
+    projectStreamTranscript(STREAM_ID, { finalize: true });
 
     split = splitTranscriptEntries(
       streams.get().get(STREAM_ID)?.entries ?? [],

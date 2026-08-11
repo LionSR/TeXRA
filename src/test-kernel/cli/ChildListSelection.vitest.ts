@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   childListStreamId,
-  childPhaseListValue,
   childStreamListValue,
   isWorkflowTaskListValue,
   workflowPhaseListValue,
@@ -37,8 +36,6 @@ describe('CLI child list selection', () => {
   it('uses stable prefixed values for child rows', () => {
     expect(mainValue).toBe('stream:main');
     expect(childListStreamId(mainValue)).toBe(main);
-    expect(childPhaseListValue(2)).toBe('phase:2');
-    expect(childListStreamId(childPhaseListValue(2))).toBeUndefined();
     expect(workflowPhaseListValue('entry:phase')).toBe(
       'workflowPhase:entry:phase',
     );

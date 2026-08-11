@@ -1,8 +1,9 @@
-// The workflow dashboard is derived once (`state/workflowDashboardModel`) and
-// read by two consumers: `App` reconciles child-list selection and stream focus
-// against `listValues`, and `SubagentList` renders the rows. If those two ever
-// disagree on which rows exist or in what order, the keyboard silently points
-// at a row other than the highlighted one. These tests pin the agreement.
+// The workflow dashboard is derived once, by `App` (`state/workflowDashboardModel`),
+// and read by two consumers: `App` itself reconciles child-list selection and
+// stream focus against `listValues`, and `SubagentList` renders the model
+// instance it is handed. If those two ever disagree on which rows exist or in
+// what order, the keyboard silently points at a row other than the highlighted
+// one. These tests pin the agreement.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -152,7 +153,7 @@ function navigateList(
     {
       keyboardActive: true,
       listRootStreamId: ROOT,
-      listRootSlice: TWO_PHASE_ROOT,
+      dashboard: workflowDashboardModel(TWO_PHASE_ROOT, columns),
       maxRows: 12,
       onCancel: vi.fn(),
       selectedValue,

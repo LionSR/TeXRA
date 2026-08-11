@@ -11,7 +11,12 @@
 
 import PQueue from 'p-queue';
 
-import type { ChildTurnRef, ChildTurnState, ResultMeta } from '@agent/storage';
+import {
+  getExecutionStore,
+  type ChildTurnRef,
+  type ChildTurnState,
+  type ResultMeta,
+} from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -49,7 +54,6 @@ import {
   deliverChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
-  persistChildRunTurnState,
 } from '@tools/delegation/childRunDelivery';
 import { formatSubagentProgress } from '@tools/delegation/subagentResults';
 import type {
@@ -456,10 +460,11 @@ async function persistTurnStateBestEffort(
   state: ChildTurnState,
   logger: AgentTrace,
 ): Promise<void> {
-  const result = await persistChildRunTurnState(executionId, state);
-  if (result.kind === 'failed') {
+  try {
+    await getExecutionStore(executionId).writeTurnState(state);
+  } catch (err) {
     logger.warn(`Failed to persist turn state for ${executionId}`, {
-      data: result.err,
+      data: err,
     });
   }
 }

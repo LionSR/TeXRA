@@ -2692,8 +2692,9 @@ describe('CLI transcript state', () => {
     expect(entryTexts(root)).toEqual(['Why?', '  The answer starts here.']);
   });
 
-  // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
-  // must not roll the entry back to `finalized: false`. Without this guard,
+  // Regression: a sync tick that fires after the turn-boundary promotion in
+  // `projectStreamTranscript` must not roll the entry back to
+  // `finalized: false`. Without this guard,
   // the de-finalized entry lands in neither bucket of
   // `splitTranscriptEntries` once status flips to WAITING, and silently
   // disappears from the transcript.

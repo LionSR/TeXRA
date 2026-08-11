@@ -29,12 +29,14 @@ import {
   executeStableSubagentInBand,
   SubagentDurabilityError,
 } from './inBandSubagentExecution';
-import { rejectOversizedBibAttachments } from './inputFields';
+import {
+  assertWorkflowFilesExist,
+  rejectOversizedBibAttachments,
+} from './inputFields';
 import {
   requireVisibleAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
-import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 async function resolveInvocationFileList(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
@@ -155,7 +157,7 @@ async function workflowScriptModelSelection(
  * the grandchild execution ids and run-storage lineage stay consistent when a
  * timed-out run is resumed under the same `meta.name`.
  */
-export interface WorkflowRunIdentity {
+interface WorkflowRunIdentity {
   readonly executionId: ExecutionId;
   readonly streamId: StreamTabId;
 }
@@ -172,46 +174,11 @@ export function createWorkflowScriptAgentRunner(
       invocation: WorkflowAgentInvocation,
       totalCostUsd: number | undefined,
     ) => void;
-    /**
-     * Fires when a live attempt for this grandchild begins (`active: true`)
-     * and settles (`active: false`), carrying its derived execution id — the
-     * identity a host uses to target interactive skip/retry. Retries re-enter
-     * the runner with the same id, so each attempt is bracketed by a
-     * start/settle pair.
-     */
-    readonly onChildActive?: (
-      grandchildExecutionId: ExecutionId,
-      invocation: WorkflowAgentInvocation,
-      active: boolean,
-    ) => void;
   },
 ): WorkflowAgentRunner {
   const { runScope } = parent;
 
   return async (invocation) => {
-    if (invocation.dependencyFingerprint !== undefined) {
-      let launchFingerprint: string;
-      try {
-        launchFingerprint = await fingerprintWorkflowAgentDependencies(
-          run.executionId,
-          invocation.options,
-        );
-      } catch (error) {
-        if (error instanceof WorkflowRunAbortError) throw error;
-        throw new WorkflowRunAbortError(
-          formatError(
-            'Workflow agent() file dependencies could not be fingerprinted while the child was launching',
-            error,
-          ),
-          { cause: error },
-        );
-      }
-      if (launchFingerprint !== invocation.dependencyFingerprint) {
-        throw new WorkflowRunAbortError(
-          'Workflow agent() file dependencies changed while the child was launching; rerun the saved workflow script.',
-        );
-      }
-    }
     const logicalExecutionId = deriveExecutionId({
       checkpointId,
       key: invocation.key,
@@ -219,8 +186,9 @@ export function createWorkflowScriptAgentRunner(
     });
     // The id this attempt actually runs (and registers its child stream)
     // under: the logical id on attempt 0, an attempt-specific id after a
-    // durable retry. A host targets the in-flight attempt by THIS id, so
-    // report it — not the logical id — through the control bridge.
+    // durable retry. A host targets the in-flight attempt by THIS id, so it is
+    // the one reported to the engine; it also marks the attempt as live, which
+    // durable recovery (which never fires the callback) is distinguished by.
     let activeExecutionId: ExecutionId | undefined;
     try {
       const completed = await executeStableSubagentInBand({
@@ -229,8 +197,7 @@ export function createWorkflowScriptAgentRunner(
         signal: invocation.signal,
         onActiveExecutionId: (executionId) => {
           activeExecutionId = executionId;
-          invocation.reportChildExecution?.(executionId);
-          hooks?.onChildActive?.(executionId, invocation, true);
+          invocation.report?.({ childExecutionId: executionId });
         },
         prepare: async () => {
           const sharedConfigFields = {
@@ -340,8 +307,7 @@ export function createWorkflowScriptAgentRunner(
 
           // Surface the resolved child model so the engine can attach it to
           // this call's `agent:end` progress event.
-          invocation.reportModel?.(configPayload.model);
-          invocation.reportAgent?.(agentName);
+          invocation.report?.({ model: configPayload.model, agent: agentName });
           return {
             configPayload,
             agentName,
@@ -362,7 +328,7 @@ export function createWorkflowScriptAgentRunner(
             // inherits from the orchestrator, so nested delegation remains
             // transitive.
             onStreamResolved: (resolvedStreamId) => {
-              invocation.reportChildStream?.(resolvedStreamId);
+              invocation.report?.({ childStreamId: resolvedStreamId });
               configureDelegatedChildApprovals(
                 resolvedStreamId,
                 run.streamId,
@@ -376,7 +342,7 @@ export function createWorkflowScriptAgentRunner(
               // failed/cancelled/retried attempt still shows what it consumed
               // even when execution never reaches the success path below.
               if (totalCostUsd !== undefined) {
-                invocation.reportCostUsd?.(totalCostUsd);
+                invocation.report?.({ costUsd: totalCostUsd });
               }
             },
           };
@@ -386,15 +352,23 @@ export function createWorkflowScriptAgentRunner(
       if (recovered) {
         // Durable recovery never fires onActiveExecutionId; re-attach the
         // known child id (and stream when available) so /executions/{id}
-        // can navigate to the child that supplied the result.
-        invocation.reportChildExecution?.(completed.executionId);
-        if (invocation.reportChildStream !== undefined) {
+        // can navigate to the child that supplied the result. The recovered
+        // marker keeps these ids out of the engine's skip/retry map — the
+        // recovered result is authoritative and must stay uncontrollable.
+        invocation.report?.({
+          childExecutionId: completed.executionId,
+          recovered: true,
+        });
+        if (invocation.report !== undefined) {
           try {
             const recoveredStreamId = (
               await getExecutionStore(completed.executionId).readMeta()
             )?.streamId;
             if (recoveredStreamId !== undefined) {
-              invocation.reportChildStream(recoveredStreamId);
+              invocation.report({
+                childStreamId: recoveredStreamId,
+                recovered: true,
+              });
             }
           } catch {
             // A recovered result is authoritative. Navigation metadata is
@@ -409,7 +383,7 @@ export function createWorkflowScriptAgentRunner(
       // not charge the synthetic resume attempt — the interrupted snapshot may
       // already hold the same cost on a closed prior attempt.
       if (!recovered) {
-        invocation.reportCostUsd?.(result.cost);
+        invocation.report?.({ costUsd: result.cost });
       }
       if (result.outcome !== 'completed') {
         throw new Error(
@@ -427,12 +401,6 @@ export function createWorkflowScriptAgentRunner(
         throw new WorkflowRunAbortError(error.message, { cause: error });
       }
       throw error;
-    } finally {
-      // Only a live attempt registered (recovered attempts never fire the
-      // active callback), so settle exactly what was registered.
-      if (activeExecutionId !== undefined) {
-        hooks?.onChildActive?.(activeExecutionId, invocation, false);
-      }
     }
   };
 }

@@ -2432,8 +2432,7 @@ function renderHarnessApp(): React.JSX.Element {
     <App
       onSubmit={handleHarnessSubmit}
       onKillExecution={markHarnessExecutionStopped}
-      onSkipExecution={() => undefined}
-      onRetryExecution={() => undefined}
+      onWorkflowControl={() => undefined}
       canInterruptActiveRun={() => canInterrupt}
       canInterruptStream={canInterruptHarnessStream}
       canStopActiveRun={() => canInterrupt}

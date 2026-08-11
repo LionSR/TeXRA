@@ -79,7 +79,10 @@ describe('workflow attempt cost', () => {
 return await agent('retry cost')`,
       runAgent: async (invocation) => {
         attempt += 1;
-        invocation.reportCostUsd?.(attempt === 1 ? 0.2 : 0.3);
+        invocation.report?.({
+          costUsd: attempt === 1 ? 0.2 : 0.3,
+          childExecutionId: `retry-cost-${attempt}` as ExecutionId,
+        });
         if (attempt === 1) {
           await new Promise<void>((_resolve, reject) =>
             invocation.signal.addEventListener(
@@ -97,7 +100,7 @@ return await agent('retry cost')`,
     });
 
     await vi.waitFor(() => expect(attempt).toBe(1));
-    control.retry(0);
+    control('retry-cost-1' as ExecutionId, 'retry');
     await vi.waitFor(() => expect(attempt).toBe(2));
     const result = await run;
 
@@ -168,24 +171,6 @@ return await agent('retry cost')`,
         entry(1, first.result, first.key),
       ]),
     ).toBe(0);
-  });
-
-  it('reports live per-call spend across retries and duplicate keys', () => {
-    const retried = entry(0, workflowResult(0.5), 'duplicate');
-    const other = entry(1, workflowResult(0.4), 'duplicate');
-    const tracker = createWorkflowAttemptCostTracker();
-
-    expect(tracker.costForCall(0)).toBeUndefined();
-
-    tracker.record(retried, 0.1);
-    tracker.record(other, 0.4);
-    tracker.record(retried, 0.2);
-
-    // Every attempt at an index counts toward that call's live spend, unlike
-    // `total`, which discards all but the best value for a completed key.
-    expect(tracker.costForCall(0)).toBeCloseTo(0.3);
-    expect(tracker.costForCall(1)).toBeCloseTo(0.4);
-    expect(tracker.costForCall(2)).toBeUndefined();
   });
 
   it('retains live spend when the final journal is malformed', () => {

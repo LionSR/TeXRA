@@ -1,14 +1,36 @@
-import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
+/**
+ * The one display model for the /executions surface: the listing lines, the
+ * /executions/{id} summary line sets, and the predicates both answer their
+ * questions with — what a run's display category is, whether it shows a model,
+ * and which sub-paths it serves. Pure formatting, no I/O, so `listExecutions`
+ * and `showSummary` only fetch and delegate here.
+ */
+
+import type {
+  ChildRecord,
+  ExecutionListingEntry,
+  ExecutionMeta,
+  TodoEntry,
+} from '@agent/storage';
 import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
+import {
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
+import {
+  AgentExecutionHandle,
+  type ExecutionHandle,
+  type ExecutionStatusInfo,
+} from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   STATUS_DISPLAY,
   TODO_STATUS,
   runIdentityName,
+  type ExecutionId,
   type RunIdentity,
   type RunOutcome,
   type TodoStatus,
@@ -35,35 +57,44 @@ export function executionDisplayCategory(
   return identity.kind === 'agent' ? agentCategory : identity.kind;
 }
 
+/**
+ * The model a run displays, or `null` when it displays none — one rule for the
+ * listing and the summary, so the two cannot disagree about the same run.
+ *
+ * Honest non-agent records (a background process, a multi-agent workflow)
+ * carry a model only when a real one backs the run, and then it is shown; a
+ * legacy fabricated `AgentConfig` on a non-agent identity stays suppressed.
+ */
+function executionDisplayModel(
+  identity: RunIdentity | undefined,
+  record: RunRecord | null | undefined,
+): string | null {
+  if (!record) return null;
+  if (!isAgentRunRecord(record)) return record.model ?? null;
+  return identity === undefined || identity.kind === 'agent'
+    ? record.model
+    : null;
+}
+
 function listingDisplay(entry: ExecutionListingEntry): {
   agent: string;
   model: string | null;
   category: string | undefined;
 } {
   switch (entry.kind) {
-    case 'run': {
-      // Honest non-agent records carry a model only when a real one backs
-      // the run; a legacy fabricated AgentConfig on a non-agent identity
-      // stays suppressed.
-      let model: string | null;
-      if (isAgentRunRecord(entry.record)) {
-        model = entry.identity.kind === 'agent' ? entry.record.model : null;
-      } else {
-        model = entry.record.model ?? null;
-      }
+    case 'run':
       return {
         agent: runIdentityName(entry.identity),
-        model,
+        model: executionDisplayModel(entry.identity, entry.record),
         category: executionDisplayCategory(entry.identity, entry.record),
       };
-    }
     case 'incomplete':
       return { agent: 'unknown', model: 'unknown', category: undefined };
   }
 }
 
 /** Return paths available for a given agent category. */
-export function getAvailablePaths(
+function getAvailablePaths(
   category?: ExecutionDisplayCategory,
   hasChildren?: boolean,
 ): string[] {
@@ -148,4 +179,137 @@ export function formatTodoHeader(
   const completed = todos.filter((t) => t.status === 'completed').length;
   const inProgress = todos.filter((t) => t.status === 'in_progress').length;
   return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${todos.length - completed - inProgress} pending):`;
+}
+
+// ============================================================================
+// /executions/{id} summary
+// ============================================================================
+
+/** Options controlling how showSummary renders a result report. */
+export interface ExecutionSummaryOptions {
+  readonly suppressAutoDeliveredSubagentReport?: boolean;
+}
+
+/**
+ * Whether a report already auto-delivered to the caller should be elided from
+ * the summary: true when `handle` is a tool-use child whose parent stream is
+ * the calling stream — i.e. the caller already receives this child's report
+ * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
+ * Deliberately identity-kind-agnostic: background bash processes
+ * (`kind: 'process'`, category ToolUse) auto-deliver their reports exactly
+ * like delegated agents do, and must stay suppressed too.
+ */
+export function shouldSuppressAutoDeliveredSubagentReport(
+  options: ExecutionSummaryOptions,
+  handle: ExecutionHandle,
+): boolean {
+  if (!options.suppressAutoDeliveredSubagentReport) return false;
+  return (
+    handle instanceof AgentExecutionHandle &&
+    handle.category === 'toolUse' &&
+    handle.isOwnedBy(getRunContextStreamId(tryUseRunContext()))
+  );
+}
+
+/** Format a single child execution as a summary line. */
+export function formatChildLine(
+  child: ChildRecord,
+  childMeta: ExecutionMeta | null | undefined,
+): string {
+  const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
+  const ts = formatTimestamp(child.timestamp);
+  const desc = childMeta?.description ? `: ${childMeta.description}` : '';
+  return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
+}
+
+/** Build the summary lines for a still-running execution (in-memory handle). */
+export function buildRunningSummaryLines(
+  executionId: ExecutionId,
+  handle: ExecutionHandle,
+  category: ExecutionDisplayCategory | undefined,
+  info: ExecutionStatusInfo,
+  meta: ExecutionMeta | null,
+): string[] {
+  const lines = [
+    `Execution: ${executionId}`,
+    `Agent: ${handle.agentName}`,
+    ...(category ? [`Category: ${category}`] : []),
+    `Started: ${new Date(handle.startedAt).toISOString()}`,
+    `Status: ${formatStatusInfo(info)}`,
+  ];
+
+  if (meta?.parentExecutionId) {
+    lines.push(`Parent: ${meta.parentExecutionId}`);
+  }
+
+  return lines;
+}
+
+/** Build the summary lines for a completed execution (full KV fetch). */
+export function buildCompletedSummaryLines(
+  executionId: ExecutionId,
+  record: RunRecord | null,
+  identity: RunIdentity | undefined,
+  category: ExecutionDisplayCategory | undefined,
+  info: ExecutionStatusInfo,
+  meta: ExecutionMeta | null,
+): string[] {
+  const name =
+    record && (isAgentRunRecord(record) ? record.agent : record.name);
+  const model = executionDisplayModel(identity, record);
+  const lines = [
+    `Execution: ${executionId}`,
+    `Agent: ${name ?? 'unknown'}`,
+    ...(category ? [`Category: ${category}`] : []),
+    ...(model === null ? [] : [`Model: ${model}`]),
+    `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
+    `Status: ${formatStatusInfo(info)}`,
+  ];
+
+  if (meta?.description) {
+    lines.push(`Description: ${meta.description}`);
+  }
+
+  if (meta?.parentExecutionId) {
+    lines.push(`Parent: ${meta.parentExecutionId}`);
+  }
+
+  return lines;
+}
+
+/**
+ * Build the todo/report/available-paths lines shared by both showSummary
+ * branches. Appended after the (I/O-fetched) children lines, so this only
+ * needs whether there were any children, not the records themselves.
+ */
+export function buildSummaryTailLines(
+  executionId: ExecutionId,
+  category: ExecutionDisplayCategory | undefined,
+  hasChildren: boolean,
+  todos: TodoEntry[],
+  report: string | null,
+  options: { readonly suppressReport?: boolean } = {},
+): string[] {
+  const lines: string[] = [];
+
+  if (todos.length > 0) {
+    lines.push('', ...formatTodoSection(todos));
+  }
+
+  if (report && options.suppressReport) {
+    lines.push(
+      '',
+      `Result: delivered automatically to this parent stream as a follow-up message. Use /executions/${executionId}/report to read the persisted report explicitly.`,
+    );
+  } else if (report) {
+    lines.push('', 'Result:', report);
+  }
+
+  const paths = getAvailablePaths(category, hasChildren);
+  lines.push(
+    '',
+    `Available paths: ${paths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+  );
+
+  return lines;
 }

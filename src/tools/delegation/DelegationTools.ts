@@ -50,6 +50,7 @@ import {
   selectAvailableDelegationModel,
 } from './proposalFlow';
 import {
+  assertWorkflowFilesExist,
   memoriesField,
   workingDirectoryField,
   withToolUseSubagentHandoffInstruction,
@@ -57,7 +58,6 @@ import {
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
 } from './inputFields';
-import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 const LOG_CHANNEL = 'delegation';
 

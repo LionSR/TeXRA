@@ -488,20 +488,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             },
           },
         ],
-        counts: {
-          total: 1,
-          waiting: 0,
-          planned: 0,
-          stageBlocked: 0,
-          queued: 0,
-          starting: 0,
-          running: 0,
-          completed: 0,
-          failed: 1,
-          cancelled: 0,
-          skipped: 0,
-          cached: 0,
-        },
         timestamps: { createdAt: timestamp, updatedAt: timestamp },
       }),
     );
@@ -609,20 +595,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           },
           ...completedCalls,
         ],
-        counts: {
-          total: 9,
-          waiting: 0,
-          planned: 0,
-          stageBlocked: 0,
-          queued: 0,
-          starting: 0,
-          running: 0,
-          completed: 8,
-          failed: 1,
-          cancelled: 0,
-          skipped: 0,
-          cached: 0,
-        },
         timestamps: { createdAt: failedAt, updatedAt: failedAt },
       }),
     );
@@ -706,20 +678,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             },
           },
         ],
-        counts: {
-          total: 9,
-          waiting: 0,
-          planned: 0,
-          stageBlocked: 0,
-          queued: 0,
-          starting: 0,
-          running: 1,
-          completed: 8,
-          failed: 0,
-          cancelled: 0,
-          skipped: 0,
-          cached: 0,
-        },
         timestamps: { createdAt: timestamp, updatedAt: timestamp },
       }),
     );
@@ -733,6 +691,70 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(output.includes('"id": "earlier-live"'));
     assert.ok(output.includes('"omittedCalls": 1'));
     assert.ok(!output.includes('"id": "current-terminal-7"'));
+  });
+
+  it('shows one model for a workflow run in both the listing and its summary', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      {
+        name: 'model-parity',
+        instruction: 'Workflow script model-parity',
+        model: 'parity-model-1',
+      },
+      'model-parity',
+      {
+        streamId: `workflow-script#${executionId}` as StreamTabId,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'model-parity' },
+      },
+    );
+
+    const summary = await new ExecutionsTool().call({
+      path: `/executions/${executionId}`,
+    });
+    const listing = await new ExecutionsTool().call({ path: '/executions' });
+    const summaryOutput = summary.output ?? '';
+    const listingOutput = listing.output ?? '';
+
+    assert.equal(summary.status, 'executed');
+    assert.equal(listing.status, 'executed');
+    // One model rule: the record's model is real, so both surfaces show it.
+    assert.ok(listingOutput.includes('parity-model-1'));
+    assert.ok(summaryOutput.includes('Model: parity-model-1'));
+    assert.ok(summaryOutput.includes('Category: multiAgentWorkflow'));
+    assert.ok(listingOutput.includes('multiAgentWorkflow'));
+  });
+
+  it('gives a running process the same category and paths as its completed row', async () => {
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('still working\n');
+    });
+
+    const running = await new ExecutionsTool().call({
+      path: `/executions/${run.executionId}`,
+    });
+    const runningOutput = running.output ?? '';
+    assert.equal(running.status, 'executed');
+    // The stamped identity, not the live wire's fabricated execution mode.
+    assert.ok(runningOutput.includes('Category: process'));
+    assert.ok(!runningOutput.includes('Category: toolUse'));
+    // /output is readable while the process runs, so the running summary
+    // must advertise it — the same path the completed row lists.
+    assert.ok(
+      runningOutput.includes(`/executions/${run.executionId}/output`),
+      'a running process must advertise its /output path',
+    );
+
+    await run.finish();
+
+    const completed = await new ExecutionsTool().call({
+      path: `/executions/${run.executionId}`,
+    });
+    const completedOutput = completed.output ?? '';
+    assert.ok(completedOutput.includes('Category: process'));
+    assert.ok(
+      completedOutput.includes(`/executions/${run.executionId}/output`),
+    );
   });
 
   it('errors on an unknown execution id', async () => {
