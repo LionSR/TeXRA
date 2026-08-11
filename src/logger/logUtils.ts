@@ -79,8 +79,12 @@ function createOutputChannel(channel: string, isAgent: boolean): OutputSink {
   return outputSinksTrusted ? sink : createRedactingSink(sink);
 }
 
+function channelKey(channel: string, isAgent: boolean): string {
+  return `${channel}::${isAgent ? 'agent' : 'shared'}`;
+}
+
 function ensureChannel(channel: string, isAgent: boolean): OutputSink {
-  const key = `${channel}::${isAgent ? 'agent' : 'shared'}`;
+  const key = channelKey(channel, isAgent);
   const existing = channels.get(key);
   if (existing) return existing;
 
@@ -89,6 +93,19 @@ function ensureChannel(channel: string, isAgent: boolean): OutputSink {
     : (mainOutputChannel ??= createOutputChannel(channel, false));
   channels.set(key, output);
   return output;
+}
+
+/**
+ * Dispose one agent channel's sink and forget it, so a writer re-created for
+ * the same name starts on a fresh sink. Only agent channels are eligible: the
+ * shared main channel lives until {@link setOutputChannelFactory} replaces it.
+ */
+export function disposeAgentChannel(channel: string): void {
+  const key = channelKey(channel, /* isAgent */ true);
+  const sink = channels.get(key);
+  if (!sink) return;
+  channels.delete(key);
+  sink.dispose?.();
 }
 
 /**
