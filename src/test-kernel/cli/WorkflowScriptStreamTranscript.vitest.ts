@@ -28,7 +28,6 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import {
   AgentCategory,
   MESSAGE_TYPES,
@@ -263,7 +262,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     // This exercises both terminal-status finalization entry points:
     // syncStreamLog's settled-prefix promotion and the explicit
     // end-of-stream projection used by the controller.
-    projectStreamTranscript(STREAM_ID, { finalize: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
 
     expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
       finalized: false,
@@ -298,7 +297,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     ]);
     staticItems = appendItems(staticItems);
-    projectStreamTranscript(STREAM_ID, { finalize: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
     syncStreamLog(STREAM_ID);
     staticItems = appendItems(staticItems);
     expect(entryTexts(staticItems)).toEqual([
@@ -334,7 +333,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
     });
-    projectStreamTranscript(STREAM_ID, { finalize: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
 
     expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
       finalized: false,
@@ -354,7 +353,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         reason: 'not-reached',
       },
     });
-    syncStreamLog(STREAM_ID, { forceFull: true });
+    syncStreamLog(STREAM_ID);
 
     const settledEntries = streams.get().get(STREAM_ID)?.entries ?? [];
     expect(settledEntries).toHaveLength(1);
@@ -370,8 +369,8 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     ]);
     staticItems = appendItems(staticItems);
-    projectStreamTranscript(STREAM_ID, { finalize: true });
-    syncStreamLog(STREAM_ID, { forceFull: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
+    syncStreamLog(STREAM_ID);
     staticItems = appendItems(staticItems);
     expect(entryTexts(staticItems)).toEqual([
       'Skipped: Audit later — The workflow ended before this call was reached.',
@@ -432,7 +431,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
     });
-    projectStreamTranscript(STREAM_ID, { finalize: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
 
     liveItems = appendItems(liveItems);
     expect(entryIds(liveItems)).toEqual([
@@ -507,7 +506,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
     });
-    syncStreamLog(STREAM_ID, { forceFull: true });
+    syncStreamLog(STREAM_ID);
     const coldItems = appendItems();
 
     expect(entryIds(coldItems)).toEqual(entryIds(liveItems));

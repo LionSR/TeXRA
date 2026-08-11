@@ -15,10 +15,24 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  type StreamLogEntry,
   type StreamTabId,
+  type TaskGroup,
 } from '@shared/schemas';
-import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { loadInk } from '@test/support/inkTestHarness.ts';
+
+/** Test-local full replay through the production reducer (the resync path). */
+function projectTaskGroupsFromStreamLog(
+  entries: Iterable<StreamLogEntry>,
+): TaskGroup[] {
+  const taskGroups: TaskGroup[] = [];
+  const taskGroupIndex = new Map<string, number>();
+  for (const entry of entries) {
+    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
+  }
+  return taskGroups;
+}
 
 const STREAM_ID = 'workflow#details' as StreamTabId;
 

@@ -457,7 +457,6 @@ describe('ConfigForm helpers', () => {
     ]);
     expect(items[0]?.description).toBeTruthy();
   });
-
 });
 
 describe('CliConfigForm API-key status lifecycle', () => {
