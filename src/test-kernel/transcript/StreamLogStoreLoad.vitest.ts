@@ -626,7 +626,7 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     expect(store.keys()).toEqual(['alpha']);
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getTimestampRange('alpha').first).toBe(200);
     expect(storage.fullLogReads()).toBe(1);
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamLogStore',
@@ -648,7 +648,7 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     expect(store.keys()).toEqual(['alpha', 'beta']);
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getTimestampRange('alpha').first).toBe(200);
     expect(storage.fullLogReads()).toBe(2);
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamLogStore',
@@ -742,7 +742,7 @@ describe('StreamLogStore load', () => {
         ?.getRange(0)
         .map((entry) => entry.id),
     ).toEqual(['alpha-1']);
-    expect(store.getFirstTimestamp('alpha')).toBe(100);
+    expect(store.getTimestampRange('alpha').first).toBe(100);
     expect(store.has('beta')).toBe(false);
   });
 
@@ -807,8 +807,7 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(0);
     expect(store.keys()).toEqual(['beta', 'alpha']);
     expect(store.get('alpha')).toBeUndefined();
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
-    expect(store.getLastTimestamp('alpha')).toBe(250);
+    expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
 
     await store.ensureLoaded('alpha');
 
@@ -840,8 +839,7 @@ describe('StreamLogStore load', () => {
 
     expect(storage.fullLogReads()).toBe(1);
     expect(store.keys()).toEqual(['alpha']);
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
-    expect(store.getLastTimestamp('alpha')).toBe(250);
+    expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(200, 250),
     );
@@ -861,8 +859,7 @@ describe('StreamLogStore load', () => {
 
     expect(storage.fullLogReads()).toBe(1);
     expect(store.keys()).toEqual(['alpha']);
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
-    expect(store.getLastTimestamp('alpha')).toBe(250);
+    expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamLogStore',
       expect.stringContaining('Ignoring corrupt summary cache for alpha'),
@@ -885,7 +882,7 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(1);
     expect(store.keys()).toEqual(['alpha']);
     expect(store.get('alpha')).toBeUndefined();
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getTimestampRange('alpha').first).toBe(200);
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(200, 250),
     );
@@ -906,7 +903,7 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(1);
-    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getTimestampRange('alpha').first).toBe(200);
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(200, 250),
     );
@@ -1702,5 +1699,41 @@ describe('StreamLogStore save throttle', () => {
     await reload;
     expect(reloaded).toBe(true);
     writer.close();
+  });
+
+  it('releases a writer that starts after terminal eviction once its flush is durable', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: { alpha: summary(100, 100) },
+    });
+    const store = await StreamLogStore.open();
+
+    store.requestEviction('alpha');
+    const writer = await store.loadAndAcquireWriter('alpha', 'late-writer');
+    writer.append(namedEntry('late', 200, 'late write'));
+    writer.close();
+
+    expect(store.dumpResidency()[0]).toMatchObject({
+      streamId: 'alpha',
+      reasons: ['flush'],
+      releaseRequested: true,
+    });
+    await store.flush();
+    expect(store.get('alpha')).toBeUndefined();
+    expect(store.dumpResidency()).toEqual([]);
+  });
+
+  it('reads cold entries without making the stream resident', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: { alpha: summary(100, 100) },
+    });
+    const store = await StreamLogStore.open();
+
+    await expect(store.readEntries('alpha')).resolves.toEqual([
+      expect.objectContaining({ id: 'alpha-1' }),
+    ]);
+    expect(store.get('alpha')).toBeUndefined();
+    expect(store.dumpResidency()).toEqual([]);
   });
 });

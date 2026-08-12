@@ -1259,9 +1259,10 @@ describe('ProgressBackend', () => {
     });
     expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(100);
 
-    vi.spyOn(backend.state.streamLogs, 'getFirstTimestamp').mockReturnValue(
-      undefined,
-    );
+    vi.spyOn(backend.state.streamLogs, 'getTimestampRange').mockReturnValue({
+      first: undefined,
+      last: undefined,
+    });
 
     expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(100);
   });

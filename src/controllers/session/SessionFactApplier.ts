@@ -555,7 +555,8 @@ export class SessionFactApplier {
         ),
       });
     } else {
-      const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);
+      const lastTimestamp =
+        this.state.streamLogs.getTimestampRange(streamId).last;
       this.renderer.onStreamStatusChanged(
         streamId,
         status,
