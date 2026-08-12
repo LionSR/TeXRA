@@ -10,7 +10,7 @@ describe('delegated-work approval copy', () => {
     expect(Object.isFrozen(DELEGATION_APPROVAL_COPY)).toBe(true);
     expect(DELEGATION_APPROVAL_COPY).toEqual({
       cliAction: 'approve agent work for this chat',
-      cliCompactAction: 'agent work in this chat',
+      cliCompactAction: 'all agent work',
       cliExplanation:
         'Approves this task and later tasks from this agent, plus file edits and commands. Other prompts still ask.',
       progressViewAction: 'Approve agent work for this run',

@@ -171,6 +171,17 @@ describe('CLI confirm-card key handling', () => {
       key: 'a',
       action: DELEGATION_APPROVAL_COPY.cliCompactAction,
     });
+
+    const narrowDelegationHints = hintsForWidth(
+      DELEGATION_APPROVAL_COPY.cliAction,
+      // ConfirmCard reserves four columns of an actual 60-column terminal.
+      56,
+    );
+    expect(narrowDelegationHints).toContainEqual({
+      key: 'a',
+      action: DELEGATION_APPROVAL_COPY.cliCompactAction,
+    });
+    expect(renderHints(narrowDelegationHints).length).toBeLessThanOrEqual(56);
   });
 
   it('keeps the approve-all hint on mid-width terminals', () => {
