@@ -38,6 +38,18 @@ import { planTeamRun } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
+function codingPlans(
+  kimiPreferred = false,
+  kimiKeySet = false,
+  glmPreferred = false,
+  glmKeySet = false,
+): CliModelAccessStatus['codingPlans'] {
+  return {
+    kimiCode: { preferred: kimiPreferred, keySet: kimiKeySet },
+    glmCodingPlan: { preferred: glmPreferred, keySet: glmKeySet },
+  };
+}
+
 function historyEntry(
   id: string,
   overrides: Partial<CliHistoryEntry> = {},
@@ -369,9 +381,8 @@ describe('CLI orchestration items', () => {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'off',
       } as const,
+      codingPlans: codingPlans(),
       chatGptSignedIn: true,
       grokSignedIn: false,
       chatGptAccountLabel: 'researcher@example.com',
@@ -442,12 +453,10 @@ describe('CLI orchestration items', () => {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'off',
       },
+      codingPlans: codingPlans(false, true),
       chatGptSignedIn: false,
       grokSignedIn: false,
-      kimiCodeKeySet: true,
     });
     expect(kimiOff).toEqual({
       value: {
@@ -464,12 +473,10 @@ describe('CLI orchestration items', () => {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'on',
-        glmCode: 'off',
       },
+      codingPlans: codingPlans(true, true),
       chatGptSignedIn: false,
       grokSignedIn: false,
-      kimiCodeKeySet: true,
     };
     expect(kimiCodePreferenceItem(kimiOnAccess)?.description).toBe(
       'On · key configured',
@@ -491,13 +498,11 @@ describe('CLI orchestration items', () => {
         preferences: {
           chatGpt: 'on',
           grok: 'off',
-          kimiCode: 'on',
-          glmCode: 'off',
         },
+        codingPlans: codingPlans(true, true),
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'researcher@example.com',
-        kimiCodeKeySet: true,
       },
     });
     const byProvider = Object.fromEntries(
@@ -596,9 +601,8 @@ describe('CLI orchestration items', () => {
           preferences: {
             chatGpt: 'off',
             grok: 'off',
-            kimiCode: 'off',
-            glmCode: 'off',
           },
+          codingPlans: codingPlans(),
           chatGptSignedIn: false,
           grokSignedIn: false,
           texraSignedIn: false,

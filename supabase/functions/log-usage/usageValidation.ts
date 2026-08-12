@@ -12,6 +12,7 @@ const optionalNonnegativeInt = optional(z.int().nonnegative());
 const optionalBoolean = optional(z.boolean());
 const UsageRouteSchema = z.enum([
   'chatgpt-subscription',
+  'glm-coding-plan-subscription',
   'kimi-code-subscription',
   'xai-subscription',
   'relay',
@@ -70,6 +71,8 @@ export function subscriptionSourceForUsage(
       return entry.subscriptionSource ?? 'chatgpt';
     case 'kimi-code-subscription':
       return entry.subscriptionSource ?? 'kimi';
+    case 'glm-coding-plan-subscription':
+      return entry.subscriptionSource ?? 'glm';
     case 'xai-subscription':
       return entry.subscriptionSource ?? 'xai';
     default:

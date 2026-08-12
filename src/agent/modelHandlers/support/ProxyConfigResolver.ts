@@ -52,11 +52,9 @@ const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
   // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
   [ModelProvider.MINIMAX]: () =>
     `https://${useChinaRegion('minimax') ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
-  // China: open.bigmodel.cn, International: api.z.ai
-  [ModelProvider.GLM]: () =>
-    `https://${useChinaRegion('glm') ? 'open.bigmodel.cn' : 'api.z.ai'}${
-      getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4'
-    }`,
+  // Resolved separately below so the selected endpoint carries its usage
+  // classification through asynchronous client construction.
+  [ModelProvider.GLM]: null,
   [ModelProvider.META]: 'https://api.meta.ai/v1',
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
@@ -140,16 +138,23 @@ export function usesServerSideKeysRoute(
  * 5. Provider default URLs
  *
  * Tiers 3-5 are the internal cascade of `route: 'direct'` (see
- * {@link resolveDirectBaseUrl}): none of them is caller-selectable, since
+ * {@link resolveProxyEndpoint}): none of them is caller-selectable, since
  * which one applies depends on global settings and provider metadata read
  * here, not on a decision the caller has already made.
  */
 export function resolveBaseUrl(config: ProxyConfig): string | null {
+  return resolveProxyEndpoint(config).baseUrl;
+}
+
+export function resolveProxyEndpoint(config: ProxyConfig): {
+  readonly baseUrl: string | null;
+  readonly usageRoute?: 'glm-coding-plan-subscription';
+} {
   switch (config.route) {
     // Per-model custom base URL (e.g., temporary endpoints).
     case 'custom':
       config.logger?.debug(`Using custom base URL for model: ${config.url}`);
-      return config.url;
+      return { baseUrl: config.url };
 
     // Server-side keys via relay (experimental feature for Ultra users).
     // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this
@@ -159,11 +164,11 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
       config.logger?.debug(
         `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
       );
-      return relayUrl;
+      return { baseUrl: relayUrl };
     }
 
     case 'direct':
-      return resolveDirectBaseUrl(config);
+      return resolveDirectEndpoint(config);
   }
 }
 
@@ -172,22 +177,35 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
  * server-side keys apply: OpenRouter, then a per-provider dashboard endpoint,
  * then provider defaults (including region toggles).
  */
-function resolveDirectBaseUrl(config: {
+function resolveDirectEndpoint(config: {
   provider: ModelProvider;
   useOpenRouter: boolean;
   logger?: ProxyLogger;
-}): string | null {
+}): {
+  readonly baseUrl: string | null;
+  readonly usageRoute?: 'glm-coding-plan-subscription';
+} {
   const { provider, useOpenRouter, logger } = config;
 
-  if (useOpenRouter) return OPENROUTER_BASE_URL;
+  if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
 
   // Per-provider custom endpoint from dashboard settings (globalSM)
   const customUrl = getProviderEndpoint(provider);
   if (customUrl) {
     logger?.debug(`Using custom base URL for ${provider}: ${customUrl}`);
-    return `https://${normalizeUrl(customUrl)}`;
+    return { baseUrl: `https://${normalizeUrl(customUrl)}` };
+  }
+
+  if (provider === ModelProvider.GLM) {
+    const codingPlan = getGLMCodingPlan();
+    return {
+      baseUrl: `https://${useChinaRegion('glm') ? 'open.bigmodel.cn' : 'api.z.ai'}${codingPlan ? '/api/coding/paas/v4' : '/api/paas/v4'}`,
+      ...(codingPlan && {
+        usageRoute: 'glm-coding-plan-subscription' as const,
+      }),
+    };
   }
 
   const baseUrl = BASE_URLS[provider];
-  return typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+  return { baseUrl: typeof baseUrl === 'function' ? baseUrl() : baseUrl };
 }

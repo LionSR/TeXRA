@@ -46,6 +46,7 @@ export interface ResolvedClientCredential {
     ModelCredentialRoute,
     'chatgpt-subscription' | 'xai-subscription'
   >;
+  readonly usageRoute?: 'glm-coding-plan-subscription';
 }
 
 /**

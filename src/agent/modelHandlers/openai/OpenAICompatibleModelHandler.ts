@@ -66,11 +66,14 @@ export abstract class OpenAICompatibleModelHandler<
       credential.route,
       this.shouldUseServerSideKeys(),
     );
-    return this.rememberClientCredentialRoute(
+    const registered = this.rememberClientCredentialRoute(
       client,
       credential.route,
       credential.apiKey,
     );
+    return credential.usageRoute
+      ? this.rememberClientUsageRoute(registered, credential.usageRoute)
+      : registered;
   }
 
   override getRetryEndpoint(client: OpenAI): string {
