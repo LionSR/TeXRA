@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 
 import { getAgent } from '@agent/index';
+import { defaultSession } from '@agent/runtime';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';

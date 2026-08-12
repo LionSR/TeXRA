@@ -1,4 +1,4 @@
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 
 /**
  * Clear the missing-outputs marker for the single workflow tab a pack/clean

@@ -3,11 +3,11 @@
 import { isDeepStrictEqual } from 'node:util';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type {
   SessionEventHub,
   SessionFact,
-} from '@agent/runtime/SessionEventHub';
+  SessionHandle,
+} from '@agent/runtime';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
 import {

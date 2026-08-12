@@ -1,7 +1,7 @@
 import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
-} from '@agent/runtime/HostInteractions';
+} from '@agent/runtime';
 import { buildHunks, formatHunkHeader } from '@cli/runtime/diffHunks';
 import {
   agentProposalCategoryLabel,

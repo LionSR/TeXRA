@@ -22,7 +22,7 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import {
   ActiveSkillsSnapshotSchema,
   AgentCategory,

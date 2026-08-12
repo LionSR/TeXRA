@@ -194,6 +194,7 @@ vi.mock('@agent/runtime/runAgent', () => ({
 
 vi.mock('@logger/logUtils', () => ({
   createChannelWriter: () => () => {},
+  createLog: () => ({ warn: () => {} }),
   initialize: () => {},
   error: mocks.logError,
   warn: () => {},
