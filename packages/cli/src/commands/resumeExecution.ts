@@ -17,7 +17,7 @@ import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
-import type { CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 function noResumeStateMessage(id: ExecutionId): string {
   return `Execution ${id} cannot be resumed (it completed or was cleared).`;
@@ -102,6 +102,10 @@ export async function runResumeExecution(
     try {
       await resolveCliLaunchAgent(config.agent, 'run');
     } catch (error) {
+      if (error instanceof CliUsageError) {
+        writeTextStderr(error.message);
+        return CliExitCode.Usage;
+      }
       writeTextStderr(loadFailureMessage(id, error));
       return CliExitCode.AgentError;
     }

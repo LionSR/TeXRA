@@ -8,7 +8,7 @@ import {
   acquireFreshExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import type { CliContext } from '@cli/runtime/cliContext';
+import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -189,6 +189,21 @@ describe('runResumeExecution', () => {
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');
     expect(mocks.runChat).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing workflow agent as a usage error', async () => {
+    mocks.readConfig.mockResolvedValue(WORKFLOW_CONFIG);
+    mocks.resolveCliLaunchAgent.mockRejectedValue(
+      new CliUsageError('Agent not found: correct.'),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(2);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Agent not found: correct.',
+    );
+    expect(mocks.initializeHeadlessTranscriptSession).not.toHaveBeenCalled();
+    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
   });
 
   it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
