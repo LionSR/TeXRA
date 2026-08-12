@@ -4,10 +4,7 @@ import {
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
-import {
-  ExecutionLeaseLostError,
-  type OwnedExecutionLeaseScope,
-} from '@agent/storage/executionLease';
+import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
@@ -278,8 +275,12 @@ export async function executeCliRequest(
           await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
         return true;
-      } catch (error) {
-        if (!(error instanceof ExecutionLeaseLostError)) throw error;
+      } catch {
+        // The runtime's ordinary artifact drain owns failure reporting and
+        // aggregation with any primary run error. A host-side drain failure
+        // may already have abandoned the lease; returning false asks the
+        // runtime to make its best effort without letting this memoized hook
+        // replace the primary error when the CLI awaits it again on shutdown.
         return false;
       }
     })();
