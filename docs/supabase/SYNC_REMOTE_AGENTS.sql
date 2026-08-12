@@ -46,7 +46,7 @@ VALUES (
   'devise',
   'Mathematical paper enhancer with two-phase workflow. Rewrites document(s) by first adding rigorous derivations then revising to publication-ready scientific style.',
   'QITBench/devise.yaml',
-  ARRAY['researcher', 'QITBench'],
+  ARRAY['researcher', 'QITBench', 'public'],
   'workflow',
   NULL
 )
