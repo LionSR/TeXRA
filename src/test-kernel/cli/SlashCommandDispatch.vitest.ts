@@ -77,8 +77,10 @@ function mockModelAccessOverview(): void {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'off',
+      },
+      codingPlans: {
+        kimiCode: { preferred: false, keySet: false },
+        glmCodingPlan: { preferred: false, keySet: false },
       },
       chatGptSignedIn: false,
       grokSignedIn: false,

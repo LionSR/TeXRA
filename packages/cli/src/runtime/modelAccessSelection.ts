@@ -80,14 +80,12 @@ export async function readCliModelAccessStatus(
         ),
       ),
     ]);
-  const codingPlans = Object.fromEntries(codingPlanEntries) as NonNullable<
-    CliModelAccessStatus['codingPlans']
-  >;
+  const codingPlans = Object.fromEntries(
+    codingPlanEntries,
+  ) as CliModelAccessStatus['codingPlans'];
   const preferences = {
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
     grok: isPreferXaiSubscription() ? 'on' : 'off',
-    kimiCode: codingPlans.kimiCode.preferred ? 'on' : 'off',
-    glmCode: codingPlans.glmCodingPlan.preferred ? 'on' : 'off',
   } as const;
   const personalKeyProviders = configuredProviders.map((provider) =>
     providerDisplayName(provider),
@@ -99,8 +97,6 @@ export async function readCliModelAccessStatus(
     chatGptAccountLabel: chatGpt.email ?? chatGpt.accountId,
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
-    kimiCodeKeySet: codingPlans.kimiCode.keySet,
-    glmKeySet: codingPlans.glmCodingPlan.keySet,
     codingPlans,
     personalKeyProviders,
   };

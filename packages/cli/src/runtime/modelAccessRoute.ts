@@ -29,8 +29,6 @@ export interface CliCodingPlanStatus {
 interface CliSubscriptionPreferences {
   readonly chatGpt: CliSubscriptionPreferenceState;
   readonly grok: CliSubscriptionPreferenceState;
-  readonly kimiCode: CliSubscriptionPreferenceState;
-  readonly glmCode: CliSubscriptionPreferenceState;
 }
 
 export type CliModelAccessSelection =
@@ -68,12 +66,7 @@ export interface CliModelAccessStatus {
   readonly chatGptAccountLabel?: string;
   readonly grokSignedIn: boolean;
   readonly grokAccountLabel?: string;
-  readonly kimiCodeKeySet?: boolean;
-  readonly glmKeySet?: boolean;
-  /** Canonical coding-plan state. The named fields remain temporarily for
-   * callers predating this map (introduced 2026-08-12); remove them once all
-   * callers construct `codingPlans`, no later than 2026-11-12. */
-  readonly codingPlans?: Readonly<
+  readonly codingPlans: Readonly<
     Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
   >;
   readonly texraSignedIn?: boolean;
@@ -290,22 +283,12 @@ function formatCliKeyedSubscriptionPreference(
     : 'Off · key required to enable';
 }
 
-/** Read one plan from the canonical status map, with named-field fallback. */
+/** Read one plan from the canonical status map. */
 export function cliCodingPlanStatus(
   status: CliModelAccessStatus,
   plan: CodingPlanSubscription,
 ): CliCodingPlanStatus {
-  const canonical = status.codingPlans?.[plan.id];
-  if (canonical) return canonical;
-  return plan.id === 'kimiCode'
-    ? {
-        preferred: status.preferences.kimiCode === 'on',
-        keySet: status.kimiCodeKeySet === true,
-      }
-    : {
-        preferred: status.preferences.glmCode === 'on',
-        keySet: status.glmKeySet === true,
-      };
+  return status.codingPlans[plan.id];
 }
 
 /** Format any catalogued coding-plan preference. */
