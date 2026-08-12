@@ -1,4 +1,9 @@
 import {
+  attachTerminalResultToast,
+  runAgent,
+  type RunAgentOptions,
+} from '@agent/runtime';
+import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -7,8 +12,6 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { runAgent, type RunAgentOptions } from '@agent/runtime/runAgent';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';

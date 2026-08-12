@@ -1,5 +1,7 @@
-import type { ManualCompactionRequestResult } from '@agent/runtime/executionRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type {
+  ManualCompactionRequestResult,
+  SessionHandle,
+} from '@agent/runtime';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface CliCompactionRequestOptions {

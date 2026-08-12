@@ -10,13 +10,13 @@ import PQueue from 'p-queue';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
-import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import {
   defaultSession,
   initializeDefaultSession,
+  initializePolishModel,
   teardownDefaultSession,
-} from '@agent/runtime/SessionHandle';
-import { initializePolishModel } from '@agent/runtime/polishModel';
+} from '@agent/runtime';
+import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import {
   getAuthCallbackUri,

@@ -1,7 +1,9 @@
 // Local imports
-import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  detachSubagentsOnStop,
+  type AgentRunHandle,
+  type SessionHandle,
+} from '@agent/runtime';
 
 /**
  * What one reviewer session is collecting findings against. Reported issues
