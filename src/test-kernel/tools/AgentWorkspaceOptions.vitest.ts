@@ -1,19 +1,17 @@
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 describe('agent workspace options', () => {
-  const originalGetPath = WorkspaceFS.getPath;
-
   beforeEach(() => {
-    WorkspaceFS.getPath = () => '/tmp/workspace';
+    vi.spyOn(WorkspaceFS, 'getPath').mockReturnValue('/tmp/workspace');
   });
 
   afterEach(() => {
-    WorkspaceFS.getPath = originalGetPath;
+    vi.restoreAllMocks();
   });
 
   it('defaults to the workspace root when no working directory is provided', () => {

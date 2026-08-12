@@ -439,14 +439,12 @@ export class StreamTabs extends LitElement {
         if (nextVisited.has(child.name)) return false;
         // Background bash/process tabs are ephemeral: once terminal, drop
         // them from the Sessions tree even if autoClose has not removed the
-        // stream record yet.
+        // stream record yet. isTerminalOutcomePhase only matches the three
+        // terminal phases, so the unstarted 'ready' default needs no special
+        // handling here.
         if (child.identity?.kind === 'process') {
           const childStatus = this.streamStates.get(child.name)?.status;
-          const phase =
-            childStatus === DEFAULT_STREAM_METADATA_STATUS
-              ? undefined
-              : childStatus;
-          if (isTerminalOutcomePhase(phase)) return false;
+          if (isTerminalOutcomePhase(childStatus)) return false;
         }
         return true;
       },

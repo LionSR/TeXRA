@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';

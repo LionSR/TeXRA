@@ -253,26 +253,24 @@ describe('chat export formatters', () => {
   it.each([
     {
       container: 'web search result link',
-      block: () =>
-        webSearchBlock({ title: RAW_TITLE, url: 'https://example.com' }),
+      block: webSearchBlock({ title: RAW_TITLE, url: 'https://example.com' }),
       expected: ESCAPED_TITLE,
     },
     {
       // Same escapeMarkdownText call, but through the web_fetch **Title:**
       // container (markdownSpec.ts's second call site).
       container: 'web-fetch **Title:**',
-      block: () =>
-        webFetchBlock({
-          url: 'https://example.com',
-          title: RAW_TITLE,
-          page_content: 'body',
-        }),
+      block: webFetchBlock({
+        url: 'https://example.com',
+        title: RAW_TITLE,
+        page_content: 'body',
+      }),
       expected: `**Title:** ${ESCAPED_TITLE}`,
     },
   ])(
     'escapes emphasis/code-span/heading characters in $container titles',
     ({ block, expected }) => {
-      const markdown = formatChatAsMarkdown(assistantChatInput([block()]));
+      const markdown = formatChatAsMarkdown(assistantChatInput([block]));
 
       assert.ok(
         markdown.includes(expected),

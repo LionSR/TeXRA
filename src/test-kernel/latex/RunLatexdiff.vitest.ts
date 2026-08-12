@@ -1,14 +1,7 @@
-// Suites for @latex/latexdiff/runLatexdiff (execution flow + command-config
-// normalization).
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
-
-// ---------------------------------------------------------------------------
-// RunLatexdiff
-// ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
   scanRunDirForOutputs: vi.fn(),
@@ -146,10 +139,6 @@ describe('runLatexdiffForExecution', () => {
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// RunLatexdiffCommandConfig
-// ---------------------------------------------------------------------------
 
 describe('normalizeRunLatexdiffOutputsByRound', () => {
   it('keeps non-empty round-record entries, dropping empty rounds', () => {

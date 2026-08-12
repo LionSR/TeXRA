@@ -22,33 +22,6 @@ interface LanguageStub {
   setLanguageConfiguration: ReturnType<typeof vi.fn>;
 }
 
-function mockMonaco(): {
-  languages: LanguageStub;
-  grammarsLoaded: () => boolean;
-} {
-  const languages: LanguageStub = {
-    register: vi.fn(),
-    setMonarchTokensProvider: vi.fn(),
-    setLanguageConfiguration: vi.fn(),
-  };
-  let loaded = false;
-
-  vi.doMock('monaco-editor/editor/editor.api.js', () => ({
-    editor: { create: vi.fn(), createModel: vi.fn(), setTheme: vi.fn() },
-    languages,
-  }));
-  // Importing this module *is* the registration of Monaco's bundled grammars, so
-  // observing that the import happened is the only way to assert it.
-  vi.doMock(GRAMMAR_MODULE_ID, () => {
-    loaded = true;
-    return { default: undefined };
-  });
-  for (const id of WORKER_MODULE_IDS) {
-    vi.doMock(id, () => ({ default: MockWorker }));
-  }
-  return { languages, grammarsLoaded: () => loaded };
-}
-
 describe('shared Monaco loader', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -58,15 +31,30 @@ describe('shared Monaco loader', () => {
   });
 
   async function loadMockedMonaco() {
-    const mock = mockMonaco();
+    const languages: LanguageStub = {
+      register: vi.fn(),
+      setMonarchTokensProvider: vi.fn(),
+      setLanguageConfiguration: vi.fn(),
+    };
+    let loaded = false;
+
+    vi.doMock('monaco-editor/editor/editor.api.js', () => ({
+      editor: { create: vi.fn(), createModel: vi.fn(), setTheme: vi.fn() },
+      languages,
+    }));
+    // Importing this module *is* the registration of Monaco's bundled grammars.
+    vi.doMock(GRAMMAR_MODULE_ID, () => {
+      loaded = true;
+      return { default: undefined };
+    });
+    for (const id of WORKER_MODULE_IDS) {
+      vi.doMock(id, () => ({ default: MockWorker }));
+    }
     const loader = await import('@shared/monaco/monacoLoader');
-    return { ...mock, ...loader };
+    return { languages, grammarsLoaded: () => loaded, ...loader };
   }
 
   it('contributes the bundled grammars, which editor.api alone does not', async () => {
-    // editor.api.js is the bare editor core and registers no languages: without
-    // this import every file renders as undifferentiated plain text no matter
-    // what language id its model carries.
     const { grammarsLoaded, loadMonaco } = await loadMockedMonaco();
 
     await loadMonaco();
@@ -75,8 +63,6 @@ describe('shared Monaco loader', () => {
   });
 
   it('registers latex and bibtex, which Monaco does not ship', async () => {
-    // .tex is the most common file type in this app, and it is precisely the one
-    // language Monaco has no grammar for.
     const { languages, loadMonaco } = await loadMockedMonaco();
 
     await loadMonaco();

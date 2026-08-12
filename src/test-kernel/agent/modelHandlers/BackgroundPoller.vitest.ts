@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -12,14 +12,11 @@ interface TestResponse {
   usage?: unknown;
 }
 
-function trace() {
+function trace(): AgentTrace & { debug: Mock; error: Mock } {
   return {
     debug: vi.fn(),
     error: vi.fn(),
-  } as unknown as AgentTrace & {
-    debug: ReturnType<typeof vi.fn>;
-    error: ReturnType<typeof vi.fn>;
-  };
+  } as unknown as AgentTrace & { debug: Mock; error: Mock };
 }
 
 const extractId = (response: TestResponse) => response.id;

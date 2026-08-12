@@ -16,6 +16,19 @@ interface ApiAccessElement extends HTMLElement {
   updateComplete: Promise<boolean>;
 }
 
+type RadioGroup = HTMLElement & { value: string };
+
+function radioGroup(section: ApiAccessElement): RadioGroup | null {
+  return section.shadowRoot?.querySelector<HTMLElement>(
+    'wa-radio-group',
+  ) as RadioGroup | null;
+}
+
+function selectMode(group: RadioGroup, value: string): void {
+  group.value = value;
+  group.dispatchEvent(new Event('change'));
+}
+
 describe('included access exhaustion rendering', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/components/profile/ApiAccessSection'),
@@ -36,12 +49,9 @@ describe('included access exhaustion rendering', () => {
       'Monthly included usage is exhausted',
     );
 
-    const group = section.shadowRoot?.querySelector<HTMLElement>(
-      'wa-radio-group',
-    ) as (HTMLElement & { value: string }) | null;
+    const group = radioGroup(section);
     if (!group) return;
-    group.value = 'included';
-    group.dispatchEvent(new Event('change'));
+    selectMode(group, 'included');
     expect(mocks.postMessage).not.toHaveBeenCalled();
     expect(group.value).toBe('personal');
 
@@ -52,8 +62,7 @@ describe('included access exhaustion rendering', () => {
         ?.querySelector('wa-radio[value="included"]')
         ?.hasAttribute('disabled'),
     ).toBe(false);
-    group.value = 'included';
-    group.dispatchEvent(new Event('change'));
+    selectMode(group, 'included');
     expect(mocks.postMessage).toHaveBeenCalledWith(
       SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
       { mode: 'included' },
@@ -66,14 +75,11 @@ describe('included access exhaustion rendering', () => {
       'api-access-section',
       { mode: 'personal', includedAccessExhausted: false },
     );
-    const group = section.shadowRoot?.querySelector<HTMLElement>(
-      'wa-radio-group',
-    ) as (HTMLElement & { value: string }) | null;
+    const group = radioGroup(section);
     expect(group).not.toBeNull();
     if (!group) return;
 
-    group.value = 'included';
-    group.dispatchEvent(new Event('change'));
+    selectMode(group, 'included');
     expect(mocks.postMessage).toHaveBeenCalledWith(
       SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
       { mode: 'included' },

@@ -42,10 +42,8 @@ function querySplitButton(element: BashRequestPanel): ApproveSplit | null {
   );
 }
 
-// Parity with ToolEditRequestPanel: the bash panel gets the Yolo affordance
-// entirely from shared BaseBypassApprovalPanel logic, so these tests guard that
-// the bash panel wires it up — a base-class regression would not be caught by
-// the tool-edit tests alone.
+// The bash panel gets the Yolo affordance from shared BaseBypassApprovalPanel
+// logic; these tests guard that it wires it up.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/BashRequestPanel'),

@@ -11,7 +11,6 @@ import {
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
@@ -31,13 +30,19 @@ type DesktopExecution = {
 };
 
 const mocks = createModuleMocks();
-const tempDirs: string[] = [];
 
 function prepareValidRequest(): (message: unknown) => unknown {
   return vi.fn(() => ({
     valid: true,
     request: { agentName: 'default', filePath: 'main.tex', prompt: 'run' },
   }));
+}
+
+function makeOpener() {
+  return {
+    openPath: vi.fn(async (_filePath: string) => {}),
+    openBuildDisplay: vi.fn(async (_location: { absolutePath: string }) => {}),
+  };
 }
 
 // The mock run bridges a trace into the process session's onResult channel
@@ -182,9 +187,8 @@ async function createExecution(options: {
 }
 
 describe('createDesktopAgentExecution', () => {
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('never attaches a presentation when its window closes during repair', async () => {
@@ -325,7 +329,7 @@ describe('createDesktopAgentExecution', () => {
   });
 
   it('opens workflow outputs through the desktop preview host', async () => {
-    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
+    const opener = makeOpener();
     const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
         outcome: RUN_OUTCOME.COMPLETED,
@@ -423,7 +427,7 @@ describe('createDesktopAgentExecution', () => {
   });
 
   it('does not auto-open outputs of a non-completed workflow', async () => {
-    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
+    const opener = makeOpener();
     const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
         outcome: RUN_OUTCOME.CANCELLED,
@@ -441,12 +445,7 @@ describe('createDesktopAgentExecution', () => {
   });
 
   it('opens compile-file actions through the desktop preview host', async () => {
-    const opener = {
-      openPath: vi.fn(async (_filePath: string) => {}),
-      openBuildDisplay: vi.fn(
-        async (_location: { absolutePath: string }) => {},
-      ),
-    };
+    const opener = makeOpener();
     const execution = await createExecution({
       opener,
       prepareMainViewExecutionRequest: vi.fn(() => ({

@@ -53,13 +53,11 @@ describe('diffFileLocation', () => {
       absolutePath('ws', 'chapters', 'paper_correct.tex'),
     );
 
-    expect(loc.kind).toBe('workspace');
-    expect(loc.absolutePath).toBe(
-      absolutePath('ws', 'chapters', 'paper_correct_diff.tex'),
-    );
-    if (loc.kind === 'workspace') {
-      expect(loc.relativePath).toBe('chapters/paper_correct_diff.tex');
-    }
+    expect(loc).toMatchObject({
+      kind: 'workspace',
+      absolutePath: absolutePath('ws', 'chapters', 'paper_correct_diff.tex'),
+      relativePath: 'chapters/paper_correct_diff.tex',
+    });
   });
 });
 
@@ -75,10 +73,9 @@ describe('cleanupStaleDiffFile', () => {
       deleteFile,
     );
 
-    expect(deleted.length).toBe(1);
-    expect(deleted[0].absolutePath).toBe(
-      absolutePath('ws', 'paper_correct_diff.tex'),
-    );
+    expect(deleted).toMatchObject([
+      { absolutePath: absolutePath('ws', 'paper_correct_diff.tex') },
+    ]);
   });
 
   it('skips deletion when the derived diff location is the accept target', async () => {
@@ -95,7 +92,7 @@ describe('cleanupStaleDiffFile', () => {
       deleteFile,
     );
 
-    expect(deleted.length).toBe(0);
+    expect(deleted).toEqual([]);
   });
 
   it('skips deletion when the target is not the base itself (copy/sibling write)', async () => {
@@ -113,7 +110,7 @@ describe('cleanupStaleDiffFile', () => {
       deleteFile,
     );
 
-    expect(deleted.length).toBe(0);
+    expect(deleted).toEqual([]);
   });
 });
 
@@ -142,10 +139,9 @@ describe('acceptEditedFileReplace', () => {
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
     expect(accepted).toBe(true);
-    expect(ports.deleted.length).toBe(1);
-    expect(ports.deleted[0].absolutePath).toBe(
-      absolutePath('ws', 'paper_correct_diff.tex'),
-    );
+    expect(ports.deleted).toMatchObject([
+      { absolutePath: absolutePath('ws', 'paper_correct_diff.tex') },
+    ]);
   });
 
   it('does not clean up when the user declines the confirmation', async () => {
@@ -155,7 +151,7 @@ describe('acceptEditedFileReplace', () => {
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
     expect(accepted).toBe(false);
-    expect(ports.deleted.length).toBe(0);
+    expect(ports.deleted).toEqual([]);
   });
 
   it('does not delete the just-accepted file when it collides with the derived diff name', async () => {
@@ -175,7 +171,7 @@ describe('acceptEditedFileReplace', () => {
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
     expect(accepted).toBe(true);
-    expect(ports.deleted.length).toBe(0);
+    expect(ports.deleted).toEqual([]);
   });
 
   it('does not clean up the base diff when accepting into a new sibling (extension mismatch)', async () => {
@@ -191,7 +187,7 @@ describe('acceptEditedFileReplace', () => {
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
     expect(accepted).toBe(true);
-    expect(ports.deleted.length).toBe(0);
+    expect(ports.deleted).toEqual([]);
   });
 });
 
@@ -246,11 +242,10 @@ describe('commitAcceptedFile', () => {
       ports,
     );
 
-    expect(ports.written.length).toBe(1);
-    expect(ports.written[0].location.absolutePath).toBe(copy.absolutePath);
-    expect(ports.written[0].content).toBe('edited content');
-    expect(ports.infoMessages.length).toBe(1);
-    expect(ports.infoMessages[0]).toMatch(/created/);
+    expect(ports.written).toEqual([
+      { location: copy, content: 'edited content' },
+    ]);
+    expect(ports.infoMessages).toEqual([expect.stringMatching(/created/)]);
   });
 
   it('reports "replaced" when the caller says the target already existed', async () => {
@@ -265,7 +260,7 @@ describe('commitAcceptedFile', () => {
       ports,
     );
 
-    expect(ports.infoMessages[0]).toMatch(/replaced/);
+    expect(ports.infoMessages).toEqual([expect.stringMatching(/replaced/)]);
   });
 
   it('leaves the copy target untouched by diff cleanup (save-as-copy leaves base intact)', async () => {
@@ -281,6 +276,6 @@ describe('commitAcceptedFile', () => {
       ports,
     );
 
-    expect(deleted.length).toBe(0);
+    expect(deleted).toEqual([]);
   });
 });

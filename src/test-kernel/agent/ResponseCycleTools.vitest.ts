@@ -18,7 +18,7 @@ function responseServices({
   supportsFunctionCalling = true,
 }: {
   supportsFunctionCalling?: boolean;
-}): Parameters<typeof responseCycleToolsForModel>[0] {
+} = {}): Parameters<typeof responseCycleToolsForModel>[0] {
   return {
     toolRegistry: getDefaultToolRegistry(),
     modelCell: testModelCell({
@@ -64,7 +64,7 @@ describe('response cycle tool visibility', () => {
   ])('$name', async ({ services, expected }) => {
     const tools = await withTestRunContext(
       testRunScope('response-cycle-stream'),
-      async () => responseCycleToolsForModel(responseServices({})),
+      async () => responseCycleToolsForModel(responseServices()),
       services,
     );
 

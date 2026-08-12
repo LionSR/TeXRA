@@ -13,14 +13,7 @@ function createHandler(): ModelHandlerOpenAIResponse {
     buildTestModelConfig({
       name: 'gpt-4.1',
       fullName: 'gpt-4.1',
-      shortName: 'gpt-4.1',
-      label: 'GPT 4.1',
       provider: ModelProvider.OPENAI,
-      capabilities: {
-        supportsReasoning: false,
-        supportsVision: false,
-      },
-      openRouterOnly: true,
     }),
   );
   handler.setLogger({ ...noopTrace });

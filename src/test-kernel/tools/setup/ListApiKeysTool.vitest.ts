@@ -33,7 +33,6 @@ beforeEach(() => {
   mocks.listStoredKeys.mockReset();
 });
 
-/** Call the tool against `keys` and assert it executed successfully. */
 async function callWithStoredKeys(
   keys: readonly string[],
 ): Promise<ToolCallResult> {

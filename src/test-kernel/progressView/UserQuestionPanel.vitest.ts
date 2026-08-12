@@ -1,12 +1,7 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
-
-// Local imports
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
 import type { UserQuestionPrompt } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-
-// Local file imports
 import {
   mountComponent,
   useLitComponentTestDom,
@@ -44,23 +39,13 @@ function mountPanel(
   });
 }
 
-function collectActions(
-  element: UserQuestionPanel,
-): Array<{ action: string; answers?: Record<string, string | string[]> }> {
-  const actions: Array<{
-    action: string;
-    answers?: Record<string, string | string[]>;
-  }> = [];
+type Decision = { action: string; answers?: Record<string, string | string[]> };
+
+function collectActions(element: UserQuestionPanel): Decision[] {
+  const actions: Decision[] = [];
   element.addEventListener('permission-action', (event) => {
     actions.push(
-      (
-        event as CustomEvent<{
-          decision: {
-            action: string;
-            answers?: Record<string, string | string[]>;
-          };
-        }>
-      ).detail.decision,
+      (event as CustomEvent<{ decision: Decision }>).detail.decision,
     );
   });
   return actions;

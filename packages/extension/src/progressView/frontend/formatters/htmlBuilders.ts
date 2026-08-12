@@ -394,7 +394,7 @@ export function buildExecutionsPathDisplay(
 
 /** Generate inline diff template showing changes between old and new text. */
 function generateInlineDiff(oldText: string, newText: string): TemplateResult {
-  const diffs = diffTextByChar(oldText ?? '', newText ?? '', {
+  const diffs = diffTextByChar(oldText, newText, {
     // Preserve diff_main's omitted-argument behavior (line-level speedup).
     checkLines: true,
     cleanupSemantic: true,

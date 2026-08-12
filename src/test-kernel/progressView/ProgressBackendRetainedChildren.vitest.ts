@@ -43,17 +43,6 @@ describe('retained finished children', () => {
     });
   }
 
-  function applyParentEdge(
-    backend: ProgressBackend,
-    childStreamId: StreamTabId,
-    parentStreamId: StreamTabId | null,
-  ): void {
-    backend.applySessionFact({
-      type: 'setParentStream',
-      payload: { childStreamId, parentStreamId },
-    });
-  }
-
   function subagent(
     id: string,
     overrides: Partial<ActiveChildInfo> = {},
@@ -406,7 +395,10 @@ describe('retained finished children', () => {
     // away and the roster drops the row, but the child keeps running and
     // finishes later. The row is found by its own childStreamId, so the phase
     // still lands.
-    applyParentEdge(backend, childStreamId, null);
+    backend.applySessionFact({
+      type: 'setParentStream',
+      payload: { childStreamId, parentStreamId: null },
+    });
     applyRoster(backend, PARENT, []);
 
     await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);

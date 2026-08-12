@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fsState = vi.hoisted(() => ({

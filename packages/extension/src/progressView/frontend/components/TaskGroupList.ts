@@ -72,14 +72,14 @@ const GROUP_MESSAGE_WINDOW_STEP = 400;
  */
 function getStatusIcon(status: string): TeXRAIconName {
   switch (status) {
-    case STREAM_PHASE.RUNNING:
-      return 'circle';
     case STREAM_PHASE.FAILED:
       return 'circle-exclamation';
     case STREAM_PHASE.COMPLETED:
       return 'check';
     case STREAM_PHASE.CANCELLED:
       return 'circle-stop';
+    // Running and every unrecognized status share the plain steady-state
+    // circle (running is the default look for a live group).
     default:
       return 'circle';
   }

@@ -1,7 +1,3 @@
-/**
- * Vitests for the inquiry storage layer: open → answer round-trip,
- * dropped path, follow-up turn semantics, and listing filters.
- */
 import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

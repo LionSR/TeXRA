@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -12,8 +10,6 @@ import {
   type ProgressFollowUpState,
 } from '@controllers/progressView/ProgressFollowUpController';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
-
-// Local file imports
 import { AgentCategory } from '@shared/schemas';
 import {
   createOutputFile,

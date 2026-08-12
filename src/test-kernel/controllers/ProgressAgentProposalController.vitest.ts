@@ -1,15 +1,14 @@
-// Node imports
-import { strict as assert } from 'node:assert';
+import { describe, expect, it } from 'vitest';
 
-// Third-party imports
-import { describe, it } from 'vitest';
-
-// Local imports
 import {
   ProgressAgentProposalController,
   type ProgressAgentProposalControllerDeps,
 } from '@controllers/progressView/ProgressAgentProposalController';
-import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
+import {
+  AgentCategory,
+  type AgentProposalPermission,
+  type WorkflowAgentProposalPermission,
+} from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
@@ -53,6 +52,31 @@ function createController(
   return { controller, resolved };
 }
 
+function createWorkflowScriptProposal(
+  workingDirectory: string | undefined,
+): WorkflowAgentProposalPermission & {
+  workflowScript: NonNullable<
+    WorkflowAgentProposalPermission['workflowScript']
+  >;
+  workingDirectory: string | undefined;
+} {
+  const base = createWorkflowProposal();
+  if (base.agentCategory !== AgentCategory.Workflow) {
+    throw new Error('expected workflow proposal');
+  }
+  return {
+    ...base,
+    workingDirectory,
+    workflowScript: {
+      name: 'review-team',
+      description: 'Review in parallel',
+      scriptPath: '.texra/workflow-scripts/review-team.mjs',
+      phases: [{ title: 'Review' }],
+      tasks: [{ id: 'review', label: 'Review draft', phase: 'Review' }],
+    },
+  };
+}
+
 describe('ProgressAgentProposalController', () => {
   it('restores pending setup proposals and resolves the coordinator', async () => {
     const proposal = createWorkflowProposal();
@@ -65,18 +89,17 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    assert.equal(
+    expect(
       await controller.handleAction({
         proposalId: proposal.proposalId,
         action: 'setup',
       }),
-      true,
-    );
-    assert.equal(restored.length, 1);
-    assert.deepEqual(resolved, [
+    ).toBe(true);
+    expect(restored).toHaveLength(1);
+    expect(resolved).toStrictEqual([
       { proposalId: 'proposal-1', result: { action: 'setup' } },
     ]);
-    assert.deepEqual(restored[0], {
+    expect(restored[0]).toStrictEqual({
       agentCategory: AgentCategory.Workflow,
       agent: 'proofreader',
       model: 'gemini31p',
@@ -93,21 +116,7 @@ describe('ProgressAgentProposalController', () => {
   });
 
   it('opens the saved workflow script instead of restoring a run config on setup', async () => {
-    const base = createWorkflowProposal();
-    if (base.agentCategory !== AgentCategory.Workflow) {
-      throw new Error('expected workflow proposal');
-    }
-    const proposal = {
-      ...base,
-      workingDirectory: '.texra/worktrees/review',
-      workflowScript: {
-        name: 'review-team',
-        description: 'Review in parallel',
-        scriptPath: '.texra/workflow-scripts/review-team.mjs',
-        phases: [{ title: 'Review' }],
-        tasks: [{ id: 'review', label: 'Review draft', phase: 'Review' }],
-      },
-    } satisfies AgentProposalPermission;
+    const proposal = createWorkflowScriptProposal('.texra/worktrees/review');
     const opened: string[] = [];
     const { controller, resolved } = createController({
       getPendingProposal: () => proposal,
@@ -116,39 +125,25 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    assert.equal(
+    expect(
       await controller.handleAction({
         proposalId: proposal.proposalId,
         action: 'setup',
       }),
-      true,
-    );
-    assert.deepEqual(opened, [
+    ).toBe(true);
+    expect(opened).toStrictEqual([
       resolveWorkspaceRelativePath(
         proposal.workflowScript.scriptPath,
         proposal.workingDirectory,
       ).fsPath,
     ]);
-    assert.deepEqual(resolved, [
+    expect(resolved).toStrictEqual([
       { proposalId: 'proposal-1', result: { action: 'setup' } },
     ]);
   });
 
   it('rejects setup when the saved workflow script cannot be opened', async () => {
-    const base = createWorkflowProposal();
-    if (base.agentCategory !== AgentCategory.Workflow) {
-      throw new Error('expected workflow proposal');
-    }
-    const proposal = {
-      ...base,
-      workflowScript: {
-        name: 'review-team',
-        description: 'Review in parallel',
-        scriptPath: '.texra/workflow-scripts/review-team.mjs',
-        phases: [{ title: 'Review' }],
-        tasks: [{ id: 'review', label: 'Review draft', phase: 'Review' }],
-      },
-    } satisfies AgentProposalPermission;
+    const proposal = createWorkflowScriptProposal(undefined);
     const { controller, resolved } = createController({
       getPendingProposal: () => proposal,
       openFile: async () => {
@@ -156,14 +151,13 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    assert.equal(
+    expect(
       await controller.handleAction({
         proposalId: proposal.proposalId,
         action: 'setup',
       }),
-      false,
-    );
-    assert.deepEqual(resolved, [
+    ).toBe(false);
+    expect(resolved).toStrictEqual([
       {
         proposalId: 'proposal-1',
         result: {
@@ -187,14 +181,13 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    assert.equal(
+    expect(
       await controller.handleAction({
         proposalId: 'missing-proposal',
         action: 'setup',
       }),
-      false,
-    );
-    assert.equal(missingProposalId, 'missing-proposal');
+    ).toBe(false);
+    expect(missingProposalId).toBe('missing-proposal');
   });
 
   it('rejects pending setup proposals when restore fails', async () => {
@@ -202,14 +195,13 @@ describe('ProgressAgentProposalController', () => {
       restoreRunConfig: async () => false,
     });
 
-    assert.equal(
+    expect(
       await controller.handleAction({
         proposalId: 'proposal-1',
         action: 'setup',
       }),
-      false,
-    );
-    assert.deepEqual(resolved, [
+    ).toBe(false);
+    expect(resolved).toStrictEqual([
       {
         proposalId: 'proposal-1',
         result: {
@@ -223,24 +215,22 @@ describe('ProgressAgentProposalController', () => {
   it('passes approve and reject actions through without restoring state', async () => {
     const { controller, resolved } = createController();
 
-    assert.equal(
+    expect(
       await controller.handleAction({
         proposalId: 'proposal-approve',
         action: 'approve',
         model: 'gpt-5.4',
         agent: 'critic',
       }),
-      true,
-    );
-    assert.equal(
+    ).toBe(true);
+    expect(
       await controller.handleAction({
         proposalId: 'proposal-reject',
         action: 'reject',
         feedback: 'too broad',
       }),
-      true,
-    );
-    assert.deepEqual(resolved, [
+    ).toBe(true);
+    expect(resolved).toStrictEqual([
       {
         proposalId: 'proposal-approve',
         result: { action: 'approve', model: 'gpt-5.4', agent: 'critic' },
@@ -264,7 +254,7 @@ describe('ProgressAgentProposalController', () => {
       action: 'reject',
     });
 
-    assert.deepEqual(resolved, [
+    expect(resolved).toStrictEqual([
       { proposalId: 'proposal-approve', result: { action: 'approve' } },
       { proposalId: 'proposal-reject', result: { action: 'reject' } },
     ]);

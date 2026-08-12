@@ -35,7 +35,7 @@ function validateFileLocations(
   errorMessage: string,
 ): FileLocation | null {
   const fileToUseLocation = baseLocation ?? inputLocation;
-  if (!fileToUseLocation || !editedLocation) {
+  if (!fileToUseLocation) {
     void showLoggedMessage(CHANNEL, errorMessage);
     return null;
   }

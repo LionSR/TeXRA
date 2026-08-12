@@ -1,10 +1,7 @@
-// Node imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { describe, it, beforeAll } from 'vitest';
 
-// Local imports
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
@@ -21,7 +18,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
 
-// Local file imports
 import { testRunScope, withTestRunContext } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';
 

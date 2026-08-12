@@ -28,17 +28,28 @@ function finalSnapshot(snapshots: readonly WorkflowExecutionSnapshot[]) {
   return snapshots.at(-1)!;
 }
 
+function recordingSnapshots(): {
+  snapshots: WorkflowExecutionSnapshot[];
+  onSnapshot: (snapshot: WorkflowExecutionSnapshot) => void;
+} {
+  const snapshots: WorkflowExecutionSnapshot[] = [];
+  return {
+    snapshots,
+    onSnapshot: (snapshot) => {
+      snapshots.push(snapshot);
+    },
+  };
+}
+
 describe('workflow execution observability', () => {
   it('keeps later tasks stage-blocked, advances stages monotonically, and skips unreached work', async () => {
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     const result = await runWorkflowScript({
       script: `${META}phase('Draft')
 await agent('draft privately', { id: 'draft' })
 return 'done'`,
       runAgent: async () => 'done',
-      onSnapshot: (snapshot) => {
-        snapshots.push(snapshot);
-      },
+      onSnapshot,
     });
 
     expect(
@@ -68,23 +79,22 @@ return 'done'`,
       WorkflowExecutionSnapshotSchema.safeParse(openTerminalAttempt).success,
     ).toBe(false);
 
-    const failedSnapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots: failedSnapshots, onSnapshot: failedOnSnapshot } =
+      recordingSnapshots();
     await expect(
       runWorkflowScript({
         script: `${META}phase('Review')
 phase('Draft')
 return null`,
         runAgent: async () => 'unused',
-        onSnapshot: (snapshot) => {
-          failedSnapshots.push(snapshot);
-        },
+        onSnapshot: failedOnSnapshot,
       }),
     ).rejects.toThrow(/monotonically/);
     expect(finalSnapshot(failedSnapshots).lifecycle).toBe('failed');
   });
 
   it('rejects empty structural identities, titles, and stage references', async () => {
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     const result = await runWorkflowScript({
       script: `export const meta = {
   name: 'structural-fields',
@@ -97,36 +107,33 @@ return await agent('work', { id: 'work-call' })`,
         invocation.report?.({ childExecutionId: 'aaaaaaaaaaaa' });
         return 'done';
       },
-      onSnapshot: (snapshot) => {
-        snapshots.push(snapshot);
-      },
+      onSnapshot,
     });
 
-    const emptyStageId = structuredClone(result.snapshot);
-    emptyStageId.stages[0]!.id = '';
-    emptyStageId.calls[0]!.stageId = '';
-    expect(
-      WorkflowExecutionSnapshotSchema.safeParse(emptyStageId).success,
-    ).toBe(false);
+    const expectEmptyFieldRejected = (
+      mutate: (snapshot: WorkflowExecutionSnapshot) => void,
+    ): void => {
+      const candidate = structuredClone(result.snapshot);
+      mutate(candidate);
+      expect(WorkflowExecutionSnapshotSchema.safeParse(candidate).success).toBe(
+        false,
+      );
+    };
 
-    const emptyStageTitle = structuredClone(result.snapshot);
-    emptyStageTitle.stages[0]!.title = '';
-    emptyStageTitle.calls[0]!.stageTitle = '';
-    expect(
-      WorkflowExecutionSnapshotSchema.safeParse(emptyStageTitle).success,
-    ).toBe(false);
-
-    const emptyCallId = structuredClone(result.snapshot);
-    emptyCallId.calls[0]!.id = '';
-    expect(WorkflowExecutionSnapshotSchema.safeParse(emptyCallId).success).toBe(
-      false,
-    );
-
-    const emptyAttemptId = structuredClone(result.snapshot);
-    emptyAttemptId.calls[0]!.attempts[0]!.id = '' as ExecutionId;
-    expect(
-      WorkflowExecutionSnapshotSchema.safeParse(emptyAttemptId).success,
-    ).toBe(false);
+    expectEmptyFieldRejected((candidate) => {
+      candidate.stages[0]!.id = '';
+      candidate.calls[0]!.stageId = '';
+    });
+    expectEmptyFieldRejected((candidate) => {
+      candidate.stages[0]!.title = '';
+      candidate.calls[0]!.stageTitle = '';
+    });
+    expectEmptyFieldRejected((candidate) => {
+      candidate.calls[0]!.id = '';
+    });
+    expectEmptyFieldRejected((candidate) => {
+      candidate.calls[0]!.attempts[0]!.id = '' as ExecutionId;
+    });
 
     const active = structuredClone(
       snapshots.find(
@@ -152,7 +159,7 @@ return await agent('work', { id: 'work-call' })`,
       if (invocation.index === 0) await firstRun;
       return 'done';
     });
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     const run = runWorkflowScript({
       script: `export const meta = {
   name: 'queue',
@@ -164,9 +171,7 @@ return await parallel([
 ])`,
       concurrency: 1,
       runAgent: runner,
-      onSnapshot: (snapshot) => {
-        snapshots.push(snapshot);
-      },
+      onSnapshot,
     });
 
     await vi.waitFor(() => {
@@ -307,7 +312,7 @@ return await agent('passes', { label: 'Passing task' })`,
 
   it('keeps a failed logical call active until its phase can settle and permits later phases while prior calls run', async () => {
     let releaseDraft!: () => void;
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     const result = await runWorkflowScript({
       script: `export const meta = {
   name: 'parallel-phases',
@@ -328,9 +333,7 @@ return [await draft, review]`,
         releaseDraft();
         return 'review';
       },
-      onSnapshot: (snapshot) => {
-        snapshots.push(snapshot);
-      },
+      onSnapshot,
     });
 
     expect(result.result).toEqual(['draft', 'review']);
@@ -351,7 +354,8 @@ return [await draft, review]`,
       }),
     ).toBe(true);
 
-    const failureSnapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots: failureSnapshots, onSnapshot: failureOnSnapshot } =
+      recordingSnapshots();
     const continued = await runWorkflowScript({
       script: `export const meta = {
   name: 'failure-stage',
@@ -366,9 +370,7 @@ return [failed, passed]`,
         if (index === 0) throw new Error('expected failure');
         return 'passed';
       },
-      onSnapshot: (snapshot) => {
-        failureSnapshots.push(snapshot);
-      },
+      onSnapshot: failureOnSnapshot,
     });
     expect(continued.result).toEqual([null, 'passed']);
     expect(continued.snapshot.stages[0]?.lifecycle).toBe('failed');
@@ -383,7 +385,7 @@ return [failed, passed]`,
   });
 
   it('marks the active stage failed when orchestration throws with no failed call', async () => {
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     await expect(
       runWorkflowScript({
         script: `export const meta = {
@@ -395,9 +397,7 @@ phase('Merge')
 const ok = await agent('already done', { id: 'done' })
 throw new Error('reduce failed after success')`,
         runAgent: async () => 'done',
-        onSnapshot: (snapshot) => {
-          snapshots.push(snapshot);
-        },
+        onSnapshot,
       }),
     ).rejects.toThrow(/reduce failed after success/);
 
@@ -410,7 +410,7 @@ throw new Error('reduce failed after success')`,
   });
 
   it('marks a call-less active stage failed on orchestration throw', async () => {
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     await expect(
       runWorkflowScript({
         script: `export const meta = {
@@ -423,9 +423,7 @@ throw new Error('reduce only')`,
         runAgent: async () => {
           throw new Error('must not run');
         },
-        onSnapshot: (snapshot) => {
-          snapshots.push(snapshot);
-        },
+        onSnapshot,
       }),
     ).rejects.toThrow(/reduce only/);
 
@@ -437,7 +435,7 @@ throw new Error('reduce only')`,
 
   it('terminalizes cancellation with no live tasks and balanced counts', async () => {
     const controller = new AbortController();
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     const run = runWorkflowScript({
       script: `export const meta = {
   name: 'cancel',
@@ -451,9 +449,7 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
             reject(new Error('cancelled')),
           ),
         ),
-      onSnapshot: (snapshot) => {
-        snapshots.push(snapshot);
-      },
+      onSnapshot,
     });
     await vi.waitFor(() =>
       expect(
@@ -496,7 +492,7 @@ return await agent('cached call', { id: 'task' })`;
     const circular: Record<string, unknown> = {};
     circular.self = circular;
 
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const { snapshots, onSnapshot } = recordingSnapshots();
     const endOutcomes: string[] = [];
     await expect(
       runWorkflowScript({
@@ -506,9 +502,7 @@ return await agent('cached call', { id: 'task' })`;
         onEvent: (event) => {
           if (event.type === 'agent:end') endOutcomes.push(event.outcome);
         },
-        onSnapshot: (snapshot) => {
-          snapshots.push(snapshot);
-        },
+        onSnapshot,
       }),
     ).rejects.toThrow(/JSON-serializable/);
 
@@ -631,7 +625,6 @@ return await agent('work')`,
   });
 
   it('aborts active work when snapshot persistence fails', async () => {
-    let writes = 0;
     let runnerStarted = false;
     const run = runWorkflowScript({
       script: `export const meta = {
@@ -650,7 +643,6 @@ return await agent('work')`,
         );
       },
       onSnapshot: async (snapshot) => {
-        writes += 1;
         if (deriveWorkflowCounts(snapshot.calls).running > 0) {
           throw new Error('snapshot disk full');
         }

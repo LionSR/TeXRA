@@ -4,7 +4,7 @@ import { PROVIDER_KEY_REDACTION_RULES, redactSecrets } from '@logger/redaction';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 describe('desktop log redaction', () => {
-  it('redacts obvious secrets and sensitive path prefixes', async () => {
+  it('redacts obvious secrets and sensitive path prefixes', () => {
     const redacted = redactSecrets(
       [
         'OPENAI_API_KEY=sk-1234567890abcdef',

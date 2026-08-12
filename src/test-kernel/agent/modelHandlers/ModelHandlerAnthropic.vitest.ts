@@ -162,11 +162,7 @@ function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
 }
 
 function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
-  if (!block) {
-    return undefined;
-  }
-
-  return (block as { cache_control?: unknown }).cache_control;
+  return (block as { cache_control?: unknown } | undefined)?.cache_control;
 }
 
 describe('ModelHandlerAnthropic.shouldContinue', () => {
@@ -1796,6 +1792,44 @@ describe('ModelHandlerAnthropic forced compaction', () => {
     },
   );
 
+  /** A streaming client that emits one compaction content-block start, then resolves to the given message. */
+  function streamingCompactionClient(
+    model: string,
+    content: unknown,
+    requestId: string,
+  ): { client: any } {
+    const response = anthropicMessage(model, {
+      content: [
+        { type: 'compaction', content },
+        { type: 'text', text: 'ok' },
+      ],
+    });
+    let streamEventHandler: ((event: unknown) => void) | undefined;
+    const client = {
+      beta: {
+        messages: {
+          stream: () => ({
+            on: (eventName: string, callback: (event: unknown) => void) => {
+              if (eventName === 'streamEvent') streamEventHandler = callback;
+            },
+            controller: { abort: () => {} },
+            finalMessage: async () => {
+              streamEventHandler?.({
+                type: 'content_block_start',
+                index: 0,
+                content_block: { type: 'compaction', content: '' },
+              });
+              return response;
+            },
+            currentMessage: response,
+            request_id: requestId,
+          }),
+        },
+      },
+    } as any;
+    return { client };
+  }
+
   it('uses the final streaming response as the canonical compaction outcome', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
@@ -1821,35 +1855,11 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       },
     });
     handler.getStreamingConfig = () => true;
-    let streamEventHandler: ((event: unknown) => void) | undefined;
-    const response = anthropicMessage(handler.config.fullName, {
-      content: [
-        { type: 'compaction', content: 'usable summary' },
-        { type: 'text', text: 'ok' },
-      ],
-    });
-    const client = {
-      beta: {
-        messages: {
-          stream: () => ({
-            on: (eventName: string, callback: (event: unknown) => void) => {
-              if (eventName === 'streamEvent') streamEventHandler = callback;
-            },
-            controller: { abort: () => {} },
-            finalMessage: async () => {
-              streamEventHandler?.({
-                type: 'content_block_start',
-                index: 0,
-                content_block: { type: 'compaction', content: '' },
-              });
-              return response;
-            },
-            currentMessage: response,
-            request_id: 'req_compaction',
-          }),
-        },
-      },
-    } as any;
+    const { client } = streamingCompactionClient(
+      handler.config.fullName,
+      'usable summary',
+      'req_compaction',
+    );
 
     await handler.createResponse({
       client,
@@ -1881,35 +1891,11 @@ describe('ModelHandlerAnthropic forced compaction', () => {
         contextManagementEvents,
       );
       handler.getStreamingConfig = () => true;
-      let streamEventHandler: ((event: unknown) => void) | undefined;
-      const response = anthropicMessage(handler.config.fullName, {
-        content: [
-          { type: 'compaction', content },
-          { type: 'text', text: 'ok' },
-        ],
-      });
-      const client = {
-        beta: {
-          messages: {
-            stream: () => ({
-              on: (eventName: string, callback: (event: unknown) => void) => {
-                if (eventName === 'streamEvent') streamEventHandler = callback;
-              },
-              controller: { abort: () => {} },
-              finalMessage: async () => {
-                streamEventHandler?.({
-                  type: 'content_block_start',
-                  index: 0,
-                  content_block: { type: 'compaction', content: '' },
-                });
-                return response;
-              },
-              currentMessage: response,
-              request_id: 'req_compaction_skipped',
-            }),
-          },
-        },
-      } as any;
+      const { client } = streamingCompactionClient(
+        handler.config.fullName,
+        content,
+        'req_compaction_skipped',
+      );
 
       await handler.createResponse({
         client,

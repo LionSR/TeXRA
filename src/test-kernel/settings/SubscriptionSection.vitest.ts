@@ -1,4 +1,3 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -9,14 +8,12 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-// Local imports - component and schema types
 import type {
   SubscriptionAuthStatus,
   SubscriptionSectionProvider,
 } from '@settingsView/frontend/components/profile/SubscriptionSection';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
-// Local imports - test utilities
 import {
   mountComponent,
   useLitComponentTestDom,

@@ -51,6 +51,22 @@ function dispatchChange(element: HTMLElement): void {
   element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
 }
 
+function recordEvents(
+  element: HTMLElement,
+  types: readonly string[],
+): Array<{ type: string; value: string }> {
+  const events: Array<{ type: string; value: string }> = [];
+  for (const type of types) {
+    element.addEventListener(type, (event) => {
+      events.push({
+        type,
+        value: (event as CustomEvent<{ value: string }>).detail.value,
+      });
+    });
+  }
+  return events;
+}
+
 function countExecutes(element: InstructionPanel): () => number {
   let count = 0;
   element.addEventListener('execute', () => {
@@ -136,26 +152,17 @@ describe('instruction-panel desktop composer', () => {
       element,
       '#desktopLaunchMode',
     );
-    const changes: Array<{ event: string; value: string }> = [];
-    element.addEventListener('session-type-change', (event) => {
-      changes.push({
-        event: 'session-type-change',
-        value: (event as CustomEvent<{ value: string }>).detail.value,
-      });
-    });
-    element.addEventListener('launch-target-change', (event) => {
-      changes.push({
-        event: 'launch-target-change',
-        value: (event as CustomEvent<{ value: string }>).detail.value,
-      });
-    });
+    const changes = recordEvents(element, [
+      'session-type-change',
+      'launch-target-change',
+    ]);
 
     mode.value = 'team';
     dispatchChange(mode);
 
     expect(changes).toEqual([
-      { event: 'session-type-change', value: 'toolUse' },
-      { event: 'launch-target-change', value: 'team' },
+      { type: 'session-type-change', value: 'toolUse' },
+      { type: 'launch-target-change', value: 'team' },
     ]);
 
     changes.length = 0;
@@ -163,7 +170,7 @@ describe('instruction-panel desktop composer', () => {
     dispatchChange(mode);
 
     expect(changes).toEqual([
-      { event: 'session-type-change', value: 'workflow' },
+      { type: 'session-type-change', value: 'workflow' },
     ]);
   });
 
@@ -189,10 +196,7 @@ describe('instruction-panel desktop composer', () => {
       multiRoot,
       '#workingDirectory',
     );
-    let selected = '';
-    multiRoot.addEventListener('working-directory-change', (event) => {
-      selected = (event as CustomEvent<{ value: string }>).detail.value;
-    });
+    const changes = recordEvents(multiRoot, ['working-directory-change']);
 
     expect(picker.getAttribute('aria-label')).toBe('Working directory');
     expect(
@@ -202,7 +206,9 @@ describe('instruction-panel desktop composer', () => {
     picker.value = '/workspace/figures';
     dispatchChange(picker);
 
-    expect(selected).toBe('/workspace/figures');
+    expect(changes).toEqual([
+      { type: 'working-directory-change', value: '/workspace/figures' },
+    ]);
   });
 
   it('sends on Enter in desktop mode and preserves Shift+Enter for a newline', async () => {

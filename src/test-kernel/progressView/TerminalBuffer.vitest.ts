@@ -43,9 +43,10 @@ describe('TerminalBuffer', () => {
     buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES - 1));
 
     const text = renderedText(buffer);
+    const lines = retainedLines(text);
     expect(text.startsWith(TRUNCATION_MARKER)).toBe(false);
-    expect(retainedLines(text)).toHaveLength(TERMINAL_BUFFER_MAX_LINES - 1);
-    expect(retainedLines(text)[0]).toBe('line 0');
+    expect(lines).toHaveLength(TERMINAL_BUFFER_MAX_LINES - 1);
+    expect(lines[0]).toBe('line 0');
   });
 
   it('preserves committed output exactly at the complete-line limit', () => {
@@ -53,11 +54,10 @@ describe('TerminalBuffer', () => {
     buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES));
 
     const text = renderedText(buffer);
+    const lines = retainedLines(text);
     expect(text.startsWith(TRUNCATION_MARKER)).toBe(false);
-    expect(retainedLines(text)).toHaveLength(TERMINAL_BUFFER_MAX_LINES);
-    expect(retainedLines(text).at(-1)).toBe(
-      `line ${TERMINAL_BUFFER_MAX_LINES - 1}`,
-    );
+    expect(lines).toHaveLength(TERMINAL_BUFFER_MAX_LINES);
+    expect(lines.at(-1)).toBe(`line ${TERMINAL_BUFFER_MAX_LINES - 1}`);
   });
 
   it('compacts to the lower watermark immediately above the limit', () => {

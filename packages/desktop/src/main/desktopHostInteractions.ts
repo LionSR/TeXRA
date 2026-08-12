@@ -17,6 +17,6 @@ export function createDesktopHostInteractions(
 ): ProgressHostInteractions {
   return {
     ...createProgressHostInteractions(options),
-    showInfoMessage: (message) => options.showInfoMessage(message),
+    showInfoMessage: options.showInfoMessage,
   };
 }

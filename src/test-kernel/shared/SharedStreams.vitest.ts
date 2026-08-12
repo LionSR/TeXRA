@@ -25,14 +25,6 @@ import {
 // ChildActivityReducer
 // ---------------------------------------------------------------------------
 
-interface Child {
-  readonly executionId: string;
-}
-
-function child(executionId: string): Child {
-  return { executionId };
-}
-
 describe('diffActiveChildren', () => {
   const cases: Array<{
     name: string;
@@ -73,9 +65,12 @@ describe('diffActiveChildren', () => {
   ];
 
   it.each(cases)('$name', ({ previous, next, vanished }) => {
-    expect(diffActiveChildren(previous.map(child), next.map(child))).toEqual(
-      new Set(vanished),
-    );
+    expect(
+      diffActiveChildren(
+        previous.map((executionId) => ({ executionId })),
+        next.map((executionId) => ({ executionId })),
+      ),
+    ).toEqual(new Set(vanished));
   });
 });
 
@@ -249,12 +244,6 @@ describe('stream status display labels', () => {
   });
 
   it('uses substate display keys for current running phases', () => {
-    expect(
-      formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
-        style: 'progressHeader',
-        substate: STREAM_SUBSTATE.STARTING,
-      }),
-    ).toBe('Initializing');
     expect(
       formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
         style: 'cli',

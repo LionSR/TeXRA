@@ -1,4 +1,3 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 const roundFlowState = vi.hoisted(() => ({
@@ -26,7 +25,6 @@ vi.mock('@agent/core/flows/ToolUseRoundFlow', () => ({
   }),
 }));
 
-// Local imports
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -50,7 +48,6 @@ import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
-// Local file imports
 import {
   createRecordingHost,
   recordSessionEvents,
@@ -311,35 +308,41 @@ describe('tool-use progress events', () => {
     expect(onCycleResponse).not.toHaveBeenCalled();
   });
 
-  it('does not return the previous cycle response for an answerless completed cycle', async () => {
-    // Assembly text unchanged since prep is historical: the cycle produced no
-    // new assistant response, so it must not become this cycle's result (#9531).
-    const { onCycleResponse, shared } = await runCyclePost({
-      assemblyText: 'previous turn response',
-      shouldSkipCycle: false,
-      prepBaseline: 'previous turn response',
+  it.each<{
+    name: string;
+    sharedLastResponse?: string;
+    result: CycleOutcome;
+  }>([
+    {
+      name: 'completed',
       sharedLastResponse: 'previous turn response',
       result: { outcome: 'completed', messages: [] },
-    });
-
-    expect(onCycleResponse).not.toHaveBeenCalled();
-    expect(shared.lastResponse).toBeUndefined();
-  });
-
-  it('does not return the previous cycle response for an answerless failed cycle', async () => {
-    const { onCycleResponse, shared } = await runCyclePost({
-      assemblyText: 'previous turn response',
-      shouldSkipCycle: false,
-      prepBaseline: 'previous turn response',
+    },
+    {
+      name: 'failed',
+      sharedLastResponse: undefined,
       result: {
         outcome: 'failed',
         lastError: { message: 'stream failed', userRetryable: true },
       },
-    });
+    },
+  ])(
+    'does not return the previous cycle response for an answerless $name cycle',
+    async ({ sharedLastResponse, result }) => {
+      // Assembly text unchanged since prep is historical: the cycle produced no
+      // new assistant response, so it must not become this cycle's result (#9531).
+      const { onCycleResponse, shared } = await runCyclePost({
+        assemblyText: 'previous turn response',
+        shouldSkipCycle: false,
+        prepBaseline: 'previous turn response',
+        sharedLastResponse,
+        result,
+      });
 
-    expect(onCycleResponse).not.toHaveBeenCalled();
-    expect(shared.lastResponse).toBeUndefined();
-  });
+      expect(onCycleResponse).not.toHaveBeenCalled();
+      expect(shared.lastResponse).toBeUndefined();
+    },
+  );
 
   it('reports assembly text written during the cycle over the prep baseline', async () => {
     // The failure path in exec copies this cycle's partial text into assembly;

@@ -111,16 +111,6 @@ function requestModelAccess(
   );
 }
 
-function clearCopilotRoute(
-  handler: SettingsViewMessageHandler,
-  modelName: string,
-): Promise<void> {
-  return handler.handleMessage(
-    { command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, modelName },
-    createWebviewView(),
-  );
-}
-
 describe('Copilot route preference handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -133,36 +123,24 @@ describe('Copilot route preference handler', () => {
     ).mockResolvedValue(undefined);
   });
 
-  it('revalidates and persists an allowed opt-in', async () => {
-    mocks.requestRuntimeModelAccess.mockResolvedValueOnce('already-allowed');
-    const handler = createHandler();
+  it.each(['already-allowed', 'requested'])(
+    'revalidates and persists an opt-in whose runtime access is %s',
+    async (accessResult) => {
+      mocks.requestRuntimeModelAccess.mockResolvedValueOnce(accessResult);
+      const handler = createHandler();
 
-    await requestModelAccess(handler, 'sonnet46');
+      await requestModelAccess(handler, 'sonnet46');
 
-    await vi.waitFor(() => {
-      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-        'sonnet46',
-        true,
-      );
-    });
-    expect(mocks.requestRuntimeModelAccess).toHaveBeenCalledWith('sonnet46');
-    expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
-  });
-
-  it('uses the current consent flow before persisting a stale allowed opt-in', async () => {
-    mocks.requestRuntimeModelAccess.mockResolvedValueOnce('requested');
-    const handler = createHandler();
-
-    await requestModelAccess(handler, 'sonnet46');
-
-    await vi.waitFor(() => {
-      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-        'sonnet46',
-        true,
-      );
-    });
-    expect(mocks.requestRuntimeModelAccess).toHaveBeenCalledWith('sonnet46');
-  });
+      await vi.waitFor(() => {
+        expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
+          'sonnet46',
+          true,
+        );
+      });
+      expect(mocks.requestRuntimeModelAccess).toHaveBeenCalledWith('sonnet46');
+      expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects an opt-in that has become unavailable with actionable feedback', async () => {
     mocks.requestRuntimeModelAccess.mockResolvedValueOnce('unavailable');
@@ -182,7 +160,13 @@ describe('Copilot route preference handler', () => {
   it('allows opt-out without consulting current Copilot access', async () => {
     const handler = createHandler();
 
-    await clearCopilotRoute(handler, 'sonnet46');
+    await handler.handleMessage(
+      {
+        command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
+        modelName: 'sonnet46',
+      },
+      createWebviewView(),
+    );
 
     await vi.waitFor(() => {
       expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(

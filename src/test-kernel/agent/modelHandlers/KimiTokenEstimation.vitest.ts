@@ -4,27 +4,11 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
-import { type ModelConfig, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - handler under test
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-function buildHandler(): ModelHandlerKimi {
-  const config: ModelConfig = buildTestModelConfig({
-    name: 'kimi-test',
-    label: 'Kimi Test',
-    fullName: 'kimi-k2.5',
-    shortName: 'kimi-test',
-    provider: ModelProvider.MOONSHOT,
-    maxOutputTokens: 8192,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    openRouterOnly: false,
-  });
-  return new ModelHandlerKimi(config);
-}
 
 function buildClient(fetchMock: typeof fetch): OpenAI {
   return new OpenAI({
@@ -44,15 +28,34 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+/** An OpenAI-shaped client whose only live member is the token-estimation `post`. */
+function stubPostClient(
+  post: (path: string, options: unknown) => Promise<{ data: unknown }>,
+): OpenAI {
+  return { post } as unknown as OpenAI;
+}
+
+const TEST_CONFIG = Object.freeze({
+  name: 'kimi-test',
+  label: 'Kimi Test',
+  fullName: 'kimi-k2.5',
+  shortName: 'kimi-test',
+  provider: ModelProvider.MOONSHOT,
+  maxOutputTokens: 8192,
+  inputPrice: 0,
+  outputPrice: 0,
+  contextWindow: 200000,
+  openRouterOnly: false,
+});
+
 function estimate(
   client: OpenAI,
   content: string,
   signal?: AbortSignal,
 ): Promise<number> {
-  return buildHandler().estimateTokenCount([{ role: 'user', content }], {
-    client,
-    signal,
-  });
+  return new ModelHandlerKimi(
+    buildTestModelConfig(TEST_CONFIG),
+  ).estimateTokenCount([{ role: 'user', content }], { client, signal });
 }
 
 describe('Kimi token estimation', () => {
@@ -61,7 +64,7 @@ describe('Kimi token estimation', () => {
     const post = vi.fn(async () => ({ data: { total_tokens: 37 } }));
 
     const total = await estimate(
-      { post } as unknown as OpenAI,
+      stubPostClient(post),
       'count this',
       controller.signal,
     );
@@ -103,7 +106,7 @@ describe('Kimi token estimation', () => {
     const post = vi.fn(async () => ({ data: { tokens: 37 } }));
 
     await assert.rejects(
-      estimate({ post } as unknown as OpenAI, 'malformed'),
+      estimate(stubPostClient(post), 'malformed'),
       /unexpected response shape/,
     );
     assert.equal(post.mock.calls.length, 1);

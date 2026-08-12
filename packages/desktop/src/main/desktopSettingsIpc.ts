@@ -146,8 +146,9 @@ export function createDesktopSettingsIpc(
   }
 
   async function openMemoryFolder(): Promise<void> {
-    await StorageFS.ensureDir(resolveMemoryStoragePath());
-    await options.ui.openPath(StorageFS.fullPath(resolveMemoryStoragePath()));
+    const memoryPath = resolveMemoryStoragePath();
+    await StorageFS.ensureDir(memoryPath);
+    await options.ui.openPath(StorageFS.fullPath(memoryPath));
   }
 
   function postReliabilityAndOrchestrationSettings(): void {

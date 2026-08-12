@@ -9,6 +9,11 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => ({
 
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 
+const INCLUDED_ACCESS_MUTATION = {
+  command: 'setApiAccessMode',
+  mode: 'included',
+} as const;
+
 type Harness = {
   handleSetApiAccessMode(data: {
     command: 'setApiAccessMode';
@@ -28,8 +33,8 @@ function createHarness(): Harness {
   handler.profileController = {
     setApiAccessMode: vi.fn(),
   };
-  handler.sendProfileData = vi.fn(async () => undefined);
-  handler.sendProfileAndModelSelectionData = vi.fn(async () => undefined);
+  handler.sendProfileData = vi.fn();
+  handler.sendProfileAndModelSelectionData = vi.fn();
   Reflect.set(handler, 'channel', 'SettingsView');
   Reflect.set(
     handler,
@@ -52,10 +57,7 @@ describe('extension included-access mutation handling', () => {
       reason: 'quota_exhausted',
     });
 
-    await handler.handleSetApiAccessMode({
-      command: 'setApiAccessMode',
-      mode: 'included',
-    });
+    await handler.handleSetApiAccessMode(INCLUDED_ACCESS_MUTATION);
 
     expect(handler.sendProfileData).toHaveBeenCalledOnce();
     expect(handler.sendProfileAndModelSelectionData).not.toHaveBeenCalled();
@@ -70,10 +72,7 @@ describe('extension included-access mutation handling', () => {
       mode: 'included',
       openRouterDisabled: false,
     });
-    await handler.handleSetApiAccessMode({
-      command: 'setApiAccessMode',
-      mode: 'included',
-    });
+    await handler.handleSetApiAccessMode(INCLUDED_ACCESS_MUTATION);
 
     expect(handler.sendProfileAndModelSelectionData).toHaveBeenCalledOnce();
     expect(showSuccess).toHaveBeenCalledWith('Now using included access.');

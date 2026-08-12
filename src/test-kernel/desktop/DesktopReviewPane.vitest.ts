@@ -4,16 +4,12 @@ import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-type ReviewPaneModule = typeof import('@desktop/renderer/reviewPane');
-
-async function loadReviewPane(): Promise<ReviewPaneModule> {
-  return import('@desktop/renderer/reviewPane');
-}
-
-type ReviewPane = ReturnType<ReviewPaneModule['createReviewPane']>;
+type ReviewPane = ReturnType<
+  (typeof import('@desktop/renderer/reviewPane'))['createReviewPane']
+>;
 
 async function newReviewPane(): Promise<ReviewPane> {
-  const { createReviewPane } = await loadReviewPane();
+  const { createReviewPane } = await import('@desktop/renderer/reviewPane');
   return createReviewPane();
 }
 
@@ -40,7 +36,7 @@ function countsText(controller: ReviewPane): string | null | undefined {
 }
 
 describe('desktop review pane', () => {
-  useLitComponentTestDom(loadReviewPane);
+  useLitComponentTestDom(() => import('@desktop/renderer/reviewPane'));
 
   it('renders cumulative counts and a changed-file tree', async () => {
     const controller = await newReviewPane();

@@ -40,6 +40,10 @@ vi.mock('@tools/setup/platform', async (importOriginal) => {
   };
 });
 
+function outputOf(result: { output?: string }): string {
+  return result.output ?? '';
+}
+
 function installChatGptOnlySetupPlatform(): void {
   mocks.anyUsableCredentialExists.mockResolvedValue(true);
   vi.spyOn(
@@ -92,11 +96,11 @@ describe('setup credential reporting', () => {
 
     const result = await new ProbeEnvironmentTool().call({});
 
-    assert.match(result.output ?? '', /"host": "cli"/);
-    assert.match(result.output ?? '', /"provider": "deepseek"/);
-    assert.match(result.output ?? '', /"origin": "env"/);
-    assert.match(result.output ?? '', /provider API key in environment/);
-    assert.doesNotMatch(result.output ?? '', /private-test-value/);
+    assert.match(outputOf(result), /"host": "cli"/);
+    assert.match(outputOf(result), /"provider": "deepseek"/);
+    assert.match(outputOf(result), /"origin": "env"/);
+    assert.match(outputOf(result), /provider API key in environment/);
+    assert.doesNotMatch(outputOf(result), /private-test-value/);
   });
 
   it('reports a usable non-API-key credential in the environment probe headline', async () => {
@@ -105,19 +109,16 @@ describe('setup credential reporting', () => {
     const result = await new ProbeEnvironmentTool().call({});
 
     assert.equal(result.status, 'executed');
-    assert.match(
-      result.output ?? '',
-      /credentials: ChatGPT subscription enabled/,
-    );
+    assert.match(outputOf(result), /credentials: ChatGPT subscription enabled/);
     assert.doesNotMatch(
-      result.output ?? '',
+      outputOf(result),
       /ChatGPT subscription enabled \+ usable credential/,
     );
-    assert.match(result.output ?? '', /"hasAnyUsableCredential": true/);
-    assert.match(result.output ?? '', /"anyApiKeySet": false/);
-    assert.match(result.output ?? '', /"chatGptSubscription"/);
-    assert.match(result.output ?? '', /"enabled": true/);
-    assert.doesNotMatch(result.output ?? '', /researcher@example\.com/);
+    assert.match(outputOf(result), /"hasAnyUsableCredential": true/);
+    assert.match(outputOf(result), /"anyApiKeySet": false/);
+    assert.match(outputOf(result), /"chatGptSubscription"/);
+    assert.match(outputOf(result), /"enabled": true/);
+    assert.doesNotMatch(outputOf(result), /researcher@example\.com/);
   });
 
   it('keeps probing when one provider key origin is unavailable', async () => {
@@ -129,10 +130,10 @@ describe('setup credential reporting', () => {
     const result = await new ProbeEnvironmentTool().call({});
 
     assert.equal(result.status, 'executed');
-    assert.match(result.output ?? '', /"origin": "unknown"/);
-    assert.match(result.output ?? '', /provider API key status unavailable/);
-    assert.match(result.output ?? '', /"anyApiKeySet": false/);
-    assert.match(result.output ?? '', /"usableCredentialStatus": "unknown"/);
+    assert.match(outputOf(result), /"origin": "unknown"/);
+    assert.match(outputOf(result), /provider API key status unavailable/);
+    assert.match(outputOf(result), /"anyApiKeySet": false/);
+    assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
   });
 
   it('reports when aggregate credential readiness is unavailable', async () => {
@@ -143,8 +144,8 @@ describe('setup credential reporting', () => {
     const result = await new ProbeEnvironmentTool().call({});
 
     assert.equal(result.status, 'executed');
-    assert.match(result.output ?? '', /overall credential status unavailable/);
-    assert.match(result.output ?? '', /"usableCredentialStatus": "unknown"/);
+    assert.match(outputOf(result), /overall credential status unavailable/);
+    assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
   });
 
   it('reports a usable non-API-key credential in setup verification', async () => {
@@ -154,7 +155,7 @@ describe('setup credential reporting', () => {
 
     assert.equal(result.status, 'executed');
     assert.match(
-      result.output ?? '',
+      outputOf(result),
       /Credentials: usable model credential available\./,
     );
   });

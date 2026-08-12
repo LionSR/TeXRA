@@ -25,6 +25,16 @@ function echoRunner(invocation: WorkflowAgentInvocation): Promise<string> {
   return Promise.resolve(`result:${invocation.prompt}`);
 }
 
+/** Captures every invocation while echoing its prompt, for later assertions. */
+function collectingRunner(
+  invocations: WorkflowAgentInvocation[],
+): (invocation: WorkflowAgentInvocation) => Promise<string> {
+  return (invocation) => {
+    invocations.push(invocation);
+    return echoRunner(invocation);
+  };
+}
+
 /** Runs `body` under the shared META header, echoing prompts by default. */
 function runScript(
   body: string,
@@ -473,10 +483,7 @@ return await parallel([
   () => agent('different'),
   () => agent('same', { id: 'second' }),
 ])`,
-      runAgent: (invocation) => {
-        invocations.push(invocation);
-        return echoRunner(invocation);
-      },
+      runAgent: collectingRunner(invocations),
     });
 
     expect(invocations.map(({ options }) => options.id)).toEqual([
@@ -1036,10 +1043,7 @@ return await agent('three:' + a + b)`,
 phase('Work')
 await agent('inside', { label: 'labelled' })
 return null`,
-      runAgent: (invocation) => {
-        invocations.push(invocation);
-        return echoRunner(invocation);
-      },
+      runAgent: collectingRunner(invocations),
       onEvent: (event) => events.push(event),
     });
     expect(invocations[0].options.phase).toBe('Work');
@@ -1073,10 +1077,7 @@ const early = agent('early', { label: 'Early', phase: '  Work  ' })
 phase('  Work  ')
 await early
 return await agent('active', { label: 'Active' })`,
-      runAgent: (invocation) => {
-        invocations.push(invocation);
-        return echoRunner(invocation);
-      },
+      runAgent: collectingRunner(invocations),
       onEvent: (event) => events.push(event),
     });
 
@@ -1170,10 +1171,7 @@ return await agent('active', { label: 'Active' })`,
 
   it('accepts a schema option and rejects obsolete or misspelled options', async () => {
     const seen: WorkflowAgentInvocation[] = [];
-    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
-      seen.push(invocation);
-      return echoRunner(invocation);
-    });
+    const runner = collectingRunner(seen);
     await runScript(
       `
 return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`,
@@ -1200,10 +1198,7 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
     // other synthesized key) would silently invalidate every completed call of
     // an otherwise identical resumed run.
     const seen: WorkflowAgentInvocation[] = [];
-    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
-      seen.push(invocation);
-      return echoRunner(invocation);
-    });
+    const runner = collectingRunner(seen);
     // Only defined values reach stableStringify, so this is exactly the key set
     // the journal identity is computed over.
     const journaledOptionKeys = (index: number): string[] =>

@@ -129,16 +129,18 @@ export function AgentRosterForm(
   const [data, setData] = useState<AgentRosterData>();
   const [error, setError] = useState<string>();
 
+  const fail = (reason: unknown): void => {
+    setError(toErrorMessage(reason));
+    props.onError?.(reason);
+  };
+
   const refresh = (): void => {
     void loadRosterData()
       .then((next) => {
         setData(next);
         setError(undefined);
       })
-      .catch((reason: unknown) => {
-        setError(toErrorMessage(reason));
-        props.onError?.(reason);
-      });
+      .catch((reason: unknown) => fail(reason));
   };
 
   useEffect(refresh, []);
@@ -149,10 +151,7 @@ export function AgentRosterForm(
         setMode(nextMode);
         refresh();
       })
-      .catch((reason: unknown) => {
-        setError(toErrorMessage(reason));
-        props.onError?.(reason);
-      });
+      .catch((reason: unknown) => fail(reason));
   };
 
   if (!data) {

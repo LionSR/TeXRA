@@ -1,10 +1,5 @@
-// Node imports
-import { strict as assert } from 'node:assert';
-
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
@@ -132,11 +127,11 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, RETRIED_WITH_OWN_KEY_RESULT);
-    assert.deepEqual(harness.prompts, ['anthropic']);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.equal(harness.invalidations, 1);
-    assert.deepEqual(harness.retries, ['stream-a']);
+    expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
+    expect(harness.prompts).toStrictEqual(['anthropic']);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
+    expect(harness.retries).toStrictEqual(['stream-a']);
   });
 
   it('does not retry when a depleted provider key was not changed', async () => {
@@ -155,11 +150,11 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, IDLE_RESULT);
-    assert.deepEqual(harness.prompts, ['anthropic']);
-    assert.deepEqual(harness.includedAccessValues, []);
-    assert.equal(harness.invalidations, 0);
-    assert.deepEqual(harness.retries, []);
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.prompts).toStrictEqual(['anthropic']);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.invalidations).toBe(0);
+    expect(harness.retries).toStrictEqual([]);
   });
 
   it('does not change routing after the retry request was replaced', async () => {
@@ -175,10 +170,10 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'copilot-subscription',
     });
 
-    assert.deepEqual(result, IDLE_RESULT);
-    assert.deepEqual(harness.includedAccessValues, []);
-    assert.equal(harness.invalidations, 0);
-    assert.deepEqual(harness.retries, []);
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.invalidations).toBe(0);
+    expect(harness.retries).toStrictEqual([]);
   });
 
   it('returns a fresh result when no retry occurs', async () => {
@@ -196,8 +191,8 @@ describe('ProgressApiKeyRetryController', () => {
     const first = await harness.controller.useOwnApiKey(request);
     const second = await harness.controller.useOwnApiKey(request);
 
-    assert.notStrictEqual(first, second);
-    assert.deepEqual(first, second);
+    expect(first).not.toBe(second);
+    expect(first).toStrictEqual(second);
   });
 
   it('accepts a changed key from any provider when depletion has no provider hint', async () => {
@@ -215,11 +210,11 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, RETRIED_WITH_OWN_KEY_RESULT);
-    assert.deepEqual(harness.prompts, [undefined]);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.equal(harness.invalidations, 1);
-    assert.deepEqual(harness.retries, ['stream-b']);
+    expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
+    expect(harness.prompts).toStrictEqual([undefined]);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
+    expect(harness.retries).toStrictEqual(['stream-b']);
   });
 
   it('uses any existing usable key for relay-limit consent without re-prompting', async () => {
@@ -233,12 +228,12 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: true,
     });
 
-    assert.deepEqual(result, RETRIED_WITH_OWN_KEY_RESULT);
+    expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
     // A usable key already exists, so the switch must not pop the key prompt.
-    assert.deepEqual(harness.prompts, []);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.equal(harness.invalidations, 1);
-    assert.deepEqual(harness.retries, ['stream-b']);
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
+    expect(harness.retries).toStrictEqual(['stream-b']);
   });
 
   it('keeps relay enabled for direct-key failures', async () => {
@@ -254,10 +249,10 @@ describe('ProgressApiKeyRetryController', () => {
       viaRelay: false,
     });
 
-    assert.deepEqual(result, IDLE_RESULT);
-    assert.deepEqual(harness.includedAccessValues, []);
-    assert.equal(harness.invalidations, 0);
-    assert.deepEqual(harness.retries, ['stream-c']);
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.invalidations).toBe(0);
+    expect(harness.retries).toStrictEqual(['stream-c']);
   });
 
   it('restores routing when the exact retry disappears during the switch', async () => {
@@ -273,11 +268,11 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    assert.deepEqual(result, IDLE_RESULT);
-    assert.deepEqual(harness.includedAccessValues, [false, true]);
-    assert.deepEqual(harness.chatGptSubscriptionValues, [false, true]);
-    assert.equal(harness.invalidations, 3);
-    assert.deepEqual(harness.retries, ['stream-race']);
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.includedAccessValues).toStrictEqual([false, true]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([false, true]);
+    expect(harness.invalidations).toBe(3);
+    expect(harness.retries).toStrictEqual(['stream-race']);
   });
 
   it('disables the ChatGPT subscription and retries with the existing OpenAI key, no prompt', async () => {
@@ -294,7 +289,7 @@ describe('ProgressApiKeyRetryController', () => {
 
     // The subscription switch also drops relay so the retry reaches the stored
     // OpenAI key rather than the relay JWT.
-    assert.deepEqual(result, {
+    expect(result).toStrictEqual({
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: true,
@@ -303,11 +298,11 @@ describe('ProgressApiKeyRetryController', () => {
     });
     // The subscription quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
-    assert.deepEqual(harness.prompts, []);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.deepEqual(harness.chatGptSubscriptionValues, [false]);
-    assert.equal(harness.invalidations, 2);
-    assert.deepEqual(harness.retries, ['stream-d']);
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(2);
+    expect(harness.retries).toStrictEqual(['stream-d']);
   });
 
   it('does not disable the subscription when no usable OpenAI key is available', async () => {
@@ -320,11 +315,11 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    assert.deepEqual(result, IDLE_RESULT);
+    expect(result).toStrictEqual(IDLE_RESULT);
     // No usable key exists, so the prompt is still shown (then declined here).
-    assert.deepEqual(harness.prompts, ['openai']);
-    assert.deepEqual(harness.chatGptSubscriptionValues, []);
-    assert.deepEqual(harness.retries, []);
+    expect(harness.prompts).toStrictEqual(['openai']);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual([]);
   });
 
   it('disables the GLM Coding Plan and retries with the existing GLM key, no prompt', async () => {
@@ -339,7 +334,7 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'glm-coding-plan',
     });
 
-    assert.deepEqual(result, {
+    expect(result).toStrictEqual({
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
@@ -348,11 +343,11 @@ describe('ProgressApiKeyRetryController', () => {
     });
     // The coding-plan quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
-    assert.deepEqual(harness.prompts, []);
-    assert.deepEqual(harness.includedAccessValues, []);
-    assert.deepEqual(harness.glmCodingPlanValues, [false]);
-    assert.equal(harness.invalidations, 1);
-    assert.deepEqual(harness.retries, ['stream-glm']);
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.glmCodingPlanValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
+    expect(harness.retries).toStrictEqual(['stream-glm']);
   });
 
   it('does not disable the GLM Coding Plan when it is already off', async () => {
@@ -368,14 +363,14 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'glm-coding-plan',
     });
 
-    assert.deepEqual(result, {
+    expect(result).toStrictEqual({
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
       disabledChatGptSubscription: false,
       disabledCodingPlans: [],
     });
-    assert.deepEqual(harness.glmCodingPlanValues, []);
+    expect(harness.glmCodingPlanValues).toStrictEqual([]);
   });
 
   it('prepares an existing direct key for a fresh Copilot fallback without retrying in place', async () => {
@@ -388,22 +383,22 @@ describe('ProgressApiKeyRetryController', () => {
       exhaustionReason: 'copilot-subscription',
     });
 
-    assert.equal(proceeded, true);
-    assert.deepEqual(harness.prompts, []);
-    assert.deepEqual(harness.includedAccessValues, []);
+    expect(proceeded).toBe(true);
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([]);
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
       { provider: 'anthropic', exhaustionReason: 'copilot-subscription' },
       async () => true,
     );
 
-    assert.equal(started, true);
+    expect(started).toBe(true);
     // Included access is disabled for the fallback and, because it started,
     // left disabled; the ChatGPT preference is untouched and nothing is
     // retried in place.
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.deepEqual(harness.chatGptSubscriptionValues, []);
-    assert.deepEqual(harness.retries, []);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual([]);
   });
 
   it('restores included access when a fresh Copilot fallback does not start', async () => {
@@ -414,9 +409,9 @@ describe('ProgressApiKeyRetryController', () => {
       async () => false,
     );
 
-    assert.equal(started, false);
-    assert.deepEqual(harness.includedAccessValues, [false, true]);
-    assert.equal(harness.invalidations, 2);
+    expect(started).toBe(false);
+    expect(harness.includedAccessValues).toStrictEqual([false, true]);
+    expect(harness.invalidations).toBe(2);
   });
 
   it('keeps a Copilot fallback on the OpenAI key instead of ChatGPT access', async () => {
@@ -430,10 +425,10 @@ describe('ProgressApiKeyRetryController', () => {
       async () => true,
     );
 
-    assert.equal(started, true);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.deepEqual(harness.chatGptSubscriptionValues, [false]);
-    assert.equal(harness.invalidations, 2);
+    expect(started).toBe(true);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(2);
   });
 
   it('restores ChatGPT access when an eligible Copilot fallback does not start', async () => {
@@ -447,10 +442,10 @@ describe('ProgressApiKeyRetryController', () => {
       async () => false,
     );
 
-    assert.equal(started, false);
-    assert.deepEqual(harness.includedAccessValues, [false, true]);
-    assert.deepEqual(harness.chatGptSubscriptionValues, [false, true]);
-    assert.equal(harness.invalidations, 3);
+    expect(started).toBe(false);
+    expect(harness.includedAccessValues).toStrictEqual([false, true]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([false, true]);
+    expect(harness.invalidations).toBe(3);
   });
 
   it('keeps direct routing when a fresh Copilot fallback starts', async () => {
@@ -461,9 +456,9 @@ describe('ProgressApiKeyRetryController', () => {
       async () => true,
     );
 
-    assert.equal(started, true);
-    assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.equal(harness.invalidations, 1);
+    expect(started).toBe(true);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
   });
 
   it('keeps the global Copilot preference while scoping direct routing to the fallback launch', async () => {

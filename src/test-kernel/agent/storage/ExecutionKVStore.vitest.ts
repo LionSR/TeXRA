@@ -84,10 +84,7 @@ function interimResultMeta(
   };
 }
 
-// `isReservedKvKeyName` is the single owner of the reserved single-value-key
-// and `child-` prefix vocabulary, exported so callers walking a run directory
-// (e.g. `src/tools/executions/executionKvFiles.ts`) recognize it without
-// re-deriving their own copy.
+// Single owner of the reserved single-value-key and `child-` prefix vocabulary.
 describe('isReservedKvKeyName', () => {
   it.each(['meta', 'config', 'report', 'workspace-files', 'result-meta'])(
     'recognizes the reserved single-value key %s',
@@ -295,22 +292,13 @@ describe('ExecutionKVStore meta read shims', () => {
     ).rejects.toThrow();
   });
 
-  it('warns when execution meta is malformed instead of silently dropping it', async () => {
+  it('warns on malformed execution meta, dropping it for readers and failing strict repair callers', async () => {
     const id = 'bad-meta' as ExecutionId;
     const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('meta', { timestamp: 123 });
 
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
-    expectParseWarning(warnSpy, id, 'meta.json');
-  });
-
-  it('rejects malformed execution meta for durable repair callers', async () => {
-    const id = 'bad-meta-strict' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('meta', { timestamp: 123 });
-
     await expect(getExecutionStore(id).readMetaStrict()).rejects.toThrow();
     expectParseWarning(warnSpy, id, 'meta.json');
   });

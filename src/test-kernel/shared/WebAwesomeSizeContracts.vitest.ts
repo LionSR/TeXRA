@@ -1,11 +1,8 @@
-// Node imports
 import { readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - test utilities
 import { REPO_ROOT } from '@test/support/repoScan';
 
 const UI_ROOTS = [

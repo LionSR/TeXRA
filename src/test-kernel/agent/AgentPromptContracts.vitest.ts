@@ -162,21 +162,12 @@ function renderLiquidSkeleton(source: string): string {
   return rendered;
 }
 
-function parsePromptYamlSource(
-  relativePath: string,
-  source: string,
-): Record<string, unknown> {
+function parsePromptYaml(relativePath: string): Record<string, unknown> {
+  const source = readFileSync(resolve(REPO_ROOT, relativePath), 'utf8');
   const rendered = LIQUID_AGENT_TEMPLATES.has(relativePath)
     ? renderLiquidSkeleton(source)
     : source;
   return yaml.parse(rendered, { strict: true }) as Record<string, unknown>;
-}
-
-function parsePromptYaml(relativePath: string): Record<string, unknown> {
-  return parsePromptYamlSource(
-    relativePath,
-    readFileSync(resolve(REPO_ROOT, relativePath), 'utf8'),
-  );
 }
 
 function authoredYamlCopy(relativePath: string): string {

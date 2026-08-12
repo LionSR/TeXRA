@@ -27,6 +27,10 @@ async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
 }
 
+function catalogSkillNames(catalog: string): string[] {
+  return [...catalog.matchAll(/^- ([^:]+):/gm)].map((match) => match[1]);
+}
+
 setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
@@ -146,9 +150,9 @@ describe('runtime skills', () => {
         source: 'project',
       },
     ]);
-    expect(
-      [...result.catalog.matchAll(/^- ([^:]+):/gm)].map((match) => match[1]),
-    ).toStrictEqual(result.skills.map((skill) => skill.name));
+    expect(catalogSkillNames(result.catalog)).toStrictEqual(
+      result.skills.map((skill) => skill.name),
+    );
   });
 
   it('bounds the accepted set once before prompt and snapshot projection', async () => {
@@ -168,9 +172,7 @@ describe('runtime skills', () => {
     setRuntimeSkillSources([{ scope: 'project', path: root }]);
 
     const result = await loadRuntimeSkillCatalog();
-    const catalogNames = [...result.catalog.matchAll(/^- ([^:]+):/gm)].map(
-      (match) => match[1],
-    );
+    const catalogNames = catalogSkillNames(result.catalog);
     const snapshotNames = result.skills.map((skill) => skill.name);
 
     expect(snapshotNames).toHaveLength(ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);

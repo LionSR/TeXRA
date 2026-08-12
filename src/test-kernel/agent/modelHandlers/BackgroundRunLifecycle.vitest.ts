@@ -37,6 +37,11 @@ function completedResponse(id: string): Response {
   } as unknown as Response;
 }
 
+/** An OpenAI client whose only live surface is the given retrieve mock. */
+function clientWith(retrieve: unknown): OpenAI {
+  return { responses: { retrieve } } as unknown as OpenAI;
+}
+
 /** Assert a poll rejects with the max-duration timeout and its error metadata. */
 async function expectPollingTimeout(promise: Promise<unknown>): Promise<void> {
   const timeout = await promise.catch((error: unknown) => error);
@@ -75,9 +80,7 @@ describe('BackgroundRunLifecycle.isPending / pending-id bookkeeping', () => {
 
   it('clearPending resets both the id and retrieve params', async () => {
     const lifecycle = createLifecycle();
-    const client = {
-      responses: { retrieve: vi.fn(async () => completedResponse('resp-1')) },
-    } as unknown as OpenAI;
+    const client = clientWith(vi.fn(async () => completedResponse('resp-1')));
 
     await lifecycle.waitForCompletion(client, {
       id: 'resp-1',
@@ -97,7 +100,7 @@ describe('BackgroundRunLifecycle.isPending / pending-id bookkeeping', () => {
 describe('BackgroundRunLifecycle.tryResume', () => {
   it('returns null when nothing is pending', async () => {
     const lifecycle = createLifecycle();
-    const client = { responses: { retrieve: vi.fn() } } as unknown as OpenAI;
+    const client = clientWith(vi.fn());
 
     await expect(lifecycle.tryResume(client)).resolves.toBeNull();
     expect(client.responses.retrieve).not.toHaveBeenCalled();
@@ -105,11 +108,9 @@ describe('BackgroundRunLifecycle.tryResume', () => {
 
   it('resolves with the retrieved response once it is already completed', async () => {
     const lifecycle = createLifecycle();
-    const client = {
-      responses: {
-        retrieve: vi.fn(async () => completedResponse('resp-done')),
-      },
-    } as unknown as OpenAI;
+    const client = clientWith(
+      vi.fn(async () => completedResponse('resp-done')),
+    );
 
     // A prior poll remembers the id as pending through the public path.
     await lifecycle.retrieveAndRemember(
@@ -132,15 +133,13 @@ describe('BackgroundRunLifecycle.tryResume', () => {
 
   it('clears the pending id and returns null when the response failed remotely', async () => {
     const lifecycle = createLifecycle();
-    const client = {
-      responses: {
-        retrieve: vi.fn(async () => ({
-          id: 'resp-failed',
-          status: 'failed',
-          error: { message: 'boom' },
-        })),
-      },
-    } as unknown as OpenAI;
+    const client = clientWith(
+      vi.fn(async () => ({
+        id: 'resp-failed',
+        status: 'failed',
+        error: { message: 'boom' },
+      })),
+    );
     await lifecycle.retrieveAndRemember(
       client,
       'resp-failed',
@@ -162,7 +161,7 @@ describe('BackgroundRunLifecycle.tryResume', () => {
       id: 'resp-pending',
       status: 'in_progress',
     }));
-    const client = { responses: { retrieve } } as unknown as OpenAI;
+    const client = clientWith(retrieve);
 
     await lifecycle.retrieveAndRemember(
       client,

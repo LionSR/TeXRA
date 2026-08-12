@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it, afterEach, vi } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -351,7 +351,6 @@ describe('BashTool', () => {
     const messages: ProviderMessage[] = [];
     const shared = freshRoundShared(messages);
 
-    // Create and run the flow directly
     const flow = createToolUseRoundFlow();
     flow.setServices(options);
     await withTestRunContext(options.runScope, () => flow.run(shared));

@@ -12,42 +12,32 @@ import {
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 
-type IsAssignable<From, To> = [From] extends [To] ? true : false;
-
 it('makes contradictory interaction decisions unrepresentable', () => {
-  expectTypeOf<
-    IsAssignable<{ action: 'submit' }, UserQuestionSettlement>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<
-      { action: 'reject'; answers: { choice: string } },
-      UserQuestionSettlement
-    >
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'approve'; feedback: string }, PlanApprovalResult>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'reject'; model: string }, ProposalResult>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'cancel'; feedback: string }, RetrySettlement>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'cancel'; reason: string }, RetrySettlement>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'timeout' }, PlanApprovalResult>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'timeout' }, ProposalResult>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'timeout' }, RetrySettlement>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ action: 'timeout' }, BashSettlement>
-  >().toEqualTypeOf<false>();
+  expectTypeOf<{ action: 'submit' }>().not.toExtend<UserQuestionSettlement>();
+  expectTypeOf<{
+    action: 'reject';
+    answers: { choice: string };
+  }>().not.toExtend<UserQuestionSettlement>();
+  expectTypeOf<{
+    action: 'approve';
+    feedback: string;
+  }>().not.toExtend<PlanApprovalResult>();
+  expectTypeOf<{
+    action: 'reject';
+    model: string;
+  }>().not.toExtend<ProposalResult>();
+  expectTypeOf<{
+    action: 'cancel';
+    feedback: string;
+  }>().not.toExtend<RetrySettlement>();
+  expectTypeOf<{
+    action: 'cancel';
+    reason: string;
+  }>().not.toExtend<RetrySettlement>();
+  expectTypeOf<{ action: 'timeout' }>().not.toExtend<PlanApprovalResult>();
+  expectTypeOf<{ action: 'timeout' }>().not.toExtend<ProposalResult>();
+  expectTypeOf<{ action: 'timeout' }>().not.toExtend<RetrySettlement>();
+  expectTypeOf<{ action: 'timeout' }>().not.toExtend<BashSettlement>();
 });
 
 it("returns each interaction kind's exact cancellation result", () => {

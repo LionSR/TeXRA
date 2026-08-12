@@ -11,7 +11,6 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
   TELEMETRY_ENABLED_KEY,
   usageLoggingOptOut,
@@ -315,10 +314,13 @@ async function checkConfig(context: CliContext): Promise<DoctorCheck> {
       context.configWarnings.join(' '),
     );
   }
-  const workspaceConfig = workspaceTexraConfigPath(context.cwd);
   try {
-    await access(workspaceConfig, fsConstants.R_OK);
-    return pass('config', 'Config', `Workspace config: ${workspaceConfig}`);
+    await access(context.configFilePath, fsConstants.R_OK);
+    return pass(
+      'config',
+      'Config',
+      `Workspace config: ${context.configFilePath}`,
+    );
   } catch {
     return warn(
       'config',

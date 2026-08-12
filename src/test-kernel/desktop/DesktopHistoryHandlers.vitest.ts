@@ -1,10 +1,7 @@
-// Node imports
 import { join } from 'node:path';
 
-// Third-party imports
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@controllers/settingsView/ChatExportController';
@@ -17,7 +14,6 @@ import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
-// Local file imports
 import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
 import { repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';

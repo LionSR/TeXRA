@@ -66,6 +66,5 @@ describe('tool availability app signals', () => {
     // external dependencies only — so there is nothing to rebuild after a
     // toggle, which is why the availability answer is derived on read.
     expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
-    expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
   });
 });

@@ -11,8 +11,6 @@ import {
   stripComments,
 } from '../support/repoScan';
 
-const ALLOWED_PRODUCTION_REFERENCES = [] as const;
-
 const SCAN_ROOTS = [
   'packages/cli/src',
   'packages/desktop/src',
@@ -33,7 +31,7 @@ describe('ambient session-fact helper retirement', () => {
       .filter(referencesEmitRuntimeEvent)
       .toSorted();
 
-    expect(references).toEqual([...ALLOWED_PRODUCTION_REFERENCES].toSorted());
+    expect(references).toEqual([]);
   });
 
   it('actually scans the production source roots', () => {

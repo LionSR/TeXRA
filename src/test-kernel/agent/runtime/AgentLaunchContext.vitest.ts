@@ -1,4 +1,3 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -26,7 +25,6 @@ vi.mock('@transcript', async (importActual) => ({
 }));
 vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
-// Local imports
 import { noopTrace } from '@agent/trace';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { useRunContext } from '@agent/runtime/RunContext';
@@ -39,11 +37,7 @@ import {
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
 import { RUN_OUTCOME, STREAM_PHASE, AgentCategory } from '@shared/schemas';
-
-// Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
-
-// Local file imports
 import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
 

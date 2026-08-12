@@ -1,4 +1,3 @@
-// Third-party imports
 import {
   afterEach,
   beforeEach,
@@ -8,8 +7,6 @@ import {
   vi,
   type Mock,
 } from 'vitest';
-
-// Local imports
 import {
   WebviewBridge,
   type ProgressViewMessageSender,

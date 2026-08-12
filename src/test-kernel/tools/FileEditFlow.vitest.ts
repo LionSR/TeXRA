@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - tools under test
 import { ToolError } from '@shared/schemas/toolResult';
 import {
   findOccurrenceLineNumbers,
@@ -12,7 +10,7 @@ import {
 import { ViewRangeSchema } from '@tools/formatting';
 
 describe('literal replacement primitives', () => {
-  // String.prototype.replace interprets these replacement patterns. The
+  // String.prototype.replace interprets these as replacement patterns; the
   // primitives must insert them verbatim for LaTeX and code edits.
   const dollarPatterns = [
     '$&',
@@ -72,6 +70,8 @@ describe('literal replacement primitives', () => {
 });
 
 describe('replaceLiteralMatches', () => {
+  const notFoundError = () => 'missing';
+
   it('returns the unique replacement and its 1-based line', () => {
     expect(
       replaceLiteralMatches({
@@ -79,7 +79,7 @@ describe('replaceLiteralMatches', () => {
         search: 'beta',
         replacement: 'delta',
         mode: 'unique',
-        notFoundError: () => 'missing',
+        notFoundError,
       }),
     ).toEqual({
       content: 'alpha\ndelta\ngamma',
@@ -96,7 +96,7 @@ describe('replaceLiteralMatches', () => {
         search: 'same',
         replacement: 'new',
         mode: 'unique',
-        notFoundError: () => 'missing',
+        notFoundError,
         multipleMatchesError: ({ count, lineNumbers }) =>
           `${count} matches on ${lineNumbers.join(',')}`,
       }),
@@ -110,7 +110,7 @@ describe('replaceLiteralMatches', () => {
         search: 'OLD',
         replacement: '$&',
         mode: 'all',
-        notFoundError: () => 'missing',
+        notFoundError,
       }),
     ).toEqual({
       content: '$& and $&',
@@ -127,7 +127,7 @@ describe('replaceLiteralMatches', () => {
         search: 'first\nsecond',
         replacement: 'joined',
         mode: 'unique',
-        notFoundError: () => 'missing',
+        notFoundError,
       }).firstMatchLine,
     ).toBe(2);
   });

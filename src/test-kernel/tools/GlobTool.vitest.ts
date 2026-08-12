@@ -1,22 +1,13 @@
-// Node imports
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
-// Local imports - shared
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-// Local imports - test support
 import { installPlatform } from '@test/support/setupPlatform';
-
-// Local imports - tools
 import { GlobTool } from '@tools/glob';
 
 function fsError(code: string, message: string): Error {

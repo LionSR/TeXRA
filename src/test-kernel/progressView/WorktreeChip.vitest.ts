@@ -1,11 +1,6 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
-
-// Local imports
 import type { WorktreeChip } from '@progressView/frontend/components/WorktreeChip';
 import type { WorktreeInfo } from '@shared/schemas';
-
-// Local file imports
 import {
   mountComponent,
   useLitComponentTestDom,

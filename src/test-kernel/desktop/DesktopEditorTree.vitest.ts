@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - desktop renderer
 import { buildEditorDirectoryEntries } from '@desktop/renderer/editorTree';
 
 describe('desktop editor tree', () => {

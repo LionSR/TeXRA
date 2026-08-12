@@ -1,8 +1,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { strict as assert } from 'node:assert';
-import { describe, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { planToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 
@@ -116,6 +115,6 @@ describe('planToolTerminalAction', () => {
     mocks.packageManager = packageManager ?? null;
     mocks.isWindows = isWindows ?? false;
 
-    assert.deepEqual(planToolTerminalAction(input), expected);
+    expect(planToolTerminalAction(input)).toEqual(expected);
   });
 });

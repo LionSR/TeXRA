@@ -39,7 +39,6 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 // ChatExportController so core stays free of `@resources`.
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ExecutionId } from '@shared/schemas';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -109,7 +108,7 @@ export class HistoryHandlers {
       this.ctx,
       'Failed to delete history item',
       async () => {
-        const executionId = data.historyId as ExecutionId;
+        const executionId = data.historyId;
         const result = await deleteExecution(executionId);
         const outcome = describeDeleteExecutionResult(result);
         switch (outcome.kind) {
@@ -275,9 +274,7 @@ export class HistoryHandlers {
       // readConfig() validates against AgentConfigSchema and returns null for
       // both missing and corrupt configs; distinguishing them belongs to the
       // storage layer, not here.
-      const config = await getExecutionStore(
-        historyId as ExecutionId,
-      ).readConfig();
+      const config = await getExecutionStore(historyId).readConfig();
       if (!config) {
         await showLoggedMessage(
           this.ctx.channel,

@@ -148,13 +148,13 @@ function createRecordedRuntime(streamId: string) {
 
 type OutputPostArgs = Parameters<OutputNode['post']>;
 
-async function runOutputPost(
+function runOutputPost(
   outputNode: OutputNode,
   shared: ReflectionFlowShared,
   prepRes: OutputPostArgs[1],
   execRes: OutputPostArgs[2],
-): Promise<void> {
-  await withTestRunContext(outputNode.services.runScope, () =>
+): ReturnType<OutputNode['post']> {
+  return withTestRunContext(outputNode.services.runScope, () =>
     outputNode.post(shared, prepRes, execRes),
   );
 }
@@ -201,30 +201,27 @@ describe('output progress events', () => {
     );
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
     try {
-      const transition = await withTestRunContext(
-        outputNode.services.runScope,
-        () =>
-          outputNode.post(
-            shared,
-            {
-              outputLocation,
-              currentRound: 2,
-              endTurn: false,
-            },
-            {
-              summary: {
-                storageKey: normalizeRunId('run:output-node'),
-                currRound: 2,
-                fileInfos: [fileInfo],
-                filesToOpen: [openedLocation],
-                outputFile: outputLocation,
-                endTurn: false,
-              },
-              compileFailures: [],
-              compiledArtifacts: [],
-              emitCompileFailures: false,
-            },
-          ),
+      const transition = await runOutputPost(
+        outputNode,
+        shared,
+        {
+          outputLocation,
+          currentRound: 2,
+          endTurn: false,
+        },
+        {
+          summary: {
+            storageKey: normalizeRunId('run:output-node'),
+            currRound: 2,
+            fileInfos: [fileInfo],
+            filesToOpen: [openedLocation],
+            outputFile: outputLocation,
+            endTurn: false,
+          },
+          compileFailures: [],
+          compiledArtifacts: [],
+          emitCompileFailures: false,
+        },
       );
 
       expect(transition).toBe('default');
@@ -249,10 +246,22 @@ describe('output progress events', () => {
     }
   });
 
-  it('stores compile failure context for the next reflection round', async () => {
-    const { outputNode, fixture, shared } = compileContextCase(
-      'stream:compile-context',
-    );
+  it.each([
+    {
+      name: 'stores compile failure context for the next reflection round',
+      streamId: 'stream:compile-context',
+      rejectOnCompileFailure: true,
+    },
+    {
+      name: 'honors disabled compile-failure repair context setting',
+      streamId: 'stream:compile-context-disabled',
+      rejectOnCompileFailure: false,
+    },
+  ])('$name', async ({ streamId, rejectOnCompileFailure }) => {
+    const { outputNode, fixture, shared } = compileContextCase(streamId, {
+      ...defaultWorkflowOutputPolicy,
+      shouldRejectOnCompileFailure: () => rejectOnCompileFailure,
+    });
 
     await runOutputPost(
       outputNode,
@@ -272,40 +281,14 @@ describe('output progress events', () => {
     );
 
     expect(shared.lastCompileResult).toEqual(fixture.compileResult);
-    expect(shared.compileFailureContext).toContain(
-      'previous workflow round was rejected',
-    );
-    expect(shared.compileFailureContext).toContain('! Missing $ inserted.');
-  });
-
-  it('honors disabled compile-failure repair context setting', async () => {
-    const { outputNode, fixture, shared } = compileContextCase(
-      'stream:compile-context-disabled',
-      {
-        ...defaultWorkflowOutputPolicy,
-        shouldRejectOnCompileFailure: () => false,
-      },
-    );
-
-    await runOutputPost(
-      outputNode,
-      shared,
-      {
-        outputLocation: fixture.outputLocation,
-        currentRound: 0,
-        endTurn: false,
-      },
-      {
-        summary: fixture.summary,
-        compileFailures: [fixture.compileFailure],
-        compileResult: fixture.compileResult,
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
-    );
-
-    expect(shared.lastCompileResult).toEqual(fixture.compileResult);
-    expect(shared.compileFailureContext).toBeUndefined();
+    if (rejectOnCompileFailure) {
+      expect(shared.compileFailureContext).toContain(
+        'previous workflow round was rejected',
+      );
+      expect(shared.compileFailureContext).toContain('! Missing $ inserted.');
+    } else {
+      expect(shared.compileFailureContext).toBeUndefined();
+    }
   });
 
   it('clears stale compile failure context after a successful compile result', async () => {

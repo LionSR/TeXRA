@@ -139,9 +139,9 @@ export function formatLatexdiffTemplate(message: LogMessageData): FormatResult {
   const entries = parseDiffResultEntries(data);
   if (entries.length === 0) return null;
 
-  const aggregatedRunId = entries.find((e) => e.runId)?.runId ?? '';
+  const aggregatedRunId = entries.find((e) => e.runId)?.runId;
   // prettier-ignore
-  return html`<latexdiff-results .logId=${id} .runId=${ifDefined(aggregatedRunId || undefined)} .entries=${entries}></latexdiff-results>`;
+  return html`<latexdiff-results .logId=${id} .runId=${ifDefined(aggregatedRunId)} .entries=${entries}></latexdiff-results>`;
 }
 
 // =============================================================================

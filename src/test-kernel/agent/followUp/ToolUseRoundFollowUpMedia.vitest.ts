@@ -1,14 +1,11 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 
-// Local file imports
 import { withTestRunContext } from '../progressTestUtils';
 import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
@@ -182,18 +179,13 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const services = {
       ...baseRoundServices('ToolUseRoundFollowUpMedia'),
-      modelCell: testModelCell({
-        addMediaToUserMessage,
-        capabilities: { supportsVision: true },
-        config: { provider: 'openai', fullName: 'test-model' },
-        createResponse: vi.fn(async () => ({ response: null })),
-        createUserFollowUpMessages,
-        getClient: async () => ({}),
-        getCredentialRouteForClient: () => undefined,
-        getWireRouteKey: () => 'openai:test-route',
-        getModelRetryRouteKey: () => 'openai:test-route:model',
-        setOutputStreaming: vi.fn(),
-      }),
+      modelCell: testModelCell(
+        roundModelHandler({
+          addMediaToUserMessage,
+          createResponse: vi.fn(async () => ({ response: null })),
+          createUserFollowUpMessages,
+        }),
+      ),
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({

@@ -205,7 +205,6 @@ function respond(
 /** Run a createResponse while draining the fake-timer poll waits. */
 async function runWithPolls<T>(promise: Promise<T>, ticks: number): Promise<T> {
   for (let i = 0; i < ticks; i += 1) {
-    // Let microtasks settle, then advance past one poll interval.
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
   }
@@ -254,9 +253,43 @@ async function expectRetryLedger(
   expected: { creates: number; gets: string[] },
 ): Promise<void> {
   await respond(handler, client, [userStep('a')]);
-  expect(calls.create).toHaveLength(expected.creates);
-  expect(calls.get).toEqual(expected.gets);
-  expect(calls.cancel).toHaveLength(0);
+  expectLedger(calls, expected.creates, expected.gets);
+}
+
+/** Assert the recorded create/get/cancel counts for a run. */
+function expectLedger(
+  calls: CapturedCalls,
+  creates: number,
+  gets: string[],
+  cancels?: string[],
+): void {
+  expect(calls.create).toHaveLength(creates);
+  expect(calls.get).toEqual(gets);
+  expect(calls.cancel).toEqual(cancels ?? []);
+}
+
+/**
+ * Assert that a retry settles (rejects) BEFORE a pending best-effort cancel
+ * resolves — i.e. the handler never deadlocks waiting on cancel. Flushes enough
+ * microtasks for the rejection to land, then releases the cancel gate; returns
+ * the rejection so tests can assert its specifics.
+ */
+async function rejectsBeforeCancel(
+  promise: Promise<unknown>,
+  releaseCancel: () => void,
+): Promise<unknown> {
+  let settled = false;
+  let caught: unknown;
+  const retry = promise.catch((error: unknown) => {
+    settled = true;
+    caught = error;
+  });
+  for (let i = 0; i < 50; i += 1) await Promise.resolve();
+  const settledBeforeCancel = settled;
+  releaseCancel();
+  await retry;
+  expect(settledBeforeCancel).toBe(true);
+  return caught;
 }
 
 describe('ModelHandlerGoogleInteractions background mode', () => {
@@ -318,9 +351,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       runWithPolls(respond(handler, client, [userStep('a')]), 1),
     ).resolves.toMatchObject({ response: { status: 'completed' } });
 
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_resume', 'int_resume']);
-    expect(calls.cancel).toHaveLength(0);
+    expectLedger(calls, 1, ['int_resume', 'int_resume']);
   });
 
   it('clears the submitted lifecycle id when resumed completion returns a different id', async () => {
@@ -338,9 +369,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     await failFirstRetrieval(handler, client, 'fetch failed', messages);
     await respond(handler, client, messages);
 
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_submitted', 'int_submitted']);
-    expect(calls.cancel).toHaveLength(0);
+    expectLedger(calls, 1, ['int_submitted', 'int_submitted']);
 
     const { client: nextClient, calls: nextCalls } = bgClient({
       submit: () => completedInteraction('int_next'),
@@ -349,10 +378,8 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     messages.push(userStep('b'));
     await respond(handler, nextClient, messages);
 
-    expect(nextCalls.create).toHaveLength(1);
     expect(nextCalls.create[0].previousId).toBe('int_returned');
-    expect(nextCalls.get).toHaveLength(0);
-    expect(nextCalls.cancel).toHaveLength(0);
+    expectLedger(nextCalls, 1, []);
   });
 
   it('resumes a pending interaction when background is disabled and preserves its chain', async () => {
@@ -375,12 +402,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       response: { status: 'completed' },
     });
 
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual([
-      'int_background_resume',
-      'int_background_resume',
-    ]);
-    expect(calls.cancel).toHaveLength(0);
+    expectLedger(calls, 1, ['int_background_resume', 'int_background_resume']);
 
     const { client: nextClient, calls: nextCalls } = bgClient({
       submit: () => completedInteraction('int_after_background_change'),
@@ -405,9 +427,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         getSequence: [completedInteraction('int_chain')],
       });
       await runWithPolls(respond(handler, chainClient, messages), 1);
-      expect(chainCalls.create).toHaveLength(1);
-      expect(chainCalls.get).toEqual(['int_chain']);
-      expect(chainCalls.cancel).toHaveLength(0);
+      expectLedger(chainCalls, 1, ['int_chain']);
 
       messages.push(userStep('b'));
       const resumeResult =
@@ -440,12 +460,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         expect(isProviderErrorAutoRetryable(missing)).toBe(false);
       }
 
-      expect(pendingCalls.create).toHaveLength(1);
-      expect(pendingCalls.get).toEqual([
-        'int_pending_turn',
-        'int_pending_turn',
-      ]);
-      expect(pendingCalls.cancel).toHaveLength(0);
+      expectLedger(pendingCalls, 1, ['int_pending_turn', 'int_pending_turn']);
 
       serverState = true;
       const { client: nextClient, calls: nextCalls } = bgClient({
@@ -453,11 +468,9 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         getSequence: [completedInteraction('int_after_server_state_change')],
       });
       await respond(handler, nextClient, messages);
-      expect(nextCalls.create).toHaveLength(1);
       expect(nextCalls.create[0].previousId).toBeUndefined();
       expect(nextCalls.create[0].input).toEqual(messages);
-      expect(nextCalls.get).toHaveLength(0);
-      expect(nextCalls.cancel).toHaveLength(0);
+      expectLedger(nextCalls, 1, []);
     },
   );
 
@@ -477,13 +490,11 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     await runWithPolls(respond(handler, client, [userStep('a')]), 1);
 
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual([
+    expectLedger(calls, 1, [
       'int_long_resume',
       'int_long_resume',
       'int_long_resume',
     ]);
-    expect(calls.cancel).toHaveLength(0);
   });
 
   it('does not reset the original deadline when a retry resumes', async () => {
@@ -508,9 +519,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(hasManualRetryOnlyErrorMarker(timeout)).toBe(true);
     expect(normalizeProviderError(timeout).userRetryable).toBe(true);
     expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_expire']);
-    expect(calls.cancel).toEqual(['int_expire']);
+    expectLedger(calls, 1, ['int_expire'], ['int_expire']);
   });
 
   it.each([
@@ -547,9 +556,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
         `maximum polling duration of ${MAX_DURATION_MS} ms`,
       );
       expect(hasManualRetryOnlyErrorMarker(timeout)).toBe(true);
-      expect(calls.create).toHaveLength(1);
-      expect(calls.get).toEqual(['int_late', 'int_late']);
-      expect(calls.cancel).toEqual(['int_late']);
+      expectLedger(calls, 1, ['int_late', 'int_late'], ['int_late']);
     },
   );
 
@@ -580,9 +587,12 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ).rejects.toMatchObject({ name: 'AbortError' });
       await Promise.resolve();
 
-      expect(calls.create).toHaveLength(1);
-      expect(calls.get).toEqual(['int_late_abort', 'int_late_abort']);
-      expect(calls.cancel).toEqual(['int_late_abort']);
+      expectLedger(
+        calls,
+        1,
+        ['int_late_abort', 'int_late_abort'],
+        ['int_late_abort'],
+      );
     },
   );
 
@@ -610,9 +620,12 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     await Promise.resolve();
 
     expect(countTokens).toHaveBeenCalledTimes(2);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_abort_before_resume']);
-    expect(calls.cancel).toEqual(['int_abort_before_resume']);
+    expectLedger(
+      calls,
+      1,
+      ['int_abort_before_resume'],
+      ['int_abort_before_resume'],
+    );
   });
 
   it('clears a pre-aborted pending interaction before token counting', async () => {
@@ -641,28 +654,20 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     const controller = new AbortController();
     controller.abort();
-    let settled = false;
-    let caught: unknown;
-    const retry = respond(
-      handler,
-      client,
-      [userStep('a')],
-      controller.signal,
-    ).catch((error: unknown) => {
-      settled = true;
-      caught = error;
-    });
-    for (let i = 0; i < 50; i += 1) await Promise.resolve();
-    const settledBeforeCancel = settled;
-    releaseCancel();
-    await retry;
 
-    expect(settledBeforeCancel).toBe(true);
+    const caught = await rejectsBeforeCancel(
+      respond(handler, client, [userStep('a')], controller.signal),
+      releaseCancel,
+    );
+
     expect(caught).toMatchObject({ name: 'AbortError' });
     expect(countTokens).not.toHaveBeenCalled();
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_abort_before_count']);
-    expect(calls.cancel).toEqual(['int_abort_before_count']);
+    expectLedger(
+      calls,
+      1,
+      ['int_abort_before_count'],
+      ['int_abort_before_count'],
+    );
   });
 
   it('lets an already-aborted signal win over pending expiry without awaiting cancel', async () => {
@@ -684,27 +689,14 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     const controller = new AbortController();
     controller.abort();
-    let settled = false;
-    let caught: unknown;
-    const retry = respond(
-      handler,
-      client,
-      [userStep('a')],
-      controller.signal,
-    ).catch((error: unknown) => {
-      settled = true;
-      caught = error;
-    });
-    for (let i = 0; i < 50; i += 1) await Promise.resolve();
-    const settledBeforeCancel = settled;
-    releaseCancel();
-    await retry;
 
-    expect(settledBeforeCancel).toBe(true);
+    const caught = await rejectsBeforeCancel(
+      respond(handler, client, [userStep('a')], controller.signal),
+      releaseCancel,
+    );
+
     expect(caught).toMatchObject({ name: 'AbortError' });
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_abort_expired']);
-    expect(calls.cancel).toEqual(['int_abort_expired']);
+    expectLedger(calls, 1, ['int_abort_expired'], ['int_abort_expired']);
   });
 
   it('rethrows a retrieval abort without awaiting best-effort cancel', async () => {
@@ -723,24 +715,18 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     await failFirstRetrieval(handler, client, 'fetch failed');
 
-    let settled = false;
-    let caught: unknown;
-    const retry = respond(handler, client, [userStep('a')]).catch(
-      (error: unknown) => {
-        settled = true;
-        caught = error;
-      },
+    const caught = await rejectsBeforeCancel(
+      respond(handler, client, [userStep('a')]),
+      releaseCancel,
     );
-    for (let i = 0; i < 50; i += 1) await Promise.resolve();
-    const settledBeforeCancel = settled;
-    releaseCancel();
-    await retry;
 
-    expect(settledBeforeCancel).toBe(true);
     expect(caught).toBe(retrievalAbort);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_retrieval_abort', 'int_retrieval_abort']);
-    expect(calls.cancel).toEqual(['int_retrieval_abort']);
+    expectLedger(
+      calls,
+      1,
+      ['int_retrieval_abort', 'int_retrieval_abort'],
+      ['int_retrieval_abort'],
+    );
   });
 
   it('treats queued as pending', async () => {
@@ -756,8 +742,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     await runWithPolls(respond(handler, client, [userStep('a')]), 2);
 
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_queued', 'int_queued']);
+    expectLedger(calls, 1, ['int_queued', 'int_queued']);
   });
 
   it('retains an unknown status but requires manual retry before another poll', async () => {
@@ -777,9 +762,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(hasManualRetryOnlyErrorMarker(unknown)).toBe(true);
     expect(normalizeProviderError(unknown).provider).toBe('google');
     expect(isProviderErrorAutoRetryable(unknown)).toBe(false);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_unknown']);
-    expect(calls.cancel).toHaveLength(0);
+    expectLedger(calls, 1, ['int_unknown']);
 
     await expectRetryLedger(handler, client, calls, {
       creates: 1,
@@ -802,9 +785,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     expect(firstError).toBe(forbidden);
     expect(isProviderErrorAutoRetryable(firstError)).toBe(false);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_forbidden']);
-    expect(calls.cancel).toHaveLength(0);
+    expectLedger(calls, 1, ['int_forbidden']);
 
     await expectRetryLedger(handler, client, calls, {
       creates: 1,
@@ -834,9 +815,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(hasManualRetryOnlyErrorMarker(missing)).toBe(true);
       expect(normalizeProviderError(missing).userRetryable).toBe(true);
       expect(isProviderErrorAutoRetryable(missing)).toBe(false);
-      expect(calls.create).toHaveLength(1);
-      expect(calls.get).toEqual(['int_missing_1']);
-      expect(calls.cancel).toHaveLength(0);
+      expectLedger(calls, 1, ['int_missing_1']);
 
       await expectRetryLedger(handler, client, calls, {
         creates: 2,
@@ -885,9 +864,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(hasManualRetryOnlyErrorMarker(stale)).toBe(true);
     expect(normalizeProviderError(stale).provider).toBe('google');
     expect(isProviderErrorAutoRetryable(stale)).toBe(false);
-    expect(calls.create).toHaveLength(1);
-    expect(calls.get).toEqual(['int_stale']);
-    expect(calls.cancel).toHaveLength(0);
+    expectLedger(calls, 1, ['int_stale']);
 
     await expectRetryLedger(handler, client, calls, {
       creates: 2,
@@ -917,9 +894,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(hasManualRetryOnlyErrorMarker(terminal)).toBe(true);
       expect(normalizeProviderError(terminal).userRetryable).toBe(true);
       expect(isProviderErrorAutoRetryable(terminal)).toBe(false);
-      expect(calls.create).toHaveLength(1);
-      expect(calls.get).toEqual(['int_terminal']);
-      expect(calls.cancel).toHaveLength(0);
+      expectLedger(calls, 1, ['int_terminal']);
 
       await expectRetryLedger(handler, client, calls, {
         creates: 2,
@@ -986,8 +961,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     await expect(
       runWithPolls(respond(handler, client2, [userStep('b')]), 1),
     ).resolves.toBeDefined();
-    expect(calls2.create).toHaveLength(1);
-    expect(calls2.get).toHaveLength(0);
+    expectLedger(calls2, 1, []);
 
     // A later abort cancels ITS OWN interaction, never the earlier one: the
     // cancel target is the id captured by that poll invocation, so no handler

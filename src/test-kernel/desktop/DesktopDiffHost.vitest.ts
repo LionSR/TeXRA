@@ -36,34 +36,19 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
   expect(path.extname(openedPaths[0])).toBe('.diff');
 }
 
-async function writeDiffPair(
-  originalName: string,
-  proposedName: string,
-  originalText = 'a\n',
-  proposedText = 'b\n',
-): Promise<{ originalPath: string; proposedPath: string }> {
-  const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
-  const originalPath = path.join(tempDir, originalName);
-  const proposedPath = path.join(tempDir, proposedName);
-  await Promise.all([
-    writeFile(originalPath, originalText, 'utf8'),
-    writeFile(proposedPath, proposedText, 'utf8'),
-  ]);
-  return { originalPath, proposedPath };
-}
-
 async function openDiffPair(
   host: DiffHost,
   title: string,
   names: [string, string] = ['a.tex', 'b.tex'],
   texts: [string, string] = ['a\n', 'b\n'],
 ): Promise<void> {
-  const { originalPath, proposedPath } = await writeDiffPair(
-    names[0],
-    names[1],
-    texts[0],
-    texts[1],
-  );
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
+  const originalPath = path.join(tempDir, names[0]);
+  const proposedPath = path.join(tempDir, names[1]);
+  await Promise.all([
+    writeFile(originalPath, texts[0], 'utf8'),
+    writeFile(proposedPath, texts[1], 'utf8'),
+  ]);
   await host.openDiff(
     { filePath: originalPath },
     { filePath: proposedPath },

@@ -236,7 +236,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map((segment) => segment.text)).toContain('3 active');
+    expect(leftTexts(display)).toContain('3 active');
     expect(display.bindings).toContain('Tab sessions');
   });
 

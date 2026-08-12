@@ -1,17 +1,8 @@
-/**
- * Regression coverage for issue #7230 at the *rendering* layer: even with
- * schema-level sanitization (`WebUrlSanitization.vitest.ts`), the formatters
- * that bind `href` from web_search/web_fetch tool payloads
- * (`webFormatters.ts`) must never emit a live anchor for a dangerous scheme,
- * and must still render legitimate links normally.
- */
-// Third-party imports
+// Regression coverage for issue #7230 at the rendering layer: the web
+// formatters must never emit a live anchor for a dangerous scheme even when
+// the schema layer has already been sanitized.
 import { beforeAll, describe, expect, it } from 'vitest';
-
-// Local imports - shared schemas
 import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
-
-// Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type WebFormatters =
@@ -22,8 +13,6 @@ useLitComponentTestDom(
     import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters'),
 );
 
-// Loaded after useLitComponentTestDom's beforeAll installs the jsdom globals
-// these modules touch at import time.
 let formatWebSearchTemplate: WebFormatters['formatWebSearchTemplate'];
 let formatWebFetchTemplate: WebFormatters['formatWebFetchTemplate'];
 let render: typeof import('lit').render;

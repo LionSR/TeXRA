@@ -23,10 +23,6 @@ import {
 } from '../agent/progressTestUtils';
 import { waitForRecordedEvent } from '../support/asyncTestUtils';
 
-// ---------------------------------------------------------------------------
-// Wolfram
-// ---------------------------------------------------------------------------
-
 async function dispatchWolfram(streamId: StreamTabId, code: string) {
   const explicit = createRecordingHost();
   const result = withRunContext(
@@ -146,10 +142,6 @@ describe('wolframRunSummary', () => {
     },
   );
 });
-
-// ---------------------------------------------------------------------------
-// wolframScriptUtils
-// ---------------------------------------------------------------------------
 
 describe('wolframScriptUtils', () => {
   afterEach(() => {
