@@ -328,7 +328,7 @@ export class DesktopProgressBridge {
           this.workflowFileActions.clearAllBackups();
         },
         rebuildRenderedStreams: ({ syncActiveStream }) => {
-          void this.syncRenderedStreams(syncActiveStream);
+          return this.syncRenderedStreams(syncActiveStream);
         },
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
@@ -431,20 +431,17 @@ export class DesktopProgressBridge {
     // first render can be enabled.
     await this.options.sessionStores.waitForPendingStreamDeletions();
     if (this.disposed) return;
-    // Close the load→subscribe gap. The process-owned snapshot listener may
-    // have accepted metadata facts while restart repair was in flight; now
-    // that live subscriptions are established, overlay that canonical state
-    // once before any initial render.
-    for (const streamId of this.streamLogs.keys()) {
-      this.state.refreshStreamMetadataFromSnapshot(streamId);
-    }
+    // No metadata refresh loop: `getStreamMetadata` overlays the
+    // always-resident summary mirror at read time, so canonical state
+    // accepted during restart repair is already visible (#9947).
+    //
     // Child activity is live presentation state rather than durable history.
     // Seed it only after attaching the presentation and every live-event
     // subscription, so the first renderer output cannot precede either.
     for (const streamId of this.streamLogs.keys()) {
-      const runConfig = this.state.snapshots.getRunMetadata(streamId).config;
-      if (runConfig) {
-        this.state.getOrCreateStreamState(streamId, runConfig.agentCategory);
+      const category = this.state.getStreamMetadata(streamId).agentCategory;
+      if (category) {
+        this.state.getOrCreateStreamState(streamId, category);
       }
       const subagents = this.session.executions.getActiveChildren(streamId);
       if (subagents.length > 0) {

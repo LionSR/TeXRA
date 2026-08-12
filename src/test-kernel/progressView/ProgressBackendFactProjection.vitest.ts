@@ -1118,7 +1118,8 @@ describe('ProgressBackend', () => {
     // Provisional patches only ever carry agentCategory/isRemote in
     // production (see SessionFactApplier.handleSetActiveStream). Identity
     // comes from the immutable descriptor; input/model details come from
-    // RunConfig and are assembled atomically by applySnapshotMetadata.
+    // RunConfig, mirrored into the stream summary and overlaid at read time
+    // by getStreamMetadata (#9947) — no refresh step exists anymore.
     backend.state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
       isRemote: true,
@@ -1128,7 +1129,6 @@ describe('ProgressBackend', () => {
       toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
-    backend.state.refreshStreamMetadataFromSnapshot(stream);
     // A late provisional event cannot replace snapshot authority.
     backend.state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
