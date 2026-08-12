@@ -903,6 +903,53 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).toContain('active background tasks: 1');
   });
 
+  it('does not report retained idle children as active', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-idle-root' as StreamTabId;
+    const childStreamIds = [
+      'stream-child-1',
+      'stream-child-2',
+    ] as StreamTabId[];
+    activeStreamId.set(rootStreamId);
+    setStreamStatusInCliState({
+      streamId: rootStreamId,
+      status: STREAM_PHASE.RUNNING,
+    });
+    setStreamStatusInCliState({
+      streamId: rootStreamId,
+      status: STREAM_PHASE.WAITING,
+    });
+    for (const childStreamId of childStreamIds) {
+      setStreamStatusInCliState({
+        streamId: childStreamId,
+        status: STREAM_PHASE.RUNNING,
+      });
+      setStreamStatusInCliState({
+        streamId: childStreamId,
+        status: STREAM_PHASE.WAITING,
+      });
+    }
+    projectChildRoster(
+      rootStreamId,
+      childStreamIds.map((childStreamId, index) => ({
+        executionId: `child-exec-${index}`,
+        identity: { kind: 'agent' as const, agent: `critic-${index}` },
+        agentName: `critic-${index}`,
+        status: STREAM_PHASE.WAITING,
+        startedAt: index + 1,
+        elapsed: '1s',
+        childStreamId,
+      })),
+    );
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('status: idle');
+    expect(statusText).not.toContain('active background tasks:');
+  });
+
   it('reports the owning workflow count while a background task is focused', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();

@@ -38,6 +38,8 @@ import {
   isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { StreamTabId } from '@shared/schemas';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -98,8 +100,12 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const runningChildrenFor = (streamId: StreamTabId) =>
+    activeSubagentsFor(streamId, childStreamEntries.get(), streamSlices).filter(
+      (child) => isActivePhase(child.status),
+    );
   const directActiveChildren = activeStreamId
-    ? activeSubagentsFor(activeStreamId, childStreamEntries.get(), streamSlices)
+    ? runningChildrenFor(activeStreamId)
     : [];
   const workflowStreamId =
     activeStreamId && directActiveChildren.length === 0
@@ -111,11 +117,7 @@ export async function showCliSessionStatus(
   let activeChildSessions = directActiveChildren.length;
   if (workflowStreamId !== activeStreamId) {
     activeChildSessions = workflowStreamId
-      ? activeSubagentsFor(
-          workflowStreamId,
-          childStreamEntries.get(),
-          streamSlices,
-        ).length
+      ? runningChildrenFor(workflowStreamId).length
       : 0;
   }
   // Use root-session access facts only before any stream exists.

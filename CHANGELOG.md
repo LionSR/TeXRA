@@ -11,9 +11,9 @@ All notable changes to this project will be documented in this file.
 - **Direct approval prompts reveal complete proposals and edits** — when a
   compact preview hides instruction or diff lines, press `v` to inspect the
   full content before approving or rejecting it.
-- **Session status reports active delegated work** — `/status` now shows the
-  number of active background tasks while retaining the focused session's own
-  status.
+- **Session status distinguishes running from finished delegated work** —
+  `/status` now shows the number of currently active background tasks while
+  retaining the focused session's own status.
 - **Interrupted multi-agent chats can be resumed immediately** — leaving a
   cancelled team session no longer leaves its printed resume command
   temporarily unavailable.
