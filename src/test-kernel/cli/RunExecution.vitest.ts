@@ -812,18 +812,20 @@ describe('executeCliRequest', () => {
       await Promise.resolve();
       expect(mocks.finalizeExecution).not.toHaveBeenCalled();
       publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
-      await shutdown;
+      await Promise.resolve();
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
+      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+      hangingRun.resolve(COMPLETED_RUN);
+      await shutdown;
       expect(runWithOwnership).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
-      expect(flushSpy).toHaveBeenCalledOnce();
+      expect(flushSpy).toHaveBeenCalled();
       expect(mocks.finalizeExecution).toHaveBeenCalledWith({
         executionId: 'exec-1',
         outcome: RUN_OUTCOME.CANCELLED,
         flowRecord: 'preserve',
       });
-      hangingRun.resolve(COMPLETED_RUN);
-      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
       await expect(run).resolves.toEqual({
         ok: true,
         result: {
@@ -854,10 +856,12 @@ describe('executeCliRequest', () => {
       registerExecution: true,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
-    await platform.lifecycle.runShutdown();
+    const shutdown = platform.lifecycle.runShutdown();
+    await Promise.resolve();
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
     hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
     await run;
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
@@ -882,13 +886,16 @@ describe('executeCliRequest', () => {
       registerExecution: true,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
-    await platform.lifecycle.runShutdown();
+    const shutdown = platform.lifecycle.runShutdown();
+    await Promise.resolve();
+    expect(mocks.emit).not.toHaveBeenCalled();
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+    hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message:
         'Failed to persist cancelled status for execution exec-1: terminal metadata disk full',
     });
-    hangingRun.resolve(COMPLETED_RUN);
-    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 
     await expect(run).resolves.toEqual({
       ok: true,

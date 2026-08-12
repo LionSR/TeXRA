@@ -257,6 +257,10 @@ export async function executeCliRequest(
       settleLeaseScope = resolve;
     },
   );
+  let settleShutdownFinalization: () => void = () => undefined;
+  const shutdownFinalizationDone = new Promise<void>((resolve) => {
+    settleShutdownFinalization = resolve;
+  });
   let shutdownStatusFinalized: Promise<boolean> | undefined;
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (!shutdownInterrupted) return Promise.resolve(false);
@@ -290,7 +294,10 @@ export async function executeCliRequest(
     SHUTDOWN_PHASE.BEFORE,
     async () => {
       shutdownInterrupted = true;
-      await finalizeShutdownStatus();
+      // Earlier shutdown handlers interrupt the live agent sessions. Wait for
+      // runAgent to finish unwinding before the final drain releases ownership,
+      // so no transcript or checkpoint writer can race the lease release.
+      await shutdownFinalizationDone;
     },
   );
   const invoke = async (): Promise<ExecuteAgentResult> => {
@@ -367,6 +374,7 @@ export async function executeCliRequest(
       await session.flushArtifacts();
       finalizationCompleted = true;
     } finally {
+      settleShutdownFinalization();
       if (!runResult.ok || !finalizationCompleted) {
         await detachPresentation();
       }
