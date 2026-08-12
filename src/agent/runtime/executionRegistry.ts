@@ -14,7 +14,7 @@ import {
 import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -98,15 +98,15 @@ export type ManualCompactionRequestResult =
  * publishes on: the registry subscribes to status facts there, and a second hub
  * would leave that subscription listening where nothing is ever published.
  */
-type ExecutionRegistryInit =
-  | {
-      readonly streamStatus: StreamStatusMachine;
-      readonly events: SessionEventHub;
-    }
-  | {
-      readonly streamStatus?: undefined;
-      readonly events?: SessionEventHub;
-    };
+interface ExecutionRegistryInit {
+  readonly streamStatus: StreamStatusMachine;
+  readonly events: SessionEventHub;
+  readonly approvals?: SessionApprovals;
+  readonly publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
+  readonly releaseRootExecutionLease?: (
+    executionId: ExecutionId,
+  ) => Promise<void>;
+}
 
 /**
  * Session-owned registry of active executions and their change listeners.
@@ -123,11 +123,10 @@ export class ExecutionRegistry {
   readonly interactionOwnership = new ExecutionInteractionOwnership(this);
   private readonly handles = new Map<string, AgentExecutionHandle>();
   private disposed = false;
-  private readonly changeCallbacks = new Map<string, Array<() => void>>();
-  private disposeStatusSubscription = (): void => undefined;
+  private readonly disposeStatusSubscription: () => void;
   private readonly streamStatus: StreamStatusMachine;
-  private events: SessionEventHub;
-  private approvals: SessionApprovals | undefined;
+  private readonly events: SessionEventHub;
+  private readonly approvals: SessionApprovals | undefined;
   /**
    * Publishes a synthesized terminal `result` event to the owning session's
    * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
@@ -135,13 +134,12 @@ export class ExecutionRegistry {
    * `terminateWaitingHandle` produces its `result` event *after* the
    * suspended run's own trace has already been disposed (see there).
    */
-  private publishResult:
+  private readonly publishResult:
     ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
-  private releaseRootExecutionLease = (executionId: ExecutionId) =>
-    completeOwnedExecutionLease(executionId);
-  // Persistent listeners stay attached across notifications (unlike one-shot
-  // waiters in `changeCallbacks`). Used by the executions subscribe action.
-  private readonly persistentListeners = new Map<
+  private readonly releaseRootExecutionLease: (
+    executionId: ExecutionId,
+  ) => Promise<void>;
+  private readonly listeners = new Map<
     string,
     Set<(handle: AgentExecutionHandle | undefined) => void>
   >();
@@ -156,46 +154,29 @@ export class ExecutionRegistry {
     (activation: ChildExecutionActivation, active: boolean) => void
   > = createListenerSet();
 
-  constructor(options: ExecutionRegistryInit = {}) {
-    const events = options.events ?? new SessionEventHub();
-    this.events = events;
-    this.streamStatus = options.streamStatus ?? new StreamStatusMachine(events);
-    this.attachSessionEvents(events);
-  }
-
-  attachSessionEvents(
-    events: SessionEventHub,
-    publishResult?: (event: ResultEvent, streamId: StreamTabId) => void,
-  ): void {
-    this.disposeStatusSubscription();
-    this.events = events;
-    if (publishResult) this.publishResult = publishResult;
+  constructor(options: ExecutionRegistryInit) {
+    this.events = options.events;
+    this.streamStatus = options.streamStatus;
+    this.approvals = options.approvals;
+    this.publishResult = options.publishResult;
+    this.releaseRootExecutionLease =
+      options.releaseRootExecutionLease ?? completeOwnedExecutionLease;
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). SessionEventHub dispatch is synchronous, so
     // bookkeeping retains the status machine subscription's original ordering.
-    this.disposeStatusSubscription = events.subscribeStatus(({ streamId }) => {
-      for (const [executionId, handle] of this.handles) {
-        if (handle.childStreamId === streamId) {
-          this.notifyWaiters(executionId);
-          if (handle.isChildExecution) {
-            this.emitChildActivity(handle.parentStreamId);
+    this.disposeStatusSubscription = options.events.subscribeStatus(
+      ({ streamId }) => {
+        for (const [executionId, handle] of this.handles) {
+          if (handle.childStreamId === streamId) {
+            this.notifyWaiters(executionId);
+            if (handle.isChildExecution) {
+              this.emitChildActivity(handle.parentStreamId);
+            }
+            break;
           }
-          break;
         }
-      }
-    });
-  }
-
-  /** Bind the session-owned approval state used when a child is detached. */
-  attachSessionApprovals(approvals: SessionApprovals): void {
-    this.approvals = approvals;
-  }
-
-  /** Bind the owning session's durable-artifact boundary to root release. */
-  attachRootExecutionLeaseRelease(
-    release: (executionId: ExecutionId) => Promise<void>,
-  ): void {
-    this.releaseRootExecutionLease = release;
+      },
+    );
   }
 
   dispose(): void {
@@ -212,8 +193,7 @@ export class ExecutionRegistry {
       this.notifyChildActivationListeners(activation, false);
     }
     this.childActivations.clear();
-    this.changeCallbacks.clear();
-    this.persistentListeners.clear();
+    this.listeners.clear();
     this.registrationListeners.clear();
     this.childActivationListeners.clear();
   }
@@ -465,13 +445,14 @@ export class ExecutionRegistry {
    */
   waitForChange(executionId: string, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve) => {
-      const cb = (): void => {
-        detach();
+      let detachAbort: () => void = () => {};
+      const detachListener = this.addListener(executionId, () => {
+        detachAbort();
+        detachListener();
         resolve();
-      };
-      this.addChangeCallback(executionId, cb);
-      const detach = onAbort(signal, () => {
-        this.removeChangeCallback(executionId, cb);
+      });
+      detachAbort = onAbort(signal, () => {
+        detachListener();
         resolve();
       });
     });
@@ -487,28 +468,26 @@ export class ExecutionRegistry {
   ): Promise<string> {
     return new Promise<string>((resolve) => {
       let resolved = false;
-      let detach: () => void = () => {};
-      const callbacks = new Map<string, () => void>();
+      let detachAbort: () => void = () => {};
+      const detachListeners: Array<() => void> = [];
 
       const cleanup = (): void => {
-        detach();
-        for (const [id, cb] of callbacks) {
-          this.removeChangeCallback(id, cb);
-        }
+        detachAbort();
+        for (const detach of detachListeners) detach();
       };
 
       for (const id of executionIds) {
-        const cb = (): void => {
-          if (resolved) return;
-          resolved = true;
-          cleanup();
-          resolve(id);
-        };
-        callbacks.set(id, cb);
-        this.addChangeCallback(id, cb);
+        detachListeners.push(
+          this.addListener(id, () => {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(id);
+          }),
+        );
       }
 
-      detach = onAbort(signal, () => {
+      detachAbort = onAbort(signal, () => {
         if (resolved) return;
         resolved = true;
         cleanup();
@@ -596,17 +575,17 @@ export class ExecutionRegistry {
     executionId: string,
     cb: (handle: AgentExecutionHandle | undefined) => void,
   ): () => void {
-    let set = this.persistentListeners.get(executionId);
+    let set = this.listeners.get(executionId);
     if (!set) {
       set = new Set();
-      this.persistentListeners.set(executionId, set);
+      this.listeners.set(executionId, set);
     }
     set.add(cb);
     return () => {
-      const s = this.persistentListeners.get(executionId);
+      const s = this.listeners.get(executionId);
       if (!s) return;
       s.delete(cb);
-      if (s.size === 0) this.persistentListeners.delete(executionId);
+      if (s.size === 0) this.listeners.delete(executionId);
     };
   }
 
@@ -938,45 +917,18 @@ export class ExecutionRegistry {
     this.streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
   }
 
-  private addChangeCallback(executionId: string, cb: () => void): void {
-    let callbacks = this.changeCallbacks.get(executionId);
-    if (!callbacks) {
-      callbacks = [];
-      this.changeCallbacks.set(executionId, callbacks);
-    }
-    callbacks.push(cb);
-  }
-
-  private removeChangeCallback(executionId: string, cb: () => void): void {
-    const callbacks = this.changeCallbacks.get(executionId);
-    if (!callbacks) return;
-    const idx = callbacks.indexOf(cb);
-    if (idx !== -1) callbacks.splice(idx, 1);
-    if (callbacks.length === 0) this.changeCallbacks.delete(executionId);
-  }
-
   private notifyWaiters(executionId: string): void {
-    const listeners = this.persistentListeners.get(executionId);
-    const callbacks = this.changeCallbacks.get(executionId);
-    if (!listeners && !callbacks) return;
+    const listeners = this.listeners.get(executionId);
+    if (!listeners) return;
 
-    // Persistent listeners fire first and stay attached so subscribers keep
-    // receiving every transition until they dispose themselves.
-    if (listeners) {
-      const handle = this.handles.get(executionId);
-      // Iterate a snapshot so a listener disposing itself mid-fire is safe.
-      for (const cb of [...listeners]) cb(handle);
-    }
-
-    if (callbacks) {
-      this.changeCallbacks.delete(executionId);
-      for (const cb of callbacks) cb();
-    }
+    const handle = this.handles.get(executionId);
+    // Iterate a snapshot so a listener disposing itself mid-fire is safe.
+    for (const cb of [...listeners]) cb(handle);
 
     // Backstop against listener leaks: if the execution is no longer tracked,
     // any still-registered persistent listener is firing into the void.
     if (!this.handles.has(executionId)) {
-      this.persistentListeners.delete(executionId);
+      this.listeners.delete(executionId);
     }
   }
 
