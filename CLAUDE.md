@@ -49,10 +49,11 @@ Things the tree won't tell you:
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`) also pin single-authority
   invariants with hardcoded allowlists rather than baseline JSON.
-- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly five
+- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly six
   modules are browser-reachable today: `@utils/core`,
   `@utils/core/boundedIdSet`, `@utils/errors/errorMessage`,
-  `@utils/files/pastedImageName`, and `@utils/text/stringUtils`. The other 51
+  `@utils/files/pastedImageName`, `@utils/text/diff`, and
+  `@utils/text/stringUtils`. The other 54
   TypeScript modules are not browser-reachable and must not be assumed
   browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
 - **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
