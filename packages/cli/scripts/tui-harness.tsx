@@ -869,7 +869,7 @@ function seedSubagentFollowupTranscript(): void {
   const writer = store.acquireWriter(STREAM_ID, 'tui-harness');
   const timestamp = Date.now();
   const followups = [
-    '<subagent-progress id="child-a" agent="strategy" type="round" current="2" total="3" />',
+    '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
     [
       '<subagent-result id="child-b" agent="leanSolver" category="toolUse" status="completed">',
       '<wall-time>2min, 3sec</wall-time>',

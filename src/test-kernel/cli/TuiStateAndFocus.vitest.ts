@@ -1982,10 +1982,10 @@ describe('CLI transcript state', () => {
       logger,
       [
         'Waiting for the child.',
-        '<subagent-progress id="abc" agent="prover" type="todos">',
-        '[{"content":"check","status":"completed"},{"content":"prove","status":"in_progress"}]',
+        '<subagent-progress id="abc" agent="prover" type="todos" completed="1" active="1" pending="0">',
+        '  ● check',
+        '  ◐ prove',
         '</subagent-progress>',
-        '<subagent-progress id="abc" agent="prover" type="activity">Subagent prover is proving completeness.</subagent-progress>',
       ].join('\n'),
     );
 
@@ -1996,7 +1996,6 @@ describe('CLI transcript state', () => {
       [
         'Waiting for the child.',
         '⟳ prover · todos · 1 done, 1 active, 0 pending',
-        '⟳ prover · Subagent prover is proving completeness.',
       ].join('\n'),
     ]);
     expect(entries[0]?.text).not.toContain('<subagent-progress');

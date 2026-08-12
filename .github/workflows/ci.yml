@@ -260,6 +260,7 @@ jobs:
             orchestrate-independent-subscription-preferences \
             orchestrate-history orchestrate-resume-submenu \
             compact-orchestrate-launcher single-run-liveness \
+            subagent-followup-summary \
             agent-proposal-approve-all workflow-timeline
 
       - name: Upload CLI TUI smoke frames
