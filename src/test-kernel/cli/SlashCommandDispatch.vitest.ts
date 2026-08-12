@@ -903,6 +903,39 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).toContain('active background tasks: 1');
   });
 
+  it('reports the owning workflow count while a background task is focused', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-root' as StreamTabId;
+    const focusedChildId = 'stream-focused-child' as StreamTabId;
+    const siblingChildId = 'stream-sibling-child' as StreamTabId;
+    activeStreamId.set(focusedChildId);
+    for (const streamId of [focusedChildId, siblingChildId]) {
+      setStreamStatusInCliState({
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+      });
+    }
+    projectChildRoster(
+      rootStreamId,
+      [focusedChildId, siblingChildId].map((childStreamId, index) => ({
+        executionId: `child-exec-${index}`,
+        identity: { kind: 'agent' as const, agent: `critic-${index}` },
+        agentName: `critic-${index}`,
+        status: STREAM_PHASE.RUNNING,
+        startedAt: index + 1,
+        elapsed: '1s',
+        childStreamId,
+      })),
+    );
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('status: running');
+    expect(statusText).toContain('active background tasks: 2');
+  });
+
   it('reports the access route that produced the focused stream usage', async () => {
     registerBuiltinSlashCommands();
     const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');

@@ -10,6 +10,7 @@ import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
   activeSubagentsFor,
   childStreamEntries,
+  parentStream,
 } from '@cli/chat/tui/state/childExecutions';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -30,6 +31,7 @@ import {
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
@@ -96,6 +98,12 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const workflowStreamId = activeStreamId
+    ? activeStreamParentOrSelfId({
+        activeStreamId,
+        parentStream: parentStream.get(),
+      })
+    : undefined;
   // Use root-session access facts only before any stream exists.
   const model = slice?.model ?? (meta.model || context.initialModel);
   const subscriptionActive = await isCodexSubscriptionActive(model);
@@ -117,9 +125,9 @@ export async function showCliSessionStatus(
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       substate: slice?.substate,
-      activeChildSessions: activeStreamId
+      activeChildSessions: workflowStreamId
         ? activeSubagentsFor(
-            activeStreamId,
+            workflowStreamId,
             childStreamEntries.get(),
             streamSlices,
           ).length
