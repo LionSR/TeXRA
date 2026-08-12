@@ -115,7 +115,7 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-export const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
+const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
   toolCallCount: 0,
 };
 

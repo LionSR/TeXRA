@@ -12,7 +12,7 @@ export const ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS = 200;
 /** Canonical skill-source scope vocabulary, shared with the skills loader
  *  (`src/skills/loadSkills.ts`) so the loader and the persisted snapshot wire
  *  contract can't drift — a scope added here is representable everywhere. */
-export const ActiveSkillSourceScopeSchema = z.enum([
+const ActiveSkillSourceScopeSchema = z.enum([
   'bundled',
   'user',
   'project',

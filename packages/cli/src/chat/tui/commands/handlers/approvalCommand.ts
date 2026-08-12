@@ -7,7 +7,7 @@ import {
 import { openCliSlashCommandForm } from '../slashForms';
 import { type SlashCommandContext } from './slashContext';
 
-export const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
+const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 export const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 
 export function applyCliApprovalPolicySelection(

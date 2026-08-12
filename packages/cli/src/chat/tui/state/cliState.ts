@@ -164,7 +164,7 @@ export interface TranscriptFoldItem {
  * reference dedupe makes the memo survive fold rebuilds unchanged: a
  * `getRange(0)` replay skips every already-applied entry.
  */
-export interface TaskGroupProjectionState {
+interface TaskGroupProjectionState {
   readonly working: TaskGroup[];
   readonly index: Map<string, number>;
   readonly applied: Map<string, StreamLogEntry>;
@@ -173,7 +173,7 @@ export interface TaskGroupProjectionState {
 
 /** Incremental compaction-activity projection state, cursored on the source
  *  log (`appliedHead`), so it too survives fold rebuilds. */
-export interface CompactionProjectionState {
+interface CompactionProjectionState {
   readonly projection: CompactionActivityProjection;
   appliedHead: number;
   terminal: boolean;

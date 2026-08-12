@@ -191,7 +191,7 @@ export interface CompletionSource {
   readonly column: number;
 }
 
-export const COMPLETION_SOURCES = {
+const COMPLETION_SOURCES = {
   agents: {
     shellFunction: '_texra_agents',
     command: 'agents list --quiet',
@@ -210,12 +210,13 @@ const AGENT_COMPLETION_SHELL_FUNCTIONS: ByCategory<string> = {
 };
 
 /** Per-category agent listing sources (roster-filtered `agents list`). */
-export const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> =
-  byCategory((category) => ({
+const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> = byCategory(
+  (category) => ({
     shellFunction: AGENT_COMPLETION_SHELL_FUNCTIONS[category],
     command: `agents list --quiet --all --category ${category}`,
     column: 2,
-  }));
+  }),
+);
 
 /**
  * Positional completions backed by a dynamic listing source, keyed by the

@@ -50,7 +50,7 @@ export type TokenUsageStats = z.infer<typeof TokenUsageStatsBaseSchema>;
  * rows written before `usageRoute` existed are reparsed on every load, so
  * the copies must not drift.
  */
-export function resolveLegacyUsageRoute<T extends { usageRoute?: UsageRoute }>(
+function resolveLegacyUsageRoute<T extends { usageRoute?: UsageRoute }>(
   usage: T,
   viaChatGptSubscription: boolean | undefined,
 ): T {

@@ -22,7 +22,7 @@ import type { Theme } from '@shared/schemas';
 
 /** The host theme kinds we recognize. Single source for the `vscode-*` /
  *  `texra-*` class names and the kind→darkness mapping. */
-export const THEME_KINDS = [
+const THEME_KINDS = [
   'light',
   'dark',
   'high-contrast',

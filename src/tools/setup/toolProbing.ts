@@ -21,7 +21,7 @@ interface ToolStatus {
  * LaTeX toolchain plus both image-tool candidates. The image requirement is
  * satisfied by either candidate — see {@link missingCoreTools}.
  */
-export const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
+const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
 const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_TOOLS);
 
@@ -46,7 +46,7 @@ export async function locateTool(name: string): Promise<ToolStatus> {
  * {@link PROBED_CORE_TOOLS}. Either image tool satisfies the image
  * requirement, so both absent report a single `gm/magick` entry.
  */
-export function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
+function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   const missing = statuses
     .filter((tool) => !tool.installed && !IMAGE_TOOL_NAMES.has(tool.name))
     .map((tool) => tool.name);
