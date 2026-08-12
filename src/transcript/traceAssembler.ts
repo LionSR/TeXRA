@@ -44,12 +44,11 @@ export async function assembleTrace(
   // reloading a live host's session, scanning the whole streamLogs
   // directory, or mutating persistence while reading the transcript files.
   const streamLogStore = await StreamLogStore.openReadOnlyForStream(streamId);
-  const [, snapshot] = await Promise.all([
-    streamLogStore.ensureLoaded(streamId),
+  if (!streamLogStore.has(streamId)) return { status: 'streamLogs_missing' };
+  const [entries, snapshot] = await Promise.all([
+    streamLogStore.readEntries(streamId),
     snapshotStore.read(streamId),
   ]);
-  const log = streamLogStore.get(streamId);
-  if (!log) return { status: 'streamLogs_missing' };
 
   const terminalStatus = meta.outcome
     ? runOutcomeToExecutionStatus(meta.outcome)
@@ -62,7 +61,7 @@ export async function assembleTrace(
       streamId,
       config,
       meta,
-      entries: log.toJSON(),
+      entries,
       snapshot,
       terminalStatus,
     },

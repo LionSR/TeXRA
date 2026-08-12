@@ -1141,18 +1141,15 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       handle instanceof AgentExecutionHandle
         ? handle.childStreamId
         : meta?.streamId;
-    // Resident while the command runs (an open writer refuses eviction); a
-    // released stream rehydrates from disk, and an ephemeral store no-ops.
-    if (streamId) await transcripts.ensureLoaded(streamId);
-    const log = streamId ? transcripts.get(streamId) : undefined;
-    if (!log) {
+    if (!streamId || !transcripts.has(streamId)) {
       return executed(
         `No retained output for ${executionId}: its stream log is no longer available. ` +
           `Use /executions/${executionId}/report for the result summary.`,
       );
     }
+    const entries = await transcripts.readEntries(streamId);
 
-    const { lines, chars } = projectProcessOutput(log.toJSON());
+    const { lines, chars } = projectProcessOutput(entries);
     const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
       ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
