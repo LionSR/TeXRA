@@ -30,7 +30,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
-export type HistoryExportFormat = 'md' | 'tex' | 'html';
+type HistoryExportFormat = 'md' | 'tex' | 'html';
 export type HistoryOpenKind = 'text' | 'pdf' | 'external';
 
 export interface HistoryActionPorts {
