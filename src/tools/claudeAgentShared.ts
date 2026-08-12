@@ -215,7 +215,6 @@ function describeToolInput(toolName: string, input: unknown): string {
     case 'TaskList':
       return 'List tasks';
     case 'Agent':
-    case 'Task':
       if (typeof record.description === 'string') {
         return `Agent ${record.description}`;
       }

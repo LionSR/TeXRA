@@ -42,7 +42,7 @@ export class ClaudeBackgroundTaskTracker {
 
   replace(tasks: BackgroundTasks): void {
     if (tasks.length === 0) {
-      this.finish('No Claude background tasks remain');
+      this.finish('No Claude background tasks remain', tasks);
       return;
     }
 
@@ -58,9 +58,11 @@ export class ClaudeBackgroundTaskTracker {
   }
 
   /** Close the card because every query starts with an empty background set. */
-  finish(summary = 'Claude session ended'): void {
+  finish(summary = 'Claude session ended', tasks?: BackgroundTasks): void {
     if (!this.active) return;
-    const { status: _status, ...baseLog } = this.active.log;
+    const { status: _status, ...baseLog } = tasks
+      ? buildBackgroundTaskLog(tasks)
+      : this.active.log;
     endToolUseCard(
       this.logger,
       this.active.ref,

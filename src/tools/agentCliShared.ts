@@ -86,6 +86,7 @@ interface ResumableAgentCliSession {
 
 interface ClaimableAgentCliStore {
   claim(id: string): (() => void) | undefined;
+  lookup(id: string): ResumableAgentCliSession | undefined;
   waitForActive(id: string): Promise<ResumableAgentCliSession | undefined>;
 }
 
@@ -331,17 +332,40 @@ export function dispatchAgentCliTool(params: {
   approvalLabel: string;
   store: ClaimableAgentCliStore;
   resumeId: string | undefined;
+  /** Existing live session read by a fresh launch, such as a fork source. */
+  sourceId?: string;
   prompt: string;
   labels: AgentCliResumeLabels;
   launch: (context: AgentCliLaunchContext) => Promise<ToolResult>;
 }): Promise<ToolResult> {
-  const { agentName, approvalLabel, store, resumeId, prompt, labels, launch } =
-    params;
-  return withAgentCliApproval(agentName, approvalLabel, (runContext) =>
-    resumeOrLaunchAgentCliSession(store, {
+  const {
+    agentName,
+    approvalLabel,
+    store,
+    resumeId,
+    sourceId,
+    prompt,
+    labels,
+    launch,
+  } = params;
+  return withAgentCliApproval(agentName, approvalLabel, (runContext) => {
+    const callerStreamId = getRunContextStreamId(runContext);
+    const source = sourceId ? store.lookup(sourceId) : undefined;
+    const sourceHandle = source?.executions.getHandle(source.executionId);
+    if (
+      sourceId &&
+      callerStreamId &&
+      sourceHandle instanceof AgentExecutionHandle &&
+      !sourceHandle.isOwnedBy(callerStreamId)
+    ) {
+      throw new ToolError(
+        `${labels.notActiveLabel} '${sourceId}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
+      );
+    }
+    return resumeOrLaunchAgentCliSession(store, {
       id: resumeId,
       prompt,
-      callerStreamId: getRunContextStreamId(runContext),
+      callerStreamId,
       labels,
       launch: (releaseFallbackClaim) => {
         // A missing in-memory entry denotes a disk-based SDK fallback.
@@ -353,8 +377,8 @@ export function dispatchAgentCliTool(params: {
           releaseFallbackClaim,
         });
       },
-    }),
-  );
+    });
+  });
 }
 
 // ============================================================================

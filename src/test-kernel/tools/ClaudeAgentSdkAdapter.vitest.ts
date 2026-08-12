@@ -150,6 +150,7 @@ describe('Claude Agent SDK adapter', () => {
       status: 'completed',
       result: {
         summary: 'No Claude background tasks remain',
+        output: { tasks: [] },
       },
     });
   });

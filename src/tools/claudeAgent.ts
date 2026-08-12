@@ -122,6 +122,7 @@ const ClaudeAgentInputSchema = z
     ),
     session_id: z
       .string()
+      .min(1)
       .nullish()
       .describe(
         'Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.',
@@ -278,7 +279,8 @@ export async function runStreamedTurn(params: {
             }
           } else {
             isError = true;
-            errorMessage = raw.errors.join('\n') || raw.subtype;
+            errorMessage =
+              raw.errors?.join('\n') || raw.subtype || 'Claude Code error';
           }
           break;
         case 'system':
@@ -446,7 +448,7 @@ function startClaudeAgentLoop(params: {
         forkSession: forkNextTurn,
         pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
       });
-      forkNextTurn = false;
+      forkNextTurn = forkNextTurn && turn.sessionId == null;
       if (turn.sessionId) resumeSessionId = turn.sessionId;
       return turn;
     },
@@ -517,6 +519,10 @@ export class ClaudeAgentTool extends defineTool({
         input.fork_session === true
           ? undefined
           : (input.session_id ?? undefined),
+      sourceId:
+        input.fork_session === true
+          ? (input.session_id ?? undefined)
+          : undefined,
       prompt: input.prompt,
       labels: {
         notActiveLabel: 'Claude Code CLI session',
