@@ -19,11 +19,6 @@ export const MAIN_VIEW_COMMANDS = {
   // Settings
   SETTINGS_OPEN: 'openSettings',
 
-  // File selection cases (single-file pickers; multi pickers go through SELECT_MULTIPLE_FILES)
-
-  // File selected cases (single-file response messages)
-  EDITED_FILE_SELECTED: 'editedFileSelected',
-
   // Request file cases (single-file refresh requests)
   REQUEST_EDITED_FILE: 'requestEditedFile',
   REQUEST_BASE_FILE: 'requestBaseFile',

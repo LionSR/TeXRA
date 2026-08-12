@@ -61,11 +61,6 @@ const SetBaseFileMessageSchema = withFilesArray(
   preserveBaseFile: z.boolean().nullish(),
 });
 
-const EditedFileSelectedMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
-  filePath: z.string(),
-});
-
 const AddMediaFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE),
   file: z.string(),
@@ -147,7 +142,6 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetWorkspaceRootsMessageSchema,
   withFilesArray(MAIN_VIEW_COMMANDS.SET_EDITED_FILE),
   SetBaseFileMessageSchema,
-  EditedFileSelectedMessageSchema,
   withFilesArray(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
   withFilesArray(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
   withFilesArray(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
