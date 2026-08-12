@@ -8,6 +8,11 @@ import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
+  activeSubagentsFor,
+  childStreamEntries,
+  parentStream,
+} from '@cli/chat/tui/state/childExecutions';
+import {
   activeStreamId as activeStreamIdSignal,
   beginWorkPlanReaderRequest,
   cancelPendingWorkPlanReaderRequest,
@@ -26,6 +31,7 @@ import {
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
@@ -90,7 +96,28 @@ export async function showCliSessionStatus(
 ): Promise<void> {
   const meta = sessionMeta.get();
   const activeStreamId = activeStreamIdSignal.get();
-  const slice = activeStreamId ? streams.get().get(activeStreamId) : undefined;
+  const streamSlices = streams.get();
+  const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const directActiveChildren = activeStreamId
+    ? activeSubagentsFor(activeStreamId, childStreamEntries.get(), streamSlices)
+    : [];
+  const workflowStreamId =
+    activeStreamId && directActiveChildren.length === 0
+      ? activeStreamParentOrSelfId({
+          activeStreamId,
+          parentStream: parentStream.get(),
+        })
+      : activeStreamId;
+  let activeChildSessions = directActiveChildren.length;
+  if (workflowStreamId !== activeStreamId) {
+    activeChildSessions = workflowStreamId
+      ? activeSubagentsFor(
+          workflowStreamId,
+          childStreamEntries.get(),
+          streamSlices,
+        ).length
+      : 0;
+  }
   // Use root-session access facts only before any stream exists.
   const model = slice?.model ?? (meta.model || context.initialModel);
   const subscriptionActive = await isCodexSubscriptionActive(model);
@@ -112,6 +139,7 @@ export async function showCliSessionStatus(
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       substate: slice?.substate,
+      activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       // Only surface the resume id once a stream exists — never next to
       // a "not started" status.
