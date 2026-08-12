@@ -10,7 +10,7 @@ import {
 import type { PlanApprovalPermission } from '@shared/schemas';
 import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
-import { ConfirmCard } from './ConfirmCard';
+import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
 import {
   ScrollableModalText,
@@ -29,8 +29,6 @@ export interface PlanApprovalProps {
 const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
-export const PLAN_APPROVAL_FEEDBACK_PLACEHOLDER =
-  'Feedback to send with rejection';
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
 const PLAN_APPROVAL_GOAL_ACTION = {
   key: 'r',
@@ -126,7 +124,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
           (feedbackMode
             ? confirmCardFeedbackRows({
                 columns,
-                placeholder: PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
+                placeholder: CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
                 value: feedbackValue,
               })
             : 0),
@@ -154,7 +152,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
             ]
           : []
       }
-      feedbackPlaceholder={PLAN_APPROVAL_FEEDBACK_PLACEHOLDER}
+      feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
       onFeedbackModeChange={setFeedbackMode}
       onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}

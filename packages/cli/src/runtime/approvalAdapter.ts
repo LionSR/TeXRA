@@ -39,7 +39,10 @@ import {
   formatToolEditApprovalSummary,
   formatUserQuestionPrompt,
 } from './approval/approvalSummaries';
-import { parseUserQuestionAnswer } from './userQuestionAnswer';
+import {
+  parseUserQuestionAnswer,
+  USER_QUESTION_SKIPPED_FEEDBACK,
+} from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 
@@ -199,7 +202,7 @@ async function askHeadlessUserQuestion(
   }
 
   if (Object.keys(answers).length === 0) {
-    return { action: 'skip', feedback: 'User question skipped by user.' };
+    return { action: 'skip', feedback: USER_QUESTION_SKIPPED_FEEDBACK };
   }
   return { action: 'submit', answers };
 }

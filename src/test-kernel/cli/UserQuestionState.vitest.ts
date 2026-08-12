@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
-  USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from '@cli/chat/tui/modals/UserQuestionState';
 

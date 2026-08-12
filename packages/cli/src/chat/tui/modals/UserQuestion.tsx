@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
-import { parseUserQuestionAnswer } from '@cli/runtime/userQuestionAnswer';
+import {
+  parseUserQuestionAnswer,
+  USER_QUESTION_SKIPPED_FEEDBACK,
+} from '@cli/runtime/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
@@ -27,7 +30,6 @@ import type {
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
-  USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
