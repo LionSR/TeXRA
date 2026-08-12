@@ -27,6 +27,7 @@ const RELAY_TIERS = [RELAY_FREE_TIER, RELAY_MAX_TIER, RELAY_ULTRA_TIER];
 const require = createRequire(import.meta.url);
 
 const RELAY_DENO_JSON_PATH = 'supabase/functions/relay/deno.json';
+const LOG_USAGE_DENO_JSON_PATH = 'supabase/functions/log-usage/deno.json';
 
 function readJsonFile<T>(relativePath: string): T {
   return JSON.parse(
@@ -97,6 +98,16 @@ describe('relay shared configuration parity', () => {
         'supabase/functions/relay/deno.json (and refresh deno.lock) or ' +
         'package.json so both point to the same version.',
     ).toBe(workspaceVersion);
+  });
+
+  it('keeps the relay and usage-cost llm-zoo pins identical', () => {
+    const logUsageDenoJson = readJsonFile<{
+      imports?: Record<string, string>;
+    }>(LOG_USAGE_DENO_JSON_PATH);
+    expect(
+      logUsageDenoJson.imports?.['llm-zoo'],
+      `${LOG_USAGE_DENO_JSON_PATH} must match ${RELAY_DENO_JSON_PATH}`,
+    ).toBe(readRelayLlmZooSpecifier());
   });
 
   it('keeps the pnpm-resolved llm-zoo version in sync with the relay deno.json pin', () => {
