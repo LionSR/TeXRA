@@ -4,8 +4,8 @@ import {
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
+import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import {
-  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -258,13 +258,13 @@ export async function executeCliRequest(
       settleLeaseScope = resolve;
     },
   );
-  let shutdownStatusFinalized: Promise<void> | undefined;
-  const finalizeShutdownStatus = (): Promise<void> => {
-    if (!shutdownInterrupted) return Promise.resolve();
+  let shutdownStatusFinalized: Promise<boolean> | undefined;
+  const finalizeShutdownStatus = (): Promise<boolean> => {
+    if (!shutdownInterrupted) return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
       const runWithOwnership = await leaseScopeReady;
       const executionId = ownedExecutionId;
-      if (!runWithOwnership || !executionId) return;
+      if (!runWithOwnership || !executionId) return false;
       try {
         await runWithOwnership(async () => {
           await finalizeCliExecution(
@@ -273,10 +273,12 @@ export async function executeCliRequest(
             'preserve',
             reportShutdownFinalizationFailure,
           );
-          await completeOwnedExecutionLease(executionId);
+          await releaseExecutionLeaseAfterArtifacts(session, executionId);
         });
+        return true;
       } catch (error) {
         if (!(error instanceof ExecutionLeaseLostError)) throw error;
+        return false;
       }
     })();
     return shutdownStatusFinalized;

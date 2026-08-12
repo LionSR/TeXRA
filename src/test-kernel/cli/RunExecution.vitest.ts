@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcome: vi.fn(),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   finalizeExecution: vi.fn(),
@@ -80,6 +81,11 @@ async function installStoragePlatform(): Promise<void> {
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
+}));
+
+vi.mock('@agent/runtime/executionOwnership', () => ({
+  releaseExecutionLeaseAfterArtifacts:
+    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage', async (importOriginal) => ({
@@ -205,6 +211,7 @@ function stubRunExecutionDeps(): void {
     close: mocks.close,
   });
   mocks.readCliRunOutcome.mockResolvedValue('completed');
+  mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
     outcomePersisted: true,
@@ -786,6 +793,10 @@ describe('executeCliRequest', () => {
     'marks $label owned executions interrupted during platform shutdown',
     async ({ options }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
+      const { flushSpy } = await spyOnTranscriptFlush();
+      mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(
+        async (session, executionId) => session.flushArtifacts(executionId),
+      );
       const runWithOwnership = vi.fn((operation: () => unknown) => operation());
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
       const hangingRun = stubHangingRun((options) => {
@@ -801,6 +812,8 @@ describe('executeCliRequest', () => {
       await shutdown;
 
       expect(runWithOwnership).toHaveBeenCalledOnce();
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
+      expect(flushSpy).toHaveBeenCalledOnce();
       expect(mocks.finalizeExecution).toHaveBeenCalledWith({
         executionId: 'exec-1',
         outcome: RUN_OUTCOME.CANCELLED,
