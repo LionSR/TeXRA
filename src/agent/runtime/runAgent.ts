@@ -49,8 +49,11 @@ export interface RunAgentOptions extends Pick<
   | 'onIdle'
 > {
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
-  /** Persist host-owned final artifacts while this run still owns its lease. */
-  beforeLeaseRelease?: () => Promise<void>;
+  /**
+   * Persist host-owned final state before the ordinary session drain. Return
+   * true when the hook already drained artifacts and disposed of ownership.
+   */
+  beforeLeaseRelease?: () => Promise<boolean | void>;
   /** Bind host callbacks that may run outside the agent's async context. */
   onExecutionLeaseAcquired?: (
     scope: OwnedExecutionLeaseScope,
@@ -137,6 +140,7 @@ export async function runAgent(
     let runResult: AgentFlowResult | undefined;
     let runFailure: { error: unknown } | undefined;
     let artifactsDurable = false;
+    let finalArtifactsHandled = false;
     let previousTerminalOutcome: RunOutcome | undefined;
     let resumedStreamId: StreamTabId | undefined;
     const callerOnRun = executeAgentOptions.onRun;
@@ -196,14 +200,16 @@ export async function runAgent(
 
       const artifactFailures: unknown[] = [];
       try {
-        await beforeLeaseRelease?.();
+        finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
       } catch (error) {
         artifactFailures.push(error);
       }
-      try {
-        await flushOwnedExecutionArtifacts(runSession, executionId);
-      } catch (error) {
-        artifactFailures.push(error);
+      if (!finalArtifactsHandled) {
+        try {
+          await flushOwnedExecutionArtifacts(runSession, executionId);
+        } catch (error) {
+          artifactFailures.push(error);
+        }
       }
       artifactsDurable = artifactFailures.length === 0;
 
@@ -229,9 +235,9 @@ export async function runAgent(
       }
       return runResult;
     } finally {
-      if (artifactsDurable) {
+      if (artifactsDurable && !finalArtifactsHandled) {
         await completeOwnedExecutionLease(executionId);
-      } else {
+      } else if (!artifactsDurable) {
         abandonOwnedExecutionLease(executionId);
       }
     }

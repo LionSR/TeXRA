@@ -75,6 +75,8 @@ export interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly CliHistoryFile[];
+  /** Whether category-specific validation found a usable resume checkpoint. */
+  /** Whether a category-valid flow record is available for resumption. */
   readonly hasFlowRecord: boolean;
   readonly currentModel?: string;
 }
