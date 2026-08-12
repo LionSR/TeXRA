@@ -30,13 +30,13 @@ Two things are genuinely fresh since `-08-04` and are the reason this note exist
 
 ## 1. Scope re-audited
 
-| Area          | Entry points inspected                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Agent core    | `src/agent/runtime/{runAgent,executeAgent,SessionHandle,ModelCell,ModelFactory}.ts`, `src/agent/implementations/flows/`  |
-| Model handler | `src/agent/modelHandlers/ModelHandler.ts`, `src/agent/types/IModelHandler.ts`, provider subclasses                        |
-| Logger        | `src/logger/{logUtils,redaction}.ts`, `src/agent/trace/{channelTrace,AgentTrace}.ts`                                      |
-| Surface       | `packages/agent/src/{index,schemas,node}.ts`, `config/ratchets/host-agent-import-baseline.json`                          |
-| Subagents     | `src/tools/delegation/`, `src/agent/{review,goal,roster}/`, `implementations/flows/agentCreator/`                         |
+| Area          | Entry points inspected                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Agent core    | `src/agent/runtime/{runAgent,executeAgent,SessionHandle,ModelCell,ModelFactory}.ts`, `src/agent/implementations/flows/` |
+| Model handler | `src/agent/modelHandlers/ModelHandler.ts`, `src/agent/types/IModelHandler.ts`, provider subclasses                      |
+| Logger        | `src/logger/{logUtils,redaction}.ts`, `src/agent/trace/{channelTrace,AgentTrace}.ts`                                    |
+| Surface       | `packages/agent/src/{index,schemas,node}.ts`, `config/ratchets/host-agent-import-baseline.json`                         |
+| Subagents     | `src/tools/delegation/`, `src/agent/{review,goal,roster}/`, `implementations/flows/agentCreator/`                       |
 
 ## 2. Surface drift since `-08-04` — baselines shrinking as designed
 
@@ -51,7 +51,7 @@ Distinct `@agent/*` deep-import specifiers per package
 | agent (SDK) | —        | **10**         | —   |
 
 Movement is entirely downward (last touched by #9951, 2026-08-11), which is the
-invariant CLAUDE.md pins: *never widen a baseline.* The SDK package's own list is
+invariant CLAUDE.md pins: _never widen a baseline._ The SDK package's own list is
 **10** specifiers, of which — per the runtime audit — **5 are genuine public
 contract already re-exported through the barrel** (`AgentConfig`, `AgentDataclass`,
 `ToolTypes`, `AgentFlowResult`, `@agent/trace`) and **5 are incidental internal
@@ -73,7 +73,7 @@ the repo's own guardrails and found load-bearing:
   holds the execution lease, and opens workflow output — not a pass-through.
   `executeAgent` has ≥3 distinct production entries (runAgent, subagent
   delegation `nativeSubagentStrategy.ts:39`, CLI resume `executeAgent.ts:499`).
-  `SessionHandle` is a composition record that self-documents as *not* a facade
+  `SessionHandle` is a composition record that self-documents as _not_ a facade
   (`SessionHandle.ts:3-30`).
 - **`ModelHandler` is a genuine provider port**, consumed as the drift-proof
   `Pick<ModelHandler, …>` narrowing `IModelHandler` (`IModelHandler.ts:34`), with
@@ -82,12 +82,12 @@ the repo's own guardrails and found load-bearing:
 - **The one arguable single-caller extraction**, `applyHelperModelPreference`
   (`helperModelPreference.ts:24`, one production caller `runAgent.ts:101`), carries
   real capability/availability branching and its own vitest — earned under the
-  "single-caller extractions banned *unless real logic*" rule, barely. Watch, do
+  "single-caller extractions banned _unless real logic_" rule, barely. Watch, do
   not rewrite.
 - **One borderline indirection to watch, not touch:** the routing round-trip in
   `createModelHandlerForResolvedCompatibilityKey` (`ModelFactory.ts:591-662`)
   re-reads `PROVIDER_HANDLER_ROUTES` that the pure key predicate already consulted.
-  The code documents *why* (`:411-421`: keep pure routing and effectful
+  The code documents _why_ (`:411-421`: keep pure routing and effectful
   instantiation from drifting) and the async Codex/Kimi overrides can't live in the
   pure predicate. Defensible-but-not-free; revisit only if that cluster is edited
   for another reason.
@@ -116,10 +116,10 @@ live only on the sink:
 
 Reachable today only by installing a host `OutputChannelFactory` via
 `setOutputChannelFactory` (`logUtils.ts:182`) — a global side-channel, not part of
-the per-run stream. **Note:** `platform().log` is *not* a real surface (grep of
+the per-run stream. **Note:** `platform().log` is _not_ a real surface (grep of
 `src/platform/platform.ts` finds no `.log` member); do not plan against it.
 
-Whether embedder-visible bootstrap/routing logs *should* join the `AgentEvent`
+Whether embedder-visible bootstrap/routing logs _should_ join the `AgentEvent`
 stream is a surface decision for the Tier-1 program, not a defect to hot-fix.
 
 ## 5. Subagent boundaries — unchanged from `-08-04` §4
@@ -129,14 +129,14 @@ The dispatch boundary (`delegate_agent`/`delegate_workflow` → `executeSubagent
 host-agnostic. Already-independent units to promote as-is: `src/tools/delegation/`,
 `src/agent/review/` (review→fix pipeline), `agentCreator/agentCreatorFlow.ts`, the
 agent-CLI adapters. The two per-run engines (`runReflectionFlow`, `runToolUseFlow`)
-and the `goal/` loop remain runtime-coupled — isolating them behind the barrel *is*
+and the `goal/` loop remain runtime-coupled — isolating them behind the barrel _is_
 the §2 Tier-1 work, not a separate refactor. No change since `-08-04`.
 
 ## 6. Actionable items (all pre-existing; none performed by this routine)
 
 1. **Tier-1 barrel, incrementally** (north-star; §2). The barrel
    (`packages/agent/src/index.ts`) is untouched since `-08-04`, so the §3-cluster
-   fold-in has not started *in the barrel*, even though other refactors have shrunk
+   fold-in has not started _in the barrel_, even though other refactors have shrunk
    the host lists. One cluster per PR, shrink the matching baseline. Human-review
    gated — deliberately left to a maintained PR, not an unattended edit.
 2. **Stabilize the withheld interaction contract** (`index.ts:42-47`, hard-deny

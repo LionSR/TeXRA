@@ -23,25 +23,24 @@ file.
 
 `core`'s split works because each module's files are addressed through the
 module path (`@agent/core/<module>/<File>`), so moving a file only means
-updating the few imports that reference it. `runtime` files are the opposite:
-~180 files across `src/` and `packages/*` import a specific
-`@agent/runtime/<File>` path directly (there is no barrel — see
-[Importing](#importing)), so physically moving any of these files into
-subdirectories means rewriting every one of those call sites. That's
-mechanical churn disproportionate to a documentation change, not a "natural"
-low-risk split — hence a README module map instead of a directory split. If a
-future refactor touches a whole group's call sites anyway, revisit turning
-that group into a real subdirectory.
+updating the few imports that reference it. Runtime files still have many
+direct consumers inside `src/agent`, the agent SDK package, and tests. Moving
+them into subdirectories would therefore create mechanical churn
+disproportionate to a documentation change. The CLI, desktop, and extension
+hosts are decoupled from that layout through the curated `@agent/runtime`
+surface, but the internal direct imports remain a reason to keep this
+directory flat. If a future refactor touches a whole group's internal call
+sites anyway, revisit turning that group into a real subdirectory.
 
 ## Importing
 
-Import each file directly by its `@agent/runtime/<File>` path, e.g.:
+CLI, desktop, and extension host code imports the curated public surface:
 
 ```ts
-import { runAgent } from '@agent/runtime/runAgent';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { runAgent, type ToolUseResumeData } from '@agent/runtime';
 ```
 
-There is intentionally no `@agent/runtime` barrel, matching `core`'s
-no-barrel convention — import from the specific file so dependency edges stay
-explicit and no re-export shim needs to be maintained.
+The barrel contains only symbols used across that host boundary. Code inside
+`src/agent`, the agent SDK package, and tests should continue importing the
+specific `@agent/runtime/<File>` module so internal dependency edges stay
+explicit and the host-facing surface does not become a convenience barrel.
