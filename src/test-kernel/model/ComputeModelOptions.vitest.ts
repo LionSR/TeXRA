@@ -20,7 +20,10 @@ import {
 } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
-import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
+import {
+  API_KEY_PROVIDER_IDS,
+  FAST_FIRST_RESPONSE_HINT,
+} from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -279,6 +282,16 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(reason).toBe(
       'Model "haiku3" is retired and no longer available from its provider. Choose an active model.',
     );
+  });
+
+  it('keeps every active catalogue provider in the API-key registry', () => {
+    const apiKeyProviders = new Set<string>(API_KEY_PROVIDER_IDS);
+
+    for (const config of Object.values(MODEL_CONFIGS)) {
+      if (!config.retired && !config.deprecated) {
+        expect(apiKeyProviders).toContain(config.provider);
+      }
+    }
   });
 
   it('honors the catalogue retirement of the legacy Copilot model', async () => {
