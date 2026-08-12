@@ -1782,6 +1782,7 @@ describe('DesktopProgressBridge', () => {
         messages.map((message) => (message as ProgressMessage).command),
       ).toEqual([
         PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
         PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
         PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       ]),
@@ -1791,6 +1792,10 @@ describe('DesktopProgressBridge', () => {
       stream: 'second',
     });
     expect(messages[1]).toMatchObject({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: 'first',
+    });
+    expect(messages[2]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
       action: 'render',
       stream: 'first',
@@ -1805,7 +1810,7 @@ describe('DesktopProgressBridge', () => {
         },
       },
     });
-    expect(messages[2]).toMatchObject({
+    expect(messages[3]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       streamId: 'first',
       entries: [expect.objectContaining({ text: 'first stream log' })],
@@ -1922,6 +1927,10 @@ describe('DesktopProgressBridge', () => {
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
     ).toEqual([
+      {
+        activeStream: 'third',
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      },
       {
         activeStream: 'third',
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
