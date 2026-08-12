@@ -22,8 +22,8 @@
       "open",
       "openOrEphemeral",
       "openReadOnlyForStream",
-      "recordSummaryMeta",
       "readEntries",
+      "recordSummaryMeta",
       "reload",
       "requestEviction"
     ],

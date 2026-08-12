@@ -48,7 +48,7 @@ interface ProgressBackendLifecycleOptions {
   ): Promise<void> | void;
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
-  rebuildRenderedStreams(options: { syncActiveStream: boolean }): void;
+  rebuildRenderedStreams(options: { syncActiveStream: boolean }): Promise<void>;
   notifyDeletionRetained(
     activeCount: number,
     failedCount: number,
@@ -298,6 +298,7 @@ export class ProgressBackend {
           : Promise.resolve(undefined),
     );
     if (retained) {
+      await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
       await this.lifecycle.notifyDeletionRetained(
         retained === 'active' ? 1 : 0,
         retained === 'failed' ? 1 : 0,
@@ -348,9 +349,6 @@ export class ProgressBackend {
     const hadDeletableData = this.hasDeletableStreamData(stream);
     const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {
-      if (hadDeletableData) {
-        this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
-      }
       return deletion;
     }
     if (!hadDeletableData) return undefined;
@@ -384,24 +382,28 @@ export class ProgressBackend {
     } else {
       // The deleted stream was not the active one, so only the stream list
       // changed; the active stream's content is still on screen and correct.
-      this.lifecycle.rebuildRenderedStreams({ syncActiveStream: false });
+      await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: false });
     }
     return undefined;
   }
 
   async deleteAllStreams(): Promise<void> {
     const storageGeneration = this.storageGeneration;
-    const retained = await this.enqueuePreparedStorageOperation(
+    const outcome = await this.enqueuePreparedStorageOperation(
       () => this.prepareAllStreamDeletions(),
       () =>
         storageGeneration === this.storageGeneration
           ? this.deleteAllStreamsNow()
           : Promise.resolve(undefined),
     );
-    if (retained) {
+    if (!outcome) return;
+    await this.lifecycle.rebuildRenderedStreams({
+      syncActiveStream: !outcome.allDeleted,
+    });
+    if (!outcome.allDeleted) {
       await this.lifecycle.notifyDeletionRetained(
-        retained.activeCount,
-        retained.failedCount,
+        outcome.activeCount,
+        outcome.failedCount,
       );
     }
   }
@@ -417,9 +419,11 @@ export class ProgressBackend {
     );
   }
 
-  private async deleteAllStreamsNow(): Promise<
-    { activeCount: number; failedCount: number } | undefined
-  > {
+  private async deleteAllStreamsNow(): Promise<{
+    allDeleted: boolean;
+    activeCount: number;
+    failedCount: number;
+  }> {
     const streamIds = this.state.streamLogs.keys();
     const retained = await this.state.clearAll();
     const retainedStreams = new Set([...retained.active, ...retained.failed]);
@@ -440,13 +444,11 @@ export class ProgressBackend {
         });
       }
     }
-    this.lifecycle.rebuildRenderedStreams({ syncActiveStream: !allDeleted });
-    return allDeleted
-      ? undefined
-      : {
-          activeCount: retained.active.size,
-          failedCount: retained.failed.size,
-        };
+    return {
+      allDeleted,
+      activeCount: retained.active.size,
+      failedCount: retained.failed.size,
+    };
   }
 
   load(): Promise<void> {

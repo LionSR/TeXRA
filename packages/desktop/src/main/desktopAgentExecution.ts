@@ -328,7 +328,7 @@ export class DesktopProgressBridge {
           this.workflowFileActions.clearAllBackups();
         },
         rebuildRenderedStreams: ({ syncActiveStream }) => {
-          void this.syncRenderedStreams(syncActiveStream);
+          return this.syncRenderedStreams(syncActiveStream);
         },
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
