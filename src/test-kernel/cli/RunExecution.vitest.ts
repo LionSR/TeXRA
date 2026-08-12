@@ -834,6 +834,10 @@ describe('executeCliRequest', () => {
         outcome: RUN_OUTCOME.CANCELLED,
         flowRecord: 'preserve',
       });
+      expect(mocks.finalizeExecution.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
       await expect(run).resolves.toEqual({
         ok: true,
         result: {
