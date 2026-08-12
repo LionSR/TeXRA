@@ -26,9 +26,10 @@ describe('polish prompt loader', () => {
       ),
     );
 
-    const prompt = await renderPolishPrompt('', 'Fix teh typo.');
+    const prompt = await renderPolishPrompt('<paper & notes>', 'Fix teh typo.');
 
     expect(prompt).toContain('Correct any spelling errors');
+    expect(prompt).toContain('<paper & notes>');
     expect(prompt).toContain('Fix teh typo.');
   });
 
