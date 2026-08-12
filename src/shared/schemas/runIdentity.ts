@@ -31,6 +31,13 @@ export const RunIdentitySchema = z.discriminatedUnion('kind', [
 
 export type RunIdentity = z.infer<typeof RunIdentitySchema>;
 
+/** Whether an identity denotes a native agent rather than an external CLI. */
+export function isPlainAgentIdentity(
+  identity: RunIdentity | null | undefined,
+): boolean {
+  return identity?.kind === 'agent' && identity.tool === undefined;
+}
+
 /** The identity's display name — what a listing row or tab label leads with. */
 export function runIdentityName(id: RunIdentity): string {
   switch (id.kind) {

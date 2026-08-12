@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
+import { buildHunks } from '@cli/runtime/diffHunks';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
@@ -18,7 +19,6 @@ import {
   confirmCardFeedbackRows,
 } from './confirmCardRowsBudget';
 import {
-  buildHunks,
   DiffView,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
