@@ -387,7 +387,7 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [
-      '⟳ strategy · round 2/3',
+      '⟳ strategy · 3 tool calls',
       '✓ leanSolver completed · 2min, 3sec',
       'Proved </response> is escaped & visible.',
       '✗ reviewer failed (retryable)',

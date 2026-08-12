@@ -26,7 +26,6 @@ import {
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { planSummaryLine } from '@shared/schemas/workPlan';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { isObject } from '@utils/core';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -133,11 +132,6 @@ function progressDetail(xml: string): string {
       if (cost) parts.push(`$${cost}`);
       return parts.length > 0 ? parts.join(' · ') : 'working';
     }
-    case 'round': {
-      const current = attr(xml, 'current');
-      const total = attr(xml, 'total');
-      return current && total ? `round ${current}/${total}` : 'working';
-    }
     case 'plan': {
       if (attr(xml, 'status') === 'cleared') return 'plan cleared';
       // The producer (`formatSubagentProgress`) attaches the plan objective as
@@ -152,35 +146,7 @@ function progressDetail(xml: string): string {
       if (completed || active || pending) {
         return `todos · ${completed ?? '0'} done, ${active ?? '0'} active, ${pending ?? '0'} pending`;
       }
-      const body = elementBody(xml, DELIVERY_TAG.subagentProgress);
-      if (!body) return 'todos updated';
-      const parsed = safeParseJson(decodeXmlEntities(body));
-      if (parsed.isErr() || !Array.isArray(parsed.value)) {
-        return 'todos updated';
-      }
-      const statuses = parsed.value.map((item) =>
-        isObject(item) ? item.status : undefined,
-      );
-      const done = statuses.filter((status) => status === 'completed').length;
-      const inProgress = statuses.filter(
-        (status) => status === 'in_progress',
-      ).length;
-      const todo = statuses.length - done - inProgress;
-      return `todos · ${done} done, ${inProgress} active, ${todo} pending`;
-    }
-    case 'conversations': {
-      const turns = attr(xml, 'turns');
-      const chars = attr(xml, 'characters');
-      const parts: string[] = [];
-      if (turns) parts.push(`${turns} turns`);
-      if (chars) parts.push(`${chars} chars`);
-      return parts.length > 0
-        ? `conversation · ${parts.join(' · ')}`
-        : 'conversation update';
-    }
-    case 'activity': {
-      const body = elementBody(xml, DELIVERY_TAG.subagentProgress);
-      return body ? decodeXmlEntities(body).split('\n')[0]! : 'activity';
+      return 'todos updated';
     }
     default:
       return 'working';
