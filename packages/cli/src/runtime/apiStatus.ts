@@ -1,6 +1,7 @@
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { configuredApiKeyProviders } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type {
   SubscriptionUsageProvider,
@@ -17,11 +18,11 @@ import { formatPercent } from '@utils/text/stringUtils';
 import { getCliApiMode } from './apiAccessMode';
 import {
   formatCliChatGptPreference,
-  formatCliGlmCodingPlanPreference,
   formatCliGrokPreference,
-  formatCliKimiCodePreference,
+  formatCliCodingPlanPreference,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
+  cliCodingPlanStatus,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
@@ -102,8 +103,10 @@ export async function loadCliModelAccessOverview(
   const lines = [
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
     `Grok preference: ${formatCliGrokPreference(access)}`,
-    `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
-    `GLM Coding Plan preference: ${formatCliGlmCodingPlanPreference(access)}`,
+    ...CODING_PLAN_SUBSCRIPTIONS.map(
+      (plan) =>
+        `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
+    ),
     `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`,
     formatAccountStatusLine(
       RESEARCHER_ACCESS.label,
@@ -261,17 +264,25 @@ export async function loadCliDetailedAccountStatusLines(options: {
   // Detailed /api status is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service.
   const usageReader = options.subscriptionUsage ?? SubscriptionUsage;
-  const [chatGptUsage, kimiCodeUsage, glmCodingPlanUsage] = await Promise.all([
+  const [chatGptUsage, codingPlanUsageEntries] = await Promise.all([
     access.chatGptSignedIn
       ? usageReader.getUsage('chatgpt', { forceRefresh: true })
       : undefined,
-    access.kimiCodeKeySet === true
-      ? usageReader.getUsage('kimiCode', { forceRefresh: true })
-      : undefined,
-    access.glmKeySet === true
-      ? usageReader.getUsage('glmCodingPlan', { forceRefresh: true })
-      : undefined,
+    Promise.all(
+      CODING_PLAN_SUBSCRIPTIONS.map(async (plan) => {
+        const status = cliCodingPlanStatus(access, plan);
+        return [
+          plan.id,
+          status.keySet
+            ? await usageReader.getUsage(plan.usageProvider, {
+                forceRefresh: true,
+              })
+            : undefined,
+        ] as const;
+      }),
+    ),
   ]);
+  const codingPlanUsage = new Map(codingPlanUsageEntries);
   const routes = {
     chatGpt: {
       preferred: access.preferences.chatGpt === 'on',
@@ -286,18 +297,6 @@ export async function loadCliDetailedAccountStatusLines(options: {
         access.grokSignedIn,
         access.grokAccountLabel,
       ),
-    },
-    kimiCode: {
-      preferred: access.preferences.kimiCode === 'on',
-      credential:
-        access.kimiCodeKeySet === true
-          ? 'key configured'
-          : 'key not configured',
-    },
-    glmCode: {
-      preferred: access.preferences.glmCode === 'on',
-      credential:
-        access.glmKeySet === true ? 'key configured' : 'key not configured',
     },
     fallback:
       access.apiFallback === 'included'
@@ -340,23 +339,17 @@ export async function loadCliDetailedAccountStatusLines(options: {
   );
   if (grokLine) lines.push(grokLine);
 
-  const kimiLine = formatModelPreferenceLine(
-    'Kimi Code',
-    routes.kimiCode.preferred,
-    access.kimiCodeKeySet === true,
-    'key required',
-    routes.kimiCode.credential,
-  );
-  if (kimiLine) lines.push(withUsage(kimiLine, kimiCodeUsage));
-
-  const glmLine = formatModelPreferenceLine(
-    'GLM Coding Plan',
-    routes.glmCode.preferred,
-    access.glmKeySet === true,
-    'key required',
-    routes.glmCode.credential,
-  );
-  if (glmLine) lines.push(withUsage(glmLine, glmCodingPlanUsage));
+  for (const plan of CODING_PLAN_SUBSCRIPTIONS) {
+    const status = cliCodingPlanStatus(access, plan);
+    const line = formatModelPreferenceLine(
+      plan.displayName,
+      status.preferred,
+      status.keySet,
+      'key required',
+      status.keySet ? 'key configured' : 'key not configured',
+    );
+    if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
+  }
 
   const fallbackLine = `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`;
   if (routes.fallback.kind === 'included') {
@@ -375,7 +368,12 @@ export async function loadCliDetailedAccountStatusLines(options: {
   }
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
-    providers.filter((provider) => provider !== 'kimiCode'),
+    providers.filter(
+      (provider) =>
+        !CODING_PLAN_SUBSCRIPTIONS.some(
+          (plan) => plan.apiProvider === provider,
+        ),
+    ),
     'Other API keys',
   );
   if (otherPersonalKeys) lines.push(otherPersonalKeys);

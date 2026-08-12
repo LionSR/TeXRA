@@ -1,10 +1,12 @@
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { lookupApiKey } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
+import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas/subscriptionUsage';
 import { useChinaRegion } from '@utils/config/providerConfig';
 
 import {
@@ -26,16 +28,34 @@ import {
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
+const CODING_PLAN_PROVIDER_NAMES = Object.fromEntries(
+  CODING_PLAN_SUBSCRIPTIONS.map((plan) => [
+    plan.usageProvider,
+    plan.apiProvider === 'glm' ? 'GLM' : plan.displayName,
+  ]),
+) as Record<
+  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'],
+  string
+>;
+
+const CODING_PLAN_DEFAULT_NAMES = Object.fromEntries(
+  CODING_PLAN_SUBSCRIPTIONS.map((plan) => [
+    plan.usageProvider,
+    plan.displayName,
+  ]),
+) as Record<
+  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'],
+  string
+>;
+
 const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT',
-  kimiCode: 'Kimi Code',
-  glmCodingPlan: 'GLM',
+  ...CODING_PLAN_PROVIDER_NAMES,
 };
 
 export const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
-  kimiCode: 'Kimi Code',
-  glmCodingPlan: 'GLM Coding Plan',
+  ...CODING_PLAN_DEFAULT_NAMES,
 };
 
 export interface SubscriptionUsageCredentials {
@@ -61,8 +81,15 @@ interface CacheEntry {
 interface ResolvedRequest {
   readonly id: number;
   readonly key: string;
-  readonly useGlmChina: boolean | undefined;
-  readonly regionResolutionFailed: boolean;
+  readonly variant: boolean | string | undefined;
+  readonly variantResolutionFailed: boolean;
+}
+
+interface SubscriptionUsageAdapter {
+  readonly resolveVariant?: () => boolean | string | Promise<boolean | string>;
+  readonly fetch: (
+    variant: boolean | string | undefined,
+  ) => Promise<ParsedSubscriptionUsage | null>;
 }
 
 const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
@@ -92,6 +119,9 @@ export class SubscriptionUsageService {
   private readonly now: () => number;
   private readonly cacheTtlMs: number;
   private readonly requestTimeoutMs: number;
+  private readonly adapters: Readonly<
+    Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
+  >;
   private readonly cache = new Map<string, CacheEntry>();
   private readonly pending = new Map<
     string,
@@ -110,13 +140,53 @@ export class SubscriptionUsageService {
     this.now = init.now ?? Date.now;
     this.cacheTtlMs = init.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.adapters = this.createAdapters();
+  }
+
+  /** Provider transports are adapters; caching and failure policy stay common. */
+  private createAdapters(): Readonly<
+    Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
+  > {
+    const signal = (): AbortSignal =>
+      AbortSignal.timeout(this.requestTimeoutMs);
+    return Object.freeze({
+      chatgpt: {
+        fetch: async () => {
+          const credential = await this.credentials.loadChatGpt();
+          return credential
+            ? fetchChatGptUsage(this.http, credential, signal())
+            : null;
+        },
+      },
+      kimiCode: {
+        fetch: async () => {
+          const apiKey = await this.credentials.loadApiKey('kimiCode');
+          return apiKey
+            ? fetchKimiCodeUsage(this.http, apiKey, signal())
+            : null;
+        },
+      },
+      glmCodingPlan: {
+        resolveVariant: () => this.credentials.useGlmChina?.() ?? true,
+        fetch: async (useChina) => {
+          const apiKey = await this.credentials.loadApiKey('glm');
+          if (!apiKey) return null;
+          return fetchGlmCodingPlanUsage(
+            this.http,
+            apiKey,
+            signal(),
+            (useChina ?? true)
+              ? GLM_CODING_PLAN_USAGE_URL
+              : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
+          );
+        },
+      },
+    });
   }
 
   /** Drop cached and in-flight work after credentials or accounts change. */
   invalidate(provider?: SubscriptionUsageProvider): void {
-    const providers = provider
-      ? [provider]
-      : (Object.keys(PROVIDER_NAMES) as SubscriptionUsageProvider[]);
+    const providers = provider ? [provider] : SUBSCRIPTION_USAGE_PROVIDERS;
     for (const target of providers) {
       const keyPrefix = `${target}:`;
       for (const key of this.cache.keys()) {
@@ -135,24 +205,23 @@ export class SubscriptionUsageService {
     options: { readonly forceRefresh?: boolean } = {},
   ): Promise<SubscriptionUsageSnapshot> {
     const requestId = ++this.nextRequestId;
-    let useGlmChina: boolean | undefined;
-    let regionResolutionFailed = false;
+    const adapter = this.adapters[provider];
+    let variant: boolean | string | undefined;
+    let variantResolutionFailed = false;
     try {
-      if (provider === 'glmCodingPlan') {
-        useGlmChina = (await this.credentials.useGlmChina?.()) ?? true;
-      }
+      variant = await adapter.resolveVariant?.();
     } catch {
-      regionResolutionFailed = true;
+      variantResolutionFailed = true;
     }
 
-    const regionKey = regionResolutionFailed
-      ? 'region-error'
-      : (useGlmChina ?? 'default');
+    const variantKey = variantResolutionFailed
+      ? 'variant-error'
+      : (variant ?? 'default');
     const resolved: ResolvedRequest = {
       id: requestId,
-      key: `${provider}:${regionKey}`,
-      useGlmChina,
-      regionResolutionFailed,
+      key: `${provider}:${variantKey}`,
+      variant,
+      variantResolutionFailed,
     };
     const latest = this.latestRequests.get(provider);
     if (!latest || latest.id < requestId) {
@@ -172,7 +241,7 @@ export class SubscriptionUsageService {
     resolved: ResolvedRequest,
     forceRefresh: boolean,
   ): Promise<SubscriptionUsageSnapshot> {
-    if (resolved.regionResolutionFailed) {
+    if (resolved.variantResolutionFailed) {
       return this.unavailable(provider, 'request_failed');
     }
 
@@ -185,7 +254,7 @@ export class SubscriptionUsageService {
     if (inFlight) return inFlight;
 
     const generation = this.generations.get(provider) ?? 0;
-    const request = this.fetchUsage(provider, resolved.useGlmChina).then(
+    const request = this.fetchUsage(provider, resolved.variant).then(
       (snapshot) => {
         if ((this.generations.get(provider) ?? 0) !== generation) {
           return this.getUsage(provider, { forceRefresh: true });
@@ -247,10 +316,10 @@ export class SubscriptionUsageService {
 
   private async fetchUsage(
     provider: SubscriptionUsageProvider,
-    useGlmChina: boolean | undefined,
+    variant: boolean | string | undefined,
   ): Promise<SubscriptionUsageSnapshot> {
     try {
-      const parsed = await this.fetchProviderUsage(provider, useGlmChina);
+      const parsed = await this.adapters[provider].fetch(variant);
       if (parsed === null) {
         return this.unavailable(provider, 'missing_credentials');
       }
@@ -275,39 +344,5 @@ export class SubscriptionUsageService {
       }
       return this.unavailable(provider, reason);
     }
-  }
-
-  private async fetchProviderUsage(
-    provider: SubscriptionUsageProvider,
-    useGlmChina: boolean | undefined,
-  ): Promise<ParsedSubscriptionUsage | null> {
-    if (provider === 'chatgpt') {
-      const credential = await this.credentials.loadChatGpt();
-      if (!credential) return null;
-      return fetchChatGptUsage(
-        this.http,
-        credential,
-        AbortSignal.timeout(this.requestTimeoutMs),
-      );
-    }
-    if (provider === 'kimiCode') {
-      const apiKey = await this.credentials.loadApiKey('kimiCode');
-      if (!apiKey) return null;
-      return fetchKimiCodeUsage(
-        this.http,
-        apiKey,
-        AbortSignal.timeout(this.requestTimeoutMs),
-      );
-    }
-    const apiKey = await this.credentials.loadApiKey('glm');
-    if (!apiKey) return null;
-    return fetchGlmCodingPlanUsage(
-      this.http,
-      apiKey,
-      AbortSignal.timeout(this.requestTimeoutMs),
-      (useGlmChina ?? true)
-        ? GLM_CODING_PLAN_USAGE_URL
-        : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-    );
   }
 }

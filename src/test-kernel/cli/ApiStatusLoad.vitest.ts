@@ -365,8 +365,8 @@ describe('loadCliApiStatus', () => {
       'GLM Coding Plan: preferred · key configured · usage unavailable',
     );
     expect(mocks.getSubscriptionUsage.mock.calls).toStrictEqual([
-      ['kimiCode', { forceRefresh: true }],
       ['glmCodingPlan', { forceRefresh: true }],
+      ['kimiCode', { forceRefresh: true }],
     ]);
   });
 
@@ -639,8 +639,8 @@ describe('loadCliApiStatus', () => {
       lines: [
         'ChatGPT preference: On · chatgpt@example.com',
         'Grok preference: Off · sign in required to enable',
-        'Kimi Code preference: Off · key required to enable',
         'GLM Coding Plan preference: Off · key required to enable',
+        'Kimi Code preference: Off · key required to enable',
         'Otherwise: Your own API keys',
         'Researcher Access: signed in as texra@example.com',
       ],

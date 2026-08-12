@@ -1,12 +1,10 @@
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
 } from '@model/codex/codexPreference';
-import {
-  setGLMCodingPlan,
-  setPreferKimiCode,
-} from '@utils/config/providerConfig';
+import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 
@@ -40,8 +38,7 @@ export async function setCliCodexSubscription(
  * persist-then-refresh sequence lives in one place.
  */
 export async function setCliKimiCode(enabled: boolean): Promise<void> {
-  await setPreferKimiCode(enabled);
-  refreshSubscriptionPreferenceViews();
+  await setCliCodingPlanSubscription('kimiCode', enabled);
 }
 
 /**
@@ -50,6 +47,18 @@ export async function setCliKimiCode(enabled: boolean): Promise<void> {
  * sequence lives in one place.
  */
 export async function setCliGlmCodingPlan(enabled: boolean): Promise<void> {
-  await setGLMCodingPlan(enabled);
+  await setCliCodingPlanSubscription('glmCodingPlan', enabled);
+}
+
+/** Flip any catalogued coding-plan preference and refresh the TUI views. */
+export async function setCliCodingPlanSubscription(
+  id: CodingPlanSubscriptionId,
+  enabled: boolean,
+): Promise<void> {
+  const runtime = codingPlanSubscriptionRuntimes.find(
+    (candidate) => candidate.descriptor.id === id,
+  );
+  if (!runtime) throw new Error(`Unknown coding-plan subscription: ${id}`);
+  await runtime.setEnabled(enabled);
   refreshSubscriptionPreferenceViews();
 }

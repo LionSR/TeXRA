@@ -8,12 +8,18 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { activeCodingPlanForModel } from '@model/codingPlanSubscriptions';
 import {
   isCodexSubscriptionActive,
-  isKimiCodeSubscriptionActive,
   isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
-import type { SpendingStatus } from '@shared/schemas';
+import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
+import type {
+  SpendingStatus,
+  SubscriptionUsageProvider,
+  SubscriptionUsageSnapshot,
+} from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
 import { approvalQueueStatus } from '../state/approvalQueue';
@@ -42,6 +48,8 @@ import {
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const RELAY_QUOTA_REFRESH_MS = 10_000;
+const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
+const SubscriptionUsage = new SubscriptionUsageService();
 
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
@@ -104,6 +112,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     readonly active: boolean;
     readonly grokActive: boolean;
     readonly kimiCodeActive: boolean;
+    readonly glmCodingPlanActive: boolean;
+    readonly codingPlanUsageProvider?: SubscriptionUsageProvider;
   }>();
   const resolutionCurrent =
     subscriptionResolution?.model === accessModel &&
@@ -112,11 +122,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionActive = resolution?.active ?? false;
   const grokSubscriptionActive = resolution?.grokActive ?? false;
   const kimiCodeActive = resolution?.kimiCodeActive ?? false;
+  const glmCodingPlanActive = resolution?.glmCodingPlanActive ?? false;
   const modelAccess = resolveCliModelAccessRoute({
     apiMode: sessionMeta.apiMode,
     subscriptionActive,
     grokSubscriptionActive,
     kimiCodeActive,
+    glmCodingPlanActive,
     usageRoute: statusSlice?.usage?.usageRoute,
   });
 
@@ -140,16 +152,18 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       void Promise.all([
         isCodexSubscriptionActive(accessModel),
         isXaiSubscriptionActive(accessModel),
-        isKimiCodeSubscriptionActive(accessModel),
+        activeCodingPlanForModel(accessModel),
       ])
-        .then(([active, grokActive, kimiActive]) => {
+        .then(([active, grokActive, codingPlan]) => {
           if (subscriptionDesiredKeyRef.current !== readKey) return;
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
             active,
             grokActive,
-            kimiCodeActive: kimiActive,
+            kimiCodeActive: codingPlan?.descriptor.id === 'kimiCode',
+            glmCodingPlanActive: codingPlan?.descriptor.id === 'glmCodingPlan',
+            codingPlanUsageProvider: codingPlan?.descriptor.usageProvider,
           });
         })
         .catch(() => {
@@ -160,6 +174,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
             active: false,
             grokActive: false,
             kimiCodeActive: false,
+            glmCodingPlanActive: false,
           });
         })
         .finally(() => {
@@ -183,6 +198,52 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       setRelayQuota(getServerSideKeyService().getSpendingStatus() ?? undefined),
     RELAY_QUOTA_REFRESH_MS,
   );
+
+  const completedCodingPlan = codingPlanForUsageRoute(
+    statusSlice?.usage?.usageRoute,
+  );
+  const subscriptionUsageProvider: SubscriptionUsageProvider | undefined =
+    statusSlice?.usage?.usageRoute === 'chatgpt-subscription'
+      ? 'chatgpt'
+      : (completedCodingPlan?.usageProvider ??
+        (modelAccess === 'chatgpt'
+          ? 'chatgpt'
+          : resolution?.codingPlanUsageProvider));
+  const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
+    readonly provider: SubscriptionUsageProvider;
+    readonly snapshot: SubscriptionUsageSnapshot;
+  }>();
+  const desiredUsageProviderRef = useRef(subscriptionUsageProvider);
+  desiredUsageProviderRef.current = subscriptionUsageProvider;
+  usePollingInterval(
+    () => {
+      if (subscriptionUsageProvider === undefined) {
+        setSubscriptionQuotaRead(undefined);
+        return;
+      }
+      const provider = subscriptionUsageProvider;
+      void SubscriptionUsage.getUsage(provider)
+        .then((snapshot) => {
+          if (desiredUsageProviderRef.current !== provider) return;
+          setSubscriptionQuotaRead({
+            provider,
+            snapshot,
+          });
+        })
+        .catch(() => {
+          if (desiredUsageProviderRef.current === provider) {
+            setSubscriptionQuotaRead(undefined);
+          }
+        });
+    },
+    SUBSCRIPTION_QUOTA_REFRESH_MS,
+    subscriptionUsageProvider,
+  );
+  const subscriptionQuota =
+    subscriptionQuotaRead !== undefined &&
+    subscriptionQuotaRead.provider === subscriptionUsageProvider
+      ? subscriptionQuotaRead.snapshot
+      : undefined;
 
   const runStartedAt = isActivePhase(statusSlice?.status)
     ? statusSlice?.runStartedAt
@@ -221,6 +282,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     model: accessModel,
     modelAccess,
     relayQuota,
+    subscriptionQuota,
     transcriptMode: sessionMeta.transcriptMode,
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,

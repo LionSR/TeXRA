@@ -381,7 +381,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: included access',
+        'ChatGPT Off · Grok Off · GLM Off · Kimi Off · otherwise: included access',
       value: { kind: 'configure-model-access' },
     });
     expect(
@@ -408,19 +408,19 @@ describe('CLI orchestration items', () => {
       {
         value: {
           kind: 'subscription-preference',
-          provider: 'kimi-code',
+          provider: 'glm-code',
           state: 'on',
         },
-        label: 'Prefer Kimi Code subscription',
+        label: 'Prefer GLM Coding Plan',
         description: 'Off · key required to enable',
       },
       {
         value: {
           kind: 'subscription-preference',
-          provider: 'glm-code',
+          provider: 'kimi-code',
           state: 'on',
         },
-        label: 'Prefer GLM Coding Plan',
+        label: 'Prefer Kimi Code subscription',
         description: 'Off · key required to enable',
       },
       {
@@ -478,7 +478,7 @@ describe('CLI orchestration items', () => {
     expect(orchestrationItems({ modelAccess: kimiOnAccess })[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
+        'ChatGPT Off · Grok Off · GLM Off · Kimi On · otherwise: your own API keys',
       value: { kind: 'configure-model-access' },
     });
   });
