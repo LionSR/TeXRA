@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import safeStringify from 'safe-stable-stringify';
 
 // Local imports
+import * as loggerSelf from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
 import { serializeError } from '@utils/core';
@@ -211,7 +212,7 @@ export const warn = makeLogFn(LOG_LEVELS.WARN);
 export const error = makeLogFn(LOG_LEVELS.ERROR);
 
 /** A channel-bound view of the four level writers. */
-export interface Log {
+interface Log {
   debug(message: string, options?: LogUtilsOptions): void;
   info(message: string, options?: LogUtilsOptions): void;
   warn(message: string, options?: LogUtilsOptions): void;
@@ -221,42 +222,29 @@ export interface Log {
 /**
  * Bind the four level writers to one channel so a module names its channel
  * once instead of threading it through every call:
- * `const log = createLog('X'); log.warn(message)`. Emits through the same
- * {@link writeLine} sink as the free `debug/info/warn/error` functions.
+ * `const log = createLog('X'); log.warn(message)`.
+ *
+ * Each method delegates to the exported `debug/info/warn/error` **through the
+ * module's own namespace** (`loggerSelf`), read fresh on every call rather than
+ * captured at bind time. That indirection is deliberate: it preserves the
+ * observable seam that tests spy on — `vi.spyOn(logger, 'warn')` patches the
+ * namespace binding, and because the lookup is per-call a `log.warn(...)` made
+ * by a module-level `createLog(...)` (bound at import, before the spy exists)
+ * is still intercepted. `options` is forwarded only when present so the spied
+ * argument list matches a direct `warn(channel, msg)` call. Behavior is
+ * otherwise identical to the free functions.
  */
 export function createLog(channel: string): Log {
+  const bind =
+    (level: 'debug' | 'info' | 'warn' | 'error') =>
+    (message: string, options?: LogUtilsOptions): void => {
+      if (options === undefined) loggerSelf[level](channel, message);
+      else loggerSelf[level](channel, message, options);
+    };
   return {
-    debug: (message, options = {}) =>
-      writeLine(
-        LOG_LEVELS.DEBUG,
-        channel,
-        /* isAgent */ false,
-        message,
-        options.data,
-      ),
-    info: (message, options = {}) =>
-      writeLine(
-        LOG_LEVELS.INFO,
-        channel,
-        /* isAgent */ false,
-        message,
-        options.data,
-      ),
-    warn: (message, options = {}) =>
-      writeLine(
-        LOG_LEVELS.WARN,
-        channel,
-        /* isAgent */ false,
-        message,
-        options.data,
-      ),
-    error: (message, options = {}) =>
-      writeLine(
-        LOG_LEVELS.ERROR,
-        channel,
-        /* isAgent */ false,
-        message,
-        options.data,
-      ),
+    debug: bind('debug'),
+    info: bind('info'),
+    warn: bind('warn'),
+    error: bind('error'),
   };
 }
