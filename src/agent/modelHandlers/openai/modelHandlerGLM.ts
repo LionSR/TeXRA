@@ -1,11 +1,13 @@
 // Local imports - agent
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
-// Local imports - model routing
-import { isGlmCodingPlanRouteActive } from '@model/codingPlanSubscriptions';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 
 // Local file imports
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
+
+// Type imports
+import type OpenAI from 'openai';
 
 /**
  * Handler for GLM (Zhipu AI / Z.AI) models using OpenAI-compatible API.
@@ -24,12 +26,21 @@ import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
  * @see https://open.bigmodel.cn/dev/api
  */
 export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
-  /** Classify successful coding-endpoint requests as subscription usage. */
-  override getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
-    const route = super.getLastCredentialUsageRoute();
-    return route === 'api-key' && isGlmCodingPlanRouteActive(this.config)
-      ? 'glm-coding-plan-subscription'
-      : route;
+  /** Capture the endpoint classification on the immutable SDK client. */
+  override async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    const client = await super.getClient(selection);
+    return client.baseURL.replace(/\/+$/, '').endsWith('/api/coding/paas/v4')
+      ? this.rememberClientUsageRoute(client, 'glm-coding-plan-subscription')
+      : client;
+  }
+
+  /** Coding-plan usage is covered by the subscription, not billed per token. */
+  protected override standardPricingConfig(): StandardPricingConfig {
+    return this.getLastCredentialUsageRoute() === 'glm-coding-plan-subscription'
+      ? { ...super.standardPricingConfig(), inputPrice: 0, outputPrice: 0 }
+      : super.standardPricingConfig();
   }
 
   /**
