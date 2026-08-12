@@ -5,6 +5,7 @@ import {
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -96,7 +97,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       : []),
     `status: ${formatCliStatusLabel(input.status, input.substate)}`,
     ...(input.activeChildSessions && input.activeChildSessions > 0
-      ? [`active child sessions: ${input.activeChildSessions}`]
+      ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
       : []),
     ...(input.goal
       ? [

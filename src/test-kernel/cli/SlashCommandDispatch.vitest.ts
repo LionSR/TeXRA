@@ -900,7 +900,7 @@ describe('handleTuiSlashCommand', () => {
 
     const statusText = lastEntryText(rootStreamId);
     expect(statusText).toContain('status: idle');
-    expect(statusText).toContain('active child sessions: 1');
+    expect(statusText).toContain('active background tasks: 1');
   });
 
   it('reports the access route that produced the focused stream usage', async () => {
