@@ -6,7 +6,11 @@ import {
   type StreamContentRenderPayload,
 } from '@shared/schemas';
 // Local imports
-import { updateToolUseState, updateWorkflowState } from '../stateUtils';
+import {
+  goalToStateFields,
+  updateToolUseState,
+  updateWorkflowState,
+} from '../stateUtils';
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
@@ -51,9 +55,7 @@ export const syncHandlers = {
         bashBypass: controls.bashBypass,
         toolEditBypass: controls.toolEditBypass,
         superYoloBypass: controls.superYoloBypass,
-        goalActive: goal.active,
-        goalStatus: goal.active ? goal.status : undefined,
-        goalObjective: goal.active ? goal.objective : undefined,
+        ...goalToStateFields(goal),
       }));
     }
   },

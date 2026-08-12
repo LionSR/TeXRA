@@ -37,7 +37,6 @@ import {
   checkZoteroRunning,
   getZoteroPort,
   type ConnectorResult,
-  type CslCreator,
 } from './bbtClient';
 
 const CHANNEL = 'ZoteroAddTool';
@@ -183,6 +182,19 @@ interface ZoteroConnectorItem {
 }
 
 /**
+ * A Crossref `Work.author` entry. The client types `given`/`family` as
+ * required, but the API sends `name` (an opaque org/affiliation name) for
+ * institutional authors and omits `given`/`family` then — so this shape
+ * mirrors the wire format: person authors carry `given`+`family`, org
+ * authors carry `name`. CSL's `literal` field never appears here.
+ */
+interface CrossrefAuthor {
+  given?: string;
+  family?: string;
+  name?: string;
+}
+
+/**
  * Resolve a DOI to full metadata via the Crossref API.
  * Uses the shared CrossrefClient and rate limiter from @tools/citation.
  * Returns a Zotero-format item object, or null if resolution fails.
@@ -202,7 +214,7 @@ async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
     const work: Work = response.content.message;
 
     const creators: ZoteroCreator[] | undefined = work.author?.length
-      ? work.author.map((a: CslCreator) => {
+      ? work.author.map((a: CrossrefAuthor) => {
           if (a.given && a.family) {
             return {
               firstName: a.given,
@@ -210,9 +222,10 @@ async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
               creatorType: 'author' as const,
             };
           }
-          // name = Crossref org author, literal = CSL unparsed name
+          // name = Crossref org author; a person author with no family name
+          // (not a real Crossref shape) falls back to 'Unknown'.
           return {
-            name: a.name || a.literal || a.family || 'Unknown',
+            name: a.name || a.family || 'Unknown',
             creatorType: 'author' as const,
           };
         })

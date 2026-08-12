@@ -8,11 +8,11 @@
 
 import {
   formatCommentEvent,
-  issueRef,
   makeTruncator,
   sections,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
+import { issueRef } from './githubPaths';
 import type { GhIssue, GhIssueComment } from './prTypes';
 
 const MAX_BODY = 500;

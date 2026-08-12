@@ -8,7 +8,10 @@ import {
   designTokens,
   settingsBannerStyles,
 } from '@shared/styles';
-import { formatDesktopAccelerator } from '@shared/commands/accelerators';
+import {
+  detectBrowserPlatform,
+  formatDesktopAccelerator,
+} from '@shared/commands/accelerators';
 import {
   getDesktopShortcutService,
   keyboardEventToAccelerator,
@@ -129,7 +132,7 @@ export class ShortcutsTab extends LitElement {
       return;
     }
 
-    const accelerator = keyboardEventToAccelerator(event, currentPlatform());
+    const accelerator = keyboardEventToAccelerator(event, detectBrowserPlatform());
     if (!accelerator) {
       this.feedback =
         'Include Command, Control, or Alt (or use a function key).';
@@ -153,7 +156,7 @@ export class ShortcutsTab extends LitElement {
     getDesktopShortcutService()?.update(id, accelerator);
     this.recordingId = undefined;
     this.feedback = accelerator
-      ? `Saved ${formatDesktopAccelerator(accelerator, currentPlatform())}.`
+      ? `Saved ${formatDesktopAccelerator(accelerator, detectBrowserPlatform())}.`
       : 'Shortcut cleared.';
     this.feedbackIsError = false;
   }
@@ -179,7 +182,7 @@ export class ShortcutsTab extends LitElement {
     const recording = this.recordingId === entry.id;
     const current = formatDesktopAccelerator(
       entry.accelerator,
-      currentPlatform(),
+      detectBrowserPlatform(),
     );
     const label = recording ? 'Press shortcut…' : (current ?? 'Not assigned');
     return html`
@@ -289,12 +292,6 @@ export class ShortcutsTab extends LitElement {
   }
 }
 
-function currentPlatform(): NodeJS.Platform {
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes('mac')) return 'darwin';
-  if (platform.includes('win')) return 'win32';
-  return 'linux';
-}
 
 declare global {
   interface HTMLElementTagNameMap {

@@ -24,7 +24,7 @@ import {
   type ApprovalDecision,
   type RetryPermission,
 } from '@shared/schemas';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 
 import { type CliContext } from '../cliContext';
 

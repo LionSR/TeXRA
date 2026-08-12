@@ -20,7 +20,7 @@ import {
   CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
-  resolveProviderCapabilities,
+  resolveCodexSubscriptionProfile,
 } from '@model/providerCapabilities';
 import { installPlatform } from '@test/support/setupPlatform';
 
@@ -81,7 +81,7 @@ async function installSubscriptionPlatform(options?: {
 
 describe('provider capabilities', () => {
   it('resolves ChatGPT subscription profile from model routing context', () => {
-    const capabilities = resolveProviderCapabilities({
+    const capabilities = resolveCodexSubscriptionProfile({
       model: gpt55Config,
       useOpenRouter: false,
     });
@@ -113,7 +113,7 @@ describe('provider capabilities', () => {
   });
 
   it('uses the larger Codex input budget for GPT-5.6', () => {
-    const capabilities = resolveProviderCapabilities({
+    const capabilities = resolveCodexSubscriptionProfile({
       model: gpt56Config,
       useOpenRouter: false,
     });

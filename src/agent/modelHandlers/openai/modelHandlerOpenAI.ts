@@ -6,7 +6,7 @@ import {
   ChatCompletionStream,
   type ContentDeltaEvent,
 } from 'openai/lib/ChatCompletionStream';
-import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
+import { assertToolCallsAreChatCompletionFunctionToolCalls } from './functionToolCalls';
 
 // Local imports
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
@@ -73,7 +73,7 @@ import { toOpenAITools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { ModelHandler } from '../ModelHandler';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import { ReasoningStreamAggregator } from './ReasoningStreamAggregator';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
@@ -393,7 +393,7 @@ export class ModelHandlerOpenAI<
 
     const streamingAggregator =
       this.useReasoningStreamAggregator && this.capabilities.supportsReasoning
-        ? new BaseReasoningStreamAggregator()
+        ? new ReasoningStreamAggregator()
         : null;
     let requestId: string | undefined;
     let stream: ChatCompletionStream | undefined;
@@ -520,7 +520,7 @@ export class ModelHandlerOpenAI<
    */
   protected async awaitFinalResponse(
     stream: ChatCompletionStream,
-    aggregator: BaseReasoningStreamAggregator | null,
+    aggregator: ReasoningStreamAggregator | null,
   ): Promise<ChatCompletion> {
     try {
       const sdkFinalResponse = await stream.finalChatCompletion();

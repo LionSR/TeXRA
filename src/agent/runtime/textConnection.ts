@@ -5,8 +5,7 @@ import {
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'LaTeXCommands';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 
 interface ConnectionResult {
   connector: string;

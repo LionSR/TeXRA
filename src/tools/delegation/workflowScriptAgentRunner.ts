@@ -9,7 +9,7 @@ import {
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
-import type { AgentEntry } from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';

@@ -24,8 +24,12 @@ export {
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
+  clearTerminalExecutionState,
   finalizeExecution,
+  getPersistedUserFollowUpSupport,
+  hasPersistedParent,
   registerExecution,
+  registerOwnedExecution,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
   writeSessionDescription,

@@ -5,7 +5,9 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+import * as logger from '@logger/logUtils';
 import { normalizeFilePath } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import { getGitAPI } from './gitExtensionTypes';
@@ -47,7 +49,8 @@ export async function resolveGitCommonRoot(
     }
 
     const gitEntryUri = vscode.Uri.joinPath(repo.rootUri, '.git');
-    // A stat failure is handled by the function-level catch below.
+    // A FileNotFound stat is the expected "not a git repo" signal; other
+    // failures are classified in the function-level catch below.
     const stat = await vscode.workspace.fs.stat(gitEntryUri);
 
     if (isDirectory(stat.type)) {
@@ -71,7 +74,25 @@ export async function resolveGitCommonRoot(
       : path.resolve(repo.rootUri.fsPath, gitdirValue);
 
     return resolveCommonRootFromGitdir(repo.rootUri.fsPath, gitdir);
-  } catch {
+  } catch (error) {
+    // A missing `.git` entry is the expected "not a git repo" signal and maps
+    // to `undefined`. Any other failure (git-extension activation rejection,
+    // an EACCES/EIO stat or read, an unreadable `.git` file) means the
+    // workspace may genuinely be a git repo whose root we failed to resolve —
+    // log it loudly rather than silently downgrading to "no git repo"
+    // (CLAUDE.md: silent degradation is a defect). The fallback still returns
+    // undefined so extension activation isn't aborted by a root-resolution
+    // problem.
+    if (
+      error instanceof vscode.FileSystemError &&
+      error.code === 'FileNotFound'
+    ) {
+      return undefined;
+    }
+    logger.warn(
+      'extension',
+      `Failed to resolve git common root for ${workspacePath}: ${toErrorMessage(error)}`,
+    );
     return undefined;
   }
 }

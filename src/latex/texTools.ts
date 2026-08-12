@@ -13,8 +13,7 @@ import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import { splitContentLines } from '@utils/text/stringUtils';
-
-const CHANNEL = 'LaTeXCommands';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
@@ -27,7 +26,7 @@ const LOG_TAIL_LINES = 200;
 const LaTeXCompileOptionsSchema = z.object({
   channel: z.string().optional(),
   outputDirectory: z.string().optional(),
-  compiler: z.enum(['pdflatex', 'latexmk']).prefault('latexmk'),
+  compiler: z.enum(['pdflatex', 'latexmk']).default('latexmk'),
   /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
   timeout: z.int().positive().optional(),
   /**
@@ -38,7 +37,7 @@ const LaTeXCompileOptionsSchema = z.object({
    * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
    * source directory.
    */
-  extraInputDirs: z.array(z.string()).prefault([]),
+  extraInputDirs: z.array(z.string()).default([]),
 });
 
 /** Input type - compiler optional with default applied by schema.parse() */

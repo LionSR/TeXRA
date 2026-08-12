@@ -1,13 +1,13 @@
-import { finalizeExecution, registerExecution } from '@agent/storage';
+import { registerExecution } from '@agent/storage';
 import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import {
   abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
   captureOwnedExecutionLease,
   completeOwnedExecutionLease,
-  markOwnedExecutionLeaseUndurable,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
+import { finalizeExecutionWithLease } from '@agent/storage/terminalPersistence';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import {
@@ -155,24 +155,24 @@ export async function runAgent(
       } catch (error) {
         runFailure = { error };
         if (shouldRegister && !lifecycleStarted) {
-          let finalizationFailure: { error: unknown } | undefined;
-          try {
-            const finalization = await finalizeExecution({
-              executionId,
-              outcome: RUN_OUTCOME.FAILED,
-              flowRecord: 'delete',
-            });
-            if (finalization.status === 'failed') {
-              finalizationFailure = { error: finalization.error };
-            }
-          } catch (finalizationError) {
-            finalizationFailure = { error: finalizationError };
-          }
-          if (finalizationFailure) {
-            markOwnedExecutionLeaseUndurable(executionId);
+          // finalizeExecutionWithLease already marks the owned lease undurable
+          // when the terminal status did not reach disk; this site only needs
+          // to fold the persistence error into the run failure.
+          const finalization = await finalizeExecutionWithLease({
+            executionId,
+            outcome: RUN_OUTCOME.FAILED,
+            flowRecord: 'delete',
+          });
+          const finalizationError =
+            'thrownError' in finalization
+              ? finalization.thrownError
+              : finalization.finalization.status === 'failed'
+                ? finalization.finalization.error
+                : undefined;
+          if (finalizationError !== undefined) {
             runFailure = {
               error: new AggregateError(
-                [error, finalizationFailure.error],
+                [error, finalizationError],
                 `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
               ),
             };

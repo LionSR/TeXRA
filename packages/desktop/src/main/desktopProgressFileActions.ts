@@ -14,12 +14,15 @@ import type {
   DiffRunResult,
 } from '@latex/latexdiff/types';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,
   pathToLocation,
 } from '@utils/files/fileLocation';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+
+const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressBridge';
 
 type DesktopProgressFileActionUi = Pick<
   DesktopAgentExecutionHost,
@@ -128,7 +131,7 @@ export class DesktopProgressFileActions {
     );
   }
 
-  async runLatexdiffForRun(
+  async diffAcceptedFilePair(
     baseFile: string,
     editedFile: string,
     runContext: DesktopLatexdiffRunContext,
@@ -146,7 +149,7 @@ export class DesktopProgressFileActions {
    * Stream-toolbar "diff" action: run the round-aware latexdiff for a whole run
    * and open every diff it produced.
    *
-   * This is the counterpart of `runLatexdiffForRun`, which exists to diff one
+   * This is the counterpart of `diffAcceptedFilePair`, which exists to diff one
    * accepted file pair and therefore has a single-file fallback. Here there is
    * no such pair to fall back to — the request is scoped to a run — so an empty
    * or failed outcome reports instead, matching what the VS Code command shows
@@ -154,7 +157,7 @@ export class DesktopProgressFileActions {
    * latexdiff surface it uses `DEFAULT_MATH_MARKUP`, since this host has no
    * quick-pick to choose a markup mode with.
    */
-  async runLatexdiffForStream(
+  async diffStreamToolbarAction(
     runContext: DesktopLatexdiffRunContext,
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
@@ -173,7 +176,7 @@ export class DesktopProgressFileActions {
   }
 
   async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
-    const service = new LaTeXdiffService('DesktopProgressBridge');
+    const service = new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL);
     const result = await service.runDiff(
       pathToLocation(baseFile),
       pathToLocation(editedFile),
@@ -226,12 +229,21 @@ export class DesktopProgressFileActions {
         outputsByRound: hasOutputs ? runContext.outputsByRound : null,
         mathMarkup: DEFAULT_MATH_MARKUP,
         generateBetweenRoundDiffs: true,
+        latexdiff: {
+          channel: DESKTOP_LATEXDIFF_CHANNEL,
+          service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),
+        },
         progress,
       });
       return outcome;
-    } catch {
+    } catch (error) {
       // The core can throw (e.g. no workspace path). Don't abort the whole
-      // action — return undefined so the caller falls back to single-file.
+      // action — return undefined so the caller falls back to single-file —
+      // but log the cause so a systematic round-aware failure isn't silently
+      // downgraded to single-file diffs with no trace.
+      console.error(
+        `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(error)}`,
+      );
       return undefined;
     }
   }

@@ -1,4 +1,5 @@
 import { computeAgentOptionsData } from '@agent/index';
+import type { StateStore } from '@platform/interfaces';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
   MainViewStartupController,
@@ -25,6 +26,7 @@ export interface DesktopMainViewStartupOptions {
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadOptions?: () => Promise<MainViewStartupOptions>;
   onAsyncError?: (error: unknown) => void;
+  globalState: StateStore;
 }
 
 export function createDesktopMainViewStartup({
@@ -32,6 +34,7 @@ export function createDesktopMainViewStartup({
   getAuthStatus,
   loadOptions,
   onAsyncError,
+  globalState,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
   const startupController = new MainViewStartupController({
     getConfig,
@@ -52,6 +55,7 @@ export function createDesktopMainViewStartup({
       };
     },
     getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
+    globalState: globalState ?? platform().globalState,
   });
 
   async function postStartupMessages(): Promise<void> {

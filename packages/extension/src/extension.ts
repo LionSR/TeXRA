@@ -16,7 +16,7 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import {
@@ -27,6 +27,7 @@ import {
 } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
@@ -43,7 +44,6 @@ import {
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
-import { setApprovalPolicyTooltipRefresh } from '@frontend/statusBar/approvalPolicyTooltipRefresh';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
@@ -135,7 +135,7 @@ async function refreshApiKeyStatus() {
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
       'Click to run the setup assistant — sign in, use ChatGPT, or add an API key';
-    apiKeyStatusBarItem.command = 'texra.runSetupAssistant';
+    apiKeyStatusBarItem.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
     apiKeyStatusBarItem.accessibilityInformation = {
       label: 'TeXRA setup, get started',
     };
@@ -157,10 +157,11 @@ export async function activate(context: vscode.ExtensionContext) {
     // a first-time user without a LaTeX project can create the sample and
     // land directly in a working workspace.
     context.subscriptions.push(
-      vscode.commands.registerCommand('texra.createSampleProject', () =>
-        createSampleProjectWithoutWorkspace(context.extensionPath),
+      vscode.commands.registerCommand(
+        EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
+        () => createSampleProjectWithoutWorkspace(context.extensionPath),
       ),
-      vscode.commands.registerCommand('texra.openGettingStarted', () =>
+      vscode.commands.registerCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED, () =>
         openGettingStarted(context.extension.id),
       ),
     );
@@ -714,7 +715,13 @@ export async function activate(context: vscode.ExtensionContext) {
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
   updateStatusBarTooltip();
-  setApprovalPolicyTooltipRefresh(updateStatusBarTooltip);
+  // Workspace transitions and approval-policy setting updates emit on this
+  // signal; the subscription here is what makes the refresh reachable, so a
+  // missed subscribe is a missing behavior rather than a silent no-op.
+  const disposeApprovalPolicyTooltipRefresh = appSignals.on(
+    'approvalPolicyChanged',
+    updateStatusBarTooltip,
+  );
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
@@ -722,9 +729,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },
-    {
-      dispose: () => setApprovalPolicyTooltipRefresh(undefined),
-    },
+    { dispose: disposeApprovalPolicyTooltipRefresh },
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.
@@ -757,7 +762,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // walkthrough alongside for the rest of the onboarding tips.
     void vscode.commands
       .executeCommand('texra.showMainView')
-      .then(() => vscode.commands.executeCommand('texra.openGettingStarted'))
+      .then(() => vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED))
       .then(() => context.globalState.update(welcomeKey, true));
   }
 }

@@ -1,3 +1,5 @@
+import type { LitElement } from 'lit';
+import { property } from 'lit/decorators.js';
 import type { z } from 'zod';
 
 type CommandMessage = { command: string };
@@ -115,6 +117,33 @@ export function isKnownUnsupported(
   command: string,
 ): boolean {
   return commands === null || commands.has(command);
+}
+
+/**
+ * Declares the `unsupportedCommands` Lit property on a component: the set of
+ * commands the active host's registry reports as `unsupported(...)` (see
+ * {@link unsupportedCommands}), threaded down once at webview-ready. `null`
+ * before that broadcast arrives — checked via {@link isKnownUnsupported},
+ * which treats "not yet known" as unsupported so a control never flashes
+ * visible then hidden.
+ *
+ * Every component that gates a control off the host's capability broadcast
+ * declares this property; it lives here once instead of being copy-pasted
+ * across components so the contract and its docstring cannot drift.
+ */
+type LitElementConstructor = new (...args: any[]) => LitElement;
+
+export function UnsupportedCommandsMixin<T extends LitElementConstructor>(
+  superClass: T,
+) {
+  class UnsupportedCommandsElement extends superClass {
+    constructor(...args: any[]) {
+      super(...args);
+    }
+    @property({ attribute: false })
+    unsupportedCommands: ReadonlySet<string> | null = null;
+  }
+  return UnsupportedCommandsElement;
 }
 
 /**

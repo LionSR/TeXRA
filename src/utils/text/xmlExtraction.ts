@@ -19,18 +19,21 @@ import { formatContent } from './xmlConversion';
 const CHANNEL = 'xmlExtraction';
 
 /**
+ * Opening `<document … name="…">` tag fragment; group 1 is the name attribute
+ * value. Case-sensitive to match the XML spec and the primary extraction path
+ * (addCdataToTagsMultiple + XMLParser), while the fallback regex extraction is
+ * case-insensitive as a safety net (the counter should reflect what the
+ * primary path can extract). Shared between {@link DOCUMENT_NAME_REGEX} and
+ * `extractNamedDocuments` so the name-attribute capture cannot drift apart.
+ */
+const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>`;
+
+/**
  * Regex pattern for matching document opening tags with name attributes.
  * Single source of truth for document name extraction.
  * Group 1: name attribute value
- *
- * Note: Case-sensitive to match XML spec and primary extraction path
- * (addCdataToTagsMultiple + XMLParser). The fallback regex extraction
- * is case-insensitive as a safety net but counter should reflect
- * what primary path can extract.
  */
-export const DOCUMENT_NAME_REGEX = new RegExp(
-  `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>`,
-);
+export const DOCUMENT_NAME_REGEX = new RegExp(DOCUMENT_OPEN_TAG_WITH_NAME);
 
 /**
  * Get a string representation of an object's structure without its values.
@@ -76,7 +79,7 @@ function extractNamedDocuments(
   content: string,
 ): Array<{ content: string; name: string }> {
   const documentRegex = new RegExp(
-    `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
+    `${DOCUMENT_OPEN_TAG_WITH_NAME}(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
     'gs',
   );
 
@@ -140,7 +143,10 @@ export function extractContentFromXMLbyTagMultiple(
           const entry = doc as Record<string, unknown>;
           return {
             content: entry.content?.toString().trim() ?? '',
-            name: entry.name as string,
+            // Same missing-name contract as the regex tier (extractNamedDocuments):
+            // a document without a usable `name` attribute is named 'unnamed'
+            // rather than admitting `undefined` into downstream naming logic.
+            name: (entry.name as string | undefined) ?? 'unnamed',
           };
         });
       }

@@ -40,6 +40,30 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
   return /^[a-z]:[\\/]/.test(canonical) ? capitalize(canonical) : canonical;
 }
 
+/**
+ * Symlink-aware workspace-relative path: a fast `resolve`-then-compare pass,
+ * then a canonicalize-then-compare fallback for paths that resolve through a
+ * symlink (e.g. a symlinked folder inside the workspace). Shared by the Node
+ * workspace provider and the desktop native-picker path so the two stay in
+ * sync. Returns `undefined` when `filePath` resolves outside `root`; the
+ * caller owns its outside-root fallback (identity vs normalized absolute).
+ */
+export function relativeToRoot(
+  root: string,
+  filePath: string,
+): string | undefined {
+  const resolvedRoot = path.resolve(root);
+  const resolvedFilePath = path.resolve(filePath);
+  if (isPathWithin(resolvedRoot, resolvedFilePath)) {
+    return normalizeFilePath(path.relative(resolvedRoot, resolvedFilePath));
+  }
+  const canonicalRoot = canonicalizeWorkspacePath(root);
+  const canonicalFilePath = canonicalizeWorkspacePath(filePath);
+  return isPathWithin(canonicalRoot, canonicalFilePath)
+    ? normalizeFilePath(path.relative(canonicalRoot, canonicalFilePath))
+    : undefined;
+}
+
 export function createNodeWorkspace(
   getRoot: () => string | undefined = () => process.cwd(),
 ): WorkspaceProvider {
@@ -52,19 +76,8 @@ export function createNodeWorkspace(
     asRelativePath(filePath: string): string {
       const rawRoot = getRoot();
       if (!rawRoot) return filePath;
-      const resolvedRoot = path.resolve(rawRoot);
-      const resolvedFilePath = path.resolve(filePath);
-      if (isPathWithin(resolvedRoot, resolvedFilePath)) {
-        return normalizeFilePath(path.relative(resolvedRoot, resolvedFilePath));
-      }
-
-      const root = canonicalizeWorkspacePath(rawRoot);
-      const canonicalFilePath = canonicalizeWorkspacePath(filePath);
-      const relative = path.relative(root, canonicalFilePath);
-      if (!isPathWithin(root, canonicalFilePath)) {
-        return filePath;
-      }
-      return normalizeFilePath(relative);
+      // Outside-root keeps the caller's input untouched.
+      return relativeToRoot(rawRoot, filePath) ?? filePath;
     },
   };
 }

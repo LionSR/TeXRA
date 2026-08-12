@@ -959,3 +959,25 @@ export function defaultSession(): SessionHandle {
 export function currentSession(): SessionHandle {
   return getRunContextSession(tryUseRunContext()) ?? defaultSession();
 }
+
+/**
+ * Resolve the session an emit should target: an explicit session, else the
+ * active run's session, else the process default. This is {@link currentSession}
+ * with an explicit-session override, plus `tryDefaultSession()` instead of
+ * the throwing `defaultSession()` so bootstrap-tolerant callers (e.g. local
+ * storage commands that notify goal state with no observer live) can skip the
+ * emit rather than throw. Callers that must not silently drop the emit fall
+ * back to `defaultSession()` themselves.
+ *
+ * A resolved owner is only used when it carries an event hub: an explicit
+ * override or run-context session without `.events` (e.g. a call-site stub
+ * threaded in for wake-decision routing) falls through to the process default
+ * rather than crashing the emit. This preserves the `owner?.events ? owner :
+ * defaultSession()` guard the collapsed call sites originally hand-rolled.
+ */
+export function resolveEmitSession(
+  session?: SessionHandle,
+): SessionHandle | undefined {
+  const owner = session ?? getRunContextSession(tryUseRunContext());
+  return owner?.events ? owner : tryDefaultSession();
+}

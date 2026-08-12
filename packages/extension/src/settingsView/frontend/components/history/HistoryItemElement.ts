@@ -13,7 +13,10 @@ import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import {
+  isKnownUnsupported,
+  UnsupportedCommandsMixin,
+} from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,
   type IconActionButtonOptions,
@@ -130,7 +133,7 @@ const HISTORY_ACTION_COMMANDS: ReadonlyMap<string, string> = new Map(
 );
 
 @customElement('history-item')
-export class HistoryItemElement extends LitElement {
+export class HistoryItemElement extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -144,16 +147,6 @@ export class HistoryItemElement extends LitElement {
   @property({ attribute: false }) open = false;
   /** Local index of the mark to highlight as current, or null if none in this item */
   @property({ attribute: false }) highlightedMatchIndex: number | null = null;
-  /**
-   * Settings-view commands the active host's registry declares
-   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
-   * same convention). Hides this item's Setup/Rerun/Export buttons on a
-   * host whose registry declares the corresponding command unsupported,
-   * instead of leaving a control visible that can only produce an
-   * unavailable-command toast.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
 
   private markInstance: Mark | null = null;
   private previousHighlightedIndex: number | null = null;

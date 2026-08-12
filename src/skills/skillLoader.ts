@@ -17,7 +17,7 @@ import {
   SkillSchema,
   type Skill,
 } from './SkillSchema';
-import { extractFrontmatter } from './frontmatter';
+import { extractFrontmatter, SkillFrontmatterError } from './frontmatter';
 
 export type SkillIssueSeverity = 'error' | 'warning';
 
@@ -60,18 +60,12 @@ function firstZodMessage(error: ZodError): string {
 }
 
 /**
- * `extractFrontmatter` throws plain errors whose messages begin with `SKILL.md`
- * or `Invalid SKILL.md`. Treat those as malformed frontmatter; anything else
- * (e.g. a failed `readFile`) is a read error.
+ * `extractFrontmatter` throws a typed {@link SkillFrontmatterError} for every
+ * malformed-frontmatter case; anything else (e.g. a failed `readFile`) is a
+ * read error.
  */
 function skillReadErrorCode(err: unknown): SkillIssueCode {
-  if (
-    err instanceof Error &&
-    (err.message.startsWith('SKILL.md') ||
-      err.message.startsWith('Invalid SKILL.md'))
-  ) {
-    return 'invalid_frontmatter';
-  }
+  if (err instanceof SkillFrontmatterError) return 'invalid_frontmatter';
   return 'read_error';
 }
 

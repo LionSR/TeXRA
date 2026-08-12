@@ -56,8 +56,6 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'builtInWorkflow',
 ];
 
-export type { AgentEntry, ResolvedAgent } from './agentEntry';
-
 // =============================================================================
 // STATE
 // =============================================================================

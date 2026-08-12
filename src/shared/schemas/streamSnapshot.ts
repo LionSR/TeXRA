@@ -25,10 +25,11 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { OutputFileInfoSchema, CompileFailureSchema } from './output';
-import { roundIndexedRecord } from './roundIndexed';
 import { StreamStatusSchema } from './stream';
-import { BackendOwnedFieldsSchema } from './streamState';
+import {
+  BackendOwnedFieldsSchema,
+  RoundKeyedOutputSidecarValueSchemas,
+} from './streamState';
 import { RunUsageMapSchema } from './usage';
 import { WorkPlanSnapshotShape } from './workPlan';
 
@@ -87,10 +88,15 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   todos: WorkPlanSnapshotShape.todos.prefault([]),
   plan: WorkPlanSnapshotShape.plan.prefault(null),
   planSummary: WorkPlanSnapshotShape.planSummary.prefault(null),
-  // Round-keyed records match the on-disk JSON: string keys → arrays.
-  outputFilesByRound: roundIndexedRecord(OutputFileInfoSchema).prefault({}),
-  missingOutputsByRound: roundIndexedRecord(z.string()).prefault({}),
-  compileFailuresByRound: roundIndexedRecord(CompileFailureSchema).prefault({}),
+  // Round-keyed records match the on-disk JSON: string keys → arrays. Value
+  // schemas shared with the live WorkflowStreamStateSchema (see
+  // RoundKeyedOutputSidecarValueSchemas) so the two can't drift.
+  outputFilesByRound:
+    RoundKeyedOutputSidecarValueSchemas.outputFiles.prefault({}),
+  missingOutputsByRound:
+    RoundKeyedOutputSidecarValueSchemas.missingOutputs.prefault({}),
+  compileFailuresByRound:
+    RoundKeyedOutputSidecarValueSchemas.compileFailures.prefault({}),
   runUsage: RunUsageMapSchema.prefault({}),
 
   // -- Pointers (resume / lookup) -------------------------------------------

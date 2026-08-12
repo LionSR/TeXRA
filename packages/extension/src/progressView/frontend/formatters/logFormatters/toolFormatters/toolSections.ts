@@ -528,6 +528,12 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
     );
   }
 
+  // Ad-hoc MCP output is not guaranteed to be Codex-shaped, so a schema
+  // mismatch here is the intended "not structured output" path, not a
+  // producer bug: catch-to-null deliberately drops the structured rendering
+  // and falls back to the raw `outputText` below. (Sibling formatters warn on
+  // malformed payloads, but those target one producer's wire shape, whereas
+  // this schema only structurally describes a subset of MCP output.)
   const mcpOutput: CodexMcpToolOutput | null =
     CodexMcpToolOutputSchema.nullable().catch(null).parse(parsedOutput);
   const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)

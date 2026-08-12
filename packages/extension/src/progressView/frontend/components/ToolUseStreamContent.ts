@@ -12,16 +12,14 @@ import { ProgressEvents } from '../events';
 import { getFollowUpInputTransientState } from '../followUpInputState';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
-import { renderStreamHeader } from './streamHeaderView';
-import { totalRunUsage } from '../stateUtils';
+
+// Side-effect import - register the <stream-header> element
+import './StreamHeader';
 
 // Side-effect imports - sibling components
-import './RequestPanels';
 import './TodoList';
 import './PlanView';
 import './TaskGroupList';
-import './LogList';
-import './UsagePanel';
 import './BackgroundTasksPanel';
 import './FollowUpInput';
 
@@ -42,24 +40,14 @@ export class ToolUseStreamContent extends BaseStreamContent {
     }
 
     return html`
-      ${renderStreamHeader(
-        streamInfo,
-        currentState,
-        this.streamContext.unsupportedCommands,
-      )}
+      <stream-header
+        .stream=${streamInfo}
+        .state=${currentState}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
+      ></stream-header>
 
       <div class="conversation-content">
-        ${
-          this.filteredPermissions.length > 0
-            ? html`
-                <div class="conversation-column conversation-approval-dock">
-                  <request-panels
-                    .permissions=${this.filteredPermissions}
-                  ></request-panels>
-                </div>
-              `
-            : nothing
-        }
+        ${this.renderApprovalDock()}
 
         <div class="conversation-column conversation-prelude">
           <todo-list
@@ -77,13 +65,10 @@ export class ToolUseStreamContent extends BaseStreamContent {
           ></background-tasks-panel>
         </div>
 
-        <div class="conversation-log"><log-list></log-list></div>
+        ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
-          <usage-panel
-            .usage=${totalRunUsage(currentState.runUsage)}
-            .contextState=${currentState.contextState ?? null}
-          ></usage-panel>
+          ${this.renderUsagePanel(currentState.runUsage, currentState.contextState)}
         </div>
       </div>
 

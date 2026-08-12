@@ -5,7 +5,6 @@ import { createGunzip } from 'node:zlib';
 
 import { parse as parseContentDisposition } from 'content-disposition';
 import { StatusCodes } from 'http-status-codes';
-import * as arxivIdentifiers from 'identifiers-arxiv';
 import pRetry, { AbortError } from 'p-retry';
 import pTimeout from 'p-timeout';
 import * as tar from 'tar';
@@ -119,10 +118,6 @@ class ArxivSourceProcessor {
     return '';
   }
 
-  private isValidId(id: string): boolean {
-    return arxivIdentifiers.extract(id).includes(id);
-  }
-
   /**
    * Normalize input that may be a URL or plain ID into a valid arXiv ID.
    * Accepts formats like:
@@ -135,9 +130,7 @@ class ArxivSourceProcessor {
       return null;
     }
 
-    const normalized = normaliseArxivIdentifier(input.trim());
-    // Verify the normalized result is a valid arXiv ID
-    return this.isValidId(normalized) ? normalized : null;
+    return normaliseArxivIdentifier(input.trim());
   }
 
   /** @returns Error message if invalid, null if valid */

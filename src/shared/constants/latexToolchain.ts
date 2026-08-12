@@ -1,4 +1,8 @@
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+/**
+ * LaTeX toolchain constants: the tool name lists, the per-tool install guides
+ * and structured install commands, and the platform normalization helpers they
+ * share. Split out of the old `@shared/constants/latex` dumping ground.
+ */
 
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
@@ -29,61 +33,6 @@ export const CORE_LATEX_TOOLS = Object.freeze([
 ] as const);
 
 export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
-
-export const NON_REGEX_REPLACEMENT_CATEGORIES = [
-  'latex_spacing',
-  'equations',
-  'sections',
-  'latex_forbidden_commands',
-  'characters',
-  'font_commands',
-  'latex_xml',
-  'unicode',
-  'html_entities',
-  'latexdiff',
-  'gptness',
-  'personal_style',
-  'max_style',
-] as const;
-
-export const REGEX_REPLACEMENT_CATEGORIES = [
-  'fenced_latex_blocks',
-  'inline_math',
-  'parentheses',
-  'latexdiff_markup',
-  'equation_style',
-  'equation_macros',
-  'personal_style_contextual',
-  'max_style_regex',
-] as const;
-
-export type NonRegexReplacementCategory =
-  (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number];
-export type RegexReplacementCategory =
-  (typeof REGEX_REPLACEMENT_CATEGORIES)[number];
-
-export const DEFAULT_ENABLED_REPLACEMENTS = [
-  'latex_spacing',
-  'equations',
-  'sections',
-  'latex_forbidden_commands',
-  'characters',
-  'font_commands',
-  'latex_xml',
-  'unicode',
-  'html_entities',
-  'latexdiff',
-  'gptness',
-] satisfies NonRegexReplacementCategory[];
-
-export const DEFAULT_ENABLED_REGEX_REPLACEMENTS = [
-  'fenced_latex_blocks',
-  'inline_math',
-  'parentheses',
-  'latexdiff_markup',
-  'equation_style',
-  'personal_style_contextual',
-] satisfies RegexReplacementCategory[];
 
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';
@@ -455,19 +404,6 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
 };
 
 // ============================================================
-// LaTeX-specific timing constants
-// ============================================================
-
-/** Delay before registering a diff document for side-by-side view. */
-export const DIFF_REGISTRATION_DELAY_MS = 300;
-
-/** Delay before auto-opening the LaTeX viewer after build. */
-export const LATEX_VIEWER_OPEN_DELAY_MS = 5000;
-
-/** Delay before refreshing the LaTeX viewer after build. */
-export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
-
-// ============================================================
 // Utility functions
 // ============================================================
 
@@ -486,107 +422,3 @@ export function normalizePlatform(raw: string): OSPlatform {
 export function getInstallGuide(guide: Guide, platform: string): string {
   return guide[normalizePlatform(platform)];
 }
-
-// ============================================================
-// LaTeX/compile/diff config — single source of truth
-// ============================================================
-//
-// These constants are imported by:
-//   - readers in src/agent/, src/latex/, src/housekeeping/, src/commands/
-//   - the inbound/outbound message schemas in src/shared/schemas/
-//   - the native LaTeX settings handlers and tab UI
-// so changing a default or range here propagates everywhere with no rot.
-//
-/** Numeric range for a setting (used by Zod schemas and UI inputs). */
-export interface NumericRange {
-  readonly min: number;
-  readonly max?: number;
-}
-
-/** Allowed values for the `latexdiff` math-markup mode. */
-export const LATEXDIFF_MATH_MARKUP_VALUES = [
-  'off',
-  'whole',
-  'coarse',
-  'fine',
-] as const;
-export type LatexdiffMathMarkupValue =
-  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
-
-/** Allowed values for the LaTeX formatter selector. */
-export const LATEX_FORMATTER_VALUES = [
-  'latexindent',
-  'tex-fmt',
-  'none',
-] as const;
-export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
-
-/** Documented defaults — match the values that used to live in package.json. */
-export const LATEX_CONFIG_DEFAULTS = {
-  workflowAutoCompile: true,
-  workflowAutoCompileTimeoutMs: 120000,
-  workflowAutoOpenPdf: true,
-  workflowRejectOnCompileFailure: true,
-  latexdiffBetweenRounds: false,
-  latexdiffTimeoutMs: 10000,
-  latexdiffMathMarkup: 'coarse' as LatexdiffMathMarkupValue,
-  latexdiffChangesOnly: true,
-  latexFormatter: 'latexindent' as LatexFormatterValue,
-} as const;
-
-/** Numeric ranges (used by Zod schemas and UI inputs). */
-export const LATEX_CONFIG_RANGES = {
-  workflowAutoCompileTimeoutMs: { min: 10000 } satisfies NumericRange,
-  latexdiffTimeoutMs: { min: 1000, max: 80000 } satisfies NumericRange,
-} as const;
-
-/**
- * Webview-facing field name → WorkspaceStateKey. Single source of truth for
- * both read and write paths, replacing per-handler maps that previously
- * duplicated this list.
- */
-export const LATEX_FIELD_TO_KEY = {
-  workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-  workflowAutoCompileTimeoutMs:
-    WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-  workflowAutoOpenPdf: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-  workflowRejectOnCompileFailure:
-    WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-  latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-  latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-  latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-  latexdiffChangesOnly: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-  latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
-} as const;
-export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
-
-/**
- * Replacement-related webview field name → core config key (`texra.latex.*`).
- * Unlike {@link LATEX_FIELD_TO_KEY} these live in core config, not
- * WorkspaceState. Shared by the settings-view frontend (LaTeXTab) and the
- * backend persistence controller so the two sides of the wire can't drift.
- */
-export const LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY = {
-  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
-  enabledReplacements: 'texra.latex.enabledReplacements',
-  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
-  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
-  customReplacements: 'texra.latex.customReplacements',
-} as const;
-
-/**
- * Workspace directories that bulk file operations (formatting, cleaning,
- * packing) skip — generated artifacts and TeXRA-managed bookkeeping dirs.
- * Compared case-insensitively (lowercase entries).
- */
-export const EXCLUDED_DIRS = new Set([
-  'figs',
-  'figures',
-  'media',
-  'medias',
-  'build',
-  'versions',
-  'history',
-  'notes',
-  'diffs',
-]);

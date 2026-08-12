@@ -193,6 +193,8 @@ export function pendingListFormChoice<T>(args: {
 interface AsyncListFormControls<TData> {
   readonly data: TData;
   readonly setData: (next: TData) => void;
+  /** Re-run the loader, keeping the current data on screen until it returns. */
+  readonly reload: () => void;
 }
 
 export interface AsyncPickerForm<TData, TValue> {
@@ -227,13 +229,20 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   ) => void;
   readonly onClose: () => void;
 }): AsyncPickerForm<TData, TValue> {
-  const { data, loading, error, pendingInput, clearPendingInput, setData } =
-    useAsyncListForm<TData>({
-      load: args.load,
-      onClose: args.onClose,
-      isEmpty: args.isEmpty,
-      closeEmptyOnEnter: args.closeEmptyOnEnter,
-    });
+  const {
+    data,
+    loading,
+    error,
+    pendingInput,
+    clearPendingInput,
+    setData,
+    reload,
+  } = useAsyncListForm<TData>({
+    load: args.load,
+    onClose: args.onClose,
+    isEmpty: args.isEmpty,
+    closeEmptyOnEnter: args.closeEmptyOnEnter,
+  });
   const selectable = args.selectable !== false;
   const items = data === undefined ? [] : args.items(data);
   const select = (value: TValue): void => {
@@ -241,7 +250,7 @@ export function useAsyncPickerForm<TData, TValue>(args: {
       args.onClose();
       return;
     }
-    if (data !== undefined) args.onSelect?.(value, { data, setData });
+    if (data !== undefined) args.onSelect?.(value, { data, setData, reload });
   };
   usePendingListFormSelection({
     loading,

@@ -124,7 +124,7 @@ async function expectDeletionReleasesEarlierRootReplacement(
   vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
     {} as never,
   );
-  vi.spyOn(backend.state, 'waitForOwnedExecutionRelease').mockResolvedValue();
+  vi.spyOn(backend.state.stores, 'waitForOwnedExecutionRelease').mockResolvedValue();
   mockSuccessfulClear(backend, deletionKind, async () => {
     operations.push('delete');
   });

@@ -50,13 +50,31 @@ function fillColor(percent: number): string {
   return 'var(--color-status-error)';
 }
 
-function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
+/**
+ * Single owner of the free-tier decision for a usage route: `null` when the
+ * route has no badge (plain cost), otherwise `free` (subscription route with
+ * zero cost) plus the two label forms the summary and the visible footer use.
+ * Both {@link usageCostLabel} and {@link UsagePanel.renderCostRoute} consume
+ * this, so changing a subscription route touches one place.
+ */
+function usageRouteDecision(
+  cost: number,
+  route: UsageRoute | undefined,
+): { free: boolean; label: string; compactLabel: string } | null {
   const badge = usageRouteBadge(route);
-  if (!badge) return formatCostUsd(cost);
-  if (badge.subscription && cost === 0) {
-    return `Free via ${badge.label}`;
-  }
-  return `${formatCostUsd(cost)} via ${badge.label}`;
+  if (!badge) return null;
+  return {
+    free: badge.subscription && cost === 0,
+    label: badge.label,
+    compactLabel: badge.compactLabel,
+  };
+}
+
+function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
+  const decision = usageRouteDecision(cost, route);
+  if (!decision) return formatCostUsd(cost);
+  if (decision.free) return `Free via ${decision.label}`;
+  return `${formatCostUsd(cost)} via ${decision.label}`;
 }
 
 @customElement('usage-panel')
@@ -266,21 +284,20 @@ export class UsagePanel extends LitElement {
   }
 
   private renderCostRoute(cost: number): TemplateResult {
-    const route = this.usage?.usageRoute;
-    const badge = usageRouteBadge(route);
-    if (!badge) return html`${formatCostUsd(cost)}`;
+    const decision = usageRouteDecision(cost, this.usage?.usageRoute);
+    if (!decision) return html`${formatCostUsd(cost)}`;
 
-    if (badge.subscription && cost === 0) {
+    if (decision.free) {
       return html`<span
         id="usage-route-badge"
         class="run-summary__route run-summary__route--free"
-        >Free · ${badge.compactLabel}</span
+        >Free · ${decision.compactLabel}</span
       >`;
     }
 
     return html`${formatCostUsd(cost)} ·
       <span id="usage-route-badge" class="run-summary__route">
-        ${badge.compactLabel}
+        ${decision.compactLabel}
       </span>`;
   }
 

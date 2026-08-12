@@ -4,8 +4,9 @@
  * This class owns the inbound registry, the memory/profile/model/tool commands,
  * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
  * focused handler classes in `./handlers/`: `AgentHandlers`,
- * `LatexSettingsHandlers`, `HistoryHandlers`, `GitHubSubscriptionHandlers`, and
- * `SubscriptionHandlers` (one instance per subscription provider).
+ * `LatexSettingsHandlers`, `MemoryHandlers`, `HistoryHandlers`,
+ * `GitHubSubscriptionHandlers`, and `SubscriptionHandlers` (one instance per
+ * subscription provider).
  */
 import * as path from 'node:path';
 
@@ -46,7 +47,6 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { refreshApprovalPolicyTooltip } from '@frontend/statusBar/approvalPolicyTooltipRefresh';
 import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -62,15 +62,13 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
-import {
-  resolveMemoryStoragePath,
-  RUNS_STORAGE_DIR,
-} from '@platform/defaults/workspaceStorage';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
+import type { SubscriptionUsageProvider } from '@shared/schemas/subscriptionUsage';
 import {
   applyStateSettingUpdate,
   postStateSettingSnapshot as dispatchStateSettingSnapshot,
@@ -94,7 +92,6 @@ import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { debounce } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
@@ -110,6 +107,7 @@ import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
+import { MemoryHandlers } from './handlers/memoryHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import {
@@ -137,6 +135,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Domain-specific handler delegates
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
+  private readonly memoryHandlers: MemoryHandlers;
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: SubscriptionHandlers;
@@ -196,8 +195,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.profileController.getProviderKeyUrl(provider),
       getApiKeySecretName: (provider) =>
         SecretManager.getApiKeySecretName(provider as ApiProvider),
-      setSecret: (key, value) => SecretManager.set(key, value),
-      deleteSecret: (key) => SecretManager.delete(key),
+      setSecret: (key, value) => platform().secrets.set(key, value),
+      deleteSecret: (key) => platform().secrets.delete(key),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
     });
@@ -210,6 +209,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
+    this.memoryHandlers = new MemoryHandlers(ctx, this.settingsHost, this.viewName);
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(
@@ -396,15 +396,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     return {
       webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
       getMemoryData: () =>
-        this.withActiveWebview((w) => this.sendMemoryData(w)),
-      getMemoryPreview: (message) => this.handleGetMemoryPreview(message),
-      openMemoryFile: (message) => this.handleOpenMemoryFile(message),
-      openMemoryFolder: () => this.handleOpenMemoryFolder(),
-      deleteMemory: (message) => this.handleDeleteMemory(message),
-      setMemoryEnabled: (message) => this.handleSetMemoryEnabled(message),
-      pinMemory: (message) => this.setMemoryPinned(message.storagePath, true),
+        this.withActiveWebview((w) => this.memoryHandlers.sendMemoryData(w)),
+      getMemoryPreview: (message) =>
+        this.memoryHandlers.handleGetMemoryPreview(message),
+      openMemoryFile: (message) =>
+        this.memoryHandlers.handleOpenMemoryFile(message),
+      openMemoryFolder: () => this.memoryHandlers.handleOpenMemoryFolder(),
+      deleteMemory: (message) =>
+        this.memoryHandlers.handleDeleteMemory(message),
+      setMemoryEnabled: (message) =>
+        this.memoryHandlers.handleSetMemoryEnabled(message),
+      pinMemory: (message) =>
+        this.memoryHandlers.setMemoryPinned(message.storagePath, true),
       unpinMemory: (message) =>
-        this.setMemoryPinned(message.storagePath, false),
+        this.memoryHandlers.setMemoryPinned(message.storagePath, false),
       rerunAgent: (message) => this.historyHandlers.handleRerunAgent(message),
       restoreAgent: (message) =>
         this.historyHandlers.handleRestoreAgent(message),
@@ -628,8 +633,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.sendProfileAndModelSelectionData(webview);
 
     await Promise.all([
-      this.sendMemoryData(webview),
-      this.sendMemoryEnabled(webview),
+      this.memoryHandlers.sendMemoryData(webview),
+      this.memoryHandlers.sendMemoryEnabled(webview),
       this.historyHandlers.sendHistoryData(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
@@ -648,35 +653,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendInlineCriticismEnabled(webview),
       this.sendGoalList(webview),
     ]);
-  }
-
-  private async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendMemoryData((message) =>
-      webview.postMessage(message),
-    );
-  }
-
-  private async handleGetMemoryPreview(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
-  ): Promise<void> {
-    await this.withActiveWebview(async (webview) => {
-      await this.settingsHost.sendMemoryPreview(data, {
-        respond: (message) => webview.postMessage(message),
-        onError: async (error) => {
-          await showLoggedErrorMessage(
-            this.channel,
-            'Failed to load memory preview',
-            error,
-          );
-        },
-      });
-    });
-  }
-
-  private async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendMemoryEnabled((message) =>
-      webview.postMessage(message),
-    );
   }
 
   private async sendInlineCriticismEnabled(
@@ -787,7 +763,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
       onApprovalPolicyChanged: (policy) => {
         defaultSession().setApprovalPolicy(policy);
-        refreshApprovalPolicyTooltip();
+        appSignals.emit('approvalPolicyChanged', undefined);
       },
     });
     if (result.kind === 'ignored') return;
@@ -840,100 +816,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
-  // Memory handler implementations
-  // ============================================================
-
-  private async handleOpenMemoryFile(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE>,
-  ): Promise<void> {
-    try {
-      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
-      const absolutePath = StorageFS.fullPath(resolvedPath);
-      const fileUri = vscode.Uri.file(absolutePath);
-
-      // Open markdown files in preview mode (read-only rendered view)
-      if (hasExtension(absolutePath, '.md')) {
-        await safeExecuteCommand(
-          'markdown.showPreview',
-          [fileUri],
-          this.viewName,
-        );
-      } else {
-        const doc = await vscode.workspace.openTextDocument(fileUri);
-        await vscode.window.showTextDocument(doc, { preview: false });
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to open memory file',
-        error,
-      );
-    }
-  }
-
-  private async handleOpenMemoryFolder(): Promise<void> {
-    try {
-      const resolvedPath = resolveMemoryStoragePath();
-      await StorageFS.ensureDir(resolvedPath);
-      const absolutePath = StorageFS.fullPath(resolvedPath);
-      await safeExecuteCommand(
-        'revealFileInOS',
-        [vscode.Uri.file(absolutePath)],
-        this.viewName,
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to open memory folder',
-        error,
-      );
-    }
-  }
-
-  private async handleDeleteMemory(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
-  ): Promise<void> {
-    try {
-      await this.settingsHost.deleteMemory(data, (message) =>
-        this.postMessageToActiveWebview(message),
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to delete memory',
-        error,
-      );
-      await this.withActiveWebview((w) => this.sendMemoryData(w));
-    }
-  }
-
-  private async handleSetMemoryEnabled(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
-  ): Promise<void> {
-    await this.settingsHost.setMemoryEnabled(data.enabled, (message) =>
-      this.postMessageToActiveWebview(message),
-    );
-  }
-
-  private async setMemoryPinned(
-    storagePath: string,
-    pinned: boolean,
-  ): Promise<void> {
-    try {
-      await this.settingsHost.setMemoryPinned(storagePath, pinned, (message) =>
-        this.postMessageToActiveWebview(message),
-      );
-    } catch (error) {
-      const action = pinned ? 'pin' : 'unpin';
-      await showLoggedErrorMessage(
-        this.channel,
-        `Failed to ${action} memory`,
-        error,
-      );
-    }
-  }
-
-  // ============================================================
   // Profile handler implementations
   // ============================================================
 
@@ -983,32 +865,28 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
-   * Refresh main view API key status, model options, and settings-view model/profile
-   * data after key changes. Model selection availability depends on provider
-   * key state, so keep it paired with the profile refresh.
+   * The shared refresh tail for a credential change (API key or subscription
+   * auth): invalidate caches, re-run the host refresh commands, and push
+   * fresh profile/model/usage data to the active webview. Model selection
+   * availability depends on key state, so the key status command is awaited
+   * before any model/profile data is sent. `refreshProfileData` selects which
+   * profile surface to push (profile+model for key changes, model-only for
+   * subscription changes).
    */
-  public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
-    // Invalidate caches so downstream refreshes see fresh key state.
+  private async refreshCredentialDependentSurfaces(options: {
+    usageProvider?: SubscriptionUsageProvider;
+    refreshProfileData: (webview: vscode.Webview) => Promise<void>;
+  }): Promise<void> {
+    // Invalidate caches so downstream refreshes see fresh credential state.
     invalidateModelOptionsCache();
-    invalidateApiKeyCache();
-    let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
-    if (provider === 'kimiCode') usageProvider = 'kimiCode';
-    if (provider === 'glm') usageProvider = 'glmCodingPlan';
-    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
-    await safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
-    const mainView = await getMainWebview(this.viewName);
-    if (mainView) {
-      const anyKeyExists = await SecretManager.anyApiKeyExists();
-      mainView.webview.postMessage({
-        command: anyKeyExists
-          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
-          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-      });
+    if (options.usageProvider) {
+      this.subscriptionUsage.invalidate(options.usageProvider);
     }
+    await safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      this.withActiveWebview((w) => this.sendProfileAndModelSelectionData(w)),
-      ...(usageProvider
+      this.withActiveWebview((w) => options.refreshProfileData(w)),
+      ...(options.usageProvider
         ? [
             this.withActiveWebview((w) =>
               sendSubscriptionUsage(w, this.subscriptionUsage),
@@ -1018,24 +896,40 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
+  /**
+   * Refresh main view API key status, model options, and settings-view model/profile
+   * data after key changes. Model selection availability depends on provider
+   * key state, so keep it paired with the profile refresh.
+   */
+  public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
+    invalidateApiKeyCache();
+    let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
+    if (provider === 'kimiCode') usageProvider = 'kimiCode';
+    if (provider === 'glm') usageProvider = 'glmCodingPlan';
+    const mainView = await getMainWebview(this.viewName);
+    if (mainView) {
+      const anyKeyExists = await SecretManager.anyApiKeyExists();
+      mainView.webview.postMessage({
+        command: anyKeyExists
+          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+      });
+    }
+    await this.refreshCredentialDependentSurfaces({
+      usageProvider,
+      refreshProfileData: (webview) =>
+        this.sendProfileAndModelSelectionData(webview),
+    });
+  }
+
   /** Subscription auth is a setup credential: same host refresh as API-key changes. */
   private async refreshAfterSubscriptionAuthChange(
     usageProvider?: 'chatgpt',
   ): Promise<void> {
-    invalidateModelOptionsCache();
-    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
-    await Promise.all([
-      safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
-      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      this.withActiveWebview((w) => this.sendModelSelectionData(w)),
-      ...(usageProvider
-        ? [
-            this.withActiveWebview((w) =>
-              sendSubscriptionUsage(w, this.subscriptionUsage),
-            ),
-          ]
-        : []),
-    ]);
+    await this.refreshCredentialDependentSurfaces({
+      usageProvider,
+      refreshProfileData: (webview) => this.sendModelSelectionData(webview),
+    });
   }
 
   private async handleRequestModelAccess(modelName: string): Promise<void> {

@@ -21,6 +21,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
 
+import { wrapResponseError } from './openAIResponseErrors';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { getStreamEventResponseId } from './responseStreamEvents';
 import type {
@@ -312,22 +313,21 @@ export class OpenAIResponseWebSocketTransport {
       // Failed responses must be rejected so the caller's catch block can run
       // error recovery (e.g., context-window compaction). The response's own
       // `error` (a structured { code, message } object, not just prose) is
-      // preserved on the thrown error — mirrored from the same pattern in
-      // createOpenAIBackgroundTerminalError — so isContextWindowError() can
-      // key off `error.code` instead of relying solely on `error.message`
-      // wording that can drift across model generations.
+      // preserved on the thrown error via wrapResponseError so
+      // isContextWindowError() can key off `error.code` instead of relying
+      // solely on `error.message` wording that can drift across model
+      // generations.
       const onFailed = (event: ResponseFailedEvent): void => {
         if (settled || !isCurrentResponse(event.response)) return;
         const responseError = event.response.error;
         const errorMsg =
           responseError?.message ?? 'Response failed without details';
-        const wrapped = new Error(
-          `OpenAI WebSocket response failed: ${errorMsg}`,
-        ) as Error & { error?: unknown };
-        if (responseError) {
-          wrapped.error = responseError;
-        }
-        failRequest(wrapped);
+        failRequest(
+          wrapResponseError(
+            `OpenAI WebSocket response failed: ${errorMsg}`,
+            responseError,
+          ),
+        );
       };
 
       // Incomplete responses are resolved (not rejected) to match the HTTP

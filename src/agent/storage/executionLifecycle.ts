@@ -23,6 +23,7 @@ import {
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { KeyedMutex } from '@utils/core';
+import { throwUnwrapAggregate } from './storageErrors';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
@@ -158,13 +159,10 @@ export async function registerExecution(
       const errors = results.flatMap((result) =>
         result.status === 'rejected' ? [result.reason] : [],
       );
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(
-          errors,
-          `Multiple execution registration writes failed for ${executionId}`,
-        );
-      }
+      throwUnwrapAggregate(
+        errors,
+        `Multiple execution registration writes failed for ${executionId}`,
+      );
     } catch (error) {
       try {
         await releaseOwnedExecutionLease(executionId);

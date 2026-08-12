@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import type {
-  ExternalInquiryThreadId,
-  ExternalInquiryThreadSummary,
+  InquiryThreadId,
+  InquiryThreadSummary,
   StreamTabId,
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 
 const STREAM = 'stream:test' as StreamTabId;
-const THREAD: ExternalInquiryThreadId =
-  'ei_aabbccdd0011' as ExternalInquiryThreadId;
-const OTHER_THREAD: ExternalInquiryThreadId =
-  'ei_ffff00001122' as ExternalInquiryThreadId;
+const THREAD: InquiryThreadId =
+  'ei_aabbccdd0011' as InquiryThreadId;
+const OTHER_THREAD: InquiryThreadId =
+  'ei_ffff00001122' as InquiryThreadId;
 
 function makeSummary(
-  partial: Partial<ExternalInquiryThreadSummary>,
-): ExternalInquiryThreadSummary {
+  partial: Partial<InquiryThreadSummary>,
+): InquiryThreadSummary {
   return {
     threadId: OTHER_THREAD,
     parentStreamId: STREAM,

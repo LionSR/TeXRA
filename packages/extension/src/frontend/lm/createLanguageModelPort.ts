@@ -6,6 +6,7 @@ import { warn } from '@logger/logUtils';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelInfo,
   type LanguageModelAccessState,
   type LanguageModelMessage,
@@ -239,8 +240,16 @@ async function* streamResponse(
 export function createLanguageModelPort(
   context: vscode.ExtensionContext,
 ): LanguageModelPort {
-  const { lm } = vscode;
-  const selectChatModels = lm.selectChatModels;
+  const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
+  if (typeof lm?.selectChatModels !== 'function') {
+    // Compatible non-VS Code hosts can expose only part of the `vscode.lm`
+    // namespace — the same boundary `registerLanguageModelTools` guards.
+    // Report unavailability through `isAvailable()` instead of throwing
+    // during activation.
+    return UNAVAILABLE_LANGUAGE_MODEL_PORT;
+  }
+  const lmApi = lm as typeof vscode.lm;
+  const selectChatModels = lmApi.selectChatModels;
   const accessInformation = context.languageModelAccessInformation;
 
   return {
@@ -263,7 +272,7 @@ export function createLanguageModelPort(
     },
 
     onDidChangeModels(listener) {
-      return lm.onDidChangeChatModels(listener);
+      return lmApi.onDidChangeChatModels(listener);
     },
 
     sendRequest(model, messages, options, signal) {

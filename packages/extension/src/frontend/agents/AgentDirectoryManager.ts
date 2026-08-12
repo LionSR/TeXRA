@@ -14,7 +14,8 @@ import type {
   AgentSource,
 } from '@agent/index';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { globalSM } from '@common/state';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';

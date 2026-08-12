@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files/fileLister';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -80,7 +80,7 @@ async function openLabel(
 export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     { id: 'texra.openFileCompile', handler: openBuildDisplayIfTex },
     { id: 'texra.openFile', handler: openFile },
     { id: 'texra.openLabel', handler: openLabel },

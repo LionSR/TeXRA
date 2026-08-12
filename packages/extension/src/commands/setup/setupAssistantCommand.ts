@@ -8,7 +8,9 @@ import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { globalSM } from '@common/state';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -133,7 +135,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
       break;
     case 'walkthrough':
-      await vscode.commands.executeCommand('texra.openGettingStarted');
+      await vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED);
       return false;
   }
 

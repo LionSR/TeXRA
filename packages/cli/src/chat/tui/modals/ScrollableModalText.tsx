@@ -14,6 +14,7 @@ import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   boundedScrollableLines,
   compactAwareMaxScrollOffset,
+  COMPACT_SCROLLABLE_CONTENT_ROWS,
   scrollPageRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
@@ -23,7 +24,6 @@ import { useScrollableOffset } from '../state/useScrollableOffset';
 type ModalTextDisplayLine = ScrollableDisplayLine<'text'>;
 
 const DEFAULT_MODAL_TEXT_ROWS = 12;
-const COMPACT_MODAL_TEXT_ROWS = 3;
 const SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 7;
 const COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 
@@ -46,7 +46,7 @@ export function scrollableModalTextRowsBudget({
     title,
     minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_MODAL_TEXT_ROWS,
-    compactMaxRows: COMPACT_MODAL_TEXT_ROWS,
+    compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
     compactFixedRows: COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
     extraFixedRows,
@@ -111,7 +111,7 @@ export function modalTextMaxScrollOffset({
   readonly totalLines: number;
 }): number {
   return compactAwareMaxScrollOffset({
-    compactRows: COMPACT_MODAL_TEXT_ROWS,
+    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines: maxRows,
     totalLines,
   });
@@ -131,7 +131,7 @@ export function boundedModalTextLines({
   readonly width: number;
 }): ModalTextDisplayLine[] {
   return boundedScrollableLines({
-    compactRows: COMPACT_MODAL_TEXT_ROWS,
+    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     hiddenNoun,
     lines,
     maxDisplayLines: maxRows,
@@ -210,11 +210,11 @@ export function ScrollableModalText(
     maxScrollOffset,
     resetKey: props.resetKey ?? text,
     pageRows: scrollPageRows({
-      compactRows: COMPACT_MODAL_TEXT_ROWS,
+      compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
       maxDisplayLines: maxRows,
     }),
   });
-  const compactLayout = maxRows <= COMPACT_MODAL_TEXT_ROWS;
+  const compactLayout = maxRows <= COMPACT_SCROLLABLE_CONTENT_ROWS;
   const displayLines = boundedModalTextLines({
     hiddenNoun: props.hiddenNoun,
     lines,

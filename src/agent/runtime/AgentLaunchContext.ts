@@ -3,11 +3,8 @@ import * as path from 'node:path';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import {
-  isRemoteAgent,
-  resolveAgentForLaunch,
-  type ResolvedAgent,
-} from '@agent/index';
+import { isRemoteAgent, resolveAgentForLaunch } from '@agent/index/agentRegistry';
+import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   createChannelTrace,
   logSdkError,

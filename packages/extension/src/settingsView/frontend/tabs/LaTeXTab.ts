@@ -53,13 +53,15 @@ import {
   REGEX_REPLACEMENT_CATEGORIES,
   type NonRegexReplacementCategory,
   type RegexReplacementCategory,
+} from '@shared/constants/replacementCategories';
+import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_FIELD_TO_KEY,
   LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
   LATEX_CONFIG_RANGES,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexConfig';
 
-// Local imports - shared constants
+// Local imports - LaTeX toolchain (install guides + commands)
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
@@ -71,7 +73,7 @@ import {
   SCOOP_INSTALL_COMMAND,
   type InstallCommand,
   type OSPlatform,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 
 // Local imports - shared utilities
 import { clampOptional, filterNotNullish } from '@utils/core';

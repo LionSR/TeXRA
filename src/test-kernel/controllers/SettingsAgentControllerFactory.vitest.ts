@@ -56,7 +56,7 @@ describe('createSettingsAgentControllers', () => {
     });
     const controllers = createControllers(workspaceState);
 
-    await controllers.visibility.setAgentEnabled({
+    await controllers.roster.setAgentEnabled({
       category: 'toolUse',
       source: 'builtInToolUse',
       name: 'assistant',
@@ -106,7 +106,7 @@ describe('createSettingsAgentControllers', () => {
     });
     const controllers = createControllers(workspaceState);
 
-    await controllers.visibility.setAgentEnabled({
+    await controllers.roster.setAgentEnabled({
       category: 'toolUse',
       source: 'builtInToolUse',
       name: 'assistant',

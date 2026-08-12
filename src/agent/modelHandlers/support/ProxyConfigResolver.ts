@@ -8,10 +8,7 @@ import {
 import { tryParseUrl } from '@utils/core';
 import {
   getProviderEndpoint,
-  getDashScopeUseChina,
-  getMiniMaxUseChina,
-  getMoonshotUseChina,
-  getGLMUseChina,
+  useChinaRegion,
   getGLMCodingPlan,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
@@ -45,19 +42,19 @@ const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
   // platform-specific. Kimi Code models never reach here — their directAccess
   // baseUrl wins as `route: 'custom'` at the top of the resolver.
   [ModelProvider.MOONSHOT]: () =>
-    `https://${getMoonshotUseChina() ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
+    `https://${useChinaRegion('moonshot') ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
   [ModelProvider.DASHSCOPE]: () =>
     `https://${
-      getDashScopeUseChina()
+      useChinaRegion('dashscope')
         ? 'dashscope.aliyuncs.com'
         : 'dashscope-intl.aliyuncs.com'
     }/compatible-mode/v1`,
   // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
   [ModelProvider.MINIMAX]: () =>
-    `https://${getMiniMaxUseChina() ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
+    `https://${useChinaRegion('minimax') ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
   // China: open.bigmodel.cn, International: api.z.ai
   [ModelProvider.GLM]: () =>
-    `https://${getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai'}${
+    `https://${useChinaRegion('glm') ? 'open.bigmodel.cn' : 'api.z.ai'}${
       getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4'
     }`,
   [ModelProvider.META]: 'https://api.meta.ai/v1',

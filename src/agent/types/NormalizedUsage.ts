@@ -9,7 +9,7 @@ import {
   TokenUsageStatsBaseSchema,
   UsageProviderSchema,
   UsageRouteSchema,
-  resolveLegacyUsageRoute,
+  withLegacyUsageRoute,
 } from '@shared/schemas';
 
 /**
@@ -53,10 +53,8 @@ const NormalizedUsageBaseSchema = TokenUsageStatsBaseSchema.pick({
   _native: z.unknown().optional(),
 });
 
-export const NormalizedUsageSchema = NormalizedUsageBaseSchema.extend({
-  viaChatGptSubscription: z.boolean().optional(),
-}).transform(({ viaChatGptSubscription, ...usage }) =>
-  resolveLegacyUsageRoute(usage, viaChatGptSubscription),
+export const NormalizedUsageSchema = withLegacyUsageRoute(
+  NormalizedUsageBaseSchema,
 );
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

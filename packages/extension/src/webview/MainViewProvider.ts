@@ -32,6 +32,9 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { CommonViewMessageSchema } from '@shared/schemas/commonViewMessages';
+import { MainViewMessageSchema } from '@shared/schemas/mainView/outbound';
+import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import { agentKeyOf, AgentCategory } from '@shared/schemas/agent';
 import {
   readOnboardingFlags,
@@ -71,9 +74,10 @@ export class MainViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.messageHandler = new MainViewMessageHandler(context, {
-      refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
-    });
+    this.messageHandler = new MainViewMessageHandler(
+      context,
+      () => this.refreshOnboardingFunnel(),
+    );
     this.contentProvider = new BundledViewContentProvider(
       context,
       'MainView',
@@ -89,6 +93,20 @@ export class MainViewProvider
     this.setupConfigurationWatcher();
     this.setupWorkspaceWatcher();
     this.setupAuthListener();
+  }
+
+  /**
+   * Sole outbound path to the launcher webview. In dev/test runs the payload
+   * goes through the boundary's outbound schemas first (`assertKnownOutbound
+   * Message`), so a schema drift is caught by CI instead of silently reaching
+   * the webview; production posts the typed payload as-is with no parse cost.
+   */
+  private postToWebview(webviewView: vscode.WebviewView, message: unknown): void {
+    assertKnownOutboundMessage(
+      [MainViewMessageSchema, CommonViewMessageSchema],
+      message,
+    );
+    webviewView.webview.postMessage(message);
   }
 
   private setupConfigurationWatcher() {
@@ -175,7 +193,7 @@ export class MainViewProvider
     this.onboardingFunnelState = transition.state;
 
     if (view) {
-      view.webview.postMessage({
+      this.postToWebview(view, {
         command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
         state: transition.state,
       });
@@ -200,7 +218,7 @@ export class MainViewProvider
       // Resolve the qualified registry key so the dropdown matches by value;
       // the plain name still resolves by label if the registry isn't loaded.
       const entry = getAgent('setup', AgentCategory.ToolUse);
-      view.webview.postMessage({
+      this.postToWebview(view, {
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
         agentId: entry ? agentKeyOf(entry) : 'setup',
         sessionType: 'toolUse',
@@ -218,11 +236,11 @@ export class MainViewProvider
 
     await refresh();
     const optionsData = await computeAgentOptionsData();
-    view.webview.postMessage({
+    this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,
     });
-    view.webview.postMessage({
+    this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
       optionsData: await loadMainViewTeamOptions(),
     });
@@ -237,7 +255,7 @@ export class MainViewProvider
     if (!view) return;
 
     const optionsDataByCategory = await loadMainViewModelOptions();
-    view.webview.postMessage({
+    this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsDataByCategory,
     });
@@ -316,10 +334,24 @@ export class MainViewProvider
   }
 
   private setupInitialState(webviewView: vscode.WebviewView): void {
-    webviewView.webview.postMessage({
+    // REQUEST_BASE_FILE is inbound-only (no outbound schema), so the
+    // assertion passes it through unchecked.
+    this.postToWebview(webviewView, {
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
+    this.flushPendingState();
+  }
+
+  /**
+   * Sole deliverer of queued restores (see stateRestoreCommand). Runs both when
+   * the webview resolves and whenever the launcher is (re)shown, so a restore
+   * enqueued while another sidebar view is active is still delivered once the
+   * launcher appears — including when it is already the active view.
+   */
+  private flushPendingState(): void {
+    const webviewView = this.getMainModeView();
+    if (!webviewView) return;
     for (
       let pendingData = consumePendingState();
       pendingData;
@@ -332,7 +364,7 @@ export class MainViewProvider
         console.warn('Invalid pending state restore payload', parsed.error);
         continue;
       }
-      webviewView.webview.postMessage({
+      this.postToWebview(webviewView, {
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
         state: parsed.data,
         executeImmediately: pendingData.executeImmediately,
@@ -387,6 +419,7 @@ export class MainViewProvider
 
   public async showInSidebar(): Promise<void> {
     this.switchMode(SIDEBAR_VIEWS.MAIN);
+    this.flushPendingState();
     await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }

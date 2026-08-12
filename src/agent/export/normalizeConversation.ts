@@ -14,24 +14,23 @@
  */
 
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
-import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
-import { z } from 'zod';
+import { isFunctionToolCall } from '@agent/modelHandlers/openai/functionToolCalls';
 import {
   extractTextContentPart,
   isFunctionCallOutputItem,
-} from '@agent/modelHandlers/openai/openAIResponseContent';
-import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
+  isResponseFunctionToolCallItem,
+} from '@agent/modelHandlers/openai/responsesShapeGuards';
+import { z } from 'zod';
 import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import { isObject } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
   ChatCompletionMessageFunctionToolCall,
-  ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 
 import type { ExportNode, UserPart } from './schemas';
@@ -270,7 +269,7 @@ function extractToolResultText(block: ContentBlock): string | undefined {
 // Non-text tags are shared with the `formatConversationBlock` switch in
 // `@agent/storage/conversationFormat` via `CONVERSATION_BLOCK_TYPES`
 // (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-// (`@agent/types/ServerToolTypes`) — both switches must recognize the same
+// (`@agent/types/ServerTools`) — both switches must recognize the same
 // tags, just into different output shapes (a structured `ExportNode` here
 // vs. a truncated marker string there).
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
@@ -457,15 +456,6 @@ function getAssistantToolCalls(
     return [];
   }
 
-  const functionToolCalls: ChatCompletionMessageFunctionToolCall[] = [];
-  for (const toolCall of message.tool_calls) {
-    const candidate: ChatCompletionMessageToolCall[] = [toolCall];
-    try {
-      assertToolCallsAreChatCompletionFunctionToolCalls(candidate);
-      functionToolCalls.push(candidate[0]);
-    } catch {
-      // Skip non-function or malformed entries while preserving valid calls.
-    }
-  }
-  return functionToolCalls;
+  // Skip non-function entries while preserving valid calls.
+  return message.tool_calls.filter(isFunctionToolCall);
 }

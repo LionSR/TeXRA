@@ -7,7 +7,6 @@
 import { wrapProviderOAuthClient } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
-  type SubscriptionAuthorizeRequest,
   type SubscriptionOAuthClient,
   type SubscriptionOAuthPolicy,
   type SubscriptionSessionStatus,
@@ -28,12 +27,7 @@ import {
   exchangeAuthorizationCode as defaultExchange,
   refreshTokens as defaultRefresh,
 } from './xaiOAuthClient';
-import {
-  XaiAuthError,
-  XaiSessionSchema,
-  type XaiSession,
-  type XaiTokenResponse,
-} from './xaiSessionTypes';
+import { XaiAuthError, XaiSessionSchema, type XaiSession } from './xaiSessionTypes';
 
 export type XaiSessionStorage = SubscriptionSessionStorage;
 export type XaiOAuthClient = SubscriptionOAuthClient;
@@ -111,14 +105,5 @@ export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSessi
       now: init.now,
       errorType: XaiAuthError,
     });
-  }
-
-  buildAuthorizeRequest(_port?: number): SubscriptionAuthorizeRequest {
-    // Port is fixed by the Grok-CLI registration; policy ignores the argument.
-    return super.buildAuthorizeRequest(0);
-  }
-
-  completeDeviceLogin(tokens: XaiTokenResponse): Promise<XaiSession> {
-    return this.storeTokens(tokens);
   }
 }

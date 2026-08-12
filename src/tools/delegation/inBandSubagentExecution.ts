@@ -38,7 +38,6 @@ import * as logger from '@logger/logUtils';
 import {
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
-  type StreamTabId,
 } from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -49,6 +48,9 @@ import {
 } from './subagentResults';
 
 // Local file imports
+// Type-only: the strategy module pulls in `@agent/runtime/executeAgent` at
+// runtime (see the lazy import below), but a type import is erased at build.
+import type { ChildRunLaunchOptions } from './nativeSubagentStrategy';
 import {
   buildSubagentResult,
   formatBuiltSubagentDelivery,
@@ -66,23 +68,9 @@ import {
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
 
-interface InBandSubagentExecutionBaseOptions {
+interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
-  readonly agentName: string;
-  readonly parentStreamId: StreamTabId;
-  readonly session: SessionHandle;
-  readonly approvalPromptsUnavailable?: boolean;
-  readonly onApprovalPolicyDenial?: () => void;
-  readonly runtimeUnavailableTools?: readonly string[];
-  readonly signal?: AbortSignal;
-  readonly onStreamResolved?: (streamId: StreamTabId) => void;
   readonly onCost?: (totalCostUsd: number | undefined) => void | Promise<void>;
-  /**
-   * Workflow-script phase owning this child, when the caller is a
-   * workflow-script run. Rides to the child's roster row so a host can group
-   * grandchild rows by phase.
-   */
-  readonly workflowPhase?: string;
 }
 
 /** Options for the typed child API. Direct persisted parentage is required. */
@@ -474,22 +462,17 @@ async function executeInBand(
         });
       }
 
+      // The base options carry the shared ChildRunLaunchOptions fields, so a
+      // spread forwards every launch option to the strategy automatically — a
+      // new shared option needs a single declaration, not a second mapping.
       const strategy = createNativeSubagentStrategy({
+        ...options,
         config,
         agentCategoryExplicit: true,
         executionId,
-        parentExecutionId: options.parentExecutionId,
-        agentName: options.agentName,
-        orchestratorStreamId: options.parentStreamId,
-        parentSession: options.session,
         startedAt,
         workingDirectory,
-        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
-        workflowPhase: options.workflowPhase,
         executionMode: 'single-cycle',
-        signal: options.signal,
         onStreamResolved: options.onStreamResolved ?? (() => {}),
       });
       let flowResult: AgentFlowResult;

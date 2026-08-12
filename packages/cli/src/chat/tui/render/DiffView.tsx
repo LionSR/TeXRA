@@ -6,12 +6,16 @@ import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { hiddenRowsText, moreRowsText, previousRowsText } from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import { clamp, isObject } from '@utils/core';
 
-import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
+import {
+  COMPACT_SCROLLABLE_CONTENT_ROWS,
+  maxScrollableRowOffset,
+  scrollBoundedRows,
+} from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
-import { hiddenRowsText, moreRowsText, previousRowsText } from './overflowText';
 
 type Hunk = StructuredPatchHunk;
 
@@ -33,7 +37,6 @@ interface DiffStats {
 
 const NO_NEWLINE_MARKER = '\\';
 const DEFAULT_DIFF_WIDTH = 74;
-export const COMPACT_DIFF_DISPLAY_LINES = 3;
 
 type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
 
@@ -163,7 +166,7 @@ export function maxDiffScrollOffset(
   maxDisplayLines: number,
 ): number {
   return maxScrollableRowOffset({
-    compactRows: COMPACT_DIFF_DISPLAY_LINES,
+    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines,
     totalLines,
   });
@@ -178,7 +181,7 @@ export function initialDiffScrollOffset(
   width: number,
   maxDisplayLines: number,
 ): number {
-  if (maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES) return 0;
+  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) return 0;
 
   const lines = wrappedDiffDisplayLines(hunks, width);
   if (lines.length <= maxDisplayLines) return 0;
@@ -287,12 +290,12 @@ export function scrollBoundedDiffDisplayLines(
       ? diffDisplayLines(hunks, maxHunkLines)
       : wrappedDiffDisplayLines(hunks, width, maxHunkLines);
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
-  if (maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES) {
+  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     return compactBoundedDiffDisplayLines(lines, maxDisplayLines, width);
   }
 
   const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
-    compactRows: COMPACT_DIFF_DISPLAY_LINES,
+    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines,
     rows: lines,
     scrollOffset,

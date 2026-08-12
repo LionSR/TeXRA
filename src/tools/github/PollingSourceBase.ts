@@ -23,13 +23,15 @@ import {
   createBoundedIdSet,
   type BoundedIdSet,
 } from '@utils/core/boundedIdSet';
-import { getNewestTimestamp } from './formatUtils';
+import { getNewestTimestamp } from './githubPaths';
 import {
   type ConditionalResponse,
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
 } from './githubClient';
+import { shouldDropBotEvent } from './botFilter';
+import type { GhUser } from './prTypes';
 import type { ZodType } from 'zod';
 
 export interface BasePollSubscriptionState {
@@ -302,6 +304,40 @@ export abstract class PollingSourceBase<
       return undefined;
     }
     return { ...res, data: parsed.data };
+  }
+
+  /**
+   * Consume one comment-shaped conditional GET in the shared comment-list
+   * pipeline. Every poller repeats the same choreography for a comment
+   * resource: on a 200, commit the ETag; seed the dedup resource on the first
+   * tick (so pre-subscription history is never replayed); and on later ticks
+   * diff + emit with the bot filter applied.
+   *
+   * Malformed-payload policy stays at the call site — validate via
+   * `validateOrSkip` before calling (skip-whole-tick) or up front for the whole
+   * tick, or not at all — and `emitEvent` owns the per-resource emit shape
+   * (formatting plus any URL gate). The seed-or-diff choice reads
+   * `isInitialized()` so callers that interleave phases (Issue) and callers
+   * that split them behind an early-return first-tick block (PR/Repo) both
+   * work. Never throws.
+   */
+  protected consumeCommentList<T extends { user: GhUser | null | undefined }>(
+    res: ConditionalResponse<readonly T[]>,
+    etagSlot: (etag: string | undefined) => void,
+    deduped: DedupedResource<T>,
+    emitEvent: (item: T) => void,
+    isInitialized: () => boolean,
+  ): void {
+    if (res.status !== 200) return;
+    etagSlot(res.etag);
+    if (isInitialized()) {
+      deduped.diff(res.data, (item) => {
+        if (shouldDropBotEvent(item.user)) return;
+        emitEvent(item);
+      });
+    } else {
+      deduped.seed(res.data);
+    }
   }
 
   /**

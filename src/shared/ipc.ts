@@ -109,10 +109,6 @@ export const MAIN_VIEW_COMMANDS = {
 
   // File refresh and update operations
   REFRESH_ALL_FILES: 'refreshAllFiles',
-  UPDATE_INPUT_FILES: 'updateInputFiles',
-  UPDATE_CONTEXT_FILES: 'updateContextFiles',
-  UPDATE_MEDIA_FILES: 'updateMediaFiles',
-  UPDATE_OUTPUT_FILES: 'updateOutputFiles',
 
   // Git/diff operations
   REQUEST_RECENT_COMMITS: 'requestRecentCommits',

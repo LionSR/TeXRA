@@ -3,11 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import {
-  runCleanSingle,
-  runCleanMultiple,
-  runCleanRunDir,
-} from '@housekeeping';
+import { runCleanSingle, runCleanMultiple } from '@housekeeping/clean';
+import { runCleanRunDir } from '@housekeeping/runDirOps';
 import * as logger from '@logger/logUtils';
 import { type FileOpResult } from '@shared/schemas/opResults';
 import { type CleanConfig } from './fileOpSchemas';

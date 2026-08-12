@@ -17,7 +17,7 @@
  */
 
 import { executeCommand } from '@utils/system/execUtils';
-import { isGitRepository } from '@utils/system/isGitRepository';
+import { isGitRepository } from '@utils/git/isGitRepository';
 
 import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
 

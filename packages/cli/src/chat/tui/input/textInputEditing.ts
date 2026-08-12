@@ -1,11 +1,11 @@
-import { clamp } from '@utils/core';
-
 import {
   isEscapeInput,
   isUnhandledControlInput,
   normalizedCtrlInput,
   SYNTHETIC_SHIFT_RETURN_INPUT,
-} from './inputKeys';
+} from '@cli/tui/inputKeys';
+import { clamp } from '@utils/core';
+
 
 export interface TextEdit {
   readonly value: string;

@@ -1,5 +1,6 @@
 // Shared imports
 import { create } from 'mutative';
+import type { GoalState, GoalStatus } from '@shared/schemas/goal';
 import {
   isToolUseState,
   isWorkflowState,
@@ -29,6 +30,24 @@ export function updateRounds<T>(
   }
   if (!rounds) return current;
   return { ...current, ...rounds };
+}
+
+/**
+ * Flatten a canonical `GoalState` (discriminated union) into the three
+ * independently-optional fields `ToolUseStreamState` carries on the wire.
+ * The inverse of `deriveGoalState`: status/objective only exist while a goal
+ * is active, so inactive goals write `undefined` for both.
+ */
+export function goalToStateFields(goal: GoalState): {
+  goalActive: boolean;
+  goalStatus: GoalStatus | undefined;
+  goalObjective: string | undefined;
+} {
+  return {
+    goalActive: goal.active,
+    goalStatus: goal.active ? goal.status : undefined,
+    goalObjective: goal.active ? goal.objective : undefined,
+  };
 }
 
 /**

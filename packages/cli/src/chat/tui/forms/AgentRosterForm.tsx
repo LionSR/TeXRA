@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import {
   createWorkspaceAgentRosterController,
@@ -33,9 +33,9 @@ import {
   STARTER_AGENT_MODE_PRESET,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
+import { useAsyncListForm } from './_shared/useAsyncListForm';
 
 type AgentRosterFormMode =
   | 'overview'
@@ -126,32 +126,19 @@ export function AgentRosterForm(
   props: AgentRosterFormProps,
 ): React.JSX.Element | null {
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
-  const [data, setData] = useState<AgentRosterData>();
-  const [error, setError] = useState<string>();
-
-  const fail = (reason: unknown): void => {
-    setError(toErrorMessage(reason));
-    props.onError?.(reason);
-  };
-
-  const refresh = (): void => {
-    void loadRosterData()
-      .then((next) => {
-        setData(next);
-        setError(undefined);
-      })
-      .catch((reason: unknown) => fail(reason));
-  };
-
-  useEffect(refresh, []);
+  const { data, error, reload, reportError } = useAsyncListForm<AgentRosterData>({
+    load: loadRosterData,
+    onClose: props.onClose,
+    onError: props.onError,
+  });
 
   const write = (action: () => Promise<void>, nextMode = mode): void => {
     void action()
       .then(() => {
         setMode(nextMode);
-        refresh();
+        reload();
       })
-      .catch((reason: unknown) => fail(reason));
+      .catch((reason: unknown) => reportError(reason));
   };
 
   if (!data) {

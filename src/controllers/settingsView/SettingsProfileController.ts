@@ -77,39 +77,55 @@ export type ApiAccessModeUpdate =
     }
   | { readonly kind: 'rejected'; readonly reason: 'quota_exhausted' };
 
-export interface SettingsProfileControllerDeps {
-  readonly globalState: StateStore;
+/**
+ * Provider wiring that is identical on every host: the provider catalog
+ * itself and the region-aware lookups built on it. Supplied whole by
+ * {@link getSharedProviderProfileDefaults} rather than a `Partial` of the full
+ * deps, so the shared fragment is a complete, self-typed object.
+ */
+export interface SettingsProfileProviderDeps {
   readonly providerIds: readonly string[];
   readonly providerSettings: Record<string, readonly ProviderSettingDef[]>;
   readonly providerDisplayNames: Record<string, string>;
   readonly providerKeyUrls: Record<string, string>;
-  loadProviderKeyStatuses(): Promise<
-    Record<string, ProviderKeyStatus['status']>
-  >;
   getProviderDisplayName(provider: string, defaultName: string): string;
   getProviderKeyUrl(provider: string, defaultUrl: string): string;
   getProviderStreaming(provider: string): boolean;
   getProviderEndpoint(provider: string): string;
   supportsCustomEndpoint(provider: string): boolean;
-  getConfig<T>(key: string, defaultValue: T): T;
-  updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
-  setUseIncludedModelAccess(enabled: boolean): Promise<void>;
-  refreshSpendingStatus(): Promise<SpendingStatus | null>;
   invalidateModelOptionsCache(): void;
 }
 
 /**
- * Provider wiring that is identical on every host: the provider catalog
- * itself and the region-aware lookups built on it. Each host still supplies
- * its own `globalState`, `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
- * and `setUseIncludedModelAccess`, since those depend on host-specific
- * storage and secrets.
- *
+ * Host-supplied storage/secrets wiring: `globalState`,
+ * `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
+ * `setUseIncludedModelAccess`, and `refreshSpendingStatus` all depend on
+ * host-specific storage and secrets, so each host must supply them. Keeping
+ * them a separate, required half of {@link SettingsProfileControllerDeps}
+ * means a host that forgets one fails at compile time instead of spreading a
+ * `Partial` silently.
+ */
+interface SettingsProfileHostDeps {
+  readonly globalState: StateStore;
+  loadProviderKeyStatuses(): Promise<
+    Record<string, ProviderKeyStatus['status']>
+  >;
+  getConfig<T>(key: string, defaultValue: T): T;
+  updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
+  setUseIncludedModelAccess(enabled: boolean): Promise<void>;
+  refreshSpendingStatus(): Promise<SpendingStatus | null>;
+}
+
+export interface SettingsProfileControllerDeps
+  extends SettingsProfileProviderDeps,
+    SettingsProfileHostDeps {}
+
+/**
  * Returns a fresh object per call rather than a shared exported literal, so
  * one host mutating its spread copy (`{ ...getSharedProviderProfileDefaults(), ... }`)
  * can never alias into the other host's controller.
  */
-export function getSharedProviderProfileDefaults() {
+export function getSharedProviderProfileDefaults(): SettingsProfileProviderDeps {
   return {
     providerIds: API_PROVIDERS,
     providerSettings: PROVIDER_SETTINGS,
@@ -121,7 +137,7 @@ export function getSharedProviderProfileDefaults() {
     getProviderEndpoint,
     supportsCustomEndpoint,
     invalidateModelOptionsCache,
-  } satisfies Partial<SettingsProfileControllerDeps>;
+  };
 }
 
 export class SettingsProfileController {

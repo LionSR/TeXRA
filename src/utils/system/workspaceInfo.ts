@@ -44,7 +44,7 @@ function getPlatformLabel(): string {
       base = 'Windows';
       break;
     case 'linux':
-      base = isWSL() ? 'Linux/WSL' : 'Linux';
+      base = isWSL ? 'Linux/WSL' : 'Linux';
       break;
     default:
       base = process.platform;
@@ -82,6 +82,10 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
   if (branchResult.timedOut || statusResult.timedOut) return null;
 
   const branch = branchResult.success ? branchResult.stdout : null;
+  // execUtils normalizes empty/whitespace-only output to null (see the
+  // ExecResult.stdout contract in src/shared/schemas/opResults.ts), so a
+  // clean `git status --porcelain` yields null and the null test is what
+  // distinguishes clean from dirty.
   const dirty = statusResult.success && statusResult.stdout !== null;
 
   return { branch, dirty };

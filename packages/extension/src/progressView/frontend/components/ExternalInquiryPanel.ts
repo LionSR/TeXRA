@@ -14,7 +14,6 @@
  * component is re-mounted with fresh @state.
  */
 
-import { LRUCache } from 'lru-cache';
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -43,8 +42,13 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
-import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
+import {
+  clearInquiryDraft,
+  getInquiryDraft,
+  isInquiryDraftResolved,
+  setInquiryDraft,
+} from '../slices/inquiryDraftState';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 import type { PermissionState } from '../permissionState';
@@ -56,10 +60,7 @@ type ExternalInquiryPermissionState = Extract<
 
 // ── Draft persistence ──
 
-const DRAFT_CACHE_CAP = 50;
 const DRAFT_SAVE_DELAY_MS = 400;
-const draftCache = new LRUCache<string, InquiryDraft>({ max: DRAFT_CACHE_CAP });
-const resolvedIds = createBoundedIdSet(DRAFT_CACHE_CAP);
 const INQUIRY_SUBMIT_ACTION = 'submit';
 
 interface InquiryPermissionIds {
@@ -80,12 +81,6 @@ function safeHttpUrl(link: string): string | undefined {
 
 function idsEqual(a: InquiryPermissionIds, b: InquiryPermissionIds): boolean {
   return a.requestId === b.requestId && a.threadId === b.threadId;
-}
-
-/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/drop. */
-export function clearInquiryDraft(requestId: string): void {
-  draftCache.delete(requestId);
-  resolvedIds.add(requestId);
 }
 
 // ── Component ──
@@ -134,7 +129,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     if (!this.draftRestored) {
       this.draftRestored = true;
       const data = this.permission.data;
-      const draft = draftCache.get(data.requestId) ?? data.draft;
+      const draft = getInquiryDraft(data.requestId) ?? data.draft;
       if (draft) {
         this.answerText = draft.answer;
         this.sessionLinksText = draft.sessionLinks;
@@ -165,12 +160,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     draft: InquiryDraft | null,
     options: { persist: boolean },
   ): void {
-    if (resolvedIds.has(ids.requestId)) return;
-    if (draft) {
-      draftCache.set(ids.requestId, draft);
-    } else {
-      draftCache.delete(ids.requestId);
-    }
+    if (isInquiryDraftResolved(ids.requestId)) return;
+    setInquiryDraft(ids.requestId, draft);
     if (options.persist) {
       postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
         action: 'draft',

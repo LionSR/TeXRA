@@ -12,6 +12,9 @@ import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
 import type { Dirent } from 'node:fs';
 import type { Skill } from './SkillSchema';
 
+// Local imports - shared schemas
+import type { ActiveSkillSourceScope } from '@shared/schemas';
+
 export { type SkillLoadIssue } from './skillLoader';
 
 interface DiscoveredSkill {
@@ -25,7 +28,10 @@ export interface DiscoverSkillsResult {
   errors: SkillLoadIssue[];
 }
 
-type SkillSourceScope = 'bundled' | 'user' | 'project' | 'interop' | 'custom';
+/** Canonical scope vocabulary, derived from the shared wire-contract enum
+ *  (`@shared/schemas/activeSkills`) so the loader and the persisted snapshot
+ *  can't drift. */
+type SkillSourceScope = ActiveSkillSourceScope;
 
 export interface SkillSource {
   readonly scope: SkillSourceScope;

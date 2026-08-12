@@ -13,7 +13,7 @@ import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   restorePendingSkillActivations,
   takePendingSkillActivations,
-} from '@cli/chat/tui/runChatTui';
+} from '@cli/chat/tui/chatSubmitDriver';
 import { AgentCategory } from '@shared/schemas';
 
 vi.mock('@agent/index', async (importOriginal) => {

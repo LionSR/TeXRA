@@ -7,7 +7,7 @@
  * future agents can quickly understand each session.
  */
 
-import { resolveAgentForLaunch } from '@agent/index';
+import { resolveAgentForLaunch } from '@agent/index/agentRegistry';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';

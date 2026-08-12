@@ -21,12 +21,10 @@ import * as logger from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { errorDataToString } from './errorData';
+import { errorDataToString, FETCH_TIMEOUT_MS } from './errorData';
 import { RemoteAgentListItemSchema, type RemoteAgentListItem } from './types';
 
 export const CHANNEL = 'RemoteAgentLoader';
-
-const FETCH_TIMEOUT_MS = 30_000;
 
 const REMOTE_AGENT_LIST_COLUMNS =
   'id, name, description, visibility, tools, agent_category';
@@ -111,8 +109,7 @@ async function fetchRemoteAgentListRows(
     // retry: 0 preserves the old fetch's fail-fast contract — listRemoteAgents
     // is awaited by registry/settings refreshes and treats failure as an empty
     // list, so ky's default GET retries (which honor Retry-After on 429/503)
-    // would block the UI rather than surfacing immediately. AbortSignal.timeout
-    // (vs ky's header-only `timeout`) also guards the .json() body read.
+    // would block the UI rather than surfacing immediately.
     const data = await ky
       .get(url, {
         headers: {
@@ -129,8 +126,6 @@ async function fetchRemoteAgentListRows(
   } catch (error) {
     if (!(error instanceof HTTPError)) throw error;
 
-    // ky v2 auto-consumes the response body into error.data;
-    // error.response body methods are not usable after that.
     const rawBody = errorDataToString(error.data);
     const parsedError = rawBody
       ? parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema).unwrapOr({

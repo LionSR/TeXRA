@@ -21,7 +21,10 @@ import { getEffectiveDiffBase } from '@shared/schemas';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { roundIndexedEntries } from '@shared/schemas/roundIndexed';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import {
+  isKnownUnsupported,
+  UnsupportedCommandsMixin,
+} from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -102,7 +105,7 @@ function parsePath(path: string): ParsedPath {
 }
 
 @customElement('file-list')
-export class FileList extends LitElement {
+export class FileList extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [designTokens, commonViewStyles, fileListStyles];
 
   @property({ attribute: false }) filesByRound: Record<
@@ -113,15 +116,6 @@ export class FileList extends LitElement {
     string,
     CompileFailure[]
   > = {};
-  /**
-   * Progress-view commands the active host's registry declares
-   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
-   * same convention). Hides the "Run latexFixer" action on a host where
-   * RUN_COMPILE_FIXER is unsupported, instead of leaving a control visible
-   * that can only produce an unavailable-command toast.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state()
   private storageHintDismissed =

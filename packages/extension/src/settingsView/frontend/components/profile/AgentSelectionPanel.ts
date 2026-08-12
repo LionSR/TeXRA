@@ -29,10 +29,13 @@ import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
   type AgentCategory,
-  type AgentSourceType,
+  type AgentSource,
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import {
+  isKnownUnsupported,
+  UnsupportedCommandsMixin,
+} from '@shared/utils/dispatcher';
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 
@@ -46,7 +49,7 @@ function agentKey(agent: AgentSelectionItem): string {
  * (icon + label) shown for non-built-in origins in both list and detail panes.
  */
 const SOURCE_META: Record<
-  AgentSourceType,
+  AgentSource,
   {
     displayName: string;
     tone: 'builtin' | 'custom' | 'remote' | 'inline';
@@ -79,7 +82,7 @@ const SOURCE_META: Record<
 };
 
 @customElement('agent-selection-panel')
-export class AgentSelectionPanel extends LitElement {
+export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -90,19 +93,9 @@ export class AgentSelectionPanel extends LitElement {
   @property({ attribute: false }) category: AgentCategory = 'workflow';
   @property({ attribute: false }) userTier = 'free';
 
-  /**
-   * Commands the active host's registry declares `unsupported(...)`, sent
-   * once at webview-ready (see `unsupportedCommands` in
-   * `@shared/utils/dispatcher`). `null` before that broadcast arrives —
-   * checked via `isKnownUnsupported`, which treats "not yet known" as
-   * unsupported so a control never flashes visible then hidden.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
-
   @state() private selectedKey: string | null = null;
 
-  @state() private groupedSources: Map<AgentSourceType, AgentSelectionItem[]> =
+  @state() private groupedSources: Map<AgentSource, AgentSelectionItem[]> =
     new Map();
 
   /** Flat list in visual display order, for keyboard navigation */
@@ -118,7 +111,7 @@ export class AgentSelectionPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      const groups = new Map<AgentSourceType, AgentSelectionItem[]>();
+      const groups = new Map<AgentSource, AgentSelectionItem[]>();
       for (const agent of this.agents) {
         const list = groups.get(agent.source) ?? [];
         list.push(agent);
@@ -185,7 +178,7 @@ export class AgentSelectionPanel extends LitElement {
     }
   }
 
-  private handleSetAllEnabled(source: AgentSourceType, enabled: boolean): void {
+  private handleSetAllEnabled(source: AgentSource, enabled: boolean): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, {
       category: this.category,
       source,

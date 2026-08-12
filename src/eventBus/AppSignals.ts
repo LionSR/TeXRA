@@ -39,6 +39,12 @@ export interface AppSignalPayloads {
   /** The editor's language-model catalogue or access permissions changed. */
   languageModelsChanged: undefined;
 
+  /**
+   * The session's approval policy changed (workspace transition or a settings
+   * update). Surfaces that re-paint the status-bar policy line.
+   */
+  approvalPolicyChanged: undefined;
+
   /** The included-model-access preference changed. */
   includedModelAccessChanged: boolean;
 

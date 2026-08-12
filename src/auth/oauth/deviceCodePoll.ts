@@ -47,8 +47,6 @@ interface DeviceCodePollOptions<T> {
   /** Absolute deadline (epoch ms). */
   readonly deadlineMs: number;
   readonly signal?: AbortSignal;
-  /** Called once per poll attempt, after the wait and before the attempt. */
-  readonly onPoll?: () => void;
   /**
    * Injectable sleep (tests). Defaults to `node:timers/promises` setTimeout
    * with optional AbortSignal support.
@@ -100,8 +98,6 @@ export async function pollUntilDeviceAuthorized<T>(
     if (!checkBefore && now() >= options.deadlineMs) {
       throw options.createTimeoutError();
     }
-
-    options.onPoll?.();
 
     const outcome = await options.attempt();
     if (outcome.ok) {

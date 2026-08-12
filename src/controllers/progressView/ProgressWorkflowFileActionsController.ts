@@ -9,14 +9,12 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { StreamOutputsSource } from './streamOutputs';
 
-interface ProgressWorkflowFileActionsState {
+interface ProgressWorkflowFileActionsState extends StreamOutputsSource {
   getActiveStream(): StreamTabId | '';
-  getRunMetadata(stream: StreamTabId): RunMetadata;
-  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
 }
 
 interface ProgressWorkflowFileActionsHost {

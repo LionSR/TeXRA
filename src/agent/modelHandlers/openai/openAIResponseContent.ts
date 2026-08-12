@@ -11,6 +11,8 @@ import type {
   ResponseOutputMessage,
 } from 'openai/resources/responses/responses';
 
+import { extractTextContentPart } from './responsesShapeGuards';
+
 /** Build an `input_text` content part. */
 export function createInputText(text: string): ResponseInputContent {
   return { type: 'input_text', text };
@@ -45,27 +47,19 @@ export function isAssistantTextMessage(
   );
 }
 
-/** Type guard for function_call_output input items. */
-export function isFunctionCallOutputItem(
-  item: unknown,
-): item is ResponseInputItem.FunctionCallOutput {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    'type' in item &&
-    item.type === 'function_call_output'
-  );
-}
-
-/** Extract the text from an input_text/output_text content part, if it is one. */
-export function extractTextContentPart(part: unknown): string | undefined {
-  if (!part || typeof part !== 'object') return undefined;
-  const candidate = part as { type?: unknown; text?: unknown };
-  return (candidate.type === 'input_text' ||
-    candidate.type === 'output_text') &&
-    typeof candidate.text === 'string'
-    ? candidate.text
-    : undefined;
+/**
+ * Flatten Responses message content (a string, or an array of text parts) to
+ * plain text. Non-text parts contribute nothing. Array parts are joined with
+ * `separator` ('' for in-line text, '\n' for row-per-message shapes); a
+ * string content is returned verbatim regardless of separator.
+ */
+export function contentToText(content: unknown, separator = '\n'): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => extractTextContentPart(part) ?? '')
+    .filter((text) => text.length > 0)
+    .join(separator);
 }
 
 /** Whether a completed Responses payload already carries assistant text. */

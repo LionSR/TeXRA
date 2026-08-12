@@ -7,6 +7,7 @@ import { describe, it } from 'vitest';
 
 // Local imports - commands
 import {
+  commandCatalog,
   commandKeybindings,
   packageCommandContributions,
 } from '@shared/commands/catalog';
@@ -42,5 +43,15 @@ describe('commandCatalog', () => {
       packageJson.contributes.keybindings ?? [],
       commandKeybindings,
     );
+  });
+
+  // commandKeybindings is derived from a hand-mirrored order list
+  // (commandKeybindingOrder) in catalog.ts; this guards the silent-drift case
+  // where a catalog entry gains a keybinding without being added to that list.
+  it('covers every catalog entry that carries a keybinding', () => {
+    const keybindingEntryCount = commandCatalog.filter(
+      (entry) => entry.keybinding !== undefined,
+    ).length;
+    assert.strictEqual(keybindingEntryCount, commandKeybindings.length);
   });
 });

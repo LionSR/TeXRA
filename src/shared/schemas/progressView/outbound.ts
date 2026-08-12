@@ -13,6 +13,7 @@ import {
 } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { SetThemeMessageSchema } from '../commonViewMessages';
+import { commandOnly } from '../messageFactories';
 import { GoalStateSchema, GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
@@ -48,7 +49,11 @@ import {
 import { PlanSchema } from '../plan';
 import { TodoItemSchema } from '../todo';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
-import { ProgressViewPlacementSchema, StreamScopedBaseSchema } from './data';
+import {
+  ProgressViewPlacementSchema,
+  StreamScopedBaseSchema,
+  streamScopedCommand,
+} from './data';
 
 const UpdateStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS),
@@ -361,13 +366,18 @@ const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   objective: z.string().optional(),
 });
 
-const ProgressDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
-});
+// DELETE_STREAM / DELETE_ALL are bidirectional echo commands: the backend emits
+// them to confirm a deletion and the frontend sends them to request one. Both
+// directions compose the identical schema from the shared factories
+// (`streamScopedCommand` / `commandOnly`), so a field added to either shape
+// propagates to both instead of drifting.
+const ProgressDeleteStreamMessageSchema = streamScopedCommand(
+  PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+);
 
-const ProgressDeleteAllMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
-});
+const ProgressDeleteAllMessageSchema = commandOnly(
+  PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+);
 
 const SetPlacementMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_PLACEMENT),

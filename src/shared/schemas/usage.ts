@@ -60,11 +60,34 @@ export function resolveLegacyUsageRoute<T extends { usageRoute?: UsageRoute }>(
   return usageRoute == null ? usage : { ...usage, usageRoute };
 }
 
-export const TokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
-  viaChatGptSubscription: z.boolean().optional(),
-}).transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
-  resolveLegacyUsageRoute(usage, viaChatGptSubscription),
-);
+/**
+ * Appends the retired `viaChatGptSubscription` field to an object schema whose
+ * output already carries `usageRoute`, then applies the shared legacy-route
+ * migration transform. Single home for the migration envelope: every usage
+ * schema that still accepts the legacy flag on parse (`TokenUsageStatsSchema`
+ * here, `TokenUsageStatsParsingBaseSchema` in `streamData.ts`,
+ * `NormalizedUsageSchema` in `@agent/types/NormalizedUsage`) wraps its own base
+ * with this, so the field spelling and the transform can't drift — persisted
+ * usage rows written before `usageRoute` existed are reparsed on every load,
+ * so a silent divergence would corrupt cost data (see #7464).
+ */
+export function withLegacyUsageRoute<S extends { usageRoute?: UsageRoute }>(
+  base: z.ZodType<S>,
+): z.ZodType<S> {
+  return (base as z.ZodObject<z.ZodRawShape>)
+    .extend({ viaChatGptSubscription: z.boolean().optional() })
+    .transform(({ viaChatGptSubscription, ...usage }) =>
+      // The `ZodObject<ZodRawShape>` cast widens the added field's output type
+      // to `unknown`; the schema itself guarantees `boolean | undefined`.
+      resolveLegacyUsageRoute(
+        usage as S,
+        viaChatGptSubscription as boolean | undefined,
+      ),
+    );
+}
+
+export const TokenUsageStatsSchema =
+  withLegacyUsageRoute<TokenUsageStats>(TokenUsageStatsBaseSchema);
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;

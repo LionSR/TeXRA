@@ -1,5 +1,5 @@
 // Local imports - shared core schema
-import { CLI_CORE_SETTING_CONSUMERS } from '@shared/schemas/coreSettings';
+import { CLI_CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 
 // Local imports - state-backed settings catalog (canonical key list)
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
@@ -23,9 +23,7 @@ import { CLI_SETTING_PATHS } from './cliSettings';
  *   (workflow/latexdiff): putting those in `config.json` is a no-op.
  */
 export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
-  ...Object.values(CLI_CORE_SETTING_CONSUMERS)
-    .flat()
-    .map((path) => `texra.${path}`),
+  ...CLI_CORE_SETTING_PATHS.map((path) => `texra.${path}`),
   ...CLI_SETTING_PATHS.map((path) => `texra.${path}`),
   // State-backed settings the CLI reads from config (git author marking, via
   // `cliStore: 'config'`) — derived from the catalog rather than hand-listed.

@@ -3,7 +3,15 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import replacementEngine, { applyReplacements } from '@replacement/engine';
+import replacementEngine, {
+  applyReplacements,
+  NON_REGEX_CATEGORIES,
+  REGEX_CATEGORIES,
+} from '@replacement/engine';
+import {
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+} from '@shared/constants/replacementCategories';
 import {
   EQUATION_MACRO_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
@@ -45,6 +53,38 @@ const embeddedNewlineCaption = [
   '  Second line',
   '  }',
 ].join('\n');
+
+describe('replacement category registry completeness', () => {
+  it('keeps the non-regex application registry in sync with the config universe', () => {
+    const registryNames = NON_REGEX_CATEGORIES.map((c) => c.name);
+    // Every category the engine can run is a config-accepted name…
+    assert.deepEqual(
+      [...new Set(registryNames)].sort(),
+      [...NON_REGEX_REPLACEMENT_CATEGORIES].sort(),
+    );
+    // …and every config-accepted name has an implementation that actually runs.
+    for (const name of NON_REGEX_REPLACEMENT_CATEGORIES) {
+      assert.ok(
+        registryNames.includes(name),
+        `non-regex category "${name}" is accepted by config but never runs`,
+      );
+    }
+  });
+
+  it('keeps the regex application registry in sync with the config universe', () => {
+    const registryNames = REGEX_CATEGORIES.map((c) => c.name);
+    assert.deepEqual(
+      [...new Set(registryNames)].sort(),
+      [...REGEX_REPLACEMENT_CATEGORIES].sort(),
+    );
+    for (const name of REGEX_REPLACEMENT_CATEGORIES) {
+      assert.ok(
+        registryNames.includes(name),
+        `regex category "${name}" is accepted by config but never runs`,
+      );
+    }
+  });
+});
 
 describe('caption spacing normalization', () => {
   it.each([

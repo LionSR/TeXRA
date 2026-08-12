@@ -14,9 +14,8 @@ import {
   sessionHintDismissed$,
 } from '../mainViewState';
 
-// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
-// owns only onboarding commands; see bannerSlice.ts for why (registry is
-// now exhaustive, messageDispatcher.ts is the real coverage checkpoint).
+// `satisfies Partial<...>` subset — owns only onboarding commands; see
+// bannerSlice.ts for the rationale.
 export const onboardingHandlers = {
   [MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL]: (message) => {
     onboardingFunnelState$.set(message.state);

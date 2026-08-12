@@ -6,7 +6,7 @@ import {
   DEFAULT_ENABLED_REPLACEMENTS,
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
-} from '@shared/constants/latex';
+} from '@shared/constants/replacementCategories';
 
 import {
   AGENT_SKILLS_ENABLED_DEFAULT,
@@ -501,7 +501,8 @@ type _AssertCorePathsExhaustive = AssertNever<
 >;
 
 /**
- * Which hosts actually read each Core setting, keyed by the file that reads it.
+ * Core settings a non-VS-Code host (CLI, desktop) actually reads, keyed by
+ * setting path alone.
  *
  * The split matters because `.texra/config.json` is shared by all three hosts,
  * but a setting only the extension reads is still inert in the CLI. The CLI's
@@ -511,91 +512,61 @@ type _AssertCorePathsExhaustive = AssertNever<
  * `stateSettings.ts`. State-backed settings additionally carry
  * `cliRuntimeReachability` because they are surfaced as editable rows in the
  * CLI `/config` panel; the entries here make the weaker claim that the key is
- * not a no-op, so the reading file is the whole of the evidence. The guardrail
- * suite checks that each file exists and sits on the side of the host split it
- * is filed under.
+ * not a no-op. The reading files are not listed here: that file-path knowledge
+ * belongs to the host split guardrail (test-kernel), which checks each reader
+ * file exists and sits on the side of the split it is filed under.
  */
-export const CLI_CORE_SETTING_CONSUMERS = {
-  'src/agent/runtime/selectAutoOpenFinalOutput.ts': [
-    'agentOutputs.autoOpenFinal',
-  ],
-  'src/tools/goal/goalFeatureFlag.ts': ['goal.enabled'],
-  'src/agent/runtime/ModelFactory.ts': ['model.useOpenAIResponsesAPI'],
-  'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts': [
-    'model.useGoogleInteractionsServerState',
-  ],
-  'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts': [
-    'model.useBackgroundResponses',
-    'model.gpt5ReasoningSummary',
-  ],
-  'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts': [
-    'model.openaiParallelToolCalls',
-  ],
-  'src/agent/modelHandlers/ModelHandler.ts': [
-    'model.compactionThresholdPercent',
-  ],
-  'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
-  // Thin provider modules own the public prefer-switch surface; the shared
-  // factory in subscriptionPreference.ts is not a separate consumer key.
-  'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
-  'src/model/xai/xaiPreference.ts': ['xaiGrok.preferSubscription'],
-  'src/utils/media/img.ts': ['maxImageDimension'],
-  'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
-  'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],
-  'src/latex/formatter/latexindentpt.ts': ['latex.latexindentConfig'],
-  'src/latex/formatter/texfmt.ts': ['latex.texfmtConfig'],
-  'src/latex/texTools.ts': [
-    'latex.tikzInputDirectory',
-    'latex.includeWorkspaceInTexinputs',
-  ],
-  'src/latex/TikzPictureManager.ts': ['latex.tikzTemplate'],
-  'src/replacement/engine.ts': [
-    'latex.wrapCritiqueInAlign',
-    'latex.enabledReplacements',
-    'latex.enabledReplacementsRegex',
-    'latex.customReplacementsRegex',
-    'latex.customReplacements',
-  ],
-  'src/tools/approval/latexPreview.ts': ['latexdiff.tempFileLocation'],
+export const CLI_CORE_SETTING_PATHS = [
+  'agentOutputs.autoOpenFinal',
+  'goal.enabled',
+  'model.useOpenAIResponsesAPI',
+  'model.useGoogleInteractionsServerState',
+  'model.useBackgroundResponses',
+  'model.gpt5ReasoningSummary',
+  'model.openaiParallelToolCalls',
+  'model.compactionThresholdPercent',
+  'model.retry.maxAttempts',
+  'chatgptCodex.preferSubscription',
+  'xaiGrok.preferSubscription',
+  'maxImageDimension',
+  'bib.defaultPath',
+  'bib.zoteroPort',
+  'latex.latexindentConfig',
+  'latex.texfmtConfig',
+  'latex.tikzInputDirectory',
+  'latex.includeWorkspaceInTexinputs',
+  'latex.tikzTemplate',
+  'latex.wrapCritiqueInAlign',
+  'latex.enabledReplacements',
+  'latex.enabledReplacementsRegex',
+  'latex.customReplacementsRegex',
+  'latex.customReplacements',
+  'latexdiff.tempFileLocation',
   // Only the extension's git commands read the commit count, but the setup
   // assistant's `update_config` tool writes it from any host, so a CLI-written
   // value must not then be reported as unknown.
-  'src/tools/setup/ConfigTools.ts': ['git.numberOfCommitsToShow'],
-  'src/tools/media/audio.ts': ['audio.soxPath'],
-  'src/logger/logUtils.ts': ['logger.debugMode'],
-  'src/telemetry/UsageLogService.ts': ['telemetry.enabled'],
-  'src/agent/utils/debugMessageSaver.ts': ['debug.saveModelIO'],
-  'src/agent/utils/userVars.ts': ['skills.enabled'],
-  'src/tools/approval/toolEditApproval.ts': ['toolUse.requireEditApproval'],
-  'src/tools/approval/bashApproval.ts': ['toolUse.requireBashApproval'],
-} as const satisfies Readonly<Record<string, readonly CoreSettingPath[]>>;
-
-const EXTENSION_ONLY_CONSUMER_FILES = {
-  // The criticism sink that honors this flag is a VS Code diagnostics surface;
-  // the desktop reports inline criticism as unsupported.
-  'packages/extension/src/frontend/latex/inlineCriticism.ts': [
-    'inlineCriticism.enabled',
-  ],
-  'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts': [
-    'agentReview.runOnCommit',
-  ],
-} as const satisfies Readonly<Record<string, readonly CoreSettingPath[]>>;
+  'git.numberOfCommitsToShow',
+  'audio.soxPath',
+  'logger.debugMode',
+  'telemetry.enabled',
+  'debug.saveModelIO',
+  'skills.enabled',
+  'toolUse.requireEditApproval',
+  'toolUse.requireBashApproval',
+] as const satisfies readonly CoreSettingPath[];
 
 /**
  * Core settings only the VS Code extension reads. Setting one of these in
  * `.texra/config.json` does nothing, so the CLI reports it as unknown.
- *
- * Exported with widened keys: the SDK declaration build (`packages/agent`)
- * forbids `packages/extension/src/` text in emitted `.d.ts`, so the literal
- * consumer-file keys stay on the internal const above, which also feeds the
- * classification guard below.
+ * Keyed by setting path alone; the reading files are tracked by the host split
+ * guardrail (test-kernel), not here.
  */
-export const EXTENSION_ONLY_CORE_SETTING_CONSUMERS: Readonly<
-  Record<string, readonly CoreSettingPath[]>
-> = EXTENSION_ONLY_CONSUMER_FILES;
-
-type ConsumedPaths<T extends Readonly<Record<string, readonly string[]>>> =
-  T[keyof T][number];
+export const EXTENSION_ONLY_CORE_SETTING_PATHS = [
+  // The criticism sink that honors this flag is a VS Code diagnostics surface;
+  // the desktop reports inline criticism as unsupported.
+  'inlineCriticism.enabled',
+  'agentReview.runOnCommit',
+] as const satisfies readonly CoreSettingPath[];
 
 // Build fails when a Core setting is added without filing it on one side of the
 // host split, so a new extension-only key cannot silently rejoin the CLI's
@@ -603,7 +574,7 @@ type ConsumedPaths<T extends Readonly<Record<string, readonly string[]>>> =
 type _AssertEveryCorePathClassified = AssertNever<
   Exclude<
     CoreSettingPath,
-    | ConsumedPaths<typeof CLI_CORE_SETTING_CONSUMERS>
-    | ConsumedPaths<typeof EXTENSION_ONLY_CONSUMER_FILES>
+    | (typeof CLI_CORE_SETTING_PATHS)[number]
+    | (typeof EXTENSION_ONLY_CORE_SETTING_PATHS)[number]
   >
 >;

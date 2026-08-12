@@ -3,8 +3,7 @@ import * as logger from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
-
-const CHANNEL = 'LaTeXCommands';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';
 

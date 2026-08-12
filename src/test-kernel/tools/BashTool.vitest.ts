@@ -51,7 +51,7 @@ import {
 } from '@test/support/streamStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
-import * as subagentResults from '@tools/delegation/subagentResults';
+import * as bashDelivery from '@tools/delegation/bashDelivery';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
@@ -809,7 +809,7 @@ describe('BashTool', () => {
     // unexpected throw on the completion path left the child stream RUNNING
     // forever, with its interrupt handler still attached to a dead process.
     const resolveCommand = holdCommand();
-    vi.spyOn(subagentResults, 'formatBashDelivery').mockImplementation(() => {
+    vi.spyOn(bashDelivery, 'formatBashDelivery').mockImplementation(() => {
       throw new Error('delivery formatting blew up');
     });
     await installPlatform(BASH_PLATFORM_OPTIONS);

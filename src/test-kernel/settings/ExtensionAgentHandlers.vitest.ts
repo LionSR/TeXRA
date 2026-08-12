@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentEntry } from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import { initializeStateManagers } from '@common/state';
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';

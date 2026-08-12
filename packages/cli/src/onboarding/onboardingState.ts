@@ -8,7 +8,7 @@ import {
   apiKeySecretName,
   type ApiProvider,
 } from '@model/apiProviders';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import type { CliModelAccessSelectionResult } from '../runtime/modelAccessSelection';
 
 /**
@@ -25,6 +25,6 @@ export function formatSavedKeySummary(
   selection: CliModelAccessSelectionResult,
 ): string {
   return `Saved your ${
-    PROVIDER_DISPLAY_NAMES[provider] ?? provider
+    providerDisplayName(provider)
   } API key. ${describeSavedKeyLocation(provider)} ${selection.message}`;
 }

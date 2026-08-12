@@ -20,13 +20,13 @@ import {
 } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
 import {
-  ExternalInquiryThreadIdSchema,
+  InquiryThreadIdSchema,
   InquiryDraftSchema,
   InquiryDropActionSchema,
   InquirySubmitActionSchema,
 } from '../inquiry';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
-import { StreamScopedBaseSchema } from './data';
+import { StreamScopedBaseSchema, streamScopedCommand } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
 
@@ -34,11 +34,6 @@ const TrimmedStringSchema = z
   .string()
   .transform((s) => s.trim())
   .pipe(z.string().min(1));
-
-/** StreamScopedBaseSchema plus a `command` literal, with no extra fields. */
-function streamScopedCommand<T extends string>(command: T) {
-  return StreamScopedBaseSchema.extend({ command: z.literal(command) });
-}
 
 /** File action carrying the output file and an optional diff base. */
 function fileWithBaseCommand<T extends string>(command: T) {
@@ -219,7 +214,7 @@ const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
     action: z.literal('draft'),
-    threadId: ExternalInquiryThreadIdSchema,
+    threadId: InquiryThreadIdSchema,
     draft: InquiryDraftSchema.nullable(),
   }),
 ]);

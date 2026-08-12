@@ -29,12 +29,12 @@ import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
 // Local file imports
-import { CHANNEL, LaTeXdiffService } from './service';
 import type {
   DiffOperation,
   DiffProgressReporter,
   DiffRunOutcome,
   DiffRunResult,
+  LatexdiffRuntime,
 } from './types';
 
 function getCanonicalSource(info: OutputFileInfo): string {
@@ -44,6 +44,7 @@ function getCanonicalSource(info: OutputFileInfo): string {
 async function executeDiffOperations(
   operations: DiffOperation[],
   mathMarkup: MathMarkupOption | undefined,
+  latexdiff: LatexdiffRuntime,
   progress: DiffProgressReporter,
   immediateResults: DiffRunResult[] = [],
 ): Promise<DiffRunOutcome> {
@@ -71,20 +72,20 @@ async function executeDiffOperations(
     }
 
     logger.debug(
-      CHANNEL,
+      latexdiff.channel,
       `Running ${operation.type} diff: ${operation.description}`,
     );
 
     const diffResult =
       operation.type === 'round'
-        ? await LaTeXdiffService.runDiffForRound(
+        ? await latexdiff.service.runDiffForRound(
             operation.base,
             operation.revised,
             operation.round,
             mathMarkup,
             { cwd: operation.cwd },
           )
-        : await LaTeXdiffService.runDiffBetweenRounds(
+        : await latexdiff.service.runDiffBetweenRounds(
             operation.base,
             operation.revised,
             operation.fromRound,
@@ -109,9 +110,16 @@ export async function runLatexdiffFromMetadata(params: {
   rounds: RoundIndexed<OutputFileInfo>;
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
+  latexdiff: LatexdiffRuntime;
   progress: DiffProgressReporter;
 }): Promise<DiffRunOutcome> {
-  const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
+  const {
+    rounds,
+    mathMarkup,
+    generateBetweenRoundDiffs,
+    latexdiff,
+    progress,
+  } = params;
 
   const workspaceCwd = WorkspaceFS.getPath();
   const immediateResults: DiffRunResult[] = [];
@@ -176,6 +184,7 @@ export async function runLatexdiffFromMetadata(params: {
   return executeDiffOperations(
     operations,
     mathMarkup,
+    latexdiff,
     progress,
     immediateResults,
   );
@@ -188,6 +197,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   outputFiles?: string[];
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
+  latexdiff: LatexdiffRuntime;
   progress: DiffProgressReporter;
 }): Promise<DiffRunOutcome> {
   const {
@@ -197,6 +207,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     outputFiles,
     mathMarkup,
     generateBetweenRoundDiffs,
+    latexdiff,
     progress,
   } = params;
 
@@ -212,7 +223,10 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   const configuredInputFiles =
     outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
 
-  logger.debug(CHANNEL, `Input files: ${configuredInputFiles.join(', ')}`);
+  logger.debug(
+    latexdiff.channel,
+    `Input files: ${configuredInputFiles.join(', ')}`,
+  );
 
   // Per input file: round number → workspace-relative output path. A round
   // matched more than once (e.g. two legacy files matching the same round
@@ -279,7 +293,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
         // Skip unreadable round dirs but record which one so a missing
         // round output isn't silently invisible during diagnosis.
         logger.debug(
-          CHANNEL,
+          latexdiff.channel,
           `Skipping round dir '${roundAbsoluteDir}': ${error}`,
         );
         continue;
@@ -306,11 +320,14 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     if (roundOutputs.size > 0) {
       inputToOutputsMap.set(candidateInput, roundOutputs);
       logger.debug(
-        CHANNEL,
+        latexdiff.channel,
         `Found ${roundOutputs.size} matching outputs for ${candidateInput}`,
       );
     } else {
-      logger.debug(CHANNEL, `No matching outputs found for ${candidateInput}`);
+      logger.debug(
+        latexdiff.channel,
+        `No matching outputs found for ${candidateInput}`,
+      );
     }
   }
 
@@ -354,5 +371,5 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     }
   }
 
-  return executeDiffOperations(operations, mathMarkup, progress);
+  return executeDiffOperations(operations, mathMarkup, latexdiff, progress);
 }

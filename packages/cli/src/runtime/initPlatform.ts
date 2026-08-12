@@ -3,7 +3,7 @@ import * as nodePath from 'node:path';
 
 // Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import {
   teardownDefaultSession,
   tryDefaultSession,

@@ -24,12 +24,11 @@
 import {
   authorOf,
   formatPreviousStateHint,
-  issueRef,
   makeTruncator,
-  prRef,
   sections,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
+import { issueRef, prRef } from './githubPaths';
 import type {
   GhIssueComment,
   GhPullsListEntry,

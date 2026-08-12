@@ -8,12 +8,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import {
-  chatAgentSupportsDelegation,
-  chatToolUseAgentUsageError,
-} from '@cli/chat/tui/commands/handlers/agentModelCommands';
+import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import {
   assertCliAgentLaunch,
+  chatAgentSupportsDelegation,
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';

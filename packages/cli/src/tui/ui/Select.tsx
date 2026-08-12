@@ -16,8 +16,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   isEscapeInput,
   isPlainReturnInput,
-} from '@cli/chat/tui/input/inputKeys';
-import { selectVisibleInlineOverflowText } from '@cli/chat/tui/render/overflowText';
+} from '@cli/tui/inputKeys';
+import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 import { clamp, clampIndex } from '@utils/core';
 
 // Local imports - TUI input and presentation

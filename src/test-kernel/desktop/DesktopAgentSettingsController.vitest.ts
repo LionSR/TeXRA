@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import type { AgentEntry } from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { TeamOptionDataSchema } from '@shared/schemas/mainView/state';

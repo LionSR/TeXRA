@@ -9,6 +9,7 @@ import {
   ApiProvider,
   type ApiProviderQuickPickItem,
 } from '@frontend/secretManager';
+import { platform } from '@platform/platform';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -43,8 +44,8 @@ function createProfileKeyController(
     getProviderKeyUrl,
     getApiKeySecretName: (provider) =>
       SecretManager.getApiKeySecretName(provider as ApiProvider),
-    setSecret: (key, value) => SecretManager.set(key, value),
-    deleteSecret: (key) => SecretManager.delete(key),
+    setSecret: (key, value) => platform().secrets.set(key, value),
+    deleteSecret: (key) => platform().secrets.delete(key),
     refreshAfterKeyChange,
   });
 }

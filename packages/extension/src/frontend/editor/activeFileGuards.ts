@@ -24,6 +24,33 @@ type ActiveFileGuardResult =
   ActiveFileGuardSuccess | { status: ActiveFileGuardFailureReason };
 
 /**
+ * Single owner of the reason -> message mapping for guard failures. Both the
+ * user-facing warning (surfaced in {@link getActiveLatexEditor}) and the
+ * standardized log line (in {@link runGuardedLatexCommand}) derive from here,
+ * so adding a guard reason means editing this table, not two switches.
+ */
+const GUARD_FAILURE_MESSAGES: Record<
+  ActiveFileGuardFailureReason,
+  { user: string; logTail: string; level: 'warn' | 'error' }
+> = {
+  noEditor: {
+    user: 'No active editor found. Open a LaTeX file in the editor and try again.',
+    logTail: 'no active editor found.',
+    level: 'warn',
+  },
+  unsupportedExtension: {
+    user: 'This command only works with LaTeX files (.tex).',
+    logTail: 'active document is not a LaTeX file.',
+    level: 'warn',
+  },
+  saveFailed: {
+    user: 'Could not save the current file. Please save and try again.',
+    logTail: 'failed to save LaTeX document before running command.',
+    level: 'error',
+  },
+};
+
+/**
  * Retrieve the active text editor when it holds a `.tex` document, optionally
  * saving it first when dirty.
  */
@@ -32,15 +59,13 @@ async function getActiveLatexEditor(
 ): Promise<ActiveFileGuardResult> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    await vscode.window.showWarningMessage(
-      'No active editor found. Open a LaTeX file in the editor and try again.',
-    );
+    await vscode.window.showWarningMessage(GUARD_FAILURE_MESSAGES.noEditor.user);
     return { status: 'noEditor' };
   }
 
   if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
     await vscode.window.showWarningMessage(
-      'This command only works with LaTeX files (.tex).',
+      GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
     );
     return { status: 'unsupportedExtension' };
   }
@@ -48,10 +73,7 @@ async function getActiveLatexEditor(
   if (saveDocument && editor.document.isDirty) {
     const saved = await editor.document.save();
     if (!saved) {
-      await showLoggedMessage(
-        CHANNEL,
-        'Could not save the current file. Please save and try again.',
-      );
+      await showLoggedMessage(CHANNEL, GUARD_FAILURE_MESSAGES.saveFailed.user);
       return { status: 'saveFailed' };
     }
   }
@@ -63,30 +85,6 @@ async function getActiveLatexEditor(
     editor,
     relativePath,
   };
-}
-
-/** Log guard failure with standardized messages. */
-function logGuardFailure(
-  channel: string,
-  action: string,
-  reason: ActiveFileGuardFailureReason,
-): void {
-  const prefix = `Cannot ${action}:`;
-
-  switch (reason) {
-    case 'noEditor':
-      logger.warn(channel, `${prefix} no active editor found.`);
-      break;
-    case 'unsupportedExtension':
-      logger.warn(channel, `${prefix} active document is not a LaTeX file.`);
-      break;
-    case 'saveFailed':
-      logger.error(
-        channel,
-        `${prefix} failed to save LaTeX document before running command.`,
-      );
-      break;
-  }
 }
 
 interface GuardedLatexCommandOptions {
@@ -116,7 +114,13 @@ export async function runGuardedLatexCommand(
     const guardResult = await getActiveLatexEditor(saveDocument);
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(channel, action, guardResult.status);
+      const failure = GUARD_FAILURE_MESSAGES[guardResult.status];
+      const logLine = `Cannot ${action}: ${failure.logTail}`;
+      if (failure.level === 'error') {
+        logger.error(channel, logLine);
+      } else {
+        logger.warn(channel, logLine);
+      }
       return;
     }
 

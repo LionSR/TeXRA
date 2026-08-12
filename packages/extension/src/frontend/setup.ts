@@ -7,11 +7,12 @@ import {
   GlobalStorageAgentDirectoryStorage,
   PathAgentDirectoryBundleSource,
 } from '@agent/index/AgentDirectorySync';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { globalSM } from '@common/state';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';

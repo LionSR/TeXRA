@@ -14,7 +14,9 @@ import { ToggleStateStore } from '@shared/state/ToggleStateStore';
  * a search the user could no longer see.
  */
 const HistoryViewStateSchema = z.object({
-  toggleStates: z.array(z.tuple([z.string(), z.boolean()])).catch([]),
+  toggleStates: z
+    .array(z.tuple([z.string(), z.boolean()]))
+    .prefault([]),
 });
 
 type HistoryViewPersistedState = z.infer<typeof HistoryViewStateSchema>;

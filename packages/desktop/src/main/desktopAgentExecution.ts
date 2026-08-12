@@ -57,7 +57,7 @@ import {
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { runCleanRunDir, runPackRunDir } from '@housekeeping';
+import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import {
   API_PROVIDERS,
   hasUsableApiKey,
@@ -641,7 +641,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.fileActions.runLatexdiffForStream({
+    await this.fileActions.diffStreamToolbarAction({
       outputsByRound: request.outputsByRound ?? {},
       ...(request.runId && { executionId: request.runId }),
       workspaceScan: {
@@ -1151,7 +1151,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.fileActions.runLatexdiffForRun(baseFile, editedFile, context);
+    await this.fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
   }
 
   private getActiveLatexdiffRunContext(

@@ -26,7 +26,10 @@ import type {
   AgentSelectionItem,
   NumberSetting,
 } from '@shared/schemas/settingsViewMessages';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import {
+  isKnownUnsupported,
+  UnsupportedCommandsMixin,
+} from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -42,7 +45,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('agents-tab')
-export class AgentsTab extends LitElement {
+export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -80,16 +83,6 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) userTier = 'free';
   @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
-
-  /**
-   * Commands the active host's registry declares `unsupported(...)`, sent
-   * once at webview-ready (see `unsupportedCommands` in
-   * `@shared/utils/dispatcher`). `null` before that broadcast arrives —
-   * checked via `isKnownUnsupported`, which treats "not yet known" as
-   * unsupported so a control never flashes visible then hidden.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
 
   protected override updated(changed: PropertyValues): void {
     super.updated(changed);

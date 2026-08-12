@@ -8,6 +8,7 @@ import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 
 // Local imports - shared schemas
 import type { HistoryItem } from '@shared/schemas';
+import { UnsupportedCommandsMixin } from '@shared/utils/dispatcher';
 import { HistoryViewState } from '../components/history/state';
 
 // Local imports - settings view components
@@ -16,7 +17,7 @@ import '../components/history/HistoryList';
 import type { SearchAction } from '../components/history/HistoryList';
 
 @customElement('history-tab')
-export class HistoryTab extends LitElement {
+export class HistoryTab extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -29,16 +30,6 @@ export class HistoryTab extends LitElement {
   ];
 
   @property({ attribute: false }) items: HistoryItem[] = [];
-  /**
-   * Settings-view commands the active host's registry declares
-   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
-   * same convention). Threaded down to `history-item` so per-item actions
-   * (rerun, setup, export) hide on a host that can't act on them, instead
-   * of leaving a control visible that can only produce an
-   * unavailable-command toast.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
   @state() private matchCount = '';
   @state() private searchTerm = '';
   @state() private searchAction: SearchAction = null;

@@ -5,7 +5,19 @@ import {
   type MainViewStartupControllerDeps,
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
+import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
+function createStateStore(
+  values: Record<string, unknown> = {},
+): StateStore {
+  return {
+    get: <T>(key: string, defaultValue?: T) =>
+      (values[key] as T | undefined) ?? (defaultValue as T),
+    update: async () => undefined,
+  };
+}
 
 const STARTUP_OPTIONS: MainViewStartupOptions = {
   modelOptionsByCategory: {
@@ -40,6 +52,7 @@ function createController(
       teamOptions: [],
     }),
     getAuthStatus: async () => ({ authenticated: false }),
+    globalState: createStateStore(),
     ...overrides,
   });
 }
@@ -53,6 +66,18 @@ describe('MainViewStartupController', () => {
 
   it('hides the orchestrator banner when disabled', () => {
     const controller = createController({ getConfig: <T>() => false as T });
+
+    expect(controller.getOrchestratorBannerMessage()).toStrictEqual({
+      command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+    });
+  });
+
+  it('hides the orchestrator banner when dismissed in global state', () => {
+    const controller = createController({
+      globalState: createStateStore({
+        [GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED]: true,
+      }),
+    });
 
     expect(controller.getOrchestratorBannerMessage()).toStrictEqual({
       command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,

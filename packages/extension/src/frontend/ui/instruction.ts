@@ -2,7 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { INSTRUCTION_PREFIX, globalSM } from '@common/state';
+import { globalSM } from '@common/state';
+import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 const NEVER_REMIND = 'Never remind again';

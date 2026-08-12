@@ -1,13 +1,12 @@
 import { signal } from '@lit-labs/signals';
 
-import { ANSI_ESCAPE_START } from '@cli/runtime/ansiEscapes';
+import {
+  ANSI_ESCAPE_START,
+  isCsiFinalByte,
+} from '@cli/runtime/ansiEscapes';
 
 interface SgrStripState {
   pending: string;
-}
-
-function isCsiFinalCode(code: number): boolean {
-  return code >= 0x40 && code <= 0x7e;
 }
 
 export function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
@@ -34,7 +33,7 @@ export function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
     }
 
     let end = index + 2;
-    while (end < input.length && !isCsiFinalCode(input.charCodeAt(end))) {
+    while (end < input.length && !isCsiFinalByte(input.charCodeAt(end))) {
       end += 1;
     }
     if (end >= input.length) {

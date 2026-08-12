@@ -44,29 +44,17 @@ import {
 import * as logger from '@logger/logUtils';
 import {
   codexBackendModelId,
-  resolveProviderCapabilities,
+  resolveCodexSubscriptionProfile,
   type ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
+import { contentToText } from './openAIResponseContent';
+import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 
 const CHANNEL = 'ModelHandlerCodex';
-
-/** Flatten Responses message content (string or typed parts) to plain text. */
-function partsToText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((part) => {
-      const text = (part as { text?: unknown } | null)?.text;
-      return typeof text === 'string' ? text : '';
-    })
-    .filter(Boolean)
-    .join('\n');
-}
 
 function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -153,7 +141,7 @@ export function rewriteCodexRequestBody(
       const record: CodexInputItem | undefined =
         item && typeof item === 'object' ? (item as CodexInputItem) : undefined;
       if (record?.role === 'system' || record?.role === 'developer') {
-        const text = partsToText(record.content).trim();
+        const text = contentToText(record.content).trim();
         if (
           text &&
           !instructions.some((instruction) => instruction.includes(text))
@@ -226,7 +214,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   }
 
   private subscriptionCapabilities(): ProviderCapabilityProfile | null {
-    return resolveProviderCapabilities({
+    return resolveCodexSubscriptionProfile({
       model: this.config,
       useOpenRouter: false,
     });

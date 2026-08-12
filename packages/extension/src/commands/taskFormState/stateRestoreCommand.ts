@@ -3,16 +3,14 @@ import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
 import {
   buildMainViewState,
   RestoreRunConfigInputSchema,
 } from '@controllers/mainView/MainViewStateRestoreController';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { COMMON_COMMANDS } from '@shared/ipc';
 
 const CHANNEL = 'stateRestoreCommand';
 
@@ -22,7 +20,7 @@ const RESTORE_MALFORMED_MESSAGE =
 export function registerStateRestoreCommand(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     { id: 'texra.restoreState', handler: restoreState },
   ]);
 }
@@ -47,22 +45,12 @@ async function restoreState(
   try {
     const nextState = buildMainViewState(parsed.data);
 
-    await vscode.commands.executeCommand('texra.showMainView');
-
-    const webviewView = await getMainWebview(CHANNEL);
-    if (webviewView) {
-      webviewView.webview.postMessage({
-        command: COMMON_COMMANDS.STATE_RESTORE,
-        state: nextState,
-        executeImmediately,
-      });
-      logger.info(CHANNEL, 'State restored via direct webview access');
-      return true;
-    }
-
+    // The MainViewProvider is the sole deliverer of pending restores: it flushes
+    // the queue on reveal and whenever the launcher is shown, so there is no
+    // need to probe for a live webview here or to invoke showMainView twice.
     setPendingState(nextState, executeImmediately);
     await vscode.commands.executeCommand('texra.showMainView');
-    logger.info(CHANNEL, 'State stored for later restoration', {
+    logger.info(CHANNEL, 'State stored for restoration', {
       data: { executeImmediately },
     });
     return true;

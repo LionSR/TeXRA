@@ -13,7 +13,7 @@ import {
   extractWebFetchResultFields,
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type {
   CompactionActivityOutcome,

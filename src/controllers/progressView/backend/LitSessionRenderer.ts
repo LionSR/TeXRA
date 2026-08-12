@@ -1,6 +1,10 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import {
+  getDefaultProgressStreamControls,
+  type GetProgressStreamControls,
+} from '@controllers/progressView/progressStreamControls';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
 import {
   SessionState,
@@ -28,31 +32,6 @@ import {
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
-
-interface ProgressStreamBypassControls {
-  bashBypass: boolean;
-  toolEditBypass: boolean;
-  superYoloBypass: boolean;
-}
-
-export type ProgressStreamControls = ProgressStreamBypassControls &
-  (
-    | { goalActive: false }
-    | { goalActive: true; goalStatus: GoalStatus; goalObjective: string }
-  );
-
-export type GetProgressStreamControls = (
-  stream: StreamTabId,
-) => ProgressStreamControls;
-
-function getDefaultProgressStreamControls(): ProgressStreamControls {
-  return {
-    bashBypass: false,
-    toolEditBypass: false,
-    superYoloBypass: false,
-    goalActive: false,
-  };
-}
 
 /**
  * Lit/progress-view renderer over {@link SessionState}: owns postMessage push

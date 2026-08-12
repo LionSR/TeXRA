@@ -43,7 +43,7 @@ interface CreateChildStreamOptions {
  * the stream phase owns the terminal outcome, so an explicit stop/kill that
  * already landed CANCELLED outranks the non-zero exit it caused.
  */
-export type ChildStreamOutcome =
+type ChildStreamOutcome =
   | { kind: 'completed' }
   | { kind: 'failed'; error?: unknown; errorMessage?: string }
   | { kind: 'cancelled' };

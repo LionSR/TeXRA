@@ -27,7 +27,7 @@ import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   isAnthropicServerToolContent,
   type ServerToolExtractionResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type {
   CreateResponseOptions,

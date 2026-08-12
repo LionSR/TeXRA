@@ -8,8 +8,9 @@
 import type {
   ActionDetail,
   AgentChangeDetail,
+  AgentConfigBannerActionDetail,
+  ApiKeyBannerActionDetail,
   BaseFileChangeDetail,
-  BannerActionDetail,
   CheckboxChangeDetail,
   CommitChangeDetail,
   EditedFileChangeDetail,
@@ -72,10 +73,10 @@ export const MainViewEvents = {
     createEvent('focus-instruction', detail),
 
   // Banner events
-  apiKeyAction: (detail: BannerActionDetail) =>
+  apiKeyAction: (detail: ApiKeyBannerActionDetail) =>
     createEvent('api-key-action', detail),
 
-  agentConfigAction: (detail: BannerActionDetail) =>
+  agentConfigAction: (detail: AgentConfigBannerActionDetail) =>
     createEvent('agent-config-action', detail),
 
   dependencyDismiss: () => createEvent('dependency-dismiss', undefined),

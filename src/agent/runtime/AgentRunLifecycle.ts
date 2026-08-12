@@ -45,7 +45,8 @@ import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
-import { persistTerminalExecution } from './persistTerminalExecution';
+import type { SessionHandle } from './SessionHandle';
+import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import {
   buildTerminalFlowResult,
   isWaitingFlowResult,
@@ -393,6 +394,51 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
 }
 
 /**
+ * Close the "Run: ..." transcript group a suspended subagent leaves open.
+ *
+ * The suspended-handle teardown a stop/kill runs (see the WAITING branch of
+ * {@link runFlowWithLifecycle}) reaches this instead of the transcript stage
+ * abstraction. Calling `ctx.parentStage.end()` there would be a silent no-op:
+ * `runFlowWithLifecycle`'s own `finally` calls `ctx.disposeTrace()`
+ * unconditionally the instant the WAITING branch returns — long before a later
+ * kill can invoke the teardown — which unsubscribes the transcript recorder
+ * from the parent stage's trace (see `createRunTrace`'s `dispose`). Emitting
+ * `stage.end` through an already-desubscribed trace reaches no subscriber, so
+ * update the session's transcript store directly instead, mirroring exactly
+ * what `TexraTranscriptRecorder`'s own `stage.end` handler writes for a
+ * `kind: 'run'` stage (see `beginRunStage` in AgentLaunchContext.ts). Each
+ * suspension opens its own stage id (fresh `nanoid` per `beginRunStage` call,
+ * including on resume), so this can never double-close a stage some other turn
+ * already ended.
+ */
+async function closeSuspendedTranscriptGroup(
+  session: SessionHandle,
+  streamId: StreamTabId,
+  handle: AgentExecutionHandle,
+  parentStageId: string | undefined,
+): Promise<void> {
+  if (handle.executionLeaseLost) return;
+  if (!parentStageId) return;
+  const writer = await session.transcripts.loadAndAcquireWriter(
+    streamId,
+    handle.executionId,
+  );
+  try {
+    if (handle.executionLeaseLost) return;
+    writer.update(parentStageId, {
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: {
+        status: RUN_OUTCOME.CANCELLED,
+        endTime: Date.now(),
+        kind: 'run',
+      },
+    });
+  } finally {
+    writer.close();
+  }
+}
+
+/**
  * Wraps a flow runner with full agent run lifecycle management: execution
  * registry tracking, stream-status transitions, error classification, user
  * notifications, and resource disposal.
@@ -655,46 +701,17 @@ export async function runFlowWithLifecycle(
       // one place this run is recorded as suspended, and carries the teardown
       // a stop/kill runs instead of the absent interrupt target — see
       // AgentRunLifecycle/ExecutionRegistry issue #7287.
-      const parentStageId = ctx.parentStage.id;
       handle.suspend(async () => {
         session.followUps.terminalize(streamId);
-        if (handle.executionLeaseLost) return;
-        // Close this turn's "Run: ..." transcript group so a killed suspended
-        // subagent doesn't leave it stuck at `running` forever (every other
-        // terminal path reaches this via `finalizeRunTerminal`'s stage end,
-        // but this WAITING branch never does — the kill path never resumes).
-        // Calling `ctx.parentStage.end()` here would be
-        // a silent no-op: this function's own `finally` below calls
-        // `ctx.disposeTrace()` unconditionally the instant this branch
-        // returns — long before a later kill can invoke this closure — which
-        // unsubscribes the transcript recorder from `ctx.parentStage`'s trace
-        // (see `createRunTrace`'s `dispose`). Emitting `stage.end` through an
-        // already-desubscribed trace reaches no subscriber, so update the
-        // session's transcript store directly instead, mirroring exactly what
-        // `TexraTranscriptRecorder`'s own `stage.end` handler writes for a
-        // `kind: 'run'` stage (see `beginRunStage` in AgentLaunchContext.ts).
-        // Each suspension opens its own stage id (fresh `nanoid` per
-        // `beginRunStage` call, including on resume), so this can never
-        // double-close a stage some other turn already ended.
-        if (parentStageId) {
-          const writer = await session.transcripts.loadAndAcquireWriter(
-            streamId,
-            handle.executionId,
-          );
-          try {
-            if (handle.executionLeaseLost) return;
-            writer.update(parentStageId, {
-              type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-              data: {
-                status: RUN_OUTCOME.CANCELLED,
-                endTime: Date.now(),
-                kind: 'run',
-              },
-            });
-          } finally {
-            writer.close();
-          }
-        }
+        // See closeSuspendedTranscriptGroup for why this closes the transcript
+        // group via the store instead of the stage abstraction, and for the
+        // dispose-ordering caveat that makes the stage path a silent no-op.
+        await closeSuspendedTranscriptGroup(
+          session,
+          streamId,
+          handle,
+          ctx.parentStage.id,
+        );
       });
       return result;
     }

@@ -1,3 +1,4 @@
+import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
   KEY_HINT_SEPARATOR,
   keyHintText,
@@ -7,7 +8,6 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
-import { isEscapeInput } from '../input/inputKeys';
 import { textDisplayWidth } from '../render/terminalText';
 
 export type ConfirmCardKeyAction =

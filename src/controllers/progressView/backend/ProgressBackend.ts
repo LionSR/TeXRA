@@ -13,10 +13,8 @@ import {
   type ProgressViewMessageSender,
 } from '@controllers/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
-import {
-  LitSessionRenderer,
-  type GetProgressStreamControls,
-} from '@controllers/progressView/backend/LitSessionRenderer';
+import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
+import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import {
   SessionFactApplier,
   type SessionRunFactEvent,
@@ -241,10 +239,14 @@ export class ProgressBackend {
     );
   }
 
-  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
-    if (!canUseStreamDataDir(stream)) return;
-    if (!this.hasDeletableStreamData(stream)) return;
-
+  /**
+   * Per-stream prepare shared by single- and all-delete: stop an in-flight
+   * stream we own locally, then wait for the execution-lease release. The
+   * `waitForOwnedExecutionRelease` no-ops for streams with no owned execution,
+   * so the all-delete path can run it over every stream without changing
+   * behavior.
+   */
+  private async prepareStreamDeletionCore(stream: StreamTabId): Promise<void> {
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
@@ -254,7 +256,13 @@ export class ProgressBackend {
     // A terminal child is untracked before its artifact flush releases the
     // execution lease. Auto-close can land in that interval, so the handle is
     // not a reliable indication that local durable writes have finished.
-    await this.state.waitForOwnedExecutionRelease(stream);
+    await this.state.stores.waitForOwnedExecutionRelease(stream);
+  }
+
+  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
+    if (!canUseStreamDataDir(stream)) return;
+    if (!this.hasDeletableStreamData(stream)) return;
+    await this.prepareStreamDeletionCore(stream);
   }
 
   private async deleteStreamNow(
@@ -322,21 +330,12 @@ export class ProgressBackend {
   }
 
   private async prepareAllStreamDeletions(): Promise<void> {
-    const streamIds = this.state.streamLogs.keys();
-    const locallyOwnedStreams = streamIds.filter(
-      (stream) =>
-        this.session.executions.getAgentHandleByStream(stream) !== undefined,
-    );
+    // Runs the per-stream prepare over every known stream — deliberately
+    // without the single-delete guards, so in-flight reserved-segment streams
+    // are still stopped before clearAll() exactly as before the shared core.
     await Promise.all(
-      locallyOwnedStreams.map(async (stream) => {
-        if (isInFlightPhase(this.session.status.get(stream))) {
-          await this.lifecycle.stopStream(stream);
-        }
-      }),
-    );
-    await Promise.all(
-      locallyOwnedStreams.map((stream) =>
-        this.state.waitForOwnedExecutionRelease(stream),
+      this.state.streamLogs.keys().map((stream) =>
+        this.prepareStreamDeletionCore(stream),
       ),
     );
   }

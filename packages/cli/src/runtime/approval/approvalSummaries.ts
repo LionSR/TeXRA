@@ -13,11 +13,8 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import {
-  CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
-  CLI_PERSONAL_API_RETRY_HINT,
-  codingPlanRetryHint,
-  isCliApiSwitchableRetry,
-  isCliChatGptSubscriptionRetry,
+  cliRetryActionHint,
+  classifyCliRetryAction,
 } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
@@ -129,19 +126,8 @@ export function formatAgentProposalApprovalSummary(
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  if (isCliChatGptSubscriptionRetry(payload)) {
-    return [message, CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT].join('\n');
-  }
-  const codingPlanHint = codingPlanRetryHint(
-    payload.errorDetails?.exhaustionReason,
-  );
-  if (codingPlanHint) {
-    return [message, codingPlanHint].join('\n');
-  }
-  if (isCliApiSwitchableRetry(payload)) {
-    return [message, CLI_PERSONAL_API_RETRY_HINT].join('\n');
-  }
-  return message;
+  const hint = cliRetryActionHint(classifyCliRetryAction(payload));
+  return hint ? [message, hint].join('\n') : message;
 }
 
 export function formatBashApprovalSummary(

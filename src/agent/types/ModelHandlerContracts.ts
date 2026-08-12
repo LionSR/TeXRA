@@ -148,62 +148,67 @@ export interface StopConditionsResult {
   shouldStop: boolean;
 }
 
-export type OpenAIToolCall = {
-  provider: 'openai';
+/**
+ * Shared tool-call shape. Members of {@link SdkToolCall} instantiate this with
+ * their provider literal, input, raw wire type, and any provider-specific
+ * extras. `provider` stays a literal so `SdkToolCall` remains a discriminated
+ * union on it.
+ */
+type ToolCallShape<
+  P extends string,
+  I,
+  R,
+  Extra extends Record<string, unknown> = {},
+> = {
+  provider: P;
   callId: string;
   name: string;
-  input: ChatCompletionMessageFunctionToolCall['function']['arguments'];
-  raw: ChatCompletionMessageToolCall;
-};
+  input: I;
+  raw: R;
+} & Extra;
 
-export type DeepSeekToolCall = {
-  provider: 'deepseek';
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: ChatCompletionMessageToolCall;
-};
+export type OpenAIToolCall = ToolCallShape<
+  'openai',
+  ChatCompletionMessageFunctionToolCall['function']['arguments'],
+  ChatCompletionMessageToolCall
+>;
 
-export type OpenAIResponseToolCall = {
-  provider: 'openai-response';
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: ResponseFunctionToolCallItem;
-};
+export type DeepSeekToolCall = ToolCallShape<
+  'deepseek',
+  unknown,
+  ChatCompletionMessageToolCall
+>;
 
-export type GoogleToolCall = {
-  provider: 'google';
-  callId: string;
-  name: string;
-  input: FunctionCall['args'];
-  raw: FunctionCall;
-  thoughtSignature?: string;
-};
+export type OpenAIResponseToolCall = ToolCallShape<
+  'openai-response',
+  unknown,
+  ResponseFunctionToolCallItem
+>;
 
-export type AnthropicToolCall = {
-  provider: 'anthropic';
-  callId: string;
-  name: string;
-  input: ToolUseBlock['input'];
-  raw: ToolUseBlock;
-};
+export type GoogleToolCall = ToolCallShape<
+  'google',
+  FunctionCall['args'],
+  FunctionCall,
+  { thoughtSignature?: string }
+>;
 
-export type OpenRouterToolCall = {
-  provider: 'openrouter';
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: ORChatToolCall;
-};
+export type AnthropicToolCall = ToolCallShape<
+  'anthropic',
+  ToolUseBlock['input'],
+  ToolUseBlock
+>;
 
-export type VscodeLmToolCall = {
-  provider: 'vscode-lm';
-  callId: string;
-  name: string;
-  input: object;
-  raw: LanguageModelToolCallPart;
-};
+export type OpenRouterToolCall = ToolCallShape<
+  'openrouter',
+  unknown,
+  ORChatToolCall
+>;
+
+export type VscodeLmToolCall = ToolCallShape<
+  'vscode-lm',
+  object,
+  LanguageModelToolCallPart
+>;
 
 export type SdkToolCall =
   | OpenAIToolCall

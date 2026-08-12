@@ -14,11 +14,12 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema } from './identifiers';
+import { formatZodIssuesMessage } from './toolResult';
 import {
   TokenUsageStatsBaseSchema,
   UsageRouteSchema,
   isEmptyUsage,
-  resolveLegacyUsageRoute,
+  withLegacyUsageRoute,
   type TokenUsageStats,
 } from './usage';
 
@@ -80,17 +81,14 @@ const numericUsageParsingShape = Object.fromEntries(
  * loudly on failure, instead of defaulting to zero. Never wrap this in
  * `.catch()` for persisted/cost data — see `parseUsageData`'s docs and #7464.
  */
-export const TokenUsageStatsParsingBaseSchema = z
-  .object({
+export const TokenUsageStatsParsingBaseSchema = withLegacyUsageRoute(
+  z.object({
     ...numericUsageParsingShape,
-    viaChatGptSubscription: z.boolean().prefault(false),
     usageRoute: UsageRouteSchema.optional(),
     // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
     // TypeScript cannot recover the required keys through `Object.fromEntries`.
-  })
-  .transform(({ viaChatGptSubscription, ...usage }): TokenUsageStats =>
-    resolveLegacyUsageRoute(usage as TokenUsageStats, viaChatGptSubscription),
-  ) as z.ZodType<TokenUsageStats>;
+  }),
+) as z.ZodType<TokenUsageStats>;
 
 export interface ParsedUsageData {
   /** Successfully parsed, non-empty per-run usage. */
@@ -149,9 +147,7 @@ export function parseUsageData(raw: unknown): ParsedUsageData {
     if (!parsed.success) {
       console.warn(
         `[streamData] Preserving unparseable usage entry for run "${runId}" ` +
-          `unchanged (not dropped): ${parsed.error.issues
-            .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-            .join('; ')}`,
+          `unchanged (not dropped): ${formatZodIssuesMessage(parsed.error.issues)}`,
       );
       unparsedRuns.set(runId, value);
       continue;

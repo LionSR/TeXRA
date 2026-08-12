@@ -7,7 +7,7 @@ import { type ModelConfig, ModelProvider } from 'llm-zoo';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { resolveProviderCapabilities } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
@@ -19,7 +19,7 @@ class UnsupportedBackgroundHandler extends ModelHandlerOpenAIResponse {
 
 class ProfileDisabledBackgroundHandler extends ModelHandlerOpenAIResponse {
   protected override getActiveProviderCapabilities() {
-    return resolveProviderCapabilities({
+    return resolveCodexSubscriptionProfile({
       model: { ...this.config, codexSubscription: true },
       useOpenRouter: false,
     });

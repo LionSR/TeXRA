@@ -164,6 +164,21 @@ export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
 }
 
 /**
+ * Stamps the active handler's compatibility key onto a keyless legacy shared
+ * record so {@link PersistedFlow.ensureRecord} never sees a stale legacy
+ * shape. Records that already carry a key — or that have no active key to
+ * stamp — are returned unchanged (same object identity). Model-based
+ * inference for keyless records lives at the resume-retrieval boundary
+ * (SessionResumeRetrieval); this path stamps the handler currently in play.
+ */
+export function stampCompatibilityKey<
+  T extends { modelHandlerCompatibilityKey?: string | null },
+>(record: T, compatibilityKey: string | undefined): T {
+  if (record.modelHandlerCompatibilityKey || !compatibilityKey) return record;
+  return { ...record, modelHandlerCompatibilityKey: compatibilityKey };
+}
+
+/**
  * Result from a step execution.
  * Used by stepWithResult() for subclasses that need action and shared state.
  */

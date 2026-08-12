@@ -2,7 +2,7 @@ import { ToolCallAccumulator } from './toolCallAccumulator';
 
 /**
  * Shared accumulation core for the two chat-completion-shaped streaming
- * aggregators (`BaseReasoningStreamAggregator` for OpenAI-compatible
+ * aggregators (`ReasoningStreamAggregator` for OpenAI-compatible
  * reasoning models, `OpenRouterStreamAggregator` for OpenRouter). Both
  * accumulate content text, reasoning text, and streamed tool-call fragments
  * across chunks, then materialize a final response — they differ only in the
