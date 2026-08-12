@@ -509,6 +509,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       ports,
       new AbortController(),
     );
+    if (!firstTurn) throw new Error('Expected a Claude fork turn');
     captured.strategy?.onTurnSuccess?.(firstTurn, {
       executions: stubExecutions(),
     } as any);
@@ -534,6 +535,84 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(ClaudeAgentSessions.lookup('forked-session')).toBeDefined();
     captured.strategy?.releaseSessionOwnership?.();
     ClaudeAgentSessions.release('forked-session');
+  });
+
+  it.each([
+    { caseName: 'omits the new session id', subtype: 'success' },
+    {
+      caseName: 'echoes the source session id',
+      subtype: 'success',
+      sessionId: 'source-session',
+    },
+    {
+      caseName: 'reports an error without a new session id',
+      subtype: 'error_during_execution',
+    },
+  ])('fails a fork that $caseName', async ({ subtype, sessionId }) => {
+    ClaudeAgentSessions.register('source-session', {
+      childStreamId,
+      executionId,
+      executions: stubExecutions(),
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+    });
+    mocks.query.mockImplementation(() =>
+      (async function* () {
+        yield {
+          type: 'result',
+          subtype,
+          ...(subtype === 'success'
+            ? { result: 'Malformed fork turn' }
+            : { errors: ['Provider fork failure'] }),
+          ...(sessionId ? { session_id: sessionId } : {}),
+          usage: { input_tokens: 7, output_tokens: 3 },
+          total_cost_usd: 0.25,
+        };
+      })(),
+    );
+    const captured = captureStrategy();
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'try a different proof',
+      session_id: 'source-session',
+      fork_session: true,
+    });
+
+    expect(result.status).toBe('executed');
+    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
+    const firstTurn = await captured.strategy?.launch?.(
+      ports,
+      new AbortController(),
+    );
+    expect(firstTurn).toMatchObject({
+      isError: true,
+      usage: { input_tokens: 7, output_tokens: 3 },
+      totalCostUsd: 0.25,
+      errorMessage: expect.stringContaining(
+        'Claude Code fork did not create a distinct session',
+      ),
+    });
+    expect(captured.strategy?.isTurnError?.(firstTurn)).toBe(true);
+    const formattedError = await captured.strategy?.formatError(
+      firstTurn,
+      null,
+    );
+    expect(formattedError).toContain('<cost-usd>0.2500</cost-usd>');
+
+    await captured.strategy?.runTurn?.(
+      [{ text: 'must not resume the source', origin: 'user' }],
+      ports,
+      new AbortController(),
+    );
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+    expect(mocks.query.mock.calls[0]?.[0]).toMatchObject({
+      options: { resume: 'source-session', forkSession: true },
+    });
+    expect(mocks.query.mock.calls[1]?.[0].options).not.toHaveProperty('resume');
+    expect(mocks.query.mock.calls[1]?.[0].options).not.toHaveProperty(
+      'forkSession',
+    );
   });
 
   it('rejects a fork from a live session owned by another stream', async () => {
