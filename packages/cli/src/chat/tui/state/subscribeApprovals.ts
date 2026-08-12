@@ -419,7 +419,8 @@ async function requestRetryInteraction(
     }
     if (
       decision.apiMode !== undefined ||
-      decision.disableChatGptSubscription === true
+      decision.disableChatGptSubscription === true ||
+      decision.disableCodingPlan !== undefined
     ) {
       await switchRetryToPersonalCredentials(decision, promptRequest, {
         prepareRetry: options?.prepareRetry,
@@ -684,6 +685,7 @@ async function switchRetryToPersonalCredentials(
           // the mode, because restoring included access clears the OpenRouter
           // toggle: a switch the user never got would otherwise leave their
           // routing preference silently off.
+          let openRouterToPreserve = previousOpenRouter;
           const rollbackFailures = await rollbackChangedSettings([
             {
               writeStarted: subscriptionWriteStarted,
@@ -712,7 +714,7 @@ async function switchRetryToPersonalCredentials(
                 writeStarted: codingPlanWrites.has(id),
                 needsRollback: () => runtime.getEnabled() !== previous,
                 restore: async () => {
-                  await setCliCodingPlanSubscription(id, previous);
+                  await runtime.restoreEnabled(previous);
                   if (runtime.getEnabled() !== previous) {
                     throw new Error(
                       `${runtime.descriptor.displayName} remained ${String(runtime.getEnabled())}.`,
@@ -728,6 +730,10 @@ async function switchRetryToPersonalCredentials(
               writeStarted: apiModeWriteStarted,
               needsRollback: () => getCliApiMode() === decision.apiMode,
               restore: async () => {
+                // A newer OpenRouter choice may have landed after this retry
+                // changed modes. Restoring included mode clears that choice,
+                // so carry its current value into the final route restore.
+                openRouterToPreserve = cliOpenRouterEnabled();
                 await setCliApiMode(previousApiMode);
                 if (getCliApiMode() !== previousApiMode) {
                   throw new Error(`API mode remained ${getCliApiMode()}.`);
@@ -741,7 +747,7 @@ async function switchRetryToPersonalCredentials(
             {
               writeStarted: apiModeWriteStarted,
               needsRollback: () =>
-                previousOpenRouter && !cliOpenRouterEnabled(),
+                openRouterToPreserve && !cliOpenRouterEnabled(),
               restore: async () => {
                 await platform().globalState.update(
                   GlobalStateKey.USE_OPENROUTER,
