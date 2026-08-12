@@ -120,47 +120,26 @@ describe('summarizeSubagentFollowup', () => {
     ).toBe('⟳ research · 3 tool calls');
   });
 
-  it('summarizes a round progress block', () => {
+  it('summarizes todo progress attributes', () => {
     expect(
       summarizeSubagentFollowup(
-        '<subagent-progress id="abc" agent="numerics" type="round" current="2" total="5">\n<file path="a.tex" />\n</subagent-progress>',
+        '<subagent-progress id="abc" agent="review" type="todos" completed="1" active="1" pending="1" />',
       ),
-    ).toBe('⟳ numerics · round 2/5');
-  });
-
-  it('summarizes todo progress blocks that carry JSON bodies', () => {
-    const xml = [
-      '<subagent-progress id="abc" agent="review" type="todos">',
-      '[',
-      '{"content":"done","status":"completed"},',
-      '{"content":"active","status":"in_progress"},',
-      '{"content":"todo","status":"pending"}',
-      ']',
-      '</subagent-progress>',
-    ].join('');
-    expect(summarizeSubagentFollowup(xml)).toBe(
-      '⟳ review · todos · 1 done, 1 active, 1 pending',
-    );
+    ).toBe('⟳ review · todos · 1 done, 1 active, 1 pending');
   });
 
   it('summarizes embedded subagent blocks inside assistant text', () => {
     const text = [
       'before',
       '<subagent-progress id="abc" agent="review" type="started" />',
-      '<subagent-progress id="abc" agent="review" type="conversations" turns="4" characters="4471">',
-      'Last message',
-      '</subagent-progress>',
-      '<subagent-progress id="abc" agent="review" type="round" current="2" total="3">',
-      '<file path="a.tex" />',
-      '</subagent-progress>',
+      '<subagent-progress id="abc" agent="review" type="todos" completed="2" active="1" pending="0" />',
       'after',
     ].join('\n');
     expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
       [
         'before',
         '⟳ review · started',
-        '⟳ review · conversation · 4 turns · 4471 chars',
-        '⟳ review · round 2/3',
+        '⟳ review · todos · 2 done, 1 active, 0 pending',
         'after',
       ].join('\n'),
     );
