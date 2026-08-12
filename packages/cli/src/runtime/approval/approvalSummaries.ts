@@ -11,7 +11,11 @@ import {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { cliRetryActionHint, classifyCliRetryAction } from './approvalPrompts';
+import {
+  cliRetryActionHint,
+  classifyCliRetryAction,
+  type CliApprovalContent,
+} from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -99,12 +103,17 @@ function formatAgentProposalFileGroup(
   return `${label}: ${visibleFiles.join(', ')}${suffix}`;
 }
 
-export function formatAgentProposalApprovalSummary(
+function agentProposalApprovalSummary(
   proposal: AgentProposalPermission,
+  bounded: boolean,
 ): string {
-  const instructionLines = boundedAgentProposalInstructionLines(
-    proposal.instruction,
-  );
+  const fullInstructionLines = proposal.instruction
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n');
+  const instructionLines = bounded
+    ? boundedAgentProposalInstructionLines(proposal.instruction)
+    : fullInstructionLines;
   const workingDirectory = proposal.workingDirectory?.trim();
   return [
     `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
@@ -113,11 +122,21 @@ export function formatAgentProposalApprovalSummary(
     `Model: ${proposal.model}`,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...getProposalFileGroups(proposal).map((group) =>
-      formatAgentProposalFileGroup(group.label, group.files),
+      bounded
+        ? formatAgentProposalFileGroup(group.label, group.files)
+        : `${group.label}: ${group.files.join(', ')}`,
     ),
     'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
+}
+
+export function buildAgentProposalApprovalContent(
+  proposal: AgentProposalPermission,
+): CliApprovalContent {
+  const summary = agentProposalApprovalSummary(proposal, true);
+  const details = agentProposalApprovalSummary(proposal, false);
+  return summary === details ? { summary } : { summary, details };
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
@@ -162,8 +181,9 @@ function boundedToolEditDiffLines(
   });
 }
 
-export function formatToolEditApprovalSummary(
+function toolEditApprovalSummary(
   request: ToolEditApprovalRequest,
+  bounded: boolean,
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
   const diffLines = toolEditDiffLines(request);
@@ -171,9 +191,19 @@ export function formatToolEditApprovalSummary(
     return `${header}\nNo content changes proposed.`;
   }
 
-  const visibleLines = boundedToolEditDiffLines(diffLines);
+  const visibleLines = bounded
+    ? boundedToolEditDiffLines(diffLines)
+    : diffLines;
 
   return `${header}\nProposed diff:\n${visibleLines.join('\n')}`;
+}
+
+export function buildToolEditApprovalContent(
+  request: ToolEditApprovalRequest,
+): CliApprovalContent {
+  const summary = toolEditApprovalSummary(request, true);
+  const details = toolEditApprovalSummary(request, false);
+  return summary === details ? { summary } : { summary, details };
 }
 
 export function formatUserQuestionPrompt(

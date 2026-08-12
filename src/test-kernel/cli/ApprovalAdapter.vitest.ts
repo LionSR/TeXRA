@@ -23,6 +23,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   appendCliApiSwitchHint,
+  askApproval,
   classifyCliRetryAction,
   cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
@@ -30,9 +31,9 @@ import {
 } from '@cli/runtime/approval/approvalPrompts';
 import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/settleApprovals';
 import {
-  formatAgentProposalApprovalSummary,
+  buildAgentProposalApprovalContent,
+  buildToolEditApprovalContent,
   formatRetryRequestMessage,
-  formatToolEditApprovalSummary,
 } from '@cli/runtime/approval/approvalSummaries';
 import {
   decideRetryApproval,
@@ -438,7 +439,7 @@ describe('bounded yolo retry batches (#9532)', () => {
 
 describe('formatToolEditApprovalSummary', () => {
   it('includes the proposed edit diff in interactive CLI prompts', () => {
-    const summary = formatToolEditApprovalSummary({
+    const { summary } = buildToolEditApprovalContent({
       path: '/tmp/proof.tex',
       originalContent: 'Let G be a group.\nThis is wrong.\n',
       proposedContent: 'Let G be a group.\nThis is correct.\n',
@@ -526,9 +527,44 @@ describe('formatToolEditApprovalSummary', () => {
     });
   });
 
+  it('shows complete bounded content without settling the approval', async () => {
+    const prompts: string[] = [];
+    const summaries: string[] = [];
+    const answers = ['v', 'y'];
+    const stderrWrite = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+
+    try {
+      const decision = await askApproval(
+        context({
+          approvalPrompt: async (request) => {
+            prompts.push(request.prompt);
+            summaries.push(request.summary);
+            return answers.shift() ?? '';
+          },
+        }),
+        { summary: 'bounded preview', details: 'complete proposal' },
+      );
+
+      expect(decision).toEqual({ accepted: true, userMessage: undefined });
+      expect(prompts).toEqual([
+        'Approve? [y/N, v view full, or n <feedback>] ',
+        'Approve? [y/N, v view full, or n <feedback>] ',
+      ]);
+      expect(summaries).toEqual(['bounded preview', 'bounded preview']);
+      expect(stderrWrite).toHaveBeenCalledWith(
+        'complete proposal\n',
+        expect.any(Function),
+      );
+    } finally {
+      stderrWrite.mockRestore();
+    }
+  });
+
   it('bounds long diff lines before prompting', () => {
     const longLine = 'x'.repeat(1_000);
-    const summary = formatToolEditApprovalSummary({
+    const { summary, details } = buildToolEditApprovalContent({
       path: '/tmp/generated.json',
       originalContent: '',
       proposedContent: `${longLine}\n`,
@@ -538,6 +574,7 @@ describe('formatToolEditApprovalSummary', () => {
     expect(summary).toContain('[line truncated]');
     expect(summary).not.toContain(longLine);
     expect(summary.length).toBeLessThan(1_000);
+    expect(details).toContain(longLine);
   });
 
   it('marks hidden diff lines when the line budget is exceeded', () => {
@@ -545,7 +582,7 @@ describe('formatToolEditApprovalSummary', () => {
       { length: 100 },
       (_, index) => `generated line ${index + 1}`,
     ).join('\n');
-    const summary = formatToolEditApprovalSummary({
+    const { summary, details } = buildToolEditApprovalContent({
       path: '/tmp/generated.tex',
       originalContent: '',
       proposedContent,
@@ -553,6 +590,8 @@ describe('formatToolEditApprovalSummary', () => {
     });
 
     expect(summary).toContain('diff lines hidden');
+    expect(details).toContain('+generated line 100');
+    expect(details).not.toContain('diff lines hidden');
   });
 
   it('skips prompting for auto-approved edits', async () => {
@@ -581,7 +620,7 @@ describe('formatToolEditApprovalSummary', () => {
 
 describe('formatAgentProposalApprovalSummary', () => {
   it('formats subagent approvals without raw JSON internals', () => {
-    const summary = formatAgentProposalApprovalSummary(
+    const { summary, details } = buildAgentProposalApprovalContent(
       agentProposal({
         instruction:
           'Please verify the proof carefully.\nReport any gaps or hidden cases.',
@@ -597,6 +636,7 @@ describe('formatAgentProposalApprovalSummary', () => {
     expect(summary).not.toContain('proposalId');
     expect(summary).not.toContain('streamId');
     expect(summary).not.toContain('{');
+    expect(details).toBeUndefined();
   });
 
   it('bounds long subagent instructions before prompting', () => {
@@ -606,7 +646,7 @@ describe('formatAgentProposalApprovalSummary', () => {
       (_, index) => `${index + 1}. ${longLine}`,
     ).join('\n');
 
-    const summary = formatAgentProposalApprovalSummary(
+    const { summary, details } = buildAgentProposalApprovalContent(
       agentProposal({
         instruction,
         memories: ['/memories/proof-style.md'],
@@ -619,14 +659,20 @@ describe('formatAgentProposalApprovalSummary', () => {
     expect(summary).toContain('[line truncated]');
     expect(summary).toContain('instruction lines hidden');
     expect(summary).not.toContain(longLine);
+    expect(details).toContain(`  60. ${longLine}`);
+    expect(details).not.toContain('instruction lines hidden');
   });
 
   it('includes workflow proposal file groups', () => {
-    const summary = formatAgentProposalApprovalSummary(
+    const inputFiles = Array.from(
+      { length: 12 },
+      (_, index) => `draft-${index + 1}.tex`,
+    );
+    const { summary, details } = buildAgentProposalApprovalContent(
       agentProposal({
         agent: 'polish',
         instruction: 'Polish the draft and write the revised file.',
-        inputFiles: ['draft.tex'],
+        inputFiles,
         contextFiles: ['notes.md'],
         mediaFiles: ['figure.png'],
         outputFiles: ['draft-polished.tex'],
@@ -638,7 +684,11 @@ describe('formatAgentProposalApprovalSummary', () => {
     expect(summary).toContain(
       'Agent proposal requested: polish (workflow agent)',
     );
-    expect(summary).toContain('Input: draft.tex');
+    expect(summary).toContain('Input: draft-1.tex');
+    expect(summary).toContain('+2 more');
+    expect(summary).not.toContain('draft-12.tex');
+    expect(details).toContain('draft-12.tex');
+    expect(details).not.toContain('+2 more');
     expect(summary).toContain('Context: notes.md');
     expect(summary).toContain('Media: figure.png');
     expect(summary).toContain('Output: draft-polished.tex');

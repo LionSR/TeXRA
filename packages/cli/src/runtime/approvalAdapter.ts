@@ -26,6 +26,7 @@ import {
   settleRetry,
 } from './approval/settleApprovals';
 import {
+  type CliApprovalContent,
   type CliApprovalPromptHooks,
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
@@ -33,10 +34,10 @@ import {
   queueCliApprovalQuestion,
 } from './approval/approvalPrompts';
 import {
-  formatAgentProposalApprovalSummary,
+  buildAgentProposalApprovalContent,
+  buildToolEditApprovalContent,
   formatBashApprovalSummary,
   formatRetryRequestMessage,
-  formatToolEditApprovalSummary,
   formatUserQuestionPrompt,
 } from './approval/approvalSummaries';
 import {
@@ -69,7 +70,7 @@ async function decideToolEdit(
 ): Promise<ToolEditApprovalResult> {
   const decision = await askApproval(
     context,
-    formatToolEditApprovalSummary(request),
+    buildToolEditApprovalContent(request),
     hooks,
   );
   return toToolEditResult(decision, request.proposedContent);
@@ -78,26 +79,28 @@ async function decideToolEdit(
 function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
   event: K,
   payload: CliDecisionApprovalPayloads[K],
-): string {
+): CliApprovalContent {
   switch (event) {
     case 'showPlanApproval': {
       const data = payload as PlanApprovalPermission;
-      return `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`;
+      return {
+        summary: `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`,
+      };
     }
     case 'showAgentProposal': {
       const data = payload as AgentProposalPermission;
-      return formatAgentProposalApprovalSummary(data);
+      return buildAgentProposalApprovalContent(data);
     }
     case 'showRetryRequest': {
       // The prompt surface owns the retry hint: the operator must see the
       // `/api personal` / coding-plan switch guidance in the prompt they
       // actually answer, not only in the pre-prompt stderr line.
       // `formatRetryRequestMessage` is the single retry formatter.
-      return formatRetryRequestMessage(payload as RetryPermission);
+      return { summary: formatRetryRequestMessage(payload as RetryPermission) };
     }
     default: {
       const never: never = event;
-      return String(never);
+      return { summary: String(never) };
     }
   }
 }
@@ -122,11 +125,13 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
 
   if (immediate) return { decision: immediate, prompted: false };
 
-  const summary = summarizeApprovalEvent(event, payload);
-  const decision = await askApproval(context, summary, hooks);
+  const content = summarizeApprovalEvent(event, payload);
+  const decision = await askApproval(context, content, hooks);
   if (!decision.accepted && options.writeRejectionToStderr) {
     writeTextStderr(
-      decision.userMessage ? `${summary}\n${decision.userMessage}` : summary,
+      decision.userMessage
+        ? `${content.summary}\n${decision.userMessage}`
+        : content.summary,
     );
   }
   return { decision, prompted: true };
@@ -224,7 +229,7 @@ export function createHeadlessCliHostInteractions(
     async requestBashApproval(request) {
       const decision = await askApproval(
         context,
-        formatBashApprovalSummary(request),
+        { summary: formatBashApprovalSummary(request) },
         hooks,
       );
       return toApprovalSettlement(decision);

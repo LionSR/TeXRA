@@ -48,6 +48,12 @@ export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
 
+export interface CliApprovalContent {
+  readonly summary: string;
+  /** Complete content behind a bounded summary, shown only on request. */
+  readonly details?: string;
+}
+
 const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 const warnedApprovalContexts = new WeakSet<CliContext>();
 
@@ -252,17 +258,25 @@ export function queueCliApprovalQuestion(
 
 export async function askApproval(
   context: CliContext,
-  summary: string,
+  content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
 ): Promise<ApprovalDecision> {
   let answer: string;
   try {
-    hooks.beforePrompt?.();
-    answer = await queueCliApprovalQuestion(context, {
-      kind: 'approval',
-      summary,
-      prompt: 'Approve? [y/N, or n <feedback>] ',
-    });
+    while (true) {
+      hooks.beforePrompt?.();
+      answer = await queueCliApprovalQuestion(context, {
+        kind: 'approval',
+        summary: content.summary,
+        prompt: content.details
+          ? 'Approve? [y/N, v view full, or n <feedback>] '
+          : 'Approve? [y/N, or n <feedback>] ',
+      });
+      if (content.details == null || answer.trim().toLowerCase() !== 'v') {
+        break;
+      }
+      writeTextStderr(content.details);
+    }
   } catch {
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
