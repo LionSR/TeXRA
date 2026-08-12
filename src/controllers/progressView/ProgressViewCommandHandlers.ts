@@ -8,8 +8,9 @@ import type {
   AgentOptionData,
   AgentProposal,
   ModelOptionData,
+  StreamTabId,
 } from '@shared/schemas';
-import type { RunIdentity, StreamTabId } from '@shared/schemas';
+import { isPlainAgentIdentity } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -42,33 +43,12 @@ import type {
 } from './ProgressFollowUpPolishController';
 
 /**
- * Resume, rerun, and restore are native-agent affordances. A workflow-script
- * stream's persisted config is a borrowed default agent, a process stream's is
- * synthetic, and an external-CLI session resumes through its own tool — for
- * all three, relaunching the stored config would run the wrong thing
- * (live defect 3 of the run-classification consolidation).
- */
-function isNativeAgentRun(identity: RunIdentity | undefined): boolean {
-  return identity?.kind === 'agent' && identity.tool === undefined;
-}
-
-/** User-facing refusal for the resume/re-run/restore gate. Front-end button
- *  hiding makes this rare (stale renderer state, direct IPC), but a refused
- *  action must still say why instead of silently doing nothing. */
-async function reportNonNativeRunRefusal(
-  showInfo: (message: string) => void | PromiseLike<unknown>,
-  action: string,
-): Promise<void> {
-  await showInfo(
-    `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
-      'not one.',
-  );
-}
-
-/**
  * Shared native-agent-run gate for the resume / re-run / restore affordances:
  * resolve the stream's run metadata, refuse with a user-facing message when
  * the run is not a native TeXRA agent run, and require a persisted config.
+ * Workflow-script configs are borrowed, process configs are synthetic, and
+ * external CLI sessions resume through their own tool, so relaunching any of
+ * those stored configs would run the wrong thing.
  * Returns the resolved metadata when the action may proceed, else null.
  */
 export async function resolveNativeAgentRun(
@@ -80,8 +60,11 @@ export async function resolveNativeAgentRun(
   (RunMetadata & { config: NonNullable<RunMetadata['config']> }) | null
 > {
   const metadata = getRunMetadata(stream);
-  if (!isNativeAgentRun(metadata.identity)) {
-    await reportNonNativeRunRefusal(showInfo, action);
+  if (!isPlainAgentIdentity(metadata.identity)) {
+    await showInfo(
+      `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
+        'not one.',
+    );
     return null;
   }
   const { config, ...rest } = metadata;

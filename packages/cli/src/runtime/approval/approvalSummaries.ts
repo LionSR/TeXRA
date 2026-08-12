@@ -1,9 +1,8 @@
-import { structuredPatch } from 'diff';
-
 import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
 } from '@agent/runtime/HostInteractions';
+import { buildHunks, formatHunkHeader } from '@cli/runtime/diffHunks';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
@@ -134,34 +133,20 @@ export function formatBashApprovalSummary(
   return `Command requested:\n${cwd}${request.command}`;
 }
 
-function formatDiffRange(start: number, lineCount: number): string {
-  return lineCount === 1 ? String(start) : `${start},${lineCount}`;
-}
-
 function toolEditDiffLines(
   request: ToolEditApprovalRequest,
 ): readonly string[] {
-  const patch = structuredPatch(
-    request.path,
+  const hunks = buildHunks(
     request.path,
     request.originalContent,
     request.proposedContent,
-    '',
-    '',
-    { context: 3 },
   );
-  if (patch.hunks.length === 0) return [];
+  if (hunks.length === 0) return [];
 
   return [
     `--- ${request.path}`,
     `+++ ${request.path}`,
-    ...patch.hunks.flatMap((hunk) => [
-      `@@ -${formatDiffRange(hunk.oldStart, hunk.oldLines)} +${formatDiffRange(
-        hunk.newStart,
-        hunk.newLines,
-      )} @@`,
-      ...hunk.lines,
-    ]),
+    ...hunks.flatMap((hunk) => [formatHunkHeader(hunk), ...hunk.lines]),
   ];
 }
 
