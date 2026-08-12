@@ -44,6 +44,7 @@ interface MockStorageOptions {
   summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
   onLogWrite?: (key: string) => Promise<void> | void;
+  onSummaryWrite?: (key: string) => Promise<void> | void;
   pauseLogWriteKey?: string;
 }
 
@@ -214,6 +215,7 @@ function mockStorage({
   summaryMtimes = {},
   onLogRead,
   onLogWrite,
+  onSummaryWrite,
   pauseLogWriteKey,
 }: MockStorageOptions): {
   deletes: string[];
@@ -303,6 +305,9 @@ function mockStorage({
     }
     if (areaOf(target) === 'log') {
       await onLogWrite?.(streamKeyFromFile(target));
+    }
+    if (areaOf(target) === 'summary') {
+      await onSummaryWrite?.(streamKeyFromFile(target));
     }
 
     const text =
@@ -1744,6 +1749,35 @@ describe('StreamLogStore summary metadata mirror', () => {
     });
     const reopened = await StreamLogStore.open();
     expect(reopened.getSummaryMeta('alpha')).toEqual(META);
+  });
+
+  it('drains a queued metadata write before a discard-pending reload', async () => {
+    const summaryWriteStarted = createDeferred();
+    const releaseSummaryWrite = createDeferred();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: { alpha: summary(200, 200) },
+      onSummaryWrite: async (streamId) => {
+        if (streamId !== 'alpha') return;
+        summaryWriteStarted.resolve();
+        await releaseSummaryWrite.promise;
+      },
+    });
+    const store = await StreamLogStore.open();
+
+    store.recordSummaryMeta('alpha', META);
+    await summaryWriteStarted.promise;
+
+    let reloaded = false;
+    const reload = store.reload({ discardPendingWrites: true }).then(() => {
+      reloaded = true;
+    });
+    await delay(0);
+    expect(reloaded).toBe(false);
+
+    releaseSummaryWrite.resolve();
+    await reload;
+    expect(reloaded).toBe(true);
   });
 
   it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {

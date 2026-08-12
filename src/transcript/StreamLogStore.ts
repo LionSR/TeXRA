@@ -531,7 +531,12 @@ export class StreamLogStore {
     if (isDeepStrictEqual(summary.meta, meta)) return;
     summary.meta = meta;
     this.stateRevision += 1;
-    void this.maintainSummaryCache(streamId, { ...summary });
+    // Summary metadata mutates independently of the throttled transcript
+    // writes, but it must share their queue: flush/reload drains this queue
+    // before a storage-root change can repoint the relative KV adapters.
+    void this.writeQueue.add(() =>
+      this.maintainSummaryCache(streamId, { ...summary }),
+    );
   }
 
   /** Land metadata recorded before this stream existed in the registry. */

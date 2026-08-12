@@ -407,8 +407,19 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     // the content sync below performs serves established disk state
     // (#9947: the explicit preload-then-read model).
     if (streamId) {
-      await this.state.streamLogs.ensureLoaded(streamId);
-      await this.state.snapshots.preload([streamId]);
+      try {
+        await Promise.all([
+          this.state.streamLogs.ensureLoaded(streamId),
+          this.state.snapshots.preload([streamId]),
+        ]);
+      } catch (error) {
+        // The backend selection was already committed. Keep the webview in
+        // step with it even when a refresh of otherwise renderable persisted
+        // state fails; a later activation can retry the hydration.
+        this.logger.error(`Failed to hydrate stream ${streamId} for display`, {
+          data: error,
+        });
+      }
     }
 
     // Another setActiveStream may have run while we awaited rehydration;
