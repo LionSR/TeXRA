@@ -9,12 +9,8 @@ import {
 } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
-export interface TeamRosterState {
+interface TeamRosterAgentCatalog {
   getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
-  setEnabledAgentKeys(
-    category: AgentCategory,
-    enabledKeys: string[],
-  ): Promise<void>;
 }
 
 export interface TeamRosterResolution {
@@ -45,15 +41,13 @@ export type TeamRosterPresetResolution =
 
 export interface TeamRosterCatalog {
   resolvePreset(presetId: string): TeamRosterPresetResolution;
-  commitPresetResolution(
-    preset: AgentModePreset,
-    resolution: TeamRosterResolution,
-  ): Promise<void>;
+  /** Commit the symbolic preset; the resolution above is preflight evidence only. */
+  commitPreset(preset: AgentModePreset): Promise<void>;
 }
 
 /** Resolve a team against the current catalog without writing roster state. */
 export function resolveTeamRoster(
-  state: Pick<TeamRosterState, 'getAgents'>,
+  state: TeamRosterAgentCatalog,
   preset: AgentModePreset,
 ): TeamRosterResolution {
   const resolved = byCategory((category) =>
@@ -66,21 +60,6 @@ export function resolveTeamRoster(
       (category) => resolved[category].nameSlots,
     ),
   };
-}
-
-/** Commit a previously resolved roster. */
-export async function commitTeamRoster(
-  state: Pick<TeamRosterState, 'setEnabledAgentKeys'>,
-  resolution: TeamRosterResolution,
-): Promise<void> {
-  for (const category of AGENT_CATEGORIES) {
-    // Resolved keys and unresolved name slots persist side by side so a
-    // name-matched member activates the moment it appears in the catalog.
-    await state.setEnabledAgentKeys(category, [
-      ...resolution.keys[category],
-      ...resolution.nameSlots[category],
-    ]);
-  }
 }
 
 /**
@@ -96,7 +75,7 @@ export function teamHostedNamesForPreflight(
 }
 
 function resolveAgentKeys(
-  state: Pick<TeamRosterState, 'getAgents'>,
+  state: TeamRosterAgentCatalog,
   category: AgentCategory,
   names: string[],
 ): { keys: string[]; nameSlots: string[] } {

@@ -101,10 +101,7 @@ ${describeTeams()}`,
           resolution: resolveTeamRoster(state, preset),
         };
       },
-      // `resolution` is unused: roster.setTeam persists a live {kind:'team'}
-      // reference and re-resolves against the catalog on read, rather than
-      // committing the frozen per-agent-key snapshot the preflight computed.
-      commitPresetResolution: async (preset) => {
+      commitPreset: async (preset) => {
         await roster.setTeam(preset.id);
         await roster.setDefaultTeam(preset.id);
       },

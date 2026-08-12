@@ -73,9 +73,11 @@ function createController(options?: {
 }): {
   controller: SettingsAgentCatalogController;
   enabled: Partial<Record<AgentCategory, string[] | undefined>>;
+  appliedTeams: AgentModePreset[];
   customPresets: unknown[];
 } {
   const enabled = { ...(options?.enabled ?? {}) };
+  const appliedTeams: AgentModePreset[] = [];
   let customPresetsRaw: unknown = options?.customPresets ?? [];
   return {
     controller: new SettingsAgentCatalogController({
@@ -84,6 +86,9 @@ function createController(options?: {
         getEnabledAgentKeys: (category) => enabled[category],
         setEnabledAgentKeys: async (category, enabledKeys) => {
           enabled[category] = enabledKeys;
+        },
+        setTeamRoster: async (preset) => {
+          appliedTeams.push(preset);
         },
         getAgents: (category) =>
           options?.agents?.[category] ?? AGENTS[category],
@@ -101,6 +106,7 @@ function createController(options?: {
       },
     }),
     enabled,
+    appliedTeams,
     get customPresets() {
       return Array.isArray(customPresetsRaw) ? customPresetsRaw : [];
     },
@@ -174,7 +180,7 @@ describe('SettingsAgentCatalogController', () => {
         toolUse: ['review', 'missing'],
       },
     };
-    const { controller, enabled } = createController({
+    const { controller, appliedTeams } = createController({
       customPresets: [persistedPreset],
     });
 
@@ -186,15 +192,18 @@ describe('SettingsAgentCatalogController', () => {
       icon: 'bookmark',
     });
     expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
-    await controller.commitPresetResolution(
-      resolved.preset,
-      resolved.resolution,
-    );
+    expect(resolved.resolution.keys).toStrictEqual({
+      workflow: ['remote:writer'],
+      toolUse: ['builtInToolUse:review'],
+    });
+    expect(resolved.resolution.nameSlots).toStrictEqual({
+      workflow: [],
+      toolUse: ['missing'],
+    });
 
-    assert.deepEqual(enabled.workflow, ['remote:writer']);
-    // Unresolved names are kept bare so the agent joins the roster the
-    // moment it appears (sign-in, install) — never silently dropped.
-    assert.deepEqual(enabled.toolUse, ['builtInToolUse:review', 'missing']);
+    await controller.commitPreset(resolved.preset);
+
+    expect(appliedTeams).toStrictEqual([resolved.preset]);
   });
 
   it('reports unknown presets without writing enabled agent state', () => {

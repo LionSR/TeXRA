@@ -94,10 +94,7 @@ export async function applyTeamRosterWithPreflight(
     };
   }
 
-  await deps.catalog.commitPresetResolution(
-    preflight.value.preset,
-    preflight.value.resolution,
-  );
+  await deps.catalog.commitPreset(preflight.value.preset);
   return {
     status: 'applied',
     preset: preflight.value.preset,
