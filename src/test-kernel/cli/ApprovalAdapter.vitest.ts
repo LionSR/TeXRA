@@ -23,6 +23,8 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   appendCliApiSwitchHint,
+  classifyCliRetryAction,
+  cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPrompts';
@@ -683,5 +685,32 @@ describe('formatRetryRequestMessage', () => {
       'Kimi Code subscription',
     );
     expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
+    expect(classifyCliRetryAction(retry)).toBe('disable-coding-plan:kimiCode');
+    expect(cliRetryApiSwitchDecision(retry)).toEqual({
+      accepted: true,
+      apiMode: 'personal',
+      disableCodingPlan: 'kimiCode',
+    });
+  });
+
+  it('uses the same coding-plan decision for a GLM quota limit', () => {
+    const retry: RetryPermission = {
+      ...credentialExhaustedRetry,
+      errorDetails: {
+        exhaustionReason: 'glm-coding-plan',
+        isRelayError: false,
+        statusCode: 429,
+      },
+    };
+
+    expect(classifyCliRetryAction(retry)).toBe(
+      'disable-coding-plan:glmCodingPlan',
+    );
+    expect(cliRetryApiSwitchDecision(retry)).toEqual({
+      accepted: true,
+      apiMode: 'personal',
+      disableCodingPlan: 'glmCodingPlan',
+    });
+    expect(formatRetryRequestMessage(retry)).toContain('regular GLM endpoint');
   });
 });

@@ -14,6 +14,7 @@
  */
 
 import type { UsageRoute } from '@shared/schemas';
+import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 
 /** Model calls paid for by your TeXRA plan. */
 export const INCLUDED_ACCESS = {
@@ -68,17 +69,19 @@ interface UsageRouteBadge {
 export function usageRouteBadge(
   route: UsageRoute | undefined,
 ): UsageRouteBadge | undefined {
+  const codingPlan = codingPlanForUsageRoute(route);
+  if (codingPlan) {
+    return {
+      label: codingPlan.displayName,
+      compactLabel: codingPlan.displayName,
+      subscription: true,
+    };
+  }
   switch (route) {
     case 'chatgpt-subscription':
       return { label: 'ChatGPT', compactLabel: 'ChatGPT', subscription: true };
     case 'xai-subscription':
       return { label: 'Grok', compactLabel: 'Grok', subscription: true };
-    case 'kimi-code-subscription':
-      return {
-        label: 'Kimi Code',
-        compactLabel: 'Kimi Code',
-        subscription: true,
-      };
     case 'relay':
       return {
         label: INCLUDED_ACCESS.inline,

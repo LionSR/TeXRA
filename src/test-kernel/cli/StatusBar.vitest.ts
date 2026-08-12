@@ -4,6 +4,7 @@ import {
   buildStatusBarDisplay,
   ctrlCActionForFocus,
   statusBarStreamTarget,
+  subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
@@ -113,6 +114,30 @@ function heavyUsage(usageRoute: UsageRoute): TokenUsage {
 }
 
 describe('CLI StatusBar display model', () => {
+  it('does not show prospective plan quota after completed API-key usage', () => {
+    expect(
+      subscriptionUsageProviderForStatus({
+        usageRoute: 'api-key',
+        modelAccess: 'personal',
+        prospectiveCodingPlan: 'glmCodingPlan',
+      }),
+    ).toBeUndefined();
+    expect(
+      subscriptionUsageProviderForStatus({
+        usageRoute: undefined,
+        modelAccess: 'personal',
+        prospectiveCodingPlan: 'glmCodingPlan',
+      }),
+    ).toBeUndefined();
+    expect(
+      subscriptionUsageProviderForStatus({
+        usageRoute: undefined,
+        modelAccess: 'glm-code',
+        prospectiveCodingPlan: 'glmCodingPlan',
+      }),
+    ).toBe('glmCodingPlan');
+  });
+
   it('uses clear compact labels for API access mode', () => {
     // The session header and the status bar share one mapper, so neither can
     // print the raw enum value ('included' / 'personal') the way they once did.
@@ -684,7 +709,11 @@ describe('CLI StatusBar display model', () => {
   it('shows the route that produced usage instead of a stale access preference', () => {
     const accessLabel = (
       usageRoute:
-        'chatgpt-subscription' | 'kimi-code-subscription' | 'relay' | 'api-key',
+        | 'chatgpt-subscription'
+        | 'kimi-code-subscription'
+        | 'glm-coding-plan-subscription'
+        | 'relay'
+        | 'api-key',
     ): string[] =>
       leftTexts(
         buildStatusBarDisplay(
@@ -706,6 +735,9 @@ describe('CLI StatusBar display model', () => {
 
     expect(accessLabel('chatgpt-subscription')).toContain('subscription');
     expect(accessLabel('kimi-code-subscription')).toContain('subscription');
+    expect(accessLabel('glm-coding-plan-subscription')).toContain(
+      'subscription',
+    );
     expect(accessLabel('relay')).toContain(INCLUDED_ACCESS_LABEL);
     expect(accessLabel('relay')).not.toContain('subscription');
     expect(accessLabel('api-key')).toContain(PERSONAL_API_MODE_LABEL);
@@ -1638,5 +1670,50 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(leftTexts(display)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
+  });
+
+  it('shows the limiting coding-plan quota in the persistent status row', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        modelAccess: 'glm-code',
+        subscriptionQuota: {
+          state: 'available',
+          provider: 'glmCodingPlan',
+          providerName: 'GLM',
+          planName: 'GLM Coding Plan',
+          fetchedAt: 1,
+          windows: [
+            { name: 'five_hour', percentUsed: 42, percentRemaining: 58 },
+            { name: 'monthly', percentUsed: 86, percentRemaining: 14 },
+          ],
+        },
+      }),
+    );
+
+    expect(leftTexts(display)).toContain('GLM Coding Plan 14% left');
+    expect(
+      display.left.find((segment) =>
+        segment.text.startsWith('GLM Coding Plan'),
+      ),
+    ).toMatchObject({ compactText: '14% left', color: 'yellow' });
+  });
+
+  it('does not render unavailable subscription quota as a false zero', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        modelAccess: 'kimi-code',
+        subscriptionQuota: {
+          state: 'unavailable',
+          provider: 'kimiCode',
+          providerName: 'Kimi Code',
+          planName: 'Kimi Code',
+          fetchedAt: 1,
+          windows: [],
+          reason: 'request_failed',
+        },
+      }),
+    );
+
+    expect(leftTexts(display)).toEqual(['◆', 'idle', 'subscription']);
   });
 });
