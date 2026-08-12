@@ -150,6 +150,7 @@ function loadRunExecution(): Promise<
 type LeaseOptions = {
   onExecutionLeaseAcquired?: (
     scope: (operation: () => unknown) => unknown,
+    executionId: ExecutionId,
   ) => void;
 };
 
@@ -210,8 +211,9 @@ function stubRunExecutionDeps(): void {
     flowRecord: 'deleted',
   });
   mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
-      operation(),
+    options.onExecutionLeaseAcquired?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
     );
     return COMPLETED_RUN;
   });
@@ -723,8 +725,9 @@ describe('executeCliRequest', () => {
     const request = baseRequest();
     const context = cliContext();
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
-      options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
-        operation(),
+      options.onExecutionLeaseAcquired?.(
+        (operation: () => unknown) => operation(),
+        'exec-1' as ExecutionId,
       );
       options.onApprovalPolicyDenial?.();
       return COMPLETED_RUN;
@@ -776,44 +779,47 @@ describe('executeCliRequest', () => {
     }
   });
 
-  it('marks owned executions interrupted during platform shutdown', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
-    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
-    let publishLeaseScope:
-      ((scope: typeof runWithOwnership) => void) | undefined;
-    const hangingRun = stubHangingRun((options) => {
-      publishLeaseScope = options.onExecutionLeaseAcquired;
-    });
+  it.each([
+    { label: 'fresh', options: { registerExecution: true } },
+    { label: 'resumed', options: {} },
+  ] as const)(
+    'marks $label owned executions interrupted during platform shutdown',
+    async ({ options }) => {
+      const { platform, executeCliRequest } = await installFakePlatform();
+      const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+      let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+      const hangingRun = stubHangingRun((options) => {
+        publishLeaseScope = options.onExecutionLeaseAcquired;
+      });
 
-    const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
-    });
-    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
-    const shutdown = platform.lifecycle.runShutdown();
-    await Promise.resolve();
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-    publishLeaseScope?.(runWithOwnership);
-    await shutdown;
+      const run = executeCliRequest(baseRequest(), cliContext(), options);
+      await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+      const shutdown = platform.lifecycle.runShutdown();
+      await Promise.resolve();
+      expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+      publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
+      await shutdown;
 
-    expect(runWithOwnership).toHaveBeenCalledOnce();
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-    });
-    hangingRun.resolve(COMPLETED_RUN);
-    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
-    await expect(run).resolves.toEqual({
-      ok: true,
-      result: {
-        category: 'toolUse',
+      expect(runWithOwnership).toHaveBeenCalledOnce();
+      expect(mocks.finalizeExecution).toHaveBeenCalledWith({
         executionId: 'exec-1',
-        outcome: 'cancelled',
-        streamId: 'stream-1',
-      },
-    });
-    expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
-  });
+        outcome: RUN_OUTCOME.CANCELLED,
+        flowRecord: 'preserve',
+      });
+      hangingRun.resolve(COMPLETED_RUN);
+      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+      await expect(run).resolves.toEqual({
+        ok: true,
+        result: {
+          category: 'toolUse',
+          executionId: 'exec-1',
+          outcome: 'cancelled',
+          streamId: 'stream-1',
+        },
+      });
+      expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
+    },
+  );
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
@@ -825,7 +831,7 @@ describe('executeCliRequest', () => {
     const hangingRun = stubHangingRun((options) => {
       options.onExecutionLeaseAcquired?.(() => {
         throw new ExecutionLeaseLostError('exec-1');
-      });
+      }, 'exec-1' as ExecutionId);
     });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
@@ -850,8 +856,9 @@ describe('executeCliRequest', () => {
       outcomePersisted: false,
     });
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
-        operation(),
+      options.onExecutionLeaseAcquired?.(
+        (operation: () => unknown) => operation(),
+        'exec-1' as ExecutionId,
       );
     });
 

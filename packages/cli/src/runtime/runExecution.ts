@@ -237,9 +237,7 @@ export async function executeCliRequest(
         writeLine: writeTextStderr,
       })
     : () => undefined;
-  const ownedExecutionId = options.registerExecution
-    ? request.executionId
-    : undefined;
+  let ownedExecutionId: ExecutionId | undefined;
   let shutdownInterrupted = false;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
@@ -262,19 +260,20 @@ export async function executeCliRequest(
   );
   let shutdownStatusFinalized: Promise<void> | undefined;
   const finalizeShutdownStatus = (): Promise<void> => {
-    if (!shutdownInterrupted || !ownedExecutionId) return Promise.resolve();
+    if (!shutdownInterrupted) return Promise.resolve();
     shutdownStatusFinalized ??= (async () => {
       const runWithOwnership = await leaseScopeReady;
-      if (!runWithOwnership) return;
+      const executionId = ownedExecutionId;
+      if (!runWithOwnership || !executionId) return;
       try {
         await runWithOwnership(async () => {
           await finalizeCliExecution(
-            ownedExecutionId,
+            executionId,
             RUN_OUTCOME.CANCELLED,
             'preserve',
             reportShutdownFinalizationFailure,
           );
-          await completeOwnedExecutionLease(ownedExecutionId);
+          await completeOwnedExecutionLease(executionId);
         });
       } catch (error) {
         if (!(error instanceof ExecutionLeaseLostError)) throw error;
@@ -282,12 +281,13 @@ export async function executeCliRequest(
     })();
     return shutdownStatusFinalized;
   };
-  const disposeShutdownStatus = ownedExecutionId
-    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
-        shutdownInterrupted = true;
-        await finalizeShutdownStatus();
-      })
-    : undefined;
+  const disposeShutdownStatus = tryPlatform()?.lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    async () => {
+      shutdownInterrupted = true;
+      await finalizeShutdownStatus();
+    },
+  );
   const invoke = async (): Promise<ExecuteAgentResult> => {
     try {
       return await runAgent(request, {
@@ -297,7 +297,8 @@ export async function executeCliRequest(
         openWorkflowOutput: options.openWorkflowOutput,
         modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
         beforeLeaseRelease: finalizeShutdownStatus,
-        onExecutionLeaseAcquired: (runWithOwnership) => {
+        onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
+          ownedExecutionId = executionId;
           settleLeaseScope(runWithOwnership);
         },
         stopAfterCycle: options.stopAfterCycle,

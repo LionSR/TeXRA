@@ -16,6 +16,7 @@ import type { ValidatedExecutionRequest } from '@agent/core/state/executionReque
 import {
   AgentCategory,
   RUN_OUTCOME,
+  type ExecutionId,
   type RunOutcome,
   type StreamTabId,
   USER_FOLLOW_UP_SUPPORT,
@@ -54,7 +55,10 @@ export interface RunAgentOptions extends Pick<
   /** Persist host-owned final artifacts while this run still owns its lease. */
   beforeLeaseRelease?: () => Promise<void>;
   /** Bind host callbacks that may run outside the agent's async context. */
-  onExecutionLeaseAcquired?: (scope: OwnedExecutionLeaseScope) => void;
+  onExecutionLeaseAcquired?: (
+    scope: OwnedExecutionLeaseScope,
+    executionId: ExecutionId,
+  ) => void;
   registerExecution?: boolean;
   /** Recheck canonical admission atomically while acquiring a resumed lease. */
   canAcquireResumeLease?: () => boolean | Promise<boolean>;
@@ -130,7 +134,7 @@ export async function runAgent(
   }
 
   const runWithOwnership = captureOwnedExecutionLease(executionId);
-  onExecutionLeaseAcquired?.(runWithOwnership);
+  onExecutionLeaseAcquired?.(runWithOwnership, executionId);
   return await runWithOwnership(async () => {
     let lifecycleStarted = false;
     let runResult: AgentFlowResult | undefined;
