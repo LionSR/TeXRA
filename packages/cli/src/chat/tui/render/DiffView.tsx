@@ -3,8 +3,8 @@
 // (see DIFF_LINE_STYLE for the color rationale).
 
 import { Box, Text } from 'ink';
-import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
+import { buildHunks } from '@cli/runtime/diffHunks';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   hiddenRowsText,
@@ -20,6 +20,7 @@ import {
   scrollBoundedRows,
 } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
+import type { StructuredPatchHunk } from 'diff';
 
 type Hunk = StructuredPatchHunk;
 
@@ -43,17 +44,6 @@ const NO_NEWLINE_MARKER = '\\';
 const DEFAULT_DIFF_WIDTH = 74;
 
 type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
-
-/** Compute hunks once; callers reuse for both stats and the renderer. */
-export function buildHunks(
-  fileLabel: string,
-  original: string,
-  proposed: string,
-): Hunk[] {
-  return structuredPatch(fileLabel, fileLabel, original, proposed, '', '', {
-    context: 3,
-  }).hunks;
-}
 
 export function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
   let added = 0;

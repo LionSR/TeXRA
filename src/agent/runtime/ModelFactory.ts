@@ -169,36 +169,6 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   return handler;
 }
 
-/**
- * Whether a model is pinned to the Interactions API. `requiresInteractionsAPI`
- * is a future per-model opt-in (parallel to `requiresResponsesAPI`); it is not
- * yet on the external llm-zoo ModelConfig, so read it defensively. v0 registers
- * no model with it set.
- */
-function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
-  return (
-    config.provider === ModelProvider.GOOGLE &&
-    !config.openRouterOnly &&
-    (config as { requiresInteractionsAPI?: boolean })
-      .requiresInteractionsAPI === true
-  );
-}
-
-/**
- * Fail loudly when an Interactions-only model resolves to OpenRouter —
- * OpenRouter cannot proxy Interactions, so silently routing it through the
- * OpenRouter handler would be wrong (spec §6.3). Called from
- * `createModelHandler` only (the live-routing path that actually instantiates a
- * handler), keeping the routing predicate pure.
- */
-function assertGoogleInteractionsRoutable(config: ModelConfig): void {
-  if (modelRequiresInteractionsAPI(config)) {
-    throw new Error(
-      `Model ${config.name} requires the Google Interactions API, which cannot be used through OpenRouter. Disable OpenRouter or select a different model.`,
-    );
-  }
-}
-
 /** Check if OpenAI Responses API should be used for this config. */
 export function shouldUseResponsesAPI(
   config: ModelConfig,
@@ -430,10 +400,6 @@ export async function createModelHandler(
     false,
     copilotRouteOverride,
   );
-  if (compatibilityKey === 'ModelHandlerOpenRouterNative') {
-    assertGoogleInteractionsRoutable(config);
-  }
-
   return createModelHandlerForResolvedCompatibilityKey(
     config,
     compatibilityKey,

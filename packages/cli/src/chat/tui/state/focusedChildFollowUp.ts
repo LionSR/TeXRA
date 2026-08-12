@@ -1,6 +1,7 @@
 import {
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
+  isPlainAgentIdentity,
   type StreamTabId,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
@@ -32,8 +33,7 @@ export function focusedChildFollowUpRoute(init: {
   // keeps their composer hidden until terminal-backed interaction has parity.
   const acceptsFollowUps =
     slice?.userFollowUpSupport === USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE &&
-    slice.identity?.kind === 'agent' &&
-    slice.identity.tool === undefined &&
+    isPlainAgentIdentity(slice.identity) &&
     slice.category === AgentCategory.ToolUse &&
     slice.status !== undefined &&
     isInFlightPhase(slice.status);

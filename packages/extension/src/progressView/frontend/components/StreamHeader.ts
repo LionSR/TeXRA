@@ -12,6 +12,7 @@ import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  isPlainAgentIdentity,
   isToolUseState,
   type ConversationProgress,
   type StreamStage,
@@ -365,8 +366,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     const goalObjective = toolUse?.goalObjective ?? '';
     const hasExecutionId = Boolean(this.stream.executionId);
     const identity = this.stream.identity;
-    const isNativeAgentRun =
-      identity?.kind === 'agent' && identity.tool === undefined;
+    const isNativeAgentRun = isPlainAgentIdentity(identity);
     const agentCategory = this.stream.agentCategory;
     // Identity decides the chrome: a non-agent run (process, multi-agent-
     // workflow container) gets the neutral toolbar even when a borrowed

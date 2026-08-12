@@ -8,8 +8,9 @@ import type {
   AgentOptionData,
   AgentProposal,
   ModelOptionData,
+  StreamTabId,
 } from '@shared/schemas';
-import type { RunIdentity, StreamTabId } from '@shared/schemas';
+import { isPlainAgentIdentity } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -48,10 +49,6 @@ import type {
  * all three, relaunching the stored config would run the wrong thing
  * (live defect 3 of the run-classification consolidation).
  */
-function isNativeAgentRun(identity: RunIdentity | undefined): boolean {
-  return identity?.kind === 'agent' && identity.tool === undefined;
-}
-
 /** User-facing refusal for the resume/re-run/restore gate. Front-end button
  *  hiding makes this rare (stale renderer state, direct IPC), but a refused
  *  action must still say why instead of silently doing nothing. */
@@ -80,7 +77,7 @@ export async function resolveNativeAgentRun(
   (RunMetadata & { config: NonNullable<RunMetadata['config']> }) | null
 > {
   const metadata = getRunMetadata(stream);
-  if (!isNativeAgentRun(metadata.identity)) {
+  if (!isPlainAgentIdentity(metadata.identity)) {
     await reportNonNativeRunRefusal(showInfo, action);
     return null;
   }

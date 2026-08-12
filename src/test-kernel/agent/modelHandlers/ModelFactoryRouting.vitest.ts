@@ -808,12 +808,6 @@ describe('Google Interactions API routing', () => {
 
   const googleConfig = (): ModelConfig => modelConfig(ModelProvider.GOOGLE);
 
-  const forcedInteractionsConfig = (): ModelConfig =>
-    ({
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    }) as ModelConfig;
-
   // Re-imports the factory alongside the platform it reads from (see the
   // module-header note on this file's vi.resetModules() calls).
   async function initGoogleRouting(
@@ -831,26 +825,6 @@ describe('Google Interactions API routing', () => {
     expect(
       factory.resolveModelHandlerCompatibilityKey(googleConfig(), false, false),
     ).toBe('ModelHandlerGoogleInteractions');
-  });
-
-  it('keeps key derivation pure for Interactions-only models under OpenRouter', async () => {
-    const factory = await initGoogleRouting();
-    expect(
-      factory.resolveModelHandlerCompatibilityKey(
-        forcedInteractionsConfig(),
-        true,
-        false,
-      ),
-    ).toBe('ModelHandlerOpenRouterNative');
-  });
-
-  it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
-    // OpenRouter cannot proxy Interactions — the live-routing path must error
-    // rather than silently route to OpenRouter (spec §6.3).
-    const factory = await initGoogleRouting(true);
-    await expect(
-      factory.createModelHandler(forcedInteractionsConfig()),
-    ).rejects.toThrow(/OpenRouter/);
   });
 
   it('creates the Interactions handler tagged with its compatibility key', async () => {
