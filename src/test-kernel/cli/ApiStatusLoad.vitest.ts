@@ -105,6 +105,29 @@ function accountStatusLines(
   return loadCliDetailedAccountStatusLines({ apiMode });
 }
 
+function renderPreferenceRoute(
+  route: 'chatGpt' | 'kimiCode' | 'glmCode',
+  preference: 'on' | 'off',
+  enabled: boolean,
+): Promise<string[]> {
+  mocks.readCliModelAccessStatus.mockResolvedValue({
+    apiFallback: 'personal',
+    preferences: {
+      chatGpt: route === 'chatGpt' ? preference : 'off',
+      grok: 'off',
+      kimiCode: route === 'kimiCode' ? preference : 'off',
+      glmCode: route === 'glmCode' ? preference : 'off',
+    },
+    chatGptSignedIn: route === 'chatGpt' && enabled,
+    grokSignedIn: false,
+    chatGptAccountLabel:
+      route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
+    kimiCodeKeySet: route === 'kimiCode' && enabled,
+    glmKeySet: route === 'glmCode' && enabled,
+  });
+  return accountStatusLines('personal');
+}
+
 describe('loadCliApiStatus', () => {
   beforeEach(() => {
     mocks.fetchRelayUsageSummary.mockReset();
@@ -261,6 +284,7 @@ describe('loadCliApiStatus', () => {
     mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 24.5 });
 
     const lines = await accountStatusLines('included');
+    const joined = lines.join('\n');
 
     expect(lineFor(lines, 'ChatGPT')).toBe(
       'ChatGPT: preferred · signed in as chatgpt@example.com',
@@ -272,9 +296,9 @@ describe('loadCliApiStatus', () => {
       'Otherwise: Included access · signed in as texra@example.com · Ultra · included usage this month: 24.5% used, 75.5% remaining',
     );
     expect(lineFor(lines, 'Other API keys')).toBe('Other API keys: DeepSeek');
-    expect(lines.join('\n').match(/Kimi Code/g)).toHaveLength(1);
-    expect(lines.join('\n').match(/chatgpt@example\.com/g)).toHaveLength(1);
-    expect(lines.join('\n').match(/texra@example\.com/g)).toHaveLength(1);
+    expect(joined.match(/Kimi Code/g)).toHaveLength(1);
+    expect(joined.match(/chatgpt@example\.com/g)).toHaveLength(1);
+    expect(joined.match(/texra@example\.com/g)).toHaveLength(1);
     expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(2);
@@ -350,13 +374,13 @@ describe('loadCliApiStatus', () => {
     {
       name: 'off and signed out',
       preference: 'off',
-      signedIn: false,
+      enabled: false,
       expected: ['Otherwise: Your own API keys'],
     },
     {
       name: 'off and signed in',
       preference: 'off',
-      signedIn: true,
+      enabled: true,
       expected: [
         'ChatGPT: not preferred · signed in as chatgpt@example.com',
         'Otherwise: Your own API keys',
@@ -365,7 +389,7 @@ describe('loadCliApiStatus', () => {
     {
       name: 'on and signed out',
       preference: 'on',
-      signedIn: false,
+      enabled: false,
       expected: [
         'ChatGPT: preferred · sign in required',
         'Otherwise: Your own API keys',
@@ -374,7 +398,7 @@ describe('loadCliApiStatus', () => {
     {
       name: 'on and signed in',
       preference: 'on',
-      signedIn: true,
+      enabled: true,
       expected: [
         'ChatGPT: preferred · signed in as chatgpt@example.com',
         'Otherwise: Your own API keys',
@@ -382,22 +406,10 @@ describe('loadCliApiStatus', () => {
     },
   ] as const)(
     'renders the ChatGPT route when available: $name',
-    async ({ expected, preference, signedIn }) => {
-      mocks.readCliModelAccessStatus.mockResolvedValue({
-        apiFallback: 'personal',
-        preferences: {
-          chatGpt: preference,
-          grok: 'off',
-          kimiCode: 'off',
-          glmCode: 'off',
-        },
-        chatGptSignedIn: signedIn,
-        chatGptAccountLabel: signedIn ? 'chatgpt@example.com' : undefined,
-        kimiCodeKeySet: false,
-        glmKeySet: false,
-      });
-
-      await expect(accountStatusLines('personal')).resolves.toEqual(expected);
+    async ({ expected, enabled, preference }) => {
+      await expect(
+        renderPreferenceRoute('chatGpt', preference, enabled),
+      ).resolves.toEqual(expected);
     },
   );
 
@@ -405,13 +417,13 @@ describe('loadCliApiStatus', () => {
     {
       name: 'off without a key',
       preference: 'off',
-      keySet: false,
+      enabled: false,
       expected: ['Otherwise: Your own API keys'],
     },
     {
       name: 'off with a key',
       preference: 'off',
-      keySet: true,
+      enabled: true,
       expected: [
         'Kimi Code: not preferred · key configured',
         'Otherwise: Your own API keys',
@@ -420,7 +432,7 @@ describe('loadCliApiStatus', () => {
     {
       name: 'on without a key',
       preference: 'on',
-      keySet: false,
+      enabled: false,
       expected: [
         'Kimi Code: preferred · key required',
         'Otherwise: Your own API keys',
@@ -429,7 +441,7 @@ describe('loadCliApiStatus', () => {
     {
       name: 'on with a key',
       preference: 'on',
-      keySet: true,
+      enabled: true,
       expected: [
         'Kimi Code: preferred · key configured',
         'Otherwise: Your own API keys',
@@ -437,22 +449,10 @@ describe('loadCliApiStatus', () => {
     },
   ] as const)(
     'renders the Kimi Code route when available: $name',
-    async ({ expected, keySet, preference }) => {
-      mocks.readCliModelAccessStatus.mockResolvedValue({
-        apiFallback: 'personal',
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-          kimiCode: preference,
-          glmCode: 'off',
-        },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
-        kimiCodeKeySet: keySet,
-        glmKeySet: false,
-      });
-
-      await expect(accountStatusLines('personal')).resolves.toEqual(expected);
+    async ({ enabled, expected, preference }) => {
+      await expect(
+        renderPreferenceRoute('kimiCode', preference, enabled),
+      ).resolves.toEqual(expected);
     },
   );
 
@@ -460,13 +460,13 @@ describe('loadCliApiStatus', () => {
     {
       name: 'off without a key',
       preference: 'off',
-      keySet: false,
+      enabled: false,
       expected: ['Otherwise: Your own API keys'],
     },
     {
       name: 'off with a key',
       preference: 'off',
-      keySet: true,
+      enabled: true,
       expected: [
         'GLM Coding Plan: not preferred · key configured',
         'Otherwise: Your own API keys',
@@ -475,7 +475,7 @@ describe('loadCliApiStatus', () => {
     {
       name: 'on without a key',
       preference: 'on',
-      keySet: false,
+      enabled: false,
       expected: [
         'GLM Coding Plan: preferred · key required',
         'Otherwise: Your own API keys',
@@ -484,7 +484,7 @@ describe('loadCliApiStatus', () => {
     {
       name: 'on with a key',
       preference: 'on',
-      keySet: true,
+      enabled: true,
       expected: [
         'GLM Coding Plan: preferred · key configured',
         'Otherwise: Your own API keys',
@@ -492,22 +492,10 @@ describe('loadCliApiStatus', () => {
     },
   ] as const)(
     'renders the GLM Coding Plan route when available: $name',
-    async ({ expected, keySet, preference }) => {
-      mocks.readCliModelAccessStatus.mockResolvedValue({
-        apiFallback: 'personal',
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-          kimiCode: 'off',
-          glmCode: preference,
-        },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
-        kimiCodeKeySet: false,
-        glmKeySet: keySet,
-      });
-
-      await expect(accountStatusLines('personal')).resolves.toEqual(expected);
+    async ({ enabled, expected, preference }) => {
+      await expect(
+        renderPreferenceRoute('glmCode', preference, enabled),
+      ).resolves.toEqual(expected);
     },
   );
 

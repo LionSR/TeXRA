@@ -41,14 +41,29 @@ function declareAllCommandsSupported(): void {
   settingsState.unsupportedCommands.set(new Set<string>());
 }
 
-async function mountSettingsApp(): Promise<LitElementLike> {
+async function mountSettingsApp(
+  initialTab = SETTINGS_TAB.ACCOUNT,
+): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
   declareAllCommandsSupported();
-  setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
+  setSelectedTabIndex(initialTab);
   document.body.append(app);
   await app.updateComplete;
   return app;
+}
+
+async function withFakeTimers(
+  systemTime: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(systemTime));
+  try {
+    await run();
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 function categoryButton(app: LitElementLike, label: string): HTMLElement {
@@ -88,9 +103,7 @@ describe('hierarchical settings navigation', () => {
   });
 
   it('refreshes settings at the UTC monthly quota rollover', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-31T23:59:59.000Z'));
-    try {
+    await withFakeTimers('2026-08-31T23:59:59.000Z', async () => {
       const app = await mountSettingsApp();
       vi.mocked(postMessage).mockClear();
 
@@ -102,17 +115,13 @@ describe('hierarchical settings navigation', () => {
       );
       app.remove();
       vi.mocked(postMessage).mockClear();
-      await vi.advanceTimersByTimeAsync(31 * 24 * 60 * 60 * 1_000);
+      await vi.advanceTimersByTimeAsync(THIRTY_ONE_DAYS_MS);
       expect(postMessage).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
+    });
   });
 
   it('follows the max-delay clamp through a 31-day UTC month boundary', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-07-01T00:00:00.000Z'));
-    try {
+    await withFakeTimers('2026-07-01T00:00:00.000Z', async () => {
       const app = await mountSettingsApp();
       vi.mocked(postMessage).mockClear();
 
@@ -125,15 +134,11 @@ describe('hierarchical settings navigation', () => {
         { view: 'settings' },
       );
       app.remove();
-    } finally {
-      vi.useRealTimers();
-    }
+    });
   });
 
   it('refreshes exactly once at rollover after disconnecting and reconnecting', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-31T23:59:58.000Z'));
-    try {
+    await withFakeTimers('2026-08-31T23:59:58.000Z', async () => {
       const app = await mountSettingsApp();
       vi.mocked(postMessage).mockClear();
 
@@ -150,9 +155,7 @@ describe('hierarchical settings navigation', () => {
         { view: 'settings' },
       );
       app.remove();
-    } finally {
-      vi.useRealTimers();
-    }
+    });
   });
 
   it('renders category navigation plus only the active category pages', async () => {
@@ -192,10 +195,7 @@ describe('hierarchical settings navigation', () => {
   });
 
   it('activates the page addressed by a wire index', async () => {
-    const app = await mountSettingsApp();
-
-    setSelectedTabIndex(SETTINGS_TAB.LATEX);
-    await app.updateComplete;
+    const app = await mountSettingsApp(SETTINGS_TAB.LATEX);
 
     expect(activePanelLabel(app)).toBe('LaTeX');
     expect(
@@ -228,8 +228,6 @@ describe('hierarchical settings navigation', () => {
 
   it('keeps account key management in the models page', async () => {
     const app = await mountSettingsApp();
-    setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
-    await app.updateComplete;
 
     const account =
       app.shadowRoot?.querySelector<LitElementLike>('account-tab');

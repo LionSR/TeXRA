@@ -75,10 +75,7 @@ const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
   isAvailable: () => true,
   selectModels: async () => [],
   onDidChangeModels: () => ({ dispose() {} }),
-  sendRequest: () =>
-    (async function* () {
-      // Factory tests do not make model requests.
-    })(),
+  sendRequest: () => (async function* () {})(),
   countTokens: async () => 0,
   onDidChangeAccess: () => ({ dispose() {} }),
 };
@@ -552,13 +549,6 @@ describe('OpenAI model handler routing', () => {
     });
   }
 
-  function createdHandlerName(): Promise<string> {
-    return inspectHandler(
-      createModelHandler(codexEligibleConfig),
-      (handler) => handler.constructor.name,
-    );
-  }
-
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
     await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
@@ -621,7 +611,11 @@ describe('OpenAI model handler routing', () => {
       },
     );
 
-    expect(await createdHandlerName()).toBe('ModelHandlerOpenAIResponse');
+    const handlerName = await inspectHandler(
+      createModelHandler(codexEligibleConfig),
+      (handler) => handler.constructor.name,
+    );
+    expect(handlerName).toBe('ModelHandlerOpenAIResponse');
   });
 
   it('propagates a superseded re-auth failure without falling back', async () => {

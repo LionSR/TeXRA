@@ -50,7 +50,7 @@ describe('model client route publication', () => {
     const construction = pDefer<TestClient>();
     const cell = cellFor(
       initial,
-      vi.fn(async () => await construction.promise),
+      vi.fn(() => construction.promise),
     );
     await cell.getClient();
 

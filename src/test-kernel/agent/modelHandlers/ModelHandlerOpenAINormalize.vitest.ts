@@ -121,19 +121,16 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       { role: 'assistant', content: 'Assistant reply' },
       'assistant message should remain intact as string content',
     );
-    assert.ok(
-      loggerStub.debugLogs.some(
-        ({ message, options }) =>
-          message === 'Preprocessed message array for model compatibility' &&
-          typeof options === 'object' &&
-          options !== null &&
-          'data' in options &&
-          (options.data as Record<string, unknown>).beforeCount === 3 &&
-          (options.data as Record<string, unknown>).afterCount === 2 &&
-          (options.data as Record<string, unknown>).providerLabel ===
-            'deepseek',
-      ),
+    const preprocessLog = loggerStub.debugLogs.find(
+      ({ message }) =>
+        message === 'Preprocessed message array for model compatibility',
     );
+    const data = (
+      preprocessLog?.options as { data?: Record<string, unknown> } | undefined
+    )?.data;
+    assert.equal(data?.beforeCount, 3);
+    assert.equal(data?.afterCount, 2);
+    assert.equal(data?.providerLabel, 'deepseek');
     assert.deepEqual(loggerStub.infoMessages, []);
   });
 

@@ -54,35 +54,32 @@ function expectInvalidFinalResult(input: unknown): void {
 }
 
 describe('AgentFinalResult', () => {
-  it('normalizes every omitted workflow list and cost', () => {
-    expect(
-      AgentFinalResultSchema.parse({
+  it.each([
+    {
+      name: 'normalizes every omitted workflow list and cost',
+      input: { category: 'workflow', outcome: 'failed' },
+      normalized: {
         category: 'workflow',
         outcome: 'failed',
-      }),
-    ).toEqual({
-      category: 'workflow',
-      outcome: 'failed',
-      outputs: [],
-      compileFailures: [],
-      diffs: [],
-      cost: 0,
-    });
-  });
-
-  it('normalizes an omitted tool-use response, file list, and cost', () => {
-    expect(
-      AgentFinalResultSchema.parse({
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        cost: 0,
+      },
+    },
+    {
+      name: 'normalizes an omitted tool-use response, file list, and cost',
+      input: { category: 'toolUse', outcome: 'cancelled' },
+      normalized: {
         category: 'toolUse',
         outcome: 'cancelled',
-      }),
-    ).toEqual({
-      category: 'toolUse',
-      outcome: 'cancelled',
-      response: '',
-      files: [],
-      cost: 0,
-    });
+        response: '',
+        files: [],
+        cost: 0,
+      },
+    },
+  ])('$name', ({ input, normalized }) => {
+    expect(AgentFinalResultSchema.parse(input)).toEqual(normalized);
   });
 
   it('builds the workflow envelope after diffs exist and drops runtime fields', () => {
@@ -135,27 +132,26 @@ describe('AgentFinalResult', () => {
     });
   });
 
-  it('surfaces structured output on the workflow envelope', () => {
-    const flowResult = workflowFlowResult();
-
-    expect(
-      buildAgentFinalResult({ flowResult, structured: { title: 'Lemma 1' } }),
-    ).toMatchObject({
+  it.each([
+    {
       category: 'workflow',
+      flowResult: workflowFlowResult(),
       structured: { title: 'Lemma 1' },
-    });
-  });
-
-  it('surfaces structured output on the tool-use envelope', () => {
-    const flowResult = toolUseFlowResult();
-
-    expect(
-      buildAgentFinalResult({ flowResult, structured: [1, 2, 3] }),
-    ).toMatchObject({
+    },
+    {
       category: 'toolUse',
+      flowResult: toolUseFlowResult(),
       structured: [1, 2, 3],
-    });
-  });
+    },
+  ])(
+    'surfaces structured output on the $category envelope',
+    ({ category, flowResult, structured }) => {
+      expect(buildAgentFinalResult({ flowResult, structured })).toMatchObject({
+        category,
+        structured,
+      });
+    },
+  );
 
   it('surfaces the flow result own structured value when the source omits it', () => {
     const flowResult = toolUseFlowResult({

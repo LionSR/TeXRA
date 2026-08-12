@@ -390,7 +390,7 @@ afterEach(() => {
 
 describe('TUI retry approvals', () => {
   it('reports an automatic yolo retry rejection as a policy denial', async () => {
-    const { interactions, cliContext } = tui(host(), {
+    const { interactions } = tui(host(), {
       approvalPolicy: 'yolo',
     });
 

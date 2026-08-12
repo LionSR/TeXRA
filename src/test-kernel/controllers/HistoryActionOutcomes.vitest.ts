@@ -94,35 +94,24 @@ describe('HistoryActionOutcomes', () => {
     });
   });
 
-  it('describes an active-execution delete result', () => {
-    expect(
-      describeDeleteExecutionResult({
-        status: 'active',
-        executionId: EXECUTION_ID,
-        heartbeatAt: 0,
-      }),
-    ).toEqual({ kind: 'active' });
-  });
-
-  it('describes a not-found delete result', () => {
-    expect(
-      describeDeleteExecutionResult({
-        status: 'not-found',
-        executionId: EXECUTION_ID,
-      }),
-    ).toEqual({
-      kind: 'not-found',
-      message: `History item not found: ${EXECUTION_ID}`,
-    });
-  });
-
-  it('describes a successful delete result', () => {
-    expect(
-      describeDeleteExecutionResult({
-        status: 'deleted',
-        executionId: EXECUTION_ID,
-      }),
-    ).toEqual({ kind: 'deleted' });
+  it.each([
+    [
+      'active',
+      { status: 'active', executionId: EXECUTION_ID, heartbeatAt: 0 },
+      { kind: 'active' },
+    ],
+    [
+      'not-found',
+      { status: 'not-found', executionId: EXECUTION_ID },
+      { kind: 'not-found', message: `History item not found: ${EXECUTION_ID}` },
+    ],
+    [
+      'deleted',
+      { status: 'deleted', executionId: EXECUTION_ID },
+      { kind: 'deleted' },
+    ],
+  ] as const)('describes a %s delete result', (_status, input, expected) => {
+    expect(describeDeleteExecutionResult(input)).toEqual(expected);
   });
 
   it('exposes the message constants both hosts share', () => {

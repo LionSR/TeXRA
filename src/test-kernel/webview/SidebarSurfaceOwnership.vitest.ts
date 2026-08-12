@@ -101,24 +101,14 @@ function createWebviewView() {
   };
 }
 
-function createProgressViewProvider() {
-  return {
-    getContentProvider: () => ({ getHtmlContent: () => PROGRESS_HTML }),
-    handleSidebarMessage: vi.fn(),
-    resetSidebarReady: vi.fn(),
-  };
-}
-
-async function settle(): Promise<void> {
-  for (let i = 0; i < 5; i++) {
-    await Promise.resolve();
-  }
-}
-
 describe('sidebar surface ownership', () => {
   let provider: InstanceType<typeof MainViewProvider>;
   let view: ReturnType<typeof createWebviewView>;
-  let progressViewProvider: ReturnType<typeof createProgressViewProvider>;
+  let progressViewProvider: {
+    getContentProvider: () => { getHtmlContent: () => string };
+    handleSidebarMessage: ReturnType<typeof vi.fn>;
+    resetSidebarReady: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     mocks.executeCommand.mockReset();
@@ -128,7 +118,11 @@ describe('sidebar surface ownership', () => {
       subscriptions: [],
       globalState: { get: () => undefined, update: async () => {} },
     } as unknown as vscode.ExtensionContext);
-    progressViewProvider = createProgressViewProvider();
+    progressViewProvider = {
+      getContentProvider: () => ({ getHtmlContent: () => PROGRESS_HTML }),
+      handleSidebarMessage: vi.fn(),
+      resetSidebarReady: vi.fn(),
+    };
     provider.setProgressViewProvider(
       progressViewProvider as unknown as ProgressViewProvider,
     );
@@ -153,7 +147,9 @@ describe('sidebar surface ownership', () => {
     provider.switchMode(SIDEBAR_VIEWS.PROGRESS);
     provider.switchMode(SIDEBAR_VIEWS.MAIN);
     contextKeyPush.resolve(undefined);
-    await settle();
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve();
+    }
 
     expect(getActiveSidebarView()).toBe(SIDEBAR_VIEWS.MAIN);
     expect(view.webview.html).toBe(MAIN_HTML);

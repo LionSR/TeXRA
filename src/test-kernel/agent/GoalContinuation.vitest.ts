@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { platform, type Platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
@@ -47,12 +44,8 @@ describe('isGoalEnabled', () => {
 });
 
 describe('maybeBuildGoalContinuation', () => {
-  let activePlatform: Platform;
-
   beforeEach(async () => {
-    activePlatform = await installPlatformWithConfig({
-      [GOAL_FEATURE_FLAG_KEY]: true,
-    });
+    await installPlatformWithConfig({ [GOAL_FEATURE_FLAG_KEY]: true });
   });
 
   afterEach(async () => {
@@ -116,30 +109,20 @@ describe('maybeBuildGoalContinuation', () => {
     await GoalStore.start(STREAM_ID, 'objective');
     // Flip just the flag — keep the same workspaceState so the active
     // goal is still on disk. Otherwise the test passes trivially.
-    (activePlatform.config as FakeConfigProvider).set(
-      GOAL_FEATURE_FLAG_KEY,
-      false,
-    );
+    (platform().config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
     const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.
     expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('active');
   });
 
-  it.each([
-    {
-      name: 'returns null when no goal exists for the stream',
-      arrange: async () => {},
-    },
-    {
-      name: 'returns null when the goal is paused',
-      arrange: async () => {
-        await GoalStore.start(STREAM_ID, 'objective');
-        await GoalStore.setStatus(STREAM_ID, 'paused');
-      },
-    },
-  ])('$name', async ({ arrange }) => {
-    await arrange();
+  it('returns null when no goal exists for the stream', async () => {
+    await expect(maybeBuildGoalContinuation(STREAM_ID)).resolves.toBeNull();
+  });
+
+  it('returns null when the goal is paused', async () => {
+    await GoalStore.start(STREAM_ID, 'objective');
+    await GoalStore.setStatus(STREAM_ID, 'paused');
 
     await expect(maybeBuildGoalContinuation(STREAM_ID)).resolves.toBeNull();
   });

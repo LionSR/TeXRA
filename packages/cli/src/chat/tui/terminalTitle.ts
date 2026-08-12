@@ -64,8 +64,16 @@ function currentTerminalTitleState(): SessionTitleState {
   return 'idle';
 }
 
+interface TerminalTitleController {
+  readonly suspend: () => void;
+  readonly resume: () => void;
+  readonly dispose: () => void;
+}
+
 /** Keep the terminal title synchronized with existing TUI state. */
-export function installTerminalTitleUpdates(cwd: string) {
+export function installTerminalTitleUpdates(
+  cwd: string,
+): TerminalTitleController {
   let disposed = false;
   let suspended = false;
   let lastTitle: string | undefined;

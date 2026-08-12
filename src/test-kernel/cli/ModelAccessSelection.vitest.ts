@@ -64,8 +64,8 @@ vi.mock('@model/xai/xaiPreference', () => ({
   setPreferXaiSubscription: mocks.setPreferXaiSubscription,
 }));
 
-vi.mock('@model/apiProviders', () => ({
-  API_PROVIDERS: [
+vi.mock('@model/apiProviders', () => {
+  const providers = [
     'openai',
     'anthropic',
     'openRouter',
@@ -78,42 +78,19 @@ vi.mock('@model/apiProviders', () => ({
     'minimax',
     'glm',
     'meta',
-  ],
-  apiKeyExists: mocks.apiKeyExists,
-  lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
-  configuredApiKeyProviders: async () => {
-    const origins = await Promise.all(
-      [
-        'openai',
-        'anthropic',
-        'openRouter',
-        'google',
-        'xai',
-        'deepseek',
-        'moonshot',
-        'kimiCode',
-        'dashscope',
-        'minimax',
-        'glm',
-        'meta',
-      ].map((provider) => mocks.lookupApiKeyOrigin({}, provider)),
-    );
-    return [
-      'openai',
-      'anthropic',
-      'openRouter',
-      'google',
-      'xai',
-      'deepseek',
-      'moonshot',
-      'kimiCode',
-      'dashscope',
-      'minimax',
-      'glm',
-      'meta',
-    ].filter((_, index) => origins[index] !== 'none');
-  },
-}));
+  ];
+  return {
+    API_PROVIDERS: providers,
+    apiKeyExists: mocks.apiKeyExists,
+    lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
+    configuredApiKeyProviders: async () => {
+      const origins = await Promise.all(
+        providers.map((provider) => mocks.lookupApiKeyOrigin({}, provider)),
+      );
+      return providers.filter((_, index) => origins[index] !== 'none');
+    },
+  };
+});
 
 vi.mock('@utils/config/providerConfig', () => ({
   getPreferKimiCode: mocks.getPreferKimiCode,

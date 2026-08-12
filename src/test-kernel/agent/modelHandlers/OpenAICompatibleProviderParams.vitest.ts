@@ -15,20 +15,6 @@ import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-const NO_VISION_CAPABILITIES = Object.freeze({ supportsVision: false });
-const MOONSHOT_TEST_CONFIG = Object.freeze({
-  provider: ModelProvider.MOONSHOT,
-  capabilities: NO_VISION_CAPABILITIES,
-});
-const GLM_TEST_CONFIG = Object.freeze({
-  provider: ModelProvider.GLM,
-  capabilities: NO_VISION_CAPABILITIES,
-});
-const XAI_TEST_CONFIG = Object.freeze({
-  provider: ModelProvider.XAI,
-  capabilities: NO_VISION_CAPABILITIES,
-});
-
 const SINGLE_TURN: ChatCompletionMessageParam[] = [
   { role: 'user', content: 'think' },
 ];
@@ -107,19 +93,25 @@ function configureKimiHandler<Handler extends ModelHandlerKimi>(
 
 function createKimiHandler(overrides: ConfigOverrides): ModelHandlerKimi {
   return configureKimiHandler(
-    new ModelHandlerKimi(buildTestModelConfig(MOONSHOT_TEST_CONFIG, overrides)),
+    new ModelHandlerKimi(
+      buildTestModelConfig({ provider: ModelProvider.MOONSHOT }, overrides),
+    ),
   );
 }
 
 function createGlmHandler(overrides: ConfigOverrides): ModelHandlerGLM {
   return configureHandler(
-    new ModelHandlerGLM(buildTestModelConfig(GLM_TEST_CONFIG, overrides)),
+    new ModelHandlerGLM(
+      buildTestModelConfig({ provider: ModelProvider.GLM }, overrides),
+    ),
   );
 }
 
 function createXaiHandler(overrides: ConfigOverrides): ModelHandlerXAI {
   return configureHandler(
-    new ModelHandlerXAI(buildTestModelConfig(XAI_TEST_CONFIG, overrides)),
+    new ModelHandlerXAI(
+      buildTestModelConfig({ provider: ModelProvider.XAI }, overrides),
+    ),
   );
 }
 
@@ -144,6 +136,22 @@ function createK3Handler(fullName: string): ModelHandlerKimi {
       reasoningEffort: ReasoningEffort.MAX,
       supportsVision: true,
     },
+  });
+}
+
+function createKimi25Handler(supportsReasoning: boolean): ModelHandlerKimi {
+  return createKimiHandler({
+    name: supportsReasoning ? 'kimi25T' : 'kimi25',
+    fullName: 'kimi-k2.5',
+    capabilities: { supportsReasoning },
+  });
+}
+
+function createKimi26Handler(supportsReasoning: boolean): ModelHandlerKimi {
+  return createKimiHandler({
+    name: supportsReasoning ? 'kimi26T' : 'kimi26',
+    fullName: 'kimi-k2.6',
+    capabilities: { supportsReasoning },
   });
 }
 
@@ -174,12 +182,15 @@ describe('OpenAI-compatible provider request params', () => {
   it('records coding-endpoint Kimi requests as subscription usage', async () => {
     const handler = configureKimiHandler(
       new KimiUsageRouteProbe(
-        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-          name: 'kimi27codeT',
-          fullName: 'kimi-for-coding',
-          kimiSubscription: true,
-          baseUrl: KIMI_CODE_BASE_URL,
-        }),
+        buildTestModelConfig(
+          { provider: ModelProvider.MOONSHOT },
+          {
+            name: 'kimi27codeT',
+            fullName: 'kimi-for-coding',
+            kimiSubscription: true,
+            baseUrl: KIMI_CODE_BASE_URL,
+          },
+        ),
       ),
     );
 
@@ -230,13 +241,7 @@ describe('OpenAI-compatible provider request params', () => {
   );
 
   it('uses the fixed Kimi K2.5 temperature during client-side compaction', async () => {
-    const handler = createKimiHandler({
-      name: 'kimi25T',
-      fullName: 'kimi-k2.5',
-      capabilities: {
-        supportsReasoning: true,
-      },
-    });
+    const handler = createKimi25Handler(true);
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.requestCompaction();
 
@@ -247,13 +252,7 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('pins Kimi K2.5 non-reasoning chat requests to temperature 0.6 and disables thinking (#7081)', async () => {
-    const handler = createKimiHandler({
-      name: 'kimi25',
-      fullName: 'kimi-k2.5',
-      capabilities: {
-        supportsReasoning: false,
-      },
-    });
+    const handler = createKimi25Handler(false);
 
     const { createCalls } = await sendRequest(handler, [
       { role: 'user', content: 'hi' },
@@ -264,13 +263,7 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('pins Kimi K2.5 thinking chat requests to temperature 1 and leaves the API default (#7081)', async () => {
-    const handler = createKimiHandler({
-      name: 'kimi25T',
-      fullName: 'kimi-k2.5',
-      capabilities: {
-        supportsReasoning: true,
-      },
-    });
+    const handler = createKimi25Handler(true);
 
     const { createCalls } = await sendRequest(handler);
 
@@ -314,13 +307,7 @@ describe('OpenAI-compatible provider request params', () => {
     // registry — the same shared-fullName ambiguity as K2.5 — but before
     // this fix only 'kimi-k2.5' was hardcoded here, so this non-reasoning
     // entry silently kept thinking on at the Moonshot API default.
-    const handler = createKimiHandler({
-      name: 'kimi26',
-      fullName: 'kimi-k2.6',
-      capabilities: {
-        supportsReasoning: false,
-      },
-    });
+    const handler = createKimi26Handler(false);
 
     const { createCalls } = await sendRequest(handler, [
       { role: 'user', content: 'hi' },
@@ -333,13 +320,7 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('leaves Kimi K2.6 thinking requests on the API default (#7081)', async () => {
-    const handler = createKimiHandler({
-      name: 'kimi26T',
-      fullName: 'kimi-k2.6',
-      capabilities: {
-        supportsReasoning: true,
-      },
-    });
+    const handler = createKimi26Handler(true);
 
     const { createCalls } = await sendRequest(handler);
 

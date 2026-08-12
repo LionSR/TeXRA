@@ -38,10 +38,10 @@ const TOOL_REGISTRY = 'src/tools/registry.ts';
  * is also the only reason these two still ship the domain tools, so shrink this
  * list rather than growing it.
  */
-const AGENT_LAUNCHING_TOOLS = [
+const AGENT_LAUNCHING_TOOLS: readonly string[] = [
   'src/tools/delegation/DelegationTools.ts',
   'src/tools/delegation/WorkflowScriptTool.ts',
-] as const;
+];
 
 /** Domain subsystems no generic tool should have to install. */
 const DOMAIN_PREFIXES = [
@@ -100,7 +100,7 @@ describe('tool module closures', () => {
     const offenders = [...closures.entries()]
       .filter(
         ([entry, files]) =>
-          !(AGENT_LAUNCHING_TOOLS as readonly string[]).includes(entry) &&
+          !AGENT_LAUNCHING_TOOLS.includes(entry) &&
           files.includes(TOOL_REGISTRY),
       )
       .map(([entry]) => entry)

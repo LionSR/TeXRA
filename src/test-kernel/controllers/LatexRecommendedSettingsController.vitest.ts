@@ -1,10 +1,5 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
+import { describe, expect, it } from 'vitest';
 
-// Third-party imports
-import { describe, it } from 'vitest';
-
-// Local imports - controllers
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 
 function createController(options?: {
@@ -32,7 +27,7 @@ describe('LatexRecommendedSettingsController', () => {
       },
     });
 
-    assert.deepEqual(controller.buildUpdates({ reset: false }), [
+    expect(controller.buildUpdates({ reset: false })).toStrictEqual([
       {
         key: 'latex-workshop.latex.outDir',
         value: '%DIR%/build/',
@@ -57,30 +52,28 @@ describe('LatexRecommendedSettingsController', () => {
       },
     });
 
-    assert.deepEqual(
+    expect(
       controller.buildUpdates({
         field: 'autoRevealExclude',
         reset: true,
       }),
-      [
-        {
-          key: 'explorer.autoRevealExclude',
-          value: { '**/node_modules/': true },
-        },
-      ],
-    );
+    ).toStrictEqual([
+      {
+        key: 'explorer.autoRevealExclude',
+        value: { '**/node_modules/': true },
+      },
+    ]);
   });
 
   it('builds field-specific string reset updates', () => {
     const controller = createController();
 
-    assert.deepEqual(
+    expect(
       controller.buildUpdates({
         field: 'outDir',
         reset: true,
       }),
-      [{ key: 'latex-workshop.latex.outDir', value: undefined }],
-    );
+    ).toStrictEqual([{ key: 'latex-workshop.latex.outDir', value: undefined }]);
   });
 
   it('clears object settings when reset leaves no remaining keys', () => {
@@ -92,13 +85,12 @@ describe('LatexRecommendedSettingsController', () => {
       },
     });
 
-    assert.deepEqual(
+    expect(
       controller.buildUpdates({
         field: 'autoRevealExclude',
         reset: true,
       }),
-      [{ key: 'explorer.autoRevealExclude', value: undefined }],
-    );
+    ).toStrictEqual([{ key: 'explorer.autoRevealExclude', value: undefined }]);
   });
 
   it('reports recommended string and object settings as set', () => {
@@ -116,8 +108,8 @@ describe('LatexRecommendedSettingsController', () => {
       },
     });
 
-    assert.equal(controller.isRecommendedValueSet('outDir'), true);
-    assert.equal(controller.isRecommendedValueSet('autoRevealExclude'), true);
+    expect(controller.isRecommendedValueSet('outDir')).toBe(true);
+    expect(controller.isRecommendedValueSet('autoRevealExclude')).toBe(true);
   });
 
   it('does not report unset or mismatched recommended settings as set', () => {
@@ -128,7 +120,7 @@ describe('LatexRecommendedSettingsController', () => {
       },
     });
 
-    assert.equal(controller.isRecommendedValueSet('outDir'), false);
-    assert.equal(controller.isRecommendedValueSet('autoRevealExclude'), false);
+    expect(controller.isRecommendedValueSet('outDir')).toBe(false);
+    expect(controller.isRecommendedValueSet('autoRevealExclude')).toBe(false);
   });
 });

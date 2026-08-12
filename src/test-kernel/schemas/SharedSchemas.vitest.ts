@@ -19,19 +19,11 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
 
-// ---------------------------------------------------------------------------
-// WorkPlan
-// ---------------------------------------------------------------------------
-
 describe('work plan schema helpers', () => {
   it('returns a stable placeholder for whitespace-only objectives', () => {
     expect(planSummaryLine(' \n\t')).toBe('(empty plan)');
   });
 });
-
-// ---------------------------------------------------------------------------
-// agentCliSettings
-// ---------------------------------------------------------------------------
 
 describe('parseCodexApprovalPolicy', () => {
   it.each(['never', 'on-request', 'on-failure', 'untrusted'])(
@@ -52,10 +44,6 @@ describe('parseClaudeAgentModel', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// MainViewHousekeeping
-// ---------------------------------------------------------------------------
-
 describe('MainView housekeeping messages', () => {
   it('uses inputFiles for Pack/Clean multiple payloads', () => {
     const parsed = MainViewInboundMessageSchema.parse({
@@ -72,28 +60,15 @@ describe('MainView housekeeping messages', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// WebUrlSanitization
-// ---------------------------------------------------------------------------
-
 /**
  * Regression coverage for issue #7230: `web_search`/`web_fetch` `url` fields
  * are LLM/tool-controlled and must never carry a dangerous scheme through to
- * a rendered `<a href>` — in the live Progress View webview OR the exported
- * standalone HTML (which has no CSP). The sanitization lives at the schema
- * level (`WebSearchResultItemSchema` / `WebFetchPayloadSchema` in
- * `src/shared/schemas/progressView/data.ts`) so both render paths, which
- * share the same formatters, are protected by one fix.
- *
- * Only `http:`/`https:`/`mailto:` survive scheme validation; anchor-only
- * (`#foo`) URLs pass through unchecked since there's no scheme to abuse;
- * everything else (empty, unparseable, protocol-relative, root-relative,
- * dangerous scheme) collapses to `undefined`. Root-relative (`/foo`) is
- * rejected rather than passed through as safe-as-is (a follow-up to the
- * original #7230 fix): the standalone HTML export opens via `file://` with
- * no origin, so a tool-controlled `/etc/passwd` would resolve against the
- * filesystem root instead of a web origin, becoming a live link to a local
- * file.
+ * a rendered `<a href>` in the live webview or the exported HTML. Sanitization
+ * lives in the shared schemas (`WebSearchResultItemSchema` /
+ * `WebFetchPayloadSchema`) so both render paths are protected by one fix.
+ * Only `http:`/`https:`/`mailto:` and anchor-only (`#foo`) URLs survive;
+ * empty, protocol-relative, root-relative, and dangerous schemes collapse to
+ * `undefined`.
  */
 
 function parseSearchUrl(url: string): string | undefined {
@@ -196,10 +171,6 @@ describe('web tool URL sanitization (issue #7230)', () => {
     expect(WebFetchPayloadSchema.parse({}).url).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// SettingsViewTabs
-// ---------------------------------------------------------------------------
 
 describe('settings view tab definitions', () => {
   it('keeps panel names unique', () => {

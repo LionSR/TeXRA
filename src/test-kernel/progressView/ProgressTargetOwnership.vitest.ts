@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type * as vscode from 'vscode';
 
-// Local imports
-
 const mocks = vi.hoisted(() => ({
   createWebviewPanel: vi.fn(),
   executeCommand: vi.fn(async () => undefined),
@@ -48,17 +46,6 @@ vi.mock('@progressView/extensionHostInteractions', () => ({
 const { SIDEBAR_VIEWS, getActiveSidebarView, setActiveSidebarView } =
   await import('@common/webview');
 
-function createSidebarView() {
-  return {
-    visible: true,
-    webview: {
-      html: '',
-      postMessage: vi.fn(),
-      onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
-    },
-  } as unknown as vscode.WebviewView;
-}
-
 function createPanel() {
   const disposeListeners: Array<() => void> = [];
   const panel = {
@@ -95,7 +82,14 @@ function createdPanel(): ReturnType<typeof createPanel> {
  * transitions consult beyond the stubs below.
  */
 function createProvider() {
-  const sidebarView = createSidebarView();
+  const sidebarView = {
+    visible: true,
+    webview: {
+      html: '',
+      postMessage: vi.fn(),
+      onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
+    },
+  } as unknown as vscode.WebviewView;
   const mainViewProvider = {
     getWebviewView: () => sidebarView,
     switchMode: vi.fn((mode: string) => {

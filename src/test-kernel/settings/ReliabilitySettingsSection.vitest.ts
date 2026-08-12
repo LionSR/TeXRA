@@ -19,12 +19,12 @@ import {
   useLitComponentTestDom,
 } from './litComponentTestUtils';
 
-useLitComponentTestDom(
-  () =>
-    import('@settingsView/frontend/components/profile/ReliabilitySettingsSection'),
-);
-
 describe('reliability-settings-section', () => {
+  useLitComponentTestDom(
+    () =>
+      import('@settingsView/frontend/components/profile/ReliabilitySettingsSection'),
+  );
+
   beforeEach(() => {
     mocks.postMessage.mockClear();
   });

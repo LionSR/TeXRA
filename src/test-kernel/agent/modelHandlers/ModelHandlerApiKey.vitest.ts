@@ -50,9 +50,9 @@ function stubServerSideKeyService(
     readonly quotaAutoSwitched?: boolean;
   } = {},
 ): { readonly canUseServerSideKeys: ReturnType<typeof vi.fn> } {
-  const canUseServerSideKeys = vi.fn(async () => {
-    return options.hasServerAccess ?? false;
-  });
+  const canUseServerSideKeys = vi.fn(
+    async () => options.hasServerAccess ?? false,
+  );
 
   vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
     getUseIncludedModelAccess: () => options.useIncludedAccess ?? false,

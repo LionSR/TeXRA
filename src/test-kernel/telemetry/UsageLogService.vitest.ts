@@ -70,6 +70,15 @@ function stubFetch(
   return fetchMock;
 }
 
+function stubBatchFetch(
+  beforeRespond: (
+    callCount: number,
+  ) => void | Response | Promise<void | Response> = () => {},
+): { batches: unknown[]; fetchMock: Mock } {
+  const batches: unknown[] = [];
+  return { batches, fetchMock: stubFetch(batches, beforeRespond) };
+}
+
 describe('UsageLogService', () => {
   beforeEach(() => {
     UsageLogService.initialize({
@@ -91,8 +100,7 @@ describe('UsageLogService', () => {
 
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
       createDeferred();
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches, async (callCount) => {
+    const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
       if (callCount === 1) {
         await firstFetchReleased;
       }
@@ -123,8 +131,7 @@ describe('UsageLogService', () => {
       createDeferred();
     const { promise: secondFetchReleased, resolve: releaseSecondFetch } =
       createDeferred();
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches, async (callCount) => {
+    const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
       if (callCount === 1) await firstFetchReleased;
       if (callCount === 2) await secondFetchReleased;
     });
@@ -163,8 +170,7 @@ describe('UsageLogService', () => {
     const warn = vi.spyOn(logger, 'warn');
 
     const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches, async () => {
+    const { batches, fetchMock } = stubBatchFetch(async () => {
       await fetchReleased;
     });
 
@@ -204,8 +210,7 @@ describe('UsageLogService', () => {
       .mockRejectedValueOnce(new Error('auth unavailable'))
       .mockResolvedValue('token');
 
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches);
+    const { batches, fetchMock } = stubBatchFetch();
 
     UsageLogService.log(usageEntry('first'));
     await expect(UsageLogService.flush()).resolves.toBe(
@@ -233,8 +238,7 @@ describe('UsageLogService', () => {
   ])('requeues entries after a %s', async (_case, firstFailure) => {
     stubRelayToken();
 
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches, (callCount) => {
+    const { batches, fetchMock } = stubBatchFetch((callCount) => {
       if (callCount !== 1) return;
       if (firstFailure instanceof Error) throw firstFailure;
       return jsonResponse(firstFailure);
@@ -258,8 +262,7 @@ describe('UsageLogService', () => {
 
     const { promise: rejectionReleased, resolve: releaseRejection } =
       createDeferred();
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches, async (callCount) => {
+    const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
       if (callCount === 2) throw new Error('network unavailable');
       if (callCount !== 1) return;
       await rejectionReleased;
@@ -297,8 +300,7 @@ describe('UsageLogService', () => {
   it('keeps a failed batch id separate from later queued entries', async () => {
     stubRelayToken();
 
-    const batches: unknown[] = [];
-    const fetchMock = stubFetch(batches, (callCount) => {
+    const { batches, fetchMock } = stubBatchFetch((callCount) => {
       if (callCount === 1) {
         throw new Error('network unavailable');
       }
@@ -337,8 +339,7 @@ describe('UsageLogService', () => {
     // a single fetch, and the flush still reports ACCEPTED — the entry is
     // gone, not kept for retry (that would be PENDING).
     async function expectOptedOutFlush(): Promise<void> {
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('optional'));
       await expect(UsageLogService.flush()).resolves.toBe(
@@ -376,8 +377,7 @@ describe('UsageLogService', () => {
     it('discards entries queued before the setting was turned off', async () => {
       stubRelayToken();
 
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('before-opt-out'));
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
@@ -396,8 +396,7 @@ describe('UsageLogService', () => {
       stubRelayToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('dropped'));
       await UsageLogService.flush();
@@ -426,8 +425,7 @@ describe('UsageLogService', () => {
         stubRelayToken();
         await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
-        const batches: unknown[] = [];
-        const fetchMock = stubFetch(batches);
+        const { batches, fetchMock } = stubBatchFetch();
 
         UsageLogService.log({ ...usageEntry('hosted'), usageRoute });
         await expect(UsageLogService.flush()).resolves.toBe(
@@ -442,8 +440,7 @@ describe('UsageLogService', () => {
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
       stubRelayToken();
 
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log({ ...usageEntry('byok'), usageRoute: 'api-key' });
       UsageLogService.log({ ...usageEntry('hosted'), usageRoute: 'relay' });
@@ -469,8 +466,7 @@ describe('UsageLogService', () => {
         },
       );
 
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('optional'));
       const flush = UsageLogService.flush();
@@ -505,8 +501,7 @@ describe('UsageLogService', () => {
         await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
-        const batches: unknown[] = [];
-        const fetchMock = stubFetch(batches);
+        const { batches, fetchMock } = stubBatchFetch();
 
         UsageLogService.log(usageEntry('optional'));
         await expect(UsageLogService.flush()).resolves.toBe(
@@ -524,8 +519,7 @@ describe('UsageLogService', () => {
       stubRelayToken();
       vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log({ ...usageEntry('hosted'), usageRoute: 'relay' });
       await expect(UsageLogService.flush()).resolves.toBe(
@@ -544,8 +538,7 @@ describe('UsageLogService', () => {
         stubRelayToken();
         await platform().config.update(TELEMETRY_ENABLED_KEY, value, 'global');
 
-        const batches: unknown[] = [];
-        const fetchMock = stubFetch(batches);
+        const { batches, fetchMock } = stubBatchFetch();
 
         UsageLogService.log(usageEntry('optional'));
         await UsageLogService.flush();
@@ -564,8 +557,7 @@ describe('UsageLogService', () => {
         'workspace',
       );
 
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches);
+      const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('optional'));
       await UsageLogService.flush();

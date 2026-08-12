@@ -1,14 +1,10 @@
-// Third-party imports
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// Local imports - functions under test
 import {
   stripOrphanedServerToolUse,
   extractAnthropicServerToolData,
   buildAnthropicAssistantContent,
 } from '@agent/modelHandlers/anthropic/anthropicServerTools';
-
-// Type imports
 import type {
   BetaContentBlock,
   BetaMessage,

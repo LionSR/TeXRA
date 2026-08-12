@@ -87,6 +87,12 @@ function setCumulativeInputTokens(
   ).chainState.setCumulativeInputTokens(tokens);
 }
 
+/** The subscription path drives the Codex backend and zero-rates usage. */
+function expectOnSubscription(handler: ModelHandlerCodex): void {
+  expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
+  expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
+}
+
 describe('ModelHandlerCodex subscription fallback', () => {
   beforeEach(() => {
     // The fallback path resolves the OpenAI base via the relay service; stub it
@@ -117,13 +123,12 @@ describe('ModelHandlerCodex subscription fallback', () => {
   it('targets the Codex backend and zero-rates usage while the preference is on', async () => {
     const handler = await newSubscriptionHandler();
 
-    expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
-    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
+    expectOnSubscription(handler);
   });
 
   it('falls back to the OpenAI API-key path when the preference is turned off mid-run', async () => {
     const handler = await newSubscriptionHandler();
-    expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
+    expectOnSubscription(handler);
 
     // The "Use your own API key" switch flips this preference; the same handler
     // instance must reroute on the next request without being recreated.
@@ -168,8 +173,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
 
     const handler = new ModelHandlerCodex(config);
 
-    expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
-    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
+    expectOnSubscription(handler);
   });
 
   it.each([
@@ -202,8 +206,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
       AgentCategory.Workflow,
     );
 
-    expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
-    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
+    expectOnSubscription(handler);
   });
 
   it('tags normalized usage with the subscription route while the preference is on', async () => {

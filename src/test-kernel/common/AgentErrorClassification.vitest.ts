@@ -17,12 +17,6 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { RUN_OUTCOME } from '@shared/schemas';
 
-function diskFullError(): NodeJS.ErrnoException {
-  const err: NodeJS.ErrnoException = new Error('write failed');
-  err.code = 'ENOSPC';
-  return err;
-}
-
 describe('classifyAgentError', () => {
   it('classifies a user abort ahead of every other kind', () => {
     const abort = new Error('The operation was aborted');
@@ -32,7 +26,9 @@ describe('classifyAgentError', () => {
   });
 
   it('classifies a local ENOSPC failure as disk-full', () => {
-    expect(classifyAgentError(diskFullError())).toBe('disk-full');
+    const err: NodeJS.ErrnoException = new Error('write failed');
+    err.code = 'ENOSPC';
+    expect(classifyAgentError(err)).toBe('disk-full');
   });
 
   it('finds the missing-api-key marker through a rewrapping cause chain', () => {

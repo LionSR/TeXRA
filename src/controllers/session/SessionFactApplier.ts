@@ -25,7 +25,6 @@ import {
   type StreamTabId,
   type UpdateConversationProgressPayload,
   type UpdateStreamDescriptionPayload,
-  type UpdateStreamUsagePayload,
   AgentCategory,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
@@ -95,7 +94,12 @@ export class SessionFactApplier {
    * becoming an unhandled rejection.
    */
   private readonly runFactHandlers: RunFactHandlers = {
-    usage: (_streamId, event) => this.handleUpdateStreamUsage(event.payload),
+    usage: (_streamId, event) => {
+      // Latest gauge value is the event payload. The snapshot store may
+      // accumulate per-key; hosts read cumulative totals from the store.
+      const { streamId, storageKey, usage } = event.payload;
+      this.renderer.onRunUsageChanged(streamId, storageKey, usage);
+    },
     'run.start': (_streamId, event) => this.handleRunConfig(event.streamId),
     'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),
     updateTodos: (_streamId, event) =>
@@ -250,16 +254,6 @@ export class SessionFactApplier {
     // fire `onStreamMetadataChanged` — that mint a StreamSlice on signal
     // hosts before attachment.
     this.renderer.onParentStreamChanged(childStreamId, parentStreamId ?? null);
-  }
-
-  private handleUpdateStreamUsage({
-    streamId,
-    storageKey,
-    usage,
-  }: UpdateStreamUsagePayload): void {
-    // Latest gauge value is the event payload. The snapshot store may
-    // accumulate per-key; hosts read cumulative totals from the store.
-    this.renderer.onRunUsageChanged(streamId, storageKey, usage);
   }
 
   private async handleSetActiveStream(

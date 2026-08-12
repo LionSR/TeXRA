@@ -82,13 +82,6 @@ function entryByKey(key: string): StateSettingEntry {
   return entry;
 }
 
-function reachabilitySegments(through: string): string[] {
-  return through
-    .split('->')
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-}
-
 const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
 const PROVIDER_ENDPOINT_DEFAULTS = Object.fromEntries(
   PROVIDER_ENDPOINT_STATE_ENTRIES.map(({ endpointKey }) => [endpointKey, '']),
@@ -189,7 +182,10 @@ describe('state settings catalog', () => {
         cliConsumer,
         `${entry.key} reachability path cannot be checked without cliConsumer`,
       );
-      const throughSegments = reachabilitySegments(reachability.through);
+      const throughSegments = reachability.through
+        .split('->')
+        .map((segment) => segment.trim())
+        .filter(Boolean);
       assert.ok(
         throughSegments.includes(cliConsumer),
         `${entry.key} reachability path must include its cliConsumer as a path segment: ${cliConsumer}`,

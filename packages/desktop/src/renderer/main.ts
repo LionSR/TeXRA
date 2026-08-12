@@ -169,13 +169,11 @@ import { createLogsPane } from './logsPane';
 import type { EditorFileEntry } from './editorTree';
 import type { ZodType } from 'zod';
 
-const root = document.querySelector<HTMLElement>('#app');
+const appRoot = document.querySelector<HTMLElement>('#app')!;
 
-if (root == null) {
+if (appRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
 }
-
-const appRoot = root;
 const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,

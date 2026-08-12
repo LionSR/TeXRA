@@ -1,10 +1,7 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
-// Local imports - Supabase relay
 import {
   FREE_TIER_MAX_OUTPUT_TOKENS,
   FREE_TIER_REQUEST_BODY_LIMIT_BYTES,

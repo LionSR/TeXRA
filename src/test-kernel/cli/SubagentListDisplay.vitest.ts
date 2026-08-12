@@ -20,7 +20,6 @@ import {
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
-  childStreamListValue,
   workflowPhaseListValue,
   workflowTaskListValue,
 } from '@cli/chat/tui/state/childListSelection';

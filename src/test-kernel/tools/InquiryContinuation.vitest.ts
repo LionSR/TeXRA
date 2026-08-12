@@ -1,6 +1,3 @@
-/**
- * Vitests for the inquiry continuation text builder.
- */
 import { describe, expect, it } from 'vitest';
 
 import type {

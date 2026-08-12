@@ -1,8 +1,5 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// Local imports - auth
 import {
   getAuthCallbackBasePath,
   isAuthCallbackPath,
@@ -11,40 +8,34 @@ import {
 
 describe('authCallback', () => {
   it('recognizes desktop and web callback paths', () => {
-    assert.equal(isAuthCallbackPath('/auth-callback'), true);
-    assert.equal(isAuthCallbackPath('/extension-auth-callback'), true);
-    assert.equal(
+    expect(isAuthCallbackPath('/auth-callback')).toBe(true);
+    expect(isAuthCallbackPath('/extension-auth-callback')).toBe(true);
+    expect(
       isAuthCallbackPath('/extension-auth-callback?state=vscode-state'),
-      true,
-    );
-    assert.equal(isAuthCallbackPath('/not-auth'), false);
-    assert.equal(
-      getAuthCallbackBasePath('/extension-auth-callback?state=abc'),
+    ).toBe(true);
+    expect(isAuthCallbackPath('/not-auth')).toBe(false);
+    expect(getAuthCallbackBasePath('/extension-auth-callback?state=abc')).toBe(
       '/extension-auth-callback',
     );
   });
-});
 
-describe('parseAuthCallbackCode', () => {
   it('extracts the PKCE code from the query string', () => {
-    assert.deepEqual(
+    expect(
       parseAuthCallbackCode({ path: '/auth-callback', query: 'code=abc123' }),
-      { success: true, code: 'abc123' },
-    );
+    ).toEqual({ success: true, code: 'abc123' });
   });
 
   it('reports auth errors before looking for a code', () => {
-    assert.deepEqual(
+    expect(
       parseAuthCallbackCode({
         path: '/auth-callback',
         query: 'error=access_denied&error_description=Nope',
       }),
-      { success: false, error: 'Nope', isAuthError: true },
-    );
+    ).toEqual({ success: false, error: 'Nope', isAuthError: true });
   });
 
   it('reports a missing code', () => {
-    assert.deepEqual(parseAuthCallbackCode({ path: '/auth-callback' }), {
+    expect(parseAuthCallbackCode({ path: '/auth-callback' })).toEqual({
       success: false,
       error: 'Missing authorization code in callback',
     });

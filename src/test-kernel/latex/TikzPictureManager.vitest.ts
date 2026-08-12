@@ -1,16 +1,11 @@
-// Node imports
-import * as assert from 'node:assert';
+import { describe, expect, it } from 'vitest';
 
-// Third-party imports
-import { describe, it } from 'vitest';
-
-// Local imports
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 async function extractFromPaper(content: string) {
-  await installFakePlatform({
+  await installPlatform({
     workspacePath: '/workspace',
     files: { '/workspace/paper.tex': content },
   });
@@ -30,7 +25,7 @@ describe('TikzPictureManager', () => {
 \end{figure*}
 `);
 
-    assert.deepStrictEqual(result, [
+    expect(result).toEqual([
       [
         'fig:wide',
         [
@@ -58,7 +53,7 @@ describe('TikzPictureManager', () => {
 \end{figure}
 `);
 
-    assert.deepStrictEqual(result, [
+    expect(result).toEqual([
       [
         'fig:labeled',
         [

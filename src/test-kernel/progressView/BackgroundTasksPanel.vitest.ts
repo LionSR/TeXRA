@@ -133,9 +133,6 @@ describe('background-tasks-panel', () => {
     expect(shadow.textContent).not.toContain('completed</em>');
     expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
 
-    // A lone populated section renders rows directly — no section header, so
-    // per-row status badges are the status surface.
-
     element.remove();
   });
 

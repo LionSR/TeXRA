@@ -2,7 +2,7 @@
 import path from 'node:path';
 
 // Third-party imports
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { computeOutputDiffStats } from '@agent/output/diffComputation';
@@ -36,10 +36,6 @@ function installFakePlatform(
 }
 
 describe('shared text-diff caller fixtures', () => {
-  beforeEach(async () => {
-    await installFakePlatform();
-  });
-
   it('preserves output diff line-change stats', async () => {
     await installFakePlatform({
       '/workspace/base.tex': 'one\ntwo\nthree\n',
@@ -130,8 +126,9 @@ describe('shared text-diff caller fixtures', () => {
     expect(
       firstChangedLine('alpha\nbeta\nomega\n', 'alpha\ninsert\nbeta\nomega\n'),
     ).toBe(1);
-    expect(computeUserPatch(original, final)).toContain('-beta');
-    expect(computeUserPatch(original, final)).toContain('+BETA');
+    const patch = computeUserPatch(original, final);
+    expect(patch).toContain('-beta');
+    expect(patch).toContain('+BETA');
 
     await installFakePlatform({
       '/workspace/paper.tex': 'alpha\nbeta\nomega\nlocal\n',

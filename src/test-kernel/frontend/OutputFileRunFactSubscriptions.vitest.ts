@@ -2,11 +2,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type {
-  AddOutputFilesPayload,
-  OutputFileInfo,
-  StreamTabId,
-} from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import type * as VSCode from 'vscode';
 
@@ -66,12 +62,6 @@ vi.mock('vscode', () => {
       Information: 2,
       Hint: 3,
     },
-    Disposable: class {
-      constructor(private readonly callOnDispose: () => unknown) {}
-      dispose(): void {
-        this.callOnDispose();
-      }
-    },
     EventEmitter,
     Range: class {
       constructor(
@@ -124,33 +114,6 @@ const vscode = await import('vscode');
 
 const streamId = 'stream:frontend-run-fact' as StreamTabId;
 
-function makeContext(): {
-  subscriptions: Array<{ dispose(): unknown }>;
-} {
-  return { subscriptions: [] };
-}
-
-function workspaceOutputFile(absolutePath: string): OutputFileInfo {
-  return {
-    source: absolutePath,
-    location: {
-      kind: 'workspace',
-      absolutePath,
-      relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
-    },
-    lineage: null,
-    diff: null,
-    round: 1,
-  };
-}
-
-function addOutputFilesPayload(absolutePath: string): AddOutputFilesPayload {
-  return {
-    streamId,
-    filesByRound: { 1: [workspaceOutputFile(absolutePath)] },
-  };
-}
-
 function emitOutputFiles(
   hub: InstanceType<typeof SessionEventHub>,
   absolutePath: string,
@@ -160,7 +123,22 @@ function emitOutputFiles(
     streamId,
     event: {
       type: 'addOutputFiles',
-      ...addOutputFilesPayload(absolutePath),
+      streamId,
+      filesByRound: {
+        1: [
+          {
+            source: absolutePath,
+            location: {
+              kind: 'workspace',
+              absolutePath,
+              relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+            },
+            lineage: null,
+            diff: null,
+            round: 1,
+          },
+        ],
+      },
     },
   });
 }
@@ -196,7 +174,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
   it('badges run-fact output files and app-scoped workspace writes', () => {
     const hub = new SessionEventHub();
-    const context = makeContext();
+    const context = { subscriptions: [] };
     registerFileDecorations(context as unknown as VSCode.ExtensionContext, hub);
     const provider = mocks.registeredProviders.at(-1) as {
       provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
@@ -233,7 +211,7 @@ describe('output-file run fact frontend subscriptions', () => {
     );
 
     const hub = new SessionEventHub();
-    const context = makeContext();
+    const context = { subscriptions: [] };
     registerInlineCriticism(context as unknown as VSCode.ExtensionContext, hub);
 
     emitOutputFiles(hub, outputPath);

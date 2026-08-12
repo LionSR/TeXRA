@@ -1,20 +1,9 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
+import { describe, expect, it } from 'vitest';
 
-// Third-party imports
-import { beforeEach, describe, it } from 'vitest';
-
-// Local imports - controllers and state keys
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 describe('LatexConfigPersistenceController', () => {
-  let controller: LatexConfigPersistenceController;
-
-  beforeEach(() => {
-    controller = new LatexConfigPersistenceController();
-  });
-
   const configProjectionCases: Array<{
     name: string;
     storedValues: Partial<Record<WorkspaceStateKey, unknown>>;
@@ -52,9 +41,10 @@ describe('LatexConfigPersistenceController', () => {
   ];
 
   it.each(configProjectionCases)('$name', ({ storedValues, expected }) => {
-    assert.deepEqual(
-      controller.buildConfigValues((key) => storedValues[key]),
-      expected,
-    );
+    expect(
+      new LatexConfigPersistenceController().buildConfigValues(
+        (key) => storedValues[key],
+      ),
+    ).toStrictEqual(expected);
   });
 });

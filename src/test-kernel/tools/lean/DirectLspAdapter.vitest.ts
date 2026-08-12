@@ -154,9 +154,7 @@ describe('createDirectLspLeanAdapter', () => {
     await expect(
       Promise.race([
         pendingDiagnostics.then(() => 'settled'),
-        new Promise<string>((resolve) =>
-          setTimeout(() => resolve('timed out'), 500),
-        ),
+        delay(500).then(() => 'timed out'),
       ]),
     ).resolves.toBe('settled');
   });

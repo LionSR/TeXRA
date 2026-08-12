@@ -13,17 +13,6 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 // Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';
 
-async function loadDesktopConfigConstructors(): Promise<{
-  JsonStore: typeof import('@platform/defaults/jsonStore').JsonStore;
-  JsonConfigProvider: typeof import('@platform/defaults/jsonConfigProvider').JsonConfigProvider;
-}> {
-  const [{ JsonStore }, { JsonConfigProvider }] = await Promise.all([
-    loadSourceModule('@platform/defaults/jsonStore'),
-    loadSourceModule('@platform/defaults/jsonConfigProvider'),
-  ]);
-  return { JsonStore, JsonConfigProvider };
-}
-
 describe('desktop JsonConfigProvider (dual-store)', () => {
   let tempDir: string | undefined;
 
@@ -38,8 +27,10 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     globalStore: JsonStore;
     workspaceStore: JsonStore;
   }> {
-    const { JsonStore, JsonConfigProvider } =
-      await loadDesktopConfigConstructors();
+    const [{ JsonStore }, { JsonConfigProvider }] = await Promise.all([
+      loadSourceModule('@platform/defaults/jsonStore'),
+      loadSourceModule('@platform/defaults/jsonConfigProvider'),
+    ]);
     tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-config-'));
     const globalStore = await JsonStore.open(join(tempDir, 'global.json'));
     const workspaceStore = await JsonStore.open(

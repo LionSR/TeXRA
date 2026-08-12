@@ -11,6 +11,7 @@ import {
 
 // Local imports
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
 const OTHER_ROUTE = 'anthropic:relay:claude-opus';
@@ -49,14 +50,11 @@ async function throwRelayLimit(): Promise<never> {
 
 /** Holds the gate's probe open until `complete()` is called. */
 function pendingOperation() {
-  let settle = (): void => undefined;
-  const result = new Promise<void>((resolve) => {
-    settle = resolve;
-  });
+  const deferred = createDeferred();
   return {
-    operation: vi.fn(() => result),
+    operation: vi.fn(() => deferred.promise),
     complete(): void {
-      settle();
+      deferred.resolve();
     },
   };
 }

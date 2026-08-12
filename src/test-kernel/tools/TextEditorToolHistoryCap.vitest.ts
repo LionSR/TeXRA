@@ -54,7 +54,6 @@ async function callTextEditor(
   );
 }
 
-/** Apply a str_replace edit and assert it went through. */
 async function strReplace(
   tool: TextEditorTool,
   path: string,
@@ -70,7 +69,6 @@ async function strReplace(
   assert.strictEqual(result.status, 'executed');
 }
 
-/** Undo the most recent edit on a path and assert it went through. */
 async function undoEdit(
   tool: TextEditorTool,
   path: string,

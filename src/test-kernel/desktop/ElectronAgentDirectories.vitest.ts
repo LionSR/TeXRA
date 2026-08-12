@@ -1,13 +1,9 @@
-// Node imports
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import * as path from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type {
@@ -24,7 +20,6 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 
-// Local file imports
 import { loadSourceModule } from './loadSourceModule.ts';
 
 async function writeText(filePath: string, content: string): Promise<void> {
@@ -224,7 +219,7 @@ describe('desktop agent directory bootstrap', () => {
     const { listRuntimeSkillSources } = await import('@skills/runtimeSkills');
 
     initializeNodeRuntimeSkills({
-      cwd: path.resolve(path.sep, 'tmp', 'project'),
+      cwd: resolve(sep, 'tmp', 'project'),
       resourcesPath,
       skillSourceOptions: {
         includeInterop: true,
@@ -237,16 +232,16 @@ describe('desktop agent directory bootstrap', () => {
       expect.arrayContaining([
         expect.objectContaining({
           scope: 'custom',
-          path: path.resolve(path.sep, 'tmp', 'project', 'vendor', 'skills'),
+          path: resolve(sep, 'tmp', 'project', 'vendor', 'skills'),
           required: true,
         }),
         expect.objectContaining({
           scope: 'project',
-          path: path.resolve(path.sep, 'tmp', 'project', '.texra', 'skills'),
+          path: resolve(sep, 'tmp', 'project', '.texra', 'skills'),
         }),
         expect.objectContaining({
           scope: 'interop',
-          path: path.resolve(path.sep, 'tmp', 'project', '.codex', 'skills'),
+          path: resolve(sep, 'tmp', 'project', '.codex', 'skills'),
         }),
         expect.objectContaining({
           scope: 'bundled',

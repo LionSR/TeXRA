@@ -1,4 +1,3 @@
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installPlatform } from '@test/support/setupPlatform';

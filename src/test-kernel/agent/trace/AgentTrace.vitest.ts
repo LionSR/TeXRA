@@ -1,6 +1,3 @@
-// Suites for src/agent/trace emit helpers (stage metadata, tool-use cards,
-// log-file categorization). RunTraceStream keeps its own suite.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   type AgentEvent,
@@ -22,10 +19,6 @@ function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
   act(trace);
   return events;
 }
-
-// ---------------------------------------------------------------------------
-// StageMetadata
-// ---------------------------------------------------------------------------
 
 describe('run-fact event vocabulary', () => {
   it('does not expose a mutable shared subscription list', () => {
@@ -58,10 +51,6 @@ describe('TraceEmitter stage metadata', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// responseFinalized (issue #7086)
-// ---------------------------------------------------------------------------
-
 describe('TraceEmitter responseFinalized', () => {
   it('emits a response.finalized event carrying the given text', () => {
     const events = collectEvents((trace) => {
@@ -90,10 +79,6 @@ describe('TraceEmitter responseFinalized', () => {
     expect(finalized).toMatchObject({ stageId });
   });
 });
-
-// ---------------------------------------------------------------------------
-// EmitToolUseCard
-// ---------------------------------------------------------------------------
 
 type ToolUseCard = Parameters<typeof emitToolUseCard>[1];
 
@@ -162,10 +147,6 @@ describe('emitToolUseCard', () => {
     },
   );
 });
-
-// ---------------------------------------------------------------------------
-// logFileCategory
-// ---------------------------------------------------------------------------
 
 describe('logFileCategory', () => {
   let logger: AgentTrace;

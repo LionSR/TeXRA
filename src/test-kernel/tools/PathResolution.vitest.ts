@@ -12,9 +12,8 @@ import {
 
 describe('assertNoParentTraversal', () => {
   it.each(['../x', 'a/../../x'])('rejects %s', (targetPath) => {
-    expect(() => assertNoParentTraversal(targetPath)).toThrow(ToolError);
-    expect(() => assertNoParentTraversal(targetPath)).toThrow(
-      `path must not contain '..': ${targetPath}`,
+    expect(() => assertNoParentTraversal(targetPath)).toThrowError(
+      new ToolError(`path must not contain '..': ${targetPath}`),
     );
   });
 

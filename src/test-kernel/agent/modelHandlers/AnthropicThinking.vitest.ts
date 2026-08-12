@@ -1,8 +1,6 @@
-// Third-party imports
 import { MODEL_CONFIGS, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
-// Local imports - functions under test
 import {
   buildThinkingConfig,
   isCompactionEligibleModel,

@@ -557,36 +557,38 @@ describe('SupabaseSession', () => {
       assert.equal(getReadCount(), 1);
     });
 
-    it('returns refreshed session tokens without reloading storage', async () => {
-      const { coordinator, getReadCount } = createCoordinator({
-        initialSession: expiredCustomSession(),
+    it.each([
+      {
+        name: 'custom refresh',
+        initial: expiredCustomSession(),
         fetch: async () =>
           new Response(REFRESHED_SESSION_BODY, { status: 200 }),
-      });
-
-      assert.deepEqual(await coordinator.getSessionTokens(), {
-        accessToken: 'new-access',
-        refreshToken: 'new-refresh',
-      });
-      assert.equal(getReadCount(), 1);
-    });
-
-    it('returns native refreshed session tokens without reloading storage', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-      });
-      const { coordinator, getReadCount } = createCoordinator({
-        initialSession,
-      });
-
-      assert.deepEqual(await coordinator.getSessionTokens(), {
-        accessToken: 'refreshed-access',
-        refreshToken: 'refreshed-refresh',
-      });
-      assert.equal(getReadCount(), 1);
-    });
+        expected: { accessToken: 'new-access', refreshToken: 'new-refresh' },
+      },
+      {
+        name: 'native refresh',
+        initial: makeSession({
+          accessToken: 'old-access',
+          refreshToken: 'old-refresh',
+          expiresAt: Date.now() - 1_000,
+        }),
+        fetch: undefined,
+        expected: {
+          accessToken: 'refreshed-access',
+          refreshToken: 'refreshed-refresh',
+        },
+      },
+    ])(
+      'returns $name session tokens without reloading storage',
+      async ({ initial, fetch, expected }) => {
+        const { coordinator, getReadCount } = createCoordinator({
+          initialSession: initial,
+          fetch,
+        });
+        assert.deepEqual(await coordinator.getSessionTokens(), expected);
+        assert.equal(getReadCount(), 1);
+      },
+    );
 
     it('does not return tokens cleared while loading the session', async () => {
       const { coordinator, getReadCount } = createClearingStorageCoordinator({

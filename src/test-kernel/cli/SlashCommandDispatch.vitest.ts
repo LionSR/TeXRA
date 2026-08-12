@@ -133,6 +133,10 @@ function localEntries(): readonly ConversationEntry[] {
   return streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? [];
 }
 
+function localEntryPairs(): Array<{ role: string; text: string }> {
+  return localEntries().map(({ role, text }) => ({ role, text }));
+}
+
 function transcriptJson(): string {
   return JSON.stringify([...streams.get().values()]);
 }
@@ -468,7 +472,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/unavailable', createContext());
 
-    expect(localEntries().map(({ role, text }) => ({ role, text }))).toEqual([
+    expect(localEntryPairs()).toEqual([
       { role: 'user', text: '/unavailable' },
       {
         role: 'assistant',
@@ -493,9 +497,7 @@ describe('handleTuiSlashCommand', () => {
 
     form.props?.onPersist?.();
 
-    expect(localEntries().map(({ role, text }) => ({ role, text }))).toEqual([
-      { role: 'user', text: '/custom-form' },
-    ]);
+    expect(localEntryPairs()).toEqual([{ role: 'user', text: '/custom-form' }]);
   });
 
   it('opens /models as the enable/disable catalog (not the active-model picker)', async () => {

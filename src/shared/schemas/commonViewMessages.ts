@@ -24,7 +24,7 @@ export const SetThemeMessageSchema = z.object({
   theme: ThemeSchema,
 });
 
-const SetDebugModeMessageSchema = z.object({
+export const SetDebugModeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.DEBUG_MODE_SET),
   debugMode: z.boolean(),
 });

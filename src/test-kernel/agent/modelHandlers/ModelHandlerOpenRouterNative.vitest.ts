@@ -38,8 +38,8 @@ function createHandler(
   const handler = new ModelHandlerOpenRouterNative(
     buildTestModelConfig(OPENROUTER_TEST_CONFIG, configOverrides),
   );
-  (handler as any).setLogger({ ...noopTrace });
-  (handler as any).getStreamingConfig = () => false;
+  handler.setLogger({ ...noopTrace });
+  handler.getStreamingConfig = () => false;
   return handler;
 }
 
@@ -126,9 +126,7 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
       );
       stubServerSideKeyService();
 
-      const handler = new ModelHandlerOpenRouterNative(
-        buildTestModelConfig(OPENROUTER_TEST_CONFIG, { openRouterOnly }),
-      );
+      const handler = createHandler({ openRouterOnly });
 
       assert.equal((handler as any).shouldUseServerSideKeys(), expected);
     },
@@ -143,9 +141,7 @@ describe('ModelHandlerOpenRouterNative system prompt placement', () => {
   ])(
     'never resupplies the system prompt per-call, even when the underlying provider is %s',
     (provider) => {
-      const handler = new ModelHandlerOpenRouterNative(
-        buildTestModelConfig(OPENROUTER_TEST_CONFIG, { provider }),
-      );
+      const handler = createHandler({ provider });
 
       assert.equal(handler.requiresPerCallSystemPrompt, false);
     },
@@ -259,12 +255,10 @@ describe('ModelHandlerOpenRouterNative forced tool choice', () => {
       expected: true,
     },
   ])('$name', ({ provider, supportsReasoning, expected }) => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-        provider,
-        capabilities: { supportsReasoning },
-      }),
-    );
+    const handler = createHandler({
+      provider,
+      capabilities: { supportsReasoning },
+    });
 
     assert.equal(handler.supportsForcedToolChoice, expected);
   });
@@ -297,7 +291,7 @@ describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
     },
   ])('$name', async ({ streaming, send, error }) => {
     const handler = createHandler();
-    (handler as any).getStreamingConfig = () => streaming;
+    handler.getStreamingConfig = () => streaming;
     const client = { chat: { send } };
 
     await assert.rejects(
@@ -313,45 +307,39 @@ describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
 
 describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   it('does not allow overrides for a fixed max-effort model', () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-        provider: ModelProvider.MOONSHOT,
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-        },
-      }),
-    );
+    const handler = createHandler({
+      provider: ModelProvider.MOONSHOT,
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MAX,
+      },
+    });
 
     assert.equal(handler.supportsReasoningLevelOverride, false);
   });
 
   it('allows max selection when the model declares max as its ceiling', () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MEDIUM,
-          maxReasoningEffort: ReasoningEffort.MAX,
-        },
-      }),
-    );
+    const handler = createHandler({
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MEDIUM,
+        maxReasoningEffort: ReasoningEffort.MAX,
+      },
+    });
 
     assert.equal(handler.supportsReasoningLevelOverride, true);
   });
 
   it('keeps the declared override range after an effective max selection', () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.XHIGH,
-        },
-      }),
-    );
+    const handler = createHandler({
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.XHIGH,
+      },
+    });
     handler.capabilities.reasoningEffort = ReasoningEffort.MAX;
 
     assert.equal(handler.supportsReasoningLevelOverride, true);
@@ -382,15 +370,13 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   ])(
     '$name',
     ({ provider, supportsReasoning, supportsReasoningEffort, expected }) => {
-      const handler = new ModelHandlerOpenRouterNative(
-        buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-          provider,
-          capabilities: {
-            supportsReasoning,
-            supportsReasoningEffort,
-          },
-        }),
-      );
+      const handler = createHandler({
+        provider,
+        capabilities: {
+          supportsReasoning,
+          supportsReasoningEffort,
+        },
+      });
 
       assert.equal(handler.supportsReasoningLevelOverride, expected);
     },

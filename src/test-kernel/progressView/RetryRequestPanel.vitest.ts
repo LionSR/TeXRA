@@ -16,7 +16,9 @@ useLitComponentTestDom(
   () => import('@progressView/frontend/components/RetryRequestPanel'),
 );
 
-function createRetryPermission(): RetryRequestPanel['permission'] {
+function createRetryPermission(
+  overrides: Partial<RetryRequestPanel['permission']['data']> = {},
+): RetryRequestPanel['permission'] {
   return {
     kind: PERMISSION_KIND.RETRY,
     data: {
@@ -30,13 +32,16 @@ function createRetryPermission(): RetryRequestPanel['permission'] {
         isRelayError: true,
         userRetryable: true,
       },
+      ...overrides,
     },
   };
 }
 
-function mountPanel(): Promise<RetryRequestPanel> {
+function mountPanel(
+  overrides?: Partial<RetryRequestPanel['permission']['data']>,
+): Promise<RetryRequestPanel> {
   return mountComponent<RetryRequestPanel>('retry-request-panel', {
-    permission: createRetryPermission(),
+    permission: createRetryPermission(overrides),
   });
 }
 
@@ -46,9 +51,11 @@ function formatRetryDetails(
   element: RetryRequestPanel,
   details: ProviderErrorPartial,
 ): string | null {
-  const format: (details: ProviderErrorPartial) => string | null = (
-    element as unknown as Record<string, unknown>
-  )['formatRetryDetails'] as never;
+  const format = (
+    element as unknown as {
+      formatRetryDetails: (details: ProviderErrorPartial) => string | null;
+    }
+  ).formatRetryDetails;
   return format.call(element, details);
 }
 
@@ -89,23 +96,16 @@ describe('retry-request-panel', () => {
   });
 
   it('distinguishes a fresh direct-model run from retrying Copilot', async () => {
-    const element = await mountPanel();
-    element.permission = {
-      kind: PERMISSION_KIND.RETRY,
-      data: {
-        requestId: 'copilot-retry',
-        streamId: 'stream-1',
-        operation: 'model request',
-        model: 'copilot:sonnet46',
-        errorMessage: 'Copilot quota exhausted',
-        errorDetails: {
-          exhaustionReason: 'copilot-subscription',
-          isRelayError: false,
-          userRetryable: true,
-        },
+    const element = await mountPanel({
+      requestId: 'copilot-retry',
+      model: 'copilot:sonnet46',
+      errorMessage: 'Copilot quota exhausted',
+      errorDetails: {
+        exhaustionReason: 'copilot-subscription',
+        isRelayError: false,
+        userRetryable: true,
       },
-    };
-    await element.updateComplete;
+    });
 
     const actions = element.shadowRoot?.querySelector(
       '.retry-request__actions',

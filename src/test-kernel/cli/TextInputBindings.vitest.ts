@@ -158,12 +158,12 @@ describe('text input keymap', () => {
   });
 
   it('renders the advertised bindings into /help from the same table', () => {
-    const help = formatSlashCommandHelp([]);
+    const help = textInputEditingHelp();
 
-    expect(help).toContain(textInputEditingHelp());
+    expect(formatSlashCommandHelp([])).toContain(help);
     for (const binding of TEXT_INPUT_BINDINGS) {
       if (binding.advertise) {
-        expect(textInputEditingHelp()).toContain(`\`${binding.keys}\``);
+        expect(help).toContain(`\`${binding.keys}\``);
       }
     }
   });

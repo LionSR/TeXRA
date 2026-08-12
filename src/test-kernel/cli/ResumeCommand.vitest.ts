@@ -130,7 +130,6 @@ describe('runResumeExecution', () => {
       executionId: EXECUTION_ID,
       streamId: STREAM_ID,
     });
-    mocks.retrieveSessionResumeData.mockResolvedValue(resolution);
 
     await expect(run(cliContext())).resolves.toBe(0);
 
@@ -162,7 +161,6 @@ describe('runResumeExecution', () => {
       executionId: EXECUTION_ID,
       modelHandlerCompatibilityKey: 'anthropic',
     });
-    mocks.executeCliWorkflowConfig.mockResolvedValue(0);
 
     // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
     // needs an interactive terminal.

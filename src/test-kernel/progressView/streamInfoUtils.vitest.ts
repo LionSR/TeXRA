@@ -1,6 +1,3 @@
-// Suites for src/controllers/progressView/backend stream info helpers
-// (streamOrdering + streamTabInfo).
-
 import { strict as assert } from 'node:assert';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getStreamTabDisplayName } from '@agent/runtime/streamTab';

@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - controllers
 import {
   ProgressWorkflowFileActionsController,
   type ProgressWorkflowFileActionsControllerDeps,

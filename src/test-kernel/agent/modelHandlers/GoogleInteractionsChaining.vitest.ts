@@ -21,6 +21,13 @@ import type { Interactions } from '@google/genai';
 type Step = Interactions.Step;
 type SSEEvent = Interactions.InteractionSSEEvent;
 
+/** The capturing client surface the compaction test intercepts. */
+interface InterceptableCreateClient {
+  interactions: {
+    create(params: unknown): Promise<unknown>;
+  };
+}
+
 /** One recorded `interactions.create` request. */
 interface RecordedCall {
   store: boolean | undefined;
@@ -335,9 +342,9 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
       }
     ).postProcessResponse = () => 'REWRITTEN';
     const calls: RecordedCall[] = [];
-    const client: any = capturingClient(calls, (i) =>
+    const client = capturingClient(calls, (i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2'),
-    );
+    ) as InterceptableCreateClient;
     // Compaction uses a separate stateless, non-streaming Interactions call.
     const create = client.interactions.create;
     client.interactions.create = async (params: { stream?: boolean }) => {

@@ -176,18 +176,11 @@ export function loginFromChat(
     }
 
     let loginArgs = args;
-    if (context) {
-      if (args.target === 'chatgpt') {
-        loginArgs = {
-          ...args,
-          device: shouldUseSubscriptionDeviceCode(context, args),
-        };
-      } else if (args.target === 'grok') {
-        loginArgs = {
-          ...args,
-          device: shouldUseSubscriptionDeviceCode(context, args),
-        };
-      }
+    if (context && (args.target === 'chatgpt' || args.target === 'grok')) {
+      loginArgs = {
+        ...args,
+        device: shouldUseSubscriptionDeviceCode(context, args),
+      };
     }
     output.writeProgress(loginStartMessage(loginArgs));
 

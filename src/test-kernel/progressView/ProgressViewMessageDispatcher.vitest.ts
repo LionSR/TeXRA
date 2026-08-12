@@ -150,18 +150,6 @@ describe('SyncStreamContentMessageSchema', () => {
   });
 });
 
-function seededPermission(): PermissionState {
-  return {
-    kind: PERMISSION_KIND.PLAN_APPROVAL,
-    data: {
-      approvalId: 'approval-1',
-      streamId: 'stream-1' as StreamTabId,
-      plan: { objective: 'Do the thing.' },
-      goalEnabled: false,
-    },
-  } as PermissionState;
-}
-
 function seedStreamWithLogListToggle(streamId: StreamTabId): void {
   appState.get().streamById.set(streamId, {
     name: streamId,
@@ -193,7 +181,17 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
   });
 
   it('routes DELETE_ALL to streamLifecycleHandlers, which clears the state singletons — dispatch parity', () => {
-    permissions$.set([seededPermission()]);
+    permissions$.set([
+      {
+        kind: PERMISSION_KIND.PLAN_APPROVAL,
+        data: {
+          approvalId: 'approval-1',
+          streamId: 'stream-1' as StreamTabId,
+          plan: { objective: 'Do the thing.' },
+          goalEnabled: false,
+        },
+      } as PermissionState,
+    ]);
     const onError = vi.fn();
 
     const handled = dispatchMessage(

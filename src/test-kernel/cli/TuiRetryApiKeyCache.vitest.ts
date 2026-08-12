@@ -1,7 +1,15 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   apiMode: 'included' as 'included' | 'personal',
@@ -32,7 +40,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { installPlatform } from '@test/support/setupPlatform';
 
 function interactions(): ReturnType<typeof createTuiHostInteractions> {
-  return createTuiHostInteractions(
+  const tui = createTuiHostInteractions(
     {
       emit: vi.fn(),
       close: vi.fn(async () => undefined),
@@ -45,6 +53,8 @@ function interactions(): ReturnType<typeof createTuiHostInteractions> {
       resourcesPath: '/resources',
     }),
   );
+  onTestFinished(() => tui.dispose?.());
+  return tui;
 }
 
 function relayLimitRetry(requestId: string, streamId: string): RetryPermission {
@@ -111,7 +121,6 @@ describe('TUI retry API-key cache boundary', () => {
     });
     expect(preparedKeys).toEqual(['sk-rotated-current-key']);
     expect(mocks.apiMode).toBe('personal');
-    tui.dispose?.();
   });
 
   it('rejects a deleted key even when presentation cached it as present', async () => {
@@ -134,6 +143,5 @@ describe('TUI retry API-key cache boundary', () => {
     });
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(prepareRetry).not.toHaveBeenCalled();
-    tui.dispose?.();
   });
 });

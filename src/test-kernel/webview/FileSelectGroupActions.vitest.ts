@@ -54,10 +54,7 @@ const SEED = {
 // state object by reference, so a fresh object would leave it holding the
 // previous test's mutations.
 function seedWebviewState(): void {
-  if (!webviewState) {
-    webviewState = { mainViewState: structuredClone(SEED) };
-    return;
-  }
+  webviewState ??= {};
   for (const key of Object.keys(webviewState)) {
     delete webviewState[key];
   }

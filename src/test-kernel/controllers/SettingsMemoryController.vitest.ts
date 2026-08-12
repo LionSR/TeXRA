@@ -1,9 +1,7 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
-// Third-party imports
 import { strict as assert } from 'node:assert';
 import { afterEach, describe, it, vi } from 'vitest';
 
-// Local imports - test support
 import { createFakeUIHosts } from '../support/FakeHosts';
 
 const mocks = vi.hoisted(() => ({

@@ -90,9 +90,5 @@ export async function showLatexHousekeepingNotification(
     case 'message':
       await showLoggedMessage(channel, notification.message);
       return;
-    default:
-      // A severity added later must still surface, not vanish.
-      await showLoggedMessage(channel, notification.message);
-      return;
   }
 }

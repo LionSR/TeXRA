@@ -1,12 +1,9 @@
-// Node imports
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
-// Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - test support
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { normalizeFilePath } from '@utils/core';
@@ -14,7 +11,6 @@ import {
   DESKTOP_SRC_DIR,
   REPO_ROOT,
   desktopSourcePath,
-  repoPath,
 } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -28,9 +24,8 @@ function namedImportSources(source: string, importedName: string): string[] {
       /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*\(?\s*(?:await\s*)?import\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)?/gu,
     ),
   ]
-    .filter((match) => bindingPattern.test(match[1] ?? ''))
-    .map((match) => match[2])
-    .filter((specifier): specifier is string => specifier !== undefined);
+    .filter((match) => bindingPattern.test(match[1]))
+    .map((match) => match[2]);
 }
 
 function readDesktopMainIndex(): Promise<string> {
@@ -95,51 +90,18 @@ describe('desktop composition root and launch environment', () => {
       'agentExecution.dispose()',
     ]);
 
-    const shutdownBefore = source.indexOf(
-      'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE',
-    );
-    const disableResume = source.indexOf(
+    expectOrderedAfter(source, 'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE', [
       'disposeAgentResumeHandler()',
-      shutdownBefore,
-    );
-    const registerAgentShutdown = source.indexOf(
       'registerAgentShutdownHandlers(lifecycle)',
-    );
-    const flush = source.indexOf(
       'processSession.flushArtifacts()',
-      registerAgentShutdown,
-    );
-    const shutdownStart = source.indexOf(
       'lifecycle.onShutdown(SHUTDOWN_PHASE.ON',
-    );
-    const disposeStores = source.indexOf(
       'disposeProcessStores()',
-      shutdownStart,
-    );
-    const dispose = source.indexOf('processSession.dispose()', shutdownStart);
-    expect(shutdownBefore).toBeGreaterThanOrEqual(0);
-    expect(disableResume).toBeGreaterThan(shutdownBefore);
-    expect(registerAgentShutdown).toBeGreaterThan(disableResume);
-    expect(flush).toBeGreaterThan(registerAgentShutdown);
-    expect(flush).toBeLessThan(shutdownStart);
-    expect(shutdownStart).toBeGreaterThanOrEqual(0);
-    expect(disposeStores).toBeGreaterThan(shutdownStart);
-    expect(dispose).toBeGreaterThan(disposeStores);
-
-    const initializeStores = source.indexOf(
-      'await initializeDesktopProcessStores',
-    );
-    const registerStoreDisposer = source.indexOf(
+      'processSession.dispose()',
+    ]);
+    expectOrderedAfter(source, 'await initializeDesktopProcessStores', [
       'disposeProcessStores = () => processStores.dispose()',
-      initializeStores,
-    );
-    const awaitSessionRepair = source.indexOf(
       'await processSession.waitUntilReady()',
-      initializeStores,
-    );
-    expect(initializeStores).toBeGreaterThanOrEqual(0);
-    expect(registerStoreDisposer).toBeGreaterThan(initializeStores);
-    expect(awaitSessionRepair).toBeGreaterThan(registerStoreDisposer);
+    ]);
   });
 
   it('imports process-store initialization directly from its owner', async () => {
@@ -170,27 +132,19 @@ describe('desktop composition root and launch environment', () => {
   it('repairs PATH before platform services and bundled agents are initialized', async () => {
     const source = await readDesktopPlatformIndex();
 
-    expect(source.indexOf('repairLaunchPath();')).toBeGreaterThanOrEqual(0);
-    expect(source.indexOf('repairLaunchPath();')).toBeLessThan(
-      source.indexOf('initPlatform('),
-    );
-    expect(source.indexOf('initPlatform(')).toBeLessThan(
-      source.indexOf('bootstrapNodeAgentDirectories('),
-    );
+    expectOrderedAfter(source, 'repairLaunchPath();', [
+      'initPlatform(',
+      'bootstrapNodeAgentDirectories(',
+    ]);
   });
 
   it('initializes desktop runtime skills from the resolved resource bundle', async () => {
     const source = await readDesktopPlatformIndex();
 
-    expect(
-      source.indexOf('const resourcesPath = resolveResourcesPath'),
-    ).toBeGreaterThanOrEqual(0);
-    expect(source.indexOf('initializeNodeRuntimeSkills({')).toBeGreaterThan(
-      source.indexOf('const resourcesPath = resolveResourcesPath'),
-    );
-    expect(source.indexOf('initializeNodeRuntimeSkills({')).toBeLessThan(
-      source.indexOf('bootstrapNodeAgentDirectories('),
-    );
+    expectOrderedAfter(source, 'const resourcesPath = resolveResourcesPath', [
+      'initializeNodeRuntimeSkills({',
+      'bootstrapNodeAgentDirectories(',
+    ]);
   });
 
   it('uses the home directory as the no-workspace skill discovery fallback', async () => {
@@ -310,10 +264,7 @@ describe('desktop composition root and launch environment', () => {
       '@desktop/main/platform/pathFix',
     );
     const env = { PATH: '/custom/bin:/usr/bin' };
-    let fixPathCalls = 0;
-    const fixPath = () => {
-      fixPathCalls += 1;
-    };
+    const fixPath = vi.fn();
 
     const first = repairLaunchPath({
       env,
@@ -327,7 +278,7 @@ describe('desktop composition root and launch environment', () => {
     });
 
     expect(first).toBe(second);
-    expect(fixPathCalls).toBe(2);
+    expect(fixPath).toHaveBeenCalledTimes(2);
     expect(second.split(':')).toEqual([
       '/Library/TeX/texbin',
       '/opt/homebrew/bin',

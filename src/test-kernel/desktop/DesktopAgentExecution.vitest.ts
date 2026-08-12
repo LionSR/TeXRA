@@ -79,12 +79,8 @@ const mocks = createModuleMocks();
 type DesktopProgressBridgeOptions =
   import('@desktop/main/desktopAgentExecution').DesktopProgressBridgeOptions;
 
-type Bridge = {
-  openFileCompile(filePath: string): Promise<void>;
+type TestableBridge = {
   dispose(): void;
-};
-
-type TestableBridge = Bridge & {
   fileActions: {
     host: { startExecution(request: unknown): void };
   };
@@ -2117,7 +2113,6 @@ describe('DesktopProgressBridge', () => {
     const runNew = assertSupported(
       bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW],
     );
-    expect(runNew).toBeTypeOf('function');
     await runNew({
       command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
       stream: 'stream-new',
@@ -2358,7 +2353,6 @@ describe('DesktopProgressBridge', () => {
         PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION
       ],
     );
-    expect(handleProposal).toBeTypeOf('function');
     await handleProposal({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
       proposalId: 'proposal-1',
@@ -2408,7 +2402,6 @@ describe('DesktopProgressBridge', () => {
     const handleRestoreState = assertSupported(
       bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RESTORE_STATE],
     );
-    expect(handleRestoreState).toBeTypeOf('function');
     await handleRestoreState({
       command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
       stream: 'stream-1',
@@ -3346,9 +3339,6 @@ describe('DesktopProgressBridge', () => {
         expect(
           owner.processSession.executions.getHandle(childExecutionId),
         ).toBeUndefined();
-        expect(
-          owner.processSession.executions.getHandle(childExecutionId),
-        ).toBeUndefined();
       } finally {
         bridgeB.dispose();
       }
@@ -3687,9 +3677,6 @@ describe('DesktopProgressBridge', () => {
           ),
         ).toBe(true);
 
-        expect(owner.processSession.executions.getHandle(executionId)).toBe(
-          freshHandle,
-        );
         // Identity-safe cleanup preserves the fresh handle.
         expect(owner.processSession.executions.getHandle(executionId)).toBe(
           freshHandle,

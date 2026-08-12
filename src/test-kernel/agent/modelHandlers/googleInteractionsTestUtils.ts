@@ -4,8 +4,6 @@ import { ModelProvider } from 'llm-zoo';
 // Local imports
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-
-// Third-party imports
 import type { Interactions } from '@google/genai';
 
 /**

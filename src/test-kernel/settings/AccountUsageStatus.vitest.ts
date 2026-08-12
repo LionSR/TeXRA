@@ -70,7 +70,6 @@ describe('account usage status', () => {
 
   it('does not call a transient refresh failure an expired session', async () => {
     const element = await mountAccountTab();
-    element.authenticated = true;
     element.sessionProblem = 'unavailable';
     element.userEmail = 'researcher@example.com';
     await element.updateComplete;

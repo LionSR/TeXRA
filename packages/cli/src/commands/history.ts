@@ -274,12 +274,12 @@ const historyListCommand = defineCliCommand({
       description: 'Show at most this many executions',
     },
   },
-  run: (context, ctx) => {
+  run: async (context, ctx) => {
     const limitValue = optString(ctx.args.limit);
     const limit = parseHistoryListLimit(limitValue);
     if (limitValue !== undefined && limit === undefined) {
       writeTextStderr(`Invalid history limit: ${limitValue}`);
-      return Promise.resolve(CliExitCode.Usage);
+      return CliExitCode.Usage;
     }
     return runHistoryList(context, { limit });
   },
@@ -312,17 +312,17 @@ const historyShowCommand = defineCliCommand({
         'Shared trace-viewer bundle location for --export html (for a site publishing many traces); omit for a single self-contained page',
     },
   },
-  run: (context, ctx) => {
+  run: async (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
-      return Promise.resolve(CliExitCode.Usage);
+      return CliExitCode.Usage;
     }
     const exportFormat = optString(ctx.args.export);
     if (exportFormat !== undefined) {
       if (exportFormat !== 'html' && exportFormat !== 'md') {
         writeTextStderr(formatInvalidExportFormatText(exportFormat));
-        return Promise.resolve(CliExitCode.Usage);
+        return CliExitCode.Usage;
       }
       return runHistoryExport(context, id, exportFormat, {
         assetsDir: optString(ctx.args['assets-dir']),
@@ -352,12 +352,12 @@ const historyDeleteCommand = defineCliCommand({
         'Confirm destructive deletes (required with --all; ignored otherwise)',
     },
   },
-  run: (context, ctx) => {
+  run: async (context, ctx) => {
     const rawId = optString(ctx.args.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
       writeTextStderr(`Invalid execution id: ${rawId}`);
-      return Promise.resolve(CliExitCode.Usage);
+      return CliExitCode.Usage;
     }
     return runHistoryDelete(context, {
       id,

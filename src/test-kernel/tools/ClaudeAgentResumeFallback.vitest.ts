@@ -110,12 +110,6 @@ function completedChildRunLoop(): { completion: Promise<void> } {
   return { completion: Promise.resolve() };
 }
 
-async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
-  for (const message of messages) {
-    yield message;
-  }
-}
-
 function stubExecutions(): any {
   return {
     getAgentHandleByStream: () => undefined,
@@ -288,14 +282,14 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   it('seeds the fallback launch with the stale session_id so the SDK resumes from disk', async () => {
     mocks.query.mockReturnValue(
-      streamMessages([
-        {
+      (async function* () {
+        yield {
           type: 'result',
           subtype: 'success',
           session_id: 'stale-session',
           result: 'Resumed and continued.',
-        },
-      ]),
+        };
+      })(),
     );
 
     const tool = new ClaudeAgentTool();

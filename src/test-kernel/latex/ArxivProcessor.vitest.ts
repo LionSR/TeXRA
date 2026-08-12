@@ -10,11 +10,27 @@ import {
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempDirs: string[] = [];
+const SOURCE_URL = 'https://arxiv.org/src/2404.12175';
 
 afterEach(async () => {
   vi.unstubAllGlobals();
   await cleanupTempDirs(tempDirs);
 });
+
+async function tempSourceBase(): Promise<string> {
+  const dir = await makeTempDir('texra-arxiv-', tempDirs);
+  return path.join(dir, 'source');
+}
+
+function sourceResponse(status = 200): Response {
+  return new Response('source contents', {
+    status,
+    headers: {
+      'content-disposition': 'attachment; filename="source"',
+      'content-type': 'application/x-gzip',
+    },
+  });
+}
 
 describe('arXiv processor paths', () => {
   it.each<{
@@ -55,22 +71,12 @@ describe('arXiv processor logger channel', () => {
 
 describe('arXiv source download filenames', () => {
   it('does not infer a missing header filename when it matches the base path', async () => {
-    const dir = await makeTempDir('texra-arxiv-', tempDirs);
-    const destBasePath = path.join(dir, 'source');
-    const fetchMock = vi.fn(
-      async (_url: RequestInfo | URL, _init?: RequestInit) =>
-        new Response('source contents', {
-          status: 200,
-          headers: {
-            'content-disposition': 'attachment; filename="source"',
-            'content-type': 'application/x-gzip',
-          },
-        }),
-    );
+    const destBasePath = await tempSourceBase();
+    const fetchMock = vi.fn(async () => sourceResponse());
     vi.stubGlobal('fetch', fetchMock);
 
     const downloadedPath = await ArxivProcessor.downloadFile(
-      'https://arxiv.org/src/2404.12175',
+      SOURCE_URL,
       destBasePath,
       5000,
     );
@@ -85,28 +91,18 @@ describe('arXiv source download filenames', () => {
 
 describe('arXiv source download retry classification', () => {
   it('retries a 429 rate limit instead of aborting immediately', async () => {
-    const dir = await makeTempDir('texra-arxiv-', tempDirs);
-    const destBasePath = path.join(dir, 'source');
+    const destBasePath = await tempSourceBase();
     let attempt = 0;
-    const fetchMock = vi.fn(
-      async (_url: RequestInfo | URL, _init?: RequestInit) => {
-        attempt += 1;
-        if (attempt === 1) {
-          return new Response(null, { status: 429 });
-        }
-        return new Response('source contents', {
-          status: 200,
-          headers: {
-            'content-disposition': 'attachment; filename="source"',
-            'content-type': 'application/x-gzip',
-          },
-        });
-      },
-    );
+    const fetchMock = vi.fn(async () => {
+      attempt += 1;
+      return attempt === 1
+        ? new Response(null, { status: 429 })
+        : sourceResponse();
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const downloadedPath = await ArxivProcessor.downloadFile(
-      'https://arxiv.org/src/2404.12175',
+      SOURCE_URL,
       destBasePath,
       5000,
     );
@@ -116,20 +112,12 @@ describe('arXiv source download retry classification', () => {
   });
 
   it('does not retry a permanent 400 response', async () => {
-    const dir = await makeTempDir('texra-arxiv-', tempDirs);
-    const destBasePath = path.join(dir, 'source');
-    const fetchMock = vi.fn(
-      async (_url: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(null, { status: 400 }),
-    );
+    const destBasePath = await tempSourceBase();
+    const fetchMock = vi.fn(async () => new Response(null, { status: 400 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
-      ArxivProcessor.downloadFile(
-        'https://arxiv.org/src/2404.12175',
-        destBasePath,
-        5000,
-      ),
+      ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
     ).rejects.toThrow('HTTP 400');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

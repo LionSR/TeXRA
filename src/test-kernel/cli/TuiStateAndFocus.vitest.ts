@@ -647,81 +647,83 @@ describe('cliState stream, focus, and child-edge fields', () => {
 });
 
 describe('CLI TUI row allocation', () => {
-  it('keeps foreground approval and form surfaces inside the middle row budget', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: true,
-      reverseSearchOpen: false,
-      rows: 24,
-      slashPaletteOpen: false,
-    });
+  it.each([
+    {
+      name: 'keeps foreground approval and form surfaces inside the middle row budget',
+      options: {
+        foregroundOpen: true,
+        reverseSearchOpen: false,
+        rows: 24,
+        slashPaletteOpen: false,
+      },
+      transcriptRows: 1,
+      foregroundRows: 18,
+    },
+    {
+      name: 'returns disabled input rows to tiny foreground surfaces',
+      options: {
+        foregroundOpen: true,
+        inputVisible: false,
+        reverseSearchOpen: false,
+        rows: 10,
+        slashPaletteOpen: false,
+      },
+      transcriptRows: 1,
+      foregroundRows: 7,
+    },
+    {
+      name: 'can cap compact foreground surfaces on tall terminals',
+      options: {
+        foregroundMaxRows: 12,
+        foregroundOpen: true,
+        reverseSearchOpen: false,
+        rows: 40,
+        slashPaletteOpen: false,
+      },
+      transcriptRows: 1,
+      foregroundRows: 12,
+    },
+    {
+      name: 'uses the whole middle region for the transcript without foreground UI',
+      options: {
+        foregroundOpen: false,
+        reverseSearchOpen: false,
+        rows: 24,
+        slashPaletteOpen: false,
+      },
+      transcriptRows: 19,
+      foregroundRows: 0,
+    },
+    {
+      name: 'reserves queued follow-up panel rows above the stable input chrome',
+      options: {
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        reverseSearchOpen: false,
+        rows: 24,
+        slashPaletteOpen: false,
+      },
+      transcriptRows: 16,
+      foregroundRows: 0,
+    },
+    {
+      name: 'accounts for capped static transcript rows above the stable input chrome',
+      options: {
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        reverseSearchOpen: false,
+        rows: 10,
+        slashPaletteOpen: false,
+        staticTranscriptRows: 2,
+      },
+      transcriptRows: 0,
+      foregroundRows: 0,
+    },
+  ])('$name', ({ options, transcriptRows, foregroundRows }) => {
+    const layout = allocateMiddleRows(options);
 
-    expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(18);
-  });
-
-  it('returns disabled input rows to tiny foreground surfaces', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: true,
-      inputVisible: false,
-      reverseSearchOpen: false,
-      rows: 10,
-      slashPaletteOpen: false,
-    });
-
-    expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(7);
-  });
-
-  it('can cap compact foreground surfaces on tall terminals', () => {
-    const layout = allocateMiddleRows({
-      foregroundMaxRows: 12,
-      foregroundOpen: true,
-      reverseSearchOpen: false,
-      rows: 40,
-      slashPaletteOpen: false,
-    });
-
-    expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(12);
-  });
-
-  it('uses the whole middle region for the transcript without foreground UI', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: false,
-      reverseSearchOpen: false,
-      rows: 24,
-      slashPaletteOpen: false,
-    });
-
-    expect(layout.transcriptRows).toBe(19);
-    expect(layout.foregroundRows).toBe(0);
-  });
-
-  it('reserves queued follow-up panel rows above the stable input chrome', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: false,
-      queuedFollowUpPanelRows: 3,
-      reverseSearchOpen: false,
-      rows: 24,
-      slashPaletteOpen: false,
-    });
-
-    expect(layout.transcriptRows).toBe(16);
-    expect(layout.foregroundRows).toBe(0);
-  });
-
-  it('accounts for capped static transcript rows above the stable input chrome', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: false,
-      queuedFollowUpPanelRows: 3,
-      reverseSearchOpen: false,
-      rows: 10,
-      slashPaletteOpen: false,
-      staticTranscriptRows: 2,
-    });
-
-    expect(layout.transcriptRows).toBe(0);
-    expect(layout.foregroundRows).toBe(0);
+    expect(layout.transcriptRows).toBe(transcriptRows);
+    expect(layout.foregroundRows).toBe(foregroundRows);
   });
 
   it('caps static transcript rows only in compact layouts', () => {
@@ -772,28 +774,34 @@ describe('CLI TUI row allocation', () => {
     ).toBe(2);
   });
 
-  it('reserves rows for reverse-search input chrome', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: false,
-      reverseSearchOpen: true,
-      rows: 24,
-      slashPaletteOpen: false,
-    });
+  it.each([
+    {
+      name: 'reserves rows for reverse-search input chrome',
+      options: {
+        foregroundOpen: false,
+        reverseSearchOpen: true,
+        rows: 24,
+        slashPaletteOpen: false,
+      },
+      transcriptRows: 14,
+      foregroundRows: 0,
+    },
+    {
+      name: 'returns former header rows to the transcript when slash palette is open',
+      options: {
+        foregroundOpen: false,
+        reverseSearchOpen: false,
+        rows: 24,
+        slashPaletteOpen: true,
+      },
+      transcriptRows: 6,
+      foregroundRows: 0,
+    },
+  ])('$name', ({ options, transcriptRows, foregroundRows }) => {
+    const layout = allocateMiddleRows(options);
 
-    expect(layout.transcriptRows).toBe(14);
-    expect(layout.foregroundRows).toBe(0);
-  });
-
-  it('returns former header rows to the transcript when slash palette is open', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: false,
-      reverseSearchOpen: false,
-      rows: 24,
-      slashPaletteOpen: true,
-    });
-
-    expect(layout.transcriptRows).toBe(6);
-    expect(layout.foregroundRows).toBe(0);
+    expect(layout.transcriptRows).toBe(transcriptRows);
+    expect(layout.foregroundRows).toBe(foregroundRows);
   });
 
   it('sizes side panels to their content within the budget', () => {
@@ -1049,124 +1057,128 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('keeps unfinished todo and plan chrome across stream phases', () => {
-    const openTodo = {
-      content: 'Check the live proof',
-      activeForm: 'Checking the live proof',
-      status: TODO_STATUS.IN_PROGRESS,
-    } satisfies TodoItem;
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: false,
-        hasPlan: false,
-        todos: [openTodo],
-      }),
-    ).toBe(true);
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: false,
-        hasPlan: true,
-        todos: [],
-      }),
-    ).toBe(true);
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: false,
-        hasPlan: false,
-        todos: [openTodo],
-      }),
-    ).toBe(true);
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: false,
-        hasPlan: false,
-        todos: [openTodo],
-      }),
-    ).toBe(true);
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: true,
-        hasPlan: false,
-        todos: [openTodo],
-      }),
-    ).toBe(false);
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: false,
-        hasPlan: false,
-        todos: [],
-      }),
-    ).toBe(false);
-    expect(
-      shouldShowTodosPlanPanel({
-        foregroundOpen: false,
-        hasPlan: true,
-        todos: [
-          {
-            content: 'Finish the old goal',
-            activeForm: 'Finishing the old goal',
-            status: TODO_STATUS.COMPLETED,
-          },
-        ],
-      }),
-    ).toBe(true);
-  });
+  const openTodo = {
+    content: 'Check the live proof',
+    activeForm: 'Checking the live proof',
+    status: TODO_STATUS.IN_PROGRESS,
+  } satisfies TodoItem;
 
-  it('only reports a chat run interruptible after stream resolution', () => {
-    const runPromise = Promise.resolve();
+  it.each([
+    {
+      name: 'an open todo with no plan',
+      foregroundOpen: false,
+      hasPlan: false,
+      todos: [openTodo],
+      expected: true,
+    },
+    {
+      name: 'a plan with no open todos',
+      foregroundOpen: false,
+      hasPlan: true,
+      todos: [],
+      expected: true,
+    },
+    {
+      name: 'the foreground open',
+      foregroundOpen: true,
+      hasPlan: false,
+      todos: [openTodo],
+      expected: false,
+    },
+    {
+      name: 'no todo or plan',
+      foregroundOpen: false,
+      hasPlan: false,
+      todos: [],
+      expected: false,
+    },
+    {
+      name: 'a plan with only completed todos',
+      foregroundOpen: false,
+      hasPlan: true,
+      todos: [
+        {
+          content: 'Finish the old goal',
+          activeForm: 'Finishing the old goal',
+          status: TODO_STATUS.COMPLETED,
+        },
+      ],
+      expected: true,
+    },
+  ])(
+    'keeps unfinished todo and plan chrome across stream phases: $name',
+    ({ foregroundOpen, hasPlan, todos, expected }) => {
+      expect(shouldShowTodosPlanPanel({ foregroundOpen, hasPlan, todos })).toBe(
+        expected,
+      );
+    },
+  );
 
-    expect(
-      chatTuiCanInterruptActiveRun({
-        runCompleted: false,
-        runPromise,
-        streamId: undefined,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanInterruptActiveRun({
-        runCompleted: false,
-        runPromise: undefined,
-        streamId: root,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanInterruptActiveRun({
-        runCompleted: true,
-        runPromise,
-        streamId: root,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanInterruptActiveRun({
-        runCompleted: false,
-        runPromise,
-        streamId: root,
-      }),
-    ).toBe(true);
-  });
+  it.each([
+    {
+      name: 'before the stream resolves',
+      runCompleted: false,
+      runPromise: Promise.resolve(),
+      streamId: undefined,
+      expected: false,
+    },
+    {
+      name: 'while startup is pending',
+      runCompleted: false,
+      runPromise: undefined,
+      streamId: root,
+      expected: false,
+    },
+    {
+      name: 'after the run completed',
+      runCompleted: true,
+      runPromise: Promise.resolve(),
+      streamId: root,
+      expected: false,
+    },
+    {
+      name: 'with the stream resolved and the run in flight',
+      runCompleted: false,
+      runPromise: Promise.resolve(),
+      streamId: root,
+      expected: true,
+    },
+  ])(
+    'only reports a chat run interruptible $name',
+    ({ runCompleted, runPromise, streamId, expected }) => {
+      expect(
+        chatTuiCanInterruptActiveRun({ runCompleted, runPromise, streamId }),
+      ).toBe(expected);
+    },
+  );
 
-  it('allows a fresh root run after a terminal chat failure', () => {
-    const runPromise = Promise.resolve();
-
-    expect(
-      chatTuiCanStartRootRun({
-        runCompleted: false,
-        runPromise: undefined,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanStartRootRun({
-        runCompleted: false,
-        runPromise,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanStartRootRun({
-        runCompleted: true,
-        runPromise,
-      }),
-    ).toBe(true);
-  });
+  it.each([
+    {
+      name: 'with no run pending',
+      runCompleted: false,
+      runPromise: undefined,
+      expected: true,
+    },
+    {
+      name: 'while a run is pending',
+      runCompleted: false,
+      runPromise: Promise.resolve(),
+      expected: false,
+    },
+    {
+      name: 'after a terminal chat failure',
+      runCompleted: true,
+      runPromise: Promise.resolve(),
+      expected: true,
+    },
+  ])(
+    'allows a fresh root run $name',
+    ({ runCompleted, runPromise, expected }) => {
+      expect(chatTuiCanStartRootRun({ runCompleted, runPromise })).toBe(
+        expected,
+      );
+    },
+  );
 
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupPromise = new Promise<void>(() => {});
@@ -1228,152 +1240,182 @@ describe('CLI TUI row allocation', () => {
     expect(rootRunStreamId.get()).toBeUndefined();
   });
 
-  it('allows model selection before start or while a tool-use chat is waiting', () => {
-    expect(
-      chatTuiCanSelectModel({
-        canStartRootRun: true,
-        streamId: undefined,
-        status: undefined,
-        hasActiveToolUseFlow: false,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanSelectModel({
-        canStartRootRun: false,
-        streamId: root,
-        status: STREAM_PHASE.WAITING,
-        hasActiveToolUseFlow: true,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanSelectModel({
-        canStartRootRun: false,
-        streamId: root,
-        status: STREAM_PHASE.RUNNING,
-        hasActiveToolUseFlow: true,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanSelectModel({
-        canStartRootRun: false,
-        streamId: root,
-        status: STREAM_PHASE.WAITING,
-        hasActiveToolUseFlow: false,
-      }),
-    ).toBe(false);
-  });
+  it.each([
+    {
+      name: 'before start',
+      canStartRootRun: true,
+      streamId: undefined,
+      status: undefined,
+      hasActiveToolUseFlow: false,
+      expected: true,
+    },
+    {
+      name: 'while a tool-use chat is waiting',
+      canStartRootRun: false,
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+      hasActiveToolUseFlow: true,
+      expected: true,
+    },
+    {
+      name: 'while a tool-use chat is running',
+      canStartRootRun: false,
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+      hasActiveToolUseFlow: true,
+      expected: false,
+    },
+    {
+      name: 'waiting without an active tool-use flow',
+      canStartRootRun: false,
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+      hasActiveToolUseFlow: false,
+      expected: false,
+    },
+  ])(
+    'allows model selection $name',
+    ({ canStartRootRun, streamId, status, hasActiveToolUseFlow, expected }) => {
+      expect(
+        chatTuiCanSelectModel({
+          canStartRootRun,
+          streamId,
+          status,
+          hasActiveToolUseFlow,
+        }),
+      ).toBe(expected);
+    },
+  );
 
-  it('only reports Ctrl-C stoppable while the root stream is actively responding', () => {
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: true,
-        streamId: undefined,
-        status: undefined,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: true,
-        streamId: root,
-        status: STREAM_PHASE.RUNNING,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: true,
-        streamId: root,
-        status: STREAM_PHASE.WAITING,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: true,
-        streamId: root,
-        status: STREAM_PHASE.FAILED,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: true,
-        streamId: root,
-        status: STREAM_PHASE.CANCELLED,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: true,
-        streamId: root,
-        status: STREAM_PHASE.COMPLETED,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanStopActiveRun({
-        runPending: false,
-        streamId: root,
-        status: STREAM_PHASE.RUNNING,
-      }),
-    ).toBe(false);
-  });
+  it.each([
+    {
+      name: 'before the root stream resolves',
+      runPending: true,
+      streamId: undefined,
+      status: undefined,
+      expected: true,
+    },
+    {
+      name: 'while the root stream is actively responding',
+      runPending: true,
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+      expected: true,
+    },
+    {
+      name: 'while the root stream waits',
+      runPending: true,
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+      expected: false,
+    },
+    {
+      name: 'after the root stream failed',
+      runPending: true,
+      streamId: root,
+      status: STREAM_PHASE.FAILED,
+      expected: false,
+    },
+    {
+      name: 'after the root stream was cancelled',
+      runPending: true,
+      streamId: root,
+      status: STREAM_PHASE.CANCELLED,
+      expected: false,
+    },
+    {
+      name: 'after the root stream completed',
+      runPending: true,
+      streamId: root,
+      status: STREAM_PHASE.COMPLETED,
+      expected: false,
+    },
+    {
+      name: 'with no run pending',
+      runPending: false,
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+      expected: false,
+    },
+  ])(
+    'only reports Ctrl-C stoppable $name',
+    ({ runPending, streamId, status, expected }) => {
+      expect(chatTuiCanStopActiveRun({ runPending, streamId, status })).toBe(
+        expected,
+      );
+    },
+  );
 
-  it('keeps Ctrl-C stoppable when the visible stream is already live', () => {
-    expect(
-      chatTuiCanStopVisibleRun({
-        runPending: false,
-        streamId: root,
-        status: STREAM_PHASE.RUNNING,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanStopVisibleRun({
-        runPending: false,
-        streamId: undefined,
-        status: STREAM_PHASE.RUNNING,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanStopVisibleRun({
-        runPending: false,
-        streamId: root,
-        status: STREAM_PHASE.WAITING,
-      }),
-    ).toBe(false);
-  });
+  it.each([
+    {
+      name: 'while the visible stream is already live',
+      runPending: false,
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+      expected: true,
+    },
+    {
+      name: 'with no visible stream resolved',
+      runPending: false,
+      streamId: undefined,
+      status: STREAM_PHASE.RUNNING,
+      expected: false,
+    },
+    {
+      name: 'while the visible stream waits',
+      runPending: false,
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+      expected: false,
+    },
+  ])(
+    'keeps Ctrl-C stoppable $name',
+    ({ runPending, streamId, status, expected }) => {
+      expect(chatTuiCanStopVisibleRun({ runPending, streamId, status })).toBe(
+        expected,
+      );
+    },
+  );
 
-  it('resolves the TUI Ctrl-C action from armed, stoppable, and interruptible state', () => {
-    expect(
-      chatTuiSigintAction({
-        exitArmed: false,
-        canStopActiveRun: false,
-        resumableIdle: false,
-      }),
-    ).toBe('clean-exit');
-
-    expect(
+  it.each([
+    {
+      name: 'clean exit',
+      exitArmed: false,
+      canStopActiveRun: false,
+      resumableIdle: false,
+      expected: 'clean-exit',
+    },
+    {
       // Idle/WAITING (interruptible, not stoppable): exit WITHOUT interrupting
       // so the suspended tool-use flow record and terminal status survive.
-      chatTuiSigintAction({
-        exitArmed: false,
-        canStopActiveRun: false,
-        resumableIdle: true,
-      }),
-    ).toBe('preserve-exit');
-
-    expect(
-      chatTuiSigintAction({
-        exitArmed: false,
-        canStopActiveRun: true,
-        resumableIdle: false,
-      }),
-    ).toBe('interrupt-and-arm-exit');
-
-    expect(
-      chatTuiSigintAction({
-        exitArmed: true,
-        canStopActiveRun: true,
-        resumableIdle: false,
-      }),
-    ).toBe('force-exit');
-  });
+      name: 'resumable idle',
+      exitArmed: false,
+      canStopActiveRun: false,
+      resumableIdle: true,
+      expected: 'preserve-exit',
+    },
+    {
+      name: 'interruptible run',
+      exitArmed: false,
+      canStopActiveRun: true,
+      resumableIdle: false,
+      expected: 'interrupt-and-arm-exit',
+    },
+    {
+      name: 'armed exit',
+      exitArmed: true,
+      canStopActiveRun: true,
+      resumableIdle: false,
+      expected: 'force-exit',
+    },
+  ])(
+    'resolves the TUI Ctrl-C action for $name',
+    ({ exitArmed, canStopActiveRun, resumableIdle, expected }) => {
+      expect(
+        chatTuiSigintAction({ exitArmed, canStopActiveRun, resumableIdle }),
+      ).toBe(expected);
+    },
+  );
 
   it('selects the focused child stream as a follow-up target', () => {
     setStatus(root, STREAM_PHASE.WAITING);

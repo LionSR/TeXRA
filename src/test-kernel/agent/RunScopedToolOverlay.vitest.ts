@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
 import { noopTrace } from '@agent/trace';
 import {
   AgentPromptSchema,
@@ -12,15 +10,13 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-
-// Local imports - shared
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-
-// Test support imports
-import { AgentCategory } from '@shared/schemas';
+import {
+  AgentCategory,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
-
 import { testModelCell } from './modelCellTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({

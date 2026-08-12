@@ -1,18 +1,14 @@
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import * as logger from '@logger/logUtils';
 import * as config from '@utils/config/configUtils';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
-/** Enables debug-level logging for the duration of a test. */
 function enableDebugLogging(): void {
   vi.spyOn(config, 'getConfig').mockReturnValue(true);
 }
 
-/** Installs a capturing sink and returns the lines it receives. */
 function captureLines(options?: { trusted: boolean }): string[] {
   const lines: string[] = [];
   logger.setOutputChannelFactory(
