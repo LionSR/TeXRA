@@ -1,12 +1,10 @@
 import { spawn } from 'node:child_process';
-import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import type { StateStore } from '@platform/interfaces';
-import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
@@ -24,6 +22,7 @@ import {
   resolveCliCwd,
   type CliContext,
 } from './cliContext';
+import { openCliGlobalStateStore } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from './style';
@@ -334,18 +333,15 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const style = createCliStyle(context.stderrColorEnabled);
   // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
   // open the same global `state.json` that `createCliStateStores` opens later
-  // directly (see `cliStateStores.ts`). Failures here (e.g. an unreadable or
-  // unwritable global-storage directory, or stdin closing mid-prompt) must
-  // stay as silent as a network failure: this whole check is best-effort and
-  // must never block `chat` / `orchestrate` startup.
+  // via `openCliGlobalStateStore` (see `cliStateStores.ts`). Failures here
+  // (e.g. an unreadable or unwritable global-storage directory, or stdin
+  // closing mid-prompt) must stay as silent as a network failure: this whole
+  // check is best-effort and must never block `chat` / `orchestrate` startup.
   let latest: string | undefined;
   let confirmed = false;
   try {
-    const globalState = await JsonStore.open(
-      path.join(
-        createNodeStorageProvider().getGlobalStoragePath(),
-        'state.json',
-      ),
+    const globalState = await openCliGlobalStateStore(
+      createNodeStorageProvider(),
     );
     latest = await checkCliUpdateAvailable({
       currentVersion: context.version,

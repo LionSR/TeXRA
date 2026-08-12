@@ -15,6 +15,16 @@ export interface CliStateStoresInit {
   readonly workspacePath: string | (() => string | undefined);
 }
 
+/** Open the CLI's global `state.json` under the given storage provider. This
+ *  is the single derivation of the global state path; pre-platform-init callers
+ *  (e.g. the update checker) use it with a default provider instead of
+ *  re-deriving the same path by hand. */
+export async function openCliGlobalStateStore(
+  storage: StorageProvider,
+): Promise<StateStore> {
+  return JsonStore.open(path.join(storage.getGlobalStoragePath(), 'state.json'));
+}
+
 export async function createCliStateStores(
   init: CliStateStoresInit,
 ): Promise<CliStateStores> {
@@ -23,7 +33,7 @@ export async function createCliStateStores(
     workspacePath: init.workspacePath,
   });
   const [globalStore, workspaceStore] = await Promise.all([
-    JsonStore.open(path.join(storage.getGlobalStoragePath(), 'state.json')),
+    openCliGlobalStateStore(storage),
     JsonStore.open(path.join(storage.getStoragePath(), 'state.json')),
   ]);
 
