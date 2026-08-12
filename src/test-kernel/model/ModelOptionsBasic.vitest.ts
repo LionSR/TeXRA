@@ -149,6 +149,19 @@ describe('computeModelListVersion', () => {
     );
   });
 
+  it('does not change when an unrelated active catalogue model is added', () => {
+    const before = computeModelListVersion(['preferred'], [['preferred', {}]]);
+    const after = computeModelListVersion(
+      ['preferred'],
+      [
+        ['preferred', {}],
+        ['new-model', {}],
+      ],
+    );
+
+    expect(after).toBe(before);
+  });
+
   it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {
     expect(MODEL_LIST_VERSION).toBeGreaterThan(21);
   });

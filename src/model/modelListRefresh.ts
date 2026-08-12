@@ -49,7 +49,7 @@ function reconcileEnabledModels(
   // intentionally remains guarded at version 16. These thresholds are frozen
   // historical facts about specific past migrations, not tied to the current
   // value of MODEL_LIST_VERSION: it is now a hash of preferred membership and
-  // the full catalogue lifecycle rather than a hand-bumped integer, so it no
+  // status plus catalogue retirements rather than a hand-bumped integer, so it no
   // longer makes sense to "bump the guard to the current version" -- a future
   // one-time sweep would add its own new numeric threshold here instead.
   if ((previousVersion ?? 0) < 16) {
@@ -63,8 +63,8 @@ function reconcileEnabledModels(
   // deliberately *not* gated behind a version threshold like the two sweeps
   // above. `reconcileEnabledModels` only ever runs when MODEL_LIST_VERSION
   // has changed (see `refreshModelListStateIfNeeded`), and since #7191 that
-  // version hashes the full catalogue lifecycle: it changes whenever any
-  // model retires, including a non-default model a user enabled explicitly.
+  // version hashes every catalogue retirement: it changes whenever any model
+  // retires, including a non-default model a user enabled explicitly.
   // The user's persisted version may already be permanently past any legacy
   // "< N" gate. Freezing this sweep behind such a gate (it
   // used to read `previousVersion < 21`, the last hand-bumped version before
