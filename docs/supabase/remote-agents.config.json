@@ -19,7 +19,7 @@
     },
     "devise": {
       "folder": "QITBench",
-      "visibility": ["researcher", "QITBench"]
+      "visibility": ["researcher", "QITBench", "public"]
     },
     "elevate": { "folder": "researcher", "visibility": ["researcher"] },
     "enhance": { "folder": "whitelist", "visibility": ["public"] },
