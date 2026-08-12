@@ -96,6 +96,22 @@ export interface AgentCliResumeLabels {
   queuedLabel: string;
 }
 
+function assertAgentCliSessionOwnedByCaller(
+  stored: ResumableAgentCliSession | undefined,
+  id: string | undefined,
+  callerStreamId: StreamTabId | undefined,
+  labels: AgentCliResumeLabels,
+): void {
+  if (!stored || !id || !callerStreamId) return;
+
+  const handle = stored.executions.getHandle(stored.executionId);
+  if (handle && !handle.isOwnedBy(callerStreamId)) {
+    throw new ToolError(
+      `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
+    );
+  }
+}
+
 async function queueAgentCliFollowUp(
   stored: ResumableAgentCliSession,
   params: {
@@ -109,12 +125,7 @@ async function queueAgentCliFollowUp(
   // Ownership is a live-handle fact: a detached or re-parented child must not
   // accept follow-ups from its former orchestrator. A missing handle falls
   // through to submitFollowUp's no-session outcome below.
-  const handle = stored.executions.getHandle(stored.executionId);
-  if (callerStreamId && handle && !handle.isOwnedBy(callerStreamId)) {
-    throw new ToolError(
-      `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-    );
-  }
+  assertAgentCliSessionOwnedByCaller(stored, id, callerStreamId, labels);
 
   const result = await submitFollowUp(stored.childStreamId, prompt, {
     session: currentSession(),
@@ -346,17 +357,12 @@ export function dispatchAgentCliTool(params: {
   return withAgentCliApproval(agentName, approvalLabel, (runContext) => {
     const callerStreamId = getRunContextStreamId(runContext);
     const source = sourceId ? store.lookup(sourceId) : undefined;
-    const sourceHandle = source?.executions.getHandle(source.executionId);
-    if (
-      sourceId &&
-      callerStreamId &&
-      sourceHandle instanceof AgentExecutionHandle &&
-      !sourceHandle.isOwnedBy(callerStreamId)
-    ) {
-      throw new ToolError(
-        `${labels.notActiveLabel} '${sourceId}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-      );
-    }
+    assertAgentCliSessionOwnedByCaller(
+      source,
+      sourceId,
+      callerStreamId,
+      labels,
+    );
     return resumeOrLaunchAgentCliSession(store, {
       id: resumeId,
       prompt,
