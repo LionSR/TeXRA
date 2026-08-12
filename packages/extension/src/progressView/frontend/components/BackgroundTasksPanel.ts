@@ -131,8 +131,14 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name--clickable {
+        appearance: none;
+        padding: 0;
+        border: 0;
+        background: transparent;
         cursor: pointer;
         color: var(--color-text-link);
+        font: inherit;
+        text-align: inherit;
         text-decoration: underline;
         text-decoration-color: transparent;
         transition: text-decoration-color var(--transition-fast);
@@ -429,34 +435,26 @@ export class BackgroundTasksPanel extends LitElement {
     const displayName = child.identity
       ? runIdentityDisplayName(child.identity)
       : child.agentName;
+    const name = childStreamId
+      ? html`<button
+          id="${idPrefix}-name"
+          type="button"
+          class="task-name task-name--clickable"
+          aria-label=${`Go to ${displayName}`}
+          @click=${() => this.navigateToStream(childStreamId)}
+        >
+          ${displayName}
+        </button>`
+      : html`<span id="${idPrefix}-name" class="task-name"
+          >${displayName}</span
+        >`;
 
     return html`
       <div class="task-header">
         ${waIcon(icon, {
           className: `task-icon ${child.identity?.kind === 'process' ? 'task-icon--process' : 'task-icon--subagent'}`,
         })}
-        <span
-          id="${idPrefix}-name"
-          class="task-name task-name--clickable"
-          role="link"
-          tabindex="0"
-          @click=${
-            childStreamId !== undefined
-              ? () => this.navigateToStream(childStreamId)
-              : nothing
-          }
-          @keydown=${
-            childStreamId !== undefined
-              ? (e: KeyboardEvent) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    this.navigateToStream(childStreamId);
-                  }
-                }
-              : nothing
-          }
-          >${displayName}</span
-        >
+        ${name}
         <wa-tooltip for="${idPrefix}-name">Go to ${displayName}</wa-tooltip>
         ${
           phaseLabel

@@ -114,8 +114,8 @@ describe('background-tasks-panel', () => {
     ]);
 
     const shadow = element.shadowRoot!;
-    const names = [...shadow.querySelectorAll('.task-name')].map(
-      (node) => node.textContent,
+    const names = [...shadow.querySelectorAll('.task-name')].map((node) =>
+      node.textContent?.trim(),
     );
     expect(names).toEqual(['reviewer', 'polisher']);
     for (const name of shadow.querySelectorAll<HTMLElement>('.task-name')) {
@@ -132,6 +132,30 @@ describe('background-tasks-panel', () => {
     expect(badges).toEqual(['Running', 'Completed']);
     expect(shadow.textContent).not.toContain('completed</em>');
     expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
+
+    element.remove();
+  });
+
+  it('uses native buttons to navigate to child streams', async () => {
+    const element = await mountPanel([
+      subagentRow({ executionId: 'exec-link', childStreamId: 'child-link' }),
+    ]);
+    const switchedTo: string[] = [];
+    element.addEventListener('stream-switch', (event) => {
+      switchedTo.push(
+        (event as CustomEvent<{ streamId: string }>).detail.streamId,
+      );
+    });
+
+    const name =
+      element.shadowRoot?.querySelector<HTMLButtonElement>('.task-name');
+    expect(name?.tagName).toBe('BUTTON');
+    expect(name?.type).toBe('button');
+    expect(name?.getAttribute('aria-label')).toBe('Go to reviewer');
+    expect(name?.hasAttribute('role')).toBe(false);
+    expect(name?.hasAttribute('tabindex')).toBe(false);
+    name?.click();
+    expect(switchedTo).toEqual(['child-link']);
 
     element.remove();
   });
