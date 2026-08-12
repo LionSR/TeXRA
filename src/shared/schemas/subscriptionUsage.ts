@@ -1,10 +1,12 @@
 import { z } from 'zod';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 
-const SubscriptionUsageProviderSchema = z.enum([
+export const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
   'chatgpt',
-  'kimiCode',
-  'glmCodingPlan',
-]);
+  ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => plan.usageProvider),
+] as const);
+
+const SubscriptionUsageProviderSchema = z.enum(SUBSCRIPTION_USAGE_PROVIDERS);
 export type SubscriptionUsageProvider = z.infer<
   typeof SubscriptionUsageProviderSchema
 >;
@@ -47,11 +49,10 @@ export type SubscriptionUsageSnapshot = z.infer<
   typeof SubscriptionUsageSnapshotSchema
 >;
 
-export const SubscriptionUsageSnapshotsSchema = z.object({
-  chatgpt: SubscriptionUsageSnapshotSchema,
-  kimiCode: SubscriptionUsageSnapshotSchema,
-  glmCodingPlan: SubscriptionUsageSnapshotSchema,
-});
+export const SubscriptionUsageSnapshotsSchema = z.record(
+  SubscriptionUsageProviderSchema,
+  SubscriptionUsageSnapshotSchema,
+);
 export type SubscriptionUsageSnapshots = z.infer<
   typeof SubscriptionUsageSnapshotsSchema
 >;

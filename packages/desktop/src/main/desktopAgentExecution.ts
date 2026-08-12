@@ -102,12 +102,6 @@ import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  getGLMCodingPlan,
-  getPreferKimiCode,
-  setGLMCodingPlan,
-  setPreferKimiCode,
-} from '@utils/config/providerConfig';
 
 import {
   postDesktopSettingsView,
@@ -514,22 +508,6 @@ export class DesktopProgressBridge {
       setPreferChatGptSubscription: async (enabled) => {
         await setPreferCodexSubscription(enabled);
       },
-      codingPlanToggles: [
-        {
-          exhaustionReason: 'glm-coding-plan',
-          getEnabled: getGLMCodingPlan,
-          setEnabled: async (enabled) => {
-            await setGLMCodingPlan(enabled);
-          },
-        },
-        {
-          exhaustionReason: 'kimi-code-subscription',
-          getEnabled: getPreferKimiCode,
-          setEnabled: async (enabled) => {
-            await setPreferKimiCode(enabled);
-          },
-        },
-      ],
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.hostInteractions.isRetryPending(stream, requestId),
