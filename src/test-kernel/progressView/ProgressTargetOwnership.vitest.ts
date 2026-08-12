@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createWebviewPanel: vi.fn(),
   executeCommand: vi.fn(async () => undefined),
   replayApprovalRequestHandlers: vi.fn(async () => undefined),
+  showErrorMessage: vi.fn(async () => undefined),
 }));
 
 vi.mock('vscode', async (importOriginal) => {
@@ -17,6 +18,7 @@ vi.mock('vscode', async (importOriginal) => {
       ...(actual.window as Record<string, unknown>),
       activeColorTheme: { kind: 1 },
       createWebviewPanel: mocks.createWebviewPanel,
+      showErrorMessage: mocks.showErrorMessage,
     },
     commands: { executeCommand: mocks.executeCommand },
     Uri: {
@@ -108,22 +110,26 @@ function createProvider() {
   injected.context = { extensionUri: { fsPath: '/ext' } };
   injected.contentProvider = { getHtmlContent: () => '<progress-view />' };
   injected.messageHandler = { handleMessage: vi.fn() };
-  injected.state = {
+  const state = {
     activeStream: undefined,
     streamLogs: { keys: () => [], get: () => undefined },
     streamStatus: { getAllStreamStates: () => new Map() },
   };
-  injected.backend = {
+  injected.state = state;
+  const backend = {
     activateStream: vi.fn(async () => false),
     approvalHandlers: {},
     syncRenderedStreams: vi.fn(async () => {}),
   };
+  injected.backend = backend;
+  const logger = { error: vi.fn() };
+  injected.logger = logger;
   injected.webviewUpdater = {
     isAvailable: () => true,
     setPlacement: vi.fn(),
     sendStreamMetadata: vi.fn(() => undefined),
   };
-  return { provider, mainViewProvider, sidebarView };
+  return { provider, mainViewProvider, sidebarView, backend, logger, state };
 }
 
 describe('progress target ownership', () => {
@@ -149,6 +155,27 @@ describe('progress target ownership', () => {
 
     await provider.markWebviewReady(panel as unknown as vscode.WebviewPanel);
     expect(mocks.replayApprovalRequestHandlers).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports the stream whose refresh failed after selection changes', async () => {
+    const { provider, backend, logger, state } = createProvider();
+    let rejectRefresh!: (error: Error) => void;
+    backend.syncRenderedStreams.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+    state.activeStream = 'refreshing-stream' as never;
+    (provider as unknown as { target: { ready: boolean } }).target.ready = true;
+
+    provider.syncFullView();
+    state.activeStream = 'new-selection' as never;
+    rejectRefresh(new Error('read failed'));
+
+    await vi.waitFor(() => expect(logger.error).toHaveBeenCalledOnce());
+    expect(logger.error.mock.calls[0]?.[0]).toContain('refreshing-stream');
+    expect(logger.error.mock.calls[0]?.[0]).not.toContain('new-selection');
   });
 
   it('drops the target when the editor panel is closed', async () => {

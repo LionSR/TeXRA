@@ -313,10 +313,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     this.webviewUpdater.setPlacement(target.placement);
 
+    const activeStream = this.state.activeStream;
     void this.backend
       .syncRenderedStreams({ syncActiveStream, theme })
       .catch((error: unknown) =>
-        this.reportTranscriptLoadError(error, this.state.activeStream),
+        this.reportTranscriptLoadError(error, activeStream),
       );
   }
 
