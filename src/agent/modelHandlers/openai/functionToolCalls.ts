@@ -18,11 +18,19 @@ import type {
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 
-/** True when a chat-completions tool call is a `function` tool call. */
+/**
+ * True when a chat-completions tool call is a `function` tool call.
+ * Accepts unknown entries so export paths can filter malformed conversation
+ * payloads (e.g. null array slots) without throwing.
+ */
 export function isFunctionToolCall(
-  toolCall: ChatCompletionMessageToolCall,
+  toolCall: ChatCompletionMessageToolCall | null | undefined | unknown,
 ): toolCall is ChatCompletionMessageFunctionToolCall {
-  return toolCall.type === 'function';
+  return (
+    toolCall != null &&
+    typeof toolCall === 'object' &&
+    (toolCall as ChatCompletionMessageToolCall).type === 'function'
+  );
 }
 
 /**

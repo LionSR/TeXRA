@@ -19,7 +19,6 @@ import {
 } from '../shared/desktopCommandSurface.js';
 import type { MenuItemConstructorOptions } from 'electron';
 
-
 /** Menu template shape produced before Electron materializes native menus. */
 export interface DesktopMenuTemplateItem extends Omit<
   MenuItemConstructorOptions,

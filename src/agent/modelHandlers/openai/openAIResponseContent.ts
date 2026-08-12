@@ -12,7 +12,6 @@ import type {
   ResponseOutputMessage,
 } from 'openai/resources/responses/responses';
 
-
 /** Build an `input_text` content part. */
 export function createInputText(text: string): ResponseInputContent {
   return { type: 'input_text', text };

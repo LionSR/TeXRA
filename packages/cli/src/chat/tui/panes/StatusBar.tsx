@@ -124,9 +124,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // so cadence and cleanup live in one place; the `resetKey` re-fires
   // immediately when the read's inputs change, matching the old effect deps.
   // Scope the in-flight guard by read key so a pending lookup for the old
-  // model/preference cannot suppress the reset-triggered re-fire (stale
-  // results are already ignored via resolutionCurrent).
+  // model/preference cannot suppress the reset-triggered re-fire. Completions
+  // also check the latest desired key so a superseded promise cannot overwrite
+  // a newer resolution (resolutionCurrent would then hide the current route).
   const subscriptionInFlightKeyRef = useRef<string | null>(null);
+  const subscriptionDesiredKeyRef = useRef(
+    `${accessModel}:${codexPreferenceVersion}`,
+  );
+  subscriptionDesiredKeyRef.current = `${accessModel}:${codexPreferenceVersion}`;
   usePollingInterval(
     () => {
       const readKey = `${accessModel}:${codexPreferenceVersion}`;
@@ -137,24 +142,26 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         isXaiSubscriptionActive(accessModel),
         isKimiCodeSubscriptionActive(accessModel),
       ])
-        .then(([active, grokActive, kimiActive]) =>
+        .then(([active, grokActive, kimiActive]) => {
+          if (subscriptionDesiredKeyRef.current !== readKey) return;
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
             active,
             grokActive,
             kimiCodeActive: kimiActive,
-          }),
-        )
-        .catch(() =>
+          });
+        })
+        .catch(() => {
+          if (subscriptionDesiredKeyRef.current !== readKey) return;
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
             active: false,
             grokActive: false,
             kimiCodeActive: false,
-          }),
-        )
+          });
+        })
         .finally(() => {
           if (subscriptionInFlightKeyRef.current === readKey) {
             subscriptionInFlightKeyRef.current = null;

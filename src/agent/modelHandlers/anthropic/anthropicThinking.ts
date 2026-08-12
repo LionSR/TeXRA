@@ -17,13 +17,32 @@ const OPUS_48_FULLNAME = 'claude-opus-4-8';
 const OPUS_5_FULLNAME = 'claude-opus-5';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 const SONNET_5_FULLNAME = 'claude-sonnet-5';
-const HAIKU_4_FULLNAME = 'claude-haiku-4';
 const FABLE_FAMILY_PREFIX = 'claude-fable-';
 const MYTHOS_FAMILY_PREFIX = 'claude-mythos-';
 
 // Native context-window sizes come from llm-zoo. Opus 4.6/4.7/4.8/5,
 // Sonnet 4.6/5, and the Mythos-class models have a 1M context window at
 // standard pricing (no beta header needed); other Claude models use 200K.
+
+/**
+ * Model patterns that require temperature removal when thinking is enabled.
+ * Per Anthropic docs, Claude 4 and Opus 5 don't support temperature with
+ * thinking. Mythos-class models (Fable 5, Mythos 5) and Sonnet 5 reject all
+ * sampling parameters (temperature/top_p/top_k), so they belong here too.
+ *
+ * Kept separate from {@link ANTHROPIC_REQUEST_TRAITS}: compaction/display are
+ * version-specific, while temperature exclusion applies to the whole Claude 4
+ * family (e.g. still-supported `claude-sonnet-4-5`).
+ */
+const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
+  'claude-opus-4',
+  'claude-opus-5',
+  'claude-sonnet-4',
+  'claude-sonnet-5',
+  'claude-haiku-4',
+  'claude-fable-',
+  'claude-mythos-',
+] as const;
 
 /** Local Anthropic request traits selected by `fullName` prefix. */
 interface AnthropicRequestTraits {
@@ -34,14 +53,6 @@ interface AnthropicRequestTraits {
    * to `'omitted'`, which would suppress reasoning output entirely.
    */
   summarizedDisplay: boolean;
-  /**
-   * Whether temperature must be removed when thinking is enabled. Per
-   * Anthropic docs, Claude 4 and Opus 5 don't support temperature with
-   * thinking; Mythos-class models (Fable 5, Mythos 5) and Sonnet 5 reject all
-   * sampling parameters (temperature/top_p/top_k). Single source of the
-   * family classification so a new family lands in exactly one table.
-   */
-  temperatureExcluded: boolean;
 }
 
 /**
@@ -51,87 +62,22 @@ interface AnthropicRequestTraits {
 const ANTHROPIC_REQUEST_TRAITS: ReadonlyArray<
   readonly [prefix: string, traits: AnthropicRequestTraits]
 > = [
-  [
-    OPUS_46_FULLNAME,
-    {
-      compactionEligible: true,
-      summarizedDisplay: false,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    OPUS_47_FULLNAME,
-    {
-      compactionEligible: true,
-      summarizedDisplay: true,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    OPUS_48_FULLNAME,
-    {
-      compactionEligible: true,
-      summarizedDisplay: true,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    OPUS_5_FULLNAME,
-    {
-      compactionEligible: true,
-      summarizedDisplay: true,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    SONNET_46_FULLNAME,
-    {
-      compactionEligible: true,
-      summarizedDisplay: false,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    SONNET_5_FULLNAME,
-    {
-      compactionEligible: true,
-      summarizedDisplay: true,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    HAIKU_4_FULLNAME,
-    {
-      compactionEligible: false,
-      summarizedDisplay: false,
-      temperatureExcluded: true,
-    },
-  ],
+  [OPUS_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false }],
+  [OPUS_47_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [OPUS_48_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [OPUS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [SONNET_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false }],
+  [SONNET_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
   // Mythos-class entries match the whole family: their API default is display
   // 'omitted', so a new family member falling through to DEFAULT_REQUEST_TRAITS
   // would silently lose all visible reasoning output.
-  [
-    MYTHOS_FAMILY_PREFIX,
-    {
-      compactionEligible: true,
-      summarizedDisplay: true,
-      temperatureExcluded: true,
-    },
-  ],
-  [
-    FABLE_FAMILY_PREFIX,
-    {
-      compactionEligible: true,
-      summarizedDisplay: true,
-      temperatureExcluded: true,
-    },
-  ],
+  [MYTHOS_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true }],
+  [FABLE_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true }],
 ];
 
 const DEFAULT_REQUEST_TRAITS: AnthropicRequestTraits = {
   compactionEligible: false,
   summarizedDisplay: false,
-  temperatureExcluded: false,
 };
 
 function requestTraitsFor(fullName: string): AnthropicRequestTraits {
@@ -147,12 +93,13 @@ export const isCompactionEligibleModel = (fullName: string): boolean =>
   requestTraitsFor(fullName).compactionEligible;
 
 /**
- * Whether temperature must be removed when thinking is enabled. Classified by
- * the same family table as the other Anthropic traits (see
- * {@link ANTHROPIC_REQUEST_TRAITS}) so a new family lands in one place.
+ * Whether temperature must be removed when thinking is enabled.
+ * Claude 4 and Opus 5 don't support temperature alongside thinking.
  */
 export const requiresNoTemperatureWithThinking = (fullName: string): boolean =>
-  requestTraitsFor(fullName).temperatureExcluded;
+  THINKING_TEMPERATURE_EXCLUDED_PATTERNS.some((pattern) =>
+    fullName.includes(pattern),
+  );
 
 type AnthropicEffort = NonNullable<BetaOutputConfig['effort']>;
 type AnthropicReasoningEffort = Exclude<ReasoningEffort, ReasoningEffort.NONE>;
