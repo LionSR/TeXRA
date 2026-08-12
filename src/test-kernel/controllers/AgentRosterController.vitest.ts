@@ -7,7 +7,10 @@ import {
 } from '@agent/roster/AgentRosterController';
 import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import {
+  STARTER_AGENT_MODE_PRESET,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -154,6 +157,23 @@ describe('AgentRosterController', () => {
     expect(
       roster.getVisibleAgents('toolUse').map((agent) => agent.name),
     ).toEqual(['lead']);
+  });
+
+  it('updates the user default without rewriting workspace selection', async () => {
+    const workspaceState = new FakeStateStore();
+    const workspaceUpdate = vi.spyOn(workspaceState, 'update');
+    const globalState = new FakeStateStore();
+    const roster = controller(workspaceState, { globalState });
+
+    await roster.setDefaultTeam(STARTER_AGENT_MODE_PRESET.id);
+
+    expect(roster.getDefaultTeamId()).toBe(STARTER_AGENT_MODE_PRESET.id);
+    expect(workspaceUpdate).not.toHaveBeenCalled();
+
+    await roster.clearDefaultTeam();
+
+    expect(roster.getDefaultTeamId()).toBeUndefined();
+    expect(workspaceUpdate).not.toHaveBeenCalled();
   });
 
   it('persists one canonical team selection', async () => {

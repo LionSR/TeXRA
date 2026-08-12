@@ -320,7 +320,7 @@ export class AgentRosterController<
     );
   }
 
-  async setSelection(selection: AgentRosterSelection): Promise<void> {
+  private async setSelection(selection: AgentRosterSelection): Promise<void> {
     await serializeWorkspaceWrite(this.deps.workspaceState, () =>
       this.writeSelection(selection),
     );
@@ -430,9 +430,6 @@ export class AgentRosterController<
       );
     }
     await setDefaultTeamId(this.deps.globalState, teamId);
-    if (this.getSelection().kind === 'inherit') {
-      await this.setSelection(INHERITED_AGENT_ROSTER);
-    }
   }
 
   async clearDefaultTeam(): Promise<void> {
@@ -440,8 +437,5 @@ export class AgentRosterController<
       GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
       undefined,
     );
-    if (this.getSelection().kind === 'inherit') {
-      await this.setSelection(INHERITED_AGENT_ROSTER);
-    }
   }
 }
