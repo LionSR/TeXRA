@@ -102,15 +102,7 @@ interface StreamWriterOwnership {
   readonly tokens: Set<symbol>;
 }
 
-export type TranscriptResidencyLeaseReason = 'writer' | 'focus' | 'flush';
-
-export interface TranscriptResidencyDebugEntry {
-  readonly streamId: StreamTabId;
-  readonly reasons: readonly TranscriptResidencyLeaseReason[];
-  readonly entryCount: number;
-  readonly approximateBytes: number;
-  readonly releaseRequested: boolean;
-}
+type TranscriptResidencyLeaseReason = 'writer' | 'focus' | 'flush';
 
 /**
  * Every per-stream field that shares the resident stream lifecycle, keyed by
@@ -246,8 +238,8 @@ export class StreamLogStore {
   readonly mode: StreamLogStoreMode;
 
   /**
-   * All per-stream resident state (heavy log, flushing/loadFailed membership,
-   * pending eviction/load, active writer) in one record per stream. See
+   * All per-stream resident state (heavy log, leases, load failure, pending
+   * release/load, active writer) in one record per stream. See
    * {@link StreamState}. `summaries`, `writeTombstones`, and `dirtyIds` are
    * deliberately kept separate because they do not share this lifecycle.
    */
@@ -444,25 +436,6 @@ export class StreamLogStore {
     const raw = await this.kv.read<unknown[]>(streamId);
     const parsed = this.parsePersistedEntries(streamId, raw);
     return new StreamLog(parsed.entries, parsed.preservedRawEntries).toJSON();
-  }
-
-  /** Diagnostic snapshot of heavy transcript residency and its lease reasons. */
-  dumpResidency(): TranscriptResidencyDebugEntry[] {
-    return [...this.streams]
-      .flatMap(([streamId, state]) => {
-        const entries = state.log?.toJSON();
-        if (!entries) return [];
-        return [
-          {
-            streamId,
-            reasons: [...(state.leases ?? [])].toSorted(),
-            entryCount: entries.length,
-            approximateBytes: JSON.stringify(entries).length * 2,
-            releaseRequested: state.releaseRequested === true,
-          },
-        ];
-      })
-      .toSorted((a, b) => a.streamId.localeCompare(b.streamId));
   }
 
   has(streamId: StreamTabId): boolean {
@@ -665,6 +638,7 @@ export class StreamLogStore {
     // A direct read reactivates the stream. A writer-reserved load instead
     // preserves an earlier eviction request until that writer closes.
     const reserved = this.streams.get(streamId);
+    if (!reserved && !this.summaries.has(streamId)) return;
     if (reserved?.writer === undefined) {
       this.acquireLease(streamId, 'focus');
       const focused = this.ensureStreamState(streamId);
@@ -1166,8 +1140,8 @@ export class StreamLogStore {
   private replaceSummaries(
     summaries: ReadonlyMap<StreamTabId, StreamLogSummary>,
   ): void {
-    // One clear drops every resident per-stream field (log, flushing/
-    // loadFailed, pendingRelease/pendingLoad, writer). `summaries`,
+    // One clear drops every resident per-stream field (log, leases,
+    // loadFailed, releaseRequested, pendingLoad, writer). `summaries`,
     // `writeTombstones`, and `dirtyIds` do not share the record's lifecycle
     // and are cleared separately.
     this.streams.clear();

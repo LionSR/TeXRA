@@ -979,7 +979,7 @@ describe('ProgressBackend', () => {
         messageType: MESSAGE_TYPES.DEFAULT,
         text: 'seed-2',
       });
-      // Durability must drain first; dirty streams only queue pendingRelease.
+      // Durability must drain first; dirty streams only queue release.
       await backend.state.flush();
       const expectedHead = backend.state.streamLogs.get(background)?.head;
       expect(expectedHead).toBeGreaterThan(0);

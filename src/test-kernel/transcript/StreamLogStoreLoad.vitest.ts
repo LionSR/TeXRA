@@ -528,7 +528,6 @@ describe('StreamLogStore load', () => {
     await loading;
 
     expect(store.get('alpha')).toBeUndefined();
-    expect(store.dumpResidency()).toEqual([]);
   });
 
   it('keeps a requested eviction resident until its sequential write finishes', async () => {
@@ -1738,14 +1737,9 @@ describe('StreamLogStore save throttle', () => {
     writer.append(namedEntry('late', 200, 'late write'));
     writer.close();
 
-    expect(store.dumpResidency()[0]).toMatchObject({
-      streamId: 'alpha',
-      reasons: ['flush'],
-      releaseRequested: true,
-    });
+    expect(store.get('alpha')?.size).toBe(2);
     await store.flush();
     expect(store.get('alpha')).toBeUndefined();
-    expect(store.dumpResidency()).toEqual([]);
   });
 
   it('does not retain eviction state for an unknown stream', async () => {
@@ -1754,11 +1748,9 @@ describe('StreamLogStore save throttle', () => {
 
     store.requestEviction('unknown');
     store.ensureStream('unknown');
+    await store.flush();
 
-    expect(store.dumpResidency()[0]).toMatchObject({
-      streamId: 'unknown',
-      releaseRequested: false,
-    });
+    expect(store.get('unknown')).toBeDefined();
   });
 
   it('reads cold entries without making the stream resident', async () => {
@@ -1772,6 +1764,5 @@ describe('StreamLogStore save throttle', () => {
       expect.objectContaining({ id: 'alpha-1' }),
     ]);
     expect(store.get('alpha')).toBeUndefined();
-    expect(store.dumpResidency()).toEqual([]);
   });
 });
