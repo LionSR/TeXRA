@@ -16,8 +16,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Malformed Claude Code forks stop safely** — a fork cannot continue in the
-  original conversation if Claude Code fails to return the new session id.
+- **Claude Code forks leave the original conversation unchanged** — an
+  incomplete fork now stops instead of continuing the original conversation.
 
 ## [0.40.2] - 2026-08-12
 

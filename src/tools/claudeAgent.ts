@@ -153,16 +153,21 @@ interface TurnResult {
   errorMessage?: string;
 }
 
+const INVALID_FORK_SESSION_MESSAGE =
+  'Claude Code fork did not create a distinct session';
+
+function claudeCostLines(turn: TurnResult): string[] | undefined {
+  return typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0
+    ? [`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`]
+    : undefined;
+}
+
 function formatClaudeDelivery(
   executionId: string,
   prompt: string,
   wallTimeMs: number,
   turn: TurnResult,
 ): string {
-  const extraLines =
-    typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0
-      ? [`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`]
-      : undefined;
   return formatChildRunDelivery(
     {
       tag: DELIVERY_TAG.claudeAgentResult,
@@ -179,7 +184,7 @@ function formatClaudeDelivery(
             output: turn.usage.output_tokens ?? 0,
           }
         : null,
-      lines: extraLines,
+      lines: claudeCostLines(turn),
     },
   );
 }
@@ -301,8 +306,14 @@ export async function runStreamedTurn(params: {
     backgroundTasks.finish();
   }
 
-  if (params.forkSession && !isError && !sessionId) {
-    throw new Error('Claude Code fork completed without a new session id');
+  if (
+    params.forkSession &&
+    (!sessionId || sessionId === params.resumeSessionId)
+  ) {
+    isError = true;
+    errorMessage = [errorMessage, INVALID_FORK_SESSION_MESSAGE]
+      .filter(isNonEmptyString)
+      .join('\n');
   }
 
   return {
@@ -440,6 +451,7 @@ function startClaudeAgentLoop(params: {
     store: ClaudeAgentSessions,
     releaseFallbackClaim: params.releaseFallbackClaim,
     runProviderTurn: async (prompt, _ports, abortController) => {
+      const forkSession = isFirstTurn && params.forkSession;
       const turn = await runStreamedTurn({
         prompt,
         logger,
@@ -451,11 +463,15 @@ function startClaudeAgentLoop(params: {
         additionalDirectories: params.additionalDirectories,
         env: params.env,
         resumeSessionId,
-        forkSession: isFirstTurn && params.forkSession,
+        forkSession,
         pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
       });
       isFirstTurn = false;
-      if (turn.sessionId) resumeSessionId = turn.sessionId;
+      if (forkSession && turn.isError) {
+        resumeSessionId = undefined;
+      } else if (turn.sessionId) {
+        resumeSessionId = turn.sessionId;
+      }
       return turn;
     },
     buildEntry: (session) => ({
@@ -482,6 +498,7 @@ function startClaudeAgentLoop(params: {
       formatChildRunError(
         { tag: DELIVERY_TAG.claudeAgentError, executionId, prompt: lastPrompt },
         {
+          lines: turn ? claudeCostLines(turn) : undefined,
           message: toErrorMessage(
             err ?? turn?.errorMessage ?? turn?.finalResponse,
           ),
