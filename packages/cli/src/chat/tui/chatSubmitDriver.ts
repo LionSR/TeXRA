@@ -8,11 +8,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import PQueue from 'p-queue';
 
+import type { SessionHandle } from '@agent/runtime';
 import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {

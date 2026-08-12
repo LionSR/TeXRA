@@ -7,7 +7,7 @@
  * settle helpers in the adapters.
  */
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import {
   decideHumanInputRequest,
   decideRetryApproval,

@@ -3,9 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { loadAgents } from '@agent/index';
+import { defaultSession, runAgent } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { runAgent } from '@agent/runtime/runAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';

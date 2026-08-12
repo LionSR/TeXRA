@@ -3,9 +3,8 @@ import * as vscode from 'vscode';
 import { z, ZodError } from 'zod';
 
 // Local imports
+import { ModelHandlerCompatibilityKeySchema, runAgent } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
-import { runAgent } from '@agent/runtime/runAgent';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';

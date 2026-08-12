@@ -9,13 +9,13 @@
  */
 import * as vscode from 'vscode';
 
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   dispatchPresentationEvent,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
+  type SessionHostInteractions,
+} from '@agent/runtime';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';

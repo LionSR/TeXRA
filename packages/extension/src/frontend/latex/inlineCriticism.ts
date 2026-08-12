@@ -19,9 +19,11 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type ManualCriticismEntry,
+  type SessionEventHub,
+} from '@agent/runtime';
 import { globalSM } from '@common/state';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
