@@ -454,10 +454,6 @@ describe('CLI model access routes', () => {
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.useOpenRouter',
-      false,
-    );
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({

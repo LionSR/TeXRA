@@ -226,9 +226,6 @@ async function updateKeyedCliModelAccess(
     };
   }
   await runtime.setEnabled(true);
-  if (plan.disablesOpenRouterWhenEnabled) {
-    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-  }
   invalidateModelOptionsCache();
   return {
     apiMode,
@@ -263,29 +260,25 @@ export async function updateCliModelAccess(
   if (codingPlan) {
     return updateKeyedCliModelAccess(apiMode, selection, codingPlan);
   }
-  switch (selection.provider) {
-    case 'kimi-code':
-    case 'glm-code':
-      throw new Error(
-        `Coding-plan provider is missing from the runtime catalog: ${selection.provider}`,
-      );
-    case 'grok':
-      return updateSubscriptionCliModelAccess(
-        context,
-        apiMode,
-        selection,
-        GROK_ADAPTER,
-        options,
-      );
-    case 'chatgpt':
-      return updateSubscriptionCliModelAccess(
-        context,
-        apiMode,
-        selection,
-        CHATGPT_ADAPTER,
-        options,
-      );
-    default:
-      return selection.provider satisfies never;
+  if (selection.provider === 'grok') {
+    return updateSubscriptionCliModelAccess(
+      context,
+      apiMode,
+      selection,
+      GROK_ADAPTER,
+      options,
+    );
   }
+  if (selection.provider === 'chatgpt') {
+    return updateSubscriptionCliModelAccess(
+      context,
+      apiMode,
+      selection,
+      CHATGPT_ADAPTER,
+      options,
+    );
+  }
+  throw new Error(
+    `Coding-plan provider is missing from the runtime catalog: ${selection.provider}`,
+  );
 }
