@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import { type BrowserWindow } from 'electron';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime';
 import { STREAM_PHASE } from '@shared/schemas';
 import {
   formatSessionTitle,

@@ -1,5 +1,5 @@
 import { getExecutionStore } from '@agent/storage';
-import { runAgent } from '@agent/runtime/runAgent';
+import { runAgent } from '@agent/runtime';
 import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';

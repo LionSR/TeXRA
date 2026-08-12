@@ -1,4 +1,4 @@
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
