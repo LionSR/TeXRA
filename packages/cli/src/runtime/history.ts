@@ -75,6 +75,7 @@ export interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly CliHistoryFile[];
+  /** Whether a category-valid flow record is available for resumption. */
   readonly hasFlowRecord: boolean;
   readonly currentModel?: string;
 }

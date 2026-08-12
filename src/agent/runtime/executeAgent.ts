@@ -319,6 +319,8 @@ export interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
+  /** Cancel launch preparation before the per-run handle is available. */
+  launchSignal?: AbortSignal;
   /** Registration-stamped stream identity for a resumed workflow launch. */
   streamTabIdOverride?: StreamTabId;
   /** The caller owns presentation for failures before the run lifecycle. */
@@ -391,6 +393,7 @@ export async function executeAgent(
       session: options.session,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
+      signal: options.launchSignal,
     });
     const runContextOptions = {
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -415,6 +418,7 @@ export async function executeAgent(
         runStreamId,
         config,
         runSession,
+        ctx.runScope.signal,
       );
       try {
         const result = await runFlowWithLifecycle(

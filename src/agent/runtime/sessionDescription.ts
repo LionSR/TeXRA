@@ -103,12 +103,15 @@ export async function generateSessionDescription(
   streamId: StreamTabId,
   config: AgentConfig,
   session: SessionHandle,
+  signal?: AbortSignal,
 ): Promise<void> {
   try {
+    signal?.throwIfAborted();
     const instruction = getDisplayedInstruction(config);
     if (!instruction) return;
 
     const helperResult = await createHelperModelKit(session);
+    signal?.throwIfAborted();
     if (!helperResult.kit) {
       warnWithoutRejecting(helperResult.reason);
       return;
@@ -132,6 +135,7 @@ export async function generateSessionDescription(
     const text = await runHelperModelCompletion(helperResult.kit, {
       userPrompt,
       systemPrompt: SYSTEM_PROMPT,
+      signal,
     });
 
     if (!isNonEmptyString(text)) return;

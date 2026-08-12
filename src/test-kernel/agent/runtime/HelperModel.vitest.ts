@@ -62,4 +62,24 @@ describe('helper model completion retries', () => {
     ).rejects.toBe(invalid);
     expect(createResponse).toHaveBeenCalledOnce();
   });
+
+  it('forwards cancellation to the provider request and retry policy', async () => {
+    const controller = new AbortController();
+    const createResponse = vi.fn(
+      async ({ signal }: { signal?: AbortSignal }) => {
+        expect(signal).toBe(controller.signal);
+        controller.abort();
+        signal?.throwIfAborted();
+        return { response: 'unreachable' };
+      },
+    );
+
+    await expect(
+      runHelperModelCompletion(createKit(createResponse), {
+        userPrompt: 'test',
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(createResponse).toHaveBeenCalledOnce();
+  });
 });

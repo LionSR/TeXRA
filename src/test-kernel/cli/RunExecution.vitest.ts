@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcome: vi.fn(),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   finalizeExecution: vi.fn(),
@@ -80,6 +81,14 @@ async function installStoragePlatform(): Promise<void> {
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
+}));
+
+vi.mock('@cli/runtime/executionFinalization', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/executionFinalization')
+  >()),
+  releaseCliExecutionLeaseAfterArtifacts:
+    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage', async (importOriginal) => ({
@@ -148,6 +157,9 @@ function loadRunExecution(): Promise<
 }
 
 type LeaseOptions = {
+  beforeLeaseRelease?: () => Promise<boolean | void>;
+  onRun?: () => void;
+  launchSignal?: AbortSignal;
   onExecutionLeaseAcquired?: (
     scope: (operation: () => unknown) => unknown,
     executionId: ExecutionId,
@@ -205,6 +217,7 @@ function stubRunExecutionDeps(): void {
     close: mocks.close,
   });
   mocks.readCliRunOutcome.mockResolvedValue('completed');
+  mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
     outcomePersisted: true,
@@ -659,6 +672,28 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a run failure when the final artifact flush also fails', async () => {
+    const { executeCliRequest } = await loadRunExecution();
+    const { flushSpy } = await spyOnTranscriptFlush();
+    const runError = new Error('provider transport failed');
+    const flushError = new Error('transcript flush failed');
+    mocks.runAgent.mockRejectedValueOnce(runError);
+    flushSpy.mockRejectedValueOnce(flushError);
+
+    const rejection = executeCliRequest(baseRequest(), cliContext()).catch(
+      (error: unknown) => error,
+    );
+
+    await expect(rejection).resolves.toEqual(
+      expect.objectContaining({
+        errors: [runError, flushError],
+        message:
+          'CLI execution failed and its final artifacts could not be persisted',
+      }),
+    );
+    expect(mocks.close).toHaveBeenCalledOnce();
+  });
+
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
@@ -786,10 +821,18 @@ describe('executeCliRequest', () => {
     'marks $label owned executions interrupted during platform shutdown',
     async ({ options }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
+      const { flushSpy } = await spyOnTranscriptFlush();
+      const { defaultSession } = await import('@agent/runtime/SessionHandle');
+      const killSpy = vi.spyOn(defaultSession().executions, 'kill');
+      mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(
+        async (session, executionId) => session.flushArtifacts(executionId),
+      );
       const runWithOwnership = vi.fn((operation: () => unknown) => operation());
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+      let publishRun: LeaseOptions['onRun'];
       const hangingRun = stubHangingRun((options) => {
         publishLeaseScope = options.onExecutionLeaseAcquired;
+        publishRun = options.onRun;
       });
 
       const run = executeCliRequest(baseRequest(), cliContext(), options);
@@ -798,16 +841,26 @@ describe('executeCliRequest', () => {
       await Promise.resolve();
       expect(mocks.finalizeExecution).not.toHaveBeenCalled();
       publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
-      await shutdown;
+      publishRun?.();
+      await Promise.resolve();
+      expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1');
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
+      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+      hangingRun.resolve(COMPLETED_RUN);
+      await shutdown;
       expect(runWithOwnership).toHaveBeenCalledOnce();
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
+      expect(flushSpy).toHaveBeenCalled();
       expect(mocks.finalizeExecution).toHaveBeenCalledWith({
         executionId: 'exec-1',
         outcome: RUN_OUTCOME.CANCELLED,
         flowRecord: 'preserve',
       });
-      hangingRun.resolve(COMPLETED_RUN);
-      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+      expect(mocks.finalizeExecution.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
       await expect(run).resolves.toEqual({
         ok: true,
         result: {
@@ -820,6 +873,87 @@ describe('executeCliRequest', () => {
       expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
     },
   );
+
+  it('forwards a failed shutdown drain to the runtime release hook', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const drainError = new Error('snapshot drain failed');
+    mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
+    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.(
+      runWithOwnership,
+      'exec-1' as ExecutionId,
+    );
+    const shutdown = platform.lifecycle.runShutdown();
+
+    await expect(leaseOptions?.beforeLeaseRelease?.()).rejects.toBe(drainError);
+    hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
+    await run;
+  });
+
+  it('cancels launch preparation when shutdown precedes run registration', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    let launchSignal: AbortSignal | undefined;
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: LeaseOptions) => {
+        launchSignal = options.launchSignal;
+        await new Promise<void>((_resolve, reject) => {
+          options.launchSignal?.addEventListener(
+            'abort',
+            () => reject(new AgentError('launch aborted')),
+            { once: true },
+          );
+        });
+        return COMPLETED_RUN;
+      },
+    );
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(launchSignal).toBeDefined());
+
+    await platform.lifecycle.runShutdown();
+    await expect(run).rejects.toThrow('launch aborted');
+    expect(launchSignal?.aborted).toBe(true);
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('preserves a terminal outcome when shutdown cannot interrupt the finished run', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    vi.spyOn(defaultSession().executions, 'kill').mockReturnValue(false);
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
+    );
+    leaseOptions?.onRun?.();
+
+    const shutdown = platform.lifecycle.runShutdown();
+    hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
+    await run;
+
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
+  });
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
@@ -838,10 +972,12 @@ describe('executeCliRequest', () => {
       registerExecution: true,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
-    await platform.lifecycle.runShutdown();
+    const shutdown = platform.lifecycle.runShutdown();
+    await Promise.resolve();
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
     hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
     await run;
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
@@ -866,13 +1002,16 @@ describe('executeCliRequest', () => {
       registerExecution: true,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
-    await platform.lifecycle.runShutdown();
+    const shutdown = platform.lifecycle.runShutdown();
+    await Promise.resolve();
+    expect(mocks.emit).not.toHaveBeenCalled();
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+    hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message:
         'Failed to persist cancelled status for execution exec-1: terminal metadata disk full',
     });
-    hangingRun.resolve(COMPLETED_RUN);
-    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 
     await expect(run).resolves.toEqual({
       ok: true,
