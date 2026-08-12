@@ -12,6 +12,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
@@ -19,7 +20,6 @@ import {
   type ChatGptAuthStatus,
   type CopilotRouteInfo,
   type GrokAuthStatus,
-  type SubscriptionUsageProvider,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -42,55 +42,6 @@ import {
   GROK_SUBSCRIPTION_SECTION,
 } from '../components/profile/SubscriptionSection';
 import '../components/profile/SubscriptionUsageRow';
-
-const KIMI_CODE_CONSOLE_URL = 'https://www.kimi.com/code/console';
-const GLM_CODING_PLAN_CONSOLE_URL = 'https://z.ai/subscribe';
-
-/** One API-key-based coding-plan subscription section (GLM Coding Plan, Kimi
- *  Code). Both share the same three-step setup: get a key, add it, enable the
- *  plan toggle. */
-interface CodingPlanSection {
-  readonly sectionId: string;
-  readonly title: string;
-  readonly description: string;
-  readonly consoleUrl: string;
-  readonly keyLabel: string;
-  readonly keyHelp: string;
-  readonly toggleLabel: string;
-  readonly toggleHelp: string;
-  readonly usageProvider: Extract<
-    SubscriptionUsageProvider,
-    'kimiCode' | 'glmCodingPlan'
-  >;
-}
-
-const CODING_PLAN_SECTIONS: readonly CodingPlanSection[] = [
-  {
-    sectionId: 'glm-coding-plan-subscription',
-    title: 'GLM Coding Plan',
-    description:
-      'Use a GLM Coding Plan subscription for GLM models via the coding endpoint.',
-    consoleUrl: GLM_CODING_PLAN_CONSOLE_URL,
-    keyLabel: '1. Get a subscription key',
-    keyHelp: 'Subscribe and create an API key in the Z.AI console.',
-    toggleLabel: '3. Enable the Coding Plan',
-    toggleHelp:
-      'Turn on "GLM Coding Plan" on the GLM row so requests route through the coding endpoint with your plan\u2019s monthly quota.',
-    usageProvider: 'glmCodingPlan',
-  },
-  {
-    sectionId: 'kimi-code-subscription',
-    title: 'Kimi Code',
-    description: 'Use a Kimi Code membership for the kimi-for-coding models.',
-    consoleUrl: KIMI_CODE_CONSOLE_URL,
-    keyLabel: '1. Get a membership key',
-    keyHelp: 'Create an API key in the Kimi Code console.',
-    toggleLabel: '3. Optional: prefer Kimi Code',
-    toggleHelp:
-      'Enable "Prefer Kimi Code" on the same row so K3 also uses your Kimi Code subscription; the kimi-for-coding models always do.',
-    usageProvider: 'kimiCode',
-  },
-];
 
 @customElement('subscriptions-tab')
 export class SubscriptionsTab extends LitElement {
@@ -187,7 +138,7 @@ export class SubscriptionsTab extends LitElement {
           .auth=${this.grokAuth}
           .now=${this.now}
         ></subscription-section>
-        ${CODING_PLAN_SECTIONS.map((section) =>
+        ${CODING_PLAN_SUBSCRIPTIONS.map((section) =>
           this.renderCodingPlanSection(section),
         )}
         ${this.renderCopilotSection()}
@@ -195,11 +146,13 @@ export class SubscriptionsTab extends LitElement {
     `;
   }
 
-  private renderCodingPlanSection(section: CodingPlanSection): TemplateResult {
+  private renderCodingPlanSection(
+    section: (typeof CODING_PLAN_SUBSCRIPTIONS)[number],
+  ): TemplateResult {
     return html`
       <section id=${section.sectionId}>
         ${renderSettingsSectionHeading({
-          title: section.title,
+          title: section.displayName,
           description: section.description,
           icon: 'gem',
         })}
@@ -226,8 +179,8 @@ export class SubscriptionsTab extends LitElement {
             <div class="settings-row-text">
               <span class="settings-row-label">2. Add the key</span>
               <span class="settings-row-help">
-                Paste it on the ${section.title} row in Providers &amp; Models,
-                or set the provider API key environment variable.
+                Paste it on the ${section.displayName} row in Providers &amp;
+                Models, or set the provider API key environment variable.
               </span>
             </div>
             <div class="settings-row-control">

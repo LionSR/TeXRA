@@ -1,5 +1,6 @@
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
+import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 
@@ -21,7 +22,7 @@ export interface ProgressApiKeyRetryRequest {
  * quota-exhaustion reason that signals the toggle should be disabled so requests
  * re-route through the regular pay-as-you-go endpoint.
  */
-interface CodingPlanToggle {
+export interface CodingPlanToggle {
   /** The exhaustion reason that signals this plan's quota ran out. */
   readonly exhaustionReason: ExhaustionReason;
   readonly getEnabled: () => boolean;
@@ -66,7 +67,7 @@ export interface ProgressApiKeyRetryControllerDeps {
   getPreferChatGptSubscription(): boolean;
   setPreferChatGptSubscription(enabled: boolean): Promise<void>;
   /** API-key-based coding-plan subscriptions (GLM Coding Plan, Kimi Code). */
-  codingPlanToggles: readonly CodingPlanToggle[];
+  codingPlanToggles?: readonly CodingPlanToggle[];
   invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
   triggerRetry(stream: StreamTabId, requestId: string): boolean;
@@ -80,6 +81,17 @@ export interface ProgressApiKeyRetryControllerDeps {
  */
 export class ProgressApiKeyRetryController {
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
+
+  private get codingPlanToggles(): readonly CodingPlanToggle[] {
+    return (
+      this.deps.codingPlanToggles ??
+      codingPlanSubscriptionRuntimes.map((runtime) => ({
+        exhaustionReason: runtime.descriptor.exhaustionReason,
+        getEnabled: runtime.getEnabled,
+        setEnabled: runtime.setEnabled,
+      }))
+    );
+  }
 
   async useOwnApiKey(
     request: ProgressApiKeyRetryRequest,
@@ -189,7 +201,7 @@ export class ProgressApiKeyRetryController {
     // whose quota is exhausted: turn off its toggle so requests re-route through
     // the regular pay-as-you-go endpoint on retry.
     const disabledCodingPlans: ExhaustionReason[] = [];
-    for (const toggle of this.deps.codingPlanToggles) {
+    for (const toggle of this.codingPlanToggles) {
       if (
         toggle.getEnabled() &&
         request.exhaustionReason === toggle.exhaustionReason
@@ -232,7 +244,7 @@ export class ProgressApiKeyRetryController {
       useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
       preferChatGptSubscription: this.deps.getPreferChatGptSubscription(),
       codingPlans: new Map(
-        this.deps.codingPlanToggles.map((toggle) => [
+        this.codingPlanToggles.map((toggle) => [
           toggle.exhaustionReason,
           toggle.getEnabled(),
         ]),
@@ -258,7 +270,7 @@ export class ProgressApiKeyRetryController {
       );
     }
     for (const reason of prepared.disabledCodingPlans) {
-      const toggle = this.deps.codingPlanToggles.find(
+      const toggle = this.codingPlanToggles.find(
         (candidate) => candidate.exhaustionReason === reason,
       );
       if (toggle)
