@@ -63,6 +63,7 @@ describe('Claude Agent SDK adapter', () => {
       cache_creation_input_tokens: 7,
       cost_usd: 0.03,
     });
+    if (!usage) throw new Error('Expected folded Claude usage');
     expect(buildClaudeUsageStats(usage)).toMatchObject({
       inputTokens: 170,
       outputTokens: 50,
@@ -70,6 +71,11 @@ describe('Claude Agent SDK adapter', () => {
       cacheCreationInputTokens: 7,
       cost: 0.03,
     });
+  });
+
+  it('keeps absent and empty model usage out of progress accounting', () => {
+    expect(aggregateClaudeModelUsage(undefined)).toBeNull();
+    expect(aggregateClaudeModelUsage({})).toBeNull();
   });
 
   it.each([
