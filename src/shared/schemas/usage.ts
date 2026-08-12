@@ -23,6 +23,7 @@ export const UsageRouteSchema = z.enum([
   'chatgpt-subscription',
   'xai-subscription',
   'kimi-code-subscription',
+  'glm-coding-plan-subscription',
   'relay',
   'api-key',
 ]);

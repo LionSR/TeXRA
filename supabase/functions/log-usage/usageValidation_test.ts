@@ -53,6 +53,17 @@ Deno.test(
   },
 );
 
+Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
+  const parsed = UsageLogEntrySchema.parse({
+    ...usageEntry(),
+    model: 'glm-5',
+    provider: 'glm',
+    usageRoute: 'glm-coding-plan-subscription',
+  });
+
+  equal(subscriptionSourceForUsage(parsed), 'glm');
+});
+
 Deno.test('classifies Grok usage under the xai subscription source', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),

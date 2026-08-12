@@ -1,12 +1,10 @@
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
 } from '@model/codex/codexPreference';
-import {
-  setGLMCodingPlan,
-  setPreferKimiCode,
-} from '@utils/config/providerConfig';
+import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 
@@ -34,22 +32,15 @@ export async function setCliCodexSubscription(
   return update;
 }
 
-/**
- * Flip the "Prefer Kimi Code" preference and refresh the TUI views. Shared by
- * the retry "switch to your own Moonshot API key" path so the
- * persist-then-refresh sequence lives in one place.
- */
-export async function setCliKimiCode(enabled: boolean): Promise<void> {
-  await setPreferKimiCode(enabled);
-  refreshSubscriptionPreferenceViews();
-}
-
-/**
- * Flip the GLM Coding Plan toggle and refresh the TUI views. Shared by the
- * retry "switch to the regular GLM endpoint" path so the persist-then-refresh
- * sequence lives in one place.
- */
-export async function setCliGlmCodingPlan(enabled: boolean): Promise<void> {
-  await setGLMCodingPlan(enabled);
+/** Flip any catalogued coding-plan preference and refresh the TUI views. */
+export async function setCliCodingPlanSubscription(
+  id: CodingPlanSubscriptionId,
+  enabled: boolean,
+): Promise<void> {
+  const runtime = codingPlanSubscriptionRuntimes.find(
+    (candidate) => candidate.descriptor.id === id,
+  );
+  if (!runtime) throw new Error(`Unknown coding-plan subscription: ${id}`);
+  await runtime.setEnabled(enabled);
   refreshSubscriptionPreferenceViews();
 }

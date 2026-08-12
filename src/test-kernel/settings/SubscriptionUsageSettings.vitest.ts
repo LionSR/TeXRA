@@ -11,6 +11,7 @@ import { formatSubscriptionUsagePercent } from '@shared/subscriptionUsagePresent
 import {
   dispatchSettingsViewOutbound,
   SettingsViewInboundMessageSchema,
+  SUBSCRIPTION_USAGE_PROVIDERS,
   type SubscriptionUsageProvider,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageSnapshots,
@@ -86,11 +87,12 @@ describe('subscription usage settings IPC', () => {
       true,
     );
 
-    expect(getUsage.mock.calls).toStrictEqual([
-      ['chatgpt', { forceRefresh: true }],
-      ['kimiCode', { forceRefresh: true }],
-      ['glmCodingPlan', { forceRefresh: true }],
-    ]);
+    expect(getUsage.mock.calls).toStrictEqual(
+      SUBSCRIPTION_USAGE_PROVIDERS.map((provider) => [
+        provider,
+        { forceRefresh: true },
+      ]),
+    );
     expect(postMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
       snapshots,

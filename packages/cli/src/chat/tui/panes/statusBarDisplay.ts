@@ -17,14 +17,21 @@ import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
+  codingPlanForUsageRoute,
+  CODING_PLAN_SUBSCRIPTIONS,
+} from '@shared/codingPlanSubscriptions';
+import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
   type SpendingStatus,
+  type SubscriptionUsageSnapshot,
+  type SubscriptionUsageProvider,
   type StreamPhase,
   type StreamStage,
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
+  type UsageRoute,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import {
@@ -65,6 +72,28 @@ import type { ApprovalQueueStatusKind } from '../state/approvalQueue';
 type StatusBarColor =
   typeof COLOR_HINT | typeof COLOR_WARNING | typeof COLOR_ERROR | 'dim';
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
+
+/** Choose the quota owner, preferring the route of completed usage. */
+export function subscriptionUsageProviderForStatus({
+  usageRoute,
+  modelAccess,
+  prospectiveCodingPlan,
+}: {
+  readonly usageRoute: UsageRoute | undefined;
+  readonly modelAccess: CliModelAccessRoute;
+  readonly prospectiveCodingPlan?: SubscriptionUsageProvider;
+}): SubscriptionUsageProvider | undefined {
+  if (usageRoute === 'chatgpt-subscription') return 'chatgpt';
+  const completedCodingPlan = codingPlanForUsageRoute(usageRoute);
+  if (completedCodingPlan) return completedCodingPlan.usageProvider;
+  if (usageRoute !== undefined) return undefined;
+  if (modelAccess === 'chatgpt') return 'chatgpt';
+  return CODING_PLAN_SUBSCRIPTIONS.find(
+    (plan) =>
+      plan.usageProvider === prospectiveCodingPlan &&
+      plan.cliProvider === modelAccess,
+  )?.usageProvider;
+}
 
 interface StatusBarSegment {
   readonly text: string;
@@ -110,6 +139,8 @@ export interface StatusBarDisplayInput {
   /** Latest relay spend snapshot, when the tier config has been fetched with
    *  auth. Only meaningful while the route is `included`. */
   readonly relayQuota?: SpendingStatus;
+  /** Latest quota snapshot for the subscription serving this model. */
+  readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
   readonly transcriptMode?: 'persistent' | 'ephemeral';
   readonly approvalPolicy?: TexraApprovalPolicy;
@@ -242,6 +273,26 @@ function relayQuotaSegment(
   }
 }
 
+function subscriptionQuotaSegment(
+  snapshot: SubscriptionUsageSnapshot | undefined,
+): StatusBarSegment | undefined {
+  if (snapshot?.state !== 'available') return undefined;
+  const limitingWindow = snapshot.windows.toSorted(
+    (left, right) => right.percentUsed - left.percentUsed,
+  )[0];
+  if (!limitingWindow) return undefined;
+  const remaining = Math.max(0, Math.round(limitingWindow.percentRemaining));
+  let color: StatusBarColor = 'dim';
+  if (remaining === 0) color = COLOR_ERROR;
+  else if (remaining <= 20) color = COLOR_WARNING;
+  return {
+    text: `${snapshot.planName} ${remaining}% left`,
+    compactText: `${remaining}% left`,
+    color,
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.subscriptionQuota,
+  };
+}
+
 function formatUsage(
   usage: TokenUsageStats | undefined,
   model: string,
@@ -311,6 +362,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   ephemeralBadge: 58,
   approvalDepth: 60,
   rootActive: 65,
+  subscriptionQuota: 67,
   relayQuota: 68,
   elapsed: 70,
   // Durable session status: outlives the transient counts above but must
@@ -1036,6 +1088,7 @@ export function buildStatusBarDisplay(
       rootActiveSegment(input),
       accessModeSegment(input.modelAccess),
       relayQuotaSegment(input.relayQuota, input.modelAccess),
+      subscriptionQuotaSegment(input.subscriptionQuota),
       approvalPolicySegment(input.approvalPolicy),
       stageSegment(input.stage),
       formatUsage(input.usage, input.model),

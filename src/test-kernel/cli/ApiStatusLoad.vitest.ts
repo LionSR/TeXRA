@@ -45,15 +45,15 @@ vi.mock('@cli/runtime/modelAccessSelection', () => ({
 }));
 
 vi.mock('@model/apiProviders', () => ({
-  API_PROVIDERS: ['deepseek', 'kimiCode'],
+  API_PROVIDERS: ['deepseek', 'glm', 'kimiCode'],
   lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
   configuredApiKeyProviders: async () => {
     const origins = await Promise.all(
-      ['deepseek', 'kimiCode'].map((provider) =>
+      ['deepseek', 'glm', 'kimiCode'].map((provider) =>
         mocks.lookupApiKeyOrigin({}, provider),
       ),
     );
-    return ['deepseek', 'kimiCode'].filter(
+    return ['deepseek', 'glm', 'kimiCode'].filter(
       (_, index) => origins[index] !== 'none',
     );
   },
@@ -255,7 +255,7 @@ describe('loadCliApiStatus', () => {
     ]);
     expect(mocks.readCliModelAccessStatus).not.toHaveBeenCalled();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
-    expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(2);
+    expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
   });
 
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
@@ -279,7 +279,7 @@ describe('loadCliApiStatus', () => {
       tier: 'Ultra',
       credentialSource: 'session',
     });
-    setPersonalKeys('deepseek', 'kimiCode');
+    setPersonalKeys('deepseek', 'glm', 'kimiCode');
     mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
     mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 24.5 });
 
@@ -295,13 +295,15 @@ describe('loadCliApiStatus', () => {
     expect(lineFor(lines, 'Otherwise')).toBe(
       'Otherwise: Included access · signed in as texra@example.com · Ultra · included usage this month: 24.5% used, 75.5% remaining',
     );
-    expect(lineFor(lines, 'Other API keys')).toBe('Other API keys: DeepSeek');
+    expect(lineFor(lines, 'Other API keys')).toBe(
+      'Other API keys: DeepSeek, GLM',
+    );
     expect(joined.match(/Kimi Code/g)).toHaveLength(1);
     expect(joined.match(/chatgpt@example\.com/g)).toHaveLength(1);
     expect(joined.match(/texra@example\.com/g)).toHaveLength(1);
     expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
-    expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(2);
+    expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
   });
 
   it('appends normalized usage to configured routes and force-refreshes on open', async () => {
@@ -498,6 +500,27 @@ describe('loadCliApiStatus', () => {
       ).resolves.toEqual(expected);
     },
   );
+
+  it('keeps a shared GLM key in the personal-key inventory', async () => {
+    mocks.readCliModelAccessStatus.mockResolvedValue({
+      apiFallback: 'personal',
+      preferences: {
+        chatGpt: 'off',
+        grok: 'off',
+        kimiCode: 'off',
+        glmCode: 'off',
+      },
+      chatGptSignedIn: false,
+      grokSignedIn: false,
+      kimiCodeKeySet: false,
+      glmKeySet: true,
+    });
+    setPersonalKeys('glm');
+
+    const lines = await accountStatusLines('personal');
+
+    expect(lineFor(lines, 'Other API keys')).toBe('Other API keys: GLM');
+  });
 
   it('keeps signed-out personal-only status truthful', async () => {
     setPersonalKeys('deepseek');
