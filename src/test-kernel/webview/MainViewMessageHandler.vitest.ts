@@ -75,6 +75,12 @@ vi.mock('@frontend/ui/instruction', () => ({
   showInstructionWithSuppress: vi.fn(),
 }));
 vi.mock('@logger/logUtils', () => ({
+  createLog: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  })),
   debug: vi.fn(),
   error: vi.fn(),
   isDebugModeEnabled: vi.fn(() => false),

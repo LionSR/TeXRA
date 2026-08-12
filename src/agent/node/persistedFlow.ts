@@ -9,7 +9,7 @@ import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - utilities
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - flow engine
@@ -23,7 +23,7 @@ export function flowKey(runId: string): string {
   return `${FLOW_KEY_PREFIX}${runId}`;
 }
 
-const CHANNEL = 'PersistedFlow';
+const log = createLog('PersistedFlow');
 
 export const FLOW_RECORD_SCHEMA_VERSION = 2;
 const START_NODE_ID = 'start';
@@ -313,7 +313,7 @@ export class PersistedFlow<
     try {
       await this.projection(shared, this.kv);
     } catch (err) {
-      logger.warn(CHANNEL, `Projection failed: ${toErrorMessage(err)}`, {
+      log.warn(`Projection failed: ${toErrorMessage(err)}`, {
         data: err,
       });
     }

@@ -14,7 +14,7 @@ import {
   isCodexSessionRoutable,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
@@ -44,7 +44,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
-const CHANNEL = 'ModelFactory';
+const log = createLog('ModelFactory');
 
 type ModelHandlerConstructor = new (
   config: ModelConfig,
@@ -161,8 +161,7 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   const effort = level ? LEVEL_TO_EFFORT[level] : undefined;
   if (effort === undefined) return handler;
 
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Applying reasoning level override for ${handler.config.name}: ${level}`,
   );
   handler.capabilities.reasoningEffort = effort;
@@ -279,10 +278,7 @@ function providerHandlerRoute(
 ): ProviderHandlerRoute | undefined {
   const route = PROVIDER_HANDLER_ROUTES[provider];
   if (!route) {
-    logger.warn(
-      CHANNEL,
-      `No model handler route is registered for provider ${provider}`,
-    );
+    log.warn(`No model handler route is registered for provider ${provider}`);
     return undefined;
   }
   return route;
@@ -349,8 +345,7 @@ function withShortModelName(config: ModelConfig): ModelConfig {
   );
   if (resolved === config) return config;
 
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
   );
   return resolved;
@@ -477,7 +472,7 @@ async function tryCodexSubscriptionRoute(
   if (!codexSessionRoutable) {
     return undefined;
   }
-  logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
+  log.debug('Using ChatGPT subscription (Codex) Handler');
   const { ModelHandlerCodex } =
     await import('@agent/modelHandlers/openai/modelHandlerCodex');
   return finalizeModelHandler(
@@ -584,8 +579,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       // Package validation still enters the real CLI and executeAgent path.
       // Only the provider boundary is deterministic, so this must not become
       // a user-facing model selector or an injected command-layer substitute.
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `${internalValidationModelHandlerEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
       );
       const { ModelHandlerValidation } =
@@ -597,7 +591,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
     }
 
     case 'ModelHandlerOpenAIResponse': {
-      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+      log.debug('Using OpenAI Responses API Handler');
       const { ModelHandlerOpenAIResponse } =
         await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
       return finalizeModelHandler(
@@ -644,7 +638,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
         throw new Error(`Unsupported model provider: ${config.provider}`);
       }
       const HandlerClass = await route.load();
-      logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
+      log.debug(`Using Handler: ${HandlerClass.name}`);
       return finalizeModelHandler(
         new HandlerClass(config, responseTextProcessing),
         route.compatibilityKey,

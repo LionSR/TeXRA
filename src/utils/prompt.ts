@@ -2,11 +2,11 @@ import * as path from 'node:path';
 
 import nunjucks from 'nunjucks';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-const CHANNEL = 'promptUtils';
+const log = createLog('promptUtils');
 
 export interface XmlFormatFromFilesResult {
   readonly xml: string | null;
@@ -66,8 +66,7 @@ export async function getXmlFormatFromReadableFiles(
           xml: `<document name="${getPromptFileName(file)}">\n${content}\n</document>`,
         };
       } catch (err) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Skipping unreadable file in prompt context: ${file} (${String(err)})`,
         );
         return null;

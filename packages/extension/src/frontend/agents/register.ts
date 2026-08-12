@@ -5,10 +5,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { createWorkspaceAgentRosterController } from '@agent/index';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';
 
-const CHANNEL = 'AgentRegister';
+const log = createLog('AgentRegister');
 
 export async function promptToAddAgentToConfig(
   agentName: string,
@@ -20,7 +20,7 @@ export async function promptToAddAgentToConfig(
   const current = roster.getVisibleAgents(category).map((entry) => entry.name);
 
   if (current.includes(agentName)) {
-    logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
+    log.debug(`Agent "${agentName}" already in configuration`);
     return;
   }
 
