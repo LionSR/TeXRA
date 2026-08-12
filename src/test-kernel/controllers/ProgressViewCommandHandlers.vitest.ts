@@ -79,7 +79,6 @@ function createActions(
     },
     file: {
       openFile: vi.fn(),
-      openFileCompile: vi.fn(),
       openTaskStorage: vi.fn(),
       compareOriginal: vi.fn(),
       comparePrevious: vi.fn(),
@@ -237,13 +236,6 @@ describe('createProgressViewCommandHandlers', () => {
     );
     expectDispatched(
       {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE,
-        file: 'paper.tex',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
         command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
         stream: 'stream-a',
       },
@@ -296,7 +288,6 @@ describe('createProgressViewCommandHandlers', () => {
     );
 
     expect(actions.file.openFile).toHaveBeenCalledWith('paper.tex', 12);
-    expect(actions.file.openFileCompile).toHaveBeenCalledWith('paper.tex');
     expect(actions.file.openTaskStorage).toHaveBeenCalledWith('stream-a');
     expect(actions.file.compareOriginal).toHaveBeenCalledWith(
       'edited.tex',
@@ -881,7 +872,6 @@ describe('createProgressViewSecondTierHandlers', () => {
         PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY,
         PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
         PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
-        PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG,
         PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
         PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
@@ -890,25 +880,6 @@ describe('createProgressViewSecondTierHandlers', () => {
         PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER,
       ].toSorted(),
     );
-  });
-
-  it('awaits host information messages', async () => {
-    const failure = new Error('message host failed');
-    const actions = createSecondTierActions({
-      host: {
-        showInfo: vi.fn().mockRejectedValue(failure),
-      },
-    });
-    const handlers = createProgressViewSecondTierHandlers(actions);
-
-    await expect(
-      assertSupported(
-        handlers[PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE],
-      )({
-        command: PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: 'Ready',
-      }),
-    ).rejects.toBe(failure);
   });
 
   it('reports an unavailable retry through the host', async () => {

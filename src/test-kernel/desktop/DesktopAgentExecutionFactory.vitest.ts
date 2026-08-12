@@ -25,7 +25,6 @@ import { loadSourceModule } from './loadSourceModule.ts';
 
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
-  openFileCompile(filePath: string): Promise<void>;
   dispose(): void;
 };
 
@@ -441,23 +440,6 @@ describe('createDesktopAgentExecution', () => {
     });
 
     await execution.handleExecute({ command: 'execute' });
-    expect(opener.openPath).not.toHaveBeenCalled();
-  });
-
-  it('opens compile-file actions through the desktop preview host', async () => {
-    const opener = makeOpener();
-    const execution = await createExecution({
-      opener,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: false,
-        message: 'not used',
-      })),
-    });
-
-    await execution.openFileCompile('/tmp/output.tex');
-    expect(opener.openBuildDisplay).toHaveBeenCalledWith(
-      expect.objectContaining({ absolutePath: '/tmp/output.tex' }),
-    );
     expect(opener.openPath).not.toHaveBeenCalled();
   });
 });

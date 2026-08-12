@@ -27,7 +27,7 @@ import {
 
 type ProgressViewFileHostActions = Pick<
   ProgressViewFileCommandActions,
-  'openFile' | 'openFileCompile'
+  'openFile'
 >;
 
 type ProgressViewApprovalHostActions = Omit<
@@ -138,7 +138,6 @@ export class ProgressViewHost {
       bypass: options.commands.bypass,
       file: {
         openFile: options.commands.file.openFile,
-        openFileCompile: options.commands.file.openFileCompile,
         openTaskStorage: (stream) =>
           this.workflowFileActionsController.openTaskStorage(stream),
         compareOriginal: (file, base) =>
