@@ -13,8 +13,6 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import {
-  SetDebugModeMessageSchema,
-  SetThemeMessageSchema,
   SwitchViewMessageSchema,
   WebviewReadyMessageSchema,
 } from '../commonViewMessages';
@@ -124,11 +122,6 @@ const RetryStreamRequestMessageSchema = StreamScopedBaseSchema.extend({
 const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
   requestId: z.string(),
-});
-
-const ShowInformationMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE),
-  text: TrimmedStringSchema,
 });
 
 const ToolEditActionMessageBase = {
@@ -253,11 +246,6 @@ const OpenFileMessageSchema = z.object({
   line: z.int().nonnegative().optional(),
 });
 
-const OpenFileCompileMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE),
-  file: z.string().min(1),
-});
-
 const ComparePreviousMessageSchema = fileWithBaseCommand(
   PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
 ).extend({
@@ -279,8 +267,6 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   [
     WebviewReadyMessageSchema,
     SwitchViewMessageSchema,
-    SetThemeMessageSchema,
-    SetDebugModeMessageSchema,
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
     commandOnly(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
@@ -316,11 +302,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ExternalInquiryActionMessageSchema,
     UserQuestionActionMessageSchema,
     RestoreProposalConfigMessageSchema,
-    ShowInformationMessageSchema,
-    commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_PROFILE),
-    commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
     OpenFileMessageSchema,
-    OpenFileCompileMessageSchema,
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL),
     ComparePreviousMessageSchema,
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.ACCEPT_FILE),

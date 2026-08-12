@@ -13,11 +13,7 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
-const PASS_THROUGH_COMMANDS = [
-  PROGRESS_VIEW_COMMANDS.SWITCH_VIEW,
-  PROGRESS_VIEW_COMMANDS.THEME_SET,
-  PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
-] as const;
+const PASS_THROUGH_COMMANDS = [PROGRESS_VIEW_COMMANDS.SWITCH_VIEW] as const;
 
 type DesktopProgressIpcOwnedCommand =
   | typeof PROGRESS_VIEW_COMMANDS.WEBVIEW_READY
