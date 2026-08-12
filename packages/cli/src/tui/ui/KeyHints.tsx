@@ -38,6 +38,28 @@ const DEFAULT_TAIL: readonly KeyHint[] = [
   { key: 'Esc', action: 'cancel' },
 ];
 
+/** Footer for the closable scroll-only readers (transcript, work plan). */
+export const READER_SCROLL_HINTS: readonly KeyHint[] = [
+  { key: '↑/↓', action: 'scroll' },
+  { key: 'PgUp/PgDn', action: 'page' },
+  { key: 'Esc', action: 'close' },
+];
+
+/** Hint spans without the surrounding dim/truncating `<Text>`. Callers that
+ *  cannot use {@link KeyHints} because the strip has to share one terminal row
+ *  with other content (ConfirmCard's compact title line) render these inside
+ *  their own `<Text>` instead of restating the markup. */
+export function keyHintSpans(
+  hints: readonly KeyHint[],
+): readonly React.JSX.Element[] {
+  return hints.map((hint, index) => (
+    <Text key={`${hint.key}-${hint.action}-${index}`}>
+      {index > 0 ? KEY_HINT_SEPARATOR : ''}
+      <Text bold>{hint.key}</Text> {hint.action}
+    </Text>
+  ));
+}
+
 export function KeyHints(props: KeyHintsProps): React.JSX.Element {
   const all =
     props.confirmCancel === false
@@ -46,12 +68,7 @@ export function KeyHints(props: KeyHintsProps): React.JSX.Element {
   return (
     <Box>
       <Text dimColor wrap={props.wrap ? 'wrap' : 'truncate-end'}>
-        {all.map((hint, index) => (
-          <Text key={`${hint.key}-${hint.action}-${index}`}>
-            {index > 0 ? KEY_HINT_SEPARATOR : ''}
-            <Text bold>{hint.key}</Text> {hint.action}
-          </Text>
-        ))}
+        {keyHintSpans(all)}
       </Text>
     </Box>
   );

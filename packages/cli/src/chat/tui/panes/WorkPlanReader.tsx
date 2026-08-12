@@ -9,6 +9,7 @@ import {
   KeyHints,
   KEY_HINT_SEPARATOR,
   keyHintText,
+  READER_SCROLL_HINTS,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
@@ -32,11 +33,6 @@ const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
   [TODO_STATUS.COMPLETED]: 'completed',
 };
 
-const WORK_PLAN_READER_HINTS: readonly KeyHint[] = [
-  { key: '↑/↓', action: 'scroll' },
-  { key: 'PgUp/PgDn', action: 'page' },
-  { key: 'Esc', action: 'close' },
-];
 const WORK_PLAN_LOADING_HINTS: readonly KeyHint[] = [
   { key: 'Esc', action: 'close' },
 ];
@@ -51,7 +47,7 @@ function wrappedRows(text: string, width: number): number {
 export function workPlanReaderLayout({
   availableRows,
   contentWidth,
-  hints = WORK_PLAN_READER_HINTS,
+  hints = READER_SCROLL_HINTS,
   title,
 }: {
   readonly availableRows: number;
@@ -119,7 +115,7 @@ export function WorkPlanReader({
   const slice = streams.get(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
-  const hints = loading ? WORK_PLAN_LOADING_HINTS : WORK_PLAN_READER_HINTS;
+  const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
   const layout = workPlanReaderLayout({
     availableRows,
     contentWidth: width,
