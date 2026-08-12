@@ -64,18 +64,6 @@ type GetCurrentFileMessage = MessageFor<
 const CHANNEL = 'FileManager';
 
 export class FileManager extends BaseWebviewManager {
-  async handleEditedFileSelection(): Promise<void> {
-    const editedFile = await vscode.commands.executeCommand<string>(
-      FILE_SELECTION_COMMAND_IDS.selectEditedFile,
-    );
-    if (editedFile) {
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
-        filePath: editedFile,
-      });
-    }
-  }
-
   async handleRequestEditedFile(
     message: RequestEditedFileMessage,
   ): Promise<void> {

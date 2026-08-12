@@ -35,30 +35,6 @@ export abstract class BaseWebviewProvider {
 
   constructor(protected readonly context: vscode.ExtensionContext) {}
 
-  /**
-   * Returns the view folder name for resource roots.
-   * Subclasses should override this to specify their view path.
-   * Used by resolveWebviewView to set up localResourceRoots.
-   */
-  protected getViewPath(): string | undefined {
-    return undefined;
-  }
-
-  public resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken,
-  ): void {
-    const viewPath = this.getViewPath();
-    if (viewPath) {
-      webviewView.webview.options = {
-        enableScripts: true,
-        localResourceRoots: getSharedLocalResourceRoots(this.context, viewPath),
-      };
-    }
-    this.resolveWebviewViewInternal(webviewView);
-  }
-
   protected resolveWebviewViewInternal(
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): void {
