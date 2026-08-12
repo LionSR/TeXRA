@@ -160,15 +160,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Each handler receives typed data - no casts or validation needed.
    */
   private createHandlerRegistry(): ProgressViewInboundHandlerRegistry {
-    const forwardToActiveView = (message: ProgressViewInboundMessage) => {
-      this.postToActiveView(message);
-    };
-    const runCommand = (command: string, ...args: unknown[]) => {
-      return async () => {
-        await this.runViewCommand(command, args);
-      };
-    };
-
     // Set for the duration of a POLISH_FOLLOW_UP notification below, so the
     // shared handler's stage reports land in the open progress notification.
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
@@ -249,8 +240,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           await this.provider.markWebviewReady(view);
         }
       },
-      [PROGRESS_VIEW_COMMANDS.THEME_SET]: forwardToActiveView,
-      [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: forwardToActiveView,
       [COMMON_COMMANDS.SWITCH_VIEW]: (data) => this.switchView(data),
       [PROGRESS_VIEW_COMMANDS.POP_OUT]: () => this.provider.popOutToEditor(),
       [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.showInSidebar(),
@@ -304,12 +293,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const view = this.getActiveView();
         if (view) await this.recordingManager.stop(view);
       },
-
-      // Profile & Memory - direct command execution
-      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: runCommand(
-        'texra.auth.viewProfile',
-      ),
-      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]: runCommand('texra.showMemory'),
 
       [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: (data) =>
         this.runGettingStartedAction(data.action),
@@ -521,9 +504,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         file: {
           openFile: async (file, line) => {
             await this.runViewCommand('texra.openFile', [file, line]);
-          },
-          openFileCompile: async (file) => {
-            await this.runViewCommand('texra.openFileCompile', [file]);
           },
         },
         approval: {

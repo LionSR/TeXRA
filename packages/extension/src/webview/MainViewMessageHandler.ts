@@ -110,8 +110,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       runWithActiveView: (fn) => this.runWithActiveView(fn),
       getActiveView: () => this.getActiveView(),
       postToActiveView: (message) => this.postToActiveView(message),
-      handleTheme: (m, view) => this.handleTheme(m, view),
-      handleDebugMode: (m, view) => this.handleDebugMode(m, view),
       handleWebviewReady: () => this.handleWebviewReady(),
       handleThemeRequest: () => this.handleThemeRequest(),
       handleDebugModeRequest: () => this.handleDebugModeRequest(),
@@ -163,35 +161,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       vscode.commands.executeCommand('texra.refreshAllOptions'),
       this.refreshOnboardingFunnel?.(),
     ]);
-  }
-
-  /** Push the current theme into the webview on request. */
-  protected async handleTheme(
-    message: { theme?: string },
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    if (!message?.theme) {
-      this.logger.warn(this.channel, 'Invalid theme message', {
-        data: message,
-      });
-      return;
-    }
-
-    webviewView.webview.postMessage({
-      command: COMMON_COMMANDS.THEME_SET,
-      theme: message.theme,
-    });
-  }
-
-  /** Push the current debug mode into the webview on request. */
-  protected async handleDebugMode(
-    message: { debugMode?: boolean },
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    webviewView.webview.postMessage({
-      command: COMMON_COMMANDS.DEBUG_MODE_SET,
-      debugMode: message.debugMode,
-    });
   }
 
   protected async handleWebviewReady(): Promise<void> {

@@ -3,7 +3,6 @@
  * commands routed through the shared executionHandlers module.
  */
 
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
 
@@ -33,8 +32,5 @@ export function createSessionHandlers(host: MainViewInboundHost) {
       executionHandlers.handleMultipleOperation(m),
     [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
       executionHandlers.handleMultipleOperation(m),
-
-    [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () =>
-      safeExecuteCommand('texra.showAgentHistory', [], host.viewName),
   } satisfies Partial<MainViewInboundHandlerRegistry>;
 }
