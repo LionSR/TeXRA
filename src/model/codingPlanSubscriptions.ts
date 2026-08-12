@@ -1,11 +1,8 @@
 import { ModelProvider } from 'llm-zoo';
 
 import { apiKeyExists } from '@model/apiProviders';
-import {
-  isKimiCodeRoute,
-  isKimiSubscriptionEligible,
-  resolveKimiCodeRoutingFacts,
-} from '@model/kimiCodeSubscriptionRouting';
+import { includedModelAccess } from '@model/includedModelAccess';
+import { isKimiCodeSubscriptionActive } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import {
@@ -25,6 +22,8 @@ export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
+  /** Restore a captured preference without changing a newer competing route. */
+  readonly restoreEnabled: (enabled: boolean) => Promise<void>;
   readonly isActiveForModel: (modelId: string) => Promise<boolean>;
 }
 
@@ -48,28 +47,29 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
   ) {
     return false;
   }
+  const includedAccess = includedModelAccess();
+  await includedAccess.canUseServerSideKeys();
+  if (
+    includedAccess.shouldUseServerSideKeysSync(config.provider, config.name)
+  ) {
+    return false;
+  }
   return apiKeyExists(platform().secrets, 'glm');
-}
-
-async function isKimiCodingPlanActive(modelId: string): Promise<boolean> {
-  const config = await resolveRuntimeModelConfig(modelId);
-  if (!config || !isKimiSubscriptionEligible(config)) return false;
-  return isKimiCodeRoute(
-    config,
-    await resolveKimiCodeRoutingFacts(getUseOpenRouter()),
-  );
 }
 
 const RUNTIME_BY_ID = {
   glmCodingPlan: {
     getEnabled: getGLMCodingPlan,
     setEnabled: setGLMCodingPlan,
+    restoreEnabled: setGLMCodingPlan,
     isActiveForModel: isGlmCodingPlanActive,
   },
   kimiCode: {
     getEnabled: getPreferKimiCode,
     setEnabled: setPreferKimiCode,
-    isActiveForModel: isKimiCodingPlanActive,
+    restoreEnabled: (enabled) =>
+      setPreferKimiCode(enabled, undefined, { preserveOpenRouter: true }),
+    isActiveForModel: isKimiCodeSubscriptionActive,
   },
 } as const satisfies Record<
   CodingPlanSubscription['id'],
