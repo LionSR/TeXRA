@@ -19,12 +19,12 @@ import {
   getProgressStreamLabel,
   revealProgressStream,
 } from '@progressView/progressNavigation';
-import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,

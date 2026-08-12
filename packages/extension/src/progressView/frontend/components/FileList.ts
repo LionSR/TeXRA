@@ -9,7 +9,6 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -21,6 +20,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { getEffectiveDiffBase } from '@shared/schemas';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { roundIndexedEntries } from '@shared/schemas/roundIndexed';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';

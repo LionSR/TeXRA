@@ -9,10 +9,10 @@ import {
   ApiProvider,
   type ApiProviderQuickPickItem,
 } from '@frontend/secretManager';
-import { platform } from '@platform/platform';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,

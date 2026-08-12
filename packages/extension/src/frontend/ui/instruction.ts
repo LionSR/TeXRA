@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { globalSM } from '@common/state';
-import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
 

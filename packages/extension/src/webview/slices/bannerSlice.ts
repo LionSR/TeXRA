@@ -7,10 +7,10 @@ import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
 import { globalSM } from '@common/state';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   checkCoreDependencies,

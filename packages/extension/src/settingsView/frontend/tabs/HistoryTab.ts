@@ -2,13 +2,13 @@
 
 import { LitElement, html, type TemplateResult, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 
 // Local imports - shared schemas
 import type { HistoryItem } from '@shared/schemas';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { HistoryViewState } from '../components/history/state';
 
 // Local imports - settings view components

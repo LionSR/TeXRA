@@ -16,7 +16,6 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import {
@@ -26,8 +25,8 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
@@ -95,6 +94,7 @@ import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { defaultSkillSources } from '@skills/skillSources';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,

@@ -22,11 +22,11 @@ import {
   CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
-import type { CliModelAccess } from '../runtime/modelAccess';
 import {
   AUTH_SIGNED_IN_LINE_PREFIX,
   AUTH_STATUS_SEGMENT_SEPARATOR,
 } from '../runtime/apiStatus';
+import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];

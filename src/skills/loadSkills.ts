@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 // Local imports - common
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { byName } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -13,7 +14,6 @@ import type { Dirent } from 'node:fs';
 import type { Skill } from './SkillSchema';
 
 // Local imports - shared schemas
-import type { ActiveSkillSourceScope } from '@shared/schemas';
 
 export { type SkillLoadIssue } from './skillLoader';
 

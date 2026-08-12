@@ -13,10 +13,10 @@ import {
   parseTeXCountStats,
   type TexcountMode,
 } from '@latex/texcount';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { runLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
-import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import * as logger from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
 import { delay } from '@utils/core';

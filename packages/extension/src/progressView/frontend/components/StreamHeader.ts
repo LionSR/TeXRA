@@ -5,7 +5,6 @@ import { consume } from '@lit/context';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -20,6 +19,7 @@ import {
   type StreamSubstate,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { deriveGoalState, type GoalStatus } from '@shared/schemas/goal';
 import {
   progressHeaderStatus,

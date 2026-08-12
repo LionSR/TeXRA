@@ -1,7 +1,7 @@
 /** Shared types for latexdiff output discovery and operation building. */
 
-import type { LaTeXdiffService } from '../latexdiff';
 import type { FileLocation } from '@shared/schemas';
+import type { LaTeXdiffService } from '../latexdiff';
 import type { RunLatexdiffForExecutionParams } from './runLatexdiff';
 
 /**

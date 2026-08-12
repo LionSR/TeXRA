@@ -6,7 +6,6 @@ import {
   ChatCompletionStream,
   type ContentDeltaEvent,
 } from 'openai/lib/ChatCompletionStream';
-import { assertToolCallsAreChatCompletionFunctionToolCalls } from './functionToolCalls';
 
 // Local imports
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
@@ -41,6 +40,7 @@ import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
+import { assertToolCallsAreChatCompletionFunctionToolCalls } from './functionToolCalls';
 
 // Local file imports
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';

@@ -10,7 +10,6 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -23,6 +22,7 @@ import {
   type AgentCategory,
   type ByCategory,
 } from '@shared/schemas';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import type {
   AgentSelectionItem,
   NumberSetting,

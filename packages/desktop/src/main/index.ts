@@ -22,7 +22,6 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -50,6 +49,7 @@ import {
   agentKeyOf,
   type AgentSource,
 } from '@shared/schemas/agent';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';

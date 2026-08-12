@@ -8,8 +8,6 @@
  * import for dispatch and palette rendering.
  */
 
-import type { MenuItemConstructorOptions } from 'electron';
-
 import {
   DESKTOP_FILE_COMMANDS,
   DESKTOP_HELP_COMMANDS,
@@ -19,6 +17,8 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface.js';
+import type { MenuItemConstructorOptions } from 'electron';
+
 
 /** Menu template shape produced before Electron materializes native menus. */
 export interface DesktopMenuTemplateItem extends Omit<

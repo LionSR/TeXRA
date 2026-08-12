@@ -8,12 +8,12 @@
 
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 
+import type { ExecResult } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
 
-import type { ExecResult } from '@shared/schemas';
 import {
   formatChildRunDelivery,
   formatChildRunError,

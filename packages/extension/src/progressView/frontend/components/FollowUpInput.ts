@@ -8,12 +8,12 @@ import {
 } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { consume } from '@lit/context';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { RecordingButtonController } from '@shared/litControllers/RecordingButtonController';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import {

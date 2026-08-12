@@ -7,7 +7,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { workspaceSM } from '@common/state';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
@@ -34,6 +33,7 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';

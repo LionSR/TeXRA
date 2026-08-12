@@ -65,9 +65,6 @@ import { platform } from '@platform/platform';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
@@ -75,6 +72,9 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type SettingsMessageFor,
 } from '@shared/schemas';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 
 import {
   applyStateSettingUpdate,

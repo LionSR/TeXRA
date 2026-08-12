@@ -12,11 +12,11 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
+import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
-import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 
 /** Memory-settings handler delegate. */
 export class MemoryHandlers {

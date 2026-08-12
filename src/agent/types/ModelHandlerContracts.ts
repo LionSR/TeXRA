@@ -158,7 +158,7 @@ type ToolCallShape<
   P extends string,
   I,
   R,
-  Extra extends Record<string, unknown> = {},
+  Extra extends Record<string, unknown> = Record<string, never>,
 > = {
   provider: P;
   callId: string;

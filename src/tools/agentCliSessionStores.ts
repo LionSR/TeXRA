@@ -1,10 +1,10 @@
+
+import { killAllSessionBackgroundProcesses } from '@agent/runtime/SessionHandle';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
 } from '@shared/schemas';
-
-import { killAllSessionBackgroundProcesses } from '@agent/runtime/SessionHandle';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 
 import {
   AgentCliSessionRegistry,

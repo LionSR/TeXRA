@@ -4,8 +4,8 @@ import {
 } from '@agent/runtime/helperModel';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import * as logger from '@logger/logUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
+import * as logger from '@logger/logUtils';
 
 interface ConnectionResult {
   connector: string;

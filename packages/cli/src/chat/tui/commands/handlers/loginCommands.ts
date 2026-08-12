@@ -23,7 +23,6 @@ import {
 } from '@cli/runtime/subscriptionLogin';
 import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
 import { type CliContext } from '@cli/runtime/cliContext';
-import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import {
   githubSelectAccountWarning,
   hasLoginTransportConflict,
@@ -41,6 +40,7 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
+import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import {
   CHATGPT_AUTH,
   GROK_AUTH,

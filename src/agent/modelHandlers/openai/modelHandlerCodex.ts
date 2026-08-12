@@ -50,9 +50,9 @@ import {
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 import { contentToText } from './openAIResponseContent';
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
+import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 const CHANNEL = 'ModelHandlerCodex';
 

@@ -7,10 +7,9 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { globalSM } from '@common/state';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -19,6 +18,7 @@ import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionS
 import * as logger from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { agentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {

@@ -12,12 +12,12 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import {
   renderLabeledActionButton,
   type LabeledActionButtonOptions,

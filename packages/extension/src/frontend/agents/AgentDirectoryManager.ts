@@ -15,10 +15,10 @@ import type {
 } from '@agent/index';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { globalSM } from '@common/state';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';

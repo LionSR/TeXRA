@@ -1,5 +1,4 @@
 import { computeAgentOptionsData } from '@agent/index';
-import type { StateStore } from '@platform/interfaces';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
   MainViewStartupController,
@@ -8,6 +7,7 @@ import {
 } from '@controllers/mainView/MainViewStartupController';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { getConfig } from '@utils/config/configUtils';
 

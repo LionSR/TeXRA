@@ -9,10 +9,6 @@ import replacementEngine, {
   REGEX_CATEGORIES,
 } from '@replacement/engine';
 import {
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-} from '@shared/constants/replacementCategories';
-import {
   EQUATION_MACRO_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
@@ -28,6 +24,10 @@ import {
   wrapCritiqueInAlign,
 } from '@replacement/advanced';
 import type { ReplacementCategory } from '@replacement/types';
+import {
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+} from '@shared/constants/replacementCategories';
 
 function apply(
   input: string,

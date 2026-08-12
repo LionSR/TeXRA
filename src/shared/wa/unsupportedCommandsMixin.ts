@@ -9,8 +9,8 @@
  * that install a jsdom `HTMLElement` only later. Custom-element classes then
  * extend the wrong-realm `HTMLElement` and `document.createElement` fails.
  */
-import type { LitElement } from 'lit';
 import { property } from 'lit/decorators.js';
+import type { LitElement } from 'lit';
 
 /**
  * Declares the `unsupportedCommands` Lit property on a component: the set of

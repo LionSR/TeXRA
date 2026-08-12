@@ -7,9 +7,9 @@ import { runCleanSingle, runCleanMultiple } from '@housekeeping/clean';
 import { runCleanRunDir } from '@housekeeping/runDirOps';
 import * as logger from '@logger/logUtils';
 
+import type { FileOpResult } from '@shared/schemas';
 import { type CleanConfig } from './fileOpSchemas';
 import { runFileOp } from './fileOpRunner';
-import type { FileOpResult } from '@shared/schemas';
 
 const CHANNEL = 'cleanCommands';
 

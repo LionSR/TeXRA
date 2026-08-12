@@ -4,12 +4,12 @@
 // main.ts-scoped closures the routes act on; the route bodies only ever reach
 // renderer state through them.
 
-import type { ZodType } from 'zod';
-
+import { SetThemeMessageSchema, type DesktopThemeKind } from '@shared/schemas';
 import {
   DesktopSetLogMessageSchema,
   type DesktopSetLogMessage,
 } from '../shared/desktopLogMessages';
+
 import {
   DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
@@ -46,9 +46,9 @@ import {
   DesktopTerminalOpenCommandMessageSchema,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages';
-import type { WorkbenchKind } from '../shared/desktopTaskShell';
 import { takePendingFileRequest } from './fileRequests';
-import { SetThemeMessageSchema, type DesktopThemeKind } from '@shared/schemas';
+import type { WorkbenchKind } from '../shared/desktopTaskShell';
+import type { ZodType } from 'zod';
 
 /** Callbacks and live state reads the routes need from the renderer. */
 export interface DesktopMessageRouteHandlers {

@@ -47,7 +47,6 @@ import {
 // Local file imports
 // Type-only: the strategy module pulls in `@agent/runtime/executeAgent` at
 // runtime (see the lazy import below), but a type import is erased at build.
-import type { ChildRunLaunchOptions } from './nativeSubagentStrategy';
 import {
   buildSubagentResult,
   formatBuiltSubagentDelivery,
@@ -62,6 +61,7 @@ import {
   type StableSubagentAttempt,
   type StableSubagentSequence,
 } from './stableSubagentAttempt';
+import type { ChildRunLaunchOptions } from './nativeSubagentStrategy';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
 

@@ -7,7 +7,6 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -23,6 +22,7 @@ import {
   type StreamLifecycleStatus,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles, selectStyles } from '@shared/styles';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {

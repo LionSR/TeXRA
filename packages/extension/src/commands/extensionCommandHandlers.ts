@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   CleanConfigSchema,
   CleanMultipleCommandArgsSchema,
@@ -11,7 +12,6 @@ import {
   type CleanConfig,
   type PackConfig,
 } from '@commands/housekeeping/fileOpSchemas';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { commandCatalog } from '@shared/commands/catalog';
 import {

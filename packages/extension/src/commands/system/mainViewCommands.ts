@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
-import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   loadMainViewModelOptions,
   type MainViewModelOptionsByCategory,

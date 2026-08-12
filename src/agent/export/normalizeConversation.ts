@@ -14,13 +14,13 @@
  */
 
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
+import { z } from 'zod';
 import { isFunctionToolCall } from '@agent/modelHandlers/openai/functionToolCalls';
 import {
   extractTextContentPart,
   isFunctionCallOutputItem,
   isResponseFunctionToolCallItem,
 } from '@agent/modelHandlers/openai/responsesShapeGuards';
-import { z } from 'zod';
 import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,

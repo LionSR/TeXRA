@@ -74,7 +74,6 @@ import {
   signOutCliSupabase,
   supabaseSignOutOutcomeMessage,
 } from '../runtime/supabaseAuth';
-import type { CliSubscriptionSignOutResult } from '../runtime/subscriptionLogin';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -86,6 +85,7 @@ import {
 } from './_helpers/globalArgs';
 import { runResumeExecution } from './resumeExecution';
 import { type CliContext } from '../runtime/cliContext';
+import type { CliSubscriptionSignOutResult } from '../runtime/subscriptionLogin';
 
 /**
  * Sign-out bindings for the subscription providers the launcher's `account`

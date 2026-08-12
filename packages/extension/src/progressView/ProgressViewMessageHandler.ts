@@ -32,12 +32,12 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
 import { apiKeySecretName } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
+import { platform } from '@platform/platform';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas';

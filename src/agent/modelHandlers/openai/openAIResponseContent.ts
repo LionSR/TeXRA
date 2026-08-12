@@ -3,6 +3,7 @@
 // carry no handler state, so they are shared by the handler and the
 // file-upload helpers.
 
+import { extractTextContentPart } from './responsesShapeGuards';
 import type {
   EasyInputMessage,
   ResponseInputContent,
@@ -11,7 +12,6 @@ import type {
   ResponseOutputMessage,
 } from 'openai/resources/responses/responses';
 
-import { extractTextContentPart } from './responsesShapeGuards';
 
 /** Build an `input_text` content part. */
 export function createInputText(text: string): ResponseInputContent {

@@ -10,6 +10,7 @@ import {
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLeaseIfPresent,
 } from '@agent/storage/executionLease';
+import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -45,14 +46,13 @@ import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
-import type { SessionHandle } from './SessionHandle';
-import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import {
   buildTerminalFlowResult,
   isWaitingFlowResult,
   type AgentRuntimeFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
+import type { SessionHandle } from './SessionHandle';
 import type { ExecutionRegistry } from './executionRegistry';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 import type { StreamStatusMachine } from './StreamStatusService';

@@ -7,13 +7,13 @@ import {
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
   agentName,
   AgentCategory,
 } from '@shared/schemas';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
 import { RecordingManager } from '@frontend/media/RecordingManager';
+import * as logger from '@logger/logUtils';
 
 import type { DiffManager } from './managers/DiffManager';
 import type { FileManager } from './managers/FileManager';

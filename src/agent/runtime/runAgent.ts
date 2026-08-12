@@ -163,12 +163,12 @@ export async function runAgent(
             outcome: RUN_OUTCOME.FAILED,
             flowRecord: 'delete',
           });
-          const finalizationError =
-            'thrownError' in finalization
-              ? finalization.thrownError
-              : finalization.finalization.status === 'failed'
-                ? finalization.finalization.error
-                : undefined;
+          let finalizationError: unknown;
+          if ('thrownError' in finalization) {
+            finalizationError = finalization.thrownError;
+          } else if (finalization.finalization.status === 'failed') {
+            finalizationError = finalization.finalization.error;
+          }
           if (finalizationError !== undefined) {
             runFailure = {
               error: new AggregateError(

@@ -20,8 +20,8 @@
 
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { platform } from '@platform/platform';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { getPreferKimiCode } from '@utils/config/providerConfig';
 
 import { apiKeyExists } from './apiProviders';
