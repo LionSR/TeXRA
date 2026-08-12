@@ -1,14 +1,9 @@
 // Local imports - agent
 import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
-import { isGlmCodingPlanRouteActive } from '@model/codingPlanSubscriptions';
 
 // Local file imports
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
-
-// Type imports
-import type OpenAI from 'openai';
 
 /**
  * Handler for GLM (Zhipu AI / Z.AI) models using OpenAI-compatible API.
@@ -27,18 +22,6 @@ import type OpenAI from 'openai';
  * @see https://open.bigmodel.cn/dev/api
  */
 export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
-  /** Capture the endpoint classification on the immutable SDK client. */
-  override async getClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    const codingPlanRoute = isGlmCodingPlanRouteActive(this.config);
-    const client = await super.getClient(selection);
-    return codingPlanRoute &&
-      this.getCredentialRouteForClient(client) === 'api-key'
-      ? this.rememberClientUsageRoute(client, 'glm-coding-plan-subscription')
-      : client;
-  }
-
   /** Coding-plan usage is covered by the subscription, not billed per token. */
   protected override standardPricingConfig(): StandardPricingConfig {
     return this.getLastCredentialUsageRoute() === 'glm-coding-plan-subscription'

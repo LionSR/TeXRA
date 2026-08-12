@@ -43,7 +43,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
   Object.freeze({
     id: 'kimiCode',
     cliProvider: 'kimi-code',
-    cliAliases: ['kimi', 'kimicode', 'kimi-code'],
+    cliAliases: Object.freeze(['kimi', 'kimicode', 'kimi-code']),
     apiProvider: 'kimiCode',
     exclusiveCredential: true,
     credentialName: 'Kimi Code',
@@ -56,7 +56,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     modelFamily: 'Kimi models',
     retryFallbackName: 'your own Moonshot API keys',
     retrySourceName: 'Kimi Code subscription',
-    usageVariantSettingKeys: [],
+    usageVariantSettingKeys: Object.freeze([]),
     sectionId: 'kimi-code-subscription',
     description: 'Use a Kimi Code membership for the kimi-for-coding models.',
     consoleUrl: 'https://www.kimi.com/code/console',
@@ -69,7 +69,13 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
   Object.freeze({
     id: 'glmCodingPlan',
     cliProvider: 'glm-code',
-    cliAliases: ['glm', 'glmcode', 'glm-code', 'glm-coding', 'glm-coding-plan'],
+    cliAliases: Object.freeze([
+      'glm',
+      'glmcode',
+      'glm-code',
+      'glm-coding',
+      'glm-coding-plan',
+    ]),
     apiProvider: 'glm',
     exclusiveCredential: false,
     credentialName: 'GLM',
@@ -82,7 +88,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     modelFamily: 'GLM models',
     retryFallbackName: 'the regular GLM endpoint',
     retrySourceName: 'GLM Coding Plan',
-    usageVariantSettingKeys: [GlobalStateKey.GLM_USE_CHINA],
+    usageVariantSettingKeys: Object.freeze([GlobalStateKey.GLM_USE_CHINA]),
     sectionId: 'glm-coding-plan-subscription',
     description:
       'Use a GLM Coding Plan subscription for GLM models via the coding endpoint.',
@@ -110,11 +116,6 @@ const CODING_PLAN_BY_EXHAUSTION_REASON = new Map<
 const CODING_PLAN_BY_API_PROVIDER = new Map<string, CodingPlanSubscription>(
   CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]),
 );
-
-const CODING_PLAN_BY_ID = new Map<
-  CodingPlanSubscriptionId,
-  CodingPlanSubscription
->(CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.id, plan]));
 
 const CODING_PLAN_BY_USAGE_SETTING = new Map<string, CodingPlanSubscription>(
   CODING_PLAN_SUBSCRIPTIONS.flatMap((plan) =>
@@ -152,13 +153,4 @@ export function codingPlanForUsageSetting(
   key: string,
 ): CodingPlanSubscription | undefined {
   return CODING_PLAN_BY_USAGE_SETTING.get(key);
-}
-
-/** Resolve a coding plan by its stable cross-host identifier. */
-export function codingPlanForId(
-  id: CodingPlanSubscriptionId,
-): CodingPlanSubscription {
-  const plan = CODING_PLAN_BY_ID.get(id);
-  if (!plan) throw new Error(`Unknown coding-plan subscription: ${id}`);
-  return plan;
 }

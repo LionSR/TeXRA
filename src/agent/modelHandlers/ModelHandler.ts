@@ -112,6 +112,7 @@ import {
 } from './support/mediaAttachmentPolicy';
 import {
   resolveBaseUrl,
+  resolveProxyEndpoint,
   shouldUseOpenRouter,
   usesServerSideKeysRoute,
   type ProxyConfig,
@@ -564,10 +565,14 @@ export abstract class ModelHandler<
         ? `Missing OpenRouter API key. Set an OpenRouter API key in settings.`
         : `Missing API key for ${provider}. ${INCLUDED_MODEL_ACCESS_REMEDY}`,
     );
+    const endpoint = resolveProxyEndpoint(
+      this.buildProxyConfig(false, useOpenRouter),
+    );
     return {
       apiKey,
-      baseUrl: resolveBaseUrl(this.buildProxyConfig(false, useOpenRouter)),
+      baseUrl: endpoint.baseUrl,
       route: useOpenRouter ? 'openrouter' : 'api-key',
+      ...('usageRoute' in endpoint && { usageRoute: endpoint.usageRoute }),
     };
   }
 
