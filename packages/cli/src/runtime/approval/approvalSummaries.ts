@@ -11,7 +11,11 @@ import {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { cliRetryActionHint, classifyCliRetryAction } from './approvalPrompts';
+import {
+  cliRetryActionHint,
+  classifyCliRetryAction,
+  type CliApprovalContent,
+} from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -73,13 +77,16 @@ function truncateLineToWidth(line: string, maxChars: number): string {
   return `${line.slice(0, prefixLength)}${TRUNCATED_DIFF_LINE_MARKER}`;
 }
 
-function boundedAgentProposalInstructionLines(
-  instruction: string,
-): readonly string[] {
-  const instructionLines = instruction
+function agentProposalInstructionLines(instruction: string): readonly string[] {
+  return instruction
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .split('\n');
+}
+
+function boundedAgentProposalInstructionLines(
+  instructionLines: readonly string[],
+): readonly string[] {
   return boundedLines(instructionLines, {
     maxLines: AGENT_PROPOSAL_INSTRUCTION_MAX_LINES,
     maxChars: AGENT_PROPOSAL_INSTRUCTION_MAX_CHARS,
@@ -87,6 +94,16 @@ function boundedAgentProposalInstructionLines(
     truncateLine: (line) =>
       truncateLineToWidth(line, AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS),
   });
+}
+
+function equalLines(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((line, index) => line === right[index])
+  );
 }
 
 function formatAgentProposalFileGroup(
@@ -99,12 +116,11 @@ function formatAgentProposalFileGroup(
   return `${label}: ${visibleFiles.join(', ')}${suffix}`;
 }
 
-export function formatAgentProposalApprovalSummary(
+function agentProposalApprovalSummary(
   proposal: AgentProposalPermission,
+  instructionLines: readonly string[],
+  boundFileGroups: boolean,
 ): string {
-  const instructionLines = boundedAgentProposalInstructionLines(
-    proposal.instruction,
-  );
   const workingDirectory = proposal.workingDirectory?.trim();
   return [
     `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
@@ -113,11 +129,38 @@ export function formatAgentProposalApprovalSummary(
     `Model: ${proposal.model}`,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...getProposalFileGroups(proposal).map((group) =>
-      formatAgentProposalFileGroup(group.label, group.files),
+      boundFileGroups
+        ? formatAgentProposalFileGroup(group.label, group.files)
+        : `${group.label}: ${group.files.join(', ')}`,
     ),
     'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
+}
+
+export function buildAgentProposalApprovalContent(
+  proposal: AgentProposalPermission,
+): CliApprovalContent {
+  const instructionLines = agentProposalInstructionLines(proposal.instruction);
+  const boundedInstructionLines =
+    boundedAgentProposalInstructionLines(instructionLines);
+  const hasHiddenContent =
+    !equalLines(boundedInstructionLines, instructionLines) ||
+    getProposalFileGroups(proposal).some(
+      (group) => group.files.length > AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
+    );
+  const summary = agentProposalApprovalSummary(
+    proposal,
+    boundedInstructionLines,
+    true,
+  );
+  return hasHiddenContent
+    ? {
+        summary,
+        details: () =>
+          agentProposalApprovalSummary(proposal, instructionLines, false),
+      }
+    : { summary };
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
@@ -162,18 +205,30 @@ function boundedToolEditDiffLines(
   });
 }
 
-export function formatToolEditApprovalSummary(
+function toolEditApprovalSummary(
   request: ToolEditApprovalRequest,
+  diffLines: readonly string[],
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
-  const diffLines = toolEditDiffLines(request);
   if (diffLines.length === 0) {
     return `${header}\nNo content changes proposed.`;
   }
 
-  const visibleLines = boundedToolEditDiffLines(diffLines);
+  return `${header}\nProposed diff:\n${diffLines.join('\n')}`;
+}
 
-  return `${header}\nProposed diff:\n${visibleLines.join('\n')}`;
+export function buildToolEditApprovalContent(
+  request: ToolEditApprovalRequest,
+): CliApprovalContent {
+  const diffLines = toolEditDiffLines(request);
+  const boundedDiffLines = boundedToolEditDiffLines(diffLines);
+  const summary = toolEditApprovalSummary(request, boundedDiffLines);
+  return equalLines(boundedDiffLines, diffLines)
+    ? { summary }
+    : {
+        summary,
+        details: () => toolEditApprovalSummary(request, diffLines),
+      };
 }
 
 export function formatUserQuestionPrompt(

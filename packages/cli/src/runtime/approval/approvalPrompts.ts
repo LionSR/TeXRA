@@ -18,6 +18,7 @@ import {
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
+import { safeTerminalText } from '../terminalText';
 
 /**
  * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
@@ -48,8 +49,23 @@ export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
 
+export interface CliApprovalContent {
+  readonly summary: string;
+  /** Complete content behind a bounded summary, shown only on request. */
+  readonly details?: () => string;
+}
+
 const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 const warnedApprovalContexts = new WeakSet<CliContext>();
+
+function cliPromptQueue(context: CliContext): PQueue {
+  let queue = cliPromptQueues.get(context);
+  if (!queue) {
+    queue = new PQueue({ concurrency: 1 });
+    cliPromptQueues.set(context, queue);
+  }
+  return queue;
+}
 
 /**
  * Tell the operator, once per run, that the policy closed a gate. The model
@@ -233,6 +249,10 @@ function parseApprovalAnswer(answer: string): ParsedApprovalAnswer {
   };
 }
 
+function isViewDetailsAnswer(answer: string): boolean {
+  return /^v(?:iew)?$/i.test(answer.trim());
+}
+
 /**
  * Queue a CLI prompt against the context's serial prompt queue. Exposed so the
  * user-question handler can interleave its own per-question prompts with
@@ -242,51 +262,59 @@ export function queueCliApprovalQuestion(
   context: CliContext,
   request: CliPromptRequest,
 ): Promise<string> {
-  let queue = cliPromptQueues.get(context);
-  if (!queue) {
-    queue = new PQueue({ concurrency: 1 });
-    cliPromptQueues.set(context, queue);
-  }
-  return queue.add(() => askCliApprovalQuestion(context, request));
+  return cliPromptQueue(context).add(() =>
+    askCliApprovalQuestion(context, request),
+  );
 }
 
 export async function askApproval(
   context: CliContext,
-  summary: string,
+  content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
 ): Promise<ApprovalDecision> {
-  let answer: string;
+  const getDetails = content.details;
   try {
-    hooks.beforePrompt?.();
-    answer = await queueCliApprovalQuestion(context, {
-      kind: 'approval',
-      summary,
-      prompt: 'Approve? [y/N, or n <feedback>] ',
+    return await cliPromptQueue(context).add(async () => {
+      let answer: string;
+      while (true) {
+        hooks.beforePrompt?.();
+        answer = await askCliApprovalQuestion(context, {
+          kind: 'approval',
+          summary: content.summary,
+          prompt: getDetails
+            ? 'Approve? [y/N, v view full, or n <feedback>] '
+            : 'Approve? [y/N, or n <feedback>] ',
+        });
+        if (getDetails == null || !isViewDetailsAnswer(answer)) {
+          break;
+        }
+        writeTextStderr(safeTerminalText(getDetails()));
+      }
+
+      const parsed = parseApprovalAnswer(answer);
+      let feedback = parsed.feedback;
+      if (!parsed.accepted && parsed.shouldPromptForFeedback) {
+        try {
+          hooks.beforePrompt?.();
+          const feedbackAnswer = await askCliApprovalQuestion(context, {
+            kind: 'approval',
+            summary: '',
+            prompt: 'Rejection feedback (optional, Enter to skip): ',
+          });
+          feedback = feedbackAnswer.trim() || undefined;
+        } catch {
+          feedback = undefined;
+        }
+      }
+
+      return {
+        accepted: parsed.accepted,
+        userMessage: parsed.accepted
+          ? undefined
+          : feedback || 'Rejected from CLI approval prompt.',
+      };
     });
   } catch {
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
-
-  const parsed = parseApprovalAnswer(answer);
-  let feedback = parsed.feedback;
-  if (!parsed.accepted && parsed.shouldPromptForFeedback) {
-    try {
-      hooks.beforePrompt?.();
-      const feedbackAnswer = await queueCliApprovalQuestion(context, {
-        kind: 'approval',
-        summary: '',
-        prompt: 'Rejection feedback (optional, Enter to skip): ',
-      });
-      feedback = feedbackAnswer.trim() || undefined;
-    } catch {
-      feedback = undefined;
-    }
-  }
-
-  return {
-    accepted: parsed.accepted,
-    userMessage: parsed.accepted
-      ? undefined
-      : feedback || 'Rejected from CLI approval prompt.',
-  };
 }
