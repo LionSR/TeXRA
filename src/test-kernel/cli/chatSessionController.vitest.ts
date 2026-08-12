@@ -1498,9 +1498,15 @@ describe('createChatSessionController', () => {
       'stream-1',
       makeAutoResumeData(),
       expect.objectContaining({
+        canAcquireResumeLease: expect.any(Function),
         isCancellationRequested: expect.any(Function),
       }),
     );
+    const resumeOptions = mocks.resumeQueuedToolUseFromResumeData.mock
+      .calls[0]?.[2] as ResumeQueuedToolUseOptions | undefined;
+    expect(resumeOptions?.canAcquireResumeLease?.()).toBe(true);
+    session.stopRequested = true;
+    expect(resumeOptions?.canAcquireResumeLease?.()).toBe(false);
     expect(mocks.syncStreamLog).toHaveBeenCalledWith('stream-1', {
       forceFinal: true,
     });
@@ -1508,6 +1514,49 @@ describe('createChatSessionController', () => {
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
+  });
+
+  it('keeps an automatic resume cancelled after clear resets session state', async () => {
+    const leaseCheckStarted = pDefer<void>();
+    const releaseLeaseCheck = pDefer<void>();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config: makeResumeConfig(),
+    });
+    const session = makeSession({ runCompleted: true });
+    resumeWithAutoResumeData();
+    let resumeOptions: ResumeQueuedToolUseOptions | undefined;
+    mocks.resumeQueuedToolUseFromResumeData.mockImplementationOnce(
+      async (
+        _streamId: StreamTabId,
+        _snapshot: unknown,
+        options: ResumeQueuedToolUseOptions,
+      ) => {
+        resumeOptions = options;
+        leaseCheckStarted.resolve();
+        await releaseLeaseCheck.promise;
+        return options.canAcquireResumeLease?.() ?? true;
+      },
+    );
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    const resume = ctrl.tryResumeStream('stream-1', {
+      streamId: 'stream-1' as StreamTabId,
+      generation: 1,
+      kind: 'recovery',
+    });
+    await leaseCheckStarted.promise;
+
+    ctrl.stop();
+    session.clearRunState();
+    expect(session.stopRequested).toBe(false);
+    expect(resumeOptions?.canAcquireResumeLease?.()).toBe(false);
+
+    releaseLeaseCheck.resolve();
+    await expect(resume).resolves.toBe(false);
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
   it('launcher resume supersedes stale interrupted recovery state', async () => {
@@ -1522,6 +1571,106 @@ describe('createChatSessionController', () => {
     expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
       kind: 'not_interrupted',
     });
+  });
+
+  it('rejects recovery only until the interrupted run promise settles', async () => {
+    const teardown = pDefer<void>();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config: makeResumeConfig(),
+    });
+    const session = makeSession({
+      streamId: 'stream-1',
+      runPromise: teardown.promise,
+    });
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    ctrl.stop();
+    // Root finalization publishes slot availability before its promise has
+    // completely settled.
+    session.markRunCompleted();
+    // `/clear` may reset the mutable session state while the interrupted
+    // promise is still settling. The captured promise must remain the guard.
+    session.clearRunState();
+
+    await expect(
+      ctrl.tryResumeStream('stream-1', {
+        streamId: 'stream-1' as StreamTabId,
+        generation: 1,
+        kind: 'recovery',
+      }),
+    ).resolves.toBe(false);
+
+    expect(snapshotStore.preload).not.toHaveBeenCalled();
+    expect(session.stopRequested).toBe(false);
+    expect(mocks.resumeQueuedToolUseFromResumeData).not.toHaveBeenCalled();
+
+    teardown.resolve();
+    await teardown.promise;
+    resumeWithAutoResumeData();
+
+    await expect(
+      ctrl.tryResumeStream('stream-1', {
+        streamId: 'stream-1' as StreamTabId,
+        generation: 2,
+        kind: 'recovery',
+      }),
+    ).resolves.toBe(true);
+
+    expect(snapshotStore.preload).toHaveBeenCalledWith(['stream-1']);
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledOnce();
+  });
+
+  it('retains every unsettled interrupted-run recovery blocker', async () => {
+    const firstTeardown = pDefer<void>();
+    const secondTeardown = pDefer<void>();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config: makeResumeConfig(),
+    });
+    const session = makeSession({
+      streamId: 'stream-1',
+      runPromise: firstTeardown.promise,
+    });
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    ctrl.stop();
+    session.markRunCompleted();
+    session.clearRunState();
+
+    session.markRunPending(secondTeardown.promise);
+    session.streamId = 'stream-2' as StreamTabId;
+    ctrl.stop();
+    session.markRunCompleted();
+    session.clearRunState();
+
+    secondTeardown.resolve();
+    await secondTeardown.promise;
+    await expect(
+      ctrl.tryResumeStream('stream-1', {
+        streamId: 'stream-1' as StreamTabId,
+        generation: 1,
+        kind: 'recovery',
+      }),
+    ).resolves.toBe(false);
+
+    firstTeardown.resolve();
+    await firstTeardown.promise;
+    resumeWithAutoResumeData();
+    await expect(
+      ctrl.tryResumeStream('stream-1', {
+        streamId: 'stream-1' as StreamTabId,
+        generation: 2,
+        kind: 'recovery',
+      }),
+    ).resolves.toBe(true);
+
+    expect(snapshotStore.preload).toHaveBeenCalledOnce();
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledOnce();
   });
 
   it('transfers an admitted interruption batch to launcher resume', async () => {
