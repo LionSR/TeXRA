@@ -70,7 +70,9 @@ export interface CliModelAccessStatus {
   readonly grokAccountLabel?: string;
   readonly kimiCodeKeySet?: boolean;
   readonly glmKeySet?: boolean;
-  /** Canonical coding-plan state; legacy named fields above remain readable. */
+  /** Canonical coding-plan state. The named fields remain temporarily for
+   * callers predating this map (introduced 2026-08-12); remove them once all
+   * callers construct `codingPlans`, no later than 2026-11-12. */
   readonly codingPlans?: Readonly<
     Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
   >;
@@ -182,9 +184,9 @@ export function resolveCliModelAccessRoute({
   }
   if (subscriptionActive) return 'chatgpt';
   if (grokSubscriptionActive === true) return 'grok';
-  // The Kimi Code route only describes personal access — under included
-  // access the relay owns eligible models.
-  if (kimiCodeActive === true && apiMode === 'personal') return 'kimi-code';
+  // Exclusive Kimi Code models bypass relay access even when the session's
+  // fallback mode remains `included`.
+  if (kimiCodeActive === true) return 'kimi-code';
   // The active predicate already excludes relay-owned requests. It therefore
   // wins over a stale session apiMode left at `included` after quota fallback.
   if (glmCodingPlanActive === true) return 'glm-code';
