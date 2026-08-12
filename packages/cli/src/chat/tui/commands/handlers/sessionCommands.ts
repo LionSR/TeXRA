@@ -100,21 +100,25 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const topologyChildrenFor = (streamId: StreamTabId) =>
+    activeSubagentsFor(streamId, childStreamEntries.get(), streamSlices);
   const runningChildrenFor = (streamId: StreamTabId) =>
-    activeSubagentsFor(streamId, childStreamEntries.get(), streamSlices).filter(
-      (child) => isActivePhase(child.status),
+    topologyChildrenFor(streamId).filter((child) =>
+      isActivePhase(child.status),
     );
-  const directActiveChildren = activeStreamId
-    ? runningChildrenFor(activeStreamId)
+  const directTopologyChildren = activeStreamId
+    ? topologyChildrenFor(activeStreamId)
     : [];
   const workflowStreamId =
-    activeStreamId && directActiveChildren.length === 0
+    activeStreamId && directTopologyChildren.length === 0
       ? activeStreamParentOrSelfId({
           activeStreamId,
           parentStream: parentStream.get(),
         })
       : activeStreamId;
-  let activeChildSessions = directActiveChildren.length;
+  let activeChildSessions = activeStreamId
+    ? runningChildrenFor(activeStreamId).length
+    : 0;
   if (workflowStreamId !== activeStreamId) {
     activeChildSessions = workflowStreamId
       ? runningChildrenFor(workflowStreamId).length

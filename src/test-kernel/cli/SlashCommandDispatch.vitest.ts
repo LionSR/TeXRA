@@ -1022,6 +1022,56 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).not.toContain('active background tasks: 3');
   });
 
+  it('does not inherit ancestor siblings when a focused parent retains idle children', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-idle-nested-root' as StreamTabId;
+    const parentStreamId = 'stream-idle-nested-parent' as StreamTabId;
+    const siblingStreamId = 'stream-running-sibling' as StreamTabId;
+    const childStreamId = 'stream-idle-grandchild' as StreamTabId;
+    activeStreamId.set(parentStreamId);
+    for (const streamId of [parentStreamId, siblingStreamId, childStreamId]) {
+      setStreamStatusInCliState({
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+      });
+    }
+    setStreamStatusInCliState({
+      streamId: parentStreamId,
+      status: STREAM_PHASE.WAITING,
+    });
+    setStreamStatusInCliState({
+      streamId: childStreamId,
+      status: STREAM_PHASE.WAITING,
+    });
+    const rosterRow = (
+      childId: StreamTabId,
+      index: number,
+      status: typeof STREAM_PHASE.RUNNING | typeof STREAM_PHASE.WAITING,
+    ) => ({
+      executionId: `idle-nested-exec-${index}`,
+      identity: { kind: 'agent' as const, agent: `reviewer-${index}` },
+      agentName: `reviewer-${index}`,
+      status,
+      startedAt: index + 1,
+      elapsed: '1s',
+      childStreamId: childId,
+    });
+    projectChildRoster(rootStreamId, [
+      rosterRow(parentStreamId, 0, STREAM_PHASE.WAITING),
+      rosterRow(siblingStreamId, 1, STREAM_PHASE.RUNNING),
+    ]);
+    projectChildRoster(parentStreamId, [
+      rosterRow(childStreamId, 2, STREAM_PHASE.WAITING),
+    ]);
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('status: idle');
+    expect(statusText).not.toContain('active background tasks:');
+  });
+
   it('reports the access route that produced the focused stream usage', async () => {
     registerBuiltinSlashCommands();
     const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
