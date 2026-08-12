@@ -1,7 +1,6 @@
 // Local imports - shared formatting
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { formatBytes } from '@shared/utils/string';
-import { collapseWhitespace } from '@utils/text/stringUtils';
+import { collapseWhitespace, formatBytes } from '@utils/text/stringUtils';
 
 // Local imports - CLI TUI rendering
 import {

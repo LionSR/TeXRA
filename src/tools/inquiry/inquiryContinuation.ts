@@ -29,8 +29,11 @@ import type {
   InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
-import { formatRelativeTime } from '@shared/utils/string';
-import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  formatRelativeTime,
+  truncateSummary,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 import {
   getThreadSummary,

@@ -6,7 +6,7 @@
  * source entries with differently-named directory flags.
  */
 
-import { formatBytes } from '@shared/utils/string';
+import { formatBytes } from '@utils/text/stringUtils';
 
 export interface SizedEntry {
   readonly path: string;

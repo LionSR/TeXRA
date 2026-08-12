@@ -11,7 +11,6 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
@@ -21,7 +20,11 @@ import {
 import { executed } from '@tools/core/result';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatBytes,
+  formatRelativeTime,
+  splitContentLines,
+} from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
