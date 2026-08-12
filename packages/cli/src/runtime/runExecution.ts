@@ -1,9 +1,11 @@
 import {
   attachTerminalResultToast,
   runAgent,
+  trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
 import {
+  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -197,6 +199,7 @@ export async function executeCliRequest(
   const { session } = await initializeHeadlessTranscriptSession();
   session.setApprovalPolicy(runContext.approvalPolicy);
   const presentationHost = createCliRuntimeHost(runContext);
+  let failurePresented = false;
   const renderWorkflowPlainProgress =
     runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
   const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
@@ -205,7 +208,10 @@ export async function executeCliRequest(
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
-      emit: (event, payload) => presentationHost.emit(event, payload),
+      emit: (event, payload) => {
+        if (event === 'requestShowError') failurePresented = true;
+        presentationHost.emit(event, payload);
+      },
       setApprovalBypassState: (update) =>
         presentationHost.emitApprovalBypassState(update),
     }),
@@ -216,6 +222,10 @@ export async function executeCliRequest(
   const detachResultToast = attachTerminalResultToast(
     session,
     session.interactions,
+  );
+  const terminalResult = trackTerminalResultPresentation(
+    session,
+    (event) => event.executionId === request.executionId,
   );
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
@@ -257,14 +267,15 @@ export async function executeCliRequest(
       const runWithOwnership = await leaseScopeReady;
       if (!runWithOwnership) return;
       try {
-        await runWithOwnership(() =>
-          finalizeCliExecution(
+        await runWithOwnership(async () => {
+          await finalizeCliExecution(
             ownedExecutionId,
             RUN_OUTCOME.CANCELLED,
             'preserve',
             reportShutdownFinalizationFailure,
-          ),
-        );
+          );
+          await completeOwnedExecutionLease(ownedExecutionId);
+        });
       } catch (error) {
         if (!(error instanceof ExecutionLeaseLostError)) throw error;
       }
@@ -316,6 +327,7 @@ export async function executeCliRequest(
     if (!presentationAttached) return;
     presentationAttached = false;
     detachResultToast();
+    terminalResult.dispose();
     detachRunProgressRenderer();
     detachSessionProgressProjection();
     detachWorkflowPlainOutput();
@@ -333,6 +345,14 @@ export async function executeCliRequest(
     if (!(err instanceof AgentError)) {
       throw err;
     }
+    // A failure before lifecycle startup has no `result` event. Preserve the
+    // ordinary toast path when it ran, and provide the missing direct fallback
+    // while the presentation host is still attached.
+    if (!failurePresented && !terminalResult.isHandled()) {
+      session.interactions.emit('requestShowError', {
+        message: toErrorMessage(err),
+      });
+    }
   } finally {
     disposeShutdownStatus?.dispose();
     let finalizationCompleted = false;
@@ -348,10 +368,6 @@ export async function executeCliRequest(
   }
 
   if (!runResult.ok) {
-    // The message was already presented once via the run's `result` event
-    // (attachTerminalResultToast → requestShowError); nothing more to print
-    // here. Reuse the same outcome-to-exit-code mapping the non-throw failure path
-    // uses below, so approval-denied stays distinct from a generic failure.
     return {
       ok: false,
       exitCode: runOutcomeExitCode(RUN_OUTCOME.FAILED),

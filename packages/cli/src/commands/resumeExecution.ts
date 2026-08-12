@@ -1,5 +1,6 @@
-import { getExecutionStore } from '@agent/storage';
 import { resolveAndResumeStream } from '@agent/runtime';
+import { getExecutionStore } from '@agent/storage';
+import { inspectExecutionLease } from '@agent/storage/executionLease';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -9,6 +10,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
+import { resolveCliLaunchAgent } from '../runtime/agents';
 import { resumeWorkflowOutputFile } from '../runtime/workflowOutput';
 import { initializeHeadlessTranscriptSession } from '../runtime/transcriptSession';
 import {
@@ -23,6 +25,10 @@ function noResumeStateMessage(id: ExecutionId): string {
 
 function loadFailureMessage(id: ExecutionId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
+}
+
+function activeExecutionMessage(id: ExecutionId): string {
+  return `Execution ${id} is active in TeXRA.`;
 }
 
 /**
@@ -49,6 +55,16 @@ export async function runResumeExecution(
   if (!config) {
     writeTextStderr(`Execution not found: ${id}`);
     return CliExitCode.Usage;
+  }
+  try {
+    const lease = await inspectExecutionLease(id);
+    if (lease.status === 'owned' || lease.status === 'foreign') {
+      writeTextStderr(activeExecutionMessage(id));
+      return CliExitCode.Usage;
+    }
+  } catch (error) {
+    writeTextStderr(loadFailureMessage(id, error));
+    return CliExitCode.AgentError;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
@@ -81,6 +97,13 @@ export async function runResumeExecution(
         }),
       );
       return CliExitCode.Usage;
+    }
+  } else {
+    try {
+      await resolveCliLaunchAgent(config.agent, 'run');
+    } catch (error) {
+      writeTextStderr(loadFailureMessage(id, error));
+      return CliExitCode.AgentError;
     }
   }
 

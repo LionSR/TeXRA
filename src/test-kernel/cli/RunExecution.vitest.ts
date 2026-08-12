@@ -632,6 +632,9 @@ describe('executeCliRequest', () => {
     const result = await executeCliRequest(request, cliContext());
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'boom',
+    });
     expect(flushSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -695,6 +698,23 @@ describe('executeCliRequest', () => {
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not repeat an error already presented before lifecycle startup', async () => {
+    const { executeCliRequest } = await loadRunExecution();
+    mocks.runAgent.mockImplementationOnce(async () => {
+      const hooks = mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[1];
+      hooks.emit('requestShowError', { message: 'Agent not found.' });
+      throw new AgentError('Agent not found.');
+    });
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext()),
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+
+    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message: 'Agent not found.',
+    });
   });
 
   it('maps a completed run to Success even after a shared policy denial', async () => {

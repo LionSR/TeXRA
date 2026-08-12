@@ -58,6 +58,13 @@ export async function getPersistedUserFollowUpSupport(
   return meta?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
 }
 
+/** Return the stream identity stamped when this execution was registered. */
+export async function getPersistedExecutionStreamId(
+  executionId: ExecutionId,
+): Promise<StreamTabId | undefined> {
+  return (await getExecutionStore(executionId).readMeta())?.streamId;
+}
+
 // ---------------------------------------------------------------------------
 // Per-execution write serialization — read-modify-write cycles on meta run one
 // at a time per execution so that concurrent terminal-outcome /
@@ -209,10 +216,11 @@ export async function registerOwnedExecution(
  */
 export async function clearTerminalExecutionState(
   executionId: ExecutionId,
-): Promise<void> {
+): Promise<RunOutcome | undefined> {
   const meta = await getExecutionStore(executionId).readMeta();
-  if (meta?.outcome === undefined) return;
+  if (meta?.outcome === undefined) return undefined;
   await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
+  return meta.outcome;
 }
 
 export interface FinalizeExecutionInput {

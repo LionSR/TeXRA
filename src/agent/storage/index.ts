@@ -25,6 +25,7 @@ export {
 } from './executionWorkspaceFiles';
 export {
   finalizeExecution,
+  getPersistedExecutionStreamId,
   registerExecution,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,

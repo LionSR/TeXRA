@@ -201,7 +201,7 @@ export async function readCliHistoryDetails(
   return {
     id,
     status: resolveHistoryRunStatus({
-      resumable: resumeData !== null,
+      resumable: resumability.resumable,
       outcome: meta?.outcome,
     }),
     meta,
@@ -213,7 +213,7 @@ export async function readCliHistoryDetails(
       ? { conversation: fullConversation }
       : {}),
     files,
-    hasFlowRecord: resumeData !== null,
+    hasFlowRecord: resumability.resumable,
     currentModel: resumeData?.agentConfig.model,
   };
 }
@@ -507,7 +507,7 @@ async function toCliHistoryEntry(
     agent: config.agent,
     model: resumeData?.agentConfig.model ?? config.model,
     status: resolveHistoryRunStatus({
-      resumable: resumeData !== null,
+      resumable: resumability.resumable,
       outcome: entry.outcome,
     }),
     inputBasename,

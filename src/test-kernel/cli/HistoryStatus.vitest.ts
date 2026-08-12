@@ -151,7 +151,7 @@ describe('CLI history status formatting', () => {
     );
   });
 
-  it('does not mark non-tool-use flow records as CLI-resumable', async () => {
+  it('marks workflow flow records as CLI-resumable', async () => {
     const id = 'workflow-with-flow' as ExecutionId;
     await seedFlowRecord(id, WORKFLOW_CONFIG, 'correct', {
       currentRound: 1,
@@ -161,9 +161,9 @@ describe('CLI history status formatting', () => {
 
     const details = await readCliHistoryDetails(id);
 
-    expect(details?.hasFlowRecord).toBe(false);
-    expect(details?.status).toBe('unknown');
-    expect(formatCliHistoryDetailsText(details!)).not.toContain(
+    expect(details?.hasFlowRecord).toBe(true);
+    expect(details?.status).toBe(CLI_HISTORY_RESUMABLE_STATUS);
+    expect(formatCliHistoryDetailsText(details!)).toContain(
       'Flow record: present',
     );
   });

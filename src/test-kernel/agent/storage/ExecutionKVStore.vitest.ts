@@ -216,7 +216,9 @@ describe('ExecutionKVStore meta read shims', () => {
       { result: { outcome: RUN_OUTCOME.CANCELLED } },
     );
 
-    await clearTerminalExecutionState(id);
+    await expect(clearTerminalExecutionState(id)).resolves.toBe(
+      RUN_OUTCOME.CANCELLED,
+    );
     await getExecutionStore(id).writeResultMeta(
       interimResultMeta('Interim result from the resumed turn.'),
     );
