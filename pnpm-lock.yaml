@@ -748,8 +748,8 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
       lucide-static:
-        specifier: ^1.30.0
-        version: 1.30.0
+        specifier: ^1.31.0
+        version: 1.31.0
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -5167,8 +5167,8 @@ packages:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
 
-  lucide-static@1.30.0:
-    resolution: {integrity: sha512-lgG5XTlCPG9OQABEVbhhvcG3N0T8SDFg8NFw34j71+VK8TSP6xMlfXLsuwXiHZvL+bDoA5J2gOebqRocl4WvTw==}
+  lucide-static@1.31.0:
+    resolution: {integrity: sha512-XFX9NO+gcLsOkXISmeQZYGJa2siGWZc/lgT/BK1b83h9RdOiz3cj1eQP5nWhELiB1KhW5ryk0nmMopOgm/CuSA==}
 
   macos-version@6.0.0:
     resolution: {integrity: sha512-O2S8voA+pMfCHhBn/TIYDXzJ1qNHpPDU32oFxglKnVdJABiYYITt45oLkV9yhwA3E2FDwn3tQqUFrTsr1p3sBQ==}
@@ -11117,7 +11117,7 @@ snapshots:
     dependencies:
       yallist: 4.0.0
 
-  lucide-static@1.30.0: {}
+  lucide-static@1.31.0: {}
 
   macos-version@6.0.0:
     dependencies:
