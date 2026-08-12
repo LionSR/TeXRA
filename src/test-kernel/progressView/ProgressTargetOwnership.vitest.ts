@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createWebviewPanel: vi.fn(),
   executeCommand: vi.fn(async () => undefined),
   replayApprovalRequestHandlers: vi.fn(async () => undefined),
+  showErrorMessage: vi.fn(async () => undefined),
 }));
 
 vi.mock('vscode', async (importOriginal) => {
@@ -17,6 +18,7 @@ vi.mock('vscode', async (importOriginal) => {
       ...(actual.window as Record<string, unknown>),
       activeColorTheme: { kind: 1 },
       createWebviewPanel: mocks.createWebviewPanel,
+      showErrorMessage: mocks.showErrorMessage,
     },
     commands: { executeCommand: mocks.executeCommand },
     Uri: {
@@ -108,21 +110,26 @@ function createProvider() {
   injected.context = { extensionUri: { fsPath: '/ext' } };
   injected.contentProvider = { getHtmlContent: () => '<progress-view />' };
   injected.messageHandler = { handleMessage: vi.fn() };
-  injected.state = {
+  const state = {
     activeStream: undefined,
     streamLogs: { keys: () => [], get: () => undefined },
     streamStatus: { getAllStreamStates: () => new Map() },
   };
-  injected.backend = {
+  injected.state = state;
+  const backend = {
+    activateStream: vi.fn(async () => undefined),
     approvalHandlers: {},
-    syncStreamContent: vi.fn(),
+    syncRenderedStreams: vi.fn(async () => {}),
   };
+  injected.backend = backend;
+  const logger = { error: vi.fn() };
+  injected.logger = logger;
   injected.webviewUpdater = {
     isAvailable: () => true,
     setPlacement: vi.fn(),
     sendStreamMetadata: vi.fn(() => undefined),
   };
-  return { provider, mainViewProvider, sidebarView };
+  return { provider, mainViewProvider, sidebarView, backend, state };
 }
 
 describe('progress target ownership', () => {
