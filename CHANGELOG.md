@@ -4,17 +4,79 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.2] - 2026-08-12
+
 ### CLI
+
+#### Features
+
+- **`/plan` shows the full work plan** — unfinished todos stay visible after a
+  run waits or finishes, and `/plan` opens the objective and todo list.
+- **Coding-plan quota appears in the status bar** — when a Kimi or GLM coding
+  plan is in use, the bar shows how much remains.
+- **Terminal tabs show when a session is running** — an active run is visible
+  from the tab without switching to it.
 
 #### Bug Fixes
 
-- **Narrow multi-agent approvals show every active decision** — delegation
-  prompts keep the chat-wide agent-work action visible at 60 columns instead
-  of leaving its key undiscoverable.
-- **Interrupted workflows resume immediately and remain visible in history** —
-  stopping a workflow releases its execution promptly, preserves its cancelled
-  state if a relaunch fails, and reports workflow checkpoints as resumable.
-  Resume failures now print an explanation instead of exiting silently.
+- **Interrupted workflows resume right away** — a stopped workflow appears in
+  history as resumable immediately. If resume fails, you get an explanation
+  instead of a silent exit.
+- **Narrow terminals still show every approval choice** — including the option
+  to approve all agent work in this chat.
+- **Follow-up input appears only when it will work** — background tasks that
+  cannot take a follow-up no longer show a follow-up box.
+
+### Extension (VS Code) and Desktop
+
+#### Features
+
+- **Each run shows the skills it is using** — a collapsible list on the
+  session.
+- **Session rows say what they are doing** — running, waiting, completed,
+  failed, cancelled, or waiting for approval, not only a colored bar.
+- **Workflow approvals name the workflow and its scale** — the workflow name,
+  how many tasks it will run, and a cost warning.
+- **Failed workflow tasks show up in the status line** — even if the workflow
+  itself finished.
+
+#### Bug Fixes
+
+- **Deleted sessions no longer keep their background tasks** — those tasks
+  remain as their own sessions instead of staying nested under a session you
+  removed.
+- **Long session histories stay responsive** — large workspaces no longer
+  hitch when you change theme or browse history.
+- **Background-task status uses the same words as the rest of the view** —
+  Running, Idle, Completed, Stopped, and Error. Rejection notes no longer
+  leave empty space.
+- **Session names stay correct after a reload** — they no longer go blank or
+  revert to a stale title.
+
+### Shared (all surfaces)
+
+#### Features
+
+- **Subscription usage is visible** — Settings and the CLI show remaining
+  ChatGPT, Kimi Code, and GLM Coding Plan quota. You cannot choose Included
+  Access when that allowance is used up. An exhausted coding plan switches
+  back to your API key.
+- **Context compaction is visible** — the transcript shows when a conversation
+  is being compacted and how it finished.
+- **Payment labels are shorter in tight spaces** — "Included" and "API keys",
+  with the full names still available to assistive technology.
+- **Claude Code background work is visible** — and its cost is included in
+  usage.
+- **Writing and review agents sound more human** — they drop generic AI
+  phrasing. Agents that only edit or check files are unchanged.
+
+#### Bug Fixes
+
+- **OpenAI overload errors retry automatically** — instead of failing the run.
+- **Withdrawn models leave your enabled list** — on the next launch, without
+  turning other models back on.
+- **Deleted sessions no longer leave leftover files behind** — leftover run
+  data is cleaned up on the next launch.
 
 ## [0.40.1] - 2026-08-08
 
