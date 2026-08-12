@@ -2,10 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 
 import { apiKeyExists } from '@model/apiProviders';
 import { includedModelAccess } from '@model/includedModelAccess';
-import {
-  shouldRouteModelThroughOpenRouter,
-  type ModelRoutingConfig,
-} from '@model/openRouterRouting';
+import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { isKimiCodeSubscriptionActive } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
@@ -31,33 +28,19 @@ export interface CodingPlanSubscriptionRuntime {
   readonly isActiveForModel: (modelId: string) => Promise<boolean>;
 }
 
-/** Whether GLM requests use the coding-plan endpoint rather than another route. */
-export function isGlmCodingPlanRouteActive(
-  config: ModelRoutingConfig,
-): boolean {
-  return (
-    getGLMCodingPlan() &&
-    !shouldRouteModelThroughOpenRouter(config, getUseOpenRouter()) &&
-    config.baseUrl == null &&
-    getProviderEndpoint('glm') === ''
-  );
-}
-
 async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (
     config?.provider !== ModelProvider.GLM ||
-    !isGlmCodingPlanRouteActive(config)
+    !getGLMCodingPlan() ||
+    shouldRouteModelThroughOpenRouter(config, getUseOpenRouter()) ||
+    config.baseUrl != null ||
+    getProviderEndpoint('glm') !== ''
   ) {
     return false;
   }
   const includedAccess = includedModelAccess();
-  await includedAccess.canUseServerSideKeys();
-  if (
-    includedAccess.shouldUseServerSideKeysSync(config.provider, config.name)
-  ) {
-    return false;
-  }
+  if (await includedAccess.canUseServerSideKeys()) return false;
   return apiKeyExists(platform().secrets, 'glm');
 }
 
