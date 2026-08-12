@@ -108,7 +108,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
 } & Partial<
     Pick<
       SessionHandle,
-      | 'executions'
       | 'subscriptions'
       | 'events'
       | 'followUps'
@@ -189,15 +188,14 @@ export class SessionHandle {
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
     const interactions = init.interactions ?? new SessionHostInteractions();
     const approvals = createSessionApprovals(interactions);
-    const executions =
-      init.executions ??
-      new ExecutionRegistry({ streamStatus: status, events });
-    // Attaching here also supports an explicitly supplied registry while
-    // keeping result publication scoped to this session's listeners.
-    executions.attachSessionEvents(events, (event, streamId) =>
-      this.publishRunEvent(streamId, event),
-    );
-    executions.attachSessionApprovals(approvals);
+    const executions = new ExecutionRegistry({
+      streamStatus: status,
+      events,
+      approvals,
+      publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
+      releaseRootExecutionLease: (executionId) =>
+        releaseExecutionLeaseAfterArtifacts(this, executionId),
+    });
 
     this.executions = executions;
     this.subscriptions =
@@ -226,9 +224,6 @@ export class SessionHandle {
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
     this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
-    executions.attachRootExecutionLeaseRelease((executionId) =>
-      releaseExecutionLeaseAfterArtifacts(this, executionId),
-    );
     liveSessions.add(this);
     if (
       this.transcripts.mode.kind === 'persistent' &&
@@ -809,7 +804,7 @@ export class SessionHandle {
    * terminal `result` events for missed replay when no replay-subscribed
    * listener is attached. Shared by `attachRunTrace` (the live per-run trace
    * subscription above) and by `ExecutionRegistry`'s injected `publishResult`
-   * callback (see `attachSessionEvents`), which needs the identical
+   * constructor callback, which needs the identical
    * forwarding for a terminal event synthesized *after* the originating run's
    * own trace has already been disposed — killing a native subagent suspended
    * at WAITING (`terminateWaitingHandle`) settles `handle.result` and the

@@ -9,7 +9,6 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { STREAM_PHASE } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
@@ -42,7 +41,6 @@ export function shouldSkipWait(executionId: string): boolean {
   // Non-subagent WAITING = human input needed, keep blocking.
   return (
     status === STREAM_PHASE.WAITING &&
-    handle instanceof AgentExecutionHandle &&
     handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
     handle.isChildExecution
